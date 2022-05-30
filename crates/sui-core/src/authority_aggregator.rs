@@ -57,6 +57,13 @@ impl<A> AuthorityAggregator<A> {
             metrics: &METRICS,
         }
     }
+
+    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
+    where
+        A: Clone,
+    {
+        self.authority_clients[&name].clone()
+    }
 }
 
 pub enum ReduceOutput<S> {

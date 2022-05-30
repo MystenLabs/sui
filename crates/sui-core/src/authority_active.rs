@@ -50,6 +50,8 @@ use gossip::gossip_process;
 pub mod checkpoint_driver;
 use checkpoint_driver::checkpoint_process;
 
+use self::checkpoint_driver::CheckpointProcessControl;
+
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
 const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
@@ -192,7 +194,7 @@ where
         let checkpoint_locals = self; // .clone();
         let _checkpoint_join = tokio::task::spawn(async move {
             if checkpoint {
-                checkpoint_process(&checkpoint_locals).await;
+                checkpoint_process(&checkpoint_locals, &CheckpointProcessControl::standard()).await;
             }
         });
 

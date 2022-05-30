@@ -13,6 +13,9 @@ use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_active_flow_happy_path() {
+    use telemetry_subscribers::init_for_testing;
+    init_for_testing();
+
     let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;
 
     let TestSetup {
@@ -45,7 +48,7 @@ async fn checkpoint_active_flow_happy_path() {
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             // Add some delay between transactions
-            tokio::time::sleep(Duration::from_millis(412)).await;
+            tokio::time::sleep(Duration::from_secs(27)).await;
         }
     });
 
@@ -54,7 +57,7 @@ async fn checkpoint_active_flow_happy_path() {
 
     // Wait for a batch to go through
     // (We do not really wait, we jump there since real-time is not running).
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(20 * 60)).await;
 
     let mut value_set = BTreeSet::new();
     for a in authorities {
@@ -126,7 +129,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             // Add some delay between transactions
-            tokio::time::sleep(Duration::from_millis(412)).await;
+            tokio::time::sleep(Duration::from_secs(27)).await;
         }
     });
 
@@ -135,7 +138,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
     // Wait for a batch to go through
     // (We do not really wait, we jump there since real-time is not running).
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
 
     let mut value_set = BTreeSet::new();
     for a in authorities {
@@ -210,7 +213,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             // Add some delay between transactions
-            tokio::time::sleep(Duration::from_millis(412)).await;
+            tokio::time::sleep(Duration::from_secs(27)).await;
         }
     });
 
@@ -219,7 +222,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
     // Wait for a batch to go through
     // (We do not really wait, we jump there since real-time is not running).
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
 
     let mut value_set = BTreeSet::new();
     for a in authorities {

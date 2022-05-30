@@ -21,7 +21,7 @@ use sui_types::{
 use tokio::time::timeout;
 
 use crate::{
-    authority_aggregator::ReduceOutput,
+    authority_aggregator::{AuthorityAggregator, ReduceOutput},
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
@@ -33,11 +33,50 @@ pub(crate) mod tests;
 
 use super::ActiveAuthority;
 
-pub async fn checkpoint_process<A>(_active_authority: &ActiveAuthority<A>)
+pub struct CheckpointProcessControl {
+    /// The time to allow upon quorum failure for sufficient
+    /// authorities to come online, to proceed with the checkpointing
+    /// main loop.
+    pub delay_on_quorum_failure: Duration,
+    
+    /// The time between full iterations of the checkpointing
+    /// logic loop.
+    pub long_pause_between_checkpoints : Duration,
+
+    /// The time we allow until a quorum of responses
+    /// is received. 
+    pub timeout_until_quorum: Duration,
+
+    /// The time we allow after a quorum is received for
+    /// additional responses to arrive.
+    pub extra_time_after_quorum : Duration,
+
+    /// The estimate of the consensus delay.
+    pub consensus_delay_estimate: Duration,
+
+    /// The amount of time we wait on any specific authority
+    /// per request (it could be byzantine)
+    pub per_other_authority_delay: Duration,
+}
+
+impl CheckpointProcessControl {
+    pub fn standard() -> CheckpointProcessControl {
+        CheckpointProcessControl {
+            delay_on_quorum_failure: Duration::from_secs(10),
+            long_pause_between_checkpoints: Duration::from_secs(60),
+            timeout_until_quorum: Duration::from_secs(60),
+            extra_time_after_quorum : Duration::from_millis(200),
+            consensus_delay_estimate: Duration::from_secs(3),
+            per_other_authority_delay: Duration::from_secs(30),
+        }
+    }
+}
+
+pub async fn checkpoint_process<A>(active_authority: &ActiveAuthority<A>, timing: &CheckpointProcessControl)
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    if _active_authority.state.checkpoints.is_none() {
+    if active_authority.state.checkpoints.is_none() {
         // If the checkpointing database is not present, do not
         // operate the active checkpointing logic.
         return;
@@ -45,20 +84,21 @@ where
     info!("Start active checkpoint process.");
 
     // Safe to unwrap due to check above
-    let state_checkpoints = _active_authority
+    let state_checkpoints = active_authority
         .state
         .checkpoints
         .as_ref()
         .unwrap()
         .clone();
 
-    tokio::time::sleep(Duration::from_millis(1220)).await;
+    tokio::time::sleep(timing.long_pause_between_checkpoints).await;
 
     loop {
         // (1) Get the latest summaries and proposals
         let state_of_world = get_latest_proposal_and_checkpoint_from_all(
-            _active_authority,
-            Duration::from_millis(200),
+            active_authority.net.clone(),
+            timing.extra_time_after_quorum,
+            timing.timeout_until_quorum,
         )
         .await;
 
@@ -66,7 +106,7 @@ where
             warn!("Cannot get a quorum of checkpoint information: {:?}", err);
             // Sleep for 10 sec to allow the network to set itself up or the partition
             // to go away.
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            tokio::time::sleep(timing.delay_on_quorum_failure).await;
             continue;
         }
 
@@ -81,14 +121,18 @@ where
             let next_checkpoint = state_checkpoints.lock().next_checkpoint();
             if next_checkpoint < checkpoint.checkpoint.sequence_number {
                 // TODO log error
-                let _ = sync_to_checkpoint(
-                    _active_authority,
+                if let Err(err) = sync_to_checkpoint(
+                    active_authority.state.name,
+                    active_authority.net.clone(),
                     state_checkpoints.clone(),
                     checkpoint.clone(),
                 )
-                .await;
-                // And start from the beginning, when done
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                .await {
+                    warn!("Failure to sync to checkpoint: {}", err);
+                    // if there was an error we pause to wait for network to come up
+                    tokio::time::sleep(timing.delay_on_quorum_failure).await;
+                }
+
                 continue;
             }
 
@@ -104,7 +148,12 @@ where
                 // the full contents of the checkpoint. So we try to download it.
                 // TODO: clean up the errors to get here only when the error is
                 //       "No checkpoint set at this sequence."
-                if let Ok(contents) = get_checkpoint_contents(_active_authority, &checkpoint).await
+                if let Ok(contents) = get_checkpoint_contents(
+                    active_authority.state.name,
+                    active_authority.net.clone(),
+                    &checkpoint,
+                )
+                .await
                 {
                     // Retry with contents
                     let _ = state_checkpoints
@@ -118,7 +167,7 @@ where
         // (3) Process any unprocessed transactions. We do this before trying to move to the
         //     next proposal.
         if let Err(err) =
-            process_unprocessed_digests(_active_authority, state_checkpoints.clone()).await
+            process_unprocessed_digests(active_authority, state_checkpoints.clone(), timing.per_other_authority_delay).await
         {
             warn!("Error processing unprocessed: {:?}", err);
             // Nothing happens until we catch up with the unprocessed transactions of the
@@ -131,19 +180,20 @@ where
         // into the consensus protocol to make the new checkpoint.
         let weight: usize = proposals
             .iter()
-            .map(|(auth, _)| _active_authority.state.committee.weight(auth))
+            .map(|(auth, _)| active_authority.state.committee.weight(auth))
             .sum();
 
         let _start_checkpoint_making =
-            weight > _active_authority.state.committee.quorum_threshold();
+            weight > active_authority.state.committee.quorum_threshold();
 
         let proposal = state_checkpoints.lock().new_proposal().clone();
         if let Ok(my_proposal) = proposal {
             diff_proposals(
-                _active_authority,
+                active_authority,
                 state_checkpoints.clone(),
                 &my_proposal,
                 proposals,
+                timing.consensus_delay_estimate,
             )
             .await;
         }
@@ -153,15 +203,16 @@ where
         let next_checkpoint = state_checkpoints.lock().next_checkpoint();
 
         debug!("{:?} at checkpoint {:?}", name, next_checkpoint);
-        tokio::time::sleep(Duration::from_millis(1220)).await;
+        tokio::time::sleep(timing.long_pause_between_checkpoints).await;
     }
 }
 
 /// Reads the latest checkpoint / proposal info from all validators
 /// and extracts the latest checkpoint as well as the set of proposals
 pub async fn get_latest_proposal_and_checkpoint_from_all<A>(
-    _active_authority: &ActiveAuthority<A>,
+    net: Arc<AuthorityAggregator<A>>,
     timeout_after_quorum: Duration,
+    timeout_until_quorum: Duration,
 ) -> Result<
     (
         Option<CertifiedCheckpoint>,
@@ -184,10 +235,9 @@ where
         errors: Vec<(AuthorityName, SuiError)>,
     }
     let initial_state = CheckpointSummaries::default();
-    let threshold = _active_authority.state.committee.quorum_threshold();
-    let validity = _active_authority.state.committee.validity_threshold();
-    let final_state = _active_authority
-        .net
+    let threshold = net.committee.quorum_threshold();
+    let validity = net.committee.validity_threshold();
+    let final_state = net
         .quorum_map_then_reduce_with_timeout(
             initial_state,
             |_name, client| {
@@ -229,7 +279,7 @@ where
                 })
             },
             // A long timeout before we hear back from a quorum
-            Duration::from_secs(60),
+            timeout_until_quorum,
         )
         .await?;
 
@@ -285,13 +335,13 @@ where
         .for_each(|((_seq, _digest), signed)| {
             let weight: usize = signed
                 .iter()
-                .map(|(auth, _)| _active_authority.state.committee.weight(auth))
+                .map(|(auth, _)| net.committee.weight(auth))
                 .sum();
-            if weight > _active_authority.state.committee.validity_threshold() {
+            if weight > net.committee.validity_threshold() {
                 // Try to construct a valid checkpoint.
                 let certificate = CertifiedCheckpoint::aggregate(
                     signed.iter().map(|(_, signed)| signed.clone()).collect(),
-                    &_active_authority.state.committee,
+                    &net.committee,
                 );
                 if let Ok(cert) = certificate {
                     highest_certificate_cert = Some(cert);
@@ -325,7 +375,8 @@ where
 
 /// Download all checkpoints that are not known to us
 pub async fn sync_to_checkpoint<A>(
-    _active_authority: &ActiveAuthority<A>,
+    name: AuthorityName,
+    net: Arc<AuthorityAggregator<A>>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     latest_known_checkpoint: CertifiedCheckpoint,
 ) -> Result<(), SuiError>
@@ -344,11 +395,11 @@ where
     if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
         debug!(
             "Partial Sync ({:?}): {:?}",
-            _active_authority.state.name,
+            name,
             *signed.checkpoint.sequence_number()
         );
         let (past, _contents) = get_one_checkpoint(
-            _active_authority,
+            net.clone(),
             *signed.checkpoint.sequence_number(),
             false,
             &available_authorities,
@@ -370,9 +421,9 @@ where
         .unwrap_or(0);
 
     for seq in full_sync_start..latest_known_checkpoint.checkpoint.sequence_number {
-        debug!("Full Sync ({:?}): {:?}", _active_authority.state.name, seq);
+        debug!("Full Sync ({:?}): {:?}", name, seq);
         let (past, _contents) =
-            get_one_checkpoint(_active_authority, seq, true, &available_authorities).await?;
+            get_one_checkpoint(net.clone(), seq, true, &available_authorities).await?;
         // NOTE: should we ignore the error here?
         if let Err(err) = checkpoint_db
             .lock()
@@ -390,7 +441,7 @@ where
 /// they have seen a subsequent certificate.
 #[allow(clippy::collapsible_match)]
 pub async fn get_one_checkpoint<A>(
-    _active_authority: &ActiveAuthority<A>,
+    net: Arc<AuthorityAggregator<A>>,
     sequence_number: CheckpointSequenceNumber,
     contents: bool,
     available_authorities: &BTreeSet<AuthorityName>,
@@ -401,7 +452,7 @@ where
     let mut available_authorities = available_authorities.clone();
     while !available_authorities.is_empty() {
         // Get a random authority by stake
-        let sample_authority = _active_authority.state.committee.sample();
+        let sample_authority = net.committee.sample();
         if !available_authorities.contains(sample_authority) {
             // We want to pick an authority that has the checkpoint and its full history.
             continue;
@@ -411,7 +462,7 @@ where
 
         // Note: safe to do lookup since authority comes from the committee sample
         //       so this should not panic.
-        let client = _active_authority.net.authority_clients[sample_authority].clone();
+        let client = net.clone_client(sample_authority);
         match client
             .handle_checkpoint(CheckpointRequest::past(sequence_number, contents))
             .await
@@ -439,16 +490,20 @@ where
 /// Given a checkpoint certificate we sample validators and try to download the certificate contents.
 #[allow(clippy::collapsible_match)]
 pub async fn get_checkpoint_contents<A>(
-    _active_authority: &ActiveAuthority<A>,
+    name: AuthorityName,
+    net: Arc<AuthorityAggregator<A>>,
     checkpoint: &CertifiedCheckpoint,
 ) -> Result<CheckpointContents, SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let available_authorities: BTreeSet<_> = checkpoint.signatory_authorities().cloned().collect();
+    let mut available_authorities: BTreeSet<_> =
+        checkpoint.signatory_authorities().cloned().collect();
+    available_authorities.remove(&name);
+
     loop {
         // Get a random authority by stake
-        let sample_authority = _active_authority.state.committee.sample();
+        let sample_authority = net.committee.sample();
         if !available_authorities.contains(sample_authority) {
             // We want to pick an authority that has the checkpoint and its full history.
             continue;
@@ -456,7 +511,7 @@ where
 
         // Note: safe to do lookup since authority comes from the committee sample
         //       so this should not panic.
-        let client = _active_authority.net.authority_clients[sample_authority].clone();
+        let client = net.clone_client(sample_authority);
         match client
             .handle_checkpoint(CheckpointRequest::past(
                 checkpoint.checkpoint.sequence_number,
@@ -491,23 +546,24 @@ where
 /// that are submitted to consensus. The process terminates when a future
 /// checkpoint is downloaded
 pub async fn diff_proposals<A>(
-    _active_authority: &ActiveAuthority<A>,
+    active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
-    _my_proposal: &CheckpointProposal,
-    _proposals: Vec<(AuthorityName, SignedCheckpointProposal)>,
+    my_proposal: &CheckpointProposal,
+    proposals: Vec<(AuthorityName, SignedCheckpointProposal)>,
+    consensus_delay_estimate: Duration,
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // Pick another authority, get their proposal, and submit it to consensus
     // Exit when we have a checkpoint proposal.
 
-    let mut available_authorities: BTreeSet<_> = _proposals.iter().map(|(auth, _)| *auth).collect();
-    available_authorities.remove(&_active_authority.state.name); // remove ourselves
+    let mut available_authorities: BTreeSet<_> = proposals.iter().map(|(auth, _)| *auth).collect();
+    available_authorities.remove(&active_authority.state.name); // remove ourselves
     let mut fragments_num = 0;
 
     loop {
         let next_checkpoint_sequence_number: u64 = checkpoint_db.lock().next_checkpoint();
-        if next_checkpoint_sequence_number > *_my_proposal.proposal.0.checkpoint.sequence_number() {
+        if next_checkpoint_sequence_number > *my_proposal.proposal.0.checkpoint.sequence_number() {
             // Our work here is done, we have progressed past the checkpoint for which we were given a proposal.
             // Our DB has been updated (presumably by consensus) with the sought information (a checkpoint
             // for this sequence number)
@@ -520,10 +576,10 @@ pub async fn diff_proposals<A>(
             break;
         }
 
-        let random_authority = _active_authority.state.committee.sample();
+        let random_authority = active_authority.net.committee.sample();
         if available_authorities.remove(random_authority) {
             // Get a client
-            let client = _active_authority.net.authority_clients[random_authority].clone();
+            let client = active_authority.net.authority_clients[random_authority].clone();
 
             if let Ok(response) = client
                 .handle_checkpoint(CheckpointRequest::latest(true))
@@ -545,7 +601,7 @@ pub async fn diff_proposals<A>(
 
                     // Check the proposal is also for the same checkpoint sequence number
                     if current.as_ref().unwrap().0.checkpoint.sequence_number()
-                        != _my_proposal.sequence_number()
+                        != my_proposal.sequence_number()
                     {
                         return;
                     }
@@ -555,10 +611,10 @@ pub async fn diff_proposals<A>(
                         response.detail.unwrap(),
                     );
 
-                    let fragment = _my_proposal.fragment_with(&other_proposal);
+                    let fragment = my_proposal.fragment_with(&other_proposal);
 
                     // We need to augment the fragment with the missing transactions
-                    match augment_fragment_with_diff_transactions(_active_authority, fragment).await
+                    match augment_fragment_with_diff_transactions(active_authority, fragment).await
                     {
                         Ok(fragment) => {
                             // On success send the fragment to consensus
@@ -579,14 +635,12 @@ pub async fn diff_proposals<A>(
                     //       needed. For the moment we just linearly back-off.
                     fragments_num += 1;
                     if fragments_num > 2 {
-                        tokio::time::sleep(Duration::from_secs(3 * fragments_num)).await;
+                        tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
                     }
                 }
             } else {
                 continue;
             }
-        } else {
-            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 }
@@ -596,7 +650,7 @@ pub async fn diff_proposals<A>(
 /// come from the local database, but others will come from downloading them from the other
 /// authority.
 pub async fn augment_fragment_with_diff_transactions<A>(
-    _active_authority: &ActiveAuthority<A>,
+    active_authority: &ActiveAuthority<A>,
     mut fragment: CheckpointFragment,
 ) -> Result<CheckpointFragment, SuiError>
 where
@@ -607,7 +661,7 @@ where
     // These are the trasnactions that we have that the other validator does not
     // have, so we can read them from our local database.
     for tx_digest in &fragment.diff.second.items {
-        let cert = _active_authority
+        let cert = active_authority
             .state
             .read_certificate(tx_digest)
             .await?
@@ -619,7 +673,7 @@ where
 
     // These are the transactions that the other node has, so we have to potentially
     // download them from the remote node.
-    let client = _active_authority.net.authority_clients[&fragment.other.0.authority].clone();
+    let client = active_authority.net.clone_client(&fragment.other.0.authority);
     for tx_digest in &fragment.diff.first.items {
         let response = client
             .handle_transaction_info_request(TransactionInfoRequest::from(*tx_digest))
@@ -646,8 +700,9 @@ where
 /// for the creation of the next proposal. Also uses the unprocessed_content
 /// to look for transactions before going to fetch them from the network.
 pub async fn process_unprocessed_digests<A>(
-    _active_authority: &ActiveAuthority<A>,
+    active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
+    per_other_authority_delay: Duration,
 ) -> Result<(), SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -671,12 +726,12 @@ where
         .zip(existing_certificates.iter())
         .filter_map(|(digest, cert_opt)| cert_opt.as_ref().map(|c| (digest, c)))
     {
-        _active_authority
+        active_authority
             .net
             .sync_certificate_to_authority_with_timeout(
                 ConfirmationTransaction::new(cert.clone()),
-                _active_authority.state.name,
-                Duration::from_secs(60),
+                active_authority.state.name,
+                per_other_authority_delay,
                 3,
             )
             .await?;
@@ -685,12 +740,19 @@ where
 
     for digest in &unprocessed_digests {
         // If we have processed this continue with the next cert, nothing to do
-        if _active_authority.state.database.effects_exists(digest)? {
+        if active_authority.state.database.effects_exists(digest)? {
             continue;
         }
 
         debug!("Try sync for digest: {:?}", digest);
-        if let Err(err) = sync_digest(_active_authority, *digest, Duration::from_secs(30)).await {
+        if let Err(err) = sync_digest(
+            active_authority.state.name,
+            active_authority.net.clone(),
+            *digest,
+            per_other_authority_delay,
+        )
+        .await
+        {
             warn!("Error doing sync from digest {:?}: {}", digest, err);
             return Err(err);
         }
@@ -700,7 +762,7 @@ where
     let cnt: usize = unprocessed_digests
         .iter()
         .filter(|digest| {
-            !_active_authority
+            !active_authority
                 .state
                 .database
                 .effects_exists(digest)
@@ -714,21 +776,17 @@ where
 
 /// Sync to a transaction certificate
 pub async fn sync_digest<A>(
-    _active_authority: &ActiveAuthority<A>,
+    name: AuthorityName,
+    net: Arc<AuthorityAggregator<A>>,
     cert_digest: TransactionDigest,
     timeout_period: Duration,
 ) -> Result<(), SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let mut source_authorities: BTreeSet<AuthorityName> = _active_authority
-        .net
-        .committee
-        .voting_rights
-        .keys()
-        .copied()
-        .collect();
-    source_authorities.remove(&_active_authority.state.name);
+    let mut source_authorities: BTreeSet<AuthorityName> =
+        net.committee.voting_rights.keys().copied().collect();
+    source_authorities.remove(&name);
 
     // Now try to update the destination authority sequentially using
     // the source authorities we have sampled.
@@ -738,23 +796,23 @@ where
         //       `sync_authority_source_to_destination` call a cache of
         //       certificates and parents to avoid re-downloading them.
 
-        let client = _active_authority.net.authority_clients[&source_authority].clone();
-        let sync_fut = async move {
+        let client = net.clone_client(&source_authority);
+        let sync_fut = async {
             let response = client
                 .handle_transaction_info_request(TransactionInfoRequest::from(cert_digest))
                 .await?;
 
             // If we have cert, use that cert to sync
             if let Some(cert) = response.certified_transaction {
-                _active_authority
-                    .net
-                    .sync_certificate_to_authority_with_timeout(
-                        ConfirmationTransaction::new(cert.clone()),
-                        _active_authority.state.name,
-                        Duration::from_secs(60),
-                        3,
-                    )
-                    .await?;
+                net.sync_certificate_to_authority_with_timeout(
+                    ConfirmationTransaction::new(cert.clone()),
+                    name,
+                    // Ok to have a fixed, and rather long timeout, since the future is controlled, 
+                    // and interupted by a global timeout as well, that can be controlled.
+                    Duration::from_secs(60),
+                    3,
+                )
+                .await?;
 
                 return Result::<(), SuiError>::Ok(());
             }
@@ -762,22 +820,21 @@ where
             // If we have a transaction, make a cert and sync
             if let Some(transaction) = response.signed_transaction {
                 // Make a cert afresh
-                let (cert, _effects) = _active_authority
-                    .net
+                let (cert, _effects) = net
                     .execute_transaction(&transaction.to_transaction())
                     .await
                     .map_err(|_e| SuiError::AuthorityUpdateFailure)?;
 
                 // Make sure the cert is syned with this authority
-                _active_authority
-                    .net
-                    .sync_certificate_to_authority_with_timeout(
-                        ConfirmationTransaction::new(cert.clone()),
-                        _active_authority.state.name,
-                        Duration::from_secs(60),
-                        3,
-                    )
-                    .await?;
+                net.sync_certificate_to_authority_with_timeout(
+                    ConfirmationTransaction::new(cert.clone()),
+                    name,
+                    // Ok to have a fixed, and rather long timeout, since the future is controlled, 
+                    // and interupted by a global timeout as well, that can be controlled.
+                    Duration::from_secs(60),
+                    3,
+                )
+                .await?;
 
                 return Result::<(), SuiError>::Ok(());
             }
