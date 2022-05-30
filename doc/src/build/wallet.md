@@ -240,7 +240,7 @@ The following commands are supported by the wallet:
     objects               Obtain all objects owned by the address
     publish               Publish Move modules
     split-coin            Split a coin object into multiple coins
-    switch                Switch active address
+    switch                Switch active address and network(e.g., devnet, local rpc server)
     sync                  Synchronize client state with authorities
     transfer-coin         Transfer coin object
 
