@@ -2320,9 +2320,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.18"
+version = "0.14.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b26ae0a80afebe130861d90abf98e3814a4f28a4c6ffeb5ab8ebb2be311e0ef2"
+checksum = "42dc3c131584288d375f2d07f822b0cb012d8c6fb899a5b9fdb3cb7eb9b6004f"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2481,6 +2481,19 @@ name = "internment"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ab388864246d58a276e60e7569a833d9cc4cd75c66e5ca77c177dad38e59996"
+dependencies = [
+ "ahash",
+ "dashmap",
+ "hashbrown 0.12.1",
+ "once_cell",
+ "parking_lot 0.12.0",
+]
+
+[[package]]
+name = "internment"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a798d7677f07d6f1e77be484ea8626ddb1566194de399f1206306820c406371"
 dependencies = [
  "ahash",
  "dashmap",
@@ -3312,7 +3325,7 @@ dependencies = [
  "anyhow",
  "codespan",
  "codespan-reporting",
- "internment",
+ "internment 0.5.6",
  "itertools",
  "log",
  "move-binary-format",
@@ -7581,7 +7594,7 @@ dependencies = [
  "indexmap",
  "instant",
  "integer-encoding",
- "internment",
+ "internment 0.7.0",
  "itertools",
  "itoa 0.4.8",
  "itoa 1.0.2",

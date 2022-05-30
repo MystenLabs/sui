@@ -197,7 +197,7 @@ indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["std"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
-internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
+internment = { version = "0.7", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
 itertools = { version = "0.10", features = ["use_alloc", "use_std"] }
 itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4", features = ["std"] }
 itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
@@ -702,7 +702,7 @@ indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["std"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
-internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
+internment = { version = "0.7", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
 itertools = { version = "0.10", features = ["use_alloc", "use_std"] }
 itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4", features = ["std"] }
 itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
