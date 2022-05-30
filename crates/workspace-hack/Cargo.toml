@@ -887,7 +887,7 @@ rocksdb = { version = "0.18", features = ["bzip2", "lz4", "snappy", "zlib", "zst
 rust-ini = { version = "0.13", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
-rustc_version = { version = "0.3", default-features = false }
+rustc_version = { version = "0.4", default-features = false }
 rustls = { version = "0.20", default-features = false, features = ["log", "logging", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
