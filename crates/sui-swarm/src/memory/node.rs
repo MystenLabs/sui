@@ -20,6 +20,7 @@ use tracing::{error, trace};
 pub struct Node {
     thread: Option<Container>,
     config: NodeConfig,
+    runtime_type: RuntimeType,
 }
 
 impl Node {
@@ -33,6 +34,7 @@ impl Node {
         Self {
             thread: None,
             config,
+            runtime_type: RuntimeType::SingleThreaded,
         }
     }
 
@@ -45,16 +47,16 @@ impl Node {
     /// up.
     pub fn spawn(&mut self) -> Result<tokio::sync::oneshot::Receiver<()>> {
         trace!(name =% self.name(), "starting in-memory node");
-        let (startup_reciever, node_handle) = Container::spawn(self.config.clone());
+        let (startup_reciever, node_handle) =
+            Container::spawn(self.config.clone(), self.runtime_type);
         self.thread = Some(node_handle);
         Ok(startup_reciever)
     }
 
     /// Start this Node, waiting until its completely started up.
     pub async fn start(&mut self) -> Result<()> {
-        let (startup_reciever, node_handle) = Container::spawn(self.config.clone());
+        let startup_reciever = self.spawn()?;
         startup_reciever.await?;
-        self.thread = Some(node_handle);
         Ok(())
     }
 
@@ -129,21 +131,46 @@ impl Drop for Container {
 
 impl Container {
     /// Spawn a new Node.
-    pub fn spawn(config: NodeConfig) -> (tokio::sync::oneshot::Receiver<()>, Self) {
+    pub fn spawn(
+        config: NodeConfig,
+        runtime: RuntimeType,
+    ) -> (tokio::sync::oneshot::Receiver<()>, Self) {
         let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
+
         let thread = thread::spawn(move || {
-            let name_span = tracing::span!(
+            let span = tracing::span!(
                 tracing::Level::INFO,
                 "node",
                 name =% config.sui_address()
             );
-            let _guard = name_span.enter();
+            let _guard = span.enter();
 
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
+            let mut builder = match runtime {
+                RuntimeType::SingleThreaded => tokio::runtime::Builder::new_current_thread(),
+                RuntimeType::MultiThreaded => {
+                    thread_local! {
+                        static SPAN: std::cell::RefCell<Option<tracing::span::EnteredSpan>> =
+                            std::cell::RefCell::new(None);
+                    }
+                    let mut builder = tokio::runtime::Builder::new_multi_thread();
+                    let span = span.clone();
+                    builder
+                        .on_thread_start(move || {
+                            SPAN.with(|maybe_entered_span| {
+                                *maybe_entered_span.borrow_mut() = Some(span.clone().entered());
+                            });
+                        })
+                        .on_thread_stop(|| {
+                            SPAN.with(|maybe_entered_span| {
+                                maybe_entered_span.borrow_mut().take();
+                            });
+                        });
+
+                    builder
+                }
+            };
+            let runtime = builder.enable_all().build().unwrap();
 
             runtime.block_on(async move {
                 let _server = SuiNode::start(&config).await.unwrap();
@@ -178,6 +205,13 @@ impl Container {
             false
         }
     }
+}
+
+/// The type of tokio runtime that should be used for a particular Node
+#[derive(Clone, Copy, Debug)]
+pub enum RuntimeType {
+    SingleThreaded,
+    MultiThreaded,
 }
 
 #[cfg(test)]
