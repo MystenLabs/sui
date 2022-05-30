@@ -1,3 +1,5 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 #[allow(unused_imports)]
 use narwhal::configuration_client::ConfigurationClient;
 use narwhal::proposer_client::ProposerClient;
