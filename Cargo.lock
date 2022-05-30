@@ -1361,13 +1361,14 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
-version = "5.3.3"
+version = "5.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "391b56fbd302e585b7a9494fb70e40949567b1cf9003a8e4a6041a1687c26573"
+checksum = "3495912c9c1ccf2e18976439f4443f3fee0fd61f424ff99fde6a66b15ecb448f"
 dependencies = [
  "cfg-if 1.0.0",
  "hashbrown 0.12.1",
  "lock_api 0.4.7",
+ "parking_lot_core 0.9.3",
 ]
 
 [[package]]
@@ -3395,7 +3396,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.137",
  "serde_json",
- "simplelog",
+ "simplelog 0.9.0",
  "tokio",
  "toml",
 ]
@@ -5413,6 +5414,17 @@ dependencies = [
  "chrono",
  "log",
  "termcolor",
+]
+
+[[package]]
+name = "simplelog"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48dfff04aade74dd495b007c831cd6f4e0cee19c344dd9dc0884c0289b70a786"
+dependencies = [
+ "log",
+ "termcolor",
+ "time 0.3.9",
 ]
 
 [[package]]
@@ -7807,7 +7819,7 @@ dependencies = [
  "shell-words",
  "shlex",
  "signature",
- "simplelog",
+ "simplelog 0.12.0",
  "siphasher",
  "sized-chunks",
  "slab",

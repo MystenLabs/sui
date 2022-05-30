@@ -384,7 +384,7 @@ sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9", features = ["std"] 
 sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1", features = ["std"] }
 signature = { version = "1", features = ["std"] }
-simplelog = { version = "0.9", features = ["termcolor"] }
+simplelog = { version = "0.12", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
@@ -928,7 +928,7 @@ sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1", features = ["std"] }
 shlex = { version = "1", features = ["std"] }
 signature = { version = "1", features = ["std"] }
-simplelog = { version = "0.9", features = ["termcolor"] }
+simplelog = { version = "0.12", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
