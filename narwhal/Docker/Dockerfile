@@ -6,8 +6,8 @@ ARG BUILD_MODE="release"
 #################################################################
 # Stage 0
 #################################################################
-FROM rust:1.60.0 as chef
-WORKDIR narwhal
+FROM rust:1.60-slim-bullseye as chef
+WORKDIR "$WORKDIR/narwhal"
 ARG BUILD_MODE
 
 # Install basic dependencies
@@ -83,7 +83,7 @@ RUN cargo build --${BUILD_MODE} --all-features --bin node
 # Creat another layer so we can re-use caching
 FROM rust:1.60-slim-bullseye
 ARG BUILD_MODE
-WORKDIR narwhal
+WORKDIR "$WORKDIR/narwhal"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libssl1.1 iputils-ping telnet curl \
