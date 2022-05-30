@@ -386,7 +386,7 @@ shell-words = { version = "1", features = ["std"] }
 signature = { version = "1", features = ["std"] }
 simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
-sized-chunks = { version = "0.6", features = ["std"] }
+sized-chunks = { version = "0.7", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
@@ -930,7 +930,7 @@ shlex = { version = "1", features = ["std"] }
 signature = { version = "1", features = ["std"] }
 simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
-sized-chunks = { version = "0.6", features = ["std"] }
+sized-chunks = { version = "0.7", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
