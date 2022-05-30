@@ -53,7 +53,7 @@ bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
-blake2 = { version = "0.9", features = ["std"] }
+blake2 = { version = "0.10", features = ["std"] }
 blake2s_simd = { version = "1", features = ["std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
@@ -535,7 +535,7 @@ bincode = { version = "1", default-features = false }
 bindgen = { version = "0.59", default-features = false, features = ["runtime"] }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
-blake2 = { version = "0.9", features = ["std"] }
+blake2 = { version = "0.10", features = ["std"] }
 blake2s_simd = { version = "1", features = ["std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }

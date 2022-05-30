@@ -90,7 +90,7 @@ dependencies = [
  "ark-serialize",
  "ark-snark",
  "ark-std",
- "blake2",
+ "blake2 0.9.2",
  "derivative",
  "digest 0.9.0",
  "rayon",
@@ -515,6 +515,15 @@ dependencies = [
  "crypto-mac",
  "digest 0.9.0",
  "opaque-debug 0.3.0",
+]
+
+[[package]]
+name = "blake2"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9cf849ee05b2ee5fba5e36f97ff8ec2533916700fc0758d40d92136a42f3388"
+dependencies = [
+ "digest 0.10.3",
 ]
 
 [[package]]
@@ -983,7 +992,7 @@ version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
 dependencies = [
  "bincode",
- "blake2",
+ "blake2 0.9.2",
  "bytes",
  "config 0.1.0",
  "crypto",
@@ -1176,7 +1185,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "base64ct",
- "blake2",
+ "blake2 0.9.2",
  "bls-crypto",
  "blst",
  "ed25519-dalek",
@@ -1709,7 +1718,7 @@ source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769
 dependencies = [
  "async-trait",
  "bincode",
- "blake2",
+ "blake2 0.9.2",
  "bytes",
  "config 0.1.0",
  "consensus",
@@ -2320,9 +2329,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.18"
+version = "0.14.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b26ae0a80afebe130861d90abf98e3814a4f28a4c6ffeb5ab8ebb2be311e0ef2"
+checksum = "42dc3c131584288d375f2d07f822b0cb012d8c6fb899a5b9fdb3cb7eb9b6004f"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -4438,7 +4447,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bincode",
- "blake2",
+ "blake2 0.9.2",
  "bytes",
  "config 0.1.0",
  "consensus",
@@ -6831,7 +6840,7 @@ source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769
 dependencies = [
  "base64",
  "bincode",
- "blake2",
+ "blake2 0.9.2",
  "bytes",
  "config 0.1.0",
  "crypto",
@@ -7341,7 +7350,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode",
- "blake2",
+ "blake2 0.9.2",
  "bytes",
  "config 0.1.0",
  "crypto",
@@ -7414,7 +7423,7 @@ dependencies = [
  "bindgen",
  "bitflags",
  "bitmaps",
- "blake2",
+ "blake2 0.10.4",
  "blake2s_simd",
  "block-buffer 0.10.2",
  "block-buffer 0.9.0",
