@@ -1135,6 +1135,16 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
     }
 }
 
+/// A wrapper to make Orphan Rule happy
+pub struct ArcWrapper<T>(pub Arc<T>);
+
+impl ModuleResolver for ArcWrapper<AuthorityStore> {
+    type Error = SuiError;
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.0.get_module(module_id)
+    }
+}
+
 // The primary key type for object storage.
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
