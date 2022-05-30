@@ -160,7 +160,6 @@ pub async fn checkpoint_process<A>(
                         .handle_checkpoint_certificate(&checkpoint, &Some(contents));
                 }
             }
-            // }
         }
 
         // (3) Process any unprocessed transactions. We do this before trying to move to the
@@ -408,10 +407,12 @@ where
         )
         .await?;
 
-        // NOTE: should we ignore the error here?
-        let _ = checkpoint_db
+        if let Err(err) = checkpoint_db
             .lock()
-            .handle_checkpoint_certificate(&past, &None);
+            .handle_checkpoint_certificate(&past, &None)
+        {
+            warn!("Error handling certificate: {:?}", err);
+        }
     }
 
     let full_sync_start = latest_checkpoint
@@ -426,7 +427,7 @@ where
         debug!("Full Sync ({:?}): {:?}", name, seq);
         let (past, _contents) =
             get_one_checkpoint(net.clone(), seq, true, &available_authorities).await?;
-        // NOTE: should we ignore the error here?
+
         if let Err(err) = checkpoint_db
             .lock()
             .handle_checkpoint_certificate(&past, &_contents)
