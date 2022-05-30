@@ -60,7 +60,7 @@ ARG BUILD_MODE
 COPY --from=planner /narwhal/Cargo.toml Cargo.toml
 COPY --from=planner /narwhal/Cargo.lock Cargo.lock
 COPY --from=planner /narwhal/workspace-hack workspace-hack
-RUN cargo build --${BUILD_MODE}
+RUN cargo build --${BUILD_MODE} --all-features
 
 #################################################################
 # Stage 2.5 : Building
@@ -74,7 +74,7 @@ RUN cargo build --${BUILD_MODE}
 COPY . .
 
 # Build the binary named "node"
-RUN cargo build --${BUILD_MODE} --bin node
+RUN cargo build --${BUILD_MODE} --all-features --bin node
 
 #################################################################
 # Stage 3 : Production image

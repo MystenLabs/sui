@@ -27,5 +27,5 @@ bench_params = {
 3. Then run the `demo-client` 
 
 ```
-cargo run --package demo --bin demo_client
+cargo run --all-features --package demo --bin demo_client
 ```
