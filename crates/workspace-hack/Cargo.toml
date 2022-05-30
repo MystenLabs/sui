@@ -275,7 +275,7 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "1b2d3b42
 multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
-named-lock = { version = "0.1", default-features = false }
+named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 network = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "a10989ee09bedfc8690135e118243d19dd004fd0", default-features = false }
@@ -788,7 +788,7 @@ multihash-derive = { version = "0.8", default-features = false, features = ["std
 multimap = { version = "0.8", default-features = false }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
-named-lock = { version = "0.1", default-features = false }
+named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 network = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "a10989ee09bedfc8690135e118243d19dd004fd0", default-features = false }
