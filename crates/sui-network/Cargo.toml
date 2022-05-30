@@ -17,7 +17,7 @@ bincode = "1.3.3"
 serde = "1.0.136"
 sui-types = { path = "../sui-types" }
 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c" }
 workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]

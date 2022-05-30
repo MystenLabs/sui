@@ -274,7 +274,8 @@ move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "1b2
 move-vm-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+mysten-network-9da6af2c8f03eecf = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+mysten-network-6e4060f3e383a374 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
 network = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
@@ -403,7 +404,8 @@ sync_wrapper = { version = "0.1", default-features = false }
 tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "unicode-width"] }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
+telemetry-subscribers-2c266570e79e716a = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
+telemetry-subscribers-6e4060f3e383a374 = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug"] }
@@ -450,7 +452,8 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+typed-store-9da6af2c8f03eecf = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+typed-store-6e4060f3e383a374 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c", default-features = false }
 typenum = { version = "1", default-features = false }
 types = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9" }
 ucd-trie = { version = "0.1", features = ["std"] }
@@ -786,8 +789,9 @@ multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+mysten-network-9da6af2c8f03eecf = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+mysten-network-6e4060f3e383a374 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c", default-features = false }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
 network = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
@@ -951,7 +955,8 @@ synstructure = { version = "0.12", features = ["proc-macro"] }
 tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "unicode-width"] }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
+telemetry-subscribers-2c266570e79e716a = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
+telemetry-subscribers-6e4060f3e383a374 = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug"] }
@@ -1007,7 +1012,8 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+typed-store-9da6af2c8f03eecf = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
+typed-store-6e4060f3e383a374 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "988cad6aaafac84d52a93227a16867bf27c1ea4c", default-features = false }
 typenum = { version = "1", default-features = false }
 types = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9" }
 ucd-trie = { version = "0.1", features = ["std"] }
