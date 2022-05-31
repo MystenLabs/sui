@@ -8,26 +8,31 @@ use sui_config::{NetworkConfig, PersistedConfig, SUI_NETWORK_CONFIG};
 use sui_core::authority::AuthorityState;
 use sui_node::SuiNode;
 
-use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
 };
+use tempfile::TempDir;
 use test_utils::network::setup_network_and_wallet_in_working_dir;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
+async fn start_full_node(working_dir: &TempDir) -> Result<SuiNode, anyhow::Error> {
+    let network_config_path = working_dir.path().join(SUI_NETWORK_CONFIG);
+    let config: NetworkConfig = PersistedConfig::read(&network_config_path)?;
+    let config = config.generate_fullnode_config();
+
+    SuiNode::start(&config).await
+}
+
 async fn transfer_coin(
-    node: &SuiNode,
     context: &mut WalletContext,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
     let sender = context.config.accounts.get(0).cloned().unwrap();
     let receiver = context.config.accounts.get(1).cloned().unwrap();
 
-    let object_refs = node
-        .state()
-        .get_owner_objects(Owner::AddressOwner(sender))?;
+    let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
     let gas_object = object_refs.get(0).unwrap().object_id;
     let object_to_send = object_refs.get(1).unwrap().object_id;
 
@@ -115,13 +120,9 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     let (_network, mut context, _) = setup_network_and_wallet_in_working_dir(&working_dir).await?;
 
-    let network_config_path = working_dir.path().join(SUI_NETWORK_CONFIG);
-    let config: NetworkConfig = PersistedConfig::read(&network_config_path)?;
-    let config = config.generate_fullnode_config();
+    let node = start_full_node(&working_dir).await?;
 
-    let node = SuiNode::start(&config).await?;
-
-    let (transfered_object, _, receiver, digest) = transfer_coin(&node, &mut context).await?;
+    let (transfered_object, _, receiver, digest) = transfer_coin(&mut context).await?;
     wait_for_tx(digest, node.state().clone()).await;
 
     // verify that the node has seen the transfer
@@ -145,13 +146,9 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     let (_network, mut context, _) = setup_network_and_wallet_in_working_dir(&working_dir).await?;
 
-    let network_config_path = working_dir.path().join(SUI_NETWORK_CONFIG);
-    let config: NetworkConfig = PersistedConfig::read(&network_config_path)?;
-    let config = config.generate_fullnode_config();
+    let node = start_full_node(&working_dir).await?;
 
-    let node = SuiNode::start(&config).await?;
-
-    let (transfered_object, sender, receiver, digest) = transfer_coin(&node, &mut context).await?;
+    let (transfered_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -181,6 +178,39 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // No transactions have originated from the receiver
     let txes = node.state().get_transactions_from_addr(receiver).await?;
     assert_eq!(txes.len(), 0);
+
+    Ok(())
+}
+
+// Test for syncing a node to an authority that already has many txes.
+#[tokio::test]
+async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
+    let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
+        .with_test_writer()
+        .with_env_filter(::tracing_subscriber::EnvFilter::from_default_env())
+        .finish();
+    let _ = ::tracing::subscriber::set_global_default(subscriber);
+
+    let working_dir = tempfile::tempdir()?;
+
+    let (_network, mut context, _) = setup_network_and_wallet_in_working_dir(&working_dir).await?;
+
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+
+    sleep(Duration::from_millis(1000)).await;
+
+    let node = start_full_node(&working_dir).await?;
+
+    // Note: currently we have to send one tx after starting the full node in order for it
+    // to start syncing, because the node doesn't request old txes immediately upon startup.
+    let (_transfered_object, sender, _receiver, digest) = transfer_coin(&mut context).await?;
+
+    wait_for_tx(digest, node.state().clone()).await;
+
+    let txes = node.state().get_transactions_from_addr(sender).await?;
+    assert_eq!(txes.last().unwrap().1, digest);
 
     Ok(())
 }
