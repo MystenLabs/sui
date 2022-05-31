@@ -1,4 +1,5 @@
-crates/rccheck @huitseeker
+crates/rccheck @huitseeker @kchalkias
 crates/name-variant @huitseeker
 crates/telemetry-subscribers @velvia
 crates/component @laura-makdah
+crates/typed-store @huitseeker @gdanezis
