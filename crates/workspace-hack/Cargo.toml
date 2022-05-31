@@ -57,7 +57,7 @@ blake2 = { version = "0.9", features = ["std"] }
 blake2s_simd = { version = "1", features = ["std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
-block-padding = { version = "0.2", default-features = false }
+block-padding = { version = "0.3", default-features = false }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "std"] }
@@ -539,7 +539,7 @@ blake2 = { version = "0.9", features = ["std"] }
 blake2s_simd = { version = "1", features = ["std"] }
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
-block-padding = { version = "0.2", default-features = false }
+block-padding = { version = "0.3", default-features = false }
 bls-crypto = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", features = ["compat"] }
 blst = { version = "0.3" }
 bs58 = { version = "0.4", features = ["alloc", "std"] }
