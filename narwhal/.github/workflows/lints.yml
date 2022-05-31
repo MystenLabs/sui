@@ -1,0 +1,38 @@
+name: Check scripts & Docker file
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  shellcheck:
+    name: Check shell scripts
+    runs-on: [ubuntu-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run ShellCheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        severity: error
+
+  docker-lint:
+    name: Lint Docker file
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            docker:
+              - 'Docker/**'
+      - name: Lint Docker file
+        if: steps.filter.outputs.docker == 'true'
+        uses: hadolint/hadolint-action@v2.0.0
+        with:
+          failure-threshold: error
+          dockerfile: Docker/Dockerfile
