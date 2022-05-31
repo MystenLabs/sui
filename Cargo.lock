@@ -626,7 +626,7 @@ checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
 dependencies = [
  "lazy_static 1.4.0",
  "memchr",
- "regex-automata",
+ "regex-automata 0.1.10",
  "serde 1.0.137",
 ]
 
@@ -1693,9 +1693,9 @@ dependencies = [
 
 [[package]]
 name = "ethnum"
-version = "1.1.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63b40347dcad92b4dfeb9765c41c48503416daddf6dba55b74614dc035a43ed2"
+checksum = "f6f4ea34740bd5042b688060cbff8b010f5a324719d5e111284d648035bccc47"
 
 [[package]]
 name = "event-listener"
@@ -2878,7 +2878,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
 dependencies = [
- "regex-automata",
+ "regex-automata 0.1.10",
 ]
 
 [[package]]
@@ -2940,9 +2940,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.5.1"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2b29bd4bc3f33391105ebee3589c19197c4271e3e5a9ec9bfe8127eeff8f082"
+checksum = "6f5c75688da582b8ffc1f1799e9db273f32133c49e048f614d22ec3256773ccc"
 dependencies = [
  "adler",
 ]
@@ -4841,6 +4841,16 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
 dependencies = [
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9368763f5a9b804326f3af749e16f9abf378d227bcdee7634b13d8f17793782"
+dependencies = [
+ "memchr",
  "regex-syntax",
 ]
 
@@ -7762,7 +7772,7 @@ dependencies = [
  "ref-cast",
  "ref-cast-impl",
  "regex",
- "regex-automata",
+ "regex-automata 0.2.0",
  "regex-syntax",
  "remove_dir_all",
  "ring",
