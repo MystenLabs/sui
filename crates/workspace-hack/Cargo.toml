@@ -337,7 +337,7 @@ rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc"
 rand_chacha = { version = "0.3", features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
-rand_pcg = { version = "0.2", default-features = false }
+rand_pcg = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
@@ -869,7 +869,7 @@ rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc"
 rand_chacha = { version = "0.3", features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
-rand_pcg = { version = "0.2", default-features = false }
+rand_pcg = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
