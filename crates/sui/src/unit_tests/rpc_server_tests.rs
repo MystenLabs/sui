@@ -14,7 +14,6 @@ use std::{
 use sui::{
     config::{PersistedConfig, WalletConfig},
     keystore::{Keystore, SuiKeystore},
-    sui_commands::SuiNetwork,
 };
 use sui_config::{SUI_GATEWAY_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::GatewayTxSeqNumber;
@@ -31,6 +30,7 @@ use sui_gateway::{
     rpc_gateway::RpcGatewayImpl,
 };
 use sui_json::SuiJsonValue;
+use sui_swarm::memory::Swarm;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -256,14 +256,14 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 }
 
 async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
-    let working_dir = tempfile::tempdir()?.path().to_path_buf();
-    let _network = start_test_network(&working_dir, None).await?;
+    let network = start_test_network(None).await?;
     let (server_addr, rpc_server_handle) =
-        start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
-    let wallet_conf: WalletConfig = PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
+        start_rpc_gateway(&network.dir().join(SUI_GATEWAY_CONFIG)).await?;
+    let wallet_conf: WalletConfig = PersistedConfig::read(&network.dir().join(SUI_WALLET_CONFIG))?;
     let http_client = HttpClientBuilder::default().build(format!("http://{}", server_addr))?;
+    let working_dir = network.dir().into();
     Ok(TestNetwork {
-        _network,
+        _network: network,
         _rpc_server: rpc_server_handle,
         accounts: wallet_conf.accounts,
         http_client,
@@ -272,7 +272,7 @@ async fn setup_test_network() -> Result<TestNetwork, anyhow::Error> {
 }
 
 struct TestNetwork {
-    _network: SuiNetwork,
+    _network: Swarm,
     _rpc_server: HttpServerHandle,
     accounts: Vec<SuiAddress>,
     http_client: HttpClient,
