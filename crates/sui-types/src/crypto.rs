@@ -3,6 +3,7 @@
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
+use crate::intent::SecureIntent;
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
 use anyhow::anyhow;
@@ -273,6 +274,14 @@ impl Signature {
         secret.sign(&message)
     }
 
+    /// TODO: This method will replace `new` in an upcoming PR.
+    pub fn new_secure<T>(value: &T, secret: &dyn signature::Signer<Signature>) -> Self
+    where
+        T: SecureIntent,
+    {
+        secret.sign(&bcs::to_bytes(&value).expect("Message serialization should not fail"))
+    }
+
     pub fn signature_bytes(&self) -> &[u8] {
         &self.0[..ed25519_dalek::SIGNATURE_LENGTH]
     }
@@ -288,6 +297,31 @@ impl Signature {
         T: Signable<Vec<u8>>,
     {
         let (message, signature, public_key_bytes) = self.get_verification_inputs(value, author)?;
+
+        // is this a cryptographically correct public key?
+        // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
+        let public_key =
+            dalek::PublicKey::from_bytes(public_key_bytes.as_ref()).map_err(|err| {
+                SuiError::InvalidSignature {
+                    error: err.to_string(),
+                }
+            })?;
+
+        // perform cryptographic signature check
+        public_key
+            .verify(&message, &signature)
+            .map_err(|error| SuiError::InvalidSignature {
+                error: error.to_string(),
+            })
+    }
+
+    /// TODO: This method will replace `verify` in an upcoming PR.
+    pub fn verify_secure<T>(&self, value: &T, author: SuiAddress) -> Result<(), SuiError>
+    where
+        T: SecureIntent,
+    {
+        let (message, signature, public_key_bytes) =
+            self.get_verification_inputs_secure(value, author)?;
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
@@ -337,6 +371,41 @@ impl Signature {
         // serialize the message (see BCS serialization for determinism)
         let mut message = Vec::new();
         value.write(&mut message);
+
+        Ok((message, signature, PublicKeyBytes(public_key_bytes)))
+    }
+
+    /// TODO: This method will replace `get_verification_inputs<T>` in an upcoming PR.
+    pub fn get_verification_inputs_secure<T>(
+        &self,
+        value: &T,
+        author: SuiAddress,
+    ) -> Result<(Vec<u8>, ed25519_dalek::Signature, PublicKeyBytes), SuiError>
+    where
+        T: SecureIntent,
+    {
+        // Is this signature emitted by the expected author?
+        let public_key_bytes: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] = self
+            .public_key_bytes()
+            .try_into()
+            .expect("byte lengths match");
+        let received_addr = SuiAddress::from(&PublicKeyBytes(public_key_bytes));
+        if received_addr != author {
+            return Err(SuiError::IncorrectSigner {
+                error: format!("Signature get_verification_inputs() failure. Author is {author}, received address is {received_addr}")
+            });
+        }
+
+        // deserialize the signature
+        let signature =
+            ed25519_dalek::Signature::from_bytes(self.signature_bytes()).map_err(|err| {
+                SuiError::InvalidSignature {
+                    error: err.to_string(),
+                }
+            })?;
+
+        // serialize the message (see BCS serialization for determinism)
+        let message = bcs::to_bytes(value).expect("Message serialization should not fail");
 
         Ok((message, signature, PublicKeyBytes(public_key_bytes)))
     }
