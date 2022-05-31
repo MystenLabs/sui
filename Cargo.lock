@@ -430,9 +430,9 @@ dependencies = [
 
 [[package]]
 name = "beef"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bed554bd50246729a1ec158d08aa3235d1b69d94ad120ebe187e28894787e736"
+checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 dependencies = [
  "serde 1.0.137",
 ]
@@ -2153,9 +2153,9 @@ dependencies = [
 
 [[package]]
 name = "hakari"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35cafecb693cbf0c09e3079793e65ee4b1567297c29d9fd8de2306e98feb8d61"
+checksum = "532c7a447b62879000ce0841235f85853fa3a44d4f05fc6fa504759966fc6056"
 dependencies = [
  "atomicwrites",
  "bimap",
