@@ -72,10 +72,12 @@ class CommandMaker:
         return f'rm demo_client ; ln -s {client} .'
 
     @staticmethod
-    def run_demo_client(key, port):
-        assert isinstance(key, str)
-        assert isinstance(port, int) and port > 1024
-        return f'./demo_client run --key {key} --port {port}'
+    def run_demo_client(keys, ports):
+        assert all(isinstance(x, str) for x in keys)
+        assert all(isinstance(x, int) and x > 1024 for x in ports)
+        keys_string = ",".join(keys)
+        ports_string = ",".join([str(x) for x in ports])
+        return f'./demo_client run --keys "{keys_string}" --ports "{ports_string}"'
 
     @staticmethod
     def kill():

@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::{crate_name, crate_version, App, AppSettings, SubCommand};
+use clap::{crate_name, crate_version, App, AppSettings, Arg, SubCommand};
 use narwhal::proposer_client::ProposerClient;
 use narwhal::validator_client::ValidatorClient;
 use narwhal::{
@@ -25,31 +25,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .subcommand(
             SubCommand::with_name("run")
                 .about("Run the demo with a local gRPC server")
-                .args_from_usage(
-                    "--key=<PUBLICKEY> 'The base64-encoded publickey of the node to query'",
+                .arg(
+                    Arg::with_name("keys")
+                        .long("keys")
+                        .help("The base64-encoded publickey of the node to query")
+                        .use_delimiter(true)
+                        .min_values(2),
                 )
-                .args_from_usage(
-                    "--port=<PORT> 'The ports on localhost where to reach the grpc server'",
+                .arg(
+                    Arg::with_name("ports")
+                        .long("ports")
+                        .help("The ports on localhost where to reach the grpc server")
+                        .use_delimiter(true)
+                        .min_values(2),
                 ),
         )
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .get_matches();
 
-    let mut dst = "http://127.0.0.1:".to_owned();
-    let mut base64_key = "Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=".to_owned();
+    let mut dsts = Vec::new();
+    let mut base64_keys = Vec::new();
     match matches.subcommand() {
-        ("docker_demo", Some(_sub_matches)) => dst.push_str("8000"),
+        ("docker_demo", Some(_sub_matches)) => {
+            dsts.push("http://127.0.0.1:8000".to_owned());
+            base64_keys.push("Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=".to_owned());
+        }
         ("run", Some(sub_matches)) => {
-            let port = sub_matches
-                .value_of("port")
-                .expect("Invalid port specified");
+            let ports = sub_matches
+                .values_of("ports")
+                .expect("Invalid ports specified");
             // TODO : check this arg is correctly formatted (number < 65536)
-            dst.push_str(port);
-            let key = sub_matches
-                .value_of("key")
-                .expect("Invalid public key specified");
+            for port in ports {
+                dsts.push(format!("http://127.0.0.1:{port}"))
+            }
+            let keys = sub_matches
+                .values_of("keys")
+                .expect("Invalid public keys specified");
             // TODO : check this arg is correctly formatted (pk in base64)
-            base64_key = key.to_owned();
+            for key in keys {
+                base64_keys.push(key.to_owned())
+            }
         }
         _ => unreachable!(),
     }
@@ -57,8 +72,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "\n******************************** Proposer Service ********************************\n"
     );
-    let mut client = ProposerClient::connect(dst.clone()).await?;
-    let public_key = base64::decode(&base64_key).unwrap();
+    let mut client = ProposerClient::connect(dsts[0].clone()).await?;
+    let public_key = base64::decode(&base64_keys[0]).unwrap();
     let gas_limit = 10;
 
     println!("\n1) Retrieve the range of rounds you have a collection for\n");
@@ -117,7 +132,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "\n******************************** Validator Service ********************************\n"
     );
-    let mut client = ValidatorClient::connect(dst).await?;
+    let other_validator = if dsts.len() > 1 {
+        dsts[1].clone()
+    } else {
+        // we're probably running the docker comamnd with a single endpoint
+        dsts[0].clone()
+    };
+    let mut client = ValidatorClient::connect(other_validator).await?;
 
     println!("\n3) Find all causal collections from the collections found.\n");
     println!("\n---- Use ReadCausal endpoint ----\n");

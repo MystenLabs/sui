@@ -128,7 +128,8 @@ class Demo:
                     self._background_run(cmd, log_file)
 
             # Wait for all transactions to be processed.
-            Print.info(f'Running benchmark ({self.duration} sec)...')
+            Print.info(
+                f'Seeding the testbed with transactions ({self.duration} sec)...')
 
             # Parse logs and return the parser.
             Print.info('Parsing logs...')
@@ -136,11 +137,11 @@ class Demo:
                 PathMaker.logs_path(), faults=self.faults)
 
             for port in port_logs.grpc_ports:
-                print(f'Found port for grpc server at {port}')
+                print(f'Found port for local grpc server: {port}')
+            ports = [int(port) for port in port_logs.grpc_ports]
             sleep(self.duration)
 
-            cmd = CommandMaker.run_demo_client(
-                names[0], int(port_logs.grpc_ports[0]))
+            cmd = CommandMaker.run_demo_client(names,  ports)
             self.demo_log_path = PathMaker.demo_client_log_file()
             self._background_run_with_stdout(cmd, self.demo_log_path)
             # ironically, it takes a *while* to get data from gRPC
@@ -150,7 +151,7 @@ class Demo:
 
         except (subprocess.SubprocessError, ParseError) as e:
             self._kill_nodes()
-            raise BenchError('Failed to run benchmark', e)
+            raise BenchError('Failed to run demo', e)
 
     def result(self):
         return f"Done with demo, find the log at {self.demo_log_path}"
