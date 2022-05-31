@@ -808,7 +808,7 @@ impl AuthorityState {
         state
     }
 
-    pub(crate) fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
+    pub fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
         self.checkpoints.clone()
     }
 

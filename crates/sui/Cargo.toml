@@ -80,7 +80,7 @@ workspace-hack = { path = "../workspace-hack"}
 tracing-test = "0.2.1"
 pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.2", features = ["codec"] }
-
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"}
 test-utils = { path = "../test-utils" }
 
 [features]
