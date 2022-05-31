@@ -2,16 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base64DataBuffer } from '../../serialization/base64';
-import { ObjectId, SuiAddress } from '../../types';
+import { ObjectId, SuiAddress, SuiJsonValue } from '../../types';
 
 ///////////////////////////////
 // Exported Types
 export interface TransferCoinTransaction {
-  signer: SuiAddress;
   objectId: ObjectId;
-  gasPayment: ObjectId;
+  gasPayment?: ObjectId;
   gasBudget: number;
   recipient: SuiAddress;
+}
+
+export interface MoveCallTransaction {
+  packageObjectId: ObjectId;
+  module: string;
+  function: string;
+  typeArguments: string[];
+  arguments: SuiJsonValue[];
+  gasPayment?: ObjectId;
+  gasBudget: number;
 }
 
 ///////////////////////////////
@@ -20,7 +29,15 @@ export interface TransferCoinTransaction {
  * Serializes a transaction to a string that can be signed by a `Signer`.
  */
 export interface TxnDataSerializer {
-  newTransferCoin(txn: TransferCoinTransaction): Promise<Base64DataBuffer>;
+  newTransferCoin(
+    signerAddress: SuiAddress,
+    txn: TransferCoinTransaction
+  ): Promise<Base64DataBuffer>;
 
-  // TODO: add more interface methods
+  newMoveCall(
+    signerAddress: SuiAddress,
+    txn: MoveCallTransaction
+  ): Promise<Base64DataBuffer>;
+
+  // TODO: add `newSplitCoin` and `newMergeCoin`
 }
