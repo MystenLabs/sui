@@ -4,6 +4,7 @@
 import { Ed25519Keypair } from '../cryptography/ed25519-keypair';
 import { Provider } from '../providers/provider';
 import { Base64DataBuffer } from '../serialization/base64';
+import { SuiAddress } from '../types';
 import { SignaturePubkeyPair } from './signer';
 import { SignerWithProvider } from './signer-with-provider';
 import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
@@ -20,8 +21,8 @@ export class RawSigner extends SignerWithProvider {
     this.keypair = keypair;
   }
 
-  async getAddress(): Promise<string> {
-    throw this.keypair.getPublicKey().toSuiAddress();
+  async getAddress(): Promise<SuiAddress> {
+    return this.keypair.getPublicKey().toSuiAddress();
   }
 
   async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {

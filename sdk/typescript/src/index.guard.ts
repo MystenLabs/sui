@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferCoinTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferCoin, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, Event, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SplitCoinResponse, TransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferCoinTransaction, MoveCallTransaction, TxnDataSerializer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferCoin, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, Event, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SplitCoinResponse, TransactionResponse } from "./index";
 import { BN } from "bn.js";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
@@ -56,11 +56,33 @@ export function isTransferCoinTransaction(obj: any, _argumentName?: string): obj
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        isTransactionDigest(obj.signer) as boolean &&
         isTransactionDigest(obj.objectId) as boolean &&
-        isTransactionDigest(obj.gasPayment) as boolean &&
+        (typeof obj.gasPayment === "undefined" ||
+            isTransactionDigest(obj.gasPayment) as boolean) &&
         isSequenceNumber(obj.gasBudget) as boolean &&
         isTransactionDigest(obj.recipient) as boolean
+    )
+}
+
+export function isMoveCallTransaction(obj: any, _argumentName?: string): obj is MoveCallTransaction {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.packageObjectId) as boolean &&
+        isTransactionDigest(obj.module) as boolean &&
+        isTransactionDigest(obj.function) as boolean &&
+        Array.isArray(obj.typeArguments) &&
+        obj.typeArguments.every((e: any) =>
+            isTransactionDigest(e) as boolean
+        ) &&
+        Array.isArray(obj.arguments) &&
+        obj.arguments.every((e: any) =>
+            isSuiJsonValue(e) as boolean
+        ) &&
+        (typeof obj.gasPayment === "undefined" ||
+            isTransactionDigest(obj.gasPayment) as boolean) &&
+        isSequenceNumber(obj.gasBudget) as boolean
     )
 }
 
@@ -69,7 +91,8 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        typeof obj.newTransferCoin === "function"
+        typeof obj.newTransferCoin === "function" &&
+        typeof obj.newMoveCall === "function"
     )
 }
 
