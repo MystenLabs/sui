@@ -20,7 +20,7 @@ hex = "0.4.3"
 tokio = { version = "1.18.2", features = ["full", "tracing", "test-util"] }
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 tokio-util = { version = "0.7.2", features = ["codec"] }
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 itertools = "0.10.3"
 async-trait = "0.1.53"
 tempfile = "3.3.0"

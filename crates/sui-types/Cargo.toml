@@ -26,7 +26,7 @@ serde_with = "1.14.0"
 signature = "1.5.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 base64ct = { version = "1.5.0", features = ["alloc"] }
 sha2 = "0.10.2"
 zeroize = "1.5.4"
