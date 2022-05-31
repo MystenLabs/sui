@@ -1,4 +1,22 @@
-### How to run demo client
+## How to run the demo client
+## Via fabric
+
+1. Go to the `benchmark` folder 
+2. Install the requirements 
+
+```
+pip install -r requirements.txt
+```
+
+3. Run the `demo` fabric command
+
+```
+fab demo
+```
+
+The parameters for the transaction rate (etc) can be adjusted by editing the `fabfile.py` file.
+
+## Via Docker (NOT WORKING RELIABLY YET)
 
 1. First start up the narwhal cluster via `docker-compose`
 
