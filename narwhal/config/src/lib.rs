@@ -595,7 +595,7 @@ mod tests {
             "Handler certificate deliver timeout set to 2000 ms"
         ));
         assert!(logs_contain(
-            "Consensus API gRPC Server listening on /ip4/127.0.0.1"
+            "Consensus API gRPC Server set to listen on on /ip4/127.0.0.1/tcp"
         ));
         assert!(logs_contain("Get collections timeout set to 5000 ms"));
         assert!(logs_contain("Remove collections timeout set to 5000 ms"));
