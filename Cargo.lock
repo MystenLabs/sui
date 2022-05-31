@@ -2174,7 +2174,7 @@ dependencies = [
  "tabular",
  "target-spec",
  "toml",
- "toml_edit",
+ "toml_edit 0.13.4",
  "twox-hash",
 ]
 
@@ -5232,12 +5232,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b827f2113224f3f19a665136f006709194bdfdcb1fdc1e4b2b5cbac8e0cced54"
+checksum = "678b5a069e50bf00ecd22d0cd8ddf7c236f68581b03db652061ed5eb13a312ff"
 dependencies = [
  "hex",
- "rustversion",
  "serde 1.0.137",
  "serde_with_macros",
 ]
@@ -6499,6 +6498,17 @@ dependencies = [
  "indexmap",
  "itertools",
  "kstring",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5376256e44f2443f8896ac012507c19a012df0fe8758b55246ae51a2279db51f"
+dependencies = [
+ "combine",
+ "indexmap",
+ "itertools",
 ]
 
 [[package]]
@@ -7862,7 +7872,7 @@ dependencies = [
  "tokio-util 0.6.10",
  "tokio-util 0.7.2",
  "toml",
- "toml_edit",
+ "toml_edit 0.14.4",
  "tonic",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",

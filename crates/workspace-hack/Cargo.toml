@@ -430,7 +430,7 @@ tokio-stream = { version = "0.1", features = ["net", "sync", "time", "tokio-util
 tokio-util-3b31131e45eafb45 = { package = "tokio-util", version = "0.6" }
 tokio-util-ca01ad9e24f5d932 = { package = "tokio-util", version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
-toml_edit = { version = "0.13" }
+toml_edit = { version = "0.14" }
 tonic = { version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
 tonic-health = { version = "0.6", features = ["transport"] }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
@@ -982,7 +982,7 @@ tokio-stream = { version = "0.1", features = ["net", "sync", "time", "tokio-util
 tokio-util-3b31131e45eafb45 = { package = "tokio-util", version = "0.6" }
 tokio-util-ca01ad9e24f5d932 = { package = "tokio-util", version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
-toml_edit = { version = "0.13" }
+toml_edit = { version = "0.14" }
 tonic = { version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
 tonic-build-bb1f6c4a1756a23d = { package = "tonic-build", git = "https://github.com/hyperium/tonic.git", rev = "de2e4ac077c076736dc451f3415ea7da1a61a560", default-features = false, features = ["transport"] }
 tonic-build-ca01ad9e24f5d932 = { package = "tonic-build", version = "0.7", features = ["prost", "prost-build", "transport"] }
