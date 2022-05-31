@@ -322,7 +322,7 @@ pin-project = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
-pretty = { version = "0.10", default-features = false }
+pretty = { version = "0.11", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 primary = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
 proc-macro2 = { version = "1", features = ["proc-macro", "span-locations"] }
@@ -847,7 +847,7 @@ pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
 pkg-config = { version = "0.3", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
-pretty = { version = "0.10", default-features = false }
+pretty = { version = "0.11", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
 primary = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
