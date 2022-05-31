@@ -104,6 +104,23 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
             fullnodes: HashMap::new(),
         }
     }
+
+    pub fn from_network_config(self, dir: PathBuf, network_config: NetworkConfig) -> Swarm {
+        let dir = SwarmDirectory::Persistent(dir);
+
+        let validators = network_config
+            .validator_configs()
+            .iter()
+            .map(|config| (config.sui_address(), Node::new(config.to_owned())))
+            .collect();
+
+        Swarm {
+            dir,
+            network_config,
+            validators,
+            fullnodes: HashMap::new(),
+        }
+    }
 }
 
 /// A handle to an in-memory Sui Network.

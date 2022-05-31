@@ -16,11 +16,10 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
     SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
+use sui_swarm::memory::Swarm;
 use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
-
-pub use crate::make::SuiNetwork;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -79,11 +78,18 @@ impl SuiCommand {
                         ))
                     })?;
 
-                // Start a sui validator (including its consensus node).
-                SuiNetwork::start(&network_config)
-                    .await?
-                    .wait_for_completion()
-                    .await
+                let mut swarm =
+                    Swarm::builder().from_network_config(sui_config_dir()?, network_config);
+                swarm.launch().await?;
+
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                loop {
+                    for node in swarm.validators_mut() {
+                        node.health_check().await?;
+                    }
+
+                    interval.tick().await;
+                }
             }
             SuiCommand::Network {
                 config,

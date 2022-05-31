@@ -217,7 +217,6 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_custom_genesis() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
 
@@ -233,10 +232,10 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         gas_object_ranges: None,
     });
 
-    let _network = start_test_network(working_dir.path(), Some(config)).await?;
+    let network = start_test_network(Some(config)).await?;
 
     // Wallet config
-    let mut context = WalletContext::new(&working_dir.path().join(SUI_WALLET_CONFIG))?;
+    let mut context = WalletContext::new(&network.dir().join(SUI_WALLET_CONFIG))?;
     assert_eq!(1, context.config.accounts.len());
     let address = context.config.accounts.first().cloned().unwrap();
 
@@ -268,8 +267,6 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
-    let temp_dir = tempfile::tempdir()?;
-    let working_dir = temp_dir.path();
     // Create and save genesis config file
     // Create 4 authorities and 1 account
     let num_authorities = 4;
@@ -282,15 +279,15 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
 
     // Start network
-    let _network = start_test_network(working_dir, Some(config)).await?;
+    let network = start_test_network(Some(config)).await?;
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
     let _network_conf =
-        PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
+        PersistedConfig::<NetworkConfig>::read(&network.dir().join(SUI_NETWORK_CONFIG))?;
 
     // Create Wallet context.
-    let wallet_conf_path = working_dir.join(SUI_WALLET_CONFIG);
+    let wallet_conf_path = network.dir().join(SUI_WALLET_CONFIG);
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
@@ -914,11 +911,10 @@ fn test_bug_1078() {
 #[traced_test]
 #[tokio::test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    let _network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+    let wallet_conf = network.dir().join(SUI_WALLET_CONFIG);
 
     let mut context = WalletContext::new(&wallet_conf)?;
 
@@ -1012,11 +1008,10 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    let _network = start_test_network(working_dir.path(), None).await?;
+    let network = start_test_network(None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+    let wallet_conf = network.dir().join(SUI_WALLET_CONFIG);
 
     let mut context = WalletContext::new(&wallet_conf)?;
 
