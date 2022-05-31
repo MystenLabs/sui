@@ -1474,6 +1474,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "850878694b7933ca4c9569d30a34b55031b9b139ee1fc7b94a527c4ef960d690"
 
 [[package]]
+name = "deunicode"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2c9736e15e7df1638a7f6eee92a6511615c738246a052af5ba86f039b65aede"
+
+[[package]]
 name = "diff"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2153,9 +2159,9 @@ dependencies = [
 
 [[package]]
 name = "hakari"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35cafecb693cbf0c09e3079793e65ee4b1567297c29d9fd8de2306e98feb8d61"
+checksum = "532c7a447b62879000ce0841235f85853fa3a44d4f05fc6fa504759966fc6056"
 dependencies = [
  "atomicwrites",
  "bimap",
@@ -5444,7 +5450,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3bc762e6a4b6c6fcaade73e77f9ebc6991b676f88bb2358bddb56560f073373"
 dependencies = [
- "deunicode",
+ "deunicode 0.4.3",
 ]
 
 [[package]]
@@ -7495,7 +7501,7 @@ dependencies = [
  "derive_builder_core",
  "derive_builder_macro",
  "determinator",
- "deunicode",
+ "deunicode 1.3.1",
  "diff",
  "difference",
  "diffus",
