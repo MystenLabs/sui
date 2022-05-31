@@ -507,6 +507,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitmaps"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "703642b98a00b3b90513279a8ede3fcfa479c126c5fb46e78f3051522f021403"
+
+[[package]]
 name = "blake2"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2418,7 +2424,7 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0acd33ff0285af998aaf9b57342af478078f53492322fafc47450e09397e0e9"
 dependencies = [
- "bitmaps",
+ "bitmaps 2.1.0",
  "rand_core 0.6.3",
  "rand_xoshiro",
  "sized-chunks",
@@ -2487,7 +2493,7 @@ dependencies = [
  "dashmap",
  "hashbrown 0.12.1",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -2594,7 +2600,7 @@ dependencies = [
  "futures-util",
  "hyper",
  "jsonrpsee-types",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "rand 0.8.5",
  "rustc-hash",
  "serde 1.0.137",
@@ -4167,9 +4173,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
+checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api 0.4.7",
  "parking_lot_core 0.9.3",
@@ -4517,7 +4523,7 @@ dependencies = [
  "fnv",
  "lazy_static 1.4.0",
  "memchr",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "thiserror",
 ]
 
@@ -5427,7 +5433,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16d69225bde7a69b235da73377861095455d298f2b970996eec25ddbb42b3d1e"
 dependencies = [
- "bitmaps",
+ "bitmaps 2.1.0",
  "typenum",
 ]
 
@@ -5586,7 +5592,7 @@ dependencies = [
  "node",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pretty_assertions",
  "prometheus_exporter",
  "rand 0.7.3",
@@ -5644,7 +5650,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "sui-framework",
  "sui-types",
  "sui-verifier",
@@ -5713,7 +5719,7 @@ dependencies = [
  "mysten-network",
  "node",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pretty_assertions",
  "prometheus_exporter",
  "rand 0.7.3",
@@ -5888,7 +5894,7 @@ dependencies = [
  "jsonrpsee",
  "multiaddr",
  "mysten-network",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "prometheus_exporter",
  "sui-config",
  "sui-core",
@@ -6002,7 +6008,7 @@ dependencies = [
  "name-variant",
  "once_cell",
  "opentelemetry",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
  "schemars",
  "serde 1.0.137",
@@ -6396,7 +6402,7 @@ dependencies = [
  "mio 0.8.3",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
@@ -7413,7 +7419,7 @@ dependencies = [
  "bincode",
  "bindgen",
  "bitflags",
- "bitmaps",
+ "bitmaps 3.2.0",
  "blake2",
  "blake2s_simd",
  "block-buffer 0.10.2",
@@ -7701,7 +7707,7 @@ dependencies = [
  "owo-colors",
  "parking_lot 0.10.2",
  "parking_lot 0.11.2",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "parking_lot_core 0.7.2",
  "parking_lot_core 0.8.5",
  "parking_lot_core 0.9.3",
