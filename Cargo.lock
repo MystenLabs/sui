@@ -1148,6 +1148,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossterm"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2102ea4f781910f8a5b98dd061f4c2023f479ce7bb1236330099ceb5a93cf17"
+dependencies = [
+ "bitflags",
+ "crossterm_winapi 0.9.0",
+ "libc",
+ "mio 0.8.3",
+ "parking_lot 0.12.1",
+ "signal-hook",
+ "signal-hook-mio",
+ "winapi",
+]
+
+[[package]]
 name = "crossterm_winapi"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1693,9 +1709,9 @@ dependencies = [
 
 [[package]]
 name = "ethnum"
-version = "1.1.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63b40347dcad92b4dfeb9765c41c48503416daddf6dba55b74614dc035a43ed2"
+checksum = "f6f4ea34740bd5042b688060cbff8b010f5a324719d5e111284d648035bccc47"
 
 [[package]]
 name = "event-listener"
@@ -2940,9 +2956,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.5.1"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2b29bd4bc3f33391105ebee3589c19197c4271e3e5a9ec9bfe8127eeff8f082"
+checksum = "6f5c75688da582b8ffc1f1799e9db273f32133c49e048f614d22ec3256773ccc"
 dependencies = [
  "adler",
 ]
@@ -3068,7 +3084,7 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "regex",
- "tui",
+ "tui 0.17.0",
 ]
 
 [[package]]
@@ -5387,6 +5403,7 @@ checksum = "29ad2e15f37ec9a6cc544097b78a1ec90001e9f71b81338ca39f430adaca99af"
 dependencies = [
  "libc",
  "mio 0.7.14",
+ "mio 0.8.3",
  "signal-hook",
 ]
 
@@ -6792,6 +6809,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tui"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96fe69244ec2af261bced1d9046a6fee6c8c2a6b0228e59e5ba39bc8ba4ed729"
+dependencies = [
+ "bitflags",
+ "cassowary",
+ "crossterm 0.23.2",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "twox-hash"
 version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7887,7 +7917,7 @@ dependencies = [
  "tracing-test",
  "tracing-test-macro",
  "try-lock",
- "tui",
+ "tui 0.18.0",
  "twox-hash",
  "typed-arena",
  "typed-store",
