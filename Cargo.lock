@@ -4860,6 +4860,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "retry"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac95c60a949a63fd2822f4964939662d8f2c16c4fa0624fd954bc6e703b9a3f6"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "ring"
 version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5720,6 +5729,7 @@ dependencies = [
  "pretty_assertions",
  "prometheus_exporter",
  "rand 0.7.3",
+ "retry",
  "rocksdb",
  "schemars",
  "scopeguard",

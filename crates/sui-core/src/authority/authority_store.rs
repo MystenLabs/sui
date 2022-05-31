@@ -4,6 +4,10 @@ use super::*;
 use crate::epoch::EpochInfoLocals;
 use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
+use retry::{
+    delay::{jitter, Exponential},
+    retry_with_index, OperationResult,
+};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -204,6 +208,8 @@ impl<
         }
     }
 
+    // TODO: Async retry method, using tokio-retry crate.
+
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
     pub fn get_effects(
         &self,
@@ -354,19 +360,32 @@ impl<
     pub async fn get_transaction_envelope(
         &self,
         object_ref: &ObjectRef,
-    ) -> Result<Option<TransactionEnvelope<S>>, SuiError> {
+    ) -> SuiResult<Option<TransactionEnvelope<S>>> {
         let transaction_option = self
             .lock_service
             .get_lock(*object_ref)
             .await?
             .ok_or(SuiError::TransactionLockDoesNotExist)?;
 
+        // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
+        // However we retry a couple times because the TX is written after the lock is acquired, so it might
+        // just be a race.
         match transaction_option {
-            Some(tx_digest) => Ok(Some(
-                self.transactions
-                    .get(&tx_digest)?
-                    .expect("Stored a lock without storing transaction?"),
-            )),
+            Some(tx_digest) => {
+                // Retry getting transaction
+                retry_with_index(Exponential::from_millis(20).map(jitter).take(3), |retry_num| {
+                    match self.transactions.get(&tx_digest) {
+                        Err(e) => OperationResult::Err(SuiError::StorageError(e)),
+                        Ok(Some(tx)) => OperationResult::Ok(Some(tx)),
+                        Ok(None) if retry_num < 3 => OperationResult::Retry(SuiError::TransactionNotFound { digest: tx_digest }),
+                        _ => {
+                            trace!(?tx_digest, ?retry_num, "No transaction in store even after 3 retries, but lock present");
+                            OperationResult::Ok(None)
+                        }
+                    }
+                // Not expected to have retry error since after 2 retries we just bail and return OK
+                }).map_err(|e| SuiError::GenericAuthorityError { error: e.to_string() })
+            }
             None => Ok(None),
         }
     }
@@ -810,6 +829,7 @@ impl<
                         }
                     })
                     .collect();
+
                 self.lock_service
                     .initialize_locks(&new_locks_to_init, false /* is_force_reset */)
                     .await?;
