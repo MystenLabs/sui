@@ -348,6 +348,7 @@ regex = { version = "1", features = ["aho-corasick", "memchr", "perf", "perf-cac
 regex-automata = { version = "0.1", features = ["regex-syntax", "std"] }
 regex-syntax = { version = "0.6", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 remove_dir_all = { version = "0.5", default-features = false }
+retry = { version = "1", features = ["rand", "random"] }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 rocksdb = { version = "0.18", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
@@ -882,6 +883,7 @@ regex = { version = "1", features = ["aho-corasick", "memchr", "perf", "perf-cac
 regex-automata = { version = "0.1", features = ["regex-syntax", "std"] }
 regex-syntax = { version = "0.6", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 remove_dir_all = { version = "0.5", default-features = false }
+retry = { version = "1", features = ["rand", "random"] }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 rocksdb = { version = "0.18", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
