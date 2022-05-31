@@ -1,14 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#[allow(unused_imports)]
-use narwhal::configuration_client::ConfigurationClient;
+
+use clap::{crate_name, crate_version, App, AppSettings, SubCommand};
 use narwhal::proposer_client::ProposerClient;
 use narwhal::validator_client::ValidatorClient;
-#[allow(unused_imports)]
 use narwhal::{
-    CertificateDigest, GetCollectionsRequest, MultiAddr, NewNetworkInfoRequest,
-    NodeReadCausalRequest, PublicKey, ReadCausalRequest, RemoveCollectionsRequest, RoundsRequest,
-    ValidatorData,
+    CertificateDigest, GetCollectionsRequest, NodeReadCausalRequest, PublicKey, ReadCausalRequest,
+    RemoveCollectionsRequest, RoundsRequest,
 };
 
 pub mod narwhal {
@@ -17,38 +15,50 @@ pub mod narwhal {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /*
+    let matches = App::new(crate_name!())
+        .version(crate_version!())
+        .about("A gRPC client emulating the Proposer / Validator API")
+        .subcommand(
+            SubCommand::with_name("docker_demo")
+                .about("run the demo with the hardcoded Docker deployment"),
+        )
+        .subcommand(
+            SubCommand::with_name("run")
+                .about("Run the demo with a local gRPC server")
+                .args_from_usage(
+                    "--key=<PUBLICKEY> 'The base64-encoded publickey of the node to query'",
+                )
+                .args_from_usage(
+                    "--port=<PORT> 'The ports on localhost where to reach the grpc server'",
+                ),
+        )
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .get_matches();
 
-    println!("\n******************************** Configuration Service ********************************\n");
-    let mut client = ConfigurationClient::connect("http://127.0.0.1:8000").await?;
-    let stake_weight = 1;
-    let address = MultiAddr {
-        address: "/ip4/127.0.0.1".to_string(),
-    };
-
-    println!("\n---- Test NewNetworkInfo endpoint ----\n");
-    let request = tonic::Request::new(NewNetworkInfoRequest {
-        epoch_number: 0,
-        validators: vec![ValidatorData {
-            public_key: Some(PublicKey {
-                bytes: public_key.clone(),
-            }),
-            stake_weight,
-            address: Some(address),
-        }],
-    });
-
-    let response = client.new_network_info(request).await;
-
-    println!("NewNetworkInfoResponse={:?}", response);
-
-    */
+    let mut dst = "http://127.0.0.1:".to_owned();
+    let mut base64_key = "Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=".to_owned();
+    match matches.subcommand() {
+        ("docker_demo", Some(_sub_matches)) => dst.push_str("8000"),
+        ("run", Some(sub_matches)) => {
+            let port = sub_matches
+                .value_of("port")
+                .expect("Invalid port specified");
+            // TODO : check this arg is correctly formatted (number < 65536)
+            dst.push_str(port);
+            let key = sub_matches
+                .value_of("key")
+                .expect("Invalid public key specified");
+            // TODO : check this arg is correctly formatted (pk in base64)
+            base64_key = key.to_owned();
+        }
+        _ => unreachable!(),
+    }
 
     println!(
         "\n******************************** Proposer Service ********************************\n"
     );
-    let mut client = ProposerClient::connect("http://127.0.0.1:8000").await?;
-    let public_key = base64::decode("Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=").unwrap();
+    let mut client = ProposerClient::connect(dst.clone()).await?;
+    let public_key = base64::decode(&base64_key).unwrap();
     let gas_limit = 10;
 
     println!("\n1) Retrieve the range of rounds you have a collection for\n");
@@ -107,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "\n******************************** Validator Service ********************************\n"
     );
-    let mut client = ValidatorClient::connect("http://127.0.0.1:8000").await?;
+    let mut client = ValidatorClient::connect(dst).await?;
 
     println!("\n3) Find all causal collections from the collections found.\n");
     println!("\n---- Use ReadCausal endpoint ----\n");
@@ -142,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let get_collection_response = response.unwrap().into_inner();
 
-    // TODO: This doesn't work yet, figure out why workers are crashing.
+    // TODO: This doesn't work in Docker yet, figure out why
     println!("Found {} batches", get_collection_response.result.len());
 
     println!("\n4) Remove collections that have been voted on and committed.\n");

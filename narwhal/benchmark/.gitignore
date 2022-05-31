@@ -2,6 +2,7 @@ node
 benchmark_client
 results
 plots
+demo_client
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

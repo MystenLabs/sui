@@ -7,7 +7,7 @@ from os.path import basename, splitext
 from time import sleep
 
 from benchmark.commands import CommandMaker
-from benchmark.log_grpc_parser import ParseError, LogGrpcParser
+from benchmark.logs import ParseError, LogGrpcParser
 from benchmark.config import Key, LocalCommittee, NodeParameters, BenchParameters, ConfigError
 from benchmark.utils import Print, BenchError, PathMaker
 
@@ -28,6 +28,11 @@ class Demo:
     def _background_run(self, command, log_file):
         name = splitext(basename(log_file))[0]
         cmd = f'{command} 2> {log_file}'
+        subprocess.run(['tmux', 'new', '-d', '-s', name, cmd], check=True)
+
+    def _background_run_with_stdout(self, command, log_file):
+        name = splitext(basename(log_file))[0]
+        cmd = f'{command} 2>&1 > {log_file}'
         subprocess.run(['tmux', 'new', '-d', '-s', name, cmd], check=True)
 
     def _kill_nodes(self):
@@ -124,13 +129,28 @@ class Demo:
 
             # Wait for all transactions to be processed.
             Print.info(f'Running benchmark ({self.duration} sec)...')
-            sleep(self.duration)
-            self._kill_nodes()
 
             # Parse logs and return the parser.
             Print.info('Parsing logs...')
-            return LogGrpcParser.process(PathMaker.logs_path(), faults=self.faults)
+            port_logs = LogGrpcParser.process(
+                PathMaker.logs_path(), faults=self.faults)
+
+            for port in port_logs.grpc_ports:
+                print(f'Found port for grpc server at {port}')
+            sleep(self.duration)
+
+            cmd = CommandMaker.run_demo_client(
+                names[0], int(port_logs.grpc_ports[0]))
+            self.demo_log_path = PathMaker.demo_client_log_file()
+            self._background_run_with_stdout(cmd, self.demo_log_path)
+            # ironically, it takes a *while* to get data from gRPC
+            sleep(10)
+            self._kill_nodes()
+            return self
 
         except (subprocess.SubprocessError, ParseError) as e:
             self._kill_nodes()
             raise BenchError('Failed to run benchmark', e)
+
+    def result(self):
+        return f"Done with demo, find the log at {self.demo_log_path}"

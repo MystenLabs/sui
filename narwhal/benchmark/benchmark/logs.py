@@ -268,3 +268,34 @@ class LogParser:
                 workers += [f.read()]
 
         return cls(clients, primaries, workers, faults=faults)
+
+
+class LogGrpcParser:
+    def __init__(self, primaries, faults=0):
+        assert all(isinstance(x, str) for x in primaries)
+        self.faults = faults
+
+        # Parse the primaries logs.
+        try:
+            with Pool() as p:
+                results = p.map(self._parse_primaries, primaries)
+        except (ValueError, IndexError, AttributeError) as e:
+            exception(e)
+            raise ParseError(f'Failed to parse nodes\' logs: {e}')
+        self.grpc_ports = results
+
+    def _parse_primaries(self, log):
+        port = search(
+            r'Consensus API gRPC Server listening on /ip4/.+/tcp/(.+)/http', log).group(1)
+        return port
+
+    @classmethod
+    def process(cls, directory, faults=0):
+        assert isinstance(directory, str)
+
+        primaries = []
+        for filename in sorted(glob(join(directory, 'primary-*.log'))):
+            with open(filename, 'r') as f:
+                primaries += [f.read()]
+
+        return cls(primaries, faults=faults)

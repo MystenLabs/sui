@@ -61,7 +61,7 @@ def demo(ctx, debug=True):
         'workers': 1,
         'rate': 50_000,
         'tx_size': 512,
-        'duration': 20,
+        'duration': 10,
     }
     node_params = {
         "batch_size": 500000,

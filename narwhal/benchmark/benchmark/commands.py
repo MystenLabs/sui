@@ -72,9 +72,10 @@ class CommandMaker:
         return f'rm demo_client ; ln -s {client} .'
 
     @staticmethod
-    def run_demo_client(address):
-        assert isinstance(address, str)
-        return f'./demo_client {address}'
+    def run_demo_client(key, port):
+        assert isinstance(key, str)
+        assert isinstance(port, int) and port > 1024
+        return f'./demo_client run --key {key} --port {port}'
 
     @staticmethod
     def kill():

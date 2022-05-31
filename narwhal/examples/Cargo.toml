@@ -11,6 +11,7 @@ name = "demo_client"
 path = "src/demo_client.rs"
 
 [dependencies]
+clap = "2.34"
 tonic = "0.7.2"
 prost = "0.10.4"
 tokio = { version = "1.18.2", features = ["macros", "rt-multi-thread"] }
