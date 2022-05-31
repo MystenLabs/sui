@@ -829,7 +829,7 @@ parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0
 parse-zoneinfo = { version = "0.3", default-features = false }
 paste = { version = "1", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
-peeking_take_while = { version = "0.1", default-features = false }
+peeking_take_while = { version = "1.0", default-features = false }
 percent-encoding = { version = "2", default-features = false }
 pest = { version = "2", default-features = false }
 pest_derive = { version = "2", default-features = false }
