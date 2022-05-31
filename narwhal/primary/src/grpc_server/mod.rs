@@ -12,7 +12,7 @@ use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc::Sender;
-use tracing::error;
+use tracing::{error, info};
 use types::{ConfigurationServer, ProposerServer, ValidatorServer};
 
 mod configuration;
@@ -78,15 +78,17 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         let narwhal_configuration = NarwhalConfiguration::new();
 
         let config = mysten_network::config::Config::default();
-        config
+        let server = config
             .server_builder()
             .add_service(ValidatorServer::new(narwhal_validator))
             .add_service(ConfigurationServer::new(narwhal_configuration))
             .add_service(ProposerServer::new(narwhal_proposer))
             .bind(&self.socket_addr)
-            .await?
-            .serve()
             .await?;
+        let local_addr = server.local_addr();
+        info!("Consensus API gRPC Server listening on {local_addr}");
+
+        server.serve().await?;
 
         Ok(())
     }

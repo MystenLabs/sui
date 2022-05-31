@@ -239,7 +239,7 @@ impl Parameters {
                 .as_millis()
         );
         info!(
-            "Consensus API gRPC Server listening on {}",
+            "Consensus API gRPC Server set to listen on on {}",
             self.consensus_api_grpc.socket_addr
         );
         info!(
