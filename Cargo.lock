@@ -2153,9 +2153,9 @@ dependencies = [
 
 [[package]]
 name = "hakari"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35cafecb693cbf0c09e3079793e65ee4b1567297c29d9fd8de2306e98feb8d61"
+checksum = "532c7a447b62879000ce0841235f85853fa3a44d4f05fc6fa504759966fc6056"
 dependencies = [
  "atomicwrites",
  "bimap",
