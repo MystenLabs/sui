@@ -19,3 +19,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]
 tonic-build = "0.7.2"
+
+[features]
+benchmark = []

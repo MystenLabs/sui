@@ -36,6 +36,16 @@ class CommandMaker:
                 f'--store {store} --parameters {parameters} primary')
 
     @staticmethod
+    def run_no_consensus_primary(keys, committee, store, parameters, debug=False):
+        assert isinstance(keys, str)
+        assert isinstance(committee, str)
+        assert isinstance(parameters, str)
+        assert isinstance(debug, bool)
+        v = '-vvv' if debug else '-vv'
+        return (f'./node {v} run --keys {keys} --committee {committee} '
+                f'--store {store} --parameters {parameters} primary --consensus-disabled')
+
+    @staticmethod
     def run_worker(keys, committee, store, parameters, id, debug=False):
         assert isinstance(keys, str)
         assert isinstance(committee, str)
@@ -54,6 +64,17 @@ class CommandMaker:
         assert all(isinstance(x, str) for x in nodes)
         nodes = f'--nodes {" ".join(nodes)}' if nodes else ''
         return f'./benchmark_client {address} --size {size} --rate {rate} {nodes}'
+
+    @staticmethod
+    def alias_demo_binaries(origin):
+        assert isinstance(origin, str)
+        client = join(origin, 'demo_client')
+        return f'rm demo_client ; ln -s {client} .'
+
+    @staticmethod
+    def run_demo_client(address):
+        assert isinstance(address, str)
+        return f'./demo_client {address}'
 
     @staticmethod
     def kill():

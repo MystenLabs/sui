@@ -26,6 +26,10 @@ class PathMaker:
         return join('..', 'node')
 
     @staticmethod
+    def examples_crate_path():
+        return join('..', 'examples')
+
+    @staticmethod
     def committee_file():
         return '.committee.json'
 

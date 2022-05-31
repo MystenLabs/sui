@@ -4,6 +4,8 @@ from benchmark.seed import SeedData
 from pathlib import Path
 
 from benchmark.local import LocalBench
+from benchmark.full_demo import Demo
+
 from benchmark.logs import ParseError, LogParser
 from benchmark.utils import Print
 from benchmark.plot import Ploter, PlotError
@@ -45,6 +47,45 @@ def local(ctx, debug=True):
     }
     try:
         ret = LocalBench(bench_params, node_params).run(debug)
+        print(ret.result())
+    except BenchError as e:
+        Print.error(e)
+
+
+@task
+def demo(ctx, debug=True):
+    ''' Run benchmarks on localhost '''
+    bench_params = {
+        'faults': 0,
+        'nodes': 4,
+        'workers': 1,
+        'rate': 50_000,
+        'tx_size': 512,
+        'duration': 20,
+    }
+    node_params = {
+        "batch_size": 500000,
+        "block_synchronizer": {
+            "certificates_synchronize_timeout": "2_000ms",
+            "handler_certificate_deliver_timeout": "2_000ms",
+            "payload_availability_timeout": "2_000ms",
+            "payload_synchronize_timeout": "2_000ms"
+        },
+        "consensus_api_grpc": {
+            "get_collections_timeout": "5_000ms",
+            "remove_collections_timeout": "5_000ms",
+            "socket_addr": "/ip4/0.0.0.0/tcp/0/http"
+        },
+        "gc_depth": 50,  # rounds
+        "header_size": 1000,  # bytes
+        "max_batch_delay": "200ms",  # ms
+        "max_concurrent_requests": 500_000,
+        "max_header_delay": "2000ms",  # ms
+        "sync_retry_delay": "10_000ms",  # ms
+        "sync_retry_nodes": 3  # number of nodes
+    }
+    try:
+        ret = Demo(bench_params, node_params).run(debug)
         print(ret.result())
     except BenchError as e:
         Print.error(e)
