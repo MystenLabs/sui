@@ -1753,6 +1753,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fail"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec3245a0ca564e7f3c797d20d833a6870f57a728ac967d5225b3ffdef4465011"
+dependencies = [
+ "lazy_static 1.4.0",
+ "log",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3614,7 +3625,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b#1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b"
 dependencies = [
  "better_any",
- "fail",
+ "fail 0.4.0",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
@@ -5232,12 +5243,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b827f2113224f3f19a665136f006709194bdfdcb1fdc1e4b2b5cbac8e0cced54"
+checksum = "678b5a069e50bf00ecd22d0cd8ddf7c236f68581b03db652061ed5eb13a312ff"
 dependencies = [
  "hex",
- "rustversion",
  "serde 1.0.137",
  "serde_with_macros",
 ]
@@ -7516,7 +7526,7 @@ dependencies = [
  "event-listener",
  "executor",
  "eyre",
- "fail",
+ "fail 0.5.0",
  "fastrand",
  "fd-lock",
  "fdlimit",
