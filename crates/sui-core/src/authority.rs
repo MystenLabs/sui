@@ -1164,13 +1164,38 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        if let Some(indexes) = &self.indexes {
-            let inputs: Vec<_> = temporary_store.objects().iter().map(|(_, o)| o).collect();
+        // We want to call update_state before updating the indexes, however this is extremely
+        // awkward because update_state takes temporary_store by value.
+        // TODO: Move indexing either into update_state, or make it a batch consumer to clean this
+        // up.
+        let (inputs, outputs) = if self.indexes.is_some() {
+            let inputs: Vec<_> = temporary_store
+                .objects()
+                .iter()
+                .map(|(_, o)| o.clone())
+                .collect();
             let outputs: Vec<_> = temporary_store
                 .written()
                 .iter()
-                .map(|(_, (_, o))| o)
+                .map(|(_, (_, o))| o.clone())
                 .collect();
+            (Some(inputs), Some(outputs))
+        } else {
+            (None, None)
+        };
+
+        let res = self
+            .database
+            .update_state(temporary_store, certificate, signed_effects, Some(seq))
+            .await;
+
+        if let Some(indexes) = &self.indexes {
+            // unwrap ok because of previous if stmt.
+            let inputs = inputs.unwrap();
+            let outputs = outputs.unwrap();
+            // turn into vectors of references...
+            let inputs: Vec<_> = inputs.iter().collect();
+            let outputs: Vec<_> = outputs.iter().collect();
             if let Err(e) = indexes.index_tx(
                 certificate.sender_address(),
                 &inputs,
@@ -1182,9 +1207,7 @@ impl AuthorityState {
             }
         }
 
-        self.database
-            .update_state(temporary_store, certificate, signed_effects, Some(seq))
-            .await
+        res
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
