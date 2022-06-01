@@ -80,7 +80,13 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     try {
       const resp = await this.client.requestWithType(
         'sui_mergeCoins',
-        [signerAddress, t.primaryCoin, t.coinToMerge, t.gasPayment, t.gasBudget],
+        [
+          signerAddress,
+          t.primaryCoin,
+          t.coinToMerge,
+          t.gasPayment,
+          t.gasBudget,
+        ],
         isTransactionBytes
       );
       return new Base64DataBuffer(resp.txBytes);
@@ -95,8 +101,14 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
   ): Promise<Base64DataBuffer> {
     try {
       const resp = await this.client.requestWithType(
-        'sui_SplitCoin',
-        [signerAddress, t.coinObjectId, t.splitAmounts, t.gasPayment, t.gasBudget],
+        'sui_splitCoin',
+        [
+          signerAddress,
+          t.coinObjectId,
+          t.splitAmounts,
+          t.gasPayment,
+          t.gasBudget,
+        ],
         isTransactionBytes
       );
       return new Base64DataBuffer(resp.txBytes);
