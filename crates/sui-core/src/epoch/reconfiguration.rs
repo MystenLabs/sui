@@ -17,82 +17,55 @@ use typed_store::Map;
 // TODO: Make last checkpoint number of each epoch more flexible.
 pub const CHECKPOINT_COUNT_PER_EPOCH: u64 = 200;
 
-const MAX_START_EPOCH_WAIT_SECONDS: Duration = Duration::from_secs(5);
-
 impl<A> ActiveAuthority<A> {
     pub async fn start_epoch_change(&self) -> SuiResult {
         if let Some(checkpoints) = &self.state.checkpoints {
             let mut checkpoints = checkpoints.lock();
             let next_cp = checkpoints.get_locals().next_checkpoint;
-            fp_ensure!(
+            assert!(
                 Self::is_second_last_checkpoint_epoch(next_cp),
-                SuiError::InconsistentEpochState {
-                    error: "start_epoch_change called at the wrong checkpoint".to_owned(),
-                }
+                "start_epoch_change called at the wrong checkpoint",
             );
-            fp_ensure!(
-                checkpoints.lowest_unprocessed_checkpoint() == next_cp,
-                SuiError::InconsistentEpochState {
-                    error:
-                        "start_epoch_change called when there are still unprocessed transactions"
-                            .to_owned(),
-                }
+            assert_eq!(
+                checkpoints.lowest_unprocessed_checkpoint(),
+                next_cp,
+                "start_epoch_change called when there are still unprocessed transactions",
             );
             // drop checkpoints lock
         } else {
-            return Err(SuiError::InconsistentEpochState {
-                error: "Checkpoints store not available in start_epoch_change".to_owned(),
-            });
+            unreachable!();
         }
 
         self.state.halted.store(true, Ordering::SeqCst);
-        let instant = Instant::now();
         while !self.state.batch_notifier.ticket_drained() {
             tokio::time::sleep(Duration::from_millis(10)).await;
-            fp_ensure!(
-                instant.elapsed() <= MAX_START_EPOCH_WAIT_SECONDS,
-                SuiError::InconsistentEpochState {
-                    error:
-                        "Waiting for batch_notifier ticket to drain timed out in start_epoch_change"
-                            .to_owned(),
-                }
-            );
         }
         Ok(())
     }
 
     pub async fn finish_epoch_change(&self) -> SuiResult {
-        fp_ensure!(
+        assert!(
             self.state.halted.load(Ordering::SeqCst),
-            SuiError::InconsistentEpochState {
-                error: "finish_epoch_change called when validator is not halted".to_owned(),
-            }
+            "finish_epoch_change called when validator is not halted",
         );
         if let Some(checkpoints) = &self.state.checkpoints {
             let mut checkpoints = checkpoints.lock();
             let next_cp = checkpoints.get_locals().next_checkpoint;
-            fp_ensure!(
+            assert!(
                 Self::is_last_checkpoint_epoch(next_cp),
-                SuiError::InconsistentEpochState {
-                    error: "finish_epoch_change called at the wrong checkpoint".to_owned(),
-                }
+                "finish_epoch_change called at the wrong checkpoint",
             );
-            fp_ensure!(
-                checkpoints.lowest_unprocessed_checkpoint() == next_cp,
-                SuiError::InconsistentEpochState {
-                    error:
-                        "finish_epoch_change called when there are still unprocessed transactions"
-                            .to_owned(),
-                }
+            assert_eq!(
+                checkpoints.lowest_unprocessed_checkpoint(),
+                next_cp,
+                "finish_epoch_change called when there are still unprocessed transactions",
             );
             if checkpoints.extra_transactions.iter().next().is_some() {
                 // TODO: Revert any tx that's executed but not in the checkpoint.
             }
             // drop checkpoints lock
         } else {
-            return Err(SuiError::InconsistentEpochState {
-                error: "Checkpoints store not available in finish_epoch_change".to_owned(),
-            });
+            unreachable!();
         }
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
@@ -113,7 +86,8 @@ impl<A> ActiveAuthority<A> {
         //self.state.checkpoints.as_ref().unwrap().lock().committee = new_committee;
         // TODO: Update all committee in all components safely,
         // potentially restart some authority clients.
-        // Including: self.net, narwhal committee, anything else?
+        // Including: self.net, narwhal committee/consensus adapter,
+        // all active processes, maybe batch service.
         // We should also reduce the amount of committee passed around.
 
         let advance_epoch_tx = SignedTransaction::new_change_epoch(

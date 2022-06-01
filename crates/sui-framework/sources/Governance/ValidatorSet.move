@@ -383,6 +383,7 @@ module Sui::ValidatorSet {
     }
 
     /// Upon any change to the validator set, derive and update the metadata of the validators for the new epoch.
+    /// TODO: If we want to enforce a % on stake threshold, this is the function to do it.
     fun derive_next_epoch_validators(self: &ValidatorSet): vector<ValidatorMetadata> {
         let active_count = Vector::length(&self.active_validators);
         let removal_count = Vector::length(&self.pending_removals);

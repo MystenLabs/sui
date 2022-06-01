@@ -286,6 +286,7 @@ impl AuthorityState {
         }
 
         if self.halted.load(Ordering::SeqCst) {
+            // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
@@ -361,6 +362,7 @@ impl AuthorityState {
         }
 
         if self.halted.load(Ordering::SeqCst) {
+            // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
@@ -856,13 +858,10 @@ impl AuthorityState {
 
     pub(crate) fn begin_new_epoch(&self) -> SuiResult {
         let epoch_info = self.database.get_last_epoch_info()?;
-        fp_ensure!(
-            &epoch_info.committee == self.committee.load().clone().deref(),
-            SuiError::InconsistentEpochState {
-                error:
-                    "About to being new epoch, however current committee differs from epoch store"
-                        .to_owned()
-            }
+        assert_eq!(
+            &epoch_info.committee,
+            self.committee.load().clone().deref(),
+            "About to being new epoch, however current committee differs from epoch store"
         );
         self.database.insert_new_epoch_info(EpochInfoLocals {
             committee: self.clone_committee(),
@@ -1106,6 +1105,7 @@ impl AuthorityState {
     ) -> SuiResult {
         if self.halted.load(Ordering::SeqCst) {
             // TODO: Here we should allow consensus transaction to continue.
+            // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
