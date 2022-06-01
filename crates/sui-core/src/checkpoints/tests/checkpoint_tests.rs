@@ -16,7 +16,7 @@ use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duratio
 use sui_types::{
     base_types::{AuthorityName, ObjectID},
     batch::UpdateItem,
-    crypto::get_key_pair,
+    crypto::get_key_pair_from_rng,
     messages::ExecutionStatus,
     object::Object,
     utils::{make_committee_key, make_committee_key_num},
@@ -30,7 +30,8 @@ fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
 }
 
 fn random_ckpoint_store_num(num: usize) -> Vec<(PathBuf, CheckpointStore)> {
-    let (keys, committee) = make_committee_key_num(num);
+    let mut rng = StdRng::from_seed(RNG_SEED);
+    let (keys, committee) = make_committee_key_num(num, &mut rng);
     keys.iter()
         .map(|k| {
             let dir = env::temp_dir();
@@ -53,7 +54,8 @@ fn random_ckpoint_store_num(num: usize) -> Vec<(PathBuf, CheckpointStore)> {
 
 #[test]
 fn crash_recovery() {
-    let (keys, committee) = make_committee_key();
+    let mut rng = StdRng::from_seed(RNG_SEED);
+    let (keys, committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
 
     // Setup
@@ -617,7 +619,8 @@ fn set_get_checkpoint() {
 
 #[test]
 fn checkpoint_integration() {
-    let (keys, committee) = make_committee_key();
+    let mut rng = StdRng::from_seed(RNG_SEED);
+    let (keys, committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
 
     // Setup
@@ -1075,6 +1078,37 @@ fn set_fragment_reconstruct_two_components() {
     assert_eq!(reconstruction.global.authority_waypoints.len(), 5);
 }
 
+#[test]
+fn set_fragment_reconstruct_two_mutual() {
+    let mut test_objects = random_ckpoint_store_num(4);
+
+    let t2 = TransactionDigest::random();
+    let t3 = TransactionDigest::random();
+    // let t6 = TransactionDigest::random();
+
+    for (_, cps) in &mut test_objects {
+        cps.update_processed_transactions(&[(1, t2), (2, t3)])
+            .unwrap();
+    }
+
+    let mut proposals: Vec<_> = test_objects
+        .iter_mut()
+        .map(|(_, cps)| cps.set_proposal().unwrap())
+        .collect();
+
+    let committee = test_objects[0].1.committee.clone();
+
+    // Get out the last two
+    let p_x = proposals.pop().unwrap();
+    let p_y = proposals.pop().unwrap();
+
+    let fragment_xy = p_x.fragment_with(&p_y);
+    let fragment_yx = p_y.fragment_with(&p_x);
+
+    let attempt1 = FragmentReconstruction::construct(0, committee, &[fragment_xy, fragment_yx]);
+    assert!(matches!(attempt1, Ok(None)));
+}
+
 #[derive(Clone)]
 struct TestConsensus {
     sender: Arc<std::sync::Mutex<std::sync::mpsc::Sender<CheckpointFragment>>>,
@@ -1264,31 +1298,39 @@ impl AsyncTestConsensus {
     }
 }
 
+#[derive(Clone)]
 #[allow(dead_code)]
-struct TestAuthority {
-    store: Arc<AuthorityStore>,
-    authority: Arc<AuthorityState>,
-    checkpoint: Arc<Mutex<CheckpointStore>>,
+pub struct TestAuthority {
+    pub store: Arc<AuthorityStore>,
+    pub authority: Arc<AuthorityState>,
+    pub checkpoint: Arc<Mutex<CheckpointStore>>,
 }
 
 #[allow(dead_code)]
-struct TestSetup {
-    committee: Committee,
-    authorities: Vec<TestAuthority>,
-    transactions: Vec<sui_types::messages::Transaction>,
-    aggregator: AuthorityAggregator<LocalAuthorityClient>,
+pub struct TestSetup {
+    pub committee: Committee,
+    pub authorities: Vec<TestAuthority>,
+    pub transactions: Vec<sui_types::messages::Transaction>,
+    pub aggregator: AuthorityAggregator<LocalAuthorityClient>,
 }
 
-async fn checkpoint_tests_setup() -> TestSetup {
-    let (keys, committee) = make_committee_key();
+// TODO use the file name as a seed
+const RNG_SEED: [u8; 32] = [
+    21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
+    179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
+];
+
+pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration) -> TestSetup {
+    let mut rng = StdRng::from_seed(RNG_SEED);
+    let (keys, committee) = make_committee_key(&mut rng);
 
     let mut genesis_objects = Vec::new();
     let mut transactions = Vec::new();
 
     // Generate a large number of objects for testing
-    for _i in 0..10 {
-        let (addr1, key1) = get_key_pair();
-        let (addr2, _) = get_key_pair();
+    for _i in 0..num_objects {
+        let (addr1, key1) = get_key_pair_from_rng(&mut rng);
+        let (addr2, _) = get_key_pair_from_rng(&mut rng);
         let gas_object1 = Object::with_owner_for_testing(addr1);
         let gas_object2 = Object::with_owner_for_testing(addr1);
 
@@ -1363,11 +1405,10 @@ async fn checkpoint_tests_setup() -> TestSetup {
         let authority = Arc::new(authority);
 
         let inner_state = authority.clone();
-        let _join = tokio::task::spawn(async move {
-            inner_state
-                .run_batch_service(1000, Duration::from_millis(500))
-                .await
-        });
+        let _join =
+            tokio::task::spawn(
+                async move { inner_state.run_batch_service(1000, batch_interval).await },
+            );
 
         authorities.push(TestAuthority {
             store,
@@ -1394,6 +1435,7 @@ async fn checkpoint_tests_setup() -> TestSetup {
                 /* total_batches */ 100, /* total_transactions */ 100,
             );
         }
+        println!("CHANEL EXIT.");
     });
 
     // Now make an authority aggregator
@@ -1421,8 +1463,21 @@ async fn checkpoint_tests_setup() -> TestSetup {
 use crate::authority_client::AuthorityAPI;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn checkpoint_messaging_flow_bug() {
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500)).await;
+
+    // Check that the system is running.
+    let t = setup.transactions.pop().unwrap();
+    let (_cert, _effects) = setup
+        .aggregator
+        .execute_transaction(&t)
+        .await
+        .expect("All ok.");
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow() {
-    let mut setup = checkpoint_tests_setup().await;
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500)).await;
 
     // Check that the system is running.
     let t = setup.transactions.pop().unwrap();

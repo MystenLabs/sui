@@ -362,11 +362,10 @@ impl<
             .ok_or(SuiError::TransactionLockDoesNotExist)?;
 
         match transaction_option {
-            Some(tx_digest) => Ok(Some(
-                self.transactions
-                    .get(&tx_digest)?
-                    .expect("Stored a lock without storing transaction?"),
-            )),
+            Some(tx_digest) => {
+                return Ok(self.transactions.get(&tx_digest)?);
+                // .expect("Stored a lock without storing transaction?"),
+            }
             None => Ok(None),
         }
     }
