@@ -3,11 +3,14 @@
 
 export enum Network {
     Local = 'Local',
+    Staging = 'Staging',
     Devnet = 'Devnet',
 }
 
 const ENDPOINTS = {
-    [Network.Local]: 'http://127.0.0.1:5001',
+    [Network.Local]: 'http://127.0.0.1:9000',
+    [Network.Staging]: 'https://full-node.staging.sui.io/',
+    // NOTE - no full node in devnet yet
     [Network.Devnet]: 'https://gateway.devnet.sui.io:443',
 };
 

@@ -40,7 +40,7 @@
         "bn.js": "^5.2.0"
     },
     "scripts": {
-        "start": "react-scripts start",
+        "start": "REACT_APP_DATA=staging react-scripts start",
         "start:static": "REACT_APP_DATA=static PORT=8080 react-scripts start",
         "start:local": "REACT_APP_DATA=local PORT=8080 react-scripts start",
         "test": "npx start-server-and-test 'yarn start:static' 8080 'react-scripts test --detectOpenHandles --watchAll=false'",

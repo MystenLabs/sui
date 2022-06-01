@@ -84,6 +84,12 @@ export default function NetworkSelect() {
                             Devnet
                         </div>
                         <div
+                            onClick={chooseNetwork(Network.Staging)}
+                            className={networkStyle(Network.Staging)}
+                        >
+                            Staging
+                        </div>
+                        <div
                             onClick={chooseNetwork(Network.Local)}
                             className={networkStyle(Network.Local)}
                         >
