@@ -48,6 +48,20 @@ impl MovePackage {
         &self.module_map
     }
 
+    pub fn modules(&self) -> BTreeMap<Identifier, CompiledModule> {
+        let mut modules = BTreeMap::new();
+        for (name, bytes) in &self.module_map {
+            modules.insert(
+                Identifier::new(name.clone())
+                    .expect("A well-formed module map should contain valid module identifiers"),
+                CompiledModule::deserialize(bytes).expect(
+                    "Unwrap safe because Sui serializes/verifies modules before publishing them",
+                ),
+            );
+        }
+        modules
+    }
+
     pub fn deserialize_module(&self, module: &Identifier) -> SuiResult<CompiledModule> {
         // TODO use the session's cache
         let bytes = self
@@ -62,6 +76,10 @@ impl MovePackage {
 
     pub fn disassemble(&self) -> SuiResult<BTreeMap<String, Value>> {
         disassemble_modules(self.module_map.values())
+    }
+
+    pub fn into(self) -> (ObjectID, BTreeMap<String, Vec<u8>>) {
+        (self.id, self.module_map)
     }
 }
 

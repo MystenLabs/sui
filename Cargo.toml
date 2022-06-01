@@ -18,6 +18,7 @@ members = [
     "crates/sui-open-rpc",
     "crates/sui-open-rpc-macros",
     "crates/sui-storage",
+    "crates/sui-surfer",
     "crates/sui-swarm",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",

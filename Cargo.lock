@@ -6141,6 +6141,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-surfer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 3.1.18",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier",
+ "move-core-types",
+ "move-package",
+ "move-unit-test",
+ "rand 0.7.3",
+ "sui",
+ "sui-adapter",
+ "sui-config",
+ "sui-core",
+ "sui-framework",
+ "sui-gateway",
+ "sui-json",
+ "sui-network",
+ "sui-node",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
+ "sui-storage",
+ "sui-types",
+ "sui-verifier",
+ "tokio",
+]
+
+[[package]]
 name = "sui-transactional-test-runner"
 version = "0.1.0"
 dependencies = [

@@ -710,13 +710,7 @@ pub async fn call_move(
         .execute_transaction(transaction)
         .await?
         .to_effect_response()?;
-    let cert = response.certificate;
-    let effects = response.effects;
-
-    if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-        return Err(anyhow!("Error calling module: {:#?}", effects.status));
-    }
-    Ok((cert, effects))
+    Ok((response.certificate, response.effects))
 }
 
 fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {

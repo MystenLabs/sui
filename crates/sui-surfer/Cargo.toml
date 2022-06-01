@@ -1,0 +1,37 @@
+[package]
+name = "sui-surfer"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+# TODO: whittle these down
+[dependencies]
+anyhow = { version = "1.0.57", features = ["backtrace"] }
+bcs = "0.1.3"
+clap = { version = "3.1.17", features = ["derive"] }
+rand = "0.7.3"
+tokio = { version = "1.18.2", features = ["full"] }
+
+sui-core = { path = "../sui-core" }
+sui-storage = { path = "../sui-storage" }
+sui-adapter = { path = "../sui-adapter" }
+sui-framework = { path = "../sui-framework" }
+sui-network = { path = "../sui-network" }
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+sui-verifier = { path = "../sui-verifier" }
+sui-open-rpc = { path = "../sui-open-rpc" }
+sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
+sui-json = { path = "../sui-json" }
+sui-gateway = { path = "../sui-gateway" }
+sui-node = { path = "../sui-node" }
+sui = { path = "../sui" }
+
+move-package = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b", features = ["address20"] }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
