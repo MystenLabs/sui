@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject } from '@mysten/sui.js';
+import {
+    getCoinAfterMerge,
+    getMoveObject,
+    isSuiMoveObject,
+} from '@mysten/sui.js';
 
 import type {
     ObjectId,
@@ -14,6 +18,9 @@ import type {
 
 const COIN_TYPE = '0x2::Coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::Coin::Coin<(.+)>$/;
+export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 1000;
+export const DEFAULT_GAS_BUDGET_FOR_MERGE = 500;
+export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
 export const GAS_TYPE_ARG = '0x2::SUI::SUI';
 export const GAS_SYMBOL = 'SUI';
 
@@ -28,11 +35,16 @@ export class Coin {
         return res ? res[1] : null;
     }
 
+    public static isSUI(obj: SuiMoveObject) {
+        const arg = Coin.getCoinTypeArg(obj);
+        return arg ? Coin.getCoinSymbol(arg) === 'SUI' : false;
+    }
+
     public static getCoinSymbol(coinTypeArg: string) {
         return coinTypeArg.substring(coinTypeArg.lastIndexOf(':') + 1);
     }
 
-    public static getBalance(obj: SuiMoveObject) {
+    public static getBalance(obj: SuiMoveObject): bigint {
         return BigInt(obj.fields.balance);
     }
 
@@ -55,36 +67,50 @@ export class Coin {
     public static async transferCoin(
         signer: RawSigner,
         coins: SuiMoveObject[],
-        amount: BigInt,
+        amount: bigint,
         recipient: SuiAddress
     ): Promise<TransactionResponse> {
-        if (coins.length < 2) {
-            throw new Error(`Not enough coins to transfer`);
-        }
-        const coin = await Coin.selectCoin(coins, amount);
+        const coin = await Coin.selectCoin(signer, coins, amount);
         return await signer.transferCoin({
             objectId: coin,
-            gasBudget: 1000,
+            gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER,
             recipient: recipient,
         });
     }
 
     private static async selectCoin(
+        signer: RawSigner,
         coins: SuiMoveObject[],
-        amount: BigInt
+        amount: bigint
     ): Promise<ObjectId> {
-        const coin = await Coin.selectCoinForSplit(coins, amount);
-        // TODO: Split coin not implemented yet
-        return Coin.getID(coin);
+        const coin = await Coin.selectCoinForSplit(signer, coins, amount);
+        const coinID = Coin.getID(coin);
+        const balance = Coin.getBalance(coin);
+        if (balance === amount) {
+            return coinID;
+        } else if (balance > amount) {
+            await signer.splitCoin({
+                coinObjectId: coinID,
+                gasBudget: DEFAULT_GAS_BUDGET_FOR_SPLIT,
+                splitAmounts: [Number(balance - amount)],
+            });
+            return coinID;
+        } else {
+            throw new Error(`Insufficient balance`);
+        }
     }
 
     private static async selectCoinForSplit(
+        signer: RawSigner,
         coins: SuiMoveObject[],
-        amount: BigInt
+        amount: bigint
     ): Promise<SuiMoveObject> {
         // Sort coins by balance in an ascending order
-        coins.sort();
+        coins.sort((a, b) =>
+            Coin.getBalance(a) - Coin.getBalance(b) > 0 ? 1 : -1
+        );
 
+        // return the coin with the smallest balance that is greater than or equal to the amount
         const coinWithSufficientBalance = coins.find(
             (c) => Coin.getBalance(c) >= amount
         );
@@ -93,6 +119,26 @@ export class Coin {
         }
 
         // merge coins to have a coin with sufficient balance
-        throw new Error(`Merge coin Not implemented`);
+        // we will start from the coins with the largest balance
+        // and end with the coin with the second smallest balance(i.e., i > 0 instead of i >= 0)
+        // we cannot merge coins with the smallest balance because we
+        // need to have a separate coin to pay for the gas
+        // TODO: there's some edge cases here. e.g., the total balance is enough before spliting/merging
+        // but not enough if we consider the cost of splitting and merging.
+        let primaryCoin = coins[coins.length - 1];
+        for (let i = coins.length - 2; i > 0; i--) {
+            const mergeTxn = await signer.mergeCoin({
+                primaryCoin: Coin.getID(primaryCoin),
+                coinToMerge: Coin.getID(coins[i]),
+                gasBudget: DEFAULT_GAS_BUDGET_FOR_MERGE,
+            });
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            primaryCoin = getMoveObject(getCoinAfterMerge(mergeTxn)!)!;
+            if (Coin.getBalance(primaryCoin) >= amount) {
+                return primaryCoin;
+            }
+        }
+        // primary coin might have a balance smaller than the `amount`
+        return primaryCoin;
     }
 }
