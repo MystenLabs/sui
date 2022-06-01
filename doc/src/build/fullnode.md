@@ -122,11 +122,11 @@ in how a Fullnode is run.
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
 6. Download the latest
-   [`genesis`](https://github.com/MystenLabs/<REPO-NAME>/raw/<BRANCH>/<PATH-TO-FILE>)
+   [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
    state for devnet by clicking the link or by running the following in your
    terminal:
     ```
-    $ curl -O https://github.com/MystenLabs/<REPO NAME>/raw/<BRANCH>/<PATH TO FILE>
+    $ curl -fO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
 7. Edit your `fullnode.yaml` file
     - Update the `db-path` field with a path to where the fullnode's database
