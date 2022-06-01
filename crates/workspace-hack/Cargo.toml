@@ -212,7 +212,7 @@ jsonrpsee-wasm-client = { version = "0.13", default-features = false }
 jsonrpsee-ws-client = { version = "0.13", features = ["tls"] }
 jsonrpsee-ws-server = { version = "0.13", default-features = false }
 keccak = { version = "0.1", default-features = false }
-kstring = { version = "1", features = ["max_inline", "serde"] }
+kstring = { version = "2", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
 lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false }
 lexical-core = { version = "0.7", features = ["arrayvec", "correct", "ryu", "static_assertions", "std", "table"] }
@@ -403,7 +403,7 @@ sync_wrapper = { version = "0.1", default-features = false }
 tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "unicode-width"] }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug"] }
@@ -719,7 +719,7 @@ jsonrpsee-wasm-client = { version = "0.13", default-features = false }
 jsonrpsee-ws-client = { version = "0.13", features = ["tls"] }
 jsonrpsee-ws-server = { version = "0.13", default-features = false }
 keccak = { version = "0.1", default-features = false }
-kstring = { version = "1", features = ["max_inline", "serde"] }
+kstring = { version = "2", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
 lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false }
 lazycell = { version = "1", default-features = false }
@@ -951,7 +951,7 @@ synstructure = { version = "0.12", features = ["proc-macro"] }
 tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "unicode-width"] }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug"] }

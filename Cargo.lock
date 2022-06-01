@@ -2726,6 +2726,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kstring"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec3066350882a1cd6d950d055997f379ac37fd39f81cd4d8ed186032eb3c5747"
+dependencies = [
+ "serde 1.0.137",
+ "static_assertions",
+]
+
+[[package]]
 name = "lazy_static"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2801,9 +2811,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.6"
+version = "1.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92e7e15d7610cce1d9752e137625f14e61a28cd45929b6e12e47b50fe154ee2e"
+checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
 dependencies = [
  "cc",
  "pkg-config",
@@ -5736,6 +5746,7 @@ dependencies = [
  "sui-network",
  "sui-storage",
  "sui-types",
+ "telemetry-subscribers",
  "temp_testdir",
  "tempfile",
  "test-fuzz",
@@ -6108,8 +6119,9 @@ dependencies = [
 [[package]]
 name = "telemetry-subscribers"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe#7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0#2de1a391654a7ee09d867de2f16627b915ad21f0"
 dependencies = [
+ "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "tokio",
@@ -6501,7 +6513,7 @@ dependencies = [
  "combine",
  "indexmap",
  "itertools",
- "kstring",
+ "kstring 1.0.6",
 ]
 
 [[package]]
@@ -7602,7 +7614,7 @@ dependencies = [
  "jsonrpsee-ws-client",
  "jsonrpsee-ws-server",
  "keccak",
- "kstring",
+ "kstring 2.0.0",
  "lazy_static 0.2.11",
  "lazy_static 1.4.0",
  "lazycell",
