@@ -327,6 +327,10 @@ function LatestTxCardAPI({ count }: { count: number }) {
 }
 
 const LatestTxCard = ({ count }: { count: number }) =>
-    IS_STATIC_ENV ? <LatestTxCardStatic count={count}/> : <LatestTxCardAPI count={count} />;
+    IS_STATIC_ENV ? (
+        <LatestTxCardStatic count={count} />
+    ) : (
+        <LatestTxCardAPI count={count} />
+    );
 
 export default LatestTxCard;
