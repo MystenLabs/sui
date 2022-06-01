@@ -14,6 +14,7 @@ import type {
 
 const COIN_TYPE = '0x2::Coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::Coin::Coin<(.+)>$/;
+export const GAS_TYPE_ARG = '0x2::SUI::SUI';
 
 // TODO use sdk
 export class Coin {
