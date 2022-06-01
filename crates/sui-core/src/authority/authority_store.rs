@@ -1136,9 +1136,9 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
 }
 
 /// A wrapper to make Orphan Rule happy
-pub struct ArcWrapper<T>(pub Arc<T>);
+pub struct AuthorityStoreWrapper(pub Arc<AuthorityStore>);
 
-impl ModuleResolver for ArcWrapper<AuthorityStore> {
+impl ModuleResolver for AuthorityStoreWrapper {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.0.get_module(module_id)

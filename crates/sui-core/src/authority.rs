@@ -79,7 +79,9 @@ mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-pub use authority_store::{ArcWrapper, AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
+pub use authority_store::{
+    AuthorityStore, AuthorityStoreWrapper, GatewayStore, ReplicaStore, SuiDataStore,
+};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
 
@@ -237,7 +239,7 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    module_cache: SyncModuleCache<ArcWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    module_cache: SyncModuleCache<AuthorityStoreWrapper>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -790,7 +792,7 @@ impl AuthorityState {
             move_vm,
             database: store.clone(),
             indexes,
-            module_cache: SyncModuleCache::new(ArcWrapper(store.clone())),
+            module_cache: SyncModuleCache::new(AuthorityStoreWrapper(store.clone())),
             checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(
