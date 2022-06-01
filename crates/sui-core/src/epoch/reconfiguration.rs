@@ -102,8 +102,9 @@ impl<A> ActiveAuthority<A> {
             .collect();
         let new_committee = Committee::new(next_epoch, votes);
         self.state.insert_new_epoch_info(&new_committee)?;
-        self.state.checkpoints.as_ref().unwrap().lock().committee = new_committee;
-        // TODO: Update all committee in all components, potentially restart some authority clients.
+        //self.state.checkpoints.as_ref().unwrap().lock().committee = new_committee;
+        // TODO: Update all committee in all components safely,
+        // potentially restart some authority clients.
         // Including: self.net, narwhal committee, anything else?
         // We should also reduce the amount of committee passed around.
 

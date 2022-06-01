@@ -61,10 +61,7 @@ pub async fn gossip_process_with_start_seq<A>(
     let committee = &active_authority.net.committee;
 
     // Number of tasks at most "degree" and no more than committee - 1
-    let target_num_tasks: usize = usize::min(
-        active_authority.state.committee.load().voting_rights.len() - 1,
-        degree,
-    );
+    let target_num_tasks: usize = usize::min(committee.voting_rights.len() - 1, degree);
 
     // If we do not expect to connect to anyone
     if target_num_tasks == 0 {
