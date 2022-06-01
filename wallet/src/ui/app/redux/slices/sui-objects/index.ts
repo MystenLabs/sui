@@ -41,19 +41,16 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     return allSuiObjects;
 });
 
-const objectsAdapterInitialState = objectsAdapter.getInitialState();
-type SuiObjectsAdapterType = typeof objectsAdapterInitialState;
-interface SuiObjectsState extends SuiObjectsAdapterType {
+interface SuiObjectsManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };
     lastSync: number | null;
 }
-const initialState: SuiObjectsState = {
-    ...objectsAdapterInitialState,
+const initialState = objectsAdapter.getInitialState<SuiObjectsManualState>({
     loading: true,
     error: false,
     lastSync: null,
-};
+});
 
 const slice = createSlice({
     name: 'sui-objects',

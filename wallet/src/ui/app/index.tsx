@@ -12,6 +12,7 @@ import BackupPage from './pages/initialize/backup';
 import CreatePage from './pages/initialize/create';
 import ImportPage from './pages/initialize/import';
 import SelectPage from './pages/initialize/select';
+import TransactionDetailsPage from './pages/transaction-details';
 import TransferCoinPage from './pages/transfer-coin';
 import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
@@ -40,6 +41,10 @@ const App = () => {
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="settings" element={<h1>Settings</h1>} />
                 <Route path="send" element={<TransferCoinPage />} />
+                <Route
+                    path="tx/:txDigest"
+                    element={<TransactionDetailsPage />}
+                />
             </Route>
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>

@@ -3,18 +3,22 @@
 
 import { isValidSuiAddress } from '@mysten/sui.js';
 import { useFormik } from 'formik';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import * as Yup from 'yup';
 
+import Alert from '_components/alert';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
+import { useAppSelector, useAppDispatch } from '_hooks';
 import { accountBalancesSelector } from '_redux/slices/account';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { Coin, GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { sendTokens } from '_redux/slices/transactions';
 import { balanceFormatOptions } from '_shared/formatting';
 
+import type { SerializedError } from '@reduxjs/toolkit';
+import type { FormikHelpers } from 'formik';
 import type { ChangeEventHandler } from 'react';
 
 import st from './TransferCoin.module.scss';
@@ -56,6 +60,14 @@ const validationSchema = Yup.object({
         )
         .label('Amount'),
 });
+const initialValues = {
+    to: '',
+    amount: '',
+    balance: '',
+    type: '',
+    gasBalance: '',
+};
+type FormValues = typeof initialValues;
 
 // TODO: show out of sync when sui objects locally might be outdated
 // TODO: clean/refactor
@@ -75,11 +87,38 @@ function TransferCoinPage() {
         () => coinType && Coin.getCoinSymbol(coinType),
         [coinType]
     );
+    const [sendError, setSendError] = useState<string | null>(null);
+    const dispatch = useAppDispatch();
+    const navigate = useNavigate();
+    const onHandleSubmit = useCallback(
+        async (
+            { to, type, amount }: FormValues,
+            { resetForm }: FormikHelpers<FormValues>
+        ) => {
+            setSendError(null);
+            try {
+                const response = await dispatch(
+                    sendTokens({
+                        amount: BigInt(amount),
+                        recipientAddress: to,
+                        tokenTypeArg: type,
+                    })
+                ).unwrap();
+                const txDigest =
+                    response.EffectResponse.certificate.transactionDigest;
+                resetForm();
+                navigate(`/tx/${encodeURIComponent(txDigest)}`);
+            } catch (e) {
+                setSendError((e as SerializedError).message || null);
+            }
+        },
+        [dispatch, navigate]
+    );
     const intl = useIntl();
     const {
         handleSubmit,
         isValid,
-        values,
+        values: { amount, to: recipientAddress },
         handleChange,
         errors,
         touched,
@@ -89,23 +128,17 @@ function TransferCoinPage() {
     } = useFormik({
         validateOnMount: true,
         validationSchema,
-        initialValues: {
-            to: '',
-            amount: '',
-            balance: '',
-            type: '',
-            gasBalance: '',
-        },
-        onSubmit: (values) => {
-            // TODO: execute transaction and show result
-            return new Promise((r) => setTimeout(r, 5000));
-        },
+        initialValues,
+        onSubmit: onHandleSubmit,
     });
     useEffect(() => {
         setFieldValue('balance', coinBalance?.toString() || '0');
         setFieldValue('type', coinType);
         setFieldValue('gasBalance', gasBalance?.toString() || '0');
     }, [coinBalance, coinType, gasBalance, setFieldValue]);
+    useEffect(() => {
+        setSendError(null);
+    }, [amount, recipientAddress]);
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
@@ -134,7 +167,7 @@ function TransferCoinPage() {
                     <div className={st.group}>
                         <label className={st.label}>To:</label>
                         <input
-                            value={values.to}
+                            value={recipientAddress}
                             onChange={handleAddressOnChange}
                             onBlur={handleBlur}
                             name="to"
@@ -156,7 +189,7 @@ function TransferCoinPage() {
                             step="1"
                             min={0}
                             max={coinBalance?.toString() || 0}
-                            value={values.amount}
+                            value={amount}
                             name="amount"
                             onChange={handleChange}
                             onBlur={handleBlur}
@@ -178,8 +211,16 @@ function TransferCoinPage() {
                     </div>
                     <div className={st.group}>
                         * Total transaction fee estimate (gas cost): {GAS_FEE}{' '}
-                        SUI
+                        {GAS_SYMBOL}
                     </div>
+                    {sendError ? (
+                        <div className={st.group}>
+                            <Alert>
+                                <strong>Transfer failed.</strong>{' '}
+                                <small>{sendError}</small>
+                            </Alert>
+                        </div>
+                    ) : null}
                     <div className={st.group}>
                         <button
                             type="submit"
