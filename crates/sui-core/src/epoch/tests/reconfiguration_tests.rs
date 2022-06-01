@@ -185,19 +185,9 @@ async fn test_finish_epoch_change() {
         .unwrap();
     // Create an active authority for the first authority state.
     let active = ActiveAuthority::new(state.clone(), net.authority_clients).unwrap();
-    // Cannot call finish_epoch_change if validator is not yet halted.
-    assert!(matches!(
-        active.finish_epoch_change().await.unwrap_err(),
-        SuiError::InconsistentEpochState { .. }
-    ));
 
     active.start_epoch_change().await.unwrap();
 
-    // Still cannot call finish_epoch_change if not at the last checkpoint.
-    assert!(matches!(
-        active.finish_epoch_change().await.unwrap_err(),
-        SuiError::InconsistentEpochState { .. }
-    ));
     locals.next_checkpoint += 1;
     state
         .checkpoints

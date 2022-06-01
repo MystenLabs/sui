@@ -7,11 +7,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::Committee;
 use sui_types::crypto::PublicKeyBytes;
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::fp_ensure;
+use sui_types::error::SuiResult;
 use sui_types::messages::SignedTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tokio::time::Instant;
 use typed_store::Map;
 
 // TODO: Make last checkpoint number of each epoch more flexible.
