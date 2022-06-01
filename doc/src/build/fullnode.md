@@ -1,5 +1,5 @@
 ---
-title: Run a Sui FullNode
+title: Run a Sui Fullnode
 ---
 
 We welcome you to run your own Sui fullnode! Sui fullnodes run a service that
@@ -72,21 +72,21 @@ Follow the instructions here to run your own Sui fullnode.
 
 ### Hardware Requirements
 
-We recommend the following minimum hardware requirements for running a Fullnode:
+We recommend the following minimum hardware requirements for running a fullnode:
 
 * CPUs: 2
 * RAM: 8GB
 
 Storage requirements will vary based on various factors (age of the chain,
-transaction rate, etc) although we don't anticipate running a Fullnode on
+transaction rate, etc) although we don't anticipate running a fullnode on
 devnet will require more than a handful of GBs given it is reset upon each
 release roughly every two weeks.
 
 ## Configuring your Fullnode
 
-Today the only supported way of running a Fullnode requires building from
+Today the only supported way of running a fullnode requires building from
 source. In the future we plan on providing Docker images for more flexibility
-in how a Fullnode is run.
+in how a fullnode is run.
 
 ### Building from Source
 
@@ -117,7 +117,7 @@ in how a Fullnode is run.
     ```
     $ git checkout --track upstream/devnet
     ```
-5. Make a copy of the Fullnode configuration template
+5. Make a copy of the fullnode configuration template
    ```
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
@@ -142,12 +142,12 @@ in how a Fullnode is run.
     genesis:
       genesis-file-location: "/path/to/genesis.blob"
     ```
-8. Start your Sui Fullnode
+8. Start your Sui fullnode
     ```
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 
-Your Fullnode will now be serving the read endpoints of the [Sui JSON-RPC
+Your fullnode will now be serving the read endpoints of the [Sui JSON-RPC
 API](https://docs.sui.io/build/json-rpc#sui-json-rpc-api) at
 `http://127.0.0.1:9000`.
 
@@ -155,14 +155,14 @@ API](https://docs.sui.io/build/json-rpc#sui-json-rpc-api) at
 
 The [Sui Explorer](https://explorer.devnet.sui.io/) supports configuring where
 it should issue read requests to query the blockchain. This enables you to
-point the explorer at your locally running Fullnode and explore the
+point the explorer at your locally running fullnode and explore the
 transactions that it has synced from the network. You can do this by:
 
 1. Open a browser and go to https://explorer.devnet.sui.io/
 2. Select the button in the top right-hand corner of the page and select
    `Local` from the drop-down menu.
 
-The explorer will now be using your local Fullnode to explore the state of the chain.
+The explorer will now be using your local fullnode to explore the state of the chain.
 
 ## Monitoring
 
@@ -171,7 +171,7 @@ Observability](https://docs.sui.io/contribute/observability).
 
 ## Future plans
 
-Today a Fullnode only relies on synchronizing with 2f+1 validators in order to
+Today a fullnode only relies on synchronizing with 2f+1 validators in order to
 ensure that it has seen all committed transactions. In the future we expect
 fullnodes to fully participate in a peer-to-peer (p2p) environment where the
 load of disseminating new transactions can be shared with the whole network and
