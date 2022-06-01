@@ -773,7 +773,7 @@ impl CheckpointStore {
                     )?;
 
                     // Now that we have the new checkpoint we try to move forward the checkpoint creation
-                    // process
+                    // process. We try to use fragments in the sequence to create past checkpoints.
                     loop {
                         let construct = self.attempt_to_construct_checkpoint();
                         // Exit if checkpoint construction leads to an error or returns false

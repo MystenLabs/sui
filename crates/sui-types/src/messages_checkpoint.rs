@@ -334,7 +334,9 @@ impl CertifiedCheckpoint {
             // NOTE: here we only require f+1 weight to accept it, since
             //       we only need to ensure one honest node signs it, and
             //       do not require quorum intersection properties between
-            //       any two sets of signers.
+            //       any two sets of signers. Further f+1 is the most honest
+            //       nodes we can be sure is in the set of 2f+1 that were
+            //       used to create the checkpoint from fragments.
             weight >= committee.validity_threshold(),
             SuiError::CertificateRequiresQuorum
         );

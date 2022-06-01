@@ -194,7 +194,7 @@ where
         let checkpoint_locals = self; // .clone();
         let _checkpoint_join = tokio::task::spawn(async move {
             if checkpoint {
-                checkpoint_process(&checkpoint_locals, &CheckpointProcessControl::standard()).await;
+                checkpoint_process(&checkpoint_locals, &CheckpointProcessControl::default()).await;
             }
         });
 

@@ -59,9 +59,9 @@ pub struct CheckpointProcessControl {
     pub per_other_authority_delay: Duration,
 }
 
-impl CheckpointProcessControl {
+impl Default for CheckpointProcessControl {
     /// Standard parameters (currenty set heuristically).
-    pub fn standard() -> CheckpointProcessControl {
+    fn default() -> CheckpointProcessControl {
         CheckpointProcessControl {
             delay_on_quorum_failure: Duration::from_secs(10),
             long_pause_between_checkpoints: Duration::from_secs(60),
@@ -135,14 +135,19 @@ pub async fn checkpoint_process<A>(
                 continue;
             }
 
-            // Check if the checkpoint is the one we are expecting next!
-            // if next_checkpoint == checkpoint.checkpoint.sequence_number {
-            // Try to upgrade the signed checkpoint to a certified one if possible
-            if state_checkpoints
-                .lock()
-                .handle_checkpoint_certificate(&checkpoint, &None)
-                .is_err()
-            {
+            // The checkpoint we received is equal to what is expected or greater.
+            // In either case try to upgrade the signed checkpoint to a certified one
+            // if possible
+            let result = {
+                state_checkpoints
+                    .lock()
+                    .handle_checkpoint_certificate(&checkpoint, &None)
+            }; // unlock
+
+            if let Err(err) = result {
+                warn!("Cannot process checkpoint: {err:?}");
+                drop(err);
+
                 // One of the errors may be due to the fact that we do not have
                 // the full contents of the checkpoint. So we try to download it.
                 // TODO: clean up the errors to get here only when the error is
@@ -203,7 +208,7 @@ pub async fn checkpoint_process<A>(
         let name = state_checkpoints.lock().name;
         let next_checkpoint = state_checkpoints.lock().next_checkpoint();
 
-        debug!("{:?} at checkpoint {:?}", name, next_checkpoint);
+        debug!("{name:?} at checkpoint {next_checkpoint:?}");
         tokio::time::sleep(timing.long_pause_between_checkpoints).await;
     }
 }
@@ -260,6 +265,19 @@ where
                         state.good_weight += weight;
                     } else {
                         state.bad_weight += weight;
+
+                        // Add to the list of errors.
+                        match result {
+                            Err(err) => state.errors.push((name, err)),
+                            Ok(msg) => state.errors.push((
+                                name,
+                                SuiError::GenericAuthorityError {
+                                    error: format!("Unexpected message: {:?}", msg),
+                                },
+                            )),
+                        }
+
+                        // Return all errors if a quorum is not possible.
                         if state.bad_weight > validity {
                             return Err(SuiError::TooManyIncorrectAuthorities {
                                 errors: state.errors,
@@ -338,7 +356,12 @@ where
                 .iter()
                 .map(|(auth, _)| net.committee.weight(auth))
                 .sum();
-            if weight > net.committee.validity_threshold() {
+
+            // Reminder: a valid checkpoint only contains a validity threshold (1/3 N + 1) of signatures.
+            //           The reason is that if >3/2 of node fragments are used to construct the checkpoint
+            //           only 1/3N + 1 honest nodes are guaranteed to be able to fully reconstruct and sign
+            //           the checkpoint for others to download.
+            if weight >= net.committee.validity_threshold() {
                 // Try to construct a valid checkpoint.
                 let certificate = CertifiedCheckpoint::aggregate(
                     signed.iter().map(|(_, signed)| signed.clone()).collect(),
@@ -394,24 +417,16 @@ where
     // Check if the latest checkpoint is merely a signed checkpoint, and if
     // so download a full certificate for it.
     if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
-        debug!(
-            "Partial Sync ({:?}): {:?}",
-            name,
-            *signed.checkpoint.sequence_number()
-        );
-        let (past, _contents) = get_one_checkpoint(
-            net.clone(),
-            *signed.checkpoint.sequence_number(),
-            false,
-            &available_authorities,
-        )
-        .await?;
+        let seq = *signed.checkpoint.sequence_number();
+        debug!("Partial Sync ({name:?}): {seq:?}",);
+        let (past, _contents) =
+            get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
 
         if let Err(err) = checkpoint_db
             .lock()
             .handle_checkpoint_certificate(&past, &None)
         {
-            warn!("Error handling certificate: {:?}", err);
+            warn!("Error handling certificate: {err:?}");
         }
     }
 
@@ -424,7 +439,7 @@ where
         .unwrap_or(0);
 
     for seq in full_sync_start..latest_known_checkpoint.checkpoint.sequence_number {
-        debug!("Full Sync ({:?}): {:?}", name, seq);
+        debug!("Full Sync ({name:?}): {seq:?}");
         let (past, _contents) =
             get_one_checkpoint(net.clone(), seq, true, &available_authorities).await?;
 
@@ -432,7 +447,7 @@ where
             .lock()
             .handle_checkpoint_certificate(&past, &_contents)
         {
-            warn!("Sync Err: {:?}", err);
+            warn!("Sync Err: {err:?}");
         }
     }
 
@@ -477,16 +492,16 @@ where
                 return Ok((past, detail));
             }
             Ok(resp) => {
-                warn!("Sync Error: Unexpected answer: {:?}", resp);
+                warn!("Sync Error: Unexpected answer: {resp:?}");
             }
             Err(err) => {
-                warn!("Sync Error: peer error: {:?}", err);
+                warn!("Sync Error: peer error: {err:?}");
             }
         }
     }
 
     Err(SuiError::GenericAuthorityError {
-        error: "Ran out of authorities.".to_string(),
+        error: "Used all authorities but did not get a valid previous checkpoint.".to_string(),
     })
 }
 
@@ -529,6 +544,7 @@ where
                 // TODO: check here that the digest of contents matches
                 if contents.digest() != checkpoint.checkpoint.digest {
                     // A byzantine authority!
+                    // TODO: Report Byzantine authority
                     warn!("Sync Error: Incorrect contents returned");
                     continue;
                 }
@@ -536,10 +552,10 @@ where
                 return Ok(contents);
             }
             Ok(resp) => {
-                warn!("Sync Error: Unexpected answer: {:?}", resp);
+                warn!("Sync Error: Unexpected answer: {resp:?}");
             }
             Err(err) => {
-                warn!("Sync Error: peer error: {:?}", err);
+                warn!("Sync Error: peer error: {err:?}");
             }
         }
     }
@@ -621,15 +637,14 @@ pub async fn diff_proposals<A>(
                     {
                         Ok(fragment) => {
                             // On success send the fragment to consensus
-                            debug!(
-                                "Send fragment: {:?} -- {:?}",
-                                &fragment.proposer.0.authority, &fragment.other.0.authority
-                            );
+                            let proposer = &fragment.proposer.0.authority;
+                            let other = &fragment.other.0.authority;
+                            debug!("Send fragment: {proposer:?} -- {other:?}");
                             let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
                         }
                         Err(err) => {
                             // TODO: some error occured -- log it.
-                            warn!("Error augmenting the fragment: {:?}", err);
+                            warn!("Error augmenting the fragment: {err:?}");
                         }
                     }
 
@@ -692,7 +707,8 @@ where
     }
 
     if !diff_certs.is_empty() {
-        debug!("Augment fragment with: {:?} tx", diff_certs.len());
+        let len = diff_certs.len();
+        debug!("Augment fragment with: {len:?} tx");
     }
 
     // Augment the fragment in place.
@@ -724,7 +740,7 @@ where
         .unprocessed_contents
         .multi_get(&unprocessed_digests)?;
 
-    // First process all certs that we have stored in the unconfirmed_contents
+    // First process all certs that we have stored in the unprocessed_contents
     let mut processed = BTreeSet::new();
     for (digest, cert) in unprocessed_digests
         .iter()
@@ -749,7 +765,8 @@ where
             continue;
         }
 
-        debug!("Try sync for digest: {:?}", digest);
+        // Download the certificate
+        debug!("Try sync for digest: {digest:?}");
         if let Err(err) = sync_digest(
             active_authority.state.name,
             active_authority.net.clone(),
@@ -758,23 +775,10 @@ where
         )
         .await
         {
-            warn!("Error doing sync from digest {:?}: {}", digest, err);
+            warn!("Error doing sync from digest {digest:?}: {err}");
             return Err(err);
         }
-        // Download the certificate
     }
-
-    let cnt: usize = unprocessed_digests
-        .iter()
-        .filter(|digest| {
-            !active_authority
-                .state
-                .database
-                .effects_exists(digest)
-                .unwrap()
-        })
-        .count();
-    debug!("Remaining unprocessed: {}", cnt);
 
     Ok(())
 }
