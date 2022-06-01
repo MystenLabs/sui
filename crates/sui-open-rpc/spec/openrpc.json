@@ -1689,6 +1689,31 @@
       "SuiAddress": {
         "$ref": "#/components/schemas/Hex"
       },
+      "SuiChangeEpoch": {
+        "type": "object",
+        "required": [
+          "computation_charge",
+          "epoch",
+          "storage_charge"
+        ],
+        "properties": {
+          "computation_charge": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storage_charge": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "SuiJsonValue": {},
       "TransactionBytes": {
         "type": "object",
@@ -1870,6 +1895,19 @@
             "properties": {
               "Call": {
                 "$ref": "#/components/schemas/MoveCall"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "A system transaction that will update epoch information on-chain.",
+            "type": "object",
+            "required": [
+              "ChangeEpoch"
+            ],
+            "properties": {
+              "ChangeEpoch": {
+                "$ref": "#/components/schemas/SuiChangeEpoch"
               }
             },
             "additionalProperties": false

@@ -267,6 +267,12 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        // Validators should never sign an external system transaction.
+        fp_ensure!(
+            !transaction.data.kind.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
+
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         if self.database.transaction_exists(&transaction_digest)? {
@@ -433,9 +439,12 @@ impl AuthorityState {
             .map(|(_, obj)| obj.compute_object_reference())
             .sorted()
             .collect();
-        if !shared_object_refs.is_empty() {
+        if !shared_object_refs.is_empty() && !certificate.data.kind.is_system_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
+            // There is no need to go through consensus for system transactions that can
+            // only be executed at a time when consensus is turned off.
+            // TODO: Add some assert here to make sure consensus is indeed off with is_system_tx.
             self.check_shared_locks(&transaction_digest, &shared_object_refs)
                 .await?;
         }
