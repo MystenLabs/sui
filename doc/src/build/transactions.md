@@ -41,7 +41,7 @@ Native transactions are optimized versions of common Sui operations. Each native
 
 This transaction type transfers coins from the sender to the specified recipients.
 
-In addition to the common metadata above, a publish transfer includes the following fields:
+In addition to the common metadata above, a transfer transaction includes the following fields:
 * Input: An object reference pointing to a mutable object owned by the sender. The object must be of type `Sui::Coin::Coin<T>` with arbitrary `T`--that is, any fungible token. The gas input object from above cannot also appear as an object input.
 * Recipients: The addresses that will receive payments from this transfer. This list must be non-empty.
 * Amounts: A list of unsigned integers encoding the amount that each recipient will receive. This list must be the same length as the recipients list. Each amount will be debited from the input object, wrapped in a freshly created coin object, and sent to the corresponding recipient address. The value of the input object must be greater than or equal to the sum of the amounts.
