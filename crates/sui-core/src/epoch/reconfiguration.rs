@@ -21,8 +21,8 @@ const MAX_START_EPOCH_WAIT_SECONDS: Duration = Duration::from_secs(5);
 
 impl<A> ActiveAuthority<A> {
     pub async fn start_epoch_change(&self) -> SuiResult {
-        {
-            let checkpoints = self.state.checkpoints.as_ref().unwrap().lock();
+        if let Some(checkpoints) = &self.state.checkpoints {
+            let mut checkpoints = checkpoints.lock();
             let next_cp = checkpoints.get_locals().next_checkpoint;
             fp_ensure!(
                 Self::is_second_last_checkpoint_epoch(next_cp),
@@ -39,6 +39,10 @@ impl<A> ActiveAuthority<A> {
                 }
             );
             // drop checkpoints lock
+        } else {
+            return Err(SuiError::InconsistentEpochState {
+                error: "Checkpoints store not available in start_epoch_change".to_owned(),
+            });
         }
 
         self.state.halted.store(true, Ordering::SeqCst);
@@ -64,8 +68,8 @@ impl<A> ActiveAuthority<A> {
                 error: "finish_epoch_change called when validator is not halted".to_owned(),
             }
         );
-        {
-            let checkpoints = self.state.checkpoints.as_ref().unwrap().lock();
+        if let Some(checkpoints) = &self.state.checkpoints {
+            let mut checkpoints = checkpoints.lock();
             let next_cp = checkpoints.get_locals().next_checkpoint;
             fp_ensure!(
                 Self::is_last_checkpoint_epoch(next_cp),
@@ -85,6 +89,10 @@ impl<A> ActiveAuthority<A> {
                 // TODO: Revert any tx that's executed but not in the checkpoint.
             }
             // drop checkpoints lock
+        } else {
+            return Err(SuiError::InconsistentEpochState {
+                error: "Checkpoints store not available in finish_epoch_change".to_owned(),
+            });
         }
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;

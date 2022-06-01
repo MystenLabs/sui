@@ -182,7 +182,7 @@ impl CheckpointStore {
 
     /// Set the local variables in memory and store
     fn set_locals(
-        &self,
+        &mut self,
         _previous: Arc<CheckpointLocals>,
         locals: CheckpointLocals,
     ) -> Result<(), SuiError> {
@@ -192,12 +192,12 @@ impl CheckpointStore {
     }
 
     #[cfg(test)]
-    pub fn set_locals_for_testing(&self, locals: CheckpointLocals) -> Result<(), SuiError> {
+    pub fn set_locals_for_testing(&mut self, locals: CheckpointLocals) -> Result<(), SuiError> {
         self.set_locals(Arc::new(locals.clone()), locals)
     }
 
     /// Read the local variables
-    pub fn get_locals(&self) -> Arc<CheckpointLocals> {
+    pub fn get_locals(&mut self) -> Arc<CheckpointLocals> {
         self.memory_locals.load().clone().unwrap()
     }
 
@@ -816,13 +816,13 @@ impl CheckpointStore {
     // Helper read functions
 
     /// Return the seq number of the last checkpoint we have recorded.
-    pub fn next_checkpoint(&self) -> CheckpointSequenceNumber {
+    pub fn next_checkpoint(&mut self) -> CheckpointSequenceNumber {
         self.get_locals().next_checkpoint
     }
 
     /// Returns the lowest checkpoint sequence number with unprocessed transactions
     /// if any, otherwise the next checkpoint (not seen).
-    pub fn lowest_unprocessed_checkpoint(&self) -> CheckpointSequenceNumber {
+    pub fn lowest_unprocessed_checkpoint(&mut self) -> CheckpointSequenceNumber {
         self.unprocessed_transactions
             .iter()
             .map(|(_, chk_seq)| chk_seq)

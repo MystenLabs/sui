@@ -111,7 +111,7 @@ fn crash_recovery() {
     // Delete and re-open DB
     drop(cps);
 
-    let cps_new = CheckpointStore::open(
+    let mut cps_new = CheckpointStore::open(
         path,
         None,
         *k.public_key_bytes(),
