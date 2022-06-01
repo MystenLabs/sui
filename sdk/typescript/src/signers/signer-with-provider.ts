@@ -10,6 +10,8 @@ import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
   MoveCallTransaction,
+  MergeCoinTransaction,
+  SplitCoinTransaction,
   TransferCoinTransaction,
   TxnDataSerializer,
 } from './txn-data-serializers/txn-data-serializer';
@@ -71,6 +73,34 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<TransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferCoin(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  /**
+   * Serialize and Sign a `MergeCoin` transaction and submit to the Gateway for execution
+   */
+  async mergeCoin(
+    transaction: MergeCoinTransaction
+  ): Promise<TransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newMergeCoin(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  /**
+   * Serialize and Sign a `SplitCoin` transaction and submit to the Gateway for execution
+   */
+  async splitCoin(
+    transaction: SplitCoinTransaction
+  ): Promise<TransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newSplitCoin(
       signerAddress,
       transaction
     );
