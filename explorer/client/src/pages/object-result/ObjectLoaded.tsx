@@ -9,10 +9,7 @@ import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
-import {
-    asciiFromNumberBytes,
-    trimStdLibPrefix,
-} from '../../utils/stringUtils';
+import { trimStdLibPrefix } from '../../utils/stringUtils';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
@@ -67,12 +64,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                 const singleOwnerPattern = /SingleOwner\(k#(.*)\)/;
                 const result = singleOwnerPattern.exec(owner);
                 return result ? result[1] : '';
-            case 'object':
-                if ('AddressOwner' in owner) {
-                    let ownerId = extractAddressOwner(owner.AddressOwner);
-                    return ownerId ? ownerId : '';
-                }
-                return '';
             default:
                 return '';
         }
@@ -88,43 +79,12 @@ function ObjectLoaded({ data }: { data: DataType }) {
         return str.replace(endParensPattern, '');
     };
 
-    const extractAddressOwner = (addrOwner: number[]): string | null => {
-        if (addrOwner.length !== 20) {
-            console.log('address owner byte length must be 20');
-            return null;
-        }
-
-        return asciiFromNumberBytes(addrOwner);
-    };
-
-    function toHexString(byteArray: number[]): string {
-        return (
-            '0x' +
-            Array.prototype.map
-                .call(byteArray, (byte) => {
-                    return ('0' + (byte & 0xff).toString(16)).slice(-2);
-                })
-                .join('')
-        );
-    }
-
-    function processOwner(owner: any) {
-        if (typeof owner === 'object' && 'AddressOwner' in owner) {
-            return toHexString(owner.AddressOwner);
-        }
-
-        return owner;
-    }
-
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(data.objType),
         name: data.name,
-        tx_digest:
-            data.data.tx_digest && typeof data.data.tx_digest === 'object'
-                ? toHexString(data.data.tx_digest as number[])
-                : data.data.tx_digest,
-        owner: processOwner(data.owner),
+        tx_digest: data.data.tx_digest,
+        owner: data.owner,
         url: parseImageURL(data.data.contents),
     };
 
