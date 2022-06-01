@@ -12,7 +12,7 @@
   },
   "scripts": {
     "start": "./type_guards.sh; tsdx watch",
-    "build": "./type_guards.sh; tsdx build",
+    "build": "typedoc && ./type_guards.sh && tsdx build",
     "test": "tsdx test",
     "lint": "tsdx lint",
     "prepare": "tsdx build",
