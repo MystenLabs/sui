@@ -1,5 +1,7 @@
 .container {
     display: inline-flex;
+    flex-flow: row nowrap;
+    align-items: center;
 }
 
 .image {
@@ -25,5 +27,27 @@
     &.huge {
         width: 120px;
         height: 120px;
+    }
+}
+
+.txt {
+    margin-left: 5px;
+    font-weight: 700;
+    color: #6fbcf0;
+
+    &.normal {
+        font-size: 15px;
+    }
+
+    &.big {
+        font-size: 20px;
+    }
+
+    &.bigger {
+        font-size: 25px;
+    }
+
+    &.huge {
+        font-size: 30px;
     }
 }

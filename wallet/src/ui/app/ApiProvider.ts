@@ -8,11 +8,23 @@ import type { Ed25519Keypair } from '@mysten/sui.js';
 export enum API_ENV {
     local = 'local',
     devNet = 'devNet',
+    staging = 'staging',
 }
+
+type EnvInfo = {
+    name: string;
+    color: string;
+};
+export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
+    [API_ENV.local]: { name: 'Local', color: '#000' },
+    [API_ENV.devNet]: { name: 'DevNet', color: '#666' },
+    [API_ENV.staging]: { name: 'Staging', color: '#999' },
+};
 
 export const ENV_TO_API: Record<API_ENV, string | undefined> = {
     [API_ENV.local]: process.env.API_ENDPOINT_LOCAL,
     [API_ENV.devNet]: process.env.API_ENDPOINT_DEV_NET,
+    [API_ENV.staging]: process.env.API_ENDPOINT_STAGING,
 };
 
 function getDefaultApiEnv() {
