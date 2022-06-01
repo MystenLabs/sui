@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use futures::stream::FuturesOrdered;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{collections::HashSet, sync::Arc, time::Duration};
+use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::AuthorityName,
     batch::{TxSequenceNumber, UpdateItem},
@@ -117,7 +118,7 @@ pub async fn gossip_process_with_start_seq<A>(
             let total_stake_used = peer_names
                 .iter()
                 .map(|name| committee.weight(name))
-                .sum::<u64>()
+                .sum::<StakeUnit>()
                 + committee.weight(&active_authority.state.name);
             if total_stake_used >= committee.quorum_threshold() {
                 break;

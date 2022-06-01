@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
-use crate::committee::EpochId;
+use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignature, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
@@ -1098,7 +1098,7 @@ impl InputObjectKind {
 }
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
-    weight: u64,
+    weight: StakeUnit,
     used_authorities: HashSet<AuthorityName>,
     partial: CertifiedTransaction,
 }

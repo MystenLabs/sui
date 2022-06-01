@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use sui_types::base_types::{ObjectID, SuiAddress, TxContext};
+use sui_types::committee::StakeUnit;
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
 use sui_types::object::Object;
 use tracing::info;
@@ -122,7 +123,7 @@ impl GenesisConfig {
 pub struct ValidatorGenesisInfo {
     pub key_pair: KeyPair,
     pub network_address: Multiaddr,
-    pub stake: usize,
+    pub stake: StakeUnit,
     pub narwhal_primary_to_primary: Multiaddr,
     pub narwhal_worker_to_primary: Multiaddr,
     pub narwhal_primary_to_worker: Multiaddr,

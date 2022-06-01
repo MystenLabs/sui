@@ -7,6 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use sui_types::committee::StakeUnit;
 use tracing::trace;
 
 pub mod builder;
@@ -32,7 +33,7 @@ pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 pub const FULL_NODE_DB_PATH: &str = "full_node_db";
 
-const DEFAULT_STAKE: usize = 1;
+const DEFAULT_STAKE: StakeUnit = 1;
 
 pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     match std::env::var_os("SUI_CONFIG_DIR") {

@@ -13,18 +13,20 @@ use std::collections::{BTreeMap, HashMap};
 
 pub type EpochId = u64;
 
+pub type StakeUnit = u64;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     pub epoch: EpochId,
-    pub voting_rights: BTreeMap<AuthorityName, u64>,
-    pub total_votes: u64,
+    pub voting_rights: BTreeMap<AuthorityName, StakeUnit>,
+    pub total_votes: StakeUnit,
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
     pub expanded_keys: HashMap<AuthorityName, PublicKey>,
 }
 
 impl Committee {
-    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, u64>) -> Self {
+    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, StakeUnit>) -> Self {
         let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
         let expanded_keys: HashMap<_, _> = voting_rights
             .iter()
@@ -57,17 +59,17 @@ impl Committee {
         unreachable!();
     }
 
-    pub fn weight(&self, author: &AuthorityName) -> u64 {
+    pub fn weight(&self, author: &AuthorityName) -> StakeUnit {
         *self.voting_rights.get(author).unwrap_or(&0)
     }
 
-    pub fn quorum_threshold(&self) -> u64 {
+    pub fn quorum_threshold(&self) -> StakeUnit {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
         2 * self.total_votes / 3 + 1
     }
 
-    pub fn validity_threshold(&self) -> u64 {
+    pub fn validity_threshold(&self) -> StakeUnit {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
         (self.total_votes + 2) / 3
@@ -89,7 +91,7 @@ impl Committee {
     pub fn robust_value<A, V>(
         &self,
         items: impl Iterator<Item = (A, V)>,
-        threshold: u64,
+        threshold: StakeUnit,
     ) -> (AuthorityName, V)
     where
         A: Borrow<AuthorityName> + Ord,
