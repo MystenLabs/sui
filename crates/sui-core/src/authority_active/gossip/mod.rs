@@ -46,6 +46,16 @@ pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: us
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    gossip_process_with_start_seq(active_authority, degree, None).await
+}
+
+pub async fn gossip_process_with_start_seq<A>(
+    active_authority: &ActiveAuthority<A>,
+    degree: usize,
+    start_seq: Option<TxSequenceNumber>,
+) where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
     // A copy of the committee
     let committee = &active_authority.net.committee;
 
@@ -93,7 +103,7 @@ where
 
             peer_names.insert(name);
             gossip_tasks.push(async move {
-                let peer_gossip = PeerGossip::new(name, active_authority);
+                let peer_gossip = PeerGossip::new(name, active_authority, start_seq);
                 // Add more duration if we make more than 1 to ensure overlap
                 debug!("Starting gossip from peer {:?}", name);
                 peer_gossip
@@ -185,12 +195,16 @@ impl<A> PeerGossip<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(peer_name: AuthorityName, active_authority: &ActiveAuthority<A>) -> PeerGossip<A> {
+    pub fn new(
+        peer_name: AuthorityName,
+        active_authority: &ActiveAuthority<A>,
+        start_seq: Option<TxSequenceNumber>,
+    ) -> PeerGossip<A> {
         PeerGossip {
             peer_name,
             client: active_authority.net.authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
-            max_seq: None,
+            max_seq: start_seq,
             aggregator: active_authority.net.clone(),
         }
     }

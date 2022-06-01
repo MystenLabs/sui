@@ -9,7 +9,7 @@ use sui_config::NodeConfig;
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::{gossip::gossip_process, ActiveAuthority},
+    authority_active::{gossip::gossip_process_with_start_seq, ActiveAuthority},
     authority_client::NetworkAuthorityClient,
     checkpoints::CheckpointStore,
 };
@@ -91,10 +91,12 @@ impl SuiNode {
 
             // Start following validators
             Some(tokio::task::spawn(async move {
-                gossip_process(
+                gossip_process_with_start_seq(
                     &active_authority,
                     // listen to all authorities (note that gossip_process caps this to total minus 1.)
                     active_authority.state.committee.voting_rights.len(),
+                    // start receiving the earliest TXes the validator has.
+                    Some(0),
                 )
                 .await;
             }))
