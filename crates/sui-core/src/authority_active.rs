@@ -111,7 +111,7 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> SuiResult<Self> {
-        let committee = authority.committee.clone();
+        let committee = authority.clone_committee();
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(

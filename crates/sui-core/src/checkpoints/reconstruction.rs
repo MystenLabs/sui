@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
+use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     committee::Committee,
@@ -117,13 +118,13 @@ impl FragmentReconstruction {
 // A structure that stores a set of spanning trees, and that supports addition
 // of links to merge them, and construct ever growing components.
 struct SpanGraph {
-    nodes: HashMap<AuthorityName, (AuthorityName, usize)>,
+    nodes: HashMap<AuthorityName, (AuthorityName, StakeUnit)>,
 }
 
 impl SpanGraph {
     /// Initialize the graph with each authority just pointing to itself.
     pub fn new(committee: &Committee) -> SpanGraph {
-        let nodes: HashMap<AuthorityName, (AuthorityName, usize)> = committee
+        let nodes: HashMap<AuthorityName, (AuthorityName, StakeUnit)> = committee
             .voting_rights
             .iter()
             .map(|(n, w)| (*n, (*n, *w)))
@@ -135,7 +136,7 @@ impl SpanGraph {
     /// Follow pointer until you get to a node that only point to itself
     /// and return the node name, and the weight of the tree that points
     /// indirectly to it.
-    pub fn top_node(&self, name: &AuthorityName) -> (AuthorityName, usize) {
+    pub fn top_node(&self, name: &AuthorityName) -> (AuthorityName, StakeUnit) {
         let mut next_name = name;
         while self.nodes[next_name].0 != *next_name {
             next_name = &self.nodes[next_name].0
@@ -151,7 +152,7 @@ impl SpanGraph {
         &mut self,
         name1: &AuthorityName,
         name2: &AuthorityName,
-    ) -> (AuthorityName, usize) {
+    ) -> (AuthorityName, StakeUnit) {
         let top1 = self.top_node(name1).0;
         let top2 = self.top_node(name2).0;
         if top1 == top2 {

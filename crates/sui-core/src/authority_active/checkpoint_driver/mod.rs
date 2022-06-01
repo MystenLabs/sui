@@ -25,6 +25,7 @@ use crate::{
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
+use sui_types::committee::StakeUnit;
 use tracing::{debug, info, warn};
 use typed_store::Map;
 
@@ -60,7 +61,7 @@ pub struct CheckpointProcessControl {
 }
 
 impl Default for CheckpointProcessControl {
-    /// Standard parameters (currenty set heuristically).
+    /// Standard parameters (currently set heuristically).
     fn default() -> CheckpointProcessControl {
         CheckpointProcessControl {
             delay_on_quorum_failure: Duration::from_secs(10),
@@ -92,6 +93,7 @@ pub async fn checkpoint_process<A>(
     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
 
     loop {
+        let committee = &active_authority.net.committee;
         // (1) Get the latest summaries and proposals
         let state_of_world = get_latest_proposal_and_checkpoint_from_all(
             active_authority.net.clone(),
@@ -185,12 +187,12 @@ pub async fn checkpoint_process<A>(
         // (4) Check if we need to advance to the next checkpoint, in case >2/3
         // have a proposal out. If so we start creating and injecting fragments
         // into the consensus protocol to make the new checkpoint.
-        let weight: usize = proposals
+        let weight: StakeUnit = proposals
             .iter()
-            .map(|(auth, _)| active_authority.state.committee.weight(auth))
+            .map(|(auth, _)| committee.weight(auth))
             .sum();
 
-        let _start_checkpoint_making = weight > active_authority.state.committee.quorum_threshold();
+        let _start_checkpoint_making = weight > committee.quorum_threshold();
 
         let proposal = state_checkpoints.lock().new_proposal().clone();
         if let Ok(my_proposal) = proposal {
@@ -231,8 +233,8 @@ where
 {
     #[derive(Default)]
     struct CheckpointSummaries {
-        good_weight: usize,
-        bad_weight: usize,
+        good_weight: StakeUnit,
+        bad_weight: StakeUnit,
         responses: Vec<(
             AuthorityName,
             Option<SignedCheckpointProposal>,
@@ -348,11 +350,11 @@ where
         });
 
     // We use a BTreeMap here to ensure we iterate in increasing order of checkpoint
-    // sequence numbers. If we find a valid checkpoint we are sure this is the higest.
+    // sequence numbers. If we find a valid checkpoint we are sure this is the highest.
     partial_checkpoints
         .iter()
         .for_each(|((_seq, _digest), signed)| {
-            let weight: usize = signed
+            let weight: StakeUnit = signed
                 .iter()
                 .map(|(auth, _)| net.committee.weight(auth))
                 .sum();
@@ -643,7 +645,7 @@ pub async fn diff_proposals<A>(
                             let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
                         }
                         Err(err) => {
-                            // TODO: some error occured -- log it.
+                            // TODO: some error occurred -- log it.
                             warn!("Error augmenting the fragment: {err:?}");
                         }
                     }
@@ -817,7 +819,7 @@ where
                     ConfirmationTransaction::new(cert.clone()),
                     name,
                     // Ok to have a fixed, and rather long timeout, since the future is controlled,
-                    // and interupted by a global timeout as well, that can be controlled.
+                    // and interrupted by a global timeout as well, that can be controlled.
                     Duration::from_secs(60),
                     3,
                 )
@@ -839,7 +841,7 @@ where
                     ConfirmationTransaction::new(cert.clone()),
                     name,
                     // Ok to have a fixed, and rather long timeout, since the future is controlled,
-                    // and interupted by a global timeout as well, that can be controlled.
+                    // and interrupted by a global timeout as well, that can be controlled.
                     Duration::from_secs(60),
                     3,
                 )

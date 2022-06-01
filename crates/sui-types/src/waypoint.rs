@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use ed25519_dalek::Sha512;
 
+use crate::committee::StakeUnit;
 use crate::{base_types::AuthorityName, committee::Committee};
 
 #[cfg(test)]
@@ -407,7 +408,7 @@ where
     /// In case keys are authority names we can check if the set of
     /// authorities represented in this checkpoint represent a quorum
     pub fn has_quorum(&self, committee: &Committee) -> bool {
-        let authority_weights: usize = self
+        let authority_weights: StakeUnit = self
             .authority_waypoints
             .keys()
             .map(|name| committee.weight(name))

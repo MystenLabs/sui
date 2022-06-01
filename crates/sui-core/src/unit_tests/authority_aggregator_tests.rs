@@ -256,7 +256,7 @@ pub async fn extract_cert<A: AuthorityAPI>(
         }
     }
 
-    let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
+    let stake: StakeUnit = votes.iter().map(|(name, _)| committee.weight(name)).sum();
     let quorum_threshold = committee.quorum_threshold();
     assert!(stake >= quorum_threshold);
 
