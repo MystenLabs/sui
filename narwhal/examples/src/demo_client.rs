@@ -109,11 +109,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let oldest_round = rounds_response.oldest_round;
     let newest_round = rounds_response.newest_round;
     let mut round = oldest_round + 1;
-    let mut max_round = round;
+    let mut last_completed_round = round;
     let mut proposed_block_gas_cost: i32 = 0;
 
     println!("\n2) Find collections from earliest round and continue to add collections until gas limit is hit\n");
-    let mut collection_ids = Vec::new();
+    let mut block_proposal_collection_ids = Vec::new();
     let mut extra_collections = Vec::new();
     while round <= newest_round {
         let node_read_causal_request = NodeReadCausalRequest {
@@ -137,7 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut new_collections = Vec::new();
             let count_of_retrieved_collections = node_read_causal_response.collection_ids.len();
             for collection_id in node_read_causal_response.collection_ids {
-                if collection_ids.contains(&collection_id) {
+                if block_proposal_collection_ids.contains(&collection_id) {
                     duplicate_collection_count += 1;
                 } else {
                     println!(
@@ -179,10 +179,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     new_collections.len()
                 );
                 extra_collections.extend(new_collections.clone());
-                max_round = round - 1;
+                last_completed_round = round - 1;
             }
 
-            collection_ids.extend(new_collections);
+            block_proposal_collection_ids.extend(new_collections);
 
             println!("\t\tDeduped {:?} collections\n", duplicate_collection_count);
         } else {
@@ -202,11 +202,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if round > newest_round {
-        max_round = newest_round;
+        last_completed_round = newest_round;
     }
 
     println!(
-        "\n2c) Find the first collection returned from node read causal for round {max_round}\n"
+        "\n2c) Find the first collection returned from node read causal for fully completed round {last_completed_round} before gas limit was reached.\n"
     );
     println!("---- Use NodeReadCausal endpoint ----\n");
 
@@ -217,7 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             public_key: Some(PublicKey {
                 bytes: public_key.clone(),
             }),
-            round: max_round,
+            round: last_completed_round,
         };
 
         println!("\t{}\n", node_read_causal_request);
@@ -228,9 +228,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(node_read_causal_response) = println_and_into_inner(response) {
             block_proposal_starting_collection =
                 Some(node_read_causal_response.collection_ids[0].clone());
+            // NodeReadCausal here will return the expected order of collections for validation versus the deduping we did in our search above.
+            block_proposal_collection_ids = node_read_causal_response.collection_ids.clone();
+            block_proposal_collection_ids.extend(extra_collections.clone());
         } else {
-            println!("\tError trying to node read causal at round {max_round} going back another round and retrying...\n");
-            max_round -= 1;
+            println!("\tError trying to node read causal at round {last_completed_round} going back another round and retrying...\n");
+            last_completed_round -= 1;
         }
     }
 
@@ -238,12 +241,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(
         "\n\tProposing a block with {} collections starting from collection {block_proposal_starting_collection}!\n",
-        collection_ids.len()
+        block_proposal_collection_ids.len()
     );
 
-    // TODO: Add extra collections to fill block proposal as per spec.
     println!(
-        "\tBroadcasting block proposal with starting certificate `H` {block_proposal_starting_collection} from round {round} in DAG + {} extra collections that fit in the block proposal.", extra_collections.len()
+        "\tBroadcasting block proposal with starting certificate `H` {block_proposal_starting_collection} from round {last_completed_round} in DAG + {} extra collections that fit in the block proposal.", extra_collections.len()
     );
     println!("\tValidators should call ReadCausal(H) which will return [collections] and call GetCollections([collections] + [{} extra_collections]) ", extra_collections.len());
 
@@ -264,7 +266,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("\n\t---- Use ReadCausal endpoint ----\n");
 
-    let mut block_proposal_collection_ids = Vec::new();
+    let mut block_validation_collection_ids = Vec::new();
     let read_causal_request = ReadCausalRequest {
         collection_id: Some(block_proposal_starting_collection),
     };
@@ -277,19 +279,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\t{}\n", read_causal_response);
 
-    block_proposal_collection_ids.extend(read_causal_response.collection_ids);
+    block_validation_collection_ids.extend(read_causal_response.collection_ids);
 
-    println!("\tFound {} collections from read causal which will be combined with the {} extra collections from the block proposal", block_proposal_collection_ids.len(), extra_collections.len());
-    block_proposal_collection_ids.extend(extra_collections);
+    println!("\tFound {} collections from read causal which will be combined with the {} extra collections from the block proposal\n", block_validation_collection_ids.len(), extra_collections.len());
+
+    block_validation_collection_ids.extend(extra_collections);
+
+    println!("\tProposed block included the following collections before compressing proposal:\n");
+    let mut result = "\t\t*** Block Proposal Collections ***".to_string();
+    for id in block_proposal_collection_ids.clone() {
+        result = format!("{}\n\t\t|-id=\"{}\"", result, id);
+    }
+    println!("{}", result);
+
+    println!(
+        "\n\tBlock validation found the following collections after decompressing proposal:\n"
+    );
+    let mut result = "\t\t*** Block Validation Collections ***".to_string();
+    for id in block_validation_collection_ids.clone() {
+        result = format!("{}\n\t\t|-id=\"{}\"", result, id);
+    }
+    println!("{}", result);
+
+    // We're comparing `block_validation_collection_ids` which is a validator determined artifact,
+    // and `block_proposal_collection_ids` which is a proposer artifact. In production, the
+    // consensus would not have access to that second artifact at any node but the proposer,
+    // we are only show this here for didactic purposes.
+    if block_proposal_collection_ids == block_validation_collection_ids {
+        println!("\n\tThey match in value and order! Moving on to find the transactions...\n");
+    } else {
+        println!("\n\tThey dont match! Aborting...\n");
+        return Ok(());
+    }
 
     println!(
         "\n4) Obtain the data payload for {} collections in block proposal.\n",
-        block_proposal_collection_ids.len()
+        block_validation_collection_ids.len()
     );
+
     println!("\n\t---- Use GetCollections endpoint ----\n");
 
     let get_collections_request = GetCollectionsRequest {
-        collection_ids: block_proposal_collection_ids.clone(),
+        collection_ids: block_validation_collection_ids.clone(),
     };
 
     println!("\t{}\n", get_collections_request);
@@ -312,7 +343,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4) Remove collections that have been voted on and committed.\n");
     println!("\n\t---- Test RemoveCollections endpoint ----\n");
 
-    let remove_collections_request = RemoveCollectionsRequest { collection_ids };
+    let remove_collections_request = RemoveCollectionsRequest {
+        collection_ids: block_validation_collection_ids.clone(),
+    };
 
     println!("\t{}\n", remove_collections_request);
 
