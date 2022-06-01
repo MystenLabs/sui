@@ -39,7 +39,6 @@ module Sui::ValidatorSetTests {
         ValidatorSet::request_add_stake(
             &mut validator_set,
             Coin::into_balance(Coin::mint_for_testing(500, &mut ctx1)),
-            600 /* max_validator_stake */,
             &ctx1,
         );
         // Adding stake to existing active validator during the epoch

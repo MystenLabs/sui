@@ -53,7 +53,7 @@ module Sui::ValidatorTests {
         );
 
         let new_stake = Coin::into_balance(Coin::mint_for_testing(30, ctx));
-        Validator::request_add_stake(&mut validator, new_stake, 100);
+        Validator::request_add_stake(&mut validator, new_stake);
 
         assert!(Validator::stake_amount(&validator) == 10, 0);
         assert!(Validator::pending_stake_amount(&validator) == 30, 0);

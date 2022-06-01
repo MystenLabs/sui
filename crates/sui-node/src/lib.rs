@@ -94,7 +94,7 @@ impl SuiNode {
                 gossip_process_with_start_seq(
                     &active_authority,
                     // listen to all authorities (note that gossip_process caps this to total minus 1.)
-                    active_authority.state.committee.voting_rights.len(),
+                    active_authority.state.committee.load().voting_rights.len(),
                     // start receiving the earliest TXes the validator has.
                     Some(0),
                 )

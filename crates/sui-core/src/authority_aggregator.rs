@@ -22,6 +22,7 @@ use tracing::{debug, info, instrument, trace, Instrument};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::time::Duration;
+use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 
@@ -389,7 +390,7 @@ where
         FReduce: Fn(
             S,
             AuthorityName,
-            usize,
+            StakeUnit,
             Result<V, SuiError>,
         ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
@@ -466,8 +467,8 @@ where
     > {
         #[derive(Default)]
         struct GetObjectByIDRequestState {
-            good_weight: usize,
-            bad_weight: usize,
+            good_weight: StakeUnit,
+            bad_weight: StakeUnit,
             responses: Vec<(AuthorityName, SuiResult<ObjectInfoResponse>)>,
         }
         let initial_state = GetObjectByIDRequestState::default();
@@ -613,8 +614,8 @@ where
     ) -> Result<(BTreeMap<ObjectRef, Vec<AuthorityName>>, Vec<AuthorityName>), SuiError> {
         #[derive(Default)]
         struct OwnedObjectQueryState {
-            good_weight: usize,
-            bad_weight: usize,
+            good_weight: StakeUnit,
+            bad_weight: StakeUnit,
             object_map: BTreeMap<ObjectRef, Vec<AuthorityName>>,
             responded_authorities: Vec<AuthorityName>,
             errors: Vec<(AuthorityName, SuiError)>,
@@ -877,8 +878,8 @@ where
             // The list of errors gathered at any point
             errors: Vec<SuiError>,
             // Tally of stake for good vs bad responses.
-            good_stake: usize,
-            bad_stake: usize,
+            good_stake: StakeUnit,
+            bad_stake: StakeUnit,
         }
 
         let state = ProcessTransactionState {
@@ -1034,8 +1035,8 @@ where
             // Different authorities could return different effects.  We want at least one effect to come
             // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
             // The map here allows us to count the stake for each unique effect.
-            effects_map: HashMap<[u8; 32], (usize, TransactionEffects)>,
-            bad_stake: usize,
+            effects_map: HashMap<[u8; 32], (StakeUnit, TransactionEffects)>,
+            bad_stake: StakeUnit,
         }
 
         let state = ProcessCertificateState {
@@ -1125,7 +1126,7 @@ where
                             let entry = state
                                 .effects_map
                                 .entry(inner_effects.digest())
-                                .or_insert((0usize, inner_effects.effects));
+                                .or_insert((0, inner_effects.effects));
                             entry.0 += weight;
 
                             if entry.0 >= threshold {
@@ -1221,7 +1222,7 @@ where
         while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
             object_ref_stack.pop()
         {
-            let stake: usize = authorities
+            let stake: StakeUnit = authorities
                 .iter()
                 .map(|(name, _)| self.committee.weight(name))
                 .sum();

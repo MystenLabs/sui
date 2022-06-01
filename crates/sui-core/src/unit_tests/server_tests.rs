@@ -302,7 +302,7 @@ async fn test_subscription_safe_client() {
             state: state.clone(),
             fault_config: LocalAuthorityClientFaultConfig::default(),
         },
-        state.committee.clone(),
+        state.clone_committee(),
         state.name,
     );
 

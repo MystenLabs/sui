@@ -75,7 +75,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             .await
             .unwrap();
         let vote = response.signed_transaction.unwrap();
-        let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
+        let certificate = SignatureAggregator::try_new(transaction, &authority.committee.load())
             .unwrap()
             .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
             .unwrap()
@@ -144,7 +144,7 @@ async fn submit_transaction_to_consensus() {
     let certificate = test_certificates(&state).await.pop().unwrap();
     let expected_transaction = certificate.clone().to_transaction();
 
-    let committee = state.committee.clone();
+    let committee = state.clone_committee();
     let state_guard = Arc::new(state);
 
     // Make a new consensus submitter instance.

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
+use sui_types::committee::StakeUnit;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -123,7 +124,7 @@ impl ConsensusConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub public_key: PublicKeyBytes,
-    pub stake: usize,
+    pub stake: StakeUnit,
     pub network_address: Multiaddr,
 }
 
@@ -136,7 +137,7 @@ impl ValidatorInfo {
         self.public_key
     }
 
-    pub fn stake(&self) -> usize {
+    pub fn stake(&self) -> StakeUnit {
         self.stake
     }
 

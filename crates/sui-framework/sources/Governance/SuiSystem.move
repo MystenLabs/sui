@@ -24,8 +24,6 @@ module Sui::SuiSystem {
     struct SystemParameters has store {
         /// Lower-bound on the amount of stake required to become a validator.
         min_validator_stake: u64,
-        /// Upper-bound on the amount of stake allowed to become a validator.
-        max_validator_stake: u64,
         /// Maximum number of validator candidates at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_candidate_count: u64,
@@ -59,9 +57,7 @@ module Sui::SuiSystem {
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
-        max_validator_stake: u64,
     ) {
-        assert!(min_validator_stake < max_validator_stake, 0);
         let state = SuiSystemState {
             // Use a hardcoded ID.
             id: ID::get_sui_system_state_object_id(),
@@ -71,7 +67,6 @@ module Sui::SuiSystem {
             storage_fund,
             parameters: SystemParameters {
                 min_validator_stake,
-                max_validator_stake,
                 max_validator_candidate_count,
             },
             delegation_reward: Balance::zero(),
@@ -100,8 +95,7 @@ module Sui::SuiSystem {
         );
         let stake_amount = Coin::value(&stake);
         assert!(
-            stake_amount >= self.parameters.min_validator_stake
-                && stake_amount <= self.parameters.max_validator_stake,
+            stake_amount >= self.parameters.min_validator_stake,
             0
         );
         let validator = Validator::new(
@@ -139,7 +133,6 @@ module Sui::SuiSystem {
         ValidatorSet::request_add_stake(
             &mut self.validators,
             Coin::into_balance(new_stake),
-            self.parameters.max_validator_stake,
             ctx,
         )
     }

@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use futures::stream::FuturesOrdered;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{collections::HashSet, sync::Arc, time::Duration};
+use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::AuthorityName,
     batch::{TxSequenceNumber, UpdateItem},
@@ -60,10 +61,7 @@ pub async fn gossip_process_with_start_seq<A>(
     let committee = &active_authority.net.committee;
 
     // Number of tasks at most "degree" and no more than committee - 1
-    let target_num_tasks: usize = usize::min(
-        active_authority.state.committee.voting_rights.len() - 1,
-        degree,
-    );
+    let target_num_tasks: usize = usize::min(committee.voting_rights.len() - 1, degree);
 
     // If we do not expect to connect to anyone
     if target_num_tasks == 0 {
@@ -114,10 +112,10 @@ pub async fn gossip_process_with_start_seq<A>(
 
             // If we have already used all the good stake, then stop here and
             // wait for some node to become available.
-            let total_stake_used: usize = peer_names
+            let total_stake_used = peer_names
                 .iter()
                 .map(|name| committee.weight(name))
-                .sum::<usize>()
+                .sum::<StakeUnit>()
                 + committee.weight(&active_authority.state.name);
             if total_stake_used >= committee.quorum_threshold() {
                 break;
@@ -173,18 +171,18 @@ where
 {
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
-    let mut tries_remaining = active_authority.state.committee.voting_rights.len();
+    let mut tries_remaining = active_authority.state.committee.load().voting_rights.len();
     while tries_remaining > 0 {
-        let name = active_authority.state.committee.sample();
-        if peer_names.contains(name)
-            || *name == my_name
-            || !active_authority.can_contact(*name).await
+        let name = *active_authority.state.committee.load().sample();
+        if peer_names.contains(&name)
+            || name == my_name
+            || !active_authority.can_contact(name).await
         {
             tries_remaining -= 1;
             tokio::time::sleep(Duration::from_millis(10)).await;
             continue;
         }
-        return Ok(*name);
+        return Ok(name);
     }
     Err(SuiError::GenericAuthorityError {
         error: "Could not connect to any peer".to_string(),

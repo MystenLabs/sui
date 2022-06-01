@@ -9,7 +9,7 @@ module Sui::ValidatorSet {
     use Sui::EpochRewardRecord;
     use Sui::SUI::SUI;
     use Sui::TxContext::{Self, TxContext};
-    use Sui::Validator::{Self, Validator};
+    use Sui::Validator::{Self, Validator, ValidatorMetadata};
 
     friend Sui::SuiSystem;
 
@@ -39,18 +39,25 @@ module Sui::ValidatorSet {
         /// Removal requests from the validators. Each element is an index
         /// pointing to `active_validators`.
         pending_removals: vector<u64>,
+
+        /// The metadata of the validator set for the next epoch. This is kept up-to-dated.
+        /// Everytime a change request is received, this set is updated.
+        next_epoch_validators: vector<ValidatorMetadata>,
     }
 
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
         let (validator_stake, delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&init_active_validators);
-        ValidatorSet {
+        let validators = ValidatorSet {
             validator_stake,
             delegation_stake,
             quorum_stake_threshold,
             active_validators: init_active_validators,
             pending_validators: Vector::empty(),
             pending_removals: Vector::empty(),
-        }
+            next_epoch_validators: Vector::empty(),
+        };
+        validators.next_epoch_validators = derive_next_epoch_validators(&validators);
+        validators
     }
 
     /// Get the total number of candidates that might become validators in the next epoch.
@@ -97,12 +104,11 @@ module Sui::ValidatorSet {
     public(friend) fun request_add_stake(
         self: &mut ValidatorSet,
         new_stake: Balance<SUI>,
-        max_validator_stake: u64,
         ctx: &TxContext,
     ) {
         let validator_address = TxContext::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        Validator::request_add_stake(validator, new_stake, max_validator_stake);
+        Validator::request_add_stake(validator, new_stake);
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
@@ -184,15 +190,25 @@ module Sui::ValidatorSet {
         computation_reward: &mut Balance<SUI>,
         ctx: &mut TxContext,
     ) {
-        distribute_reward(&mut self.active_validators, self.validator_stake, computation_reward);
+        // `compute_reward_distribution` must be called before `adjust_stake` to make sure we are using the current
+        // epoch's stake information to compute reward distribution.
+        let rewards = compute_reward_distribution(
+            &self.active_validators,
+            self.validator_stake,
+            Balance::value(computation_reward),
+        );
 
-        // This needs to come before adjust_stake since some of the
-        // pending validators may also have pending deposits.
-        process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
-
+        // `adjust_stake` must be called before `distribute_reward`, because reward distribution goes to
+        // each validator's pending stake, and that shouldn't be available in the next epoch.
         adjust_stake(&mut self.active_validators, ctx);
 
+        distribute_reward(&mut self.active_validators, &rewards, computation_reward);
+
+        process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
+
         process_pending_removals(&mut self.active_validators, &mut self.pending_removals, ctx);
+
+        self.next_epoch_validators = derive_next_epoch_validators(self);
 
         let (validator_stake, delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&self.active_validators);
         self.validator_stake = validator_stake;
@@ -327,20 +343,68 @@ module Sui::ValidatorSet {
         }
     }
 
+    /// Given the current list of active validators, the total stake and total reward,
+    /// calculate the amount of reward each validator should get.
+    /// Returns the amount of reward for each validator, as well as a remaining reward
+    /// due to integer division loss.
+    fun compute_reward_distribution(
+        validators: &vector<Validator>,
+        total_stake: u64,
+        total_reward: u64,
+    ): vector<u64> {
+        let results = Vector::empty();
+        let length = Vector::length(validators);
+        let i = 0;
+        while (i < length) {
+            let validator = Vector::borrow(validators, i);
+            // Integer divisions will truncate the results. Because of this, we expect that at the end
+            // there will be some reward remaining in `total_reward`.
+            // Use u128 to avoid multiplication overflow.
+            let stake_amount: u128 = (Validator::stake_amount(validator) as u128);
+            let reward_amount = stake_amount * (total_reward as u128) / (total_stake as u128);
+            Vector::push_back(&mut results, (reward_amount as u64));
+            i = i + 1;
+        };
+        results
+    }
+
     // TODO: Allow reward compunding for delegators.
-    fun distribute_reward(validators: &mut vector<Validator>, total_stake: u64, reward: &mut Balance<SUI>) {
-        let total_reward_amount = Balance::value(reward);
+    fun distribute_reward(validators: &mut vector<Validator>, rewards: &vector<u64>, reward: &mut Balance<SUI>) {
         let length = Vector::length(validators);
         let i = 0;
         while (i < length) {
             let validator = Vector::borrow_mut(validators, i);
-            // Integer divisions will truncate the results. Because of this, we expect that at the end
-            // there will be some reward remaining in `reward`.
-            let reward_amount = Validator::stake_amount(validator) * total_reward_amount / total_stake;
+            let reward_amount = *Vector::borrow(rewards, i);
             let reward = Balance::split(reward, reward_amount);
-            Validator::deposit_reward(validator, reward);
+            // Because reward goes to pending stake, it's the same as calling `request_add_stake`.
+            Validator::request_add_stake(validator, reward);
             i = i + 1;
         }
+    }
+
+    /// Upon any change to the validator set, derive and update the metadata of the validators for the new epoch.
+    /// TODO: If we want to enforce a % on stake threshold, this is the function to do it.
+    fun derive_next_epoch_validators(self: &ValidatorSet): vector<ValidatorMetadata> {
+        let active_count = Vector::length(&self.active_validators);
+        let removal_count = Vector::length(&self.pending_removals);
+        let result = Vector::empty();
+        while (active_count > 0) {
+            if (removal_count > 0) {
+                let removal_index = *Vector::borrow(&self.pending_removals, removal_count - 1);
+                if (removal_index == active_count - 1) {
+                    // This validator will be removed, and hence we won't add it to the new validator set.
+                    removal_count = removal_count - 1;
+                    active_count = active_count - 1;
+                    continue
+                };
+            };
+            let metadata = Validator::metadata(
+                Vector::borrow(&self.active_validators, active_count - 1),
+            );
+            Vector::push_back(&mut result, *metadata);
+            active_count = active_count - 1;
+        };
+        result
     }
 
     #[test_only]
@@ -355,6 +419,7 @@ module Sui::ValidatorSet {
             active_validators,
             pending_validators,
             pending_removals: _,
+            next_epoch_validators: _,
         } = self;
         while (!Vector::is_empty(&active_validators)) {
             let v = Vector::pop_back(&mut active_validators);

@@ -17,9 +17,6 @@ module Sui::Genesis {
     /// Initial value of the lower-bound on the amount of stake required to become a validator.
     const INIT_MIN_VALIDATOR_STAKE: u64 = 100000000000000;
 
-    /// Initial value of the upper-bound on the amount of stake allowed to become a validator.
-    const INIT_MAX_VALIDATOR_STAKE: u64 = 100000000000000000;
-
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
 
@@ -67,7 +64,6 @@ module Sui::Genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
-            INIT_MAX_VALIDATOR_STAKE,
         );
     }
 }

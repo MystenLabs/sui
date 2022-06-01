@@ -12,6 +12,7 @@ use crate::{
     transaction_input_checker,
 };
 use anyhow::anyhow;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
@@ -30,6 +31,7 @@ use parking_lot::Mutex;
 use prometheus_exporter::prometheus::{
     register_histogram, register_int_counter, Histogram, IntCounter,
 };
+use std::ops::Deref;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -52,7 +54,7 @@ use sui_types::{
     messages::*,
     object::{Data, Object, ObjectFormatOptions, ObjectRead},
     storage::{BackingPackageStore, DeleteKind, Storage},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::{debug, error, instrument};
 use typed_store::Map;
@@ -79,6 +81,7 @@ pub use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
 use sui_types::object::Owner;
+use sui_types::sui_system_state::SuiSystemState;
 
 use self::authority_store::{
     generate_genesis_system_object, store_package_and_init_modules_for_genesis,
@@ -219,14 +222,15 @@ pub struct AuthorityState {
     pub secret: StableSyncAuthoritySigner,
 
     /// Committee of this Sui instance.
-    pub committee: Committee,
+    pub committee: ArcSwap<Committee>,
     /// A global lock to halt all transaction/cert processing.
     #[allow(dead_code)]
-    halted: AtomicBool,
+    pub(crate) halted: AtomicBool,
+    pub(crate) change_epoch_tx: ArcSwapOption<SignedTransaction>,
 
     /// Move native functions that are available to invoke
-    _native_functions: NativeFunctionTable,
-    move_vm: Arc<MoveVM>,
+    pub(crate) _native_functions: NativeFunctionTable,
+    pub(crate) move_vm: Arc<MoveVM>,
 
     /// The database
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
@@ -281,6 +285,11 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
+        if self.halted.load(Ordering::SeqCst) {
+            // TODO: Do we want to include the new validator set?
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+        }
+
         let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             &transaction,
@@ -290,8 +299,12 @@ impl AuthorityState {
 
         let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
 
-        let signed_transaction =
-            SignedTransaction::new(self.committee.epoch, transaction, self.name, &*self.secret);
+        let signed_transaction = SignedTransaction::new(
+            self.committee.load().epoch,
+            transaction,
+            self.name,
+            &*self.secret,
+        );
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
@@ -348,9 +361,18 @@ impl AuthorityState {
             return Ok(info);
         }
 
+        if self.halted.load(Ordering::SeqCst) {
+            // TODO: Do we want to include the new validator set?
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+        }
+
         // Check the certificate and retrieve the transfer data.
         tracing::trace_span!("cert_check_signature")
-            .in_scope(|| confirmation_transaction.certificate.verify(&self.committee))
+            .in_scope(|| {
+                confirmation_transaction
+                    .certificate
+                    .verify(&self.committee.load())
+            })
             .map_err(|e| {
                 self.metrics.signature_errors.inc();
                 e
@@ -481,7 +503,7 @@ impl AuthorityState {
             &self.move_vm,
             &self._native_functions,
             gas_status,
-            self.committee.epoch,
+            self.committee.load().epoch,
         )?;
 
         self.metrics.total_effects.inc();
@@ -491,7 +513,7 @@ impl AuthorityState {
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects =
-            effects.to_sign_effects(self.committee.epoch, &self.name, &*self.secret);
+            effects.to_sign_effects(self.committee.load().epoch, &self.name, &*self.secret);
 
         // Update the database in an atomic manner
         self.update_state(temporary_store, &certificate, &signed_effects)
@@ -762,8 +784,9 @@ impl AuthorityState {
         let mut state = AuthorityState {
             name,
             secret,
-            committee: current_epoch_info.committee,
+            committee: ArcSwap::from(Arc::new(current_epoch_info.committee)),
             halted: AtomicBool::new(current_epoch_info.validator_halted),
+            change_epoch_tx: ArcSwapOption::empty(),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
@@ -817,12 +840,47 @@ impl AuthorityState {
         state
     }
 
+    pub(crate) fn insert_new_epoch_info(&self, new_committee: &Committee) -> SuiResult {
+        let current_epoch_info = self.database.get_last_epoch_info()?;
+        fp_ensure!(
+            current_epoch_info.committee.epoch <= new_committee.epoch,
+            SuiError::InconsistentEpochState {
+                error: "Trying to insert an old epoch entry".to_owned()
+            }
+        );
+        self.database.insert_new_epoch_info(EpochInfoLocals {
+            committee: new_committee.clone(),
+            validator_halted: true,
+        })?;
+        self.committee.store(Arc::new(new_committee.clone()));
+        Ok(())
+    }
+
+    pub(crate) fn begin_new_epoch(&self) -> SuiResult {
+        let epoch_info = self.database.get_last_epoch_info()?;
+        assert_eq!(
+            &epoch_info.committee,
+            self.committee.load().clone().deref(),
+            "About to being new epoch, however current committee differs from epoch store"
+        );
+        self.database.insert_new_epoch_info(EpochInfoLocals {
+            committee: self.clone_committee(),
+            validator_halted: false,
+        })?;
+        self.halted.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
     pub(crate) fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
         self.checkpoints.clone()
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
+    }
+
+    pub fn clone_committee(&self) -> Committee {
+        self.committee.load().clone().deref().clone()
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
@@ -835,6 +893,20 @@ impl AuthorityState {
             .await?
             .expect("framework object should always exist")
             .compute_object_reference())
+    }
+
+    pub async fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+        let sui_system_object = self
+            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
+            .await?
+            .expect("Sui System State object must always exist");
+        let move_object = sui_system_object
+            .data
+            .try_as_move()
+            .expect("Sui System State object must be a Move object");
+        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+            .expect("Sui System State object deserialization cannot fail");
+        Ok(result)
     }
 
     pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
@@ -1025,12 +1097,18 @@ impl AuthorityState {
     /// Update state and signals that a new transactions has been processed
     /// to the batch maker service.
     #[instrument(name = "db_update_state", level = "debug", skip_all)]
-    async fn update_state(
+    pub(crate) async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore<AuthorityStore>,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
+        if self.halted.load(Ordering::SeqCst) {
+            // TODO: Here we should allow consensus transaction to continue.
+            // TODO: Do we want to include the new validator set?
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+        }
+
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
@@ -1157,7 +1235,7 @@ impl ExecutionState for AuthorityState {
                 if !self.shared_locks_exist(&certificate).await? {
                     // Check the certificate. Remember that Byzantine authorities may input anything into
                     // consensus.
-                    certificate.verify(&self.committee)?;
+                    certificate.verify(&self.committee.load())?;
 
                     // Persist the certificate since we are about to lock one or more shared object.
                     // We thus need to make sure someone (if not the client) can continue the protocol.
