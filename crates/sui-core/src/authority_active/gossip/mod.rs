@@ -272,7 +272,14 @@ where
                     if !self.state.database.effects_exists(&digest)? {
                         // Download the certificate
                         let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
-                        self.process_response(response).await?;
+                        if let Err(err) = self.process_response(response).await {
+                            // Check again whether the failure is due to a concurrent execution.
+                            // TODO: a concurrent execution should not really have returned an
+                            //       error but it seems it does? Check correctness?
+                            if !self.state.database.effects_exists(&digest)?{
+                                return Err(err);
+                            }
+                        }
                     }
                 }
             };
@@ -282,7 +289,6 @@ where
 
     async fn process_response(&self, response: TransactionInfoResponse) -> Result<(), SuiError> {
         if let Some(certificate) = response.certified_transaction {
-            // Process the certificate from one authority to ourselves
             // Process the certificate from one authority to ourselves
             self.aggregator
                 .sync_authority_source_to_destination(

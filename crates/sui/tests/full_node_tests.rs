@@ -183,7 +183,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 }
 
 // Test for syncing a node to an authority that already has many txes.
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
         .with_test_writer()
