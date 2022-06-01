@@ -37,7 +37,7 @@ Refer to the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/
 
 You can view the generated [Type Doc](https://typedoc.org/) for the [current release of the SDK](https://www.npmjs.com/package/@mysten/sui.js) at http://typescript-sdk-docs.s3-website-us-east-1.amazonaws.com/.
 
-For the latest docs for the `main` branch, open the [doc/index.html](doc/index.html) in your browser.
+For the latest docs for the `main` branch, run `yarn doc` and open the [doc/index.html](doc/index.html) in your browser.
 
 ## Usage
 
