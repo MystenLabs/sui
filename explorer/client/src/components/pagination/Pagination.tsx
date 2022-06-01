@@ -11,9 +11,8 @@ function generatePaginationArr(
 ) {
     // number of list items to show before truncating
     const range: number = 5;
-    const max = Math.ceil(totalItems / itemsPerPage) - 1;
+    const max = Math.ceil((totalItems - 1) / itemsPerPage);
     const maxRange = (Math.floor(startAt / range) + 1) * range;
-
     // set the min range to be the max range minus the range if it is less than the max - range
     const minRange = startAt <= max - range ? maxRange - range : max - range;
     return {
@@ -91,7 +90,8 @@ function Pagination({
                             </button>
                         </li>
                     ))}
-                    {pageIndex < pagiData.max - pagiData.range && (
+
+                    {pageIndex < pagiData.max - 1 && (
                         <li className="page-item">
                             {' ... '}
                             <button
