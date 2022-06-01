@@ -1,7 +1,6 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
 from fabric import task
 from benchmark.seed import SeedData
-from pathlib import Path
 
 from benchmark.local import LocalBench
 from benchmark.full_demo import Demo
@@ -92,7 +91,7 @@ def demo(ctx, debug=True):
 
 
 @task
-def seed(ctx, committee_path):
+def seed(ctx, starting_data_port):
     ''' Run data seeder '''
     bench_params = {
         'faults': 0,
@@ -103,7 +102,7 @@ def seed(ctx, committee_path):
         'duration': 20,
     }
     try:
-        SeedData(bench_params).run(Path(committee_path))
+        SeedData(bench_params).run(int(starting_data_port))
     except BenchError as e:
         Print.error(e)
 

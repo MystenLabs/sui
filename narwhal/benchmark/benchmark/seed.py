@@ -3,8 +3,6 @@ import subprocess
 from math import ceil
 from os.path import basename, splitext
 from time import sleep
-from pathlib import Path
-import json
 
 from benchmark.commands import CommandMaker
 from benchmark.config import BenchParameters, ConfigError
@@ -34,24 +32,23 @@ class SeedData:
         except subprocess.SubprocessError as e:
             raise BenchError('Failed to kill testbed', e)
 
-    def run(self, committee_path):
-        assert isinstance(committee_path, Path)
+    def run(self, starting_data_port):
+        assert isinstance(starting_data_port, int)
         Print.heading('Start seeding data')
+        nodes, rate, workers = self.nodes[0], self.rate[0], self.workers
 
-        # TODO: Figure out how to infer worker address from "/dns/worker_2/tcp/4001/http" format
-        committee_data = json.loads(open(committee_path, "r").read())
         workers_addresses = []
-        transactions_address_port = 7001
-        for authority in committee_data['authorities']:
-            transactions_address = f'http://127.0.0.1:{transactions_address_port}/'
-            transactions_address_port += 1
-            Print.info(transactions_address)
-            workers_addresses.append(
-                [(0, transactions_address)])
+        transactions_address_port = starting_data_port
+        for _ in range(nodes):
+            for worker_id in range(workers):
+                transactions_address = f'http://127.0.0.1:{transactions_address_port}/'
+                transactions_address_port += 1
+                Print.info(transactions_address)
+
+                workers_addresses.append(
+                    [(worker_id, transactions_address)])
 
         try:
-            rate = self.rate[0]
-
             # Cleanup all files.
             cmd = f'{CommandMaker.clean_logs()} ; {CommandMaker.cleanup()}'
             subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
@@ -66,7 +63,7 @@ class SeedData:
             subprocess.run([cmd], shell=True)
 
             # Run the clients (they will wait for the nodes to be ready).
-            rate_share = ceil(rate / len(workers_addresses))
+            rate_share = ceil(rate / (nodes * workers))
             for i, addresses in enumerate(workers_addresses):
                 for (id, address) in addresses:
                     cmd = CommandMaker.run_client(

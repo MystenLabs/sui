@@ -24,10 +24,10 @@ The parameters for the transaction rate (etc) can be adjusted by editing the `fa
 $ docker-compose -f docker-compose.yml up
 ```
 
-2. Run the data seeder via the benchmark tooling. 
+2. Run the data seeder via the benchmark tooling. Note that the port provided is the starting port for which the workers will receive transactions. Seeder will autoincrement port for the number of nodes * workers provided in the parameters.
 
 ```
-fab seed $(pwd)/Docker/validators/committee.json
+fab seed 7001
 ```
 
 Parameters for transaction rate can be adjusted in `/benchmark/fabfile.py`

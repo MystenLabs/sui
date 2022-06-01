@@ -4,14 +4,26 @@
 use clap::{crate_name, crate_version, App, AppSettings, Arg, SubCommand};
 use narwhal::proposer_client::ProposerClient;
 use narwhal::validator_client::ValidatorClient;
+use narwhal::CollectionRetrievalResult;
 use narwhal::{
-    CertificateDigest, GetCollectionsRequest, NodeReadCausalRequest, PublicKey, ReadCausalRequest,
-    RemoveCollectionsRequest, RoundsRequest,
+    collection_retrieval_result::RetrievalResult, BatchDigest, CertificateDigest, Empty,
+    GetCollectionsRequest, GetCollectionsResponse, NodeReadCausalRequest, NodeReadCausalResponse,
+    PublicKey, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest, RoundsRequest,
+    RoundsResponse,
 };
+use std::fmt;
+use std::fmt::{Display, Formatter};
+use tonic::Status;
 
 pub mod narwhal {
     tonic::include_proto!("narwhal");
 }
+
+/// DEMO CONSTANTS
+const PRIMARY_0_PUBLIC_KEY: &str = "Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=";
+// Assumption that each transaction costs 1 gas to complete
+// Chose this number because it allows demo to complete round + get extra collections when proposing block.
+const BLOCK_GAS_LIMIT: i32 = 300000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -48,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match matches.subcommand() {
         ("docker_demo", Some(_sub_matches)) => {
             dsts.push("http://127.0.0.1:8000".to_owned());
-            base64_keys.push("Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=".to_owned());
+            base64_keys.push(PRIMARY_0_PUBLIC_KEY.to_owned());
         }
         ("run", Some(sub_matches)) => {
             let ports = sub_matches
@@ -70,64 +82,163 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!(
-        "\n******************************** Proposer Service ********************************\n"
+        "******************************** Proposer Service ********************************\n"
     );
-    let mut client = ProposerClient::connect(dsts[0].clone()).await?;
+    println!("\nConnecting to {} as the proposer.", dsts[0]);
+    let mut proposer_client_1 = ProposerClient::connect(dsts[0].clone()).await?;
+    let mut validator_client_1 = ValidatorClient::connect(dsts[0].clone()).await?;
     let public_key = base64::decode(&base64_keys[0]).unwrap();
-    let gas_limit = 10;
 
     println!("\n1) Retrieve the range of rounds you have a collection for\n");
     println!("\n---- Use Rounds endpoint ----\n");
 
-    let request = tonic::Request::new(RoundsRequest {
+    let rounds_request = RoundsRequest {
         public_key: Some(PublicKey {
             bytes: public_key.clone(),
         }),
-    });
+    };
 
-    println!("RoundsRequest={:?}\n", request);
+    println!("{}\n", rounds_request);
 
-    let response = client.rounds(request).await;
-
-    println!("RoundsResponse={:?}\n", response);
-
+    let request = tonic::Request::new(rounds_request);
+    let response = proposer_client_1.rounds(request).await;
     let rounds_response = response.unwrap().into_inner();
+
+    println!("{}\n", rounds_response);
+
     let oldest_round = rounds_response.oldest_round;
     let newest_round = rounds_response.newest_round;
     let mut round = oldest_round + 1;
+    let mut max_round = round;
+    let mut proposed_block_gas_cost: i32 = 0;
+
     println!("\n2) Find collections from earliest round and continue to add collections until gas limit is hit\n");
     println!("\n---- Use NodeReadCausal endpoint ----\n");
 
-    let mut collection_ids: Vec<CertificateDigest> = vec![];
-    while round < newest_round && collection_ids.len() < gas_limit {
-        let request = tonic::Request::new(NodeReadCausalRequest {
+    let mut collection_ids = Vec::new();
+    let mut extra_collections = Vec::new();
+    while round <= newest_round {
+        let node_read_causal_request = NodeReadCausalRequest {
             public_key: Some(PublicKey {
                 bytes: public_key.clone(),
             }),
             round,
-        });
+        };
 
-        println!("NodeReadCausalRequest={:?}\n", request);
+        println!("{}\n", node_read_causal_request);
 
-        let response = client.node_read_causal(request).await;
+        let request = tonic::Request::new(node_read_causal_request);
+        let response = proposer_client_1.node_read_causal(request).await;
 
-        println!("NodeReadCausalResponse={:?}\n", response);
+        if let Some(node_read_causal_response) = println_and_into_inner(response) {
+            let mut duplicate_collection_count = 0;
+            let mut new_collections = Vec::new();
+            let count_of_retrieved_collections = node_read_causal_response.collection_ids.len();
+            for collection_id in node_read_causal_response.collection_ids {
+                if collection_ids.contains(&collection_id) {
+                    duplicate_collection_count += 1;
+                } else {
+                    println!(
+                        "\n2a) Get collection payloads to calculate gas cost of proposed block.\n"
+                    );
+                    println!("\n---- Use GetCollections endpoint ----\n");
 
-        let node_read_causal_response = response.unwrap().into_inner();
+                    let get_collections_request = GetCollectionsRequest {
+                        collection_ids: vec![collection_id.clone()],
+                    };
 
-        if collection_ids.len() + node_read_causal_response.collection_ids.len() <= gas_limit {
-            collection_ids.extend(node_read_causal_response.collection_ids);
+                    println!("{}\n", get_collections_request);
+
+                    let request = tonic::Request::new(get_collections_request);
+                    let response = validator_client_1.get_collections(request).await;
+                    let get_collection_response = response.unwrap().into_inner();
+
+                    let (total_num_of_transactions, total_transactions_size) =
+                        get_total_transaction_count_and_size(
+                            get_collection_response.result.clone(),
+                        );
+
+                    // TODO: This doesn't work in Docker yet, figure out why
+                    println!("Found {total_num_of_transactions} transactions with a total size of {total_transactions_size} bytes");
+
+                    proposed_block_gas_cost += total_num_of_transactions;
+                    if proposed_block_gas_cost <= BLOCK_GAS_LIMIT {
+                        println!("Adding {total_num_of_transactions} transactions to the proposed block, increasing the block gas cost to {proposed_block_gas_cost}");
+                        new_collections.push(collection_id);
+                    } else {
+                        println!("Not adding {total_num_of_transactions} transactions to the proposed block as it would increase the block gas cost to {proposed_block_gas_cost} which is greater than block gas limit of {BLOCK_GAS_LIMIT}");
+                        break;
+                    }
+                }
+            }
+            if new_collections.len() + duplicate_collection_count != count_of_retrieved_collections
+            {
+                println!(
+                    "We added {} extra collections to the block proposal from round {round}",
+                    new_collections.len()
+                );
+                extra_collections.extend(new_collections.clone());
+                max_round = round - 1;
+            }
+
+            collection_ids.extend(new_collections);
+
+            println!("Deduped {:?} collections\n", duplicate_collection_count);
         } else {
-            println!("Reached gas limit of {gas_limit}, stopping search for more collections\n");
-            break;
+            println!("Error trying to node read causal at round {round}\n")
         }
-        round += 1;
+        if proposed_block_gas_cost >= BLOCK_GAS_LIMIT {
+            break;
+        } else {
+            round += 1;
+        }
+    }
+
+    if round > newest_round {
+        max_round = newest_round;
     }
 
     println!(
-        "Proposing block with {} collections!\n",
+        "\n2 b) Find the first collection returned from node read causal for round {max_round}\n"
+    );
+    println!("\n---- Use NodeReadCausal endpoint ----\n");
+
+    let mut block_proposal_starting_collection: Option<CertificateDigest> = None;
+
+    while block_proposal_starting_collection.is_none() {
+        let node_read_causal_request = NodeReadCausalRequest {
+            public_key: Some(PublicKey {
+                bytes: public_key.clone(),
+            }),
+            round: max_round,
+        };
+
+        println!("{}\n", node_read_causal_request);
+
+        let request = tonic::Request::new(node_read_causal_request);
+        let response = proposer_client_1.node_read_causal(request).await;
+
+        if let Some(node_read_causal_response) = println_and_into_inner(response) {
+            block_proposal_starting_collection =
+                Some(node_read_causal_response.collection_ids[0].clone());
+        } else {
+            println!("Error trying to node read causal at round {max_round} going back another round and retrying...\n");
+            max_round -= 1;
+        }
+    }
+
+    let block_proposal_starting_collection = block_proposal_starting_collection.unwrap();
+
+    println!(
+        "\nProposing a block with {} collections starting from collection {block_proposal_starting_collection}!\n",
         collection_ids.len()
     );
+
+    // TODO: Add extra collections to fill block proposal as per spec.
+    println!(
+        "Broadcasting block proposal with starting certificate `H` {block_proposal_starting_collection} from round {round} in DAG + {} extra collections that fit in the block proposal.", extra_collections.len()
+    );
+    println!("Validators should call ReadCausal(H) which will return [collections] and call GetCollections([collections] + [{} extra_collections]) ", extra_collections.len());
 
     println!(
         "\n******************************** Validator Service ********************************\n"
@@ -135,54 +246,270 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let other_validator = if dsts.len() > 1 {
         dsts[1].clone()
     } else {
-        // we're probably running the docker comamnd with a single endpoint
+        // we're probably running the docker command with a single endpoint
         dsts[0].clone()
     };
-    let mut client = ValidatorClient::connect(other_validator).await?;
+    println!("\nConnecting to {other_validator} as the validator");
+    let mut validator_client_2 = ValidatorClient::connect(other_validator).await?;
 
-    println!("\n3) Find all causal collections from the collections found.\n");
+    println!(
+        "\n3) Find all causal collections from the starting collection {block_proposal_starting_collection} in block proposal.\n",
+    );
     println!("\n---- Use ReadCausal endpoint ----\n");
-    let node_read_causal_cids = collection_ids.clone();
-    for collection_id in node_read_causal_cids {
-        let request = tonic::Request::new(ReadCausalRequest {
-            collection_id: Some(collection_id),
-        });
 
-        println!("ReadCausalRequest={:?}\n", request);
+    let mut block_proposal_collection_ids = Vec::new();
+    let read_causal_request = ReadCausalRequest {
+        collection_id: Some(block_proposal_starting_collection),
+    };
 
-        let response = client.read_causal(request).await;
+    println!("{}\n", read_causal_request);
 
-        println!("ReadCausalResponse={:?}\n", response);
+    let request = tonic::Request::new(read_causal_request);
+    let response = validator_client_2.read_causal(request).await;
+    let read_causal_response = response.unwrap().into_inner();
 
-        let read_causal_response = response.unwrap().into_inner();
+    println!("{}\n", read_causal_response);
 
-        collection_ids.extend(read_causal_response.collection_ids);
-    }
+    block_proposal_collection_ids.extend(read_causal_response.collection_ids);
 
-    println!("\n4) Obtain the data payload from collections found.\n");
+    println!("Found {} collections from read causal which will be combined with the {} extra collections from the block proposal", block_proposal_collection_ids.len(), extra_collections.len());
+    block_proposal_collection_ids.extend(extra_collections);
+
+    println!(
+        "\n4) Obtain the data payload for {} collections in block proposal.\n",
+        block_proposal_collection_ids.len()
+    );
     println!("\n---- Use GetCollections endpoint ----\n");
-    let request = tonic::Request::new(GetCollectionsRequest {
-        collection_ids: collection_ids.clone(),
-    });
 
-    println!("GetCollectionsRequest={:?}\n", request);
+    let get_collections_request = GetCollectionsRequest {
+        collection_ids: block_proposal_collection_ids.clone(),
+    };
 
-    let response = client.get_collections(request).await;
+    println!("{}\n", get_collections_request);
 
-    println!("GetCollectionsResponse={:?}\n", response);
-
+    let request = tonic::Request::new(get_collections_request);
+    let response = validator_client_2.get_collections(request).await;
     let get_collection_response = response.unwrap().into_inner();
 
+    println!("{}\n", get_collection_response);
+
+    let (total_num_of_transactions, total_transactions_size) =
+        get_total_transaction_count_and_size(get_collection_response.result.clone());
+
     // TODO: This doesn't work in Docker yet, figure out why
-    println!("Found {} batches", get_collection_response.result.len());
+    println!("Found {total_num_of_transactions} transactions with a total size of {total_transactions_size} bytes\n");
+
+    println!("Waiting for validators to decide wheter to vote for the block...\n");
+    println!("Vote completed successfully, block can be removed!\n");
 
     println!("\n4) Remove collections that have been voted on and committed.\n");
     println!("\n---- Test RemoveCollections endpoint ----\n");
-    let request = tonic::Request::new(RemoveCollectionsRequest { collection_ids });
 
-    let response = client.remove_collections(request).await;
+    let remove_collections_request = RemoveCollectionsRequest { collection_ids };
 
-    println!("RemoveCollectionsResponse={:?}", response);
+    println!("{}\n", remove_collections_request);
+
+    let request = tonic::Request::new(remove_collections_request);
+    let response = validator_client_2.remove_collections(request).await;
+    if response.is_ok() {
+        println!("Successfully removed committed collections\n");
+    } else {
+        println!("Was not able to remove committed collections\n");
+    }
 
     Ok(())
+}
+
+fn get_total_transaction_count_and_size(result: Vec<CollectionRetrievalResult>) -> (i32, usize) {
+    let mut total_num_of_transactions = 0;
+    let mut total_transactions_size = 0;
+    for r in result {
+        match r.retrieval_result.unwrap() {
+            RetrievalResult::Batch(message) => {
+                for t in message.transactions.unwrap().transaction {
+                    total_transactions_size += t.transaction.len();
+                    total_num_of_transactions += 1;
+                }
+            }
+            RetrievalResult::Error(_) => {}
+        }
+    }
+    (total_num_of_transactions, total_transactions_size)
+}
+
+////////////////////////////////////////////////////////////////////////
+/// Formatting the requests and responses                             //
+////////////////////////////////////////////////////////////////////////
+impl std::fmt::Display for GetCollectionsRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "*** GetCollectionsRequest ***".to_string();
+        for id in &self.collection_ids {
+            result = format!("{}\nid=\"{}\"", result, id);
+        }
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for RemoveCollectionsRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "*** RemoveCollectionsRequest ***".to_string();
+        for id in &self.collection_ids {
+            result = format!("{}\nid=\"{}\"", result, id);
+        }
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for Empty {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let result = "*** Empty ***".to_string();
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for GetCollectionsResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "*** GetCollectionsResponse ***".to_string();
+
+        for r in self.result.clone() {
+            match r.retrieval_result.unwrap() {
+                RetrievalResult::Batch(message) => {
+                    let batch_id = &message.id.unwrap();
+                    //let batch_id = &message.id.unwrap();
+                    let mut transactions_size = 0;
+                    let mut num_of_transactions = 0;
+
+                    for t in message.transactions.unwrap().transaction {
+                        transactions_size += t.transaction.len();
+                        num_of_transactions += 1;
+                    }
+
+                    result = format!(
+                        "{}\nBatch id {}, transactions {}, size: {} bytes",
+                        result, batch_id, num_of_transactions, transactions_size
+                    );
+                }
+                RetrievalResult::Error(error) => {
+                    //let certificate_id = base64::encode(&error.id.unwrap().digest);
+
+                    result = format!(
+                        "{}\nError for certificate id {:?}, error: {}",
+                        result,
+                        &error.id.unwrap(),
+                        error.error
+                    );
+                }
+            }
+        }
+
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for NodeReadCausalResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "*** NodeReadCausalResponse ***".to_string();
+
+        for id in &self.collection_ids {
+            result = format!("{}\nid=\"{}\"", result, id);
+        }
+
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for NodeReadCausalRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "**** NodeReadCausalRequest ***".to_string();
+
+        result = format!("{}\nRequest for round {}", result, &self.round);
+        result = format!(
+            "{}\nAuthority: {}",
+            result,
+            base64::encode(&self.public_key.clone().unwrap().bytes)
+        );
+
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for ReadCausalResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "*** ReadCausalResponse ***".to_string();
+
+        for id in &self.collection_ids {
+            result = format!("{}\nid=\"{}\"", result, id);
+        }
+
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for ReadCausalRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "**** ReadCausalRequest ***".to_string();
+
+        result = format!(
+            "{}\nRequest for collection {}",
+            result,
+            &self.collection_id.as_ref().unwrap()
+        );
+
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for RoundsRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "**** RoundsRequest ***".to_string();
+
+        result = format!(
+            "{}\nAuthority: {}",
+            result,
+            base64::encode(&self.public_key.clone().unwrap().bytes)
+        );
+
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for RoundsResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = "**** RoundsResponse ***".to_string();
+        result = format!(
+            "{}\noldest_round: {}, newest_round: {}",
+            result, &self.oldest_round, &self.newest_round
+        );
+
+        write!(f, "{}", result)
+    }
+}
+
+impl std::fmt::Display for CertificateDigest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", base64::encode(&self.digest))
+    }
+}
+
+impl std::fmt::Display for BatchDigest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", base64::encode(&self.digest))
+    }
+}
+
+fn println_and_into_inner<T>(result: Result<tonic::Response<T>, Status>) -> Option<T>
+where
+    T: Display,
+{
+    match result {
+        Ok(response) => {
+            let inner = response.into_inner();
+            println!("{}", &inner);
+            Some(inner)
+        }
+        Err(error) => {
+            println!("{:?}", error);
+            None
+        }
+    }
 }
