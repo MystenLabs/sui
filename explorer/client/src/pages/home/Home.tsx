@@ -23,10 +23,11 @@ async function getTransactionCount(network: Network | string): Promise<number> {
 }
 
 function HomeStatic() {
+    const [count] = useState(500);
     return (
         <div data-testid="home-page" id="home" className={styles.home}>
-            <LastestTxCard count={500} />
-            <TxCountCard count={500} />
+            <LastestTxCard count={count} />
+            <TxCountCard count={count} />
         </div>
     );
 }

@@ -244,12 +244,15 @@ function LatestTxView({
     );
 }
 
-function LatestTxCardStatic() {
+function LatestTxCardStatic({ count }: { count: number }) {
     const latestTx = getAllMockTransaction().map((tx) => ({
         ...tx,
         status: tx.status as ExecutionStatusType,
         kind: tx.kind as TransactionKindName,
     }));
+    const [searchParams] = useSearchParams();
+    const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
+
     const results = {
         loadState: 'loaded',
         latestTx: latestTx,
@@ -257,7 +260,7 @@ function LatestTxCardStatic() {
     return (
         <>
             <LatestTxView results={results} />
-            <Pagination totalTxCount={350} txNum={15} />
+            <Pagination totalTxCount={count} txNum={pagedNum} />
         </>
     );
 }
@@ -324,6 +327,6 @@ function LatestTxCardAPI({ count }: { count: number }) {
 }
 
 const LatestTxCard = ({ count }: { count: number }) =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI count={count} />;
+    IS_STATIC_ENV ? <LatestTxCardStatic count={count}/> : <LatestTxCardAPI count={count} />;
 
 export default LatestTxCard;
