@@ -14,6 +14,8 @@ import type {
 
 const COIN_TYPE = '0x2::Coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::Coin::Coin<(.+)>$/;
+export const GAS_TYPE_ARG = '0x2::SUI::SUI';
+export const GAS_SYMBOL = 'SUI';
 
 // TODO use sdk
 export class Coin {
@@ -36,6 +38,10 @@ export class Coin {
 
     public static getID(obj: SuiMoveObject): ObjectId {
         return obj.fields.id.id;
+    }
+
+    public static getCoinTypeFromArg(coinTypeArg: string) {
+        return `${COIN_TYPE}<${coinTypeArg}>`;
     }
 
     /**

@@ -7,6 +7,8 @@
     background-color: #f0f0f0;
     box-shadow: 0 0 3px 0 #00000050;
     position: relative;
+    align-items: center;
+    justify-content: space-between;
 
     & + .container {
         margin-top: 12px;
@@ -34,4 +36,11 @@
     text-transform: uppercase;
     letter-spacing: -0.4px;
     margin-left: 4px;
+}
+
+:global(.btn).send {
+    font-size: 11px;
+    font-weight: 300;
+    padding: 4px;
+    margin-left: 5px;
 }
