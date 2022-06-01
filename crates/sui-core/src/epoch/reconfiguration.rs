@@ -2,20 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_active::ActiveAuthority;
+use crate::authority_aggregator::AuthorityAggregator;
+use crate::authority_client::AuthorityAPI;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::Committee;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::error::SuiResult;
-use sui_types::messages::SignedTransaction;
+use sui_types::messages::{ConfirmationTransaction, SignedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use typed_store::Map;
 
 // TODO: Make last checkpoint number of each epoch more flexible.
 pub const CHECKPOINT_COUNT_PER_EPOCH: u64 = 200;
 
-impl<A> ActiveAuthority<A> {
+const WAIT_BETWEEN_EPOCH_TX_QUERY_RETRY: Duration = Duration::from_millis(300);
+
+impl<A> ActiveAuthority<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    /// This function should be called by the active checkpoint process, when it finishes processing
+    /// all transactions from the second to the least checkpoint of the epoch. It's called by a
+    /// validator that belongs to the committee of the current epoch.
     pub async fn start_epoch_change(&self) -> SuiResult {
         if let Some(checkpoints) = &self.state.checkpoints {
             let mut checkpoints = checkpoints.lock();
@@ -41,6 +51,9 @@ impl<A> ActiveAuthority<A> {
         Ok(())
     }
 
+    /// This function should be called by the active checkpoint process, when it finishes processing
+    /// all transactions from the last checkpoint of the epoch. This function needs to be called by
+    /// a validator that belongs to the committee of the next epoch.
     pub async fn finish_epoch_change(&self) -> SuiResult {
         assert!(
             self.state.halted.load(Ordering::SeqCst),
@@ -81,7 +94,14 @@ impl<A> ActiveAuthority<A> {
             .collect();
         let new_committee = Committee::new(next_epoch, votes);
         self.state.insert_new_epoch_info(&new_committee)?;
-        //self.state.checkpoints.as_ref().unwrap().lock().committee = new_committee;
+        let new_net = Arc::new(AuthorityAggregator::new(
+            new_committee,
+            self.net.load().clone_inner_clients(),
+        ));
+        self.net.store(new_net.clone());
+        // TODO: Also reconnect network if changed.
+        // This is blocked for now since we are not storing network info on-chain yet.
+
         // TODO: Update all committee in all components safely,
         // potentially restart some authority clients.
         // Including: self.net, narwhal committee/consensus adapter,
@@ -97,20 +117,38 @@ impl<A> ActiveAuthority<A> {
         );
         self.state
             .change_epoch_tx
-            .store(Some(Arc::new(advance_epoch_tx)));
+            .store(Some(Arc::new(advance_epoch_tx.clone())));
 
-        // TODO: Now ask every validator in the committee for this signed tx.
-        // Aggregate them to obtain a cert, execute the cert, and then start the new epoch.
+        // Collect a certificate for this system transaction that changes epoch,
+        // and execute it locally.
+        loop {
+            if let Ok(certificate) = new_net
+                .process_transaction(
+                    advance_epoch_tx.clone().to_transaction(),
+                    Duration::from_secs(0),
+                )
+                .await
+            {
+                self.state
+                    .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+                    .await
+                    .expect("Executing the special cert cannot fail");
+                break;
+            }
 
-        self.state.begin_new_epoch()?;
+            tokio::time::sleep(WAIT_BETWEEN_EPOCH_TX_QUERY_RETRY).await;
+        }
+
+        // Resume the validator to start accepting transactions for the new epoch.
+        self.state.unhalt_validator()?;
         Ok(())
     }
 
-    fn is_last_checkpoint_epoch(checkpoint: CheckpointSequenceNumber) -> bool {
+    pub fn is_last_checkpoint_epoch(checkpoint: CheckpointSequenceNumber) -> bool {
         checkpoint > 0 && checkpoint % CHECKPOINT_COUNT_PER_EPOCH == 0
     }
 
-    fn is_second_last_checkpoint_epoch(checkpoint: CheckpointSequenceNumber) -> bool {
+    pub fn is_second_last_checkpoint_epoch(checkpoint: CheckpointSequenceNumber) -> bool {
         (checkpoint + 1) % CHECKPOINT_COUNT_PER_EPOCH == 0
     }
 }

@@ -281,12 +281,6 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        // Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.data.kind.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
-
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         if self.database.transaction_exists(&transaction_digest)? {
@@ -340,6 +334,22 @@ impl AuthorityState {
         })?;
         let transaction_digest = *transaction.digest();
 
+        if transaction.data.kind.is_system_tx() {
+            // A validator only accepts a system transaction if it's the same transaction
+            // this validator has signed locally for the change epoch transaction.
+            if let Some(signed_tx) = self.change_epoch_tx.load().deref() {
+                if signed_tx.digest() == &transaction_digest {
+                    return Ok(TransactionInfoResponse {
+                        signed_transaction: Some(signed_tx.clone().deref().clone()),
+                        certified_transaction: None,
+                        signed_effects: None,
+                    });
+                }
+            }
+            // Otherwise, validators should never sign an external system transaction.
+            return Err(SuiError::InvalidSystemTransaction);
+        }
+
         let response = self.handle_transaction_impl(transaction).await;
         match response {
             Ok(r) => Ok(r),
@@ -371,7 +381,13 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.halted.load(Ordering::SeqCst) {
+        if self.halted.load(Ordering::SeqCst)
+            && !confirmation_transaction
+                .certificate
+                .data
+                .kind
+                .is_system_tx()
+        {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
@@ -903,7 +919,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub(crate) fn begin_new_epoch(&self) -> SuiResult {
+    pub(crate) fn unhalt_validator(&self) -> SuiResult {
         let epoch_info = self.database.get_last_epoch_info()?;
         assert_eq!(
             &epoch_info.committee,
@@ -1145,7 +1161,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.halted.load(Ordering::SeqCst) {
+        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);

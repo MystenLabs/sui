@@ -1260,7 +1260,7 @@ async fn test_genesis_sui_sysmtem_state_object() {
 async fn test_change_epoch_transaction() {
     let authority_state = init_state().await;
     let signed_tx = SignedTransaction::new_change_epoch(
-        0,
+        1,
         100,
         100,
         authority_state.name,
