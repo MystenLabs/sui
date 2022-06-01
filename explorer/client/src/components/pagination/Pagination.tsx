@@ -11,7 +11,7 @@ function generatePaginationArr(
 ) {
     // number of list items to show before truncating
     const range: number = 5;
-    const max = Math.ceil(totalItems / itemsPerPage);
+    const max = Math.ceil(totalItems / itemsPerPage) - 1;
     const maxRange = (Math.floor(startAt / range) + 1) * range;
 
     // set the min range to be the max range minus the range if it is less than the max - range
