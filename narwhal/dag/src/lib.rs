@@ -57,6 +57,12 @@ impl<T> From<Arc<Node<T>>> for NodeRef<T> {
     }
 }
 
+impl<T> From<Node<T>> for NodeRef<T> {
+    fn from(node: Node<T>) -> Self {
+        NodeRef::from_pointee(node)
+    }
+}
+
 impl<T> NodeRef<T> {
     /// Returns a NodeRef pointing at the Node passed as argument
     ///
@@ -76,12 +82,6 @@ impl<T> NodeRef<T> {
 
 /// Non reference-counted pointers to a Node
 pub type WeakNodeRef<T> = Weak<Node<T>>;
-
-impl<T> From<Node<T>> for NodeRef<T> {
-    fn from(node: Node<T>) -> Self {
-        NodeRef(Arc::new(node))
-    }
-}
 
 /// The Dag node, aka vertex.
 #[derive(Debug)]

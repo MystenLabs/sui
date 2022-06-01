@@ -108,7 +108,8 @@ async fn test_dag_compresses_empty_blocks() {
     let (_, dag) = Dag::new(&committee, rx_cert);
 
     // insert one round of empty certificates
-    let (mut certificates, next_parents) = make_optimal_certificates(1..=1, &genesis, &keys);
+    let (mut certificates, next_parents) =
+        make_optimal_certificates(1..=1, &genesis.clone(), &keys);
     // make those empty
     for mut cert in certificates.iter_mut() {
         cert.header.payload = std::collections::BTreeMap::new();
@@ -127,18 +128,32 @@ async fn test_dag_compresses_empty_blocks() {
 
     // Add one round of non-empty certificates
     let (additional_certificates, _next_parents) =
-        make_optimal_certificates(1..=1, &next_parents, &keys);
+        make_optimal_certificates(2..=2, &next_parents, &keys);
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
     while let Some(certificate) = additional_certs_to_insert.pop_front() {
         dag.insert(certificate).await.unwrap();
     }
 
-    // we trigger read_causal on the newly inserted certs
+    // we trigger read_causal on all the newly inserted certs
     for cert in additional_certificates.clone() {
         let res = dag.read_causal(cert.digest()).await.unwrap();
         // the read_causals do not report genesis or the empty round we inserted: we only walk one node, the start of the walk
         assert_eq!(res, vec![cert.digest()]);
+    }
+
+    // genesis is gone
+    for digest in genesis {
+        assert!(!dag.contains(digest).await);
+    }
+
+    // certificates are gone
+    for certificate in certificates {
+        assert!(
+            !dag.contains(certificate.digest()).await,
+            "{} should no longer be here",
+            certificate.digest()
+        );
     }
 }
 

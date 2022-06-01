@@ -204,11 +204,11 @@ impl<T: Affiliated> NodeDag<T> {
             value,
             compressible,
         };
-        let strong_node_ref = Arc::new(node);
+        let strong_node_ref = NodeRef::from_pointee(node);
         // important: do this first, before downgrading the head references
         self.node_table
-            .insert(digest, Either::Right(strong_node_ref.into()));
-        // maintain the header invariant
+            .insert(digest, Either::Right(strong_node_ref));
+        // maintain the head invariant: the node table should no longer have a strong reference to the head
         for mut parent in parent_digests
             .into_iter()
             .flat_map(|digest| self.node_table.get_mut(&digest))
