@@ -10,6 +10,7 @@ use crate::{
     event_handler::EventHandler,
     execution_engine,
     gateway_types::TransactionEffectsResponse,
+    query_helpers::QueryHelpers,
     transaction_input_checker,
 };
 use anyhow::anyhow;
@@ -97,7 +98,6 @@ pub mod authority_notifier;
 
 pub const MAX_ITEMS_LIMIT: u64 = 100_000;
 const BROADCAST_CAPACITY: usize = 10_000;
-const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -992,7 +992,7 @@ impl AuthorityState {
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
-        Ok(self.database.next_sequence_number()?)
+        QueryHelpers::get_total_transaction_number(&self.database)
     }
 
     pub fn get_transactions_in_range(
@@ -1000,63 +1000,21 @@ impl AuthorityState {
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            start <= end,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "start must not exceed end, (start={}, end={}) given",
-                    start, end
-                ),
-            }
-            .into()
-        );
-        fp_ensure!(
-            end - start <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE,
-                    end - start
-                ),
-            }
-            .into()
-        );
-        let res = self.database.transactions_in_seq_range(start, end)?;
-        debug!(?start, ?end, ?res, "Fetched transactions");
-        Ok(res)
+        QueryHelpers::get_transactions_in_range(&self.database, start, end)
     }
 
     pub fn get_recent_transactions(
         &self,
         count: u64,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            count <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE, count
-                ),
-            }
-            .into()
-        );
-        let end = self.get_total_transaction_number()?;
-        let start = if end >= count { end - count } else { 0 };
-        self.get_transactions_in_range(start, end)
+        QueryHelpers::get_recent_transactions(&self.database, count)
     }
 
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        let opt = self.database.get_certified_transaction(&digest)?;
-        match opt {
-            Some(certificate) => Ok(TransactionEffectsResponse {
-                certificate: certificate.try_into()?,
-                effects: self.database.get_effects(&digest)?.into(),
-            }),
-            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
-        }
+        QueryHelpers::get_transaction(&self.database, digest)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
