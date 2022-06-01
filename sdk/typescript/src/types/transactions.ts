@@ -128,8 +128,7 @@ export type TransactionBytes = {
 
 export type MergeCoinResponse = {
   certificate: CertifiedTransaction;
-  updatedCoins: SuiObject[];
-  newCoin: SuiObject;
+  updatedCoin: SuiObject;
   updatedGas: SuiObject;
 };
 
