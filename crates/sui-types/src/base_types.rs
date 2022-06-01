@@ -598,6 +598,15 @@ impl ObjectID {
         Self::from(AccountAddress::random())
     }
 
+    // Random for testing
+    pub fn random_from_rng<R>(rng: &mut R) -> Self
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
+        let buf: [u8; Self::LENGTH] = rng.gen();
+        ObjectID::new(buf)
+    }
+
     pub const fn from_single_byte(byte: u8) -> ObjectID {
         let mut bytes = [0u8; Self::LENGTH];
         bytes[Self::LENGTH - 1] = byte;

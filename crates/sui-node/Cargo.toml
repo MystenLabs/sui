@@ -23,6 +23,6 @@ sui-storage = { path = "../sui-storage" }
 sui-gateway = { path = "../sui-gateway" }
 sui-network = { path = "../sui-network" }
 
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
 workspace-hack = { path = "../workspace-hack"}

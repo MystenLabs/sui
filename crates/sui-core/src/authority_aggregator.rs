@@ -57,6 +57,13 @@ impl<A> AuthorityAggregator<A> {
             metrics: &METRICS,
         }
     }
+
+    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
+    where
+        A: Clone,
+    {
+        self.authority_clients[name].clone()
+    }
 }
 
 pub enum ReduceOutput<S> {
@@ -243,7 +250,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    async fn sync_certificate_to_authority_with_timeout(
+    pub async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: ConfirmationTransaction,
         destination_authority: AuthorityName,
@@ -364,7 +371,7 @@ where
     /// This function provides a flexible way to communicate with a quorum of authorities, processing and
     /// processing their results into a safe overall result, and also safely allowing operations to continue
     /// past the quorum to ensure all authorities are up to date (up to a timeout).
-    async fn quorum_map_then_reduce_with_timeout<'a, S, V, FMap, FReduce>(
+    pub(crate) async fn quorum_map_then_reduce_with_timeout<'a, S, V, FMap, FReduce>(
         &'a self,
         // The initial state that will be used to fold in values from authorities.
         initial_state: S,
@@ -943,8 +950,12 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                             // In case we don't get an error but also don't get a valid value
-                            _ => {
-                                state.errors.push(SuiError::ErrorWhileProcessingTransaction);
+                            ret => {
+                                state.errors.push(
+                                    SuiError::ErrorWhileProcessingTransactionTransaction {
+                                        err: format!("Unexpected: {:?}", ret),
+                                    },
+                                );
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                         };
@@ -1003,7 +1014,9 @@ where
         // If we have some certificate return it, or return an error.
         state
             .certificate
-            .ok_or(SuiError::ErrorWhileProcessingTransaction)
+            .ok_or_else(|| SuiError::ErrorWhileProcessingTransactionTransaction {
+                err: format!("No certificate: {:?}", state.errors),
+            })
     }
 
     /// Process a certificate assuming that 2f+1 authorities already are up to date.
@@ -1177,13 +1190,22 @@ where
         &self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        self.execute_transaction_with_timeout(transaction, Duration::from_secs(60))
+            .await
+    }
+
+    pub async fn execute_transaction_with_timeout(
+        &self,
+        transaction: &Transaction,
+        timeout: Duration,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let new_certificate = self
-            .process_transaction(transaction.clone(), Duration::from_secs(60))
+            .process_transaction(transaction.clone(), timeout)
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         self.metrics.total_tx_certificates.inc();
         let response = self
-            .process_certificate(new_certificate.clone(), Duration::from_secs(60))
+            .process_certificate(new_certificate.clone(), timeout)
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 

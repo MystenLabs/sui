@@ -5736,6 +5736,7 @@ dependencies = [
  "sui-network",
  "sui-storage",
  "sui-types",
+ "telemetry-subscribers",
  "temp_testdir",
  "tempfile",
  "test-fuzz",
@@ -6108,8 +6109,9 @@ dependencies = [
 [[package]]
 name = "telemetry-subscribers"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe#7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0#2de1a391654a7ee09d867de2f16627b915ad21f0"
 dependencies = [
+ "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "tokio",

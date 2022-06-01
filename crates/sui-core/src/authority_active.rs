@@ -36,7 +36,7 @@ use std::{
 };
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
+use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -46,6 +46,11 @@ use tokio::time::Instant;
 
 pub mod gossip;
 use gossip::gossip_process;
+
+pub mod checkpoint_driver;
+use checkpoint_driver::checkpoint_process;
+
+use self::checkpoint_driver::CheckpointProcessControl;
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
@@ -91,6 +96,7 @@ impl AuthorityHealth {
     }
 }
 
+#[derive(Clone)]
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
@@ -170,11 +176,33 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    pub async fn spawn_all_active_processes(self) {
+        self.spawn_active_processes(true, true).await
+    }
+
     /// Spawn all active tasks.
-    pub async fn spawn_all_active_processes(self) -> JoinHandle<()> {
+    pub async fn spawn_active_processes(self, gossip: bool, checkpoint: bool) {
         // Spawn a task to take care of gossip
-        tokio::task::spawn(async move {
-            gossip_process(&self, 4).await;
-        })
+        let gossip_locals = self.clone();
+        let _gossip_join = tokio::task::spawn(async move {
+            if gossip {
+                gossip_process(&gossip_locals, 4).await;
+            }
+        });
+
+        // Spawn task to take care of checkpointing
+        let checkpoint_locals = self; // .clone();
+        let _checkpoint_join = tokio::task::spawn(async move {
+            if checkpoint {
+                checkpoint_process(&checkpoint_locals, &CheckpointProcessControl::default()).await;
+            }
+        });
+
+        if let Err(err) = _gossip_join.await {
+            error!("Join gossip task end error: {:?}", err);
+        }
+        if let Err(err) = _checkpoint_join.await {
+            error!("Join checkpoint task end error: {:?}", err);
+        }
     }
 }

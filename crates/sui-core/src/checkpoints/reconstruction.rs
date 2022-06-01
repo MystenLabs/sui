@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use sui_types::{
     base_types::{AuthorityName, TransactionDigest},
     committee::Committee,
     error::SuiError,
+    messages::CertifiedTransaction,
     messages_checkpoint::{CheckpointFragment, CheckpointSummary},
     waypoint::{GlobalCheckpoint, WaypointError},
 };
@@ -14,6 +15,7 @@ use sui_types::{
 pub struct FragmentReconstruction {
     pub committee: Committee,
     pub global: GlobalCheckpoint<AuthorityName, TransactionDigest>,
+    pub extra_transactions: BTreeMap<TransactionDigest, CertifiedTransaction>,
 }
 
 impl FragmentReconstruction {
@@ -38,6 +40,7 @@ impl FragmentReconstruction {
         let mut span = SpanGraph::new(&committee);
         let mut fragments_used = Vec::new();
         let mut proposals: HashMap<AuthorityName, CheckpointSummary> = HashMap::new();
+        let mut extra_transactions = BTreeMap::new();
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
@@ -80,7 +83,9 @@ impl FragmentReconstruction {
                 let mut global = GlobalCheckpoint::new();
                 while let Some(link) = active_links.pop_front() {
                     match global.insert(link.diff.clone()) {
-                        Ok(_) | Err(WaypointError::NothingToDo) => {} // Do nothing
+                        Ok(_) | Err(WaypointError::NothingToDo) => {
+                            extra_transactions.extend(link.certs.clone());
+                        }
                         Err(WaypointError::CannotConnect) => {
                             // Reinsert the fragment at the end
                             active_links.push_back(link);
@@ -95,7 +100,11 @@ impl FragmentReconstruction {
                     }
                 }
 
-                return Ok(Some(FragmentReconstruction { global, committee }));
+                return Ok(Some(FragmentReconstruction {
+                    global,
+                    committee,
+                    extra_transactions,
+                }));
             }
         }
 
@@ -146,9 +155,11 @@ impl SpanGraph {
         let top1 = self.top_node(name1).0;
         let top2 = self.top_node(name2).0;
         if top1 == top2 {
-            // They have been merged in the past, nothing to do.
+            // they are already merged
             return (top1, self.nodes[&top1].1);
         }
+
+        // They are not merged, so merge now
         let new_weight = self.nodes[&top1].1 + self.nodes[&top2].1;
         self.nodes.get_mut(&top1).unwrap().0 = top2;
         self.nodes.get_mut(&top2).unwrap().1 = new_weight;

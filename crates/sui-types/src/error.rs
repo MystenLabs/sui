@@ -97,9 +97,7 @@ pub enum SuiError {
     ConflictingTransaction {
         pending_transaction: TransactionDigest,
     },
-    #[error("Transaction was processed but no signature was produced by authority")]
-    ErrorWhileProcessingTransaction,
-    #[error("Transaction transaction processing failed: {err}")]
+    #[error("Transaction processing failed: {err}")]
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
     ErrorWhileProcessingConfirmationTransaction { err: String },
