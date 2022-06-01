@@ -169,6 +169,42 @@ The explorer will now be using your local fullnode to explore the state of the c
 Monitor your fullnode using the instructions at [Logging, Tracing, Metrics, and
 Observability](https://docs.sui.io/contribute/observability).
 
+## Updating your Fullnode with New Releases
+
+Whenever a new release is deployed to `devnet` the blockchain state is
+generally wiped. In order to have your fullnode continue to properly
+synchronize with the new state of devnet you'll need to follow a few steps
+based on how you originally setup your node.
+
+### Built from Source
+
+If you followed the [Building from
+Source](#markdown-header-building-from-source) directions you can do the
+following to update:
+
+1. Shutdown your currently running fullnode.
+2. `cd` into where your local Sui repository is.
+    ```
+    $ cd sui
+    ```
+3. Remove the old on-disk database and genesis.blob file
+    ```
+    $ rm -r suidb genesis.blob
+    ```
+4. Fetch the source from the latest release.
+    ```
+    $ git fetch upstream
+    $ git checkout -B devnet --track upstream/devnet
+    ```
+5. Download the latest
+   [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
+   state for devnet.
+6. Update your `fullnode.yaml` configuration file if needed.
+7. Start your Sui fullnode
+    ```
+    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    ```
+
 ## Future plans
 
 Today a fullnode only relies on synchronizing with 2f+1 validators in order to
