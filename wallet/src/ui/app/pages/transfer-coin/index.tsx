@@ -12,8 +12,16 @@ import Alert from '_components/alert';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useAppDispatch } from '_hooks';
-import { accountBalancesSelector } from '_redux/slices/account';
-import { Coin, GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import {
+    accountAggregateBalancesSelector,
+    accountItemizedBalancesSelector,
+} from '_redux/slices/account';
+import {
+    Coin,
+    DEFAULT_GAS_BUDGET_FOR_TRANSFER,
+    GAS_SYMBOL,
+    GAS_TYPE_ARG,
+} from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
 import { balanceFormatOptions } from '_shared/formatting';
 
@@ -24,7 +32,6 @@ import type { ChangeEventHandler } from 'react';
 import st from './TransferCoin.module.scss';
 
 // TODO: calculate the transfer gas fee
-const GAS_FEE = 100;
 const addressValidation = Yup.string()
     .ensure()
     .trim()
@@ -47,15 +54,28 @@ const validationSchema = Yup.object({
         .min(1)
         .max(Yup.ref('balance'))
         .test(
-            'available-gas-check',
-            'Insufficient funds for gas',
+            'gas-balance-check',
+            'Insufficient SUI balance to cover gas fee',
             (amount, ctx) => {
-                const { type, gasBalance } = ctx.parent;
-                let availableGas = BigInt(gasBalance || 0);
+                const { type, gasAggregateBalance } = ctx.parent;
+                let availableGas = BigInt(gasAggregateBalance || 0);
                 if (type === GAS_TYPE_ARG) {
                     availableGas -= BigInt(amount || 0);
                 }
-                return availableGas >= GAS_FEE;
+                // TODO: implement more sophisticated validation by taking
+                // the splitting/merging fee into account
+                return availableGas >= DEFAULT_GAS_BUDGET_FOR_TRANSFER;
+            }
+        )
+        .test(
+            'num-gas-coins-check',
+            'Need at least 2 SUI coins to transfer a SUI coin',
+            (amount, ctx) => {
+                const { type, gasBalances } = ctx.parent;
+                return (
+                    type !== GAS_TYPE_ARG ||
+                    (gasBalances && gasBalances.length) >= 2
+                );
             }
         )
         .label('Amount'),
@@ -74,14 +94,19 @@ type FormValues = typeof initialValues;
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const coinType = useMemo(() => searchParams.get('type'), [searchParams]);
-    const balances = useAppSelector(accountBalancesSelector);
+    const balances = useAppSelector(accountItemizedBalancesSelector);
+    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
-        () => (coinType && balances[coinType]) || null,
-        [coinType, balances]
+        () => (coinType && aggregateBalances[coinType]) || null,
+        [coinType, aggregateBalances]
     );
-    const gasBalance = useMemo(
+    const gasBalances = useMemo(
         () => balances[GAS_TYPE_ARG] || null,
         [balances]
+    );
+    const gasAggregateBalance = useMemo(
+        () => aggregateBalances[GAS_TYPE_ARG] || null,
+        [aggregateBalances]
     );
     const coinSymbol = useMemo(
         () => coinType && Coin.getCoinSymbol(coinType),
@@ -134,8 +159,21 @@ function TransferCoinPage() {
     useEffect(() => {
         setFieldValue('balance', coinBalance?.toString() || '0');
         setFieldValue('type', coinType);
-        setFieldValue('gasBalance', gasBalance?.toString() || '0');
-    }, [coinBalance, coinType, gasBalance, setFieldValue]);
+        setFieldValue(
+            'gasBalances',
+            gasBalances?.map((b: bigint) => b.toString()) || []
+        );
+        setFieldValue(
+            'gasAggregateBalance',
+            gasAggregateBalance?.toString() || '0'
+        );
+    }, [
+        coinBalance,
+        coinType,
+        gasAggregateBalance,
+        gasBalances,
+        setFieldValue,
+    ]);
     useEffect(() => {
         setSendError(null);
     }, [amount, recipientAddress]);
@@ -210,8 +248,8 @@ function TransferCoinPage() {
                         </span>
                     </div>
                     <div className={st.group}>
-                        * Total transaction fee estimate (gas cost): {GAS_FEE}{' '}
-                        {GAS_SYMBOL}
+                        * Total transaction fee estimate (gas cost):{' '}
+                        {DEFAULT_GAS_BUDGET_FOR_TRANSFER} {GAS_SYMBOL}
                     </div>
                     {sendError ? (
                         <div className={st.group}>
