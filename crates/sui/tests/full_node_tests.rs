@@ -198,14 +198,11 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     let (_, _, _, _) = transfer_coin(&mut context).await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_transfered_object, sender, _receiver, digest) = transfer_coin(&mut context).await?;
 
     sleep(Duration::from_millis(1000)).await;
 
     let node = start_full_node(&working_dir).await?;
-
-    // Note: currently we have to send one tx after starting the full node in order for it
-    // to start syncing, because the node doesn't request old txes immediately upon startup.
-    let (_transfered_object, sender, _receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
