@@ -280,7 +280,7 @@ impl<
             .collect())
     }
 
-    pub fn get_object_version(
+    pub fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,

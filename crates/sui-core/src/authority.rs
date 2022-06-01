@@ -967,7 +967,7 @@ impl AuthorityState {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some((obj_ref, _)) => {
                 if obj_ref.2.is_alive() {
-                    match self.database.get_object_version(object_id, obj_ref.1)? {
+                    match self.database.get_object_by_key(object_id, obj_ref.1)? {
                         None => {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
                             Err(SuiError::ObjectNotFound {
