@@ -273,6 +273,10 @@ impl Signature {
         secret.sign(&message)
     }
 
+    pub fn new_empty() -> Self {
+        Self([0u8; SUI_SIGNATURE_LENGTH])
+    }
+
     pub fn signature_bytes(&self) -> &[u8] {
         &self.0[..ed25519_dalek::SIGNATURE_LENGTH]
     }

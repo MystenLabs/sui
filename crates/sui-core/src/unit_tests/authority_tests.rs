@@ -1255,6 +1255,51 @@ async fn test_genesis_sui_sysmtem_state_object() {
     assert_eq!(move_object.type_, SuiSystemState::type_());
 }
 
+#[tokio::test]
+async fn test_change_epoch_transaction() {
+    let authority_state = init_state().await;
+    let signed_tx = SignedTransaction::new_change_epoch(
+        0,
+        100,
+        100,
+        authority_state.name,
+        &*authority_state.secret,
+    );
+    // Make sure that the raw transaction will never be accepted by the validator.
+    assert_eq!(
+        authority_state
+            .handle_transaction(signed_tx.clone().to_transaction())
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSystemTransaction
+    );
+    let mut builder = SignatureAggregator::try_new(
+        signed_tx.clone().to_transaction(),
+        &authority_state.committee,
+    )
+    .unwrap();
+    let certificate = builder
+        .append(
+            signed_tx.auth_sign_info.authority,
+            signed_tx.auth_sign_info.signature,
+        )
+        .unwrap()
+        .unwrap();
+    let result = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction::new(certificate))
+        .await
+        .unwrap();
+    assert!(result.signed_effects.unwrap().effects.status.is_ok());
+    let sui_system_object = authority_state
+        .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)
+        .await
+        .unwrap()
+        .unwrap();
+    let move_object = sui_system_object.data.try_as_move().unwrap();
+    let sui_system_state = bcs::from_bytes::<SuiSystemState>(move_object.contents()).unwrap();
+    assert_eq!(sui_system_state.epoch, 1);
+}
+
 // helpers
 
 #[cfg(test)]

@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::{balance::Balance, coin::TreasuryCap, id::VersionedID, SUI_FRAMEWORK_ADDRESS};
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
-const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("SuiSystem");
+pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("SuiSystem");
+pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 
 /// Rust version of the Move Sui::SuiSystem::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

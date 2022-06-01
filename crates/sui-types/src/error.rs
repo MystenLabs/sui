@@ -118,6 +118,8 @@ pub enum SuiError {
         object_id: ObjectID,
         current_sequence_number: VersionNumber,
     },
+    #[error("System Transaction not accepted")]
+    InvalidSystemTransaction,
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,

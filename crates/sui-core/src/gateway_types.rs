@@ -23,6 +23,7 @@ use serde_json::Value;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::event::Event;
@@ -756,6 +757,8 @@ pub enum SuiTransactionKind {
     Publish(SuiMovePackage),
     /// Call a function in a published Move module
     Call(SuiMoveCall),
+    /// A system transaction that will update epoch information on-chain.
+    ChangeEpoch(SuiChangeEpoch),
     // .. more transaction types go here
 }
 
@@ -788,6 +791,12 @@ impl Display for SuiTransactionKind {
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Arguments : {:?}", c.arguments)?;
                 write!(writer, "Type Arguments : {:?}", c.type_arguments)?;
+            }
+            Self::ChangeEpoch(e) => {
+                writeln!(writer, "Transaction Kind: Epoch Change")?;
+                writeln!(writer, "New epoch ID: {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
             }
         }
         write!(f, "{}", writer)
@@ -823,6 +832,11 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             }),
+            SingleTransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
+                epoch: e.epoch,
+                storage_charge: e.storage_charge,
+                computation_charge: e.computation_charge,
+            }),
         })
     }
 }
@@ -837,6 +851,13 @@ pub struct SuiMoveCall {
     pub type_arguments: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub arguments: Vec<SuiJsonValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SuiChangeEpoch {
+    pub epoch: EpochId,
+    pub storage_charge: u64,
+    pub computation_charge: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
