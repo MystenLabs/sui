@@ -110,7 +110,7 @@ See the [mystenlabs.com](https://mystenlabs.com/) website for company details.
 
 ### Do you need moderators in Discord? Can I be the mod for my country?
 
-Wait until the community managers are on board. The managers will plan for growing and engaging the community. Stay tuned in Discord.
+Sui Community Mod Program is officially accepting applications. [Apply here](https://bit.ly/suimods)
 
 
 ### I'm looking for someone from the Mysten Crew to speak at an event - is there someone I can DM/email?
