@@ -94,7 +94,7 @@ proptest::proptest! {
         let digest = batch.digest();
         let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch);
         let serialized = bincode::serialize(&message).expect("Failed to serialize our own batch");
-        let digest_from_serialized = serialized_batch_digest(&serialized);
+        let digest_from_serialized = serialized_batch_digest(&serialized).expect("Failed to hash serialized batch");
         assert_eq!(digest, digest_from_serialized);
     }
 }

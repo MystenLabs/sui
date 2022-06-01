@@ -16,7 +16,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{error, warn};
 use types::{
     serialized_batch_digest, BatchDigest, BincodeEncodedPayload, ClientBatchRequest,
     SerializedBatchMessage, WorkerToWorkerClient,
@@ -160,11 +160,18 @@ impl SyncConnection {
                         let batch = batch.payload;
                         // Store the batch in the temporary store.
                         // TODO: We can probably avoid re-computing the hash of the bach since we trust the worker.
-                        let digest = serialized_batch_digest(&batch);
-                        self.store.write(digest, batch.to_vec()).await;
+                        let res_digest = serialized_batch_digest(&batch);
+                        match res_digest {
+                            Ok(digest) => {
+                                self.store.write(digest, batch.to_vec()).await;
 
-                        // Cleanup internal state.
-                        self.to_request.remove(&digest);
+                                // Cleanup internal state.
+                                self.to_request.remove(&digest);
+                            }
+                            Err(error) => {
+                                error!("Worker sent invalid serialized batch data: {error}");
+                            }
+                        }
                     }
                     Err(e) => {
                         warn!(

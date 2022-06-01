@@ -34,25 +34,24 @@ pub type SerializedBatchMessage = Vec<u8>;
 /// TODO: remove the expects in the below, making this return a `Result` and correspondingly
 /// doing error management at the callers. See #268
 /// TODO: update batch hashing to reflect hashing fixed sequences of transactions, see #87.
-pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> BatchDigest {
+pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, DigestError> {
     let sbm = sbm.as_ref();
     let mut offset = 4; // skip the enum variant selector
     let num_transactions = u64::from_le_bytes(
         sbm[offset..offset + 8]
             .try_into()
-            .expect("Invalid serialized batch"),
+            .map_err(|_| DigestError::InvalidArgumentError(offset))?,
     );
     offset += 8;
     let mut transactions = Vec::new();
     for _i in 0..num_transactions {
-        let (tx_ref, new_offset) =
-            read_one_transaction(sbm, offset).expect("Invalid serialized transaction!");
+        let (tx_ref, new_offset) = read_one_transaction(sbm, offset)?;
         transactions.push(tx_ref);
         offset = new_offset;
     }
-    BatchDigest::new(crypto::blake2b_256(|hasher| {
+    Ok(BatchDigest::new(crypto::blake2b_256(|hasher| {
         transactions.iter().for_each(|tx| hasher.update(tx))
-    }))
+    })))
 }
 
 #[derive(Debug, Error)]

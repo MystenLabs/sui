@@ -24,7 +24,7 @@ pub fn test_batch<T: Serialize>(transactions: Vec<T>) -> (BatchDigest, Serialize
         .collect();
     let message = WorkerMessage::<Ed25519PublicKey>::Batch(Batch(batch));
     let serialized = bincode::serialize(&message).unwrap();
-    let digest = serialized_batch_digest(&serialized);
+    let digest = serialized_batch_digest(&serialized).unwrap();
     (digest, serialized)
 }
 

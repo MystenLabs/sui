@@ -6,6 +6,7 @@ use config::WorkerId;
 use primary::WorkerPrimaryMessage;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tracing::error;
 use types::{serialized_batch_digest, BatchDigest, SerializedBatchMessage};
 
 #[cfg(test)]
@@ -31,20 +32,27 @@ impl Processor {
         tokio::spawn(async move {
             while let Some(batch) = rx_batch.recv().await {
                 // Hash the batch.
-                let digest = serialized_batch_digest(&batch);
+                let res_digest = serialized_batch_digest(&batch);
 
-                // Store the batch.
-                store.write(digest, batch).await;
+                match res_digest {
+                    Ok(digest) => {
+                        // Store the batch.
+                        store.write(digest, batch).await;
 
-                // Deliver the batch's digest.
-                let message = match own_digest {
-                    true => WorkerPrimaryMessage::OurBatch(digest, id),
-                    false => WorkerPrimaryMessage::OthersBatch(digest, id),
-                };
-                tx_digest
-                    .send(message)
-                    .await
-                    .expect("Failed to send digest");
+                        // Deliver the batch's digest.
+                        let message = match own_digest {
+                            true => WorkerPrimaryMessage::OurBatch(digest, id),
+                            false => WorkerPrimaryMessage::OthersBatch(digest, id),
+                        };
+                        tx_digest
+                            .send(message)
+                            .await
+                            .expect("Failed to send digest");
+                    }
+                    Err(error) => {
+                        error!("Received invalid batch, serialization failure: {error}");
+                    }
+                }
             }
         });
     }
