@@ -77,7 +77,6 @@ async function getRecentTransactions(
     try {
         // Get the latest transactions
 
-        // TODO: Get total transactions once across conmponents
         // Instead of getRecentTransactions, use getTransactionCount
         // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
         // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
@@ -272,8 +271,6 @@ function LatestTxCardAPI({ count }: { count: number }) {
     useEffect(() => {
         let isMounted = true;
         const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
-
-        // pass the network to the API call, totaltx count, number of transactions per page and page number
         getRecentTransactions(network, count, txNumPerPage, pagedNum)
             .then(async (resp: any) => {
                 if (isMounted) {
