@@ -11,6 +11,14 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use tracing::debug;
 
+use crate::rpc_gateway::responses::SuiTypeTag;
+use crate::{
+    api::{
+        RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, SuiRpcModule,
+        TransactionBytes,
+    },
+    config::GatewayConfig,
+};
 use sui_config::PersistedConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
 use sui_core::gateway_types::{
@@ -24,15 +32,6 @@ use sui_types::{
     crypto,
     crypto::SignableBytes,
     messages::{Transaction, TransactionData},
-};
-
-use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::{
-    api::{
-        RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, SuiRpcModule,
-        TransactionBytes,
-    },
-    config::GatewayConfig,
 };
 
 pub mod responses;

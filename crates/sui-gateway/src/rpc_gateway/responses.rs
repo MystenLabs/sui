@@ -6,7 +6,7 @@ use move_core_types::parser::parse_type_tag;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use sui_core::gateway_types::{SuiData, SuiObjectRef};
+use sui_core::gateway_types::{SuiData, SuiObjectRef, SuiParsedMoveObject};
 
 use sui_types::base_types::TransactionDigest;
 use sui_types::object::Owner;
@@ -17,7 +17,7 @@ pub struct ObjectExistsResponse {
     object_ref: SuiObjectRef,
     owner: Owner,
     previous_transaction: TransactionDigest,
-    data: SuiData,
+    data: SuiData<SuiParsedMoveObject>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]

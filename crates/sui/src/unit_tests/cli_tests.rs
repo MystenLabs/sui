@@ -18,7 +18,7 @@ use sui_config::{
     Config, NetworkConfig, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
     SUI_GENESIS_FILENAME, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
-use sui_core::gateway_types::{GetObjectDataResponse, SuiObject, SuiTransactionEffects};
+use sui_core::gateway_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -889,11 +889,11 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn get_gas_value(o: &SuiObject) -> u64 {
+fn get_gas_value(o: &SuiParsedObject) -> u64 {
     GasCoin::try_from(o).unwrap().value()
 }
 
-async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObject> {
+async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiParsedObject> {
     if let GetObjectDataResponse::Exists(o) = context.gateway.get_object(id).await.unwrap() {
         Some(o)
     } else {

@@ -215,6 +215,31 @@
       }
     },
     {
+      "name": "sui_getRawObject",
+      "tags": [
+        {
+          "name": "BCS API"
+        }
+      ],
+      "description": "Return the raw BCS serialised move object bytes for a specified object",
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "GetRawObjectDataResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectRead"
+        }
+      }
+    },
+    {
       "name": "sui_getRecentTransactions",
       "tags": [
         {
@@ -1039,10 +1064,16 @@
         "oneOf": [
           {
             "type": "object",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoveObject"
+              },
+              {
+                "$ref": "#/components/schemas/RawMoveObject"
+              }
+            ],
             "required": [
-              "dataType",
-              "fields",
-              "type"
+              "dataType"
             ],
             "properties": {
               "dataType": {
@@ -1050,12 +1081,6 @@
                 "enum": [
                   "moveObject"
                 ]
-              },
-              "fields": {
-                "$ref": "#/components/schemas/MoveStruct"
-              },
-              "type": {
-                "type": "string"
               }
             }
           },
@@ -1274,6 +1299,21 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "MoveObject": {
+        "type": "object",
+        "required": [
+          "fields",
+          "type"
+        ],
+        "properties": {
+          "fields": {
+            "$ref": "#/components/schemas/MoveStruct"
+          },
+          "type": {
+            "type": "string"
           }
         }
       },
@@ -1633,6 +1673,26 @@
                 "$ref": "#/components/schemas/Object"
               }
             ]
+          }
+        }
+      },
+      "RawMoveObject": {
+        "type": "object",
+        "required": [
+          "bcs_bytes",
+          "type"
+        ],
+        "properties": {
+          "bcs_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          },
+          "type": {
+            "type": "string"
           }
         }
       },
