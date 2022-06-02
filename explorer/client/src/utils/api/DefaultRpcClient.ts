@@ -5,8 +5,6 @@ import { JsonRpcProvider } from '@mysten/sui.js';
 
 import { getEndpoint, Network } from './rpcSetting';
 
-export type AnyVec = { vec: any[] };
-
 export { Network, getEndpoint };
 
 export const DefaultRpcClient = (network: Network | string) =>

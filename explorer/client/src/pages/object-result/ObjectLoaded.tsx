@@ -54,13 +54,11 @@ function ObjectLoaded({ data }: { data: DataType }) {
         url: parseImageURL(data.data.contents),
     };
 
-    //TO DO remove when have distinct name field under Description
     const nameKeyValue = Object.entries(viewedData.data?.contents)
         .filter(([key, _]) => key === 'name')
         .map(([_, value]) => value);
 
     const properties = Object.entries(viewedData.data?.contents)
-        //TO DO: remove when have distinct 'name' field in Description
         .filter(([key, _]) => key !== 'name')
         .filter(([_, value]) => checkIsPropertyType(value));
 
