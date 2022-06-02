@@ -40,7 +40,6 @@ curve25519-dalek = { version = "3", default-features = false }
 thiserror = "1.0.30"
 arc-swap = "1.5.0"
 
-
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
 sui-network = { path = "../sui-network" }
@@ -48,8 +47,6 @@ sui-types = { path = "../sui-types" }
 sui-storage = { path = "../sui-storage" }
 sui-config = { path = "../sui-config" }
 sui-json = { path = "../sui-json" }
-
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0", features = ["jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"] }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
@@ -72,8 +69,7 @@ serde_yaml = "0.8.23"
 pretty_assertions = "1.2.1"
 temp_testdir = "0.2.3"
 hex = "0.4.3"
-tracing-test = "0.2.1"
-tracing-subscriber = "^0.3"
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0" }
 
 test-fuzz = "3.0.2"
 test-utils = { path = "../test-utils" }
