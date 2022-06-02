@@ -29,6 +29,7 @@
 
 */
 
+use arc_swap::ArcSwap;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -96,12 +97,11 @@ impl AuthorityHealth {
     }
 }
 
-#[derive(Clone)]
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
     // The network interfaces to other authorities
-    pub net: Arc<AuthorityAggregator<A>>,
+    pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
 }
@@ -122,7 +122,10 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
-            net: Arc::new(AuthorityAggregator::new(committee, authority_clients)),
+            net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
+                committee,
+                authority_clients,
+            ))),
         })
     }
 
@@ -133,10 +136,10 @@ impl<A> ActiveAuthority<A> {
     /// even if we have a few connections.
     pub async fn minimum_wait_for_majority_honest_available(&self) -> Instant {
         let lock = self.health.lock().await;
-        let (_, instant) = self.net.committee.robust_value(
+        let (_, instant) = self.net.load().committee.robust_value(
             lock.iter().map(|(name, h)| (*name, h.no_contact_before)),
             // At least one honest node is at or above it.
-            self.net.committee.quorum_threshold(),
+            self.net.load().committee.quorum_threshold(),
         );
         instant
     }
@@ -182,8 +185,9 @@ where
 
     /// Spawn all active tasks.
     pub async fn spawn_active_processes(self, gossip: bool, checkpoint: bool) {
+        let active = Arc::new(self);
         // Spawn a task to take care of gossip
-        let gossip_locals = self.clone();
+        let gossip_locals = active.clone();
         let _gossip_join = tokio::task::spawn(async move {
             if gossip {
                 gossip_process(&gossip_locals, 4).await;
@@ -191,7 +195,7 @@ where
         });
 
         // Spawn task to take care of checkpointing
-        let checkpoint_locals = self; // .clone();
+        let checkpoint_locals = active; // .clone();
         let _checkpoint_join = tokio::task::spawn(async move {
             if checkpoint {
                 checkpoint_process(&checkpoint_locals, &CheckpointProcessControl::default()).await;
