@@ -41,7 +41,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
 };
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::debug;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -219,15 +219,12 @@ where
     }
 }
 
-/*
-    The active authority start-update-shutdown facilities.
+// The active authority start-update-shutdown facilities.
 
-    The active authority runs in a separate task, and manages the tasks of separate active
-    processes, with one sub-task per active process. These subtasks internally listen to a
-    watch channel on which others may send a start, shutdown, or update signal. When this
-    is received the tasks are restarted, or shut down.
-
-*/
+// The active authority runs in a separate task, and manages the tasks of separate active
+// processes, with one sub-task per active process. These subtasks internally listen to a
+// watch channel on which others may send a start, shutdown, or update signal. When this
+// is received the tasks are restarted, or shut down.
 
 use tokio::sync::watch;
 
@@ -279,7 +276,7 @@ impl LifecycleTaskHandler {
             let signal = self.receiver.changed().await;
             match signal {
                 Err(_err) => {
-                    info!("Closing active tasks, command channel was dropped.");
+                    debug!("Closing active tasks, command channel was dropped.");
                     abort = true;
                     exit = true;
                 }
@@ -287,16 +284,16 @@ impl LifecycleTaskHandler {
                     // We have actually received a new signal.
                     match *self.receiver.borrow() {
                         LifecycleSignal::Start => {
-                            info!("Starting task: {}", description);
+                            debug!("Starting task: {}", description);
                             start = true;
                         }
                         LifecycleSignal::Restart => {
-                            info!("Restarting task: {}", description);
+                            debug!("Restarting task: {}", description);
                             abort = true;
                             start = true;
                         }
                         LifecycleSignal::Exit => {
-                            info!("Exit task: {}", description);
+                            debug!("Exit task: {}", description);
                             abort = true;
                             exit = true;
                         }
