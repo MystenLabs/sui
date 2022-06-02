@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectType, getMoveObjectType, type ObjectOwner } from '@mysten/sui.js';
+import {
+    getObjectType,
+    getMoveObjectType,
+    type ObjectOwner,
+} from '@mysten/sui.js';
 
 import type { GetObjectDataResponse } from '@mysten/sui.js';
 
