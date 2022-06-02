@@ -4,6 +4,7 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ToS_LINK } from '_shared/constants';
 import Loading from '_src/ui/app/components/loading';
 import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
 import { createMnemonic } from '_src/ui/app/redux/slices/account';
@@ -43,11 +44,7 @@ const CreatePage = () => {
                 />
                 <span>
                     I have read and agree to the{' '}
-                    <a
-                        href="https://sui.io/terms"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
+                    <a href={ToS_LINK} target="_blank" rel="noreferrer">
                         Terms of Service
                     </a>
                 </span>
