@@ -217,14 +217,13 @@ where
 
         // Run concurrently and wait for both to quit.
         let (res_gossip, res_checkpoint) = join!(gossip_join, checkpoint_join);
-        
+
         if let Err(err) = res_gossip {
             error!("Gossip exit: {}", err);
-        }        
+        }
         if let Err(err) = res_checkpoint {
             error!("Checkpoint exit: {}", err);
         }
-
     }
 }
 
@@ -393,7 +392,6 @@ mod test {
         assert!(*arc_int.lock().unwrap() == 2);
     }
 
-
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_signal_complete() {
         let (sender, receiver) = LifecycleSignalSender::new();
@@ -426,5 +424,4 @@ mod test {
         // .. the restart does nothing.
         assert!(*arc_int.lock().unwrap() == 1);
     }
-
 }
