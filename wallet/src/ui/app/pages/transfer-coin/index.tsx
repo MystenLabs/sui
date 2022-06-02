@@ -31,7 +31,6 @@ import type { ChangeEventHandler } from 'react';
 
 import st from './TransferCoin.module.scss';
 
-// TODO: calculate the transfer gas fee
 const addressValidation = Yup.string()
     .ensure()
     .trim()
