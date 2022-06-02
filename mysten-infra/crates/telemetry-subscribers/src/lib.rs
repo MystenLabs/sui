@@ -75,7 +75,7 @@ fn get_output(config: &TelemetryConfig) -> (NonBlocking, WorkerGuard) {
         let file_appender = tracing_appender::rolling::daily("", logfile_prefix);
         tracing_appender::non_blocking(file_appender)
     } else {
-        tracing_appender::non_blocking(std::io::stdout())
+        tracing_appender::non_blocking(std::io::stderr())
     }
 }
 
