@@ -5815,6 +5815,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-cluster-test"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap 3.1.18",
+ "futures",
+ "reqwest",
+ "serde_json",
+ "serde_with",
+ "sui",
+ "sui-core",
+ "sui-faucet",
+ "sui-json",
+ "sui-types",
+ "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-config"
 version = "0.0.0"
 dependencies = [
@@ -6123,27 +6144,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-testsuite"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "clap 3.1.18",
- "futures",
- "reqwest",
- "serde_json",
- "serde_with",
- "sui",
- "sui-core",
- "sui-faucet",
- "sui-json",
- "sui-types",
- "telemetry_subscribers",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "sui-transactional-test-runner"
 version = "0.1.0"
 dependencies = [
@@ -6329,20 +6329,6 @@ version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c#988cad6aaafac84d52a93227a16867bf27c1ea4c"
 dependencies = [
  "once_cell",
- "opentelemetry",
- "opentelemetry-jaeger",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-opentelemetry",
- "tracing-subscriber 0.3.11",
-]
-
-[[package]]
-name = "telemetry_subscribers"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=d2976a45420147ad821baae96e6fe4b12215f743#d2976a45420147ad821baae96e6fe4b12215f743"
-dependencies = [
  "opentelemetry",
  "opentelemetry-jaeger",
  "tokio",

@@ -33,7 +33,7 @@ enum Env {
 
 #[derive(Parser)]
 #[clap(name = "", rename_all = "kebab-case")]
-struct E2ETestOpt {
+struct ClusterTestOpt {
     #[clap(arg_enum)]
     env: Env,
     #[clap(long)]
@@ -53,11 +53,11 @@ const PROD_FAUCET_ADDR: &str = "https://faucet.devnet.sui.io:443";
 const STAGING_GATEWAY_ADDR: &str = "https://gateway.staging.sui.io:443";
 const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
 
-struct E2ETest {
+struct ClusterTest {
     context: TestContext,
 }
 
-impl E2ETest {
+impl ClusterTest {
     async fn test_transfer(&self, coins: &mut Vec<GasCoin>, gas_obj_id: ObjectID) {
         info!("Testing gas coin transfer");
         assert!(!coins.is_empty(), "Not enough gas objects to run test.");
@@ -350,9 +350,9 @@ impl E2ETest {
         }
     }
 
-    pub fn setup(options: E2ETestOpt) -> Self {
+    pub fn setup(options: ClusterTestOpt) -> Self {
         let temp_dir = tempfile::tempdir().unwrap();
-        let wallet_config_path = temp_dir.path().join("wallet.conf");
+        let wallet_config_path = temp_dir.path().join("wallet.yaml");
 
         let (gateway_addr, faucet_addr) = match options.env {
             Env::Prod => (PROD_GATEWAY_ADDR.into(), PROD_FAUCET_ADDR.into()),
@@ -389,7 +389,7 @@ impl E2ETest {
 
         let wallet_context = WalletContext::new(&wallet_config_path).unwrap();
 
-        E2ETest {
+        ClusterTest {
             context: TestContext {
                 wallet_context,
                 address: new_address,
@@ -406,15 +406,15 @@ impl E2ETest {
 #[tokio::main]
 async fn main() {
     let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "e2e-test".into(),
+        service_name: "cluster-test".into(),
         enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
         json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
         ..Default::default()
     };
     let _guard = telemetry_subscribers::init(config);
 
-    let options = E2ETestOpt::parse();
-    let mut test = E2ETest::setup(options);
+    let options = ClusterTestOpt::parse();
+    let mut test = ClusterTest::setup(options);
 
     // Run tests
     let mut coins = test.test_get_gas().await;
