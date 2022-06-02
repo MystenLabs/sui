@@ -29,12 +29,17 @@
 
 */
 
+use futures::Future;
 use std::{
+    borrow::Borrow,
     collections::{BTreeMap, HashMap},
     sync::Arc,
     time::Duration,
 };
-use sui_types::{base_types::AuthorityName, error::SuiResult};
+use sui_types::{
+    base_types::AuthorityName,
+    error::{SuiError, SuiResult},
+};
 use tokio::sync::Mutex;
 use tracing::error;
 
@@ -204,5 +209,140 @@ where
         if let Err(err) = _checkpoint_join.await {
             error!("Join checkpoint task end error: {:?}", err);
         }
+    }
+}
+
+/*
+    The active authority start-update-shutdown facilities.
+
+    The active authority runs in a separate task, and manages the tasks of separate active
+    processes, with one sub-task per active process. These subtasks internally listen to a
+    watch channel on which others may send a start, shutdown, or update signal. When this
+    is received the tasks are restarted, or shut down.
+
+*/
+
+use tokio::sync::watch;
+
+pub enum LifecycleSignal {
+    Start,
+    Restart,
+    Exit,
+}
+
+pub struct LifecycleSignalSender {
+    sender: watch::Sender<LifecycleSignal>,
+}
+
+impl LifecycleSignalSender {
+    pub fn new() -> (Self, LifecycleTaskHandler) {
+        let (sender, receiver) = watch::channel(LifecycleSignal::Start);
+        (
+            LifecycleSignalSender { sender },
+            LifecycleTaskHandler { receiver },
+        )
+    }
+
+    pub async fn signal(&self, signal: LifecycleSignal) {
+        // TODO: reflect on what to do with this error.
+        let _ = self.sender.send(signal);
+    }
+}
+
+pub struct LifecycleTaskHandler {
+    pub receiver: watch::Receiver<LifecycleSignal>,
+}
+
+impl LifecycleTaskHandler {
+    pub async fn spawn<F, T>(mut self, fun: F)
+    where
+        F: Fn() -> T,
+        T: Future + Send + 'static,
+        <T as Future>::Output: Borrow<Result<(), SuiError>> + Send + 'static,
+    {
+        let mut handle: Option<tokio::task::JoinHandle<Result<(), SuiError>>> = None;
+        loop {
+            let mut start = false;
+            let mut abort = false;
+            let mut exit = false;
+
+            let signal = self.receiver.changed().await;
+            match signal {
+                Err(_err) => {
+                    // TODO: what happens on error?
+                    abort = true;
+                    exit = true;
+                }
+                Ok(()) => {
+                    // We have actually received a new signal.
+                    match *self.receiver.borrow() {
+                        LifecycleSignal::Start => {
+                            println!("Start");
+                            start = true;
+                        }
+                        LifecycleSignal::Restart => {
+                            println!("ReStart");
+                            abort = true;
+                            start = true;
+                        }
+                        LifecycleSignal::Exit => {
+                            println!("Exit");
+                            abort = true;
+                            exit = true;
+                        }
+                    }
+                }
+            }
+
+            // First close / abort previous task.
+            if abort {
+                if let Some(join_handle) = handle {
+                    join_handle.abort();
+                    let _ = join_handle.await;
+                }
+                handle = None;
+            }
+
+            // Second potentially restart task
+            if start {
+                let fut = fun();
+                handle = Some(tokio::task::spawn(
+                    async move { fut.await.borrow().clone() },
+                ));
+            }
+
+            // Third exit the loop.
+            if exit {
+                break;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_signal() {
+        let (sender, receiver) = LifecycleSignalSender::new();
+
+        let join = tokio::task::spawn(async move {
+            receiver
+                .spawn(|| async move {
+                    println!("inner start");
+                    tokio::time::sleep(Duration::from_secs(50)).await;
+                    println!("inner end");
+                    Ok(())
+                })
+                .await
+        });
+
+        sender.signal(LifecycleSignal::Start).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        sender.signal(LifecycleSignal::Restart).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        sender.signal(LifecycleSignal::Exit).await;
+        join.await.unwrap();
     }
 }
