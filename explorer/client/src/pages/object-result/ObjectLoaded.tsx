@@ -160,10 +160,16 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <div>Owner</div>
                                     <div id="owner">
                                         <Longtext
-                                            text={typeof viewedData.owner === 'string' ? viewedData.owner : typeof viewedData.owner}
+                                            text={
+                                                typeof viewedData.owner ===
+                                                'string'
+                                                    ? viewedData.owner
+                                                    : typeof viewedData.owner
+                                            }
                                             category="unknown"
                                             isLink={
-                                                viewedData.owner !== 'Immutable' &&
+                                                viewedData.owner !==
+                                                    'Immutable' &&
                                                 viewedData.owner !== 'Shared'
                                             }
                                         />
