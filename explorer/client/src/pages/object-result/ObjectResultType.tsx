@@ -10,7 +10,6 @@ import {
     getObjectPreviousTransactionDigest,
 } from '@mysten/sui.js';
 
-import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseObjectType } from '../../utils/objectUtils';
 
 import type { GetObjectDataResponse, ObjectOwner } from '@mysten/sui.js';
@@ -18,7 +17,7 @@ import type { GetObjectDataResponse, ObjectOwner } from '@mysten/sui.js';
 export type DataType = {
     id: string;
     category?: string;
-    owner: string | AddressOwner;
+    owner: ObjectOwner;
     version: string;
     readonly?: string;
     objType: string;
