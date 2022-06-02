@@ -32,7 +32,7 @@ Now `ColorObject` represents a Sui object type and can be used to create Sui obj
 Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `id`. The only way to create a new unique `VersionedID` for a Sui object is to call `TxContext::new_id`. The `new_id` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
 ```rust
 /// TxContext::Self represents the TxContext module, which allows us call
-/// functions in the module, such as the `sender` function.
+/// functions in the module, such as the `new_id` function.
 /// TxContext::TxContext represents the TxContext struct in TxContext module.
 use Sui::TxContext::{Self, TxContext};
 
@@ -154,7 +154,7 @@ $ wallet active-address
 ```
 This will tell you the current wallet address.
 
-First, we need to publish the code on-chain. Assuming the path to the root of the repository is $ROOT:
+First, we need to publish the code on-chain. Assuming the path to the root of the repository containing Sui source code is $ROOT:
 ```
 $ wallet publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```

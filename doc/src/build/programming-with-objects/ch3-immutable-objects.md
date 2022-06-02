@@ -82,7 +82,7 @@ TestScenario::next_tx(scenario, &sender2);
 ```
  To show that this object is indeed not owned by anyone, we start the next transaction with `sender2`. As explained earlier, we used `take_immutable` and subsequently `borrow` to obtain a read-only reference to the object. It succeeded! This means that any sender will be able to take an immutable object. In the end, to return the object, we also need to call a new API: `return_immutable`.
 
-Next let's examine if this object is indeed immutable. To test this, let's first introduce a function that would mutate a `ColorObject`:
+In order to examine if this object is indeed immutable, let's introduce a function that would mutate a `ColorObject` (we will use this function when describing [on-chain interactions](#on-chain-interactions)):
 ```rust
 public(script) fun update(
     object: &mut ColorObject,
