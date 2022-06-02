@@ -16,7 +16,7 @@ use arc_swap::{ArcSwap, ArcSwapOption};
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::ModuleCache;
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -79,7 +79,9 @@ mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-pub use authority_store::{AuthorityStore, GatewayStore, ReplicaStore, SuiDataStore};
+pub use authority_store::{
+    AuthorityStore, AuthorityStoreWrapper, GatewayStore, ReplicaStore, SuiDataStore,
+};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
 
@@ -236,6 +238,8 @@ pub struct AuthorityState {
     pub(crate) database: Arc<AuthorityStore>, // TODO: remove pub
 
     indexes: Option<Arc<IndexStore>>,
+
+    module_cache: SyncModuleCache<AuthorityStoreWrapper>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -625,10 +629,7 @@ impl AuthorityState {
                                 .await?
                         };
                         let layout = match request_layout {
-                            Some(format) => {
-                                let resolver = ModuleCache::new(&self);
-                                object.get_layout(format, &resolver)?
-                            }
+                            Some(format) => object.get_layout(format, &self.module_cache)?,
                             None => None,
                         };
 
@@ -791,6 +792,7 @@ impl AuthorityState {
             move_vm,
             database: store.clone(),
             indexes,
+            module_cache: SyncModuleCache::new(AuthorityStoreWrapper(store.clone())),
             checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(
@@ -922,9 +924,8 @@ impl AuthorityState {
                             })
                         }
                         Some(object) => {
-                            let resolver = ModuleCache::new(&self);
-                            let layout =
-                                object.get_layout(ObjectFormatOptions::default(), &resolver)?;
+                            let layout = object
+                                .get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }
@@ -1193,14 +1194,6 @@ impl AuthorityState {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self.database.get_latest_parent_entry(object_id)
-    }
-}
-
-impl ModuleResolver for AuthorityState {
-    type Error = SuiError;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.database.get_module(module_id)
     }
 }
 
