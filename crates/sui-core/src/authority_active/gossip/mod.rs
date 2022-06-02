@@ -270,14 +270,7 @@ where
                     if !self.state.database.effects_exists(&digest)? {
                         // Download the certificate
                         let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
-                        if let Err(err) = self.process_response(response).await {
-                            // Check again whether the failure is due to a concurrent execution.
-                            // TODO: a concurrent execution should not really have returned an
-                            //       error but it seems it does? Check correctness?
-                            if !self.state.database.effects_exists(&digest)?{
-                                return Err(err);
-                            }
-                        }
+                        self.process_response(response).await?;
                     }
                 }
             };

@@ -773,8 +773,17 @@ impl<
             // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
             //    (But the lock should exist which means previous transactions finished)
             // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
+            // 4. Locks may have existed when we started processing this tx, but could have since
+            //    been deleted by a concurrent tx that finished first. In that case, check if the tx effects exist.
             if USE_LOCKS {
-                self.lock_service.locks_exist(owned_inputs.clone()).await?;
+                if let Err(e) = self.lock_service.locks_exist(owned_inputs.clone()).await {
+                    if self.effects_exists(&transaction_digest)? {
+                        debug!(digest = ?transaction_digest, "locks were deleted due to concurrent processing of tx");
+                        return Ok(());
+                    } else {
+                        return Err(e);
+                    }
+                }
             }
 
             if let Some(next_seq) = seq_opt {
