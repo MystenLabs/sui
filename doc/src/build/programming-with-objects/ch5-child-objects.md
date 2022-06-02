@@ -9,7 +9,10 @@ In the previous chapter, we walked through various ways of wrapping an object in
 
 Fortunately, Sui provides another way to represent object relationships: *an object can own other objects*. In the first chapter, we introduced libraries for transferring objects to an account address. In this chapter, we will introduce libraries that allow you transfer objects to other objects.
 
-### Create hild objects
+### Create child objects
+
+There are two ways of creating child objects which we describe in the following sections.
+
 #### transfer_to_object
 Assume we own two objects in our account address. To make one object own the other object, we can use the following API in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) library:
 ```rust
@@ -22,7 +25,7 @@ The first argument `obj` will become a child object of the second argument `owne
 
 The function returns a special struct `ChildRef<T>` where `T` matches the type of the child object. It represents a reference to the child object. Since `ChildRef` is a struct type without `drop` ability, Move ensures the return value cannot be dropped. This ensures the caller of the function must put the reference somewhere and cannot forget about it.
 
-This is very important because later on if we attempt to delete the parent object, the existence of the child references force us to take care of them. Otherwise, we may end up in a situation where we deleted the parent object, but there are still some child objects; and these child objects will be locked forever, as we will explain in latter sections. In the last section, we will also see how this reference is used to move around child objects and prevent making mistakes.
+This is very important because later on if we attempt to delete the parent object, the existence of the child references forces us to take care of them. Otherwise, we may end up in a situation where we deleted the parent object, but there are still some child objects; and these child objects will be locked forever, as we will explain in latter sections. In the last section, we will also see how this reference is used to move around child objects and to prevent making mistakes.
 
 Let's look at some code. The full source code can be found in [ObjectOwner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
 
@@ -104,15 +107,15 @@ public(script) fun create_another_parent(child: Child, ctx: &mut TxContext) {
 In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, thereby obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer to the sender's account.
 
 ### Use Child Objects
-We have explained in the first chapter that, in order to use an owned object, the object owner must be the transaction sender. What about objects owned by objects? We require that the object's owner object must also be passed as an argument in the Move call. For example, if object A owns object B, and object B owns object C, to be able to use C when calling a Move entry function, one must also pass B in the argument; and since B is in the argument, A must also be in the argument. This essentially mean that to use an object, its entire ownership ancestor chain must be included, and the account owner of the root ancestor must match the sender of the transaction.
+We have explained in the first chapter that, in order to use an owned object, the object owner must be the transaction sender. What about objects owned by objects? We require that the object's owner object must also be passed as an argument in the Move call. For example, if object A owns object B, and object B owns object C, to be able to use C when calling a Move entry function, one must also pass B as an argument; and since B is an argument, A must also be an argument. This essentially means that to use an object, its entire ownership ancestor chain must be included, and the account owner of the root ancestor must match the sender of the transaction.
 
 Let's look at how we could use the child object created earlier. Let's define two entry functions:
 ```rust
 public(script) fun mutate_child(_child: &mut Child, _ctx: &mut TxContext) {}
 public(script) fun mutate_child_with_parent(_child: &mut Child, _parent: &mut Parent, _ctx: &mut TxContext) {}
 ```
-The first function requires only one object argument, which is an `Child` object. The second function requires two arguments, a `Child` object and a `Parent` object. Both functions are made empty since what we care about here is not the mutation logic, but whether you are able to make a call to them at all.
-Both functions will compile successfully, because object ownership relationships are dynamic properties and the compiler cannot forsee.
+The first function requires only one object argument, which is a `Child` object. The second function requires two arguments, a `Child` object and a `Parent` object. Both functions are made empty since what we care about here is not the mutation logic, but whether you are able to make a call to them at all.
+Both functions will compile successfully, because object ownership relationships are dynamic properties and the compiler cannot forsee them.
 
 Let's try to interact with these two entry functions on-chain and see what happens. First we publish the sample code:
 ```
@@ -185,7 +188,7 @@ In this section, we will introduce a few more APIs that will allow us safely mov
 
 There are two ways to transfer a child object:
 1. Transfer it to an account address, thus it will no longer be a child object after the transfer.
-2. Transfer it to another object, thus it will still be a child object but the parent object changed.
+2. Transfer it to another object, thus it will still be a child object but with the parent object changed.
 
 #### transfer_child_to_address
 First of all, let's look at how to transfer a child object to an account address. The [Transfer](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) library provides the following API:
@@ -196,9 +199,9 @@ public fun transfer_child_to_address<T: key>(
     recipient: address,
 );
 ```
-`transfer_child_to_address` transfers a currently child object to an account address. This function takes 3 arguments: `child` is the child object we wish to transfer, `child_ref` is the reference to it that was obtained when we previously transferred it to its current parent, and `recipient` is the recipient account address. After the transfer, the `recipient` account address now owns this object.
+`transfer_child_to_address` transfers an object that is currently a child to an account address. This function takes 3 arguments: `child` is the child object we wish to transfer, `child_ref` is the reference to it that was obtained when we previously transferred it to its current parent, and `recipient` is the recipient account address. After the transfer, the `recipient` account address now owns this object.
 There are two important things worth mentioning:
-1. Requiring `child_ref` as an argument ensures that the old parent won't have an out-of-dated reference to the child object, and this reference is properly destroyed by the library during the transfer.
+1. Requiring `child_ref` as an argument ensures that the old parent won't have an out-of-date reference to the child object, and this reference is properly destroyed by the library during the transfer.
 2. This function has no return value. We no longer need a `ChildRef` because the object is no longer a child object.
 
 To demonstrate how to use this API, let's implement a function that removes a child object from a parent object and transfer it back to the account owner:
