@@ -11,11 +11,12 @@ import { parseImageURL } from '../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../utils/stringUtils';
 import { type DataType } from './ObjectResultType';
 
+import type { ObjectOwner } from '@mysten/sui.js';
+
 import styles from './ObjectResult.module.css';
-import { ObjectOwner } from '@mysten/sui.js';
 
 function getOwnerStr(owner: ObjectOwner): string {
-    if (typeof(owner) === 'object') {
+    if (typeof owner === 'object') {
         if ('AddressOwner' in owner) return owner.AddressOwner;
         if ('ObjectOwner' in owner) return owner.ObjectOwner;
     }
