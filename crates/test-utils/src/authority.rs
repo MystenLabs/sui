@@ -8,7 +8,6 @@ use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_core::{
     authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
-    safe_client::SafeClient,
 };
 use sui_node::SuiNode;
 use sui_types::{committee::Committee, object::Object};
@@ -54,7 +53,7 @@ where
 
 pub fn create_authority_aggregator(
     authority_configs: &[ValidatorInfo],
-) -> AuthorityAggregator<SafeClient<NetworkAuthorityClient>> {
+) -> AuthorityAggregator<NetworkAuthorityClient> {
     let voting_rights: BTreeMap<_, _> = authority_configs
         .iter()
         .map(|config| (config.public_key(), config.stake()))
@@ -65,11 +64,7 @@ pub fn create_authority_aggregator(
         .map(|config| {
             (
                 config.public_key(),
-                SafeClient::new(
-                    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap(),
-                    committee.clone(),
-                    config.public_key(),
-                ),
+                NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap(),
             )
         })
         .collect();

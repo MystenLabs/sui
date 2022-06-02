@@ -27,7 +27,7 @@ async fn checkpoint_active_flow_happy_path() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.authority_clients.clone();
+        let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
             let active_state =
                 ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
@@ -93,7 +93,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.authority_clients.clone();
+        let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
             let active_state =
                 ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
@@ -112,14 +112,13 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
                 .expect("Unexpected crash");
 
             // Send it only to 1 random node
-            use crate::authority_client::AuthorityAPI;
             let sample_authority = sender_aggregator.committee.sample();
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
                 .handle_confirmation_transaction(ConfirmationTransaction::new(new_certificate))
                 .await
-                .expect("Problem processing certificare");
+                .expect("Problem processing certificate");
 
             // Check whether this is a success?
             assert!(matches!(
@@ -177,7 +176,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.authority_clients.clone();
+        let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
             let active_state =
                 ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
@@ -196,14 +195,13 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
                 .expect("Unexpected crash");
 
             // Send it only to 1 random node
-            use crate::authority_client::AuthorityAPI;
             let sample_authority = sender_aggregator.committee.sample();
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
                 .handle_confirmation_transaction(ConfirmationTransaction::new(new_certificate))
                 .await
-                .expect("Problem processing certificare");
+                .expect("Problem processing certificate");
 
             // Check whether this is a success?
             assert!(matches!(
