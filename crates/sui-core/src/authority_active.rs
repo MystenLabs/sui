@@ -392,4 +392,39 @@ mod test {
         assert!(join.await.unwrap().is_err());
         assert!(*arc_int.lock().unwrap() == 2);
     }
+
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_signal_complete() {
+        let (sender, receiver) = LifecycleSignalSender::new();
+        let arc_int = Arc::new(std::sync::Mutex::new(0usize));
+
+        let arc_int_clone = arc_int.clone();
+        let join = tokio::task::spawn(async move {
+            receiver
+                .spawn("Test task 1".to_string(), move || {
+                    let inner_arc = arc_int_clone.clone();
+                    async move {
+                        println!("inner start");
+                        *inner_arc.lock().unwrap() += 1;
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        println!("inner end");
+                        Ok(())
+                    }
+                })
+                .await
+        });
+
+        sender.signal(LifecycleSignal::Start).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        sender.signal(LifecycleSignal::Restart).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        sender.signal(LifecycleSignal::Exit).await;
+
+        // It complete on the first iteration, so ...
+        assert!(join.await.unwrap().is_ok());
+        // .. the restart does nothing.
+        assert!(*arc_int.lock().unwrap() == 1);
+    }
+
 }
