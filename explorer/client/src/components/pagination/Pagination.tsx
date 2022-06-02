@@ -67,7 +67,7 @@ function Pagination({
                             </button>
                         </li>
                     )}
-                    {pageIndex > pagiData.range -1 && (
+                    {pageIndex > pagiData.range - 1 && (
                         <li className="page-item">
                             <button
                                 className="page-link"
