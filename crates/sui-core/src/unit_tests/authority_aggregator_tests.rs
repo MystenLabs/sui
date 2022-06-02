@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use move_core_types::{account_address::AccountAddress, ident_str};
-use once_cell::sync::Lazy;
 use signature::Signer;
 
 use sui_adapter::genesis;
@@ -31,8 +30,6 @@ pub fn authority_genesis_objects(
     objects
 }
 
-static LOGGING_INIT: Lazy<()> = Lazy::new(tracing_subscriber::fmt::init);
-
 pub async fn init_local_authorities(
     genesis_objects: Vec<Vec<Object>>,
 ) -> (
@@ -50,8 +47,7 @@ pub async fn init_local_authorities_with_genesis(
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
 ) {
-    #[allow(clippy::no_effect)]
-    *LOGGING_INIT; // Initialize logging if needed
+    telemetry_subscribers::init_for_testing();
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..genesis_objects.len() {
