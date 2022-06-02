@@ -41,7 +41,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
 };
 use tokio::sync::Mutex;
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -215,7 +215,16 @@ where
             }
         });
 
-        join!(gossip_join, checkpoint_join);
+        // Run concurrently and wait for both to quit.
+        let (res_gossip, res_checkpoint) = join!(gossip_join, checkpoint_join);
+        
+        if let Err(err) = res_gossip {
+            error!("Gossip exit: {}", err);
+        }        
+        if let Err(err) = res_checkpoint {
+            error!("Checkpoint exit: {}", err);
+        }
+
     }
 }
 
@@ -259,7 +268,7 @@ pub struct LifecycleTaskHandler {
 }
 
 impl LifecycleTaskHandler {
-    pub async fn spawn<F, T>(mut self, description: String, fun: F)
+    pub async fn spawn<F, T>(mut self, description: String, fun: F) -> Result<(), SuiError>
     where
         F: Fn() -> T,
         T: Future + Send + 'static,
@@ -273,7 +282,20 @@ impl LifecycleTaskHandler {
             let mut abort = false;
             let mut exit = false;
 
-            let signal = self.receiver.changed().await;
+            // Either the task finishes, and we return the result, or
+            // we get a signal to restart or stop that we execute.
+            let signal = tokio::select! {
+                signal = self.receiver.changed() => {
+                    signal
+                },
+
+                // If the handle exists and returns a result, we return this result.
+                // Note that the async { ... } is never polled if handle is not Some(...)
+                result = async { handle.as_mut().unwrap().await }, if handle.is_some() => {
+                    return result.map_err(|_err| SuiError::GenericAuthorityError { error: "Task cancelled".to_string() })?;
+                }
+            };
+
             match signal {
                 Err(_err) => {
                     debug!("Closing active tasks, command channel was dropped.");
@@ -305,7 +327,12 @@ impl LifecycleTaskHandler {
             if abort {
                 if let Some(join_handle) = handle {
                     join_handle.abort();
-                    let _ = join_handle.await;
+                    if let Ok(inner_res) = join_handle.await {
+                        return inner_res;
+                    }
+                    // In case this is an error it is due to
+                    // cancelling the task and we will either
+                    // restart it or exit.
                 }
                 handle = None;
             }
@@ -323,6 +350,12 @@ impl LifecycleTaskHandler {
                 break;
             }
         }
+
+        // If we have not returned a result yet, its because the task was
+        // cancelled and no result was ever recorded.
+        Err(SuiError::GenericAuthorityError {
+            error: "Task cancelled".to_string(),
+        })
     }
 }
 
@@ -356,7 +389,7 @@ mod test {
         sender.signal(LifecycleSignal::Restart).await;
         tokio::time::sleep(Duration::from_secs(5)).await;
         sender.signal(LifecycleSignal::Exit).await;
-        join.await.unwrap();
+        assert!(join.await.unwrap().is_err());
         assert!(*arc_int.lock().unwrap() == 2);
     }
 }
