@@ -41,7 +41,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
 };
 use tokio::sync::Mutex;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -254,7 +254,7 @@ pub struct LifecycleTaskHandler {
 }
 
 impl LifecycleTaskHandler {
-    pub async fn spawn<F, T>(mut self, fun: F)
+    pub async fn spawn<F, T>(mut self, description: String, fun: F)
     where
         F: Fn() -> T,
         T: Future + Send + 'static,
@@ -262,6 +262,8 @@ impl LifecycleTaskHandler {
     {
         let mut handle: Option<tokio::task::JoinHandle<Result<(), SuiError>>> = None;
         loop {
+            // flags for each iteration on whether we should
+            // start, restart or exit the task.
             let mut start = false;
             let mut abort = false;
             let mut exit = false;
@@ -269,7 +271,7 @@ impl LifecycleTaskHandler {
             let signal = self.receiver.changed().await;
             match signal {
                 Err(_err) => {
-                    // TODO: what happens on error?
+                    info!("Closing active tasks, command channel was dropped.");
                     abort = true;
                     exit = true;
                 }
@@ -277,16 +279,16 @@ impl LifecycleTaskHandler {
                     // We have actually received a new signal.
                     match *self.receiver.borrow() {
                         LifecycleSignal::Start => {
-                            println!("Start");
+                            info!("Starting task: {}", description);
                             start = true;
                         }
                         LifecycleSignal::Restart => {
-                            println!("ReStart");
+                            info!("Restarting task: {}", description);
                             abort = true;
                             start = true;
                         }
                         LifecycleSignal::Exit => {
-                            println!("Exit");
+                            info!("Exit task: {}", description);
                             abort = true;
                             exit = true;
                         }
@@ -323,17 +325,23 @@ impl LifecycleTaskHandler {
 mod test {
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_signal() {
         let (sender, receiver) = LifecycleSignalSender::new();
+        let arc_int = Arc::new(std::sync::Mutex::new(0usize));
 
+        let arc_int_clone = arc_int.clone();
         let join = tokio::task::spawn(async move {
             receiver
-                .spawn(|| async move {
-                    println!("inner start");
-                    tokio::time::sleep(Duration::from_secs(50)).await;
-                    println!("inner end");
-                    Ok(())
+                .spawn("Test task 1".to_string(), move || {
+                    let inner_arc = arc_int_clone.clone();
+                    async move {
+                        println!("inner start");
+                        *inner_arc.lock().unwrap() += 1;
+                        tokio::time::sleep(Duration::from_secs(50)).await;
+                        println!("inner end");
+                        Ok(())
+                    }
                 })
                 .await
         });
@@ -344,5 +352,6 @@ mod test {
         tokio::time::sleep(Duration::from_secs(5)).await;
         sender.signal(LifecycleSignal::Exit).await;
         join.await.unwrap();
+        assert!(*arc_int.lock().unwrap() == 2);
     }
 }
