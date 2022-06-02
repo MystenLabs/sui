@@ -5930,11 +5930,13 @@ name = "sui-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake2",
  "fdlimit",
  "flexstr",
  "futures",
  "move-core-types",
  "pretty_assertions",
+ "rand 0.7.3",
  "rocksdb",
  "serde 1.0.137",
  "sui-types",

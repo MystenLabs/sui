@@ -8,9 +8,11 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.55"
+blake2 = "0.9"
 fdlimit = "0.2.1"
 futures = "0.3.21"
 flexstr = "^0.9"
+rand = "0.7.3"
 serde = { version = "1.0.136", features = ["derive"] }
 tokio = { version = "1.17.0", features = ["full", "tracing"] }
 rocksdb = "0.18.0"
