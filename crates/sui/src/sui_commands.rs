@@ -5,7 +5,6 @@ use crate::{
     keystore::{Keystore, KeystoreType, SuiKeystore},
 };
 use anyhow::{anyhow, bail};
-use base64ct::{Base64, Encoding};
 use clap::*;
 use std::fs;
 use std::num::NonZeroUsize;
@@ -275,7 +274,7 @@ impl SuiCommand {
                 let keystore = SuiKeystore::load_or_create(&keystore_path)?;
                 info!("Data to sign : {}", data);
                 info!("Address : {}", address);
-                let message = Base64::decode_vec(data).map_err(|e| anyhow!(e))?;
+                let message = bs58::decode(data).into_vec().map_err(|e| anyhow!(e))?;
                 let signature = keystore.sign(address, &message)?;
                 // Separate pub key and signature string, signature and pub key are concatenated with an '@' symbol.
                 let signature_string = format!("{:?}", signature);
@@ -286,7 +285,7 @@ impl SuiCommand {
                 let pub_key = sig_split
                     .last()
                     .ok_or_else(|| anyhow!("Error creating signature."))?;
-                info!("Public Key Base64: {}", pub_key);
+                info!("Public Key Base58: {}", pub_key);
                 info!("Signature : {}", signature);
                 Ok(())
             }

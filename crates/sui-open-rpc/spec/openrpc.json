@@ -28,21 +28,21 @@
           "name": "tx_bytes",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           }
         },
         {
           "name": "signature",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           }
         },
         {
           "name": "pub_key",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           }
         }
       ],
@@ -792,7 +792,7 @@
           "schema": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Base64"
+              "$ref": "#/components/schemas/Base58"
             }
           }
         },
@@ -995,11 +995,11 @@
         "description": "A signature emitted by an authority. It's useful to decouple this from user signatures, as their set of supported schemes will probably diverge",
         "allOf": [
           {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           }
         ]
       },
-      "Base64": {
+      "Base58": {
         "type": "string"
       },
       "CertifiedTransaction": {
@@ -1343,7 +1343,7 @@
             }
           },
           {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           },
           {
             "type": "string"
@@ -1426,7 +1426,7 @@
         }
       },
       "ObjectDigest": {
-        "$ref": "#/components/schemas/Base64"
+        "$ref": "#/components/schemas/Base58"
       },
       "ObjectID": {
         "$ref": "#/components/schemas/Hex"
@@ -1592,7 +1592,7 @@
         ]
       },
       "PublicKeyBytes": {
-        "$ref": "#/components/schemas/Base64"
+        "$ref": "#/components/schemas/Base58"
       },
       "PublishResponse": {
         "type": "object",
@@ -1642,7 +1642,7 @@
         "minimum": 0.0
       },
       "Signature": {
-        "$ref": "#/components/schemas/Base64"
+        "$ref": "#/components/schemas/Base58"
       },
       "SplitCoinResponse": {
         "type": "object",
@@ -1733,7 +1733,7 @@
             }
           },
           "txBytes": {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           }
         }
       },
@@ -1769,7 +1769,7 @@
         "description": "A transaction will have a (unique) digest.",
         "allOf": [
           {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/Base58"
           }
         ]
       },

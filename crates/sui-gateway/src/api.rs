@@ -16,7 +16,7 @@ use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::sui_serde::Base64;
+use sui_types::sui_serde::Base58;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto::SignableBytes,
@@ -32,9 +32,9 @@ pub trait RpcGatewayApi {
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
         &self,
-        tx_bytes: Base64,
-        signature: Base64,
-        pub_key: Base64,
+        tx_bytes: Base58,
+        signature: Base58,
+        pub_key: Base58,
     ) -> RpcResult<TransactionResponse>;
 
     /// Synchronize client state with validators.
@@ -146,7 +146,7 @@ pub trait RpcTransactionBuilder {
     async fn publish(
         &self,
         sender: SuiAddress,
-        compiled_modules: Vec<Base64>,
+        compiled_modules: Vec<Base58>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
@@ -176,7 +176,7 @@ pub trait RpcTransactionBuilder {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
-    pub tx_bytes: Base64,
+    pub tx_bytes: Base58,
     pub gas: SuiObjectRef,
     pub input_objects: Vec<SuiInputObjectKind>,
 }
@@ -184,7 +184,7 @@ pub struct TransactionBytes {
 impl TransactionBytes {
     pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            tx_bytes: Base64::from_bytes(&data.to_bytes()),
+            tx_bytes: Base58::from_bytes(&data.to_bytes()),
             gas: data.gas().into(),
             input_objects: data
                 .input_objects()?

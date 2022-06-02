@@ -18,7 +18,7 @@ use sui_core::gateway_types::{
 };
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
-use sui_types::sui_serde::Base64;
+use sui_types::sui_serde::Base58;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto,
@@ -86,9 +86,9 @@ pub fn create_client(config_path: &Path) -> Result<GatewayClient, anyhow::Error>
 impl RpcGatewayApiServer for RpcGatewayImpl {
     async fn execute_transaction(
         &self,
-        tx_bytes: Base64,
-        signature: Base64,
-        pub_key: Base64,
+        tx_bytes: Base58,
+        signature: Base58,
+        pub_key: Base58,
     ) -> RpcResult<TransactionResponse> {
         let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
         let signature =
@@ -197,7 +197,7 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
     async fn publish(
         &self,
         sender: SuiAddress,
-        compiled_modules: Vec<Base64>,
+        compiled_modules: Vec<Base58>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {

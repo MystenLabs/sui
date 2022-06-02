@@ -28,7 +28,7 @@ use sui_core::gateway_types::{
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_types::object::Owner;
-use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::sui_serde::{Base58, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
@@ -617,7 +617,7 @@ impl Display for WalletCommandResult {
                         " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
                         oref.object_id,
                         oref.version.value(),
-                        Base64::encode(oref.digest),
+                        Base58::encode(oref.digest),
                         owner_type,
                         oref.type_
                     )?

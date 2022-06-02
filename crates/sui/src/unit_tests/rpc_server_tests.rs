@@ -31,7 +31,7 @@ use sui_gateway::{
 };
 use sui_json::SuiJsonValue;
 use sui_swarm::memory::Swarm;
-use sui_types::sui_serde::Base64;
+use sui_types::sui_serde::Base58;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     SUI_FRAMEWORK_ADDRESS,
@@ -73,9 +73,9 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
-    let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let tx_bytes = Base58::from_bytes(&tx_bytes);
+    let signature_bytes = Base58::from_bytes(signature.signature_bytes());
+    let pub_key = Base58::from_bytes(signature.public_key_bytes());
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, signature_bytes, pub_key)
@@ -101,7 +101,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         false,
     )?
     .iter()
-    .map(|bytes| Base64::from_bytes(bytes))
+    .map(|bytes| Base58::from_bytes(bytes))
     .collect::<Vec<_>>();
 
     let tx_data: TransactionBytes = http_client
@@ -112,9 +112,9 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
-    let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let tx_bytes = Base58::from_bytes(&tx_bytes);
+    let signature_bytes = Base58::from_bytes(signature.signature_bytes());
+    let pub_key = Base58::from_bytes(signature.public_key_bytes());
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, signature_bytes, pub_key)
@@ -160,9 +160,9 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
-    let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let tx_bytes = Base58::from_bytes(&tx_bytes);
+    let signature_bytes = Base58::from_bytes(signature.signature_bytes());
+    let pub_key = Base58::from_bytes(signature.public_key_bytes());
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, signature_bytes, pub_key)
@@ -212,9 +212,9 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let tx_bytes = tx_data.tx_bytes.to_vec()?;
         let signature = keystore.sign(address, &tx_bytes)?;
 
-        let tx_bytes = Base64::from_bytes(&tx_bytes);
-        let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        let tx_bytes = Base58::from_bytes(&tx_bytes);
+        let signature_bytes = Base58::from_bytes(signature.signature_bytes());
+        let pub_key = Base58::from_bytes(signature.public_key_bytes());
 
         let response: TransactionResponse = http_client
             .execute_transaction(tx_bytes, signature_bytes, pub_key)

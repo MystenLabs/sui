@@ -14,7 +14,7 @@ use sui_core::gateway_types::{
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
-use sui_types::sui_serde::Base64;
+use sui_types::sui_serde::Base58;
 
 use crate::api::RpcReadApiClient;
 use crate::api::RpcTransactionBuilderClient;
@@ -35,9 +35,9 @@ impl RpcGatewayClient {
 impl GatewayAPI for RpcGatewayClient {
     async fn execute_transaction(&self, tx: Transaction) -> Result<TransactionResponse, Error> {
         let signature = tx.tx_signature;
-        let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
-        let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        let tx_bytes = Base58::from_bytes(&tx.data.to_bytes());
+        let signature_bytes = Base58::from_bytes(signature.signature_bytes());
+        let pub_key = Base58::from_bytes(signature.public_key_bytes());
 
         Ok(self
             .client
@@ -104,7 +104,7 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<TransactionData, Error> {
         let package_bytes = package_bytes
             .iter()
-            .map(|bytes| Base64::from_bytes(bytes))
+            .map(|bytes| Base58::from_bytes(bytes))
             .collect();
         let bytes: TransactionBytes = self
             .client

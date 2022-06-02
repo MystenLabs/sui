@@ -5716,8 +5716,8 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64ct",
  "bcs",
+ "bs58",
  "bytes",
  "clap 3.1.18",
  "colored",
@@ -5839,8 +5839,8 @@ name = "sui-config"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "base64ct",
  "bcs",
+ "bs58",
  "config 0.1.0",
  "crypto",
  "debug-ignore",
@@ -5954,8 +5954,8 @@ name = "sui-framework"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64",
  "bcs",
+ "bs58",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-cli",
@@ -6180,9 +6180,9 @@ name = "sui-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64ct",
  "bcs",
  "bincode",
+ "bs58",
  "crypto",
  "curve25519-dalek",
  "digest 0.10.3",

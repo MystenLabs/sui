@@ -35,7 +35,7 @@ use sui_types::messages::{
 };
 use sui_types::move_package::disassemble_modules;
 use sui_types::object::{Data, Object, ObjectRead, Owner};
-use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::sui_serde::{Base58, Encoding};
 
 use sui_json::SuiJsonValue;
 
@@ -479,7 +479,7 @@ pub enum SuiMoveValue {
     Bool(bool),
     Address(SuiAddress),
     Vector(Vec<SuiMoveValue>),
-    Bytearray(Base64),
+    Bytearray(Base58),
     String(String),
     VersionedID { id: ObjectID, version: u64 },
     Struct(SuiMoveStruct),
@@ -551,7 +551,7 @@ impl From<MoveValue> for SuiMoveValue {
                             }
                         })
                         .collect::<Vec<_>>();
-                    return SuiMoveValue::Bytearray(Base64::from_bytes(&bytearray));
+                    return SuiMoveValue::Bytearray(Base58::from_bytes(&bytearray));
                 }
                 SuiMoveValue::Vector(value.into_iter().map(|value| value.into()).collect())
             }
@@ -780,7 +780,7 @@ impl Display for SuiTransactionKind {
                 write!(
                     writer,
                     "Object Digest : {}",
-                    Base64::encode(t.object_ref.digest)
+                    Base58::encode(t.object_ref.digest)
                 )?;
             }
             Self::Publish(_p) => {

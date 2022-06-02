@@ -72,16 +72,19 @@ pub enum EventType {
     User,
 }
 
-/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as base64.
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as base58.
 /// This is useful for when publishing via JSON
 /// If we are building the Sui framework, `is_framework` will be true;
 /// Otherwise `is_framework` should be false (e.g. calling from client).
-pub fn build_move_package_to_base64(
+pub fn build_move_package_to_base58(
     path: &Path,
     is_framework: bool,
 ) -> Result<Vec<String>, SuiError> {
-    build_move_package_to_bytes(path, is_framework)
-        .map(|mods| mods.iter().map(base64::encode).collect::<Vec<_>>())
+    build_move_package_to_bytes(path, is_framework).map(|mods| {
+        mods.iter()
+            .map(|bytes| bs58::encode(bytes).into_string())
+            .collect::<Vec<_>>()
+    })
 }
 
 /// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.

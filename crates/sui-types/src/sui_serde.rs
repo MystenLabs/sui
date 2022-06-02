@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use anyhow::anyhow;
-use base64ct::Encoding as _;
 use move_core_types::account_address::AccountAddress;
 use schemars::JsonSchema;
 use serde;
@@ -25,7 +24,7 @@ where
     D::Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
 }
 
-/// Use with serde_as to encode/decode bytes to/from Base64/Hex for human-readable serializer and deserializer
+/// Use with serde_as to encode/decode bytes to/from Base58/Hex for human-readable serializer and deserializer
 /// E : Encoding of the human readable output
 /// R : serde_as SerializeAs/DeserializeAs delegation
 ///
@@ -154,20 +153,21 @@ pub trait Encoding {
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct Hex(String);
+
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, JsonSchema)]
 #[serde(try_from = "String")]
-pub struct Base64(String);
+pub struct Base58(String);
 
-impl TryFrom<String> for Base64 {
+impl TryFrom<String> for Base58 {
     type Error = anyhow::Error;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        // Make sure the value is valid base64 string.
-        Base64::decode(&value)?;
+        // Make sure the value is valid base58 string.
+        Base58::decode(&value)?;
         Ok(Self(value))
     }
 }
 
-impl Base64 {
+impl Base58 {
     pub fn to_vec(self) -> Result<Vec<u8>, anyhow::Error> {
         Self::decode(&self.0)
     }
@@ -186,17 +186,17 @@ impl Encoding for Hex {
         format!("0x{}", encode_bytes_hex(&data).to_lowercase())
     }
 }
-impl Encoding for Base64 {
+impl Encoding for Base58 {
     fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
-        base64ct::Base64::decode_vec(s).map_err(|e| anyhow!(e))
+        bs58::decode(s).into_vec().map_err(Into::into)
     }
 
     fn encode<T: AsRef<[u8]>>(data: T) -> String {
-        base64ct::Base64::encode_string(data.as_ref())
+        bs58::encode(data).into_string()
     }
 }
 
-impl<'de> DeserializeAs<'de, Vec<u8>> for Base64 {
+impl<'de> DeserializeAs<'de, Vec<u8>> for Base58 {
     fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     where
         D: Deserializer<'de>,
@@ -206,7 +206,7 @@ impl<'de> DeserializeAs<'de, Vec<u8>> for Base64 {
     }
 }
 
-impl<T> SerializeAs<T> for Base64
+impl<T> SerializeAs<T> for Base58
 where
     T: AsRef<[u8]>,
 {

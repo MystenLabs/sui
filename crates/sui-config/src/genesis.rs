@@ -3,7 +3,6 @@
 
 use crate::ValidatorInfo;
 use anyhow::Context;
-use base64ct::Encoding;
 use move_binary_format::CompiledModule;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fs, path::Path};
@@ -112,7 +111,7 @@ impl Serialize for Genesis {
         let bytes = bcs::to_bytes(&raw_genesis).map_err(|e| Error::custom(e.to_string()))?;
 
         if serializer.is_human_readable() {
-            let s = base64ct::Base64::encode_string(&bytes);
+            let s = bs58::encode(&bytes).into_string();
             serializer.serialize_str(&s)
         } else {
             serializer.serialize_bytes(&bytes)
@@ -137,7 +136,9 @@ impl<'de> Deserialize<'de> for Genesis {
 
         let bytes = if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            base64ct::Base64::decode_vec(&s).map_err(|e| Error::custom(e.to_string()))?
+            bs58::decode(s)
+                .into_vec()
+                .map_err(|e| Error::custom(e.to_string()))?
         } else {
             let data: Vec<u8> = Vec::deserialize(deserializer)?;
             data

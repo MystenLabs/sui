@@ -12,7 +12,6 @@ use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::CheckpointFragment;
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
-use base64ct::Encoding;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
@@ -367,8 +366,8 @@ where
         writer
     }
 
-    pub fn to_base64(&self) -> String {
-        base64ct::Base64::encode_string(&self.to_bytes())
+    pub fn to_base58(&self) -> String {
+        bs58::encode(self.to_bytes()).into_string()
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {

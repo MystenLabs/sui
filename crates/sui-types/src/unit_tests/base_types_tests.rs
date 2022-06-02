@@ -6,7 +6,6 @@
 
 use std::str::FromStr;
 
-use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
 use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair};
@@ -279,7 +278,7 @@ fn test_transaction_digest_serde_human_readable() {
     let digest = TransactionDigest::random();
     let serialized = serde_json::to_string(&digest).unwrap();
     assert_eq!(
-        format!("\"{}\"", Base64::encode_string(&digest.0)),
+        format!("\"{}\"", bs58::encode(&digest.0).into_string()),
         serialized
     );
     let deserialized: TransactionDigest = serde_json::from_str(&serialized).unwrap();
@@ -305,7 +304,7 @@ fn test_signature_serde_human_readable() {
     let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
     let serialized = serde_json::to_string(&sig).unwrap();
     assert_eq!(
-        format!("\"{}\"", Base64::encode_string(sig.as_ref())),
+        format!("\"{}\"", bs58::encode(sig.as_ref()).into_string()),
         serialized
     );
     let deserialized: AuthoritySignature = serde_json::from_str(&serialized).unwrap();

@@ -9,7 +9,6 @@ use std::fmt;
 use std::str::FromStr;
 
 use anyhow::anyhow;
-use base64ct::Encoding;
 use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -27,7 +26,7 @@ use crate::committee::EpochId;
 use crate::crypto::PublicKeyBytes;
 use crate::error::SuiError;
 use crate::object::{Object, Owner};
-use crate::sui_serde::Base64;
+use crate::sui_serde::Base58;
 use crate::sui_serde::Hex;
 use crate::sui_serde::Readable;
 
@@ -220,8 +219,8 @@ pub const OBJECT_DIGEST_LENGTH: usize = 32;
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
@@ -229,16 +228,16 @@ pub struct TransactionDigest(
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObjectDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
     pub [u8; 32],
 ); // We use SHA3-256 hence 32 bytes here
 
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionEffectsDigest(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
     pub [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
@@ -512,7 +511,7 @@ impl TryFrom<&[u8]> for ObjectDigest {
 
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64ct::Base64::encode_string(&self.0);
+        let s = bs58::encode(&self.0).into_string();
         write!(f, "{}", s)?;
         Ok(())
     }

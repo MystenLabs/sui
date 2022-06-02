@@ -13,9 +13,9 @@ pub enum MoveCommands {
     /// Build and verify Move project
     #[clap(name = "build")]
     Build {
-        /// Whether we are printing in base64.
+        /// Whether we are printing in base58.
         #[clap(long)]
-        dump_bytecode_as_base64: bool,
+        dump_bytecode_as_base58: bool,
     },
 
     /// Run all Move unit tests
@@ -27,11 +27,11 @@ impl MoveCommands {
     pub fn execute(&self, path: &Path, is_std_framework: bool) -> Result<(), anyhow::Error> {
         match self {
             Self::Build {
-                dump_bytecode_as_base64,
+                dump_bytecode_as_base58,
             } => {
-                if *dump_bytecode_as_base64 {
+                if *dump_bytecode_as_base58 {
                     let compiled_modules =
-                        sui_framework::build_move_package_to_base64(path, is_std_framework)?;
+                        sui_framework::build_move_package_to_base58(path, is_std_framework)?;
                     println!("{:?}", compiled_modules);
                 } else {
                     Self::build(path, is_std_framework)?;

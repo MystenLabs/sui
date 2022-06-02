@@ -3,11 +3,10 @@
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
-use crate::sui_serde::Base64;
+use crate::sui_serde::Base58;
 use crate::sui_serde::Readable;
 use anyhow::anyhow;
 use anyhow::Error;
-use base64ct::Encoding;
 use digest::Digest;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
@@ -76,7 +75,7 @@ impl Serialize for KeyPair {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(&base64ct::Base64::encode_string(&self.key_pair.to_bytes()))
+        serializer.serialize_str(&bs58::encode(&self.key_pair.to_bytes()).into_string())
     }
 }
 
@@ -86,7 +85,8 @@ impl<'de> Deserialize<'de> for KeyPair {
         D: serde::de::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let value = base64ct::Base64::decode_vec(&s)
+        let value = bs58::decode(s)
+            .into_vec()
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         let key = DalekKeypair::from_bytes(&value)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
@@ -101,7 +101,9 @@ impl FromStr for KeyPair {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = base64ct::Base64::decode_vec(s).map_err(|e| anyhow!("{}", e.to_string()))?;
+        let value = bs58::decode(s)
+            .into_vec()
+            .map_err(|e| anyhow!("{}", e.to_string()))?;
         let key = dalek::Keypair::from_bytes(&value).map_err(|e| anyhow!("{}", e.to_string()))?;
         Ok(KeyPair {
             key_pair: key,
@@ -133,8 +135,8 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
     Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
 pub struct PublicKeyBytes(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
     [u8; dalek::PUBLIC_KEY_LENGTH],
 );
 
@@ -235,8 +237,8 @@ pub const SUI_SIGNATURE_LENGTH: usize =
 #[serde_as]
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Signature(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, Bytes>")]
     [u8; SUI_SIGNATURE_LENGTH],
 );
 
@@ -256,8 +258,8 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64ct::Base64::encode_string(self.signature_bytes());
-        let p = base64ct::Base64::encode_string(self.public_key_bytes());
+        let s = bs58::encode(self.signature_bytes()).into_string();
+        let p = bs58::encode(self.public_key_bytes()).into_string();
         write!(f, "{s}@{p}")?;
         Ok(())
     }
@@ -351,8 +353,8 @@ impl Signature {
 #[serde_as]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AuthoritySignature(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, _>")]
+    #[schemars(with = "Base58")]
+    #[serde_as(as = "Readable<Base58, _>")]
     pub dalek::Signature,
 );
 impl AsRef<[u8]> for AuthoritySignature {
