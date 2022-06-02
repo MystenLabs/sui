@@ -51,7 +51,7 @@ export function translate(o: GetObjectDataResponse): DataType {
                 id: getObjectId(o),
                 version: getObjectVersion(o)!.toString(),
                 objType: parseObjectType(o),
-                owner: parseOwner(getObjectOwner(o)!),
+                owner: getObjectOwner(o)!,
                 data: {
                     contents: getObjectFields(o) ?? getMovePackageContent(o)!,
                     tx_digest: getObjectPreviousTransactionDigest(o),
@@ -74,16 +74,4 @@ export function translate(o: GetObjectDataResponse): DataType {
             throw new Error(`Unexpected status ${o.status} for object ${o}`);
         }
     }
-}
-
-function parseOwner(owner: ObjectOwner): string {
-    let result = '';
-    if (typeof owner === 'string') {
-        result = owner;
-    } else if ('AddressOwner' in owner) {
-        result = owner['AddressOwner'];
-    } else {
-        result = owner['ObjectOwner'];
-    }
-    return `SingleOwner(k#${result})`;
 }

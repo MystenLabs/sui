@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectType, getMoveObjectType } from '@mysten/sui.js';
+import { getObjectType, getMoveObjectType, type ObjectOwner } from '@mysten/sui.js';
 
 import type { GetObjectDataResponse } from '@mysten/sui.js';
 
@@ -25,4 +25,12 @@ export function parseObjectType(data: GetObjectDataResponse): string {
         return getMoveObjectType(data)!;
     }
     return 'unknown';
+}
+
+export function getOwnerStr(owner: ObjectOwner): string {
+    if (typeof owner === 'object') {
+        if ('AddressOwner' in owner) return owner.AddressOwner;
+        if ('ObjectOwner' in owner) return owner.ObjectOwner;
+    }
+    return owner;
 }

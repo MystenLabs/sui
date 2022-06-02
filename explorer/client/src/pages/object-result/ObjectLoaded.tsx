@@ -7,21 +7,12 @@ import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-import { parseImageURL } from '../../utils/objectUtils';
+import { getOwnerStr, parseImageURL } from '../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../utils/stringUtils';
 import { type DataType } from './ObjectResultType';
 
-import type { ObjectOwner } from '@mysten/sui.js';
-
 import styles from './ObjectResult.module.css';
 
-function getOwnerStr(owner: ObjectOwner): string {
-    if (typeof owner === 'object') {
-        if ('AddressOwner' in owner) return owner.AddressOwner;
-        if ('ObjectOwner' in owner) return owner.ObjectOwner;
-    }
-    return owner;
-}
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
