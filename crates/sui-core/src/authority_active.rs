@@ -31,7 +31,6 @@
 
 use futures::{join, Future};
 use std::{
-    borrow::Borrow,
     collections::{BTreeMap, HashMap},
     sync::Arc,
     time::Duration,
@@ -270,8 +269,8 @@ impl LifecycleTaskHandler {
     pub async fn spawn<F, T>(mut self, description: String, fun: F) -> Result<(), SuiError>
     where
         F: Fn() -> T,
-        T: Future + Send + 'static,
-        <T as Future>::Output: Borrow<Result<(), SuiError>> + Send + 'static,
+        T: Future<Output = Result<(), SuiError>> + Send + 'static,
+        <T as Future>::Output: Send + 'static,
     {
         let mut handle: Option<tokio::task::JoinHandle<Result<(), SuiError>>> = None;
         loop {
@@ -340,7 +339,7 @@ impl LifecycleTaskHandler {
             if start {
                 let fut = fun();
                 handle = Some(tokio::task::spawn(
-                    async move { fut.await.borrow().clone() },
+                    async move { fut.await },
                 ));
             }
 
