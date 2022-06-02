@@ -5833,6 +5833,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8020,6 +8021,7 @@ dependencies = [
  "regex-automata",
  "regex-syntax",
  "remove_dir_all",
+ "reqwest",
  "ring",
  "rocksdb",
  "rust-ini",
