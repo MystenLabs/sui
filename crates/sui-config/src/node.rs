@@ -200,7 +200,7 @@ enum GenesisLocation {
 #[cfg(test)]
 mod tests {
     use super::Genesis;
-    use crate::genesis;
+    use crate::{genesis, NodeConfig};
 
     #[test]
     fn serialize_genesis_config_from_file() {
@@ -236,5 +236,12 @@ mod tests {
 
         let loaded_genesis = genesis_config.genesis().unwrap();
         assert_eq!(&genesis, loaded_genesis);
+    }
+
+    #[test]
+    fn fullnode_template() {
+        const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
+
+        let _template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
     }
 }
