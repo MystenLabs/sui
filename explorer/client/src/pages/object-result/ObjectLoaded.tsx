@@ -7,12 +7,20 @@ import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../utils/stringUtils';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
+import { ObjectOwner } from '@mysten/sui.js';
+
+function getOwnerStr(owner: ObjectOwner): string {
+    if (typeof(owner) === 'object') {
+        if ('AddressOwner' in owner) return owner.AddressOwner;
+        if ('ObjectOwner' in owner) return owner.ObjectOwner;
+    }
+    return owner;
+}
 
 function ObjectLoaded({ data }: { data: DataType }) {
     // TODO - restore or remove this functionality
@@ -42,42 +50,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
 
-    //TODO - a backend convention on how owned objects are labelled and how values are stored
-    //This would facilitate refactoring the below and stopping bugs when a variant is missed:
-    const addrOwnerPattern = /^AddressOwner\(k#/;
-    const endParensPattern = /\){1}$/;
-
-    //TODO - improve move code handling:
-    // const isMoveVecType = (value: { vec?: [] }) => Array.isArray(value?.vec);
-    // TODO - merge / replace with other version of same thing
     const stdLibRe = /0x2::/;
     const prepObjTypeValue = (typeString: string) =>
         typeString.replace(stdLibRe, '');
-
-    const extractOwnerData = (owner: string | AddressOwner): string => {
-        switch (typeof owner) {
-            case 'string':
-                if (addrOwnerPattern.test(owner)) {
-                    let ownerId = getAddressOwnerId(owner);
-                    return ownerId ? ownerId : '';
-                }
-                const singleOwnerPattern = /SingleOwner\(k#(.*)\)/;
-                const result = singleOwnerPattern.exec(owner);
-                return result ? result[1] : '';
-            default:
-                return '';
-        }
-    };
-    const getAddressOwnerId = (addrOwner: string): string | null => {
-        if (
-            !addrOwnerPattern.test(addrOwner) ||
-            !endParensPattern.test(addrOwner)
-        )
-            return null;
-
-        let str = addrOwner.replace(addrOwnerPattern, '');
-        return str.replace(endParensPattern, '');
-    };
 
     const viewedData = {
         ...data,
@@ -106,6 +81,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
             ? 'Disassembled Bytecode'
             : 'Properties';
 
+    const ownerStr = getOwnerStr(data.owner);
     return (
         <>
             <div className={styles.resultbox}>
@@ -194,14 +170,11 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <div>Owner</div>
                                     <div id="owner">
                                         <Longtext
-                                            text={extractOwnerData(data.owner)}
+                                            text={ownerStr}
                                             category="unknown"
-                                            // TODO: make this more elegant
                                             isLink={
-                                                extractOwnerData(data.owner) !==
-                                                    'Immutable' &&
-                                                extractOwnerData(data.owner) !==
-                                                    'Shared'
+                                                ownerStr !== 'Immutable' &&
+                                                ownerStr !== 'Shared'
                                             }
                                         />
                                     </div>

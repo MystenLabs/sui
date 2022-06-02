@@ -5,9 +5,6 @@ import { JsonRpcProvider } from '@mysten/sui.js';
 
 import { getEndpoint, Network } from './rpcSetting';
 
-// TODO: Remove these types with SDK types
-export type AddressOwner = { AddressOwner: string };
-
 export type AnyVec = { vec: any[] };
 
 export { Network, getEndpoint };
