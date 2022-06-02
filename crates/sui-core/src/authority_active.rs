@@ -338,9 +338,7 @@ impl LifecycleTaskHandler {
             // Second potentially restart task
             if start {
                 let fut = fun();
-                handle = Some(tokio::task::spawn(
-                    async move { fut.await },
-                ));
+                handle = Some(tokio::task::spawn(async move { fut.await }));
             }
 
             // Third exit the loop.
