@@ -8,6 +8,7 @@ import type { ObjectId, TransactionDigest } from '@mysten/sui.js';
 const API_ENV_TO_EXPLORER_URL: Record<API_ENV, string | undefined> = {
     [API_ENV.local]: process.env.EXPLORER_URL_LOCAL,
     [API_ENV.devNet]: process.env.EXPLORER_URL_DEV_NET,
+    [API_ENV.staging]: process.env.EXPLORER_URL_STAGING,
 };
 
 function getDefaultUrl() {
