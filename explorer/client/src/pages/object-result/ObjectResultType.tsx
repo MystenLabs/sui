@@ -17,7 +17,7 @@ import type { GetObjectDataResponse, ObjectOwner } from '@mysten/sui.js';
 export type DataType = {
     id: string;
     category?: string;
-    owner: ObjectOwner;
+    owner: ObjectOwner | { SingleOwner: string };
     version: string;
     readonly?: string;
     objType: string;

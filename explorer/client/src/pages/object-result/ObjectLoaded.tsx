@@ -50,7 +50,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
         objType: trimStdLibPrefix(data.objType),
         name: data.name,
         tx_digest: data.data.tx_digest,
-        owner: data.owner,
+        owner: getOwnerStr(data.owner),
         url: parseImageURL(data.data.contents),
     };
 
@@ -72,7 +72,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
             ? 'Disassembled Bytecode'
             : 'Properties';
 
-    const ownerStr = getOwnerStr(data.owner);
     return (
         <>
             <div className={styles.resultbox}>
@@ -161,11 +160,11 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <div>Owner</div>
                                     <div id="owner">
                                         <Longtext
-                                            text={ownerStr}
+                                            text={typeof viewedData.owner === 'string' ? viewedData.owner : typeof viewedData.owner}
                                             category="unknown"
                                             isLink={
-                                                ownerStr !== 'Immutable' &&
-                                                ownerStr !== 'Shared'
+                                                viewedData.owner !== 'Immutable' &&
+                                                viewedData.owner !== 'Shared'
                                             }
                                         />
                                     </div>
