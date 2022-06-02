@@ -1435,7 +1435,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
                 /* total_batches */ 100, /* total_transactions */ 100,
             );
         }
-        println!("CHANEL EXIT.");
+        println!("CHANNEL EXIT.");
     });
 
     // Now make an authority aggregator
@@ -1459,8 +1459,6 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
         aggregator,
     }
 }
-
-use crate::authority_client::AuthorityAPI;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow_bug() {

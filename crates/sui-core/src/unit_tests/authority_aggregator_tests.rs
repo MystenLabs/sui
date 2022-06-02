@@ -85,7 +85,7 @@ pub fn get_local_client(
         clients.next();
         i += 1;
     }
-    clients.next().unwrap().authority_client()
+    clients.next().unwrap().authority_client_mut()
 }
 
 pub fn transfer_coin_transaction(
@@ -219,18 +219,24 @@ pub fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> 
     Transaction::new(data, signature)
 }
 
-pub async fn do_transaction<A: AuthorityAPI>(authority: &A, transaction: &Transaction) {
+pub async fn do_transaction<A>(authority: &SafeClient<A>, transaction: &Transaction)
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     authority
         .handle_transaction(transaction.clone())
         .await
         .unwrap();
 }
 
-pub async fn extract_cert<A: AuthorityAPI>(
-    authorities: &[&A],
+pub async fn extract_cert<A>(
+    authorities: &[&SafeClient<A>],
     committee: &Committee,
     transaction_digest: &TransactionDigest,
-) -> CertifiedTransaction {
+) -> CertifiedTransaction
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     let mut votes = vec![];
     let mut transaction: Option<SignedTransaction> = None;
     for authority in authorities {
@@ -263,10 +269,13 @@ pub async fn extract_cert<A: AuthorityAPI>(
     )
 }
 
-pub async fn do_cert<A: AuthorityAPI>(
-    authority: &A,
+pub async fn do_cert<A>(
+    authority: &SafeClient<A>,
     cert: &CertifiedTransaction,
-) -> TransactionEffects {
+) -> TransactionEffects
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     authority
         .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
         .await
@@ -276,7 +285,10 @@ pub async fn do_cert<A: AuthorityAPI>(
         .effects
 }
 
-pub async fn do_cert_configurable<A: AuthorityAPI>(authority: &A, cert: &CertifiedTransaction) {
+pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     let result = authority
         .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
         .await;
@@ -285,7 +297,10 @@ pub async fn do_cert_configurable<A: AuthorityAPI>(authority: &A, cert: &Certifi
     }
 }
 
-pub async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID) -> ObjectRef {
+pub async fn get_latest_ref<A>(authority: &SafeClient<A>, object_id: ObjectID) -> ObjectRef
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     if let Ok(ObjectInfoResponse {
         requested_object_reference: Some(object_ref),
         ..
@@ -331,7 +346,7 @@ async fn execute_transaction_with_fault_configs(
         .await?;
 
     for client in authorities.authority_clients.values_mut() {
-        client.authority_client().fault_config.reset();
+        client.authority_client_mut().fault_config.reset();
     }
     for (index, config) in configs_before_process_certificate {
         get_local_client(&mut authorities, *index).fault_config = *config;

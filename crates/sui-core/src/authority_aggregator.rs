@@ -65,6 +65,17 @@ impl<A> AuthorityAggregator<A> {
     {
         self.authority_clients[name].clone()
     }
+
+    pub fn clone_inner_clients(&self) -> BTreeMap<AuthorityName, A>
+    where
+        A: Clone,
+    {
+        let mut clients = BTreeMap::new();
+        for (name, client) in &self.authority_clients {
+            clients.insert(*name, client.authority_client().clone());
+        }
+        clients
+    }
 }
 
 pub enum ReduceOutput<S> {
@@ -1065,17 +1076,18 @@ where
                         // - we try to update the authority with the cert, and on error return Err.
                         // - we try to re-process the certificate and return the result.
 
-                        let handle = if contains_shared_object {
+                        let res = if contains_shared_object {
                             client.handle_consensus_transaction(ConsensusTransaction::UserTransaction(Box::new(cert_ref.clone())))
+                                .instrument(tracing::trace_span!("handle_consensus_cert", authority =? name))
+                                .await
                         } else {
                             client
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
+                                .instrument(tracing::trace_span!("handle_cert", authority =? name))
+                                .await
                         };
-                        let res = handle
-                            .instrument(tracing::trace_span!("handle_cert", authority =? name))
-                            .await;
 
                         if res.is_ok() {
                             // We got an ok answer, so returning the result of processing
