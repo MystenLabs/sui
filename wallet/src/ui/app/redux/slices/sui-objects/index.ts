@@ -55,9 +55,7 @@ const initialState = objectsAdapter.getInitialState<SuiObjectsManualState>({
 const slice = createSlice({
     name: 'sui-objects',
     initialState: initialState,
-    reducers: {
-        setOwnedObjects: objectsAdapter.setAll,
-    },
+    reducers: {},
     extraReducers: (builder) => {
         builder
             .addCase(fetchAllOwnedObjects.fulfilled, (state, action) => {
