@@ -78,7 +78,7 @@ TestScenario::next_tx(scenario, &owner);
 ### Pass objects by value
 Objects can also be passed by value into an entry function. By doing so, the object is moved out of Sui storage (a.k.a. deleted). It is then up to the Move code to decide where this object should go.
 
-> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `VersionedID` as a field, and the [VersionedID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) does not have the `drop` ability, the Sui object struct type [must not](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed or unpacked.
+> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `VersionedID` as a field, and the [VersionedID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) does not have the `drop` ability, the Sui object struct type [must not](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
 
 There are two ways we can deal with a pass-by-value Sui object in Move:
 

@@ -22,11 +22,11 @@ struct Bar has key, store {
     value: u64,
 }
 ```
-Now `Bar` is also a Sui object type. When we put a Sui object of type `Bar` into a Sui object of type `Foo`, the Sui object of type `Bar` is said to be **wrapped** by `Foo` (which we call the **wrapper** object).
+Now `Bar` is also a Sui object type. When we put a Sui object of type `Bar` into a Sui object of type `Foo`, the Sui object of type `Bar` is said to be **wrapped** by `Foo` (which we call the **wrapper** object or the **wrapping** object).
 
 > :bulb: In Move code, it is also possible to put a Sui object as a field of a non-Sui object struct type. For example, in the above code sample, we can define `Foo` to not have `key` but `Bar` to have `key, store`. However, this case can happen only temporarily in the middle of a Move execution and cannot be persisted on-chain. This is because a non-Sui object cannot flow across the Move-Sui boundary, and one must unpack the non-Sui object at some point and deal with the Sui object fields in it.
 
-There are some interesting consequences of wrapping an Sui object into another. When an object is wrapped, this object no longer exists independently on-chain. We will no longer be able to look up this object by its ID. This object becomes part of the data of the object that wraps it. Most importantly, *we can no longer pass the wrapped object as an argument in any way in Move calls*. The only access point is through the wrapping object.
+There are some interesting consequences of wrapping a Sui object into another. When an object is wrapped, this object no longer exists independently on-chain. We will no longer be able to look up this object by its ID. This object becomes part of the data of the object that wraps it. Most importantly, *we can no longer pass the wrapped object as an argument in any way in Move calls*. The only access point is through the wrapping object.
 
 >:bulb: The fact that you can no longer use a wrapped Sui object means that it's impossible to create circular wrapping behavior, where A wraps B, B wraps C, and C also wraps A.
 
@@ -102,7 +102,7 @@ Finally, let's define the function that the service operator can call in order t
 ```rust
 public(script) fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext);
 ```
-Where `wrapper1` and `wrapper2` are two wrapped objects that were sent from different object owners to the service operator. (Hence, the service operator owns both.) Both wrapped objects are passed by value because they will eventually need to be unpacked.
+Where `wrapper1` and `wrapper2` are two wrapped objects that were sent from different object owners to the service operator. (Hence, the service operator owns both.) Both wrapped objects are passed by value because they will eventually need to be [unpacked](https://move-book.com/advanced-topics/struct.html#destructing-structures).
 We first check that the swap is indeed legit:
 ```rust
 assert!(wrapper1.to_swap.scarcity == wrapper2.to_swap.scarcity, 0);
