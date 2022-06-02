@@ -35,7 +35,7 @@ module ObjectWrapping::ObjectWrapping {
         )
     }
 
-    public(script) fun set_child(parent: &mut Parent, child: Child, _ctx: &mut TxContext) {
+    public(script) fun set_child(parent: &mut Parent, child: Child) {
         Option::fill(&mut parent.child, child)
     }
 
@@ -47,7 +47,7 @@ module ObjectWrapping::ObjectWrapping {
         )
     }
 
-    public(script) fun delete_parent(parent: Parent, _ctx: &mut TxContext) {
+    public(script) fun delete_parent(parent: Parent) {
         let Parent { id: parent_id, child: child_opt } = parent;
         ID::delete(parent_id);
         if (Option::is_some(&child_opt)) {

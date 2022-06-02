@@ -130,7 +130,7 @@ module DeFi::FlashLender {
 
     /// Allow admin to add more funds to `self`
     public(script) fun deposit<T>(
-        self: &mut FlashLender<T>, admin_cap: &AdminCap, coin: Coin<T>, _ctx: &mut TxContext
+        self: &mut FlashLender<T>, admin_cap: &AdminCap, coin: Coin<T>
     ) {
         // only the holder of the `AdminCap` for `self` can deposit funds
         check_admin(self, admin_cap);
@@ -139,7 +139,7 @@ module DeFi::FlashLender {
 
     /// Allow admin to update the fee for `self`
     public(script) fun update_fee<T>(
-        self: &mut FlashLender<T>, admin_cap: &AdminCap, new_fee: u64, _ctx: &mut TxContext
+        self: &mut FlashLender<T>, admin_cap: &AdminCap, new_fee: u64
     ) {
         // only the holder of the `AdminCap` for `self` can update the fee
         check_admin(self, admin_cap);

@@ -87,7 +87,7 @@ module Sui::Delegation {
 
     /// Destroy the delegation object. This can be done only when the delegation
     /// is inactive and all reward have been claimed.
-    public(script) fun burn(self: Delegation, _ctx: &mut TxContext) {
+    public(script) fun burn(self: Delegation) {
         assert!(!is_active(&self), 0);
 
         let Delegation {
@@ -104,7 +104,7 @@ module Sui::Delegation {
         assert!(next_reward_unclaimed_epoch == ending_epoch, 0);
     }
 
-    public(script) fun transfer(self: Delegation, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(self: Delegation, recipient: address) {
         Transfer::transfer(self, recipient)
     }
 
