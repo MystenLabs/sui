@@ -1197,14 +1197,6 @@ impl AuthorityState {
     }
 }
 
-impl ModuleResolver for AuthorityState {
-    type Error = SuiError;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.database.get_module(module_id)
-    }
-}
-
 #[async_trait]
 impl ExecutionState for AuthorityState {
     type Transaction = ConsensusTransaction;
