@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority_active::ActiveAuthority, authority_client::LocalAuthorityClient,
-    checkpoints::checkpoint_tests::TestSetup, safe_client::SafeClient,
+    authority_active::{ActiveAuthority, LifecycleSignal, LifecycleSignalSender},
+    authority_client::LocalAuthorityClient,
+    checkpoints::checkpoint_tests::TestSetup,
+    safe_client::SafeClient,
 };
 
 use std::{collections::BTreeSet, time::Duration};
@@ -26,13 +28,18 @@ async fn checkpoint_active_flow_happy_path() {
     } = setup;
 
     // Start active part of authority.
+    let mut control_channel_senders = Vec::new();
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
+        let (_sender, receiver) = LifecycleSignalSender::new();
         let _active_handle = tokio::task::spawn(async move {
             let active_state =
                 ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
-            active_state.spawn_all_active_processes().await
+
+            active_state.spawn_all_active_processes(receiver).await;
         });
+        _sender.signal(LifecycleSignal::Start).await;
+        control_channel_senders.push(_sender);
     }
 
     let sender_aggregator = aggregator.clone();
@@ -92,14 +99,20 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     } = setup;
 
     // Start active part of authority.
+    let mut control_channel_senders = Vec::new();
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
+        let (_sender, receiver) = LifecycleSignalSender::new();
         let _active_handle = tokio::task::spawn(async move {
             let active_state =
                 ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
             // Spin the gossip service.
-            active_state.spawn_active_processes(true, true).await;
+            active_state
+                .spawn_active_processes(receiver, true, true)
+                .await;
         });
+        _sender.signal(LifecycleSignal::Start).await;
+        control_channel_senders.push(_sender);
     }
 
     let sender_aggregator = aggregator.clone();
@@ -175,14 +188,20 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
     } = setup;
 
     // Start active part of authority.
+    let mut control_channel_senders = Vec::new();
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
+        let (_sender, receiver) = LifecycleSignalSender::new();
         let _active_handle = tokio::task::spawn(async move {
             let active_state =
                 ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
             // Spin the gossip service.
-            active_state.spawn_active_processes(false, true).await;
+            active_state
+                .spawn_active_processes(receiver, false, true)
+                .await;
         });
+        _sender.signal(LifecycleSignal::Start).await;
+        control_channel_senders.push(_sender);
     }
 
     let sender_aggregator = aggregator.clone();

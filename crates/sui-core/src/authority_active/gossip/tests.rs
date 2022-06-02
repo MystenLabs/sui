@@ -5,7 +5,7 @@ use super::*;
 use crate::authority_active::gossip::configurable_batch_action_client::{
     init_configurable_authorities, BatchAction,
 };
-use crate::authority_active::MAX_RETRY_DELAY_MS;
+use crate::authority_active::{LifecycleSignal, LifecycleSignalSender, MAX_RETRY_DELAY_MS};
 use std::time::Duration;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -20,15 +20,20 @@ pub async fn test_gossip() {
 
     let mut active_authorities = Vec::new();
     // Start active processes.
+
+    let mut control_channel_senders = Vec::new();
     for state in states.clone() {
         let inner_state = state.clone();
         let inner_clients = clients.clone();
 
+        let (_sender, receiver) = LifecycleSignalSender::new();
         let handle = tokio::task::spawn(async move {
             let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
-            active_state.spawn_all_active_processes().await;
+            active_state.spawn_all_active_processes(receiver).await;
         });
+        _sender.signal(LifecycleSignal::Start).await;
 
+        control_channel_senders.push(_sender);
         active_authorities.push(handle);
     }
     tokio::time::sleep(Duration::from_secs(20)).await;
@@ -60,14 +65,18 @@ pub async fn test_gossip_error() {
     let mut active_authorities = Vec::new();
 
     // Start active processes.
+    let mut control_channel_senders = Vec::new();
     for state in states.clone() {
         let inner_state = state.clone();
         let inner_clients = clients.clone();
 
+        let (_sender, receiver) = LifecycleSignalSender::new();
         let handle = tokio::task::spawn(async move {
             let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
-            active_state.spawn_all_active_processes().await;
+            active_state.spawn_all_active_processes(receiver).await;
         });
+        _sender.signal(LifecycleSignal::Start).await;
+        control_channel_senders.push(_sender);
         active_authorities.push(handle);
     }
     // failure back-offs were set from the errors

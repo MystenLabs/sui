@@ -29,7 +29,7 @@
 
 */
 
-use futures::Future;
+use futures::{join, Future};
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap},
@@ -41,7 +41,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
 };
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -181,34 +181,41 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub async fn spawn_all_active_processes(self) {
-        self.spawn_active_processes(true, true).await
+    pub async fn spawn_all_active_processes(self, receiver: LifecycleTaskHandler) {
+        self.spawn_active_processes(receiver, true, true).await
     }
 
     /// Spawn all active tasks.
-    pub async fn spawn_active_processes(self, gossip: bool, checkpoint: bool) {
-        // Spawn a task to take care of gossip
+    pub async fn spawn_active_processes(
+        self,
+        receiver: LifecycleTaskHandler,
+        gossip: bool,
+        checkpoint: bool,
+    ) {
+        let gossip_receiver = receiver.clone();
         let gossip_locals = self.clone();
-        let _gossip_join = tokio::task::spawn(async move {
-            if gossip {
-                gossip_process(&gossip_locals, 4).await;
+        let gossip_join = gossip_receiver.spawn("Gossip".to_string(), move || {
+            let inner_locals = gossip_locals.clone();
+            async move {
+                if gossip {
+                    gossip_process(&inner_locals, 4).await;
+                }
+                Ok(())
             }
         });
 
-        // Spawn task to take care of checkpointing
         let checkpoint_locals = self; // .clone();
-        let _checkpoint_join = tokio::task::spawn(async move {
-            if checkpoint {
-                checkpoint_process(&checkpoint_locals, &CheckpointProcessControl::default()).await;
+        let checkpoint_join = receiver.spawn("Gossip".to_string(), move || {
+            let inner_locals = checkpoint_locals.clone();
+            async move {
+                if checkpoint {
+                    checkpoint_process(&inner_locals, &CheckpointProcessControl::default()).await;
+                }
+                Ok(())
             }
         });
 
-        if let Err(err) = _gossip_join.await {
-            error!("Join gossip task end error: {:?}", err);
-        }
-        if let Err(err) = _checkpoint_join.await {
-            error!("Join checkpoint task end error: {:?}", err);
-        }
+        join!(gossip_join, checkpoint_join);
     }
 }
 
@@ -249,6 +256,7 @@ impl LifecycleSignalSender {
     }
 }
 
+#[derive(Clone)]
 pub struct LifecycleTaskHandler {
     pub receiver: watch::Receiver<LifecycleSignal>,
 }
