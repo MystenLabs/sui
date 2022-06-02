@@ -6113,9 +6113,9 @@ dependencies = [
  "rocksdb",
  "serde 1.0.137",
  "sui-types",
+ "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0)",
  "tokio",
  "tracing",
- "tracing-subscriber 0.3.11",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
  "workspace-hack",
 ]

@@ -25,4 +25,4 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "1b2d3b
 
 [dev-dependencies]
 pretty_assertions = "1.2.0"
-tracing-subscriber = "0.3.9"
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0" }

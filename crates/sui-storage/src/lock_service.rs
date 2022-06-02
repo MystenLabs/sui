@@ -565,8 +565,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_lockservice_conc_acquire_init() {
+        telemetry_subscribers::init_for_testing();
         let ls = init_lockservice();
-        tracing_subscriber::fmt::init();
 
         let ref1: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
         let ref2: ObjectRef = (ObjectID::random(), 1.into(), ObjectDigest::random());
