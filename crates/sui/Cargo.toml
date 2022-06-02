@@ -78,9 +78,7 @@ shell-words = "1.1.0"
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
-tracing-test = "0.2.1"
 pretty_assertions = "1.2.0"
-tokio-util = { version = "0.7.2", features = ["codec"] }
 
 test-utils = { path = "../test-utils" }
 

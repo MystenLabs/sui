@@ -22,10 +22,16 @@ pub struct Args {
 pub fn run(args: Args) -> crate::Result<()> {
     let direct_dups_config = DirectDepDupsConfig { allow: vec![] };
     let banned_deps_config = BannedDepsConfig {
-        direct: vec![(
-            "lazy_static".to_owned(),
-            "use once_cell::sync::Lazy instead".to_owned(),
-        )]
+        direct: vec![
+            (
+                "lazy_static".to_owned(),
+                "use once_cell::sync::Lazy instead".to_owned(),
+            ),
+            (
+                "tracing-test".to_owned(),
+                "you should not be testing against log lines".to_owned(),
+            ),
+        ]
         .into_iter()
         .collect(),
     };

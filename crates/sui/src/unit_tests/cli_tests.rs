@@ -1,11 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt::Write, fs::read_dir, ops::Add, path::PathBuf, str, time::Duration};
+use std::{fmt::Write, fs::read_dir, path::PathBuf, str, time::Duration};
 
 use anyhow::anyhow;
 use serde_json::{json, Value};
-use tracing_test::traced_test;
 
 use sui::wallet_commands::SwitchResponse;
 use sui::{
@@ -22,30 +21,15 @@ use sui_config::{
 use sui_core::gateway_types::{GetObjectDataResponse, SuiObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SuiAddress},
     crypto::get_key_pair,
     gas_coin::GasCoin,
-    object::GAS_VALUE_FOR_TESTING,
 };
 
 use test_utils::network::{setup_network_and_wallet, start_test_network};
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 
-macro_rules! retry_assert {
-    ($test:expr, $timeout:expr) => {{
-        let mut duration = Duration::from_secs(0);
-        let max_duration: Duration = $timeout;
-        let sleep_duration = Duration::from_millis(100);
-        while duration.lt(&max_duration) && !$test {
-            tokio::time::sleep(sleep_duration).await;
-            duration = duration.add(sleep_duration);
-        }
-        assert!(duration.lt(&max_duration));
-    }};
-}
-
-#[traced_test]
 #[tokio::test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
@@ -68,7 +52,6 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     }
     .execute()
     .await?;
-    assert!(logs_contain("Network genesis completed."));
 
     // Get all the new file names
     let files = read_dir(working_dir)?
@@ -116,7 +99,6 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[traced_test]
 #[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
@@ -151,15 +133,9 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    // Check log output contains all addresses
-    for address in &context.config.accounts {
-        assert!(logs_contain(&*format!("{address}")));
-    }
-
     Ok(())
 }
 
-#[traced_test]
 #[tokio::test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -172,20 +148,14 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    let object_refs = context
+    let _object_refs = context
         .gateway
         .get_objects_owned_by_address(address)
         .await?;
 
-    // Check log output contains all object ids.
-    for oref in object_refs {
-        assert!(logs_contain(format!("{}", oref.object_id).as_str()))
-    }
-
     Ok(())
 }
 
-#[traced_test]
 #[tokio::test]
 async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -214,7 +184,6 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[traced_test]
 #[tokio::test]
 async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
@@ -255,16 +224,9 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     .await?
     .print(true);
 
-    // confirm the object with custom object id.
-    retry_assert!(
-        logs_contain(format!("{object_id}").as_str()),
-        Duration::from_millis(5000)
-    );
-
     Ok(())
 }
 
-#[traced_test]
 #[tokio::test]
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
@@ -281,7 +243,6 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Start network
     let network = start_test_network(Some(config)).await?;
 
-    assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
     let _network_conf =
         PersistedConfig::<NetworkConfig>::read(&network.dir().join(SUI_NETWORK_CONFIG))?;
@@ -297,7 +258,6 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     Ok(())
 }
 
-#[traced_test]
 #[tokio::test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -314,17 +274,10 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?
         .print(true);
-    let obj_owner = format!("{}", address);
-
-    retry_assert!(
-        logs_contain(obj_owner.as_str()),
-        Duration::from_millis(5000)
-    );
 
     Ok(())
 }
 
-#[traced_test]
 #[tokio::test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -344,33 +297,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?
     .print(true);
-    let object_id_str = format!("{object_id}");
 
     tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Check that the value got printed
-    logs_assert(|lines: &[&str]| {
-        let matches = lines
-            .iter()
-            .filter_map(|line| {
-                if line.contains(&object_id_str) {
-                    return extract_gas_info(line);
-                }
-                None
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(matches.len(), 1);
-
-        // Extract the values
-        let (obj_id, version, val) = *matches.get(0).unwrap();
-
-        assert_eq!(obj_id, object_id);
-        assert_eq!(version, SequenceNumber::new());
-        assert_eq!(val, GAS_VALUE_FOR_TESTING);
-
-        Ok(())
-    });
 
     // Send an object
     WalletCommands::Transfer {
@@ -389,54 +317,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?
     .print(true);
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Check that the value got printed and updated
-    logs_assert(|lines: &[&str]| {
-        let matches = lines
-            .iter()
-            .filter_map(|line| {
-                if line.contains(&object_id_str) {
-                    return extract_gas_info(line);
-                }
-                None
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(matches.len(), 2);
-
-        // Extract the values
-        let (obj_id, version, val) = *matches.get(1).unwrap();
-
-        assert_eq!(obj_id, object_id);
-        assert_eq!(version, SequenceNumber::from_u64(1));
-        assert!(val < GAS_VALUE_FOR_TESTING);
-
-        Ok(())
-    });
 
     Ok(())
-}
-
-fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
-    let tokens = s.split('|').map(|q| q.trim()).collect::<Vec<_>>();
-    if tokens.len() != 3 {
-        return None;
-    }
-
-    let id_str = tokens[0]
-        .split(':')
-        .map(|q| q.trim())
-        .collect::<Vec<_>>()
-        .iter()
-        .last()
-        .unwrap()
-        .to_owned();
-    Some((
-        ObjectID::from_hex_literal(id_str).unwrap(),
-        SequenceNumber::from_u64(tokens[1].parse::<u64>().unwrap()),
-        tokens[2].parse::<u64>().unwrap(),
-    ))
 }
 
 async fn get_move_objects_by_type(
@@ -504,7 +386,6 @@ async fn get_move_object(
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[traced_test]
 #[tokio::test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address1) = setup_network_and_wallet().await?;
@@ -531,11 +412,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .gateway
         .get_objects_owned_by_address(address1)
         .await?;
-
-    // Check log output contains all object ids.
-    for oref in &object_refs {
-        assert!(logs_contain(format!("{}", oref.object_id).as_str()))
-    }
 
     // Create an object for address1 using Move call
 
@@ -566,12 +442,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
     resp.print(true);
-
-    retry_assert!(
-        logs_contain("Mutated Objects:"),
-        Duration::from_millis(1000)
-    );
-    assert!(logs_contain("Created Objects:"));
 
     // Get the created object
     let created_obj: ObjectID = if let WalletCommandResult::Call(
@@ -667,17 +537,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    retry_assert!(
-        logs_contain("Mutated Objects:"),
-        Duration::from_millis(1000)
-    );
-    assert!(logs_contain("Created Objects:"));
-
     Ok(())
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[traced_test]
 #[tokio::test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -714,16 +577,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         unreachable!("Invalid response");
     };
 
-    // One is the actual module, while the other is the object created at init
-    retry_assert!(
-        logs_contain(&format!("{}", package.object_id)),
-        Duration::from_millis(5000)
-    );
-    retry_assert!(
-        logs_contain(&format!("{}", created_obj.object_id)),
-        Duration::from_millis(5000)
-    );
-
     // Check the objects
     let resp = WalletCommands::Object {
         id: package.object_id,
@@ -749,7 +602,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[traced_test]
 #[tokio::test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -787,15 +639,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
             assert!(false);
             panic!()
         };
-
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj1)),
-        Duration::from_millis(5000)
-    );
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj2)),
-        Duration::from_millis(5000)
-    );
 
     // Sync both to fetch objects
     WalletCommands::SyncClientState {
@@ -874,7 +717,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) =
+    let (_mut_obj1, _mut_obj2) =
         if let WalletCommandResult::Transfer(_, _, SuiTransactionEffects { mutated, .. }) = resp {
             (
                 mutated.get(0).unwrap().reference.object_id,
@@ -884,15 +727,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
             assert!(false);
             panic!()
         };
-
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj1)),
-        Duration::from_millis(5000)
-    );
-    retry_assert!(
-        logs_contain(&format!("{}", mut_obj2)),
-        Duration::from_millis(5000)
-    );
 
     Ok(())
 }
@@ -908,7 +742,6 @@ fn test_bug_1078() {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[traced_test]
 #[tokio::test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(None).await?;
@@ -1005,7 +838,6 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[traced_test]
 #[tokio::test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let network = start_test_network(None).await?;
@@ -1070,7 +902,6 @@ async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObje
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[traced_test]
 #[tokio::test]
 async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -1153,7 +984,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 }
 
 #[allow(clippy::assertions_on_constants)]
-#[traced_test]
 #[tokio::test]
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
