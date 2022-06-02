@@ -608,7 +608,9 @@
         {
             "id": "7bc832ec31709638cd8d9323e90edf332gff4389",
             "category": "object",
-            "owner": { "SingleOwner": "0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e" },
+            "owner": {
+                "SingleOwner": "0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e"
+            },
             "version": "1",
             "objType": "0x2::SuiDrop::NFT",
             "name": "Bored Ape Yacht Club #8937",
@@ -671,7 +673,9 @@
         },
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v1",
-            "owner": { "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f" },
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "5",
             "readonly": "false",
@@ -694,7 +698,9 @@
         },
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v2",
-            "owner": { "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f" },
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "6",
             "readonly": "false",
@@ -725,7 +731,9 @@
         },
         {
             "id": "3a4e674ce2810749de9e0434f01feg443hgg54v2",
-            "owner": { "SingleOwner": "8cd943fd42810749de9e0434f01feg443hgg54v2" },
+            "owner": {
+                "SingleOwner": "8cd943fd42810749de9e0434f01feg443hgg54v2"
+            },
             "category": "object",
             "version": "1",
             "readonly": "true",
@@ -741,7 +749,9 @@
 
         {
             "id": "9de054ge53921850ef0f1545g12gfh554ihh65v1",
-            "owner": { "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f" },
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "4",
             "readonly": "false",
@@ -764,7 +774,9 @@
         },
         {
             "id": "9de054ge53921850ef0f1545g12gfh554ihh65v2",
-            "owner": { "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f" },
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "5",
             "readonly": "false",
@@ -794,7 +806,9 @@
         },
         {
             "id": "f4a5535e53921850ef0f1545g12gfh554ihh65v2",
-            "owner": { "SingleOwner": "9de054ge53921850ef0f1545g12gfh554ihh65v2" },
+            "owner": {
+                "SingleOwner": "9de054ge53921850ef0f1545g12gfh554ihh65v2"
+            },
             "category": "object",
             "version": "1",
             "readonly": "true",
@@ -810,7 +824,9 @@
 
         {
             "id": "0ef165hf64032961fg1g2656h23hgi665jii7690",
-            "owner": { "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f" },
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "7",
             "readonly": "false",
@@ -841,7 +857,9 @@
         },
         {
             "id": "f14e489364032961fg1g2656h23hgi665jii7690",
-            "owner": { "SingleOwner": "0ef165hf64032961fg1g2656h23hgi665jii7690" },
+            "owner": {
+                "SingleOwner": "0ef165hf64032961fg1g2656h23hgi665jii7690"
+            },
             "category": "object",
             "version": "1",
             "readonly": "true",
