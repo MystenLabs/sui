@@ -677,7 +677,7 @@ impl Display for WalletCommandResult {
     }
 }
 
-async fn call_move(
+pub async fn call_move(
     package: ObjectID,
     module: &str,
     function: &str,

@@ -365,6 +365,12 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
 }
 
 impl SuiData {
+    pub fn try_as_move(&self) -> Option<&SuiMoveObject> {
+        match self {
+            SuiData::MoveObject(o) => Some(o),
+            SuiData::Package(_) => None,
+        }
+    }
     pub fn try_as_package(&self) -> Option<&SuiMovePackage> {
         match self {
             SuiData::MoveObject(_) => None,
