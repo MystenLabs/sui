@@ -21,6 +21,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use serde_with::serde_as;
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -350,11 +351,14 @@ impl SuiMoveObject for SuiParsedMoveObject {
     }
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "RawMoveObject")]
 pub struct SuiRawMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
+    #[serde_as(as = "Base64")]
+    #[schemars(with = "Base64")]
     pub bcs_bytes: Vec<u8>,
 }
 
