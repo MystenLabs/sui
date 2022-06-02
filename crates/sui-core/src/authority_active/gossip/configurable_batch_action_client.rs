@@ -6,6 +6,7 @@ use crate::authority::AuthorityState;
 use crate::authority::AuthorityStore;
 use crate::authority_aggregator::authority_aggregator_tests::*;
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
@@ -242,7 +243,7 @@ pub async fn init_configurable_authorities(
         }
         states.push(client.state.clone());
         names.push(authority_name);
-        clients.push(client);
+        clients.push(SafeClient::new(client, committee.clone(), authority_name));
     }
 
     // Execute transactions for every EmitUpdateItem Action, use the digest of the transaction to
@@ -300,9 +301,15 @@ pub async fn init_configurable_authorities(
             _ = do_cert(cert_client, &cert1).await;
 
             // Register the internal actions to client
-            cert_client.register_action_sequence(batch_action_internal.clone());
+            cert_client
+                .authority_client_mut()
+                .register_action_sequence(batch_action_internal.clone());
         }
     }
 
+    let authority_clients = authority_clients
+        .into_iter()
+        .map(|(name, client)| (name, client.authority_client().clone()))
+        .collect();
     (authority_clients, states, executed_digests)
 }
