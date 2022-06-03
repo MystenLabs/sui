@@ -37,6 +37,11 @@ impl GasCostSummary {
     pub fn gas_used(&self) -> u64 {
         self.computation_cost + self.storage_cost
     }
+
+    /// Get net gas usage, positive number means used gas; negative number means refund.
+    pub fn net_gas_usage(&self) -> i64 {
+        self.gas_used() as i64 - self.storage_rebate as i64
+    }
 }
 
 /// ComputationCost is a newtype wrapper of InternalGasUnits

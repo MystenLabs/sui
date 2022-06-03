@@ -424,12 +424,14 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: SuiAddress) -> SuiResult {
+    pub fn transfer(&mut self, new_owner: SuiAddress, should_update_version: bool) -> SuiResult {
         self.is_transfer_eligible()?;
         // unwrap safe as the above check guarantees it.
         self.owner = Owner::AddressOwner(new_owner);
-        let data = self.data.try_as_move_mut().unwrap();
-        data.increment_version();
+        if should_update_version {
+            let data = self.data.try_as_move_mut().unwrap();
+            data.increment_version();
+        }
         Ok(())
     }
 
@@ -446,15 +448,10 @@ impl Object {
         }
     }
 
-    pub fn with_id_owner_gas_for_testing(
-        id: ObjectID,
-        version: SequenceNumber,
-        owner: SuiAddress,
-        gas: u64,
-    ) -> Self {
+    pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
-            contents: GasCoin::new(id, version, gas).to_bcs_bytes(),
+            contents: GasCoin::new(id, SequenceNumber::new(), gas).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),
@@ -466,32 +463,11 @@ impl Object {
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
         // For testing, we provide sufficient gas by default.
-        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
+        Self::with_id_owner_gas_for_testing(id, owner, GAS_VALUE_FOR_TESTING)
     }
 
     pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
         Self::with_id_owner_for_testing(ObjectID::random(), owner)
-    }
-
-    /// Create Coin object for use in Move object operation
-    pub fn with_id_owner_gas_coin_object_for_testing(
-        id: ObjectID,
-        version: SequenceNumber,
-        owner: SuiAddress,
-        value: u64,
-    ) -> Self {
-        let obj = GasCoin::new(id, version, value);
-
-        let data = Data::Move(MoveObject {
-            type_: GasCoin::type_(),
-            contents: bcs::to_bytes(&obj).unwrap(),
-        });
-        Self {
-            owner: Owner::AddressOwner(owner),
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
     }
 
     /// Get a `MoveStructLayout` for `self`.

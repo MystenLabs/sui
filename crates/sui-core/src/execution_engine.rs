@@ -193,9 +193,11 @@ fn execute_transaction<S: BackingPackageStore>(
     // can charge gas for all mutated objects properly.
     temporary_store.ensure_active_inputs_mutated(&gas_object_id);
     if !gas_status.is_unmetered() {
+        // We must call `read_object` instead of getting it from `temporary_store.objects`
+        // because a `TransferSui` transaction may have already mutated the gas object and put
+        // it in `temporary_store.written`.
         let mut gas_object = temporary_store
-            .objects()
-            .get(&gas_object_id)
+            .read_object(&gas_object_id)
             .expect("We constructed the object map so it should always have the gas object id")
             .clone();
         trace!(?gas_object_id, "Obtained gas object");
@@ -239,7 +241,7 @@ fn transfer_coin<S>(
     mut object: Object,
     recipient: SuiAddress,
 ) -> SuiResult {
-    object.transfer(recipient)?;
+    object.transfer(recipient, true)?;
     temporary_store.log_event(Event::TransferObject {
         object_id: object.id(),
         version: object.version(),
@@ -250,6 +252,13 @@ fn transfer_coin<S>(
     Ok(())
 }
 
+/// Transfer the gas object (which is a SUI coin object) with an optional `amount`.
+/// If `amount` is specified, the gas object remains in the original owner, but a new SUI coin
+/// is created with `amount` balance and is transferred to `recipient`;
+/// if `amount` is not specified, the entire object will be transferred to `recipient`.
+/// `tx_ctx` is needed to create new object ID for the split coin.
+/// We make sure that the gas object's version is not incremented after this function call, because
+/// when we charge gas latter, its version will be officially incremented.
 fn transfer_sui<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut object: Object,
@@ -283,15 +292,29 @@ fn transfer_sui<S>(
             tx_ctx.digest(),
         );
         temporary_store.write_object(new_object);
-        gas_coin.0.balance.withdraw(amount);
 
-        let move_object = object.data.try_as_move_mut().expect("");
-        move_object.update_contents(bcs::to_bytes(&gas_coin).expect(""));
+        // This is necessary for the temporary store to know this new object is not unwrapped.
+        let newly_generated_ids = tx_ctx.recreate_all_ids();
+        temporary_store.set_create_object_ids(newly_generated_ids);
+
+        // Safe because we have checked that balance covers amount.
+        gas_coin.0.balance.withdraw(amount);
+        let move_object = object
+            .data
+            .try_as_move_mut()
+            .expect("Gas object must be Move object");
+        move_object.update_contents(
+            bcs::to_bytes(&gas_coin).expect("Serializing gas coin can never fail"),
+        );
+        // update_contents increments object version, reverts it.
+        move_object.revert_version_increase();
     } else {
-        object.transfer(recipient)?;
+        // Pass the second param as false so that transfer won't increment object version.
+        object.transfer(recipient, false)?;
     }
-    let move_object = object.data.try_as_move_mut().expect("");
-    move_object.revert_version_increase();
+
+    // TODO: Emit a new event type for this.
+
     debug_assert_eq!(object.version(), version);
     temporary_store.write_object(object);
 
