@@ -8,6 +8,7 @@ pub mod indexes;
 pub use indexes::IndexStore;
 
 pub mod event_store;
+pub mod mutex_table;
 
 use rocksdb::Options;
 
