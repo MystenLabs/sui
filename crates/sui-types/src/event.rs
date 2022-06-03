@@ -8,6 +8,7 @@ use move_core_types::{
 };
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use serde_with::{serde_as, Bytes};
 use strum_macros::EnumDiscriminants;
 
@@ -27,8 +28,8 @@ pub struct EventEnvelope {
     tx_digest: Option<TransactionDigest>,
     /// Specific event type
     pub event: Event,
-    /// MoveStruct (for MoveEvent only)
-    pub move_struct: Option<MoveStruct>,
+    /// json value for MoveStruct (for MoveEvent only)
+    pub move_struct_json_value: Option<Value>,
 }
 
 impl EventEnvelope {
@@ -36,13 +37,13 @@ impl EventEnvelope {
         timestamp: u64,
         tx_digest: Option<TransactionDigest>,
         event: Event,
-        move_struct: Option<MoveStruct>,
+        move_struct_json_value: Option<Value>,
     ) -> Self {
         Self {
             timestamp,
             tx_digest,
             event,
-            move_struct,
+            move_struct_json_value,
         }
     }
 
