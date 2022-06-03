@@ -17,6 +17,7 @@ module Sui::Balance {
     /// Storable balance - an inner struct of a Coin type.
     /// Can be used to store coins which don't need to have the
     /// key ability.
+    /// Helpful in representing a Coin without having to create a stand-alone object.
     struct Balance<phantom T> has store {
         value: u64
     }

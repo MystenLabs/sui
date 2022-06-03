@@ -80,16 +80,16 @@ impl SuiValue {
         }
     }
 
-    pub(crate) fn into_call_args(self, test_adapter: &SuiTestAdapter) -> CallArg {
-        match self {
+    pub(crate) fn into_call_args(self, test_adapter: &SuiTestAdapter) -> anyhow::Result<CallArg> {
+        Ok(match self {
             SuiValue::Object(fake_id) => {
                 let id = match test_adapter.fake_to_real_object_id(fake_id) {
                     Some(id) => id,
-                    None => panic!("Unknown object, object({})", fake_id),
+                    None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
                 };
                 let obj = match test_adapter.storage.get_object(&id) {
                     Some(obj) => obj,
-                    None => panic!("Could not load object argument {}", id),
+                    None => bail!("INVALID TEST. Could not load object argument {}", id),
                 };
                 if obj.is_shared() {
                     CallArg::SharedObject(id)
@@ -99,7 +99,7 @@ impl SuiValue {
                 }
             }
             SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),
-        }
+        })
     }
 }
 
