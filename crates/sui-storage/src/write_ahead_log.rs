@@ -24,12 +24,11 @@ use tracing::{debug, error, info};
 /// TxGuard is a handle on an in-progress transaction.
 ///
 /// TxGuard must implement Drop, which should mark the tx as unfinished
-/// if the guard is dropped without commit_tx or abort_tx being called.
+/// if the guard is dropped without commit_tx being called.
 #[allow(drop_bounds)]
 pub trait TxGuard<'a>: Drop {
     fn tx_id(&self) -> TransactionDigest;
     fn commit_tx(self) -> SuiResult;
-    fn abort_tx(self) -> SuiResult;
 }
 
 // WriteAheadLog is parameterized on the value type (C) because:
@@ -43,7 +42,7 @@ pub trait WriteAheadLog<'a, C> {
     /// Begin a confirmation transaction identified by its digest, with the associated cert
     ///
     /// If a transaction with the given digest is already in progress, return None.
-    /// Otherwise return a TxGuard, which is used to commit or abort the tx.
+    /// Otherwise return a TxGuard, which is used to commit the tx.
     #[must_use]
     async fn begin_tx(&'a self, tx: &TransactionDigest, cert: &C)
         -> SuiResult<Option<Self::Guard>>;
@@ -54,12 +53,11 @@ pub trait WriteAheadLog<'a, C> {
     ///
     /// This method takes and clears the current recoverable txes list.
     /// A vector of Guard is returned, which means the txes will return to the recoverable_txes
-    /// list if not explicitly committed or aborted.
+    /// list if not explicitly committed.
     ///
     /// The caller is responsible for running each tx to completion.
     ///
-    /// Recoverable TXes will remain in the on-disk log until they are explicitly committed or
-    /// aborted.
+    /// Recoverable TXes will remain in the on-disk log until they are explicitly committed.
     #[must_use]
     fn take_recoverable_txes(&'a self) -> Vec<Self::Guard>;
 
@@ -100,11 +98,6 @@ where
         self.dead = true;
         self.wal.commit_tx(&self.tx)
     }
-
-    fn abort_tx(mut self) -> SuiResult {
-        self.dead = true;
-        self.wal.abort_tx(&self.tx)
-    }
 }
 
 impl<C> Drop for DBTxGuard<'_, C>
@@ -114,7 +107,7 @@ where
     fn drop(&mut self) {
         if !self.dead {
             let tx = self.tx;
-            error!(digest = ?tx, "DBTxGuard dropped without explicit commit/abort");
+            error!(digest = ?tx, "DBTxGuard dropped without explicit commit");
             self.wal.implicit_drop_tx(&tx);
         }
     }
@@ -151,6 +144,12 @@ where
             DBMap::reopen(&db, Some("tx_write_ahead_log")).expect("Cannot open CF.");
 
         // Read in any digests that were left in the log, e.g. due to a crash.
+        //
+        // This list will normally be small - it will typically only include txes that were
+        // in-progress when we crashed.
+        //
+        // If, however, we were hitting repeated errors while trying to store txes, we could have
+        // accumulated many txes in this list.
         let recoverable_txes: Vec<_> = log.iter().map(|(tx, _)| tx).collect();
 
         Self {
@@ -162,11 +161,6 @@ where
 
     fn commit_tx(&self, tx: &TransactionDigest) -> SuiResult {
         debug!(digest = ?tx, "committing tx");
-        self.log.remove(tx).map_err(|e| e.into())
-    }
-
-    fn abort_tx(&self, tx: &TransactionDigest) -> SuiResult {
-        info!(digest = ?tx, "aborting tx");
         self.log.remove(tx).map_err(|e| e.into())
     }
 
@@ -194,6 +188,11 @@ where
         let _mutex_guard = self.mutex_table.acquire_lock(tx).await;
 
         if self.log.contains_key(tx)? {
+            // We return None instead of a guard, to signal that a tx with this digest is already
+            // in progress.
+            //
+            // TODO: It may turn out to be better to hold the lock until the other guard is
+            // dropped - this should become clear once this code is being used.
             return Ok(None);
         }
 
@@ -246,7 +245,7 @@ mod tests {
             tx1.commit_tx().unwrap();
 
             let tx2 = log.begin_tx(&tx2_id, &2).await?.unwrap();
-            tx2.abort_tx().unwrap();
+            tx2.commit_tx().unwrap();
 
             {
                 let _tx3 = log.begin_tx(&tx3_id, &3).await?.unwrap();
