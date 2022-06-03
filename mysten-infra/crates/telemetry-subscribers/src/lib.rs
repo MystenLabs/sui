@@ -8,12 +8,8 @@
 //!
 //! Getting started is easy:
 //! ```
-//! let config = telemetry_subscribers::TelemetryConfig {
-//!   service_name: "my_app".into(),
-//!   ..Default::default()
-//! };
 //! // Important! Need to keep the guard and not drop until program terminates
-//! let guard = telemetry_subscribers::init(config);
+//! let guard = telemetry_subscribers::TelemetryConfig::new("my_app").init();
 //! ```
 //!
 //! ## Features
@@ -21,25 +17,17 @@
 //! - `json` - Bunyan formatter - JSON log output, optional
 //! - `tokio-console` - [Tokio-console](https://github.com/tokio-rs/console) subscriber, optional
 
-#[cfg(feature = "jaeger")]
-use opentelemetry::global;
-#[cfg(feature = "jaeger")]
-use opentelemetry::sdk::propagation::TraceContextPropagator;
-
+use std::env;
+use tracing::metadata::LevelFilter;
 use tracing::subscriber::set_global_default;
-use tracing::{info, metadata::LevelFilter};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
+use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
+use tracing_subscriber::Layer;
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
     EnvFilter, Registry,
 };
-
-#[cfg(feature = "chrome")]
-use tracing_chrome::ChromeLayerBuilder;
-
-#[cfg(feature = "json")]
-use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 
 /// Configuration for different logging/tracing options
 /// ===
@@ -49,9 +37,10 @@ use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 /// - service_name:
 #[derive(Default, Clone, Debug)]
 pub struct TelemetryConfig {
-    pub enable_tracing: bool,
     /// The name of the service for Jaeger and Bunyan
     pub service_name: String,
+
+    pub enable_tracing: bool,
     pub tokio_console: bool,
     /// Output JSON logs.  Tracing and Tokio Console are not available if this is enabled.
     pub json_log_output: bool,
@@ -61,17 +50,21 @@ pub struct TelemetryConfig {
     pub log_file: Option<String>,
     /// Log level to set, defaults to info
     pub log_level: Option<String>,
+    /// Set a panic hook
+    pub panic_hook: bool,
 }
 
-#[cfg(feature = "chrome")]
-type ChromeGuard = tracing_chrome::FlushGuard;
-#[cfg(not(feature = "chrome"))]
-type ChromeGuard = ();
+#[must_use]
+#[allow(dead_code)]
+pub struct TelemetryGuards {
+    worker_guard: WorkerGuard,
 
-pub struct TelemetryGuards(WorkerGuard, Option<ChromeGuard>);
+    #[cfg(feature = "chrome")]
+    chrome_guard: Option<tracing_chrome::FlushGuard>,
+}
 
-fn get_output(config: &TelemetryConfig) -> (NonBlocking, WorkerGuard) {
-    if let Some(logfile_prefix) = &config.log_file {
+fn get_output(log_file: Option<String>) -> (NonBlocking, WorkerGuard) {
+    if let Some(logfile_prefix) = log_file {
         let file_appender = tracing_appender::rolling::daily("", logfile_prefix);
         tracing_appender::non_blocking(file_appender)
     } else {
@@ -106,109 +99,150 @@ fn set_panic_hook() {
     }));
 }
 
-#[cfg(feature = "json")]
-fn bunyan_json_subscriber(config: &TelemetryConfig, env_filter: EnvFilter, nb_output: NonBlocking) {
-    // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
-    // Also Bunyan layer addes JSON logging for tracing spans with duration information
-    let formatting_layer = BunyanFormattingLayer::new(config.service_name.clone(), nb_output);
-    // The `with` method is provided by `SubscriberExt`, an extension
-    // trait for `Subscriber` exposed by `tracing_subscriber`
-    let subscriber = Registry::default()
-        .with(env_filter)
-        .with(JsonStorageLayer)
-        .with(formatting_layer);
-    // `set_global_default` can be used by applications to specify
-    // what subscriber should be used to process spans.
-    set_global_default(subscriber).expect("Failed to set subscriber");
-
-    info!("Enabling JSON and span logging");
-}
-
-#[cfg(feature = "jaeger")]
-fn jaeger_subscriber<S>(config: &TelemetryConfig, subscriber: S)
-where
-    S: tracing::Subscriber
-        + Send
-        + Sync
-        + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
-{
-    // Install a tracer to send traces to Jaeger.  Batching for better performance.
-    let tracer = opentelemetry_jaeger::new_pipeline()
-        .with_service_name(&config.service_name)
-        .with_max_packet_size(9216) // Default max UDP packet size on OSX
-        .with_auto_split_batch(true) // Auto split batches so they fit under packet size
-        .install_batch(opentelemetry::runtime::Tokio)
-        .expect("Could not create async Tracer");
-
-    // Create a tracing subscriber with the configured tracer
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-    // Enable Trace Contexts for tying spans together
-    global::set_text_map_propagator(TraceContextPropagator::new());
-
-    set_global_default(subscriber.with(telemetry)).expect("Failed to set subscriber");
-    info!("Jaeger tracing initialized");
-}
-
-/// Initialize telemetry subscribers based on TelemetryConfig
-/// NOTE: You must keep the returned guard and not drop it until the end of the program, otherwise
-/// logs will not appear!!
-pub fn init(config: TelemetryConfig) -> TelemetryGuards {
-    // TODO: reorganize different telemetry options so they can use the same registry
-    // Code to add logging/tracing config from environment, including RUST_LOG
-    let log_level = config.log_level.clone().unwrap_or_else(|| "info".into());
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
-    let (nb_output, worker_guard) = get_output(&config);
-
-    #[allow(unused_mut)]
-    let mut chrome_guard = None;
-
-    if config.json_log_output {
-        #[cfg(feature = "json")]
-        bunyan_json_subscriber(&config, env_filter, nb_output);
-        #[cfg(not(feature = "json"))]
-        panic!("Cannot enable JSON log output because json package feature is not enabled");
-    } else if config.tokio_console {
-        #[cfg(feature = "tokio-console")]
-        console_subscriber::init();
-        #[cfg(not(feature = "tokio-console"))]
-        panic!("Cannot enable Tokio console subscriber because tokio-console feature not enabled");
-    } else if config.chrome_trace_output {
-        #[cfg(feature = "chrome")]
-        {
-            let (chrome_layer, guard) = ChromeLayerBuilder::new().build();
-            let subscriber = Registry::default().with(chrome_layer);
-            set_global_default(subscriber).expect("Failed to set subscriber");
-            chrome_guard = Some(guard);
-        }
-        #[cfg(not(feature = "chrome"))]
-        panic!("Cannot enable chrome traces because chrome feature not enabled");
-    } else {
-        // Output to file or to stdout with ANSI colors
-        let fmt_layer = fmt::layer()
-            .with_ansi(config.log_file.is_none())
-            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-            .with_writer(nb_output);
-
-        // Standard env filter (RUST_LOG) with standard formatter
-        let subscriber = Registry::default().with(env_filter).with(fmt_layer);
-
-        if config.enable_tracing {
-            #[cfg(feature = "jaeger")]
-            jaeger_subscriber(&config, subscriber);
-            #[cfg(not(feature = "jaeger"))]
-            panic!("Cannot enable Jaeger subscriber because jaeger feature not enabled in package");
-        } else {
-            set_global_default(subscriber).expect("Failed to set subscriber");
+impl TelemetryConfig {
+    pub fn new(service_name: &str) -> Self {
+        Self {
+            service_name: service_name.to_owned(),
+            enable_tracing: false,
+            tokio_console: false,
+            json_log_output: false,
+            chrome_trace_output: false,
+            log_file: None,
+            log_level: None,
+            panic_hook: true,
         }
     }
 
-    set_panic_hook();
+    pub fn with_log_file(mut self, filename: &str) -> Self {
+        self.log_file = Some(filename.to_owned());
+        self
+    }
 
-    // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
-    // gets flushed and closed. If this is dropped too early then no output will appear!
-    TelemetryGuards(worker_guard, chrome_guard)
+    pub fn with_env(mut self) -> Self {
+        if env::var("MYSTEN_TRACING").is_ok() {
+            self.enable_tracing = true
+        }
+
+        if env::var("MYSTEN_TRACING_CHROME").is_ok() {
+            self.chrome_trace_output = true;
+        }
+
+        if env::var("MYSTEN_TRACING_JSON").is_ok() {
+            self.json_log_output = true;
+        }
+
+        if env::var("TOKIO_CONSOLE").is_ok() {
+            self.tokio_console = true;
+        }
+
+        if let Ok(filepath) = env::var("MYSTEN_TRACING_FILE") {
+            self.log_file = Some(filepath);
+        }
+
+        self
+    }
+
+    pub fn init(self) -> TelemetryGuards {
+        let config = self;
+
+        let registry = Registry::default();
+
+        // tokio-console layer
+        #[cfg(feature = "tokio-console")]
+        let tokio_console = if config.tokio_console {
+            Some(console_subscriber::spawn())
+        } else {
+            None
+        };
+
+        #[cfg(feature = "tokio-console")]
+        let registry = registry.with(tokio_console);
+
+        // Setup an EnvFilter which will filter all downstream layers
+        let log_level = config.log_level.unwrap_or_else(|| "info".into());
+        let env_filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+        let registry = registry.with(env_filter);
+
+        #[cfg(feature = "chrome")]
+        let (chrome_layer, chrome_guard) = if config.chrome_trace_output {
+            let (chrome_layer, guard) = tracing_chrome::ChromeLayerBuilder::new().build();
+            (Some(chrome_layer), Some(guard))
+        } else {
+            (None, None)
+        };
+
+        #[cfg(feature = "chrome")]
+        let registry = registry.with(chrome_layer);
+
+        #[cfg(feature = "jaeger")]
+        let jaeger_layer = if config.enable_tracing {
+            // Install a tracer to send traces to Jaeger.  Batching for better performance.
+            let tracer = opentelemetry_jaeger::new_pipeline()
+                .with_service_name(&config.service_name)
+                .with_max_packet_size(9216) // Default max UDP packet size on OSX
+                .with_auto_split_batch(true) // Auto split batches so they fit under packet size
+                .install_batch(opentelemetry::runtime::Tokio)
+                .expect("Could not create async Tracer");
+
+            // Create a tracing subscriber with the configured tracer
+            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+            // Enable Trace Contexts for tying spans together
+            opentelemetry::global::set_text_map_propagator(
+                opentelemetry::sdk::propagation::TraceContextPropagator::new(),
+            );
+
+            Some(telemetry)
+        } else {
+            None
+        };
+
+        #[cfg(feature = "jaeger")]
+        let registry = registry.with(jaeger_layer);
+
+        // Setup formatter and optional storage layer
+        let json_storage_layer = if config.json_log_output {
+            Some(JsonStorageLayer)
+        } else {
+            None
+        };
+
+        let registry = registry.with(json_storage_layer);
+
+        let (nb_output, worker_guard) = get_output(config.log_file.clone());
+        let fmt_layer: Box<dyn Layer<_> + Send + Sync + 'static> = {
+            if config.json_log_output {
+                // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
+                // Also Bunyan layer addes JSON logging for tracing spans with duration information
+                let json_layer = BunyanFormattingLayer::new(config.service_name, nb_output);
+                Box::new(json_layer)
+            } else {
+                // Output to file or to stdout with ANSI colors
+                let fmt_layer = fmt::layer()
+                    .with_ansi(config.log_file.is_none())
+                    .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                    .with_writer(nb_output);
+                Box::new(fmt_layer)
+            }
+        };
+
+        let registry = registry.with(fmt_layer);
+
+        set_global_default(registry).expect("Failed to set subscriber");
+
+        if config.panic_hook {
+            set_panic_hook();
+        }
+
+        // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
+        // gets flushed and closed. If this is dropped too early then no output will appear!
+        TelemetryGuards {
+            worker_guard,
+            #[cfg(feature = "chrome")]
+            chrome_guard,
+        }
+    }
 }
 
 /// Globally set a tracing subscriber suitable for testing environments
@@ -217,12 +251,11 @@ pub fn init_for_testing() {
 
     static LOGGER: Lazy<()> = Lazy::new(|| {
         let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
-            .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            .with_env_filter(
                 EnvFilter::builder()
-                    .with_default_directive(LevelFilter::DEBUG.into())
-                    .parse("debug,h2=off,hyper=off")
-                    .unwrap()
-            }))
+                    .with_default_directive(LevelFilter::INFO.into())
+                    .from_env_lossy(),
+            )
             .with_file(true)
             .with_line_number(true)
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
@@ -243,11 +276,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_telemetry_init() {
-        let config = TelemetryConfig {
-            service_name: "my_app".into(),
-            ..Default::default()
-        };
-        let _guard = init(config);
+        let _guard = TelemetryConfig::new("my_app").init();
 
         info!(a = 1, "This will be INFO.");
         debug!(a = 2, "This will be DEBUG.");
