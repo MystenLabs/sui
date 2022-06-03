@@ -7,9 +7,12 @@ use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeSet;
 use std::path::Path;
-use sui_storage::{default_db_options, LockService};
+use sui_storage::{
+    default_db_options,
+    mutex_table::{LockGuard, MutexTable},
+    LockService,
+};
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
@@ -56,7 +59,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     lock_service: LockService,
 
     /// Internal vector of locks to manage concurrent writes to the database
-    lock_table: Vec<tokio::sync::Mutex<()>>,
+    mutex_table: MutexTable<ObjectDigest>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -186,10 +189,7 @@ impl<
             objects,
             all_object_versions,
             lock_service,
-            lock_table: (0..NUM_SHARDS)
-                .into_iter()
-                .map(|_| tokio::sync::Mutex::new(()))
-                .collect(),
+            mutex_table: MutexTable::new(NUM_SHARDS),
             owner_index,
             transactions,
             certificates,
@@ -257,29 +257,14 @@ impl<
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks<'a, 'b>(
-        &'a self,
-        input_objects: &'b [ObjectRef],
-    ) -> Vec<tokio::sync::MutexGuard<'a, ()>> {
+    async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard<'a>> {
         if !USE_LOCKS {
             return vec![];
         }
 
-        let num_locks = self.lock_table.len();
-        // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
-        let lock_numbers: BTreeSet<usize> = input_objects
-            .iter()
-            .map(|(_, _, digest)| {
-                usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
-            })
-            .collect();
-        // Note: we need to iterate over the sorted unique elements, hence the use of a Set
-        //       in order to prevent deadlocks when trying to acquire many locks.
-        let mut locks = Vec::new();
-        for lock_seq in lock_numbers {
-            locks.push(self.lock_table[lock_seq].lock().await);
-        }
-        locks
+        self.mutex_table
+            .acquire_locks(input_objects.iter().map(|(_, _, digest)| digest))
+            .await
     }
 
     // Methods to read the store
