@@ -115,9 +115,10 @@ where
             self.state.name,
             &*self.state.secret,
         );
+        // Add the signed transaction to the store.
         self.state
-            .change_epoch_tx
-            .store(Some(Arc::new(advance_epoch_tx.clone())));
+            .set_transaction_lock(&[], advance_epoch_tx.clone())
+            .await?;
 
         // Collect a certificate for this system transaction that changes epoch,
         // and execute it locally.

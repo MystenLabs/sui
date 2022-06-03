@@ -13,7 +13,7 @@ use crate::{
     transaction_input_checker,
 };
 use anyhow::anyhow;
-use arc_swap::{ArcSwap, ArcSwapOption};
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
@@ -232,7 +232,6 @@ pub struct AuthorityState {
     /// A global lock to halt all transaction/cert processing.
     #[allow(dead_code)]
     pub(crate) halted: AtomicBool,
-    pub(crate) change_epoch_tx: ArcSwapOption<SignedTransaction>,
 
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
@@ -289,6 +288,12 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
+        // Validators should never sign an external system transaction.
+        fp_ensure!(
+            !transaction.data.kind.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
+
         if self.halted.load(Ordering::SeqCst) {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -333,22 +338,6 @@ impl AuthorityState {
             e
         })?;
         let transaction_digest = *transaction.digest();
-
-        if transaction.data.kind.is_system_tx() {
-            // A validator only accepts a system transaction if it's the same transaction
-            // this validator has signed locally for the change epoch transaction.
-            if let Some(signed_tx) = self.change_epoch_tx.load().deref() {
-                if signed_tx.digest() == &transaction_digest {
-                    return Ok(TransactionInfoResponse {
-                        signed_transaction: Some(signed_tx.clone().deref().clone()),
-                        certified_transaction: None,
-                        signed_effects: None,
-                    });
-                }
-            }
-            // Otherwise, validators should never sign an external system transaction.
-            return Err(SuiError::InvalidSystemTransaction);
-        }
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
@@ -841,7 +830,6 @@ impl AuthorityState {
             secret,
             committee: ArcSwap::from(Arc::new(current_epoch_info.committee)),
             halted: AtomicBool::new(current_epoch_info.validator_halted),
-            change_epoch_tx: ArcSwapOption::empty(),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),

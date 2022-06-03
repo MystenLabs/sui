@@ -17,6 +17,7 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{ConfirmationTransaction, SignatureAggregator, Transaction, TransactionData},
     object::Object,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 use crate::{
@@ -209,22 +210,37 @@ async fn test_finish_epoch_change() {
         .collect();
     futures::future::join_all(results).await;
 
-    /*
-    // Verify that epoch changed in authority state.
-    assert_eq!(active.state.committee.load().epoch, 1);
-    assert_eq!(
-        active
+    // Verify that epoch changed in every authority state.
+    for active in actives {
+        assert_eq!(active.state.committee.load().epoch, 1);
+        assert_eq!(active.net.load().committee.epoch, 1);
+        assert_eq!(
+            active
+                .state
+                .db()
+                .get_last_epoch_info()
+                .unwrap()
+                .committee
+                .epoch,
+            1
+        );
+        // Verify that validator is no longer halted.
+        assert!(!active.state.halted.load(Ordering::SeqCst));
+        let system_state = active.state.get_sui_system_state_object().await.unwrap();
+        assert_eq!(system_state.epoch, 1);
+        let (_, tx_digest) = active
             .state
-            .db()
-            .get_last_epoch_info()
+            .get_latest_parent_entry(SUI_SYSTEM_STATE_OBJECT_ID)
+            .await
             .unwrap()
-            .committee
-            .epoch,
-        1
-    );
-    // Verify that validator is no longer halted.
-    assert!(!active.state.halted.load(Ordering::SeqCst));
-    // Verify that the special system tx is set.
-    assert!(active.state.change_epoch_tx.load().is_some());
-    */
+            .unwrap();
+        let response = active
+            .state
+            .handle_transaction_info_request(tx_digest.into())
+            .await
+            .unwrap();
+        assert!(response.signed_effects.is_some());
+        assert!(response.certified_transaction.is_some());
+        assert!(response.signed_effects.is_some());
+    }
 }
