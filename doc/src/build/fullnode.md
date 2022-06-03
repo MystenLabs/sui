@@ -97,11 +97,16 @@ in how a fullnode is run.
     - `cmake`
 
 1. Setup your fork of the Sui repository.
-    - Go to the [Sui repository](https://github.com/MystenLabs/sui) on Github
+    - Use the GitHub CLI
+    ```shell
+    $ gh repo fork git@github.com:MystenLabs/sui.git
+    ```
+    If you are missing the GitHub CLI (`gh`), follow the instructions [here](https://cli.github.com/manual/installation) to install it.
+    - Alternatively, you can fork the repo manually: go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
       and click the *Fork* button in the top right-hand corner of the screen.
     - Clone your personal fork of the Sui repository to your local machine
-      (ensure that you insert your Github username into the URL):
-    ```
+      (ensure that you insert your GitHub username into the URL):
+    ```shell
     $ git clone https://github.com/<YOUR GITHUB USERNAME>/sui.git
     ```
 2. `cd` into your `sui` repository.
@@ -213,4 +218,4 @@ fullnodes to fully participate in a peer-to-peer (p2p) environment where the
 load of disseminating new transactions can be shared with the whole network and
 not have the burden be solely on the validators. We also expect future
 features, like checkpoints, to enable improved performance of synchronizing the
-state of the chain from genesis. 
+state of the chain from genesis.

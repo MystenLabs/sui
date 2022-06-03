@@ -38,7 +38,7 @@ Simply edit the file in question and generate a pull request. We will get back t
 
 ## Download Sui
 
-In order to obtain the Sui source code, follow the steps to download (`git clone`) the `sui` repository
+In order to obtain the Sui source code, follow the steps to fork the `sui` repository
 at [Install Sui](../build/install.md#source-code).
 
 > **Tip:** The install docs recommend use of the `devnet` branch as the last stable release. To instead

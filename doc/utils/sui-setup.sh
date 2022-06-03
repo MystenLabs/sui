@@ -11,6 +11,9 @@ set -o pipefail
 ## Confirm or get Cargo with Rust toolchain
 command -v cargo >/dev/null 2>&1 || { echo "Cargo (https://doc.rust-lang.org/cargo/getting-started/installation.html) is not installed or missing from PATH, exiting."; return 1; }
 
+## Confirm GitHub CLI
+command -v gh >/dev/null 2>&1 || { echo "GitHub CLI (https://cli.github.com/manual/installation) is not installed or missing from PATH, exiting."; return 1; }
+
 ## Remove sui directory if it already exists
 rm -rf sui/
 
@@ -21,7 +24,7 @@ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "dev
 cargo install --git https://github.com/move-language/move move-analyzer
 
 ## Download Sui source code
-git clone https://github.com/MystenLabs/sui.git
+gh repo fork https://github.com/MystenLabs/sui.git
 
 ## Create Wallet configuration
 sui genesis --force

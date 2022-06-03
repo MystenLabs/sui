@@ -276,14 +276,14 @@ wallet in [Calling Move code](wallet.md#calling-move-code).
 
 In order to build a Move package and run code defined in
 this package, first [install Sui binaries](install.md#binaries) and
-[clone the repository](install.md#source-code) as this tutorial assumes
+[fork the repository](install.md#source-code) as this tutorial assumes
 you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
 [M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move) file.
 
 The directory structure used in this tutorial should at the moment
-look as follows (assuming Sui has been cloned to a directory called
+look as follows (assuming Sui has been forked to a directory called
 "sui"):
 
 ```

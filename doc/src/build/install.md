@@ -89,11 +89,13 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## Source code
 
-If you need to download and understand the Sui source code, clone the Sui repository:
+If you need to download and understand the Sui source code, fork the Sui repository:
 
 ```shell
-$ git clone https://github.com/MystenLabs/sui.git
+$ gh repo fork git@github.com:MystenLabs/sui.git
 ```
+
+If you are missing the GitHub CLI (`gh`), follow the instructions [here](https://cli.github.com/manual/installation) to install it.
 
 You can start exploring Sui's source code by looking into the following primary directories:
 * [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
