@@ -4,11 +4,9 @@
 use tracing::{debug, info, warn};
 
 fn main() {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "my_app".into(),
-        ..Default::default()
-    };
-    let _guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new("my_app")
+        .with_env()
+        .init();
 
     info!(a = 1, "This will be INFO.");
     debug!(a = 2, "This will be DEBUG.");
