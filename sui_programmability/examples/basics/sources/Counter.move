@@ -36,7 +36,7 @@ module Basics::Counter {
     }
 
     /// Increment a counter by 1.
-    public(script) fun increment(counter: &mut Counter, _ctx: &mut TxContext) {
+    public(script) fun increment(counter: &mut Counter) {
         counter.value = counter.value + 1;
     }
 
@@ -47,7 +47,7 @@ module Basics::Counter {
     }
 
     /// Assert a value for the counter.
-    public(script) fun assert_value(counter: &Counter, value: u64, _ctx: &mut TxContext) {
+    public(script) fun assert_value(counter: &Counter, value: u64) {
         assert!(counter.value == value, 0)
     }
 }
@@ -77,9 +77,9 @@ module Basics::CounterTest {
             assert!(Counter::owner(counter) == owner, 0);
             assert!(Counter::value(counter) == 0, 1);
 
-            Counter::increment(counter, TestScenario::ctx(scenario));
-            Counter::increment(counter, TestScenario::ctx(scenario));
-            Counter::increment(counter, TestScenario::ctx(scenario));
+            Counter::increment(counter);
+            Counter::increment(counter);
+            Counter::increment(counter);
             TestScenario::return_shared(scenario, counter_wrapper);
         };
 
@@ -104,7 +104,7 @@ module Basics::CounterTest {
             assert!(Counter::owner(counter) == owner, 0);
             assert!(Counter::value(counter) == 100, 1);
 
-            Counter::increment(counter, TestScenario::ctx(scenario));
+            Counter::increment(counter);
 
             assert!(Counter::value(counter) == 101, 2);
 

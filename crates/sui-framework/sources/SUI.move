@@ -19,7 +19,7 @@ module Sui::SUI {
     }
 
     /// Transfer to a recipient
-    public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address) {
         Coin::transfer(c, recipient)
     }
 

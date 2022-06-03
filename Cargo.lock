@@ -6032,6 +6032,7 @@ dependencies = [
  "sui-adapter",
  "sui-framework",
  "sui-types",
+ "sui-verifier",
  "test-fuzz",
  "workspace-hack",
 ]

@@ -48,12 +48,10 @@ module DeFi::EscrowTests {
         TestScenario::next_tx(scenario, &THIRD_PARTY_ADDRESS);
         {
             let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            Escrow::return_to_sender<ItemA, ItemB>(item_a, ctx);
+            Escrow::return_to_sender<ItemA, ItemB>(item_a);
 
             let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            Escrow::return_to_sender<ItemB, ItemA>(item_b, ctx);
+            Escrow::return_to_sender<ItemB, ItemA>(item_b);
         };
 
         // Alice now owns item A, and Bob now owns item B
@@ -84,8 +82,7 @@ module DeFi::EscrowTests {
         {
             let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
             let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            Escrow::swap(item_a, item_b, ctx);
+            Escrow::swap(item_a, item_b);
         };
     }
 
