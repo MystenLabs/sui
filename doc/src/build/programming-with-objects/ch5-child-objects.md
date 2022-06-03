@@ -64,7 +64,7 @@ public(script) fun create_parent(ctx: &mut TxContext) {
 Since the `child` field is `Option` type, we can start with `Option::none()`.
 Now we can define an API that makes an object of `Child` a child of an object of `Parent`:
 ```rust
-public(script) fun add_child(parent: &mut Parent, child: Child, _ctx: &mut TxContext) {
+public(script) fun add_child(parent: &mut Parent, child: Child) {
     let child_ref = Transfer::transfer_to_object(child, parent);
     Option::fill(&mut parent.child, child_ref);
 }
@@ -111,8 +111,8 @@ We have explained in the first chapter that, in order to use an owned object, th
 
 Let's look at how we could use the child object created earlier. Let's define two entry functions:
 ```rust
-public(script) fun mutate_child(_child: &mut Child, _ctx: &mut TxContext) {}
-public(script) fun mutate_child_with_parent(_child: &mut Child, _parent: &mut Parent, _ctx: &mut TxContext) {}
+public(script) fun mutate_child(_child: &mut Child) {}
+public(script) fun mutate_child_with_parent(_child: &mut Child, _parent: &mut Parent) {}
 ```
 The first function requires only one object argument, which is a `Child` object. The second function requires two arguments, a `Child` object and a `Parent` object. Both functions are made empty since what we care about here is not the mutation logic, but whether you are able to make a call to them at all.
 Both functions will compile successfully, because object ownership relationships are dynamic properties and the compiler cannot forsee them.
@@ -229,7 +229,7 @@ Comparing to the previous API, there are two primary differences:
 
 To see how to use this API, let's define a function that could transfer a child object to a new parent:
 ```rust
-public(script) fun transfer_child(parent: &mut Parent, child: Child, new_parent: &mut Parent, _ctx: &mut TxContext) {
+public(script) fun transfer_child(parent: &mut Parent, child: Child, new_parent: &mut Parent) {
     let child_ref = Option::extract(&mut parent.child);
     let new_child_ref = Transfer::transfer_child_to_object(child, child_ref, new_parent);
     Option::fill(&mut new_parent.child, new_child_ref);
@@ -246,7 +246,7 @@ There are two ways to delete a child object:
 #### Transfer and then delete
 What happens if we try to delete a child directly using what we learned in the first chapter, without taking the child reference? Let's find out. We can define a simple `delete_child` method like this:
 ```rust
-public(script) fun delete_child(child: Child, _parent: &mut Parent, _ctx: &mut TxContext) {
+public(script) fun delete_child(child: Child, _parent: &mut Parent) {
     let Child { id } = child;
     ID::delete(id);
 }
@@ -271,7 +271,7 @@ The function takes both the ID of the child object and the child reference as ar
 Instead of calling `ID::delete` on the `id`, for child object, here we require calling `Transfer::delete_child_object` with the `id` and the child reference.
 To demonstrate how to use this API, we define a function that can delete a parent object and a child object altogether:
 ```rust
-public(script) fun delete_parent_and_child(parent: Parent, child: Child, _ctx: &mut TxContext) {
+public(script) fun delete_parent_and_child(parent: Parent, child: Child) {
     let Parent { id: parent_id, child: child_ref_opt } = parent;
     let child_ref = Option::extract(&mut child_ref_opt);
     Option::destroy_none(child_ref_opt);

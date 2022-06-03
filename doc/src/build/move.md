@@ -254,7 +254,7 @@ In general, an entry function, must satisfy the following properties:
 
 - have `public(script)` visibility modifier
 - have no return value
-- have a mutable reference to an instance of the `TxContext` struct
+- (optional) have a mutable reference to an instance of the `TxContext` struct
   defined in the [TxContext module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TxContext.move) as the last parameter
 
 More concretely, the `transfer` function is public, has no return
@@ -267,6 +267,7 @@ value, and has three parameters:
 - `_ctx` - a mutable reference to an instance of the `TxContext`
   struct (in this particular case, this parameter is not actually used
   in the function's body as indicated by its name starting with `_`)
+  - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
 You can see how the `transfer` function is called from a sample Sui
 wallet in [Calling Move code](wallet.md#calling-move-code).

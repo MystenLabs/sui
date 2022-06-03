@@ -21,13 +21,13 @@ struct ColorObject has key {
 Now let's add this function:
 ```rust
 /// Copies the values of `from_object` into `into_object`.
-public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject, _ctx: &mut TxContext) {
+public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject) {
     into_object.red = from_object.red;
     into_object.green = from_object.green;
     into_object.blue = from_object.blue;
 }
 ```
-> :bulb: We added a `&mut TxContext` parameter to the function signature although it's not used. This is to allow the `copy_into` function to be called as an entry function from transactions. The parameter is named with an underscore `_` prefix to tell the compiler that it won't be used and we don't get an unused parameter warning.
+> :bulb: We declared this function as `public(script)` to be callable as an entry function from transactions.
 
 In the above function signature, `from_object` can be a read-only reference because we only need to read its fields; conversely, `into_object` must be a mutable reference since we need to mutate it. In order for a transaction to make a call to the `copy_into` function, **the sender of the transaction must be the owner of both of `from_object` and `into_object`**.
 
@@ -59,7 +59,7 @@ TestScenario::next_tx(scenario, &owner);
     assert!(red == 255 && green == 255 && blue == 255, 0);
 
     let ctx = TestScenario::ctx(scenario);
-    ColorObject::copy_into(&obj2, &mut obj1, ctx);
+    ColorObject::copy_into(&obj2, &mut obj1);
     TestScenario::return_owned(scenario, obj1);
     TestScenario::return_owned(scenario, obj2);
 };
@@ -91,7 +91,7 @@ public fun delete(versioned_id: VersionedID);
 ```
 Let's define a function in the `ColorObject` module that allows us to delete the object:
 ```rust
-    public(script) fun delete(object: ColorObject, _ctx: &mut TxContext) {
+    public(script) fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         ID::delete(id);
     }
@@ -111,8 +111,7 @@ let scenario = &mut TestScenario::begin(&owner);
 TestScenario::next_tx(scenario, &owner);
 {
     let object = TestScenario::take_owned<ColorObject>(scenario);
-    let ctx = TestScenario::ctx(scenario);
-    ColorObject::delete(object, ctx);
+    ColorObject::delete(object);
 };
 // Verify that the object was indeed deleted.
 TestScenario::next_tx(scenario, &owner);
@@ -125,11 +124,11 @@ The first part is the same as what we have seen in [Chapter 1](./ch1-object-basi
 #### Option 2. Transfer the object
 The owner of the object may want to transfer it to another account. To support this, the `ColorObject` module will need to define a `transfer` API:
 ```rust
-public(script) fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
+public(script) fun transfer(object: ColorObject, recipient: address) {
     Transfer::transfer(object, recipient)
 }
 ```
->:bulb: One cannot call `Transfer::transfer` directly in a transaction because it doesn't have `TxContext` as the last parameter, and hence it cannot be called as an entry function.
+>:bulb: One cannot call `Transfer::transfer` directly as it is not a `public(script)` function.
 
 Let's add a test for transferring too. First of all, we create an object in `owner`'s account and then transfer it to a different account `recipient`:
 ```rust

@@ -19,16 +19,16 @@ connect the wallet  client to the DevNet, run the following command:
 ```shell
 $ wallet
 ```
-The wallet will print the following line if the wallet is starting up the 
+The wallet will print the following line if the wallet is starting up the
 first time.
 ```shell
 Config file ["/Users/dir/.sui/sui_config/wallet.conf"] doesn't exist, do you want to connect to a Sui Gateway [y/n]?
 ```
 Type 'y' and then press 'Enter'. You should see the following output:
 ```shell
-Sui Gateway Url (Default to Sui DevNet if not specified) : 
+Sui Gateway Url (Default to Sui DevNet if not specified) :
 ```
-The wallet will prompt for the Gateway URL, press 'Enter' and it will default to the DevNet, 
+The wallet will prompt for the Gateway URL, press 'Enter' and it will default to the DevNet,
 or enter the URL if you want to connect to a Gateway hosted elsewhere.
 
 If you have used the wallet before with a local network, follow the next section to
@@ -360,12 +360,12 @@ When not specified, the active address is used.
 
 ```
 sui>-$ objects
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      | o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221
 
 sui>-$ objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      | o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221
 ```
@@ -477,7 +477,7 @@ $ wallet objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
 The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
 
 ```shell
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x00a0a5211f6edcf4ba09d23b8a7250072be1edb6 |     0      | o#fbb33b6524d4a648fd5fff8dc93f3d6858945959b710a0893c2b86504b38f731
  0x054c8263c73abd697a0f5aa8990d6d7668ce3d0d |     0      | o#cb99c4b8bb83a0b0111583cd2671f27d6eaeb89f89fd7ae822dc335f1a09e187
@@ -572,7 +572,7 @@ If you inspect a newly created account, you would expect the account does not ow
 
 ```shell
 $ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
 Showing 0 results.
 ```
@@ -602,7 +602,7 @@ OPTIONS:
 
 To transfer a coin object to a recipient, you will need the recipient's address,
 the object ID of the coin that you want to transfer,
-and optionally the coin object ID for the transaction fee payment. If a gas 
+and optionally the coin object ID for the transaction fee payment. If a gas
 coin is not specified, one that meets the budget is picked. Gas budget sets a
 cap for how much gas you want to spend. We are still finalizing our gas metering
 mechanisms. For now, just set something large enough.
@@ -636,7 +636,7 @@ The account will now have one object:
 
 ```shell
 $ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 |     0      | o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297
 ```
@@ -723,7 +723,7 @@ $ wallet objects --address 0xef999dbdb19ccca504eef5432cec69ea8a1d4a1b
 And its output:
 
 ```
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x149a3493c97fafc696526052fe08e77043d4be0b |     0      | o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5
  0x1b19f74ad77a95d7562432f6991ac9ec1ea2c57c |     0      | o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352
@@ -788,7 +788,7 @@ $ wallet objects --address 0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
 
 With output resembling:
 
-```                 Object ID                  |  Version   |                                Digest                               
+```                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 |     0      | o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1
  0xb402f52ba6216a770939e6d4922ae6d6d05c2256 |     0      | o#b95d120c36fab571c2389bccf507530a39e0055cdd9e9793aaf4ef691b1b8c96
@@ -828,7 +828,7 @@ New Coins : Coin { id: 0x72129fbf3168c37a4dd8ec7ee69da28d0d4d4636, value: 5000 }
 Updated Gas : Coin { id: 0xb402f52ba6216a770939e6d4922ae6d6d05c2256, value: 99780 }
 
 $ wallet objects --address 0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 |     1      | o#4f86a454ed9aa482adcbfece78cdd77d491d4e768aa8034af78a237d18e09f9f
  0x72129fbf3168c37a4dd8ec7ee69da28d0d4d4636 |     1      | o#247905d1c8eee09b4d3bd02f4229376cd7482705e28ef7ff4ca86774d09c72b8
@@ -852,7 +852,7 @@ for the first look at Move source code and a description of the
 following function we will be calling in this tutorial:
 
 ```rust
-public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
+public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address) {
     Coin::transfer(c, Address::new(recipient))
 }
 ```
@@ -866,7 +866,7 @@ Let us examine objects owned by address `0xae6fb6036570fec1df71599740c132cdf5b45
 
 ```shell
 $ wallet objects --address ae6fb6036570fec1df71599740c132cdf5b45b9d
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x5044dc15d3c71d500116eb026e8b70d0a180f3ac |     0      | o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1
  0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
@@ -948,7 +948,7 @@ the sender:
 
 ```shell
 $ wallet objects --address 0xae6fb6036570fec1df71599740c132cdf5b45b9d
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
  0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
@@ -1001,7 +1001,7 @@ $ wallet objects --address 0xae6fb6036570fec1df71599740c132cdf5b45b9d
 Outputting:
 
 ```
-                 Object ID                  |  Version   |                                Digest                               
+                 Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
  0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
  0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
