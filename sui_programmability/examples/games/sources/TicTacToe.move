@@ -161,7 +161,7 @@ module Games::TicTacToe {
         }
     }
 
-    public(script) fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
+    public(script) fun delete_game(game: TicTacToe) {
         let TicTacToe { id, gameboard, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         while (Vector::length(&gameboard) > 0) {
             let row = Vector::pop_back(&mut gameboard);
@@ -179,12 +179,12 @@ module Games::TicTacToe {
         ID::delete(id);
     }
 
-    public(script) fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
+    public(script) fun delete_trophy(trophy: Trophy) {
         let Trophy { id } = trophy;
         ID::delete(id);
     }
 
-    public(script) fun delete_cap(cap: MarkMintCap, _ctx: &mut TxContext) {
+    public(script) fun delete_cap(cap: MarkMintCap) {
         let MarkMintCap { id, game_id: _, remaining_supply: _ } = cap;
         ID::delete(id);
     }

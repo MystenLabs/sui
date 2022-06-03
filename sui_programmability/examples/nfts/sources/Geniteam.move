@@ -204,7 +204,6 @@ module NFTs::Geniteam {
         fire_runes_count: u64,
         wind_runes_count: u64,
         earth_runes_count: u64,
-        _ctx: &mut TxContext
     ) {
         player.water_runes_count = water_runes_count;
         player.fire_runes_count = fire_runes_count;
@@ -224,7 +223,6 @@ module NFTs::Geniteam {
         affection_level: u64,
         buddy_level: u8,
         display: vector<u8>,
-        _ctx: &mut TxContext
     ) {
         self.monster_affinity = monster_affinity;
         self.monster_level = monster_level;
@@ -240,7 +238,6 @@ module NFTs::Geniteam {
     /// Update the attributes of the farm
     public fun update_farm_stats(
         _player: &mut Player, farm: &mut Farm, level: u64, current_xp: u64,
-        _ctx: &mut TxContext
     ) {
         farm.current_xp = current_xp;
         farm.level = level;
@@ -249,7 +246,7 @@ module NFTs::Geniteam {
     /// Apply the cosmetic to the Farm from the inventory
     public fun update_farm_cosmetics(
         _player: &mut Player, farm: &mut Farm, _inventory: &mut Bag,
-        farm_cosmetic: FarmCosmetic, cosmetic_slot_id: u64, _ctx: &mut TxContext
+        farm_cosmetic: FarmCosmetic, cosmetic_slot_id: u64
     ) {
         // Only 2 slots allowed
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
@@ -272,7 +269,6 @@ module NFTs::Geniteam {
         _player: &mut Player, _farm: &mut Farm, monster: &mut Monster,
         _inventory: &mut Bag, monster_cosmetic: MonsterCosmetic,
         _pet_monsters: &mut Collection<Monster>, cosmetic_slot_id: u64,
-         _ctx: &mut TxContext
     ) {
         // Only 2 slots allowed
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);

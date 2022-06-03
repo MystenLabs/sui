@@ -25,7 +25,7 @@ module Examples::TrustedCoin {
         Coin::transfer(coin, TxContext::sender(ctx));
     }
 
-    public(script) fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: address) {
         Coin::transfer_cap<EXAMPLE>(treasury_cap, recipient);
     }
 

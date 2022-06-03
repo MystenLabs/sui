@@ -62,7 +62,6 @@ module Basics::Lock {
         obj: T,
         lock: &mut Lock<T>,
         key: &Key<T>,
-        _ctx: &mut TxContext,
     ) {
         assert!(Option::is_none(&lock.locked), ELockIsFull);
         assert!(&key.for == ID::id(lock), EKeyMismatch);

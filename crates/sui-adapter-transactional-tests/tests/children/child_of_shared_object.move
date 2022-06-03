@@ -41,7 +41,7 @@ module T2::O2 {
         Transfer::transfer(new(child, ctx), TxContext::sender(ctx))
     }
 
-    public(script) fun use_o2_o3(_o2: &mut O2, _o3: &mut O3, _ctx: &mut TxContext) {}
+    public(script) fun use_o2_o3(_o2: &mut O2, _o3: &mut O3) {}
 
     fun new(child: O3, ctx: &mut TxContext): O2 {
         let id = TxContext::new_id(ctx);
@@ -70,7 +70,7 @@ module T1::O1 {
     }
 
     // This function will be invalid if _o2 is a shared object and owns _o3.
-    public(script) fun use_o2_o3(_o2: &mut O2, _o3: &mut O3, _ctx: &mut TxContext) {}
+    public(script) fun use_o2_o3(_o2: &mut O2, _o3: &mut O3) {}
 
     fun new(child: O2, ctx: &mut TxContext): O1 {
         let id = TxContext::new_id(ctx);

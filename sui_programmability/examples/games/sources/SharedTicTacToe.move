@@ -107,12 +107,12 @@ module Games::SharedTicTacToe {
         }
     }
 
-    public(script) fun delete_game(game: TicTacToe, _ctx: &mut TxContext) {
+    public(script) fun delete_game(game: TicTacToe) {
         let TicTacToe { id, gameboard: _, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         ID::delete(id);
     }
 
-    public(script) fun delete_trophy(trophy: Trophy, _ctx: &mut TxContext) {
+    public(script) fun delete_trophy(trophy: Trophy) {
         let Trophy { id } = trophy;
         ID::delete(id);
     }

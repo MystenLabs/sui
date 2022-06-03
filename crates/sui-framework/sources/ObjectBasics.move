@@ -29,26 +29,26 @@ module Sui::ObjectBasics {
         )
     }
 
-    public(script) fun transfer(o: Object, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(o: Object, recipient: address) {
         Transfer::transfer(o, recipient)
     }
 
-    public(script) fun freeze_object(o: Object, _ctx: &mut TxContext) {
+    public(script) fun freeze_object(o: Object) {
         Transfer::freeze_object(o)
     }
 
-    public(script) fun set_value(o: &mut Object, value: u64, _ctx: &mut TxContext) {
+    public(script) fun set_value(o: &mut Object, value: u64) {
         o.value = value;
     }
 
     // test that reading o2 and updating o1 works
-    public(script) fun update(o1: &mut Object, o2: &Object, _ctx: &mut TxContext) {
+    public(script) fun update(o1: &mut Object, o2: &Object) {
         o1.value = o2.value;
         // emit an event so the world can see the new value
         Event::emit(NewValueEvent { new_value: o2.value })
     }
 
-    public(script) fun delete(o: Object, _ctx: &mut TxContext) {
+    public(script) fun delete(o: Object) {
         let Object { id, value: _ } = o;
         ID::delete(id);
     }
