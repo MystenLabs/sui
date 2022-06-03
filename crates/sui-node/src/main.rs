@@ -21,14 +21,9 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "sui-node".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        ..Default::default()
-    };
-
-    let _guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_env()
+        .init();
 
     let args = Args::parse();
 
