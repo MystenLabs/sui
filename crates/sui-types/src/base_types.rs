@@ -10,6 +10,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::Encoding;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
@@ -239,8 +240,32 @@ pub struct ObjectDigest(
 pub struct TransactionEffectsDigest(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; TRANSACTION_DIGEST_LENGTH],
+    pub [u8; 32],
 );
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+pub struct ExecutionDigests {
+    pub transaction: TransactionDigest,
+    pub effects: TransactionEffectsDigest,
+}
+
+impl ExecutionDigests {
+    pub fn new(transaction : TransactionDigest, effects: TransactionEffectsDigest) -> Self {
+        Self {
+            transaction,
+            effects
+        }
+    }
+}
+
+impl From<ExecutionDigests> for RistrettoPoint {
+    fn from(other: ExecutionDigests) -> RistrettoPoint {
+        let mut data = [0; 64];
+        data[0..32].clone_from_slice(&other.transaction.0);
+        data[32..64].clone_from_slice(&other.effects.0);
+        RistrettoPoint::from_uniform_bytes(&data)
+    }
+}
 
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("Option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = STD_OPTION_MODULE_NAME;
