@@ -19,7 +19,7 @@ use sui_types::error::{SuiError, SuiResult};
 
 use typed_store::{rocks::DBMap, traits::Map};
 
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 /// TxGuard is a handle on an in-progress transaction.
 ///
