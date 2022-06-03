@@ -261,8 +261,9 @@ impl<
             return vec![];
         }
 
-        let digests: Vec<_> = input_objects.iter().map(|(_, _, digest)| *digest).collect();
-        self.mutex_table.acquire_locks(&digests).await
+        self.mutex_table.acquire_locks(
+            input_objects.iter().map(|(_, _, digest)| digest)
+        ).await
     }
 
     // Methods to read the store

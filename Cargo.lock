@@ -5930,7 +5930,6 @@ name = "sui-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "blake2",
  "fdlimit",
  "flexstr",
  "futures",
