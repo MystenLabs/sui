@@ -175,6 +175,16 @@ impl<A> ActiveAuthority<A> {
     }
 }
 
+impl<A> Clone for ActiveAuthority<A> {
+    fn clone(&self) -> Self {
+        ActiveAuthority {
+            state: self.state.clone(),
+            net: ArcSwap::from(self.net.load().clone()),
+            health: self.health.clone(),
+        }
+    }
+}
+
 impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
