@@ -289,6 +289,9 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
+    #[error("Failed to dispatch event: {error:?}")]
+    EventFailedToDispatch { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()

@@ -7,6 +7,7 @@ use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
     epoch::EpochInfoLocals,
+    event_handler::EventHandler,
     execution_engine,
     gateway_types::TransactionEffectsResponse,
     transaction_input_checker,
@@ -243,6 +244,8 @@ pub struct AuthorityState {
     indexes: Option<Arc<IndexStore>>,
 
     module_cache: SyncModuleCache<AuthorityStoreWrapper>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+
+    event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -525,6 +528,11 @@ impl AuthorityState {
         // Update the database in an atomic manner
         self.update_state(temporary_store, &certificate, &signed_effects)
             .await?;
+
+        // Each certificate only reaches here once
+        if let Some(event_handler) = &self.event_handler {
+            event_handler.process_events(&signed_effects.effects).await;
+        }
 
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&transaction_digest)?,
@@ -822,6 +830,9 @@ impl AuthorityState {
             database: store.clone(),
             indexes,
             module_cache: SyncModuleCache::new(AuthorityStoreWrapper(store.clone())),
+            // `event_handler` uses a separate in-mem cache from `module_cache`
+            // this is because they largely deal with different types of MoveStructs
+            event_handler: Some(Arc::new(EventHandler::new(store.clone()))),
             checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(

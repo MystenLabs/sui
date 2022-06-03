@@ -26,15 +26,23 @@ pub struct EventEnvelope {
     /// Transaction digest of associated transaction, if any
     tx_digest: Option<TransactionDigest>,
     /// Specific event type
-    event: Event,
+    pub event: Event,
+    /// MoveStruct (for MoveEvent only)
+    pub move_struct: Option<MoveStruct>,
 }
 
 impl EventEnvelope {
-    pub fn new(timestamp: u64, tx_digest: Option<TransactionDigest>, event: Event) -> Self {
+    pub fn new(
+        timestamp: u64,
+        tx_digest: Option<TransactionDigest>,
+        event: Event,
+        move_struct: Option<MoveStruct>,
+    ) -> Self {
         Self {
             timestamp,
             tx_digest,
             event,
+            move_struct,
         }
     }
 
