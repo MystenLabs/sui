@@ -6,7 +6,6 @@
 //# publish
 
 module Test::M {
-    use Sui::TxContext::TxContext;
     public(script) fun create(_value: u64, _recipient: address) {}
 
 }
