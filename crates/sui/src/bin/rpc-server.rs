@@ -38,14 +38,10 @@ struct RpcGatewayOpt {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "rpc_gateway".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        ..Default::default()
-    };
-    #[allow(unused)]
-    let guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_env()
+        .init();
+
     let options: RpcGatewayOpt = RpcGatewayOpt::parse();
     let config_path = options
         .config

@@ -53,15 +53,11 @@ struct ClientOpt {
 }
 
 async fn try_main() -> Result<(), anyhow::Error> {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "wallet".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        log_file: Some("wallet.log".into()),
-        ..Default::default()
-    };
-    #[allow(unused)]
-    let guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_log_file("wallet.log")
+        .with_env()
+        .init();
+
     if let Some(git_rev) = std::option_env!("GIT_REV") {
         debug!("Wallet built at git revision {git_rev}");
     }
