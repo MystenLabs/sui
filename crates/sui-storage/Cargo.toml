@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.55"
+async-trait = "0.1.53"
 fdlimit = "0.2.1"
 futures = "0.3.21"
 flexstr = "^0.9"
@@ -25,5 +26,11 @@ workspace-hack = { path = "../workspace-hack"}
 move-core-types = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b", features = ["address20"] }
 
 [dev-dependencies]
+tempfile = "3.3.0"
+num_cpus = "1.13.1"
 pretty_assertions = "1.2.0"
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2de1a391654a7ee09d867de2f16627b915ad21f0" }
+
+[[bench]]
+name = "write_ahead_log"
+harness = false

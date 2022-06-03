@@ -9,6 +9,7 @@ pub use indexes::IndexStore;
 
 pub mod event_store;
 pub mod mutex_table;
+pub mod write_ahead_log;
 
 use rocksdb::Options;
 
