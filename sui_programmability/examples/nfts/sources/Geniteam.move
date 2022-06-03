@@ -58,7 +58,7 @@ module NFTs::Geniteam {
         applied_farm_cosmetic_1:  Option<ChildRef<FarmCosmetic>>,
     }
 
-    struct Monster has key {
+    struct Monster has key, store {
         id: VersionedID,
         monster_name: String,
         monster_img_index: u64,
@@ -79,13 +79,13 @@ module NFTs::Geniteam {
 
     }
 
-    struct FarmCosmetic has key {
+    struct FarmCosmetic has key, store{
         id: VersionedID,
         cosmetic_type: u8,
         display: String,
     }
 
-    struct MonsterCosmetic has key {
+    struct MonsterCosmetic has key, store {
         id: VersionedID,
         cosmetic_type: u8,
         display: String,
@@ -299,7 +299,7 @@ module NFTs::Geniteam {
         let inventory = Bag::new(ctx);
 
         // Transfer ownership of inventory to player.
-        let (id, child_ref) = Transfer::transfer_to_object_id(inventory, id);
+        let (id, child_ref) = Bag::transfer_to_object_id(inventory, id);
 
         let player = Player {
             id,
@@ -327,7 +327,7 @@ module NFTs::Geniteam {
         let pet_monsters = Collection::new<Monster>(ctx);
 
         // Transfer ownership of pet monsters to farm.
-        let (id, child_ref) = Transfer::transfer_to_object_id(pet_monsters, id);
+        let (id, child_ref) = Collection::transfer_to_object_id(pet_monsters, id);
 
 
         let farm = Farm {

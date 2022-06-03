@@ -74,7 +74,7 @@ module Sui::Bag {
     /// Abort if the object is already in the Bag.
     /// If the object was owned by another object, an `old_child_ref` would be around
     /// and need to be consumed as well.
-    fun add_impl<T: key>(c: &mut Bag, object: T, old_child_ref: Option<ChildRef<T>>) {
+    fun add_impl<T: key + store>(c: &mut Bag, object: T, old_child_ref: Option<ChildRef<T>>) {
         assert!(
             size(c) + 1 <= c.max_capacity,
             Errors::limit_exceeded(EMaxCapacityExceeded)
@@ -89,14 +89,14 @@ module Sui::Bag {
 
     /// Add a new object to the Bag.
     /// Abort if the object is already in the Bag.
-    public fun add<T: key>(c: &mut Bag, object: T) {
+    public fun add<T: key + store>(c: &mut Bag, object: T) {
         add_impl(c, object, Option::none())
     }
 
     /// Transfer a object that was owned by another object to the bag.
     /// Since the object is a child object of another object, an `old_child_ref`
     /// is around and needs to be consumed.
-    public fun add_child_object<T: key>(c: &mut Bag, object: T, old_child_ref: ChildRef<T>) {
+    public fun add_child_object<T: key + store>(c: &mut Bag, object: T, old_child_ref: ChildRef<T>) {
         add_impl(c, object, Option::some(old_child_ref))
     }
 
@@ -108,7 +108,7 @@ module Sui::Bag {
 
     /// Remove and return the object from the Bag.
     /// Abort if the object is not found.
-    public fun remove<T: key>(c: &mut Bag, object: T): T {
+    public fun remove<T: key + store>(c: &mut Bag, object: T): T {
         let idx = find(c, ID::id(&object));
         if (Option::is_none(&idx)) {
             abort EObjectNotFound
@@ -118,14 +118,26 @@ module Sui::Bag {
     }
 
     /// Remove the object from the Bag, and then transfer it to the signer.
-    public(script) fun remove_and_take<T: key>(c: &mut Bag, object: T, ctx: &mut TxContext) {
+    public(script) fun remove_and_take<T: key + store>(c: &mut Bag, object: T, ctx: &mut TxContext) {
         let object = remove(c, object);
         Transfer::transfer(object, TxContext::sender(ctx));
     }
 
     /// Transfer the entire Bag to `recipient`.
-    public(script) fun transfer(c: Bag, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer_(c: Bag, recipient: address) {
         Transfer::transfer(c, recipient)
+    }
+
+    /// Transfer the entire Bag to `recipient`.
+    public fun transfer(c: Bag, recipient: address) {
+        Transfer::transfer(c, recipient)
+    }
+
+    public fun transfer_to_object_id(
+        obj: Bag,
+        owner_id: VersionedID,
+    ): (VersionedID, ChildRef<Bag>) {
+        Transfer::transfer_to_object_id(obj, owner_id)
     }
 
     /// Look for the object identified by `id_bytes` in the Bag.

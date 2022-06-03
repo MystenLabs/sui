@@ -31,7 +31,7 @@ module NFTs::Marketplace {
     public(script) fun create(ctx: &mut TxContext) {
         let id = TxContext::new_id(ctx);
         let objects = Bag::new(ctx);
-        let (id, objects) = Transfer::transfer_to_object_id(objects, id);
+        let (id, objects) = Bag::transfer_to_object_id(objects, id);
         let market_place = Marketplace {
             id,
             objects,
