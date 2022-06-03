@@ -31,6 +31,10 @@ impl Balance {
         }
     }
 
+    pub fn withdraw(&mut self, amount: u64) {
+        self.value -= amount;
+    }
+
     pub fn value(&self) -> u64 {
         self.value
     }

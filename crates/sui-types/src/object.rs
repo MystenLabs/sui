@@ -106,6 +106,16 @@ impl MoveObject {
             .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
     }
 
+    /// Decrease the version of this object by one.
+    /// This should only be called when a version is first increased, and needs to be reverted.
+    pub fn revert_version_increase(&mut self) {
+        let new_version = self.version().decrement().expect(
+            "Version decrement is only called after increment, and hence should never fail",
+        );
+        self.version_bytes_mut()
+            .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
+    }
+
     fn version_bytes(&self) -> &BcsU64 {
         self.contents[ID_END_INDEX..VERSION_END_INDEX]
             .try_into()

@@ -820,6 +820,8 @@ pub enum SuiTransactionKind {
     Publish(SuiMovePackage),
     /// Call a function in a published Move module
     Call(SuiMoveCall),
+    /// Initiate a SUI coin transfer between addresses
+    TransferSui(SuiTransferSui),
     /// A system transaction that will update epoch information on-chain.
     ChangeEpoch(SuiChangeEpoch),
     // .. more transaction types go here
@@ -830,7 +832,7 @@ impl Display for SuiTransactionKind {
         let mut writer = String::new();
         match &self {
             Self::TransferCoin(t) => {
-                writeln!(writer, "Transaction Kind : Transfer")?;
+                writeln!(writer, "Transaction Kind : Transfer Coin")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 writeln!(writer, "Object ID : {}", t.object_ref.object_id)?;
                 writeln!(writer, "Version : {:?}", t.object_ref.version)?;
@@ -839,6 +841,15 @@ impl Display for SuiTransactionKind {
                     "Object Digest : {}",
                     Base64::encode(t.object_ref.digest)
                 )?;
+            }
+            Self::TransferSui(t) => {
+                writeln!(writer, "Transaction Kind : Transfer SUI")?;
+                writeln!(writer, "Recipient : {}", t.recipient)?;
+                if let Some(amount) = t.amount {
+                    writeln!(writer, "Amount: {}", amount)?;
+                } else {
+                    writeln!(writer, "Amount: Full Balance")?;
+                }
             }
             Self::Publish(_p) => {
                 write!(writer, "Transaction Kind : Publish")?;
@@ -874,6 +885,10 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
             SingleTransactionKind::TransferCoin(t) => Self::TransferCoin(SuiTransferCoin {
                 recipient: t.recipient,
                 object_ref: t.object_ref.into(),
+            }),
+            SingleTransactionKind::TransferSui(t) => Self::TransferSui(SuiTransferSui {
+                recipient: t.recipient,
+                amount: t.amount,
             }),
             SingleTransactionKind::Publish(p) => Self::Publish(p.try_into()?),
             SingleTransactionKind::Call(c) => Self::Call(SuiMoveCall {
@@ -1185,6 +1200,13 @@ pub struct SuiEvent {
 pub struct SuiTransferCoin {
     pub recipient: SuiAddress,
     pub object_ref: SuiObjectRef,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "TransferSui", rename_all = "camelCase")]
+pub struct SuiTransferSui {
+    pub recipient: SuiAddress,
+    pub amount: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]

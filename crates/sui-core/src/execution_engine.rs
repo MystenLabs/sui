@@ -8,14 +8,18 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::committee::EpochId;
+use sui_types::error::SuiError;
+use sui_types::gas_coin::GasCoin;
+use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
     event::{Event, TransferType},
+    fp_ensure,
     gas::{self, SuiGasStatus},
     messages::{
         CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
-        TransactionData, TransactionEffects, TransferCoin,
+        TransactionData, TransactionEffects, TransferCoin, TransferSui,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
@@ -113,7 +117,15 @@ fn execute_transaction<S: BackingPackageStore>(
                         .get(&object_ref.0)
                         .unwrap()
                         .clone();
-                    transfer(temporary_store, object, recipient)
+                    transfer_coin(temporary_store, object, recipient)
+                }
+                SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
+                    let gas_object = temporary_store
+                        .objects()
+                        .get(&gas_object_id)
+                        .expect("We constructed the object map so it should always have the gas object id")
+                        .clone();
+                    transfer_sui(temporary_store, gas_object, recipient, amount, tx_ctx)
                 }
                 SingleTransactionKind::Call(MoveCall {
                     package,
@@ -222,7 +234,7 @@ fn execute_transaction<S: BackingPackageStore>(
     }
 }
 
-fn transfer<S>(
+fn transfer_coin<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut object: Object,
     recipient: SuiAddress,
@@ -235,5 +247,53 @@ fn transfer<S>(
         type_: TransferType::Coin,
     });
     temporary_store.write_object(object);
+    Ok(())
+}
+
+fn transfer_sui<S>(
+    temporary_store: &mut AuthorityTemporaryStore<S>,
+    mut object: Object,
+    recipient: SuiAddress,
+    amount: Option<u64>,
+    tx_ctx: &mut TxContext,
+) -> SuiResult {
+    #[cfg(debug_assertions)]
+    let version = object.version();
+    if let Some(amount) = amount {
+        let mut gas_coin = GasCoin::try_from(&object)?;
+        let balance = gas_coin.value();
+        fp_ensure!(
+            balance >= amount,
+            SuiError::TransferInsufficientBalance {
+                balance,
+                required: amount,
+            }
+        );
+        let new_object = Object::new_move(
+            MoveObject::new(
+                GasCoin::type_(),
+                bcs::to_bytes(&GasCoin::new(
+                    tx_ctx.fresh_id(),
+                    OBJECT_START_VERSION,
+                    amount,
+                ))
+                .expect("Serializing gas object cannot fail"),
+            ),
+            Owner::AddressOwner(recipient),
+            tx_ctx.digest(),
+        );
+        temporary_store.write_object(new_object);
+        gas_coin.0.balance.withdraw(amount);
+
+        let move_object = object.data.try_as_move_mut().expect("");
+        move_object.update_contents(bcs::to_bytes(&gas_coin).expect(""));
+    } else {
+        object.transfer(recipient)?;
+    }
+    let move_object = object.data.try_as_move_mut().expect("");
+    move_object.revert_version_increase();
+    debug_assert_eq!(object.version(), version);
+    temporary_store.write_object(object);
+
     Ok(())
 }

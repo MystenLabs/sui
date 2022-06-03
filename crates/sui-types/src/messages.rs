@@ -75,6 +75,12 @@ pub struct MoveModulePublish {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct TransferSui {
+    pub recipient: SuiAddress,
+    pub amount: Option<u64>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
@@ -92,6 +98,7 @@ pub enum SingleTransactionKind {
     Publish(MoveModulePublish),
     /// Call a function in a published Move module
     Call(MoveCall),
+    TransferSui(TransferSui),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -161,6 +168,9 @@ impl SingleTransactionKind {
                     .collect::<Vec<_>>();
                 Transaction::input_objects_in_compiled_modules(&compiled_modules)
             }
+            Self::TransferSui(_) => {
+                vec![]
+            }
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject(
                     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -187,12 +197,21 @@ impl Display for SingleTransactionKind {
         let mut writer = String::new();
         match &self {
             Self::TransferCoin(t) => {
-                writeln!(writer, "Transaction Kind : Transfer")?;
+                writeln!(writer, "Transaction Kind : Transfer Coin")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
                 writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
+            }
+            Self::TransferSui(t) => {
+                writeln!(writer, "Transaction Kind : Transfer SUI")?;
+                writeln!(writer, "Recipient : {}", t.recipient)?;
+                if let Some(amount) = t.amount {
+                    writeln!(writer, "Amount: {}", amount)?;
+                } else {
+                    writeln!(writer, "Amount: Full Balance")?;
+                }
             }
             Self::Publish(_p) => {
                 writeln!(writer, "Transaction Kind : Publish")?;
@@ -332,6 +351,20 @@ where
         let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
+    pub fn new_transfer_sui(
+        recipient: SuiAddress,
+        sender: SuiAddress,
+        amount: Option<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
+            recipient,
+            amount,
         }));
         Self::new(kind, sender, gas_payment, gas_budget)
     }
