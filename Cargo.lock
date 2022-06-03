@@ -1001,6 +1001,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "console-api"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06c5fd425783d81668ed68ec98408a80498fb4ae2fd607797539e1a9dfa3618f"
+dependencies = [
+ "prost",
+ "prost-types",
+ "tonic",
+ "tracing-core",
+]
+
+[[package]]
+name = "console-subscriber"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31432bc31ff8883bf6a693a79371862f73087822470c82d6a1ec778781ee3978"
+dependencies = [
+ "console-api",
+ "crossbeam-channel 0.5.4",
+ "crossbeam-utils 0.8.8",
+ "futures",
+ "hdrhistogram",
+ "humantime",
+ "prost-types",
+ "serde 1.0.137",
+ "serde_json",
+ "thread_local",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber 0.3.11",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1050,6 +1086,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ae5588f6b3c3cb05239e90bd110f257254aecd01e4635400391aeae07497845"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-channel 0.5.4",
+ "crossbeam-deque",
+ "crossbeam-epoch",
+ "crossbeam-queue",
+ "crossbeam-utils 0.8.8",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1092,6 +1142,16 @@ dependencies = [
  "lazy_static 1.4.0",
  "memoffset",
  "scopeguard",
+]
+
+[[package]]
+name = "crossbeam-queue"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f25d8400f4a7a5778f0e4e52384a48cbd9b5c495d110786187fc750075277a2"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-utils 0.8.8",
 ]
 
 [[package]]
@@ -2004,6 +2064,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gethostname"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1ebd34e35c46e00bb73e81363248d627782724609fe1b6396f553f68fe3862e"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2576,6 +2646,12 @@ checksum = "671a26f820db17c2a2750743f1dd03bafd15b98c9f30c7c2628c024c05d73397"
 dependencies = [
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "json"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "jsonrpsee"
@@ -3759,7 +3835,7 @@ dependencies = [
 [[package]]
 name = "mysten-network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c#988cad6aaafac84d52a93227a16867bf27c1ea4c"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3777,7 +3853,7 @@ dependencies = [
 [[package]]
 name = "name-variant"
 version = "1.0.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c#988cad6aaafac84d52a93227a16867bf27c1ea4c"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5735,7 +5811,7 @@ dependencies = [
  "move-package",
  "move-unit-test",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "node",
  "num_cpus",
  "once_cell",
@@ -5770,7 +5846,7 @@ dependencies = [
  "sui-swarm",
  "sui-types",
  "sui-verifier",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "tokio",
@@ -5827,7 +5903,7 @@ dependencies = [
  "sui-faucet",
  "sui-json",
  "sui-types",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tracing",
@@ -5887,7 +5963,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "node",
  "once_cell",
  "parking_lot 0.12.1",
@@ -5910,7 +5986,7 @@ dependencies = [
  "sui-network",
  "sui-storage",
  "sui-types",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0)",
+ "telemetry-subscribers",
  "temp_testdir",
  "tempfile",
  "test-fuzz",
@@ -5920,7 +5996,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.2",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "types",
  "workspace-hack",
 ]
@@ -6000,7 +6076,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
  "move-core-types",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "once_cell",
  "prometheus_exporter",
  "schemars",
@@ -6045,7 +6121,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bytes",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "prost",
  "serde 1.0.137",
  "sui-types",
@@ -6065,7 +6141,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "parking_lot 0.12.1",
  "prometheus_exporter",
  "sui-config",
@@ -6073,7 +6149,7 @@ dependencies = [
  "sui-gateway",
  "sui-network",
  "sui-storage",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "telemetry-subscribers",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -6116,11 +6192,11 @@ dependencies = [
  "rocksdb",
  "serde 1.0.137",
  "sui-types",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0)",
+ "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "workspace-hack",
 ]
 
@@ -6130,7 +6206,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "rand 0.7.3",
  "serde 1.0.137",
  "sui-config",
@@ -6138,7 +6214,7 @@ dependencies = [
  "sui-node",
  "sui-types",
  "tap",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tonic-health",
@@ -6221,7 +6297,7 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "workspace-hack",
  "zeroize",
 ]
@@ -6314,29 +6390,17 @@ dependencies = [
 [[package]]
 name = "telemetry-subscribers"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0#2de1a391654a7ee09d867de2f16627b915ad21f0"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
 dependencies = [
+ "console-subscriber",
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "tokio",
  "tracing",
  "tracing-appender",
- "tracing-opentelemetry",
- "tracing-subscriber 0.3.11",
-]
-
-[[package]]
-name = "telemetry-subscribers"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c#988cad6aaafac84d52a93227a16867bf27c1ea4c"
-dependencies = [
- "once_cell",
- "opentelemetry",
- "opentelemetry-jaeger",
- "tokio",
- "tracing",
- "tracing-appender",
+ "tracing-bunyan-formatter",
+ "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber 0.3.11",
 ]
@@ -6476,7 +6540,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.2",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "workspace-hack",
 ]
 
@@ -6911,6 +6975,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-bunyan-formatter"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd99ff040622c69c0fc4bd3ea5fe16630ce46400a79bd41339391b2d416ea24c"
+dependencies = [
+ "gethostname",
+ "log",
+ "serde 1.0.137",
+ "serde_json",
+ "time 0.3.9",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
+ "tracing-subscriber 0.3.11",
+]
+
+[[package]]
+name = "tracing-chrome"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1ac1f6a3a47e9c755e65ef974653c978da2246487a16044a8ee1d9a0a67257c"
+dependencies = [
+ "crossbeam",
+ "json",
+ "tracing",
+ "tracing-subscriber 0.3.11",
+]
+
+[[package]]
 name = "tracing-core"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7035,7 +7128,7 @@ dependencies = [
 [[package]]
 name = "typed-store"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c#988cad6aaafac84d52a93227a16867bf27c1ea4c"
+source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
 dependencies = [
  "bincode",
  "collectable",
@@ -7694,13 +7787,17 @@ dependencies = [
  "config 0.1.0",
  "config 0.11.0",
  "consensus",
+ "console-api",
+ "console-subscriber",
  "constant_time_eq",
  "core2",
  "crc32fast",
+ "crossbeam",
  "crossbeam-channel 0.4.4",
  "crossbeam-channel 0.5.4",
  "crossbeam-deque",
  "crossbeam-epoch",
+ "crossbeam-queue",
  "crossbeam-utils 0.7.2",
  "crossbeam-utils 0.8.8",
  "crossterm 0.21.0",
@@ -7775,6 +7872,7 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "generic-array 0.14.5",
+ "gethostname",
  "getrandom 0.1.16",
  "getrandom 0.2.6",
  "gimli",
@@ -7825,6 +7923,7 @@ dependencies = [
  "itoa 1.0.2",
  "jobserver",
  "js-sys",
+ "json",
  "jsonrpsee",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -7904,7 +8003,7 @@ dependencies = [
  "multihash-derive",
  "multimap",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "name-variant",
  "named-lock",
  "nested",
@@ -8071,8 +8170,7 @@ dependencies = [
  "tap",
  "target-lexicon",
  "target-spec",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=2de1a391654a7ee09d867de2f16627b915ad21f0)",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "telemetry-subscribers",
  "temp_testdir",
  "tempfile",
  "tera",
@@ -8116,6 +8214,8 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-attributes",
+ "tracing-bunyan-formatter",
+ "tracing-chrome",
  "tracing-core",
  "tracing-futures",
  "tracing-log",
@@ -8127,7 +8227,7 @@ dependencies = [
  "twox-hash",
  "typed-arena",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=988cad6aaafac84d52a93227a16867bf27c1ea4c)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "typenum",
  "types",
  "ucd-trie",
