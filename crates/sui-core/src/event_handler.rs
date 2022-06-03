@@ -51,14 +51,12 @@ impl EventHandler {
             Event::MoveEvent { .. } => {
                 debug!(event =? event, "Process MoveEvent.");
                 match event.extract_move_struct(&self.module_cache) {
-                    Ok(Some(move_struct)) => {
-                        EventEnvelope::new(
-                            get_unixtime_ms(),
-                            None,
-                            event.clone(),
-                            Some(move_struct),
-                        )
-                    }
+                    Ok(Some(move_struct)) => EventEnvelope::new(
+                        get_unixtime_ms(),
+                        None,
+                        event.clone(),
+                        Some(move_struct),
+                    ),
                     Ok(None) => unreachable!("Expect a MoveStruct from a MoveEvent."),
                     Err(e) => return Err(e),
                 }
