@@ -573,20 +573,24 @@ SuiError:
         STRUCT:
           - error: STR
     92:
+      EventFailedToDispatch:
+        STRUCT:
+          - error: STR
+    93:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    93:
+    94:
       ObjectSerializationError:
         STRUCT:
           - error: STR
-    94:
-      ConcurrentTransactionError: UNIT
     95:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     96:
+      IncorrectRecipientError: UNIT
+    97:
       TooManyIncorrectAuthorities:
         STRUCT:
           - errors:
@@ -594,51 +598,51 @@ SuiError:
                 TUPLE:
                   - TYPENAME: PublicKeyBytes
                   - TYPENAME: SuiError
-    97:
+    98:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
-    98:
+    99:
       GatewayInvalidTxRangeQuery:
         STRUCT:
           - error: STR
-    99:
-      OnlyOneConsensusClientPermitted: UNIT
     100:
+      OnlyOneConsensusClientPermitted: UNIT
+    101:
       ConsensusConnectionBroken:
         NEWTYPE: STR
-    101:
+    102:
       FailedToHearBackFromConsensus:
         NEWTYPE: STR
-    102:
+    103:
       SharedObjectLockingFailure:
         NEWTYPE: STR
-    103:
-      ListenerCapacityExceeded: UNIT
     104:
+      ListenerCapacityExceeded: UNIT
+    105:
       ConsensusSuiSerializationError:
         NEWTYPE: STR
-    105:
-      NotASharedObjectTransaction: UNIT
     106:
+      NotASharedObjectTransaction: UNIT
+    107:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    107:
+    108:
       HkdfError:
         NEWTYPE: STR
-    108:
+    109:
       SignatureKeyGenError:
         NEWTYPE: STR
-    109:
-      ValidatorHaltedAtEpochEnd: UNIT
     110:
+      ValidatorHaltedAtEpochEnd: UNIT
+    111:
       InconsistentEpochState:
         STRUCT:
           - error: STR
-    111:
+    112:
       RpcError:
         NEWTYPE: STR
-    112:
+    113:
       UnsupportedFeatureError:
         STRUCT:
           - error: STR
