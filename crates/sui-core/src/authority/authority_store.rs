@@ -8,7 +8,11 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::path::Path;
-use sui_storage::{default_db_options, mutex_table::MutexTable, LockService};
+use sui_storage::{
+    default_db_options,
+    mutex_table::{LockGuard, MutexTable},
+    LockService,
+};
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
@@ -253,17 +257,14 @@ impl<
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks<'a, 'b>(
-        &'a self,
-        input_objects: &'b [ObjectRef],
-    ) -> Vec<tokio::sync::MutexGuard<'a, ()>> {
+    async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard<'a>> {
         if !USE_LOCKS {
             return vec![];
         }
 
-        self.mutex_table.acquire_locks(
-            input_objects.iter().map(|(_, _, digest)| digest)
-        ).await
+        self.mutex_table
+            .acquire_locks(input_objects.iter().map(|(_, _, digest)| digest))
+            .await
     }
 
     // Methods to read the store
