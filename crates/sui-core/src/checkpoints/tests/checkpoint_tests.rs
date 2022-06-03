@@ -24,15 +24,19 @@ use sui_types::{
 };
 
 use parking_lot::Mutex;
+use sui_types::crypto::KeyPair;
 
-fn random_ckpoint_store() -> Vec<(PathBuf, CheckpointStore)> {
+fn random_ckpoint_store() -> (Committee, Vec<KeyPair>, Vec<(PathBuf, CheckpointStore)>) {
     random_ckpoint_store_num(4)
 }
 
-fn random_ckpoint_store_num(num: usize) -> Vec<(PathBuf, CheckpointStore)> {
+fn random_ckpoint_store_num(
+    num: usize,
+) -> (Committee, Vec<KeyPair>, Vec<(PathBuf, CheckpointStore)>) {
     let mut rng = StdRng::from_seed(RNG_SEED);
     let (keys, committee) = make_committee_key_num(num, &mut rng);
-    keys.iter()
+    let stores = keys
+        .iter()
         .map(|k| {
             let dir = env::temp_dir();
             let path = dir.join(format!("SC_{:?}", ObjectID::random()));
@@ -43,19 +47,19 @@ fn random_ckpoint_store_num(num: usize) -> Vec<(PathBuf, CheckpointStore)> {
                 path.clone(),
                 None,
                 *k.public_key_bytes(),
-                committee.clone(),
                 Arc::pin(k.copy()),
             )
             .unwrap();
             (path, cps)
         })
-        .collect()
+        .collect();
+    (committee, keys, stores)
 }
 
 #[test]
 fn crash_recovery() {
     let mut rng = StdRng::from_seed(RNG_SEED);
-    let (keys, committee) = make_committee_key(&mut rng);
+    let (keys, _committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
 
     // Setup
@@ -71,7 +75,6 @@ fn crash_recovery() {
         path.clone(),
         None,
         *k.public_key_bytes(),
-        committee.clone(),
         Arc::pin(k.copy()),
     )
     .unwrap();
@@ -111,14 +114,8 @@ fn crash_recovery() {
     // Delete and re-open DB
     drop(cps);
 
-    let mut cps_new = CheckpointStore::open(
-        path,
-        None,
-        *k.public_key_bytes(),
-        committee,
-        Arc::pin(k.copy()),
-    )
-    .unwrap();
+    let mut cps_new =
+        CheckpointStore::open(path, None, *k.public_key_bytes(), Arc::pin(k.copy())).unwrap();
 
     // TEST 3 -- the current proposal is correctly recreated.
 
@@ -141,7 +138,8 @@ fn crash_recovery() {
 
 #[test]
 fn make_checkpoint_db() {
-    let (_, mut cps) = random_ckpoint_store().pop().unwrap();
+    let (_committee, _keys, mut stores) = random_ckpoint_store();
+    let (_, mut cps) = stores.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -152,29 +150,29 @@ fn make_checkpoint_db() {
 
     cps.update_processed_transactions(&[(1, t1), (2, t2), (3, t3)])
         .unwrap();
-    assert!(cps.checkpoint_contents.iter().count() == 0);
-    assert!(cps.extra_transactions.iter().count() == 3);
-    assert!(cps.unprocessed_transactions.iter().count() == 0);
+    assert_eq!(cps.checkpoint_contents.iter().count(), 0);
+    assert_eq!(cps.extra_transactions.iter().count(), 3);
+    assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
 
-    assert!(cps.next_checkpoint() == 0);
+    assert_eq!(cps.next_checkpoint(), 0);
 
     cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
-    assert!(cps.checkpoint_contents.iter().count() == 4);
+    assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
-    assert!(cps.unprocessed_transactions.iter().count() == 2);
+    assert_eq!(cps.unprocessed_transactions.iter().count(), 2);
 
     assert_eq!(cps.lowest_unprocessed_checkpoint(), 0);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert!(tx_seq >= u64::MAX / 2);
 
-    assert!(cps.next_checkpoint() == 1);
+    assert_eq!(cps.next_checkpoint(), 1);
 
     cps.update_processed_transactions(&[(4, t4), (5, t5), (6, t6)])
         .unwrap();
-    assert!(cps.checkpoint_contents.iter().count() == 4);
+    assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
-    assert!(cps.unprocessed_transactions.iter().count() == 0);
+    assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
 
     assert_eq!(cps.lowest_unprocessed_checkpoint(), 1);
 
@@ -184,11 +182,11 @@ fn make_checkpoint_db() {
 
 #[test]
 fn make_proposals() {
-    let mut test_objects = random_ckpoint_store();
-    let (_, mut cps1) = test_objects.pop().unwrap();
-    let (_, mut cps2) = test_objects.pop().unwrap();
-    let (_, mut cps3) = test_objects.pop().unwrap();
-    let (_, mut cps4) = test_objects.pop().unwrap();
+    let (_committee, _keys, mut stores) = random_ckpoint_store();
+    let (_, mut cps1) = stores.pop().unwrap();
+    let (_, mut cps2) = stores.pop().unwrap();
+    let (_, mut cps3) = stores.pop().unwrap();
+    let (_, mut cps4) = stores.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -225,24 +223,24 @@ fn make_proposals() {
     cps3.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps4.update_new_checkpoint(0, &ckp_items[..]).unwrap();
 
-    assert!(
-        cps4.unprocessed_transactions.keys().collect::<HashSet<_>>()
-            == [t1, t2, t3].into_iter().collect::<HashSet<_>>()
+    assert_eq!(
+        cps4.unprocessed_transactions.keys().collect::<HashSet<_>>(),
+        [t1, t2, t3].into_iter().collect::<HashSet<_>>()
     );
 
-    assert!(
-        cps4.extra_transactions.keys().collect::<HashSet<_>>()
-            == [t5].into_iter().collect::<HashSet<_>>()
+    assert_eq!(
+        cps4.extra_transactions.keys().collect::<HashSet<_>>(),
+        [t5].into_iter().collect::<HashSet<_>>()
     );
 }
 
 #[test]
 fn make_diffs() {
-    let mut test_objects = random_ckpoint_store();
-    let (_, mut cps1) = test_objects.pop().unwrap();
-    let (_, mut cps2) = test_objects.pop().unwrap();
-    let (_, mut cps3) = test_objects.pop().unwrap();
-    let (_, mut cps4) = test_objects.pop().unwrap();
+    let (_committee, _keys, mut stores) = random_ckpoint_store();
+    let (_, mut cps1) = stores.pop().unwrap();
+    let (_, mut cps2) = stores.pop().unwrap();
+    let (_, mut cps3) = stores.pop().unwrap();
+    let (_, mut cps4) = stores.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -292,11 +290,11 @@ fn make_diffs() {
 
 #[test]
 fn latest_proposal() {
-    let mut test_objects = random_ckpoint_store();
-    let (_, mut cps1) = test_objects.pop().unwrap();
-    let (_, mut cps2) = test_objects.pop().unwrap();
-    let (_, mut cps3) = test_objects.pop().unwrap();
-    let (_, mut cps4) = test_objects.pop().unwrap();
+    let (_committee, _keys, mut stores) = random_ckpoint_store();
+    let (_, mut cps1) = stores.pop().unwrap();
+    let (_, mut cps2) = stores.pop().unwrap();
+    let (_, mut cps3) = stores.pop().unwrap();
+    let (_, mut cps4) = stores.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -475,11 +473,11 @@ fn latest_proposal() {
 
 #[test]
 fn set_get_checkpoint() {
-    let mut test_objects = random_ckpoint_store();
-    let (_, mut cps1) = test_objects.pop().unwrap();
-    let (_, mut cps2) = test_objects.pop().unwrap();
-    let (_, mut cps3) = test_objects.pop().unwrap();
-    let (_, mut cps4) = test_objects.pop().unwrap();
+    let (committee, _keys, mut stores) = random_ckpoint_store();
+    let (_, mut cps1) = stores.pop().unwrap();
+    let (_, mut cps2) = stores.pop().unwrap();
+    let (_, mut cps3) = stores.pop().unwrap();
+    let (_, mut cps4) = stores.pop().unwrap();
 
     let t1 = TransactionDigest::random();
     let t2 = TransactionDigest::random();
@@ -507,8 +505,7 @@ fn set_get_checkpoint() {
     // --- TEST 0 ---
 
     // There is no previous checkpoint
-    let request = CheckpointRequest::past(0, true);
-    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::None)
@@ -516,8 +513,7 @@ fn set_get_checkpoint() {
     assert!(response.detail.is_none());
 
     // There is no previous checkpoint
-    let request = CheckpointRequest::past(0, true);
-    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::None)
@@ -547,8 +543,7 @@ fn set_get_checkpoint() {
     // --- TEST 1 ---
 
     // Now we have a signed checkpoint
-    let request = CheckpointRequest::past(0, true);
-    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(..))
@@ -562,7 +557,7 @@ fn set_get_checkpoint() {
     // Make a certificate
     let mut signed_checkpoint: Vec<SignedCheckpoint> = Vec::new();
     for x in [&mut cps1, &mut cps2, &mut cps3] {
-        match x.handle_checkpoint_request(&request).unwrap().info {
+        match x.handle_past_checkpoint(true, 0).unwrap().info {
             AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) => {
                 signed_checkpoint.push(signed)
             }
@@ -574,20 +569,19 @@ fn set_get_checkpoint() {
 
     // We can set the checkpoint cert to those that have it
 
-    let checkpoint_cert =
-        CertifiedCheckpoint::aggregate(signed_checkpoint, &cps1.committee).unwrap();
+    let checkpoint_cert = CertifiedCheckpoint::aggregate(signed_checkpoint, &committee).unwrap();
 
     // Send the certificate to a party that has the data
-    let request_ckp = CheckpointRequest::set_checkpoint(checkpoint_cert.clone(), None);
-    let response_ckp = cps1.handle_checkpoint_request(&request_ckp).unwrap();
+    let response_ckp = cps1
+        .handle_checkpoint_certificate(&checkpoint_cert, &None, &committee)
+        .unwrap();
     assert!(matches!(
         response_ckp.info,
         AuthorityCheckpointInfo::Success
     ));
 
     // Now we have a certified checkpoint
-    let request = CheckpointRequest::past(0, true);
-    let response = cps1.handle_checkpoint_request(&request).unwrap();
+    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(..))
@@ -596,21 +590,20 @@ fn set_get_checkpoint() {
     // --- TEST 3 ---
 
     // Setting just cert to a node that does not have the checkpoint fails
-    let request_ckp = CheckpointRequest::set_checkpoint(checkpoint_cert.clone(), None);
-    let response_ckp = cps4.handle_checkpoint_request(&request_ckp);
+    let response_ckp = cps4.handle_checkpoint_certificate(&checkpoint_cert, &None, &committee);
     assert!(response_ckp.is_err());
 
     // Setting with contents succeeds
-    let request_ckp = CheckpointRequest::set_checkpoint(checkpoint_cert, Some(transactions));
-    let response_ckp = cps4.handle_checkpoint_request(&request_ckp).unwrap();
+    let response_ckp = cps4
+        .handle_checkpoint_certificate(&checkpoint_cert, &Some(transactions), &committee)
+        .unwrap();
     assert!(matches!(
         response_ckp.info,
         AuthorityCheckpointInfo::Success
     ));
 
     // Now we have a certified checkpoint
-    let request = CheckpointRequest::past(0, true);
-    let response = cps4.handle_checkpoint_request(&request).unwrap();
+    let response = cps4.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(..))
@@ -620,7 +613,7 @@ fn set_get_checkpoint() {
 #[test]
 fn checkpoint_integration() {
     let mut rng = StdRng::from_seed(RNG_SEED);
-    let (keys, committee) = make_committee_key(&mut rng);
+    let (keys, _committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
 
     // Setup
@@ -632,14 +625,8 @@ fn checkpoint_integration() {
     // Create an authority
     // Make a checkpoint store:
 
-    let mut cps = CheckpointStore::open(
-        path,
-        None,
-        *k.public_key_bytes(),
-        committee,
-        Arc::pin(k.copy()),
-    )
-    .unwrap();
+    let mut cps =
+        CheckpointStore::open(path, None, *k.public_key_bytes(), Arc::pin(k.copy())).unwrap();
 
     let mut next_tx_num: TxSequenceNumber = 0;
     let mut unprocessed = Vec::new();
@@ -726,7 +713,6 @@ async fn test_batch_to_checkpointing() {
             &checkpoints_path,
             None,
             *secret.public_key_bytes(),
-            committee.clone(),
             secret.clone(),
         )
         .unwrap(),
@@ -892,7 +878,6 @@ async fn test_batch_to_checkpointing_init_crash() {
                 &checkpoints_path,
                 None,
                 *secret.public_key_bytes(),
-                committee.clone(),
                 secret.clone(),
             )
             .unwrap(),
@@ -923,7 +908,7 @@ async fn test_batch_to_checkpointing_init_crash() {
 
 #[test]
 fn set_fragment_external() {
-    let mut test_objects = random_ckpoint_store();
+    let (committee, _keys, mut test_objects) = random_ckpoint_store();
     let (test_tx, _rx) = TestConsensus::new();
 
     let (_, mut cps1) = test_objects.pop().unwrap();
@@ -966,16 +951,22 @@ fn set_fragment_external() {
     // let fragment13 = p1.diff_with(&p3);
 
     // When the fragment concern the authority it processes it
-    assert!(cps1.handle_receive_fragment(&fragment12).is_ok());
-    assert!(cps2.handle_receive_fragment(&fragment12).is_ok());
+    assert!(cps1
+        .handle_receive_fragment(&fragment12, &committee)
+        .is_ok());
+    assert!(cps2
+        .handle_receive_fragment(&fragment12, &committee)
+        .is_ok());
 
     // When the fragment does not concern the authority it does not process it.
-    assert!(cps3.handle_receive_fragment(&fragment12).is_err());
+    assert!(cps3
+        .handle_receive_fragment(&fragment12, &committee)
+        .is_err());
 }
 
 #[test]
 fn set_fragment_reconstruct() {
-    let mut test_objects = random_ckpoint_store();
+    let (committee, _keys, mut test_objects) = random_ckpoint_store();
     let (_, mut cps1) = test_objects.pop().unwrap();
     let (_, mut cps2) = test_objects.pop().unwrap();
     let (_, mut cps3) = test_objects.pop().unwrap();
@@ -1010,14 +1001,14 @@ fn set_fragment_reconstruct() {
 
     let attempt1 = FragmentReconstruction::construct(
         0,
-        cps1.committee.clone(),
+        committee.clone(),
         &[fragment12.clone(), fragment34.clone()],
     );
     assert!(matches!(attempt1, Ok(None)));
 
     let fragment41 = p4.fragment_with(&p1);
     let attempt2 =
-        FragmentReconstruction::construct(0, cps1.committee, &[fragment12, fragment34, fragment41]);
+        FragmentReconstruction::construct(0, committee, &[fragment12, fragment34, fragment41]);
     assert!(attempt2.is_ok());
 
     let reconstruction = attempt2.unwrap().unwrap();
@@ -1026,7 +1017,7 @@ fn set_fragment_reconstruct() {
 
 #[test]
 fn set_fragment_reconstruct_two_components() {
-    let mut test_objects = random_ckpoint_store_num(2 * 3 + 1);
+    let (committee, _keys, mut test_objects) = random_ckpoint_store_num(2 * 3 + 1);
 
     let t2 = TransactionDigest::random();
     let t3 = TransactionDigest::random();
@@ -1041,8 +1032,6 @@ fn set_fragment_reconstruct_two_components() {
         .iter_mut()
         .map(|(_, cps)| cps.set_proposal().unwrap())
         .collect();
-
-    let committee = test_objects[0].1.committee.clone();
 
     // Get out the last two
     let p_x = proposals.pop().unwrap();
@@ -1080,7 +1069,7 @@ fn set_fragment_reconstruct_two_components() {
 
 #[test]
 fn set_fragment_reconstruct_two_mutual() {
-    let mut test_objects = random_ckpoint_store_num(4);
+    let (committee, _, mut test_objects) = random_ckpoint_store_num(4);
 
     let t2 = TransactionDigest::random();
     let t3 = TransactionDigest::random();
@@ -1095,8 +1084,6 @@ fn set_fragment_reconstruct_two_mutual() {
         .iter_mut()
         .map(|(_, cps)| cps.set_proposal().unwrap())
         .collect();
-
-    let committee = test_objects[0].1.committee.clone();
 
     // Get out the last two
     let p_x = proposals.pop().unwrap();
@@ -1139,7 +1126,7 @@ impl TestConsensus {
 
 #[test]
 fn test_fragment_full_flow() {
-    let mut test_objects = random_ckpoint_store_num(2 * 3 + 1);
+    let (committee, _keys, mut test_objects) = random_ckpoint_store_num(2 * 3 + 1);
 
     let (test_tx, rx) = TestConsensus::new();
 
@@ -1171,7 +1158,7 @@ fn test_fragment_full_flow() {
     // Validator 3 is not validator 5 or 6
     assert!(test_objects[3]
         .1
-        .handle_receive_fragment(&fragment_xy)
+        .handle_receive_fragment(&fragment_xy, &committee)
         .is_err());
     // Nothing is sent to consensus
     assert!(rx.try_recv().is_err());
@@ -1179,11 +1166,11 @@ fn test_fragment_full_flow() {
     // But accept it on both the 5 and 6
     assert!(test_objects[5]
         .1
-        .handle_receive_fragment(&fragment_xy)
+        .handle_receive_fragment(&fragment_xy, &committee)
         .is_ok());
     assert!(test_objects[6]
         .1
-        .handle_receive_fragment(&fragment_xy)
+        .handle_receive_fragment(&fragment_xy, &committee)
         .is_ok());
 
     // Check we registered one local fragment
@@ -1197,7 +1184,7 @@ fn test_fragment_full_flow() {
             let fragment_xy = proposal.fragment_with(&proposals[proposals.len() - 1]);
             assert!(test_objects[proposals.len() - 1]
                 .1
-                .handle_receive_fragment(&fragment_xy)
+                .handle_receive_fragment(&fragment_xy, &committee)
                 .is_ok());
             fragments.push(fragment_xy);
         }
@@ -1214,7 +1201,9 @@ fn test_fragment_full_flow() {
     let mut all_fragments = Vec::new();
     while let Ok(fragment) = rx.try_recv() {
         all_fragments.push(fragment.clone());
-        assert!(cps0.handle_internal_fragment(seq.clone(), fragment).is_ok());
+        assert!(cps0
+            .handle_internal_fragment(seq.clone(), fragment, &committee)
+            .is_ok());
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
         );
@@ -1226,7 +1215,7 @@ fn test_fragment_full_flow() {
     assert_eq!(cps0.next_checkpoint(), 1);
 
     let response = cps0
-        .handle_checkpoint_request(&CheckpointRequest::past(0, true))
+        .handle_past_checkpoint(true, 0)
         .expect("No errors on response");
     // Ensure the reconstruction worked
     assert_eq!(response.detail.unwrap().transactions.len(), 2);
@@ -1237,7 +1226,7 @@ fn test_fragment_full_flow() {
     let mut seq = ExecutionIndices::default();
     let cps6 = &mut test_objects[6].1;
     for fragment in &all_fragments {
-        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone());
+        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone(), &committee);
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
         );
@@ -1253,7 +1242,7 @@ fn test_fragment_full_flow() {
     // and no more fragments are recorded.
 
     for fragment in &all_fragments {
-        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone());
+        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone(), &committee);
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
         );
@@ -1377,7 +1366,6 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
             &checkpoints_path,
             None,
             *secret.public_key_bytes(),
-            committee.clone(),
             secret.clone(),
         )
         .unwrap();
@@ -1419,6 +1407,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
 
     // The fake consensus channel for testing
     let checkpoint_stores: Vec<_> = authorities.iter().map(|a| a.checkpoint.clone()).collect();
+    let c = committee.clone();
     let _join = tokio::task::spawn(async move {
         let mut seq = ExecutionIndices::default();
         while let Some(msg) = _rx.recv().await {
@@ -1426,7 +1415,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
             for cps in &checkpoint_stores {
                 if let Err(err) = cps
                     .lock()
-                    .handle_internal_fragment(seq.clone(), msg.clone())
+                    .handle_internal_fragment(seq.clone(), msg.clone(), &c)
                 {
                     println!("Error: {:?}", err);
                 }
@@ -1564,7 +1553,7 @@ async fn checkpoint_messaging_flow() {
         }
     }
 
-    assert!(contents.as_ref().unwrap().transactions.len() == 1);
+    assert_eq!(contents.as_ref().unwrap().transactions.len(), 1);
 
     // Construct a certificate
     // We need at least f+1 signatures

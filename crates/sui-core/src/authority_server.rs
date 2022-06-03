@@ -379,17 +379,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CheckpointRequest>,
     ) -> Result<tonic::Response<CheckpointResponse>, tonic::Status> {
-        if let Some(checkpoint) = &self.state.checkpoints() {
-            let request = request.into_inner();
+        let request = request.into_inner();
 
-            let response = checkpoint
-                .lock()
-                .handle_checkpoint_request(&request)
-                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let response = self
+            .state
+            .handle_checkpoint_request(&request)
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-            return Ok(tonic::Response::new(response));
-        }
-
-        Err(tonic::Status::internal("Unsupported".to_string()))
+        return Ok(tonic::Response::new(response));
     }
 }
