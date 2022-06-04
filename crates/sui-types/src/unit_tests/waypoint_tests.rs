@@ -19,6 +19,12 @@ fn make_item() -> Item {
     Item(item)
 }
 
+impl From<&Item> for RistrettoPoint {
+    fn from(other: &Item) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&other.0)
+    }
+}
+
 #[test]
 fn test_diff() {
     let mut first = Waypoint::default();
@@ -29,11 +35,11 @@ fn test_diff() {
     let v3 = make_item();
     let v4 = make_item();
 
-    first.insert(&v1);
+    first.insertx(&v1);
     first.insert(&v2);
     first.insert(&v3);
 
-    second.insert(&v1);
+    second.insertx(&v1);
     second.insert(&v2);
     second.insert(&v4);
 
@@ -45,7 +51,7 @@ fn test_diff() {
         second,
         vec![v3].into_iter(),
     );
-    assert!(diff.check());
+    assert!(diff.checkx());
 }
 
 #[test]

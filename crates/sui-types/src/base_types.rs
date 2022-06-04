@@ -12,6 +12,7 @@ use anyhow::anyhow;
 use base64ct::Encoding;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
+use ed25519_dalek::Sha512;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -226,6 +227,18 @@ pub struct TransactionDigest(
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
+impl From<TransactionDigest> for RistrettoPoint {
+    fn from(other: TransactionDigest) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&other.0)
+    }
+}
+
+impl From<&TransactionDigest> for RistrettoPoint {
+    fn from(other: &TransactionDigest) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&other.0)
+    }
+}
+
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -250,11 +263,20 @@ pub struct ExecutionDigests {
 }
 
 impl ExecutionDigests {
-    pub fn new(transaction : TransactionDigest, effects: TransactionEffectsDigest) -> Self {
+    pub fn new(transaction: TransactionDigest, effects: TransactionEffectsDigest) -> Self {
         Self {
             transaction,
-            effects
+            effects,
         }
+    }
+}
+
+impl From<&ExecutionDigests> for RistrettoPoint {
+    fn from(other: &ExecutionDigests) -> RistrettoPoint {
+        let mut data = [0; 64];
+        data[0..32].clone_from_slice(&other.transaction.0);
+        data[32..64].clone_from_slice(&other.effects.0);
+        RistrettoPoint::from_uniform_bytes(&data)
     }
 }
 

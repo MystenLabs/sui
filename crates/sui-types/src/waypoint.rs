@@ -71,6 +71,29 @@ impl Accumulator {
     }
 }
 
+impl Accumulator {
+    /// Insert one item in the accumulator
+    pub fn insertx<'a, I>(&mut self, item: &'a I)
+    where
+        RistrettoPoint: From<&'a I>,
+    {
+        let point: RistrettoPoint = item.into();
+        self.accumulator += point;
+    }
+
+    // Insert all items from an iterator into the accumulator
+    pub fn insert_allx<'a, 'c, I, It>(&mut self, items: It)
+    where
+        It: 'c + IntoIterator<Item = &'a I>,
+        I: 'a,
+        RistrettoPoint: From<&'a I>,
+    {
+        for i in items {
+            self.insertx(&i);
+        }
+    }
+}
+
 impl Debug for Accumulator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Accumulator").finish()
@@ -106,7 +129,8 @@ where
 
 impl<K, I> WaypointWithItems<K, I>
 where
-    I: AsRef<[u8]> + Ord,
+    K: 'static,
+    I: 'static + Ord,
 {
     pub fn new(key: K) -> WaypointWithItems<K, I> {
         WaypointWithItems {
@@ -115,7 +139,12 @@ where
             items: BTreeSet::new(),
         }
     }
+}
 
+impl<K, I> WaypointWithItems<K, I>
+where
+    I: AsRef<[u8]> + Ord,
+{
     /// Insert an element in the accumulator and list of items
     pub fn insert_full(&mut self, item: I) {
         self.waypoint.insert(&item);
@@ -130,7 +159,7 @@ where
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WaypointDiff<K, I>
 where
-    I: AsRef<[u8]> + Ord,
+    I: Ord,
 {
     pub first: WaypointWithItems<K, I>,
     pub second: WaypointWithItems<K, I>,
@@ -138,7 +167,8 @@ where
 
 impl<K, I> WaypointDiff<K, I>
 where
-    I: AsRef<[u8]> + Ord,
+    K: 'static,
+    I: 'static + Ord,
 {
     pub fn new<V1, V2>(
         first_key: K,
@@ -176,7 +206,12 @@ where
             second: self.first,
         }
     }
+}
 
+impl<K, I> WaypointDiff<K, I>
+where
+    I: AsRef<[u8]> + Ord,
+{
     /// Check the internal invariants: ie that adding to both
     /// waypoints the missing elements makes them point to the
     /// accumulated same set.
@@ -186,6 +221,27 @@ where
 
         let mut second_plus = self.second.waypoint.clone();
         second_plus.insert_all(self.second.items.iter());
+
+        first_plus == second_plus
+    }
+}
+
+impl<'a, K, I> WaypointDiff<K, I>
+where
+    I: 'static + Ord,
+    K: 'static,
+    RistrettoPoint: From<&'a I>,
+{
+    /// Check the internal invariants: ie that adding to both
+    /// waypoints the missing elements makes them point to the
+    /// accumulated same set.
+    pub fn  checkx(&'a self)-> bool 
+    {
+        let mut first_plus = self.first.waypoint.clone();
+        first_plus.insert_allx(self.first.items.iter());
+
+        let mut second_plus = self.second.waypoint.clone();
+        second_plus.insert_allx(self.second.items.iter());
 
         first_plus == second_plus
     }
@@ -207,8 +263,7 @@ where
 
 impl<K, I> Default for GlobalCheckpoint<K, I>
 where
-    K: Eq + Ord + Clone,
-    I: AsRef<[u8]> + Ord + Clone,
+    I: Ord,
 {
     fn default() -> Self {
         Self::new()
@@ -217,8 +272,7 @@ where
 
 impl<K, I> GlobalCheckpoint<K, I>
 where
-    K: Eq + Ord + Clone,
-    I: AsRef<[u8]> + Ord + Clone,
+    I: Ord,
 {
     /// Initializes an empty global checkpoint at a specific
     /// sequence number.
@@ -228,7 +282,13 @@ where
             authority_waypoints: BTreeMap::new(),
         }
     }
+}
 
+impl<K, I> GlobalCheckpoint<K, I>
+where
+    K: 'static + Eq + Ord + Clone,
+    I: 'static + AsRef<[u8]> + Ord + Clone,
+{
     /// Inserts a waypoint diff into the checkpoint. If the checkpoint
     /// is empty both ends of the diff are inserted, and the reference
     /// waypoint set to their union. If there are already waypoints into
@@ -415,4 +475,160 @@ where
             .sum();
         authority_weights >= committee.quorum_threshold()
     }
+}
+
+impl<'a, 'b, K, I> GlobalCheckpoint<K, I>
+where
+    'b: 'a,
+    K: 'static + Eq + Ord + Clone,
+    I: 'static + Ord + Clone,
+    RistrettoPoint: From<&'a I>,
+{
+    /// Checks the internal invariants of the checkpoint, namely that
+    /// all the contained waypoints + the associated items lead to the
+    /// reference waypoint.
+    pub fn checkx(&'b self) -> bool {
+        let root = self.reference_waypoint.clone();
+        for v in self.authority_waypoints.values() {
+            let mut inner_root = v.waypoint.clone();
+            inner_root.insert_allx(v.items.iter());
+
+            if inner_root != root {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Given our proposal, a waypoint us-other, and a global checkpoint
+    /// that either contains us, or the other, what is the actual set of
+    /// items in the checkpoint?
+    pub fn checkpoint_itemsx(
+        &'b self,
+        diff: &WaypointDiff<K, I>,
+        mut own_proposal: BTreeSet<I>,
+    ) -> Result<BTreeSet<I>, WaypointError> {
+        // Case 1 -- we are in the checkpoint (easy)
+
+        // If the authority is one of the participants in the checkpoint
+        // just add our proposal to the diff with the global waypoint, and
+        // this is the checkpoint.
+        if self.authority_waypoints.contains_key(&diff.first.key) {
+            let mut all_elements = self.authority_waypoints[&diff.first.key].items.clone();
+            all_elements.extend(own_proposal);
+            return Ok(all_elements);
+        }
+
+        // Case 2 -- the other side of our diff is in the checkpoint (harder)
+
+        // If not then we need to compute the difference.
+        if !self.authority_waypoints.contains_key(&diff.second.key) {
+            return Err(WaypointError::generic(
+                "Need the second key at least to link into the checkpoint.".to_string(),
+            ));
+        }
+
+        // Union of items, to catch up with second
+        own_proposal.extend(diff.first.items.clone());
+        // Remove items not in second
+        let mut second_items: BTreeSet<I> = own_proposal
+            .difference(&diff.second.items)
+            .cloned()
+            .collect();
+        // Add items from second to global checkpoint
+        second_items.extend(self.authority_waypoints[&diff.second.key].items.clone());
+
+        Ok(second_items)
+    }
+
+/*
+    pub fn insertx(&'b mut self, diff: WaypointDiff<K, I>) -> bool {
+        if !diff.checkx() {
+            return true;
+        }
+        false
+    }   
+*/
+
+    /*
+
+    /// Inserts a waypoint diff into the checkpoint. If the checkpoint
+    /// is empty both ends of the diff are inserted, and the reference
+    /// waypoint set to their union. If there are already waypoints into
+    /// this checkpoint the first part of the diff should be in the
+    /// checkpoint and the second is added and updates all waypoints with
+    /// the new union of all items.
+    pub fn insertx(&'a mut self, diff: WaypointDiff<K, I>) -> Result<(), WaypointError> {
+        if !diff.checkx() {
+            return Err(WaypointError::generic("Bad waypoint diff".to_string()));
+        }
+
+        // The first link we add to the checkpoint does not need to be
+        // connected to the graph since there is nothing to connect to.
+        if self.authority_waypoints.is_empty() {
+            // Add both waypoints into the checkpoint and compute root.
+            let WaypointDiff { first, second } = diff;
+            let mut root = first.waypoint.clone();
+            root.insert_allx(first.items.iter());
+            self.reference_waypoint = root;
+
+            self.authority_waypoints.insert(first.key.clone(), first);
+            self.authority_waypoints.insert(second.key.clone(), second);
+        } else {
+            // If the checkpoint is not empty, then the first element of the diff
+            // must connect, and the second must not exist.
+
+            debug_assert!(self.checkx());
+
+            if !(self.authority_waypoints.contains_key(&diff.first.key)
+                && self.authority_waypoints[&diff.first.key].waypoint == diff.first.waypoint)
+            {
+                // If the other side connects use that
+                if self.authority_waypoints.contains_key(&diff.second.key)
+                    && self.authority_waypoints[&diff.second.key].waypoint == diff.second.waypoint
+                {
+                    let diff = diff.swap();
+                    return self.insertx(diff);
+                }
+
+                return Err(WaypointError::CannotConnect);
+            }
+
+            if self.authority_waypoints.contains_key(&diff.second.key) {
+                return Err(WaypointError::NothingToDo);
+            }
+
+            let WaypointDiff { first, mut second } = diff;
+
+            // Determine the items to add to all.
+            let additional_first_items: Vec<_> = first
+                .items
+                .difference(&self.authority_waypoints[&first.key].items)
+                .cloned()
+                .collect();
+            let save_old_first = self.authority_waypoints[&first.key].items.clone();
+
+            // Update the root
+            self.reference_waypoint
+                .insert_allx(additional_first_items.iter());
+
+            // Update existing keys
+            for v in self.authority_waypoints.values_mut() {
+                let add_items = additional_first_items.clone();
+                v.items.extend(add_items);
+            }
+
+            debug_assert!(self.checkx());
+
+            // Add the new key
+            second.items.extend(&save_old_first - &first.items);
+            self.authority_waypoints.insert(second.key.clone(), second);
+
+            debug_assert!(self.checkx());
+        }
+
+        Ok(())
+    }
+    */
+
 }
