@@ -180,7 +180,6 @@ GET /object_info?objectId={{monster_id}}
         hunger_level: u64,
         affection_level: u64,
         buddy_level: u8,
-        _ctx: &mut TxContext
     ) {
         self.monster_level = monster_level;
         self.hunger_level = hunger_level;
