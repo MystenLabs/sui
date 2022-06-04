@@ -23,8 +23,8 @@ pub fn all_natives(
         ("ID", "get_versioned_id", id::get_versioned_id),
         (
             "TestScenario",
-            "delete_object_for_testing",
-            test_scenario::delete_object_for_testing,
+            "drop_object_for_testing",
+            test_scenario::drop_object_for_testing,
         ),
         (
             "TestScenario",
