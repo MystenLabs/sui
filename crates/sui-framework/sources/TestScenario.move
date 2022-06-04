@@ -190,22 +190,32 @@ module Sui::TestScenario {
     /// Should only be used in cases where current tx sender has more than one object of
     /// type `T` in their inventory.
     public fun take_owned_by_id<T: key>(scenario: &mut Scenario, id: ID): T {
-        let object_opt: Option<T> = find_object_by_id_in_inventory(scenario, &id);
+        let sender = sender(scenario);
+        let inventory: vector<T> = get_account_owned_inventory<T>(
+            sender,
+            last_tx_start_index(scenario)
+        );
+        let object_opt: Option<T> = find_object_by_id_in_inventory(inventory, &id);
 
-        assert!(Option::is_some(&object_opt), EObjectIDNotFound);
-        let object = Option::extract(&mut object_opt);
+        let objects = if (Option::is_some(&object_opt)) {
+            let object = Option::extract(&mut object_opt);
+            Vector::singleton(object)
+        } else {
+            vector[]
+        };
         Option::destroy_none(object_opt);
-
-        assert!(!Vector::contains(&scenario.removed, &id), EAlreadyRemovedObject);
-        Vector::push_back(&mut scenario.removed, id);
-
-        object
+        remove_unique_object_from_inventory(scenario, objects)
     }
 
     /// This function tells you whether calling `take_owned_by_id` would succeed.
     /// It provides a way to check without triggering assertions.
     public fun can_take_owned_by_id<T: key>(scenario: &Scenario, id: ID): bool {
-        let object_opt: Option<T> = find_object_by_id_in_inventory(scenario, &id);
+        let sender = sender(scenario);
+        let objects: vector<T> = get_account_owned_inventory<T>(
+            sender,
+            last_tx_start_index(scenario)
+        );
+        let object_opt: Option<T> = find_object_by_id_in_inventory(objects, &id);
         if (Option::is_none(&object_opt)) {
             Option::destroy_none(object_opt);
             return false
@@ -217,13 +227,26 @@ module Sui::TestScenario {
         return !Vector::contains(&scenario.removed, &id)
     }
 
-    /// Same as `take_nested_object`, but returns the child object of type `T` with object ID `id`.
+    /// Same as `take_child_object`, but returns the child object of type `T` with object ID `id`.
     /// Should only be used in cases where the parent object has more than one child of type `T`.
     public fun take_child_object_by_id<T1: key, T2: key>(
-        _scenario: &mut Scenario, _parent_obj: &T1, _child_id: ID
+        scenario: &mut Scenario, parent_obj: &T1, child_id: ID
     ): T2 {
-        // TODO: implement me
-        abort(200)
+        let signer_address = sender(scenario);
+        let objects = get_object_owned_inventory<T2>(
+            signer_address,
+            ID::id_address(ID::id(parent_obj)),
+            last_tx_start_index(scenario),
+        );
+        let child_object_opt = find_object_by_id_in_inventory(objects, &child_id);
+        let child_objects = if (Option::is_some(&child_object_opt)) {
+            let child_object = Option::extract(&mut child_object_opt);
+            Vector::singleton(child_object)
+        } else {
+            vector[]
+        };
+        Option::destroy_none(child_object_opt);
+        remove_unique_object_from_inventory(scenario, child_objects)
     }
 
     /// Return `t` to the global object pool maintained by `scenario`.
@@ -324,15 +347,10 @@ module Sui::TestScenario {
         }
     }
 
-    fun find_object_by_id_in_inventory<T: key>(scenario: &Scenario, id: &ID): Option<T> {
-        let sender = sender(scenario);
-        let objects: vector<T> = get_account_owned_inventory<T>(
-            sender,
-            last_tx_start_index(scenario)
-        );
+    fun find_object_by_id_in_inventory<T: key>(inventory: vector<T>, id: &ID): Option<T> {
         let object_opt = Option::none();
-        while (!Vector::is_empty(&objects)) {
-            let element = Vector::pop_back(&mut objects);
+        while (!Vector::is_empty(&inventory)) {
+            let element = Vector::pop_back(&mut inventory);
             if (ID::id(&element) == id) {
                 // Within the same test scenario, there is no way to
                 // create two objects with the same ID. So this should
@@ -342,7 +360,7 @@ module Sui::TestScenario {
                 drop_object_for_testing(element);
             }
         };
-        Vector::destroy_empty(objects);
+        Vector::destroy_empty(inventory);
 
         object_opt
     }
