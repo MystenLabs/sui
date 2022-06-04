@@ -32,6 +32,7 @@ use crate::object::{Object, Owner};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Hex;
 use crate::sui_serde::Readable;
+use crate::waypoint::IntoPoint;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -239,6 +240,12 @@ impl From<&TransactionDigest> for RistrettoPoint {
     }
 }
 
+impl IntoPoint for TransactionDigest {
+    fn into_point(&self) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
+    }
+}
+
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -285,6 +292,15 @@ impl From<ExecutionDigests> for RistrettoPoint {
         let mut data = [0; 64];
         data[0..32].clone_from_slice(&other.transaction.0);
         data[32..64].clone_from_slice(&other.effects.0);
+        RistrettoPoint::from_uniform_bytes(&data)
+    }
+}
+
+impl IntoPoint for ExecutionDigests {
+    fn into_point(&self) -> RistrettoPoint {
+        let mut data = [0; 64];
+        data[0..32].clone_from_slice(&self.transaction.0);
+        data[32..64].clone_from_slice(&self.effects.0);
         RistrettoPoint::from_uniform_bytes(&data)
     }
 }

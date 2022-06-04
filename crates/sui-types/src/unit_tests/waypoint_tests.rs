@@ -3,6 +3,7 @@
 
 use super::*;
 use rand::Rng;
+use ed25519_dalek::Sha512;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Item([u8; 8]);
@@ -25,6 +26,12 @@ impl From<&Item> for RistrettoPoint {
     }
 }
 
+impl IntoPoint for Item {
+    fn into_point(&self) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
+    }
+}
+
 #[test]
 fn test_diff() {
     let mut first = Waypoint::default();
@@ -35,11 +42,11 @@ fn test_diff() {
     let v3 = make_item();
     let v4 = make_item();
 
-    first.insertx(&v1);
+    first.insert(&v1);
     first.insert(&v2);
     first.insert(&v3);
 
-    second.insertx(&v1);
+    second.insert(&v1);
     second.insert(&v2);
     second.insert(&v4);
 
@@ -51,7 +58,7 @@ fn test_diff() {
         second,
         vec![v3].into_iter(),
     );
-    assert!(diff.checkx());
+    assert!(diff.check());
 }
 
 #[test]
