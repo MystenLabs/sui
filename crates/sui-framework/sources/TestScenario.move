@@ -212,7 +212,7 @@ module Sui::TestScenario {
         };
         let object = Option::extract(&mut object_opt);
         Option::destroy_none(object_opt);
-        delete_object_for_testing(object);
+        drop_object_for_testing(object);
 
         return !Vector::contains(&scenario.removed, &id)
     }
@@ -265,7 +265,7 @@ module Sui::TestScenario {
             last_tx_start_index(scenario)
         );
         let res = !Vector::is_empty(&objects);
-        delete_object_for_testing(objects);
+        drop_object_for_testing(objects);
         res
     }
 
@@ -339,7 +339,7 @@ module Sui::TestScenario {
                 // be unique.
                 Option::fill(&mut object_opt, element);
             } else {
-                delete_object_for_testing(element);
+                drop_object_for_testing(element);
             }
         };
         Vector::destroy_empty(objects);
@@ -369,10 +369,12 @@ module Sui::TestScenario {
     /// Events at or beyond `tx_end_index` in the log should not be processed to build this inventory
     native fun get_unowned_inventory<T: key>(immutable: bool, tx_end_index: u64): vector<T>;
 
-    /// Test-only function for discarding an arbitrary object.
+    /// Test-only function for dropping an arbitrary object.
     /// Useful for eliminating objects without the `drop` ability.
-    /// TODO: Rename this function to avoid confusion.
-    native fun delete_object_for_testing<T>(t: T);
+    /// Note that this doesn't delete the object from anywhere.
+    /// Usually it existed in the first place through a native copy
+    /// that could not be done in normal code path.
+    native fun drop_object_for_testing<T>(t: T);
 
     /// Return the total number of events emitted by all txes in the current VM execution, including both user-defined events and system events
     native fun num_events(): u64;
