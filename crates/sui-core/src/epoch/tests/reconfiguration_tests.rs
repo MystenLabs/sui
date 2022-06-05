@@ -157,7 +157,7 @@ async fn test_start_epoch_change() {
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state
-            .update_state(temporary_store, &certificate, &signed_effects)
+            .commit_certificate(temporary_store, &certificate, &signed_effects)
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd

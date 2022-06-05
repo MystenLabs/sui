@@ -22,7 +22,7 @@ use sui_types::error::{SuiError, SuiResult};
 
 use typed_store::{rocks::DBMap, traits::Map};
 
-use tracing::{debug, error};
+use tracing::{debug, error, instrument, trace, warn};
 
 /// TxGuard is a handle on an in-progress transaction.
 ///
@@ -31,7 +31,7 @@ use tracing::{debug, error};
 #[allow(drop_bounds)]
 pub trait TxGuard<'a>: Drop {
     fn tx_id(&self) -> TransactionDigest;
-    fn commit_tx(self) -> SuiResult;
+    fn commit_tx(self);
 }
 
 // WriteAheadLog is parameterized on the value type (C) because:
@@ -112,9 +112,14 @@ where
         self.tx
     }
 
-    fn commit_tx(mut self) -> SuiResult {
+    fn commit_tx(mut self) {
         self.dead = true;
-        self.wal.commit_tx(&self.tx)
+        // Note: if commit_tx fails, the tx will still be in the log and will re-enter
+        // recoverable_txes when we restart. But the tx is fully processed at that point, so at
+        // worst we will do a needless retry.
+        if let Err(e) = self.wal.commit_tx(&self.tx) {
+            warn!(digest = ?self.tx, "Couldn't write tx completion to WriteAheadLog: {}", e);
+        }
     }
 }
 
@@ -205,12 +210,14 @@ where
     type Guard = DBTxGuard<'a, C>;
 
     #[must_use]
+    #[instrument(level = "debug", name = "begin_tx", skip_all)]
     async fn begin_tx(
         &'a self,
         tx: &TransactionDigest,
         cert: &C,
     ) -> SuiResult<Option<DBTxGuard<'a, C>>> {
         let mutex_guard = self.mutex_table.acquire_lock(tx).await;
+        trace!(digest = ?tx, "acquired tx lock");
 
         if self.log.contains_key(tx)? {
             // A concurrent tx will have held the mutex guard until it finished. If the tx is
@@ -273,10 +280,10 @@ mod tests {
             assert!(recover_queue_empty(&log).await);
 
             let tx1 = log.begin_tx(&tx1_id, &1).await?.unwrap();
-            tx1.commit_tx().unwrap();
+            tx1.commit_tx();
 
             let tx2 = log.begin_tx(&tx2_id, &2).await?.unwrap();
-            tx2.commit_tx().unwrap();
+            tx2.commit_tx();
 
             {
                 let _tx3 = log.begin_tx(&tx3_id, &3).await?.unwrap();
@@ -302,7 +309,7 @@ mod tests {
             assert!(recover_queue_empty(&log).await);
 
             // commit the recoverable tx
-            r.commit_tx().unwrap();
+            r.commit_tx();
         }
 
         {

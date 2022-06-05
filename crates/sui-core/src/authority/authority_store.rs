@@ -12,6 +12,7 @@ use std::path::Path;
 use sui_storage::{
     default_db_options,
     mutex_table::{LockGuard, MutexTable},
+    write_ahead_log::DBWriteAheadLog,
     LockService,
 };
 use sui_types::base_types::SequenceNumber;
@@ -39,6 +40,10 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
+    /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
+    /// crashes.
+    pub wal: Arc<DBWriteAheadLog<CertifiedTransaction>>,
+
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -179,7 +184,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let lock_service =
             LockService::new(lockdb_path, None).expect("Could not initialize lockdb");
 
+        let wal_path = path.as_ref().join("recovery_log");
+        let wal = Arc::new(DBWriteAheadLog::new(wal_path));
+
         Self {
+            wal,
             objects,
             all_object_versions,
             lock_service,
