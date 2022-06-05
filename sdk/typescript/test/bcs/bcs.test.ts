@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS } from '../../src/bcs';
+import { BCS } from '../../src/experimental/bcs';
 import { Base64DataBuffer as B64 } from '../../src';
 import { BN } from 'bn.js';
 
@@ -18,7 +18,7 @@ describe('Move BCS', () => {
   it('should ser/de u64', () => {
     const exp = 'AO/Nq3hWNBI=';
     const num = BigInt('1311768467750121216');
-    const set = BCS.set('u64', num).toBytes();
+    const set = BCS.ser('u64', num).toBytes();
 
     expect(new B64(set).toString()).toEqual(exp);
     expect(BCS.de('u64', new B64(exp).getData())).toEqual(
@@ -33,7 +33,7 @@ describe('Move BCS', () => {
     expect(BCS.de('u128', sample.getData()).toString(10)).toEqual(
       '1111311768467750121216'
     );
-    expect(new B64(BCS.set('u128', num).toBytes()).toString()).toEqual(
+    expect(new B64(BCS.ser('u128', num).toBytes()).toString()).toEqual(
       sample.toString()
     );
   });
@@ -52,7 +52,7 @@ describe('Move BCS', () => {
       is_locked: false,
     };
 
-    const setBytes = BCS.set('Coin', expected);
+    const setBytes = BCS.ser('Coin', expected);
 
     expect(BCS.de('Coin', rustBcs.getData())).toEqual(expected);
     expect(setBytes.toString('base64')).toEqual(rustBcs.toString());
@@ -69,7 +69,7 @@ describe('Move BCS', () => {
 
     // create the same vec with 1000 elements
     let arr = Array.from(Array(1000)).map(() => 255);
-    const serialized = BCS.set('vector<u8>', arr);
+    const serialized = BCS.ser('vector<u8>', arr);
 
     expect(deserialized.length).toEqual(1000);
     expect(serialized.toString('base64')).toEqual(largeBCSVec());
@@ -88,8 +88,8 @@ describe('Move BCS', () => {
     let example2 = new B64('AQIBAAAAAAAAAAIAAAAAAAAA');
 
     // serialize 2 objects with the same data and signature
-    let set1 = BCS.set('Enum', { single: { value: 10000000 } }).toBytes();
-    let set2 = BCS.set('Enum', {
+    let set1 = BCS.ser('Enum', { single: { value: 10000000 } }).toBytes();
+    let set2 = BCS.ser('Enum', {
       multi: [{ value: 1 }, { value: 2 }],
     }).toBytes();
 
@@ -124,7 +124,7 @@ describe('Move BCS', () => {
     // Test Transfer tx
     let sample = transactionData().transfer;
     let de = BCS.de('TransactionData', sample.getData());
-    expect(BCS.set('TransactionData', de).toString('base64')).toEqual(
+    expect(BCS.ser('TransactionData', de).toString('base64')).toEqual(
       sample.toString()
     );
   });
@@ -133,7 +133,7 @@ describe('Move BCS', () => {
     // Test Module publish tx
     let sample = transactionData().module_publish;
     let de = BCS.de('TransactionData', sample.getData());
-    expect(BCS.set('TransactionData', de).toString('base64')).toEqual(
+    expect(BCS.ser('TransactionData', de).toString('base64')).toEqual(
       sample.toString()
     );
   });
@@ -144,9 +144,9 @@ describe('Move BCS', () => {
     let de = BCS.de('TransactionData', sample.getData());
 
     // Buffer size in this example is increased to 20KB
-    // @see BCS.set(type, data, [SIZE=1024]);
+    // @see BCS.ser(type, data, [SIZE=1024]);
     expect(
-      BCS.set('TransactionData', de, 1024 * 20).toString('base64')
+      BCS.ser('TransactionData', de, 1024 * 20).toString('base64')
     ).toEqual(sample.toString());
   });
 });
