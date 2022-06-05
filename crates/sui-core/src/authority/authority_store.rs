@@ -18,7 +18,7 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::{Owner, OBJECT_START_VERSION};
-use tracing::{debug, error, trace};
+use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
@@ -616,10 +616,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
         // Store the unsigned effects of the transaction
         let effects_digest = effects.effects.digest();
-        write_batch = write_batch.insert_batch(
-            &self.effects,
-            std::iter::once((transaction_digest, effects)),
-        )?;
 
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
@@ -632,7 +628,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             *transaction_digest,
             Some((sequence_number, effects_digest)),
         )
-        .await
+        .await?;
+
+        // Store the unsigned effects of the transaction. Must be done after batch_update_objects
+        // returns, as we use digest-in-effects? as a proxy for cert-has-been-fully-processed
+        // throughout the code.
+        self.effects
+            .insert(transaction_digest, &effects)
+            .map_err(SuiError::from)
     }
 
     /// Helper function for updating the objects in the state
@@ -736,6 +739,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 .map(|(_, (obj_ref, new_object))| (ObjectKey::from(obj_ref), new_object)),
         )?;
 
+        // Atomic write of all data other than locks
+        write_batch.write()?;
+        trace!("Finished writing batch");
+
         // Need to have a critical section for now because we need to prevent execution of older
         // certs which may overwrite newer objects with older ones.  This can be removed once we have
         // an object storage supporting multiple object versions at once, then there is idempotency and
@@ -751,39 +758,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
             // 4. Locks may have existed when we started processing this tx, but could have since
             //    been deleted by a concurrent tx that finished first. In that case, check if the tx effects exist.
-            if let Err(e) = self.lock_service.locks_exist(owned_inputs.clone()).await {
-                if self.effects_exists(&transaction_digest)? {
-                    debug!(digest = ?transaction_digest, "locks were deleted due to concurrent processing of tx");
-                    return Ok(());
-                } else {
-                    return Err(e);
-                }
-            }
-
-            if let Some((next_seq, effects_digest)) = seq_opt {
-                // Now we are sure we are going to execute, add to the sequence
-                // number and insert into authority sequence.
-                //
-                // NOTE: it is possible that we commit to the database transactions
-                //       out of order with respect to their sequence number. It is also
-                //       possible for the authority to crash without committing the
-                //       full sequence, and the batching logic needs to deal with this.
-                write_batch = write_batch.insert_batch(
-                    &self.executed_sequence,
-                    std::iter::once((
-                        next_seq,
-                        ExecutionDigests::new(transaction_digest, effects_digest),
-                    )),
-                )?;
-            }
-
-            // Atomic write of all data other than locks
-            write_batch.write()?;
-            trace!("Finished writing batch");
-
-            // Initialize object locks for new objects.  After this point, transactions on new objects
-            // can run.  So it is critical this is done AFTER objects are done writing.
-            // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object))| {
@@ -794,13 +768,39 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                     }
                 })
                 .collect();
-            self.lock_service
-                .initialize_locks(&new_locks_to_init, false /* is_force_reset */)
-                .await?;
 
-            // Remove the old lock - timing of this matters less
-            let locks_to_remove = owned_inputs;
-            self.lock_service.remove_locks(locks_to_remove).await?;
+            match seq_opt {
+                Some((seq, effects_digest)) => {
+                    // sequence_transaction atomically assigns a sequence number to the tx and
+                    // initializes locks for the output objects.
+                    // It also (not atomically) deletes the locks for input objects.
+                    // After this call completes, new txes can run on the output locks, so all
+                    // output objects must be written already.
+                    self.lock_service
+                        .sequence_transaction(
+                            transaction_digest,
+                            seq,
+                            owned_inputs,
+                            new_locks_to_init,
+                        )
+                        .await?;
+
+                    // This write may be done repeatedly when retrying a tx. the
+                    // sequence_transaction call above ensures that it is only ever called with
+                    // exactly one seq->transaction_digest mapping, so we can't sequence the same
+                    // tx twice here.
+                    self.executed_sequence.insert(
+                        &seq,
+                        &ExecutionDigests::new(transaction_digest, effects_digest),
+                    )?;
+                }
+                None => {
+                    info!("Creating locks for genesis objects");
+                    self.lock_service
+                        .create_locks_for_genesis_objects(new_locks_to_init)
+                        .await?;
+                }
+            }
 
             // implicit: drop(_mutexes);
         }
