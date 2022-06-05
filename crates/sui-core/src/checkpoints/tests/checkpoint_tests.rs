@@ -89,12 +89,12 @@ fn crash_recovery() {
 
     // Do stuff
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
-    let t6 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
+    let t6 = ExecutionDigests::random();
 
     cps.handle_internal_batch(4, &[(1, t1), (2, t2), (3, t3)])
         .unwrap();
@@ -141,12 +141,12 @@ fn make_checkpoint_db() {
     let (_committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps) = stores.pop().unwrap();
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
-    let t6 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
+    let t6 = ExecutionDigests::random();
 
     cps.update_processed_transactions(&[(1, t1), (2, t2), (3, t3)])
         .unwrap();
@@ -188,11 +188,11 @@ fn make_proposals() {
     let (_, mut cps3) = stores.pop().unwrap();
     let (_, mut cps4) = stores.pop().unwrap();
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     cps1.update_processed_transactions(&[(1, t2), (2, t3)])
@@ -242,11 +242,11 @@ fn make_diffs() {
     let (_, mut cps3) = stores.pop().unwrap();
     let (_, mut cps4) = stores.pop().unwrap();
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     cps1.update_processed_transactions(&[(1, t2), (2, t3)])
@@ -269,7 +269,7 @@ fn make_diffs() {
     let diff12 = p1.fragment_with(&p2);
     let diff23 = p2.fragment_with(&p3);
 
-    let mut global = GlobalCheckpoint::<AuthorityName, TransactionDigest>::new();
+    let mut global = GlobalCheckpoint::<AuthorityName, ExecutionDigests>::new();
     global.insert(diff12.diff.clone()).unwrap();
     global.insert(diff23.diff).unwrap();
 
@@ -296,12 +296,12 @@ fn latest_proposal() {
     let (_, mut cps3) = stores.pop().unwrap();
     let (_, mut cps4) = stores.pop().unwrap();
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
-    let t6 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
+    let t6 = ExecutionDigests::random();
 
     cps1.update_processed_transactions(&[(1, t2), (2, t3)])
         .unwrap();
@@ -479,11 +479,11 @@ fn set_get_checkpoint() {
     let (_, mut cps3) = stores.pop().unwrap();
     let (_, mut cps4) = stores.pop().unwrap();
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     cps1.update_processed_transactions(&[(1, t2), (2, t3)])
@@ -634,7 +634,7 @@ fn checkpoint_integration() {
         let old_checkpoint = cps.get_locals().next_checkpoint;
 
         let some_fresh_transactions: Vec<_> = (0..7)
-            .map(|_| TransactionDigest::random())
+            .map(|_| ExecutionDigests::random())
             .chain(unprocessed.clone().into_iter())
             .enumerate()
             .map(|(i, d)| (i as u64 + next_tx_num, d))
@@ -655,7 +655,7 @@ fn checkpoint_integration() {
 
         // Step 2. Continue to process transactions while a proposal is out.
         let some_fresh_transactions: Vec<_> = (0..7)
-            .map(|_| TransactionDigest::random())
+            .map(|_| ExecutionDigests::random())
             .enumerate()
             .map(|(i, d)| (i as u64 + next_tx_num, d))
             .collect();
@@ -668,7 +668,7 @@ fn checkpoint_integration() {
 
         // Step 3. Receive a Checkpoint
         unprocessed = (0..5)
-            .map(|_| TransactionDigest::random())
+            .map(|_| ExecutionDigests::random())
             .into_iter()
             .chain(some_fresh_transactions.iter().cloned().map(|(_, d)| d))
             .collect();
@@ -745,10 +745,10 @@ async fn test_batch_to_checkpointing() {
         let t2 = &authority_state.batch_notifier.ticket().expect("ok");
         let t3 = &authority_state.batch_notifier.ticket().expect("ok");
 
-        store.side_sequence(t1.seq(), &TransactionDigest::random());
-        store.side_sequence(t3.seq(), &TransactionDigest::random());
-        store.side_sequence(t2.seq(), &TransactionDigest::random());
-        store.side_sequence(t0.seq(), &TransactionDigest::random());
+        store.side_sequence(t1.seq(), &ExecutionDigests::random());
+        store.side_sequence(t3.seq(), &ExecutionDigests::random());
+        store.side_sequence(t2.seq(), &ExecutionDigests::random());
+        store.side_sequence(t0.seq(), &ExecutionDigests::random());
     }
 
     // Get transactions in order then batch.
@@ -837,10 +837,10 @@ async fn test_batch_to_checkpointing_init_crash() {
             let t2 = &authority_state.batch_notifier.ticket().expect("ok");
             let t3 = &authority_state.batch_notifier.ticket().expect("ok");
 
-            store.side_sequence(t1.seq(), &TransactionDigest::random());
-            store.side_sequence(t3.seq(), &TransactionDigest::random());
-            store.side_sequence(t2.seq(), &TransactionDigest::random());
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t1.seq(), &ExecutionDigests::random());
+            store.side_sequence(t3.seq(), &ExecutionDigests::random());
+            store.side_sequence(t2.seq(), &ExecutionDigests::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         // Get transactions in order then batch.
@@ -924,11 +924,11 @@ fn set_fragment_external() {
     cps4.set_consensus(Box::new(test_tx))
         .expect("No issues setting the consensus");
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     cps1.update_processed_transactions(&[(1, t2), (2, t3)])
@@ -972,11 +972,11 @@ fn set_fragment_reconstruct() {
     let (_, mut cps3) = test_objects.pop().unwrap();
     let (_, mut cps4) = test_objects.pop().unwrap();
 
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
-    let t4 = TransactionDigest::random();
-    let t5 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+    let t4 = ExecutionDigests::random();
+    let t5 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     cps1.update_processed_transactions(&[(1, t2), (2, t3)])
@@ -1019,8 +1019,8 @@ fn set_fragment_reconstruct() {
 fn set_fragment_reconstruct_two_components() {
     let (committee, _keys, mut test_objects) = random_ckpoint_store_num(2 * 3 + 1);
 
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     for (_, cps) in &mut test_objects {
@@ -1071,8 +1071,8 @@ fn set_fragment_reconstruct_two_components() {
 fn set_fragment_reconstruct_two_mutual() {
     let (committee, _, mut test_objects) = random_ckpoint_store_num(4);
 
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     for (_, cps) in &mut test_objects {
@@ -1130,8 +1130,8 @@ fn test_fragment_full_flow() {
 
     let (test_tx, rx) = TestConsensus::new();
 
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
     // let t6 = TransactionDigest::random();
 
     for (_, cps) in &mut test_objects {

@@ -3,11 +3,12 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use crate::base_types::ExecutionDigests;
 use crate::crypto::Signable;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
-    base_types::{AuthorityName, TransactionDigest},
+    base_types::AuthorityName,
     committee::Committee,
     crypto::{sha3_hash, AuthoritySignature, BcsSignable, VerificationObligation},
     error::SuiError,
@@ -390,7 +391,7 @@ impl CertifiedCheckpoint {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    pub transactions: BTreeSet<TransactionDigest>,
+    pub transactions: BTreeSet<ExecutionDigests>,
 }
 
 impl BcsSignable for CheckpointContents {}
@@ -398,7 +399,7 @@ impl BcsSignable for CheckpointContents {}
 impl CheckpointContents {
     pub fn new<T>(contents: T) -> CheckpointContents
     where
-        T: Iterator<Item = TransactionDigest>,
+        T: Iterator<Item = ExecutionDigests>,
     {
         CheckpointContents {
             transactions: contents.collect(),
@@ -415,8 +416,8 @@ impl CheckpointContents {
 pub struct CheckpointFragment {
     pub proposer: SignedCheckpointProposal,
     pub other: SignedCheckpointProposal,
-    pub diff: WaypointDiff<AuthorityName, TransactionDigest>,
-    pub certs: BTreeMap<TransactionDigest, CertifiedTransaction>,
+    pub diff: WaypointDiff<AuthorityName, ExecutionDigests>,
+    pub certs: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
 
 impl CheckpointFragment {
@@ -478,7 +479,7 @@ mod tests {
         let (authority_key, _committee) = make_committee_key(&mut rng);
         let name = authority_key[0].public_key_bytes();
 
-        let set = [TransactionDigest::random()];
+        let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
 
         let mut proposal = SignedCheckpoint::new(1, *name, &authority_key[0], &set);
@@ -489,7 +490,7 @@ mod tests {
 
         // Error on different transactions
         let contents = CheckpointContents {
-            transactions: [TransactionDigest::random()].into_iter().collect(),
+            transactions: [ExecutionDigests::random()].into_iter().collect(),
         };
         assert!(proposal.verify_with_transactions(&contents).is_err());
 
@@ -503,7 +504,7 @@ mod tests {
         let mut rng = StdRng::from_seed(RNG_SEED);
         let (keys, committee) = make_committee_key(&mut rng);
 
-        let set = [TransactionDigest::random()];
+        let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
 
         let signed_checkpoints: Vec<_> = keys
@@ -528,7 +529,7 @@ mod tests {
             .iter()
             .map(|k| {
                 let name = k.public_key_bytes();
-                let set: BTreeSet<_> = [TransactionDigest::random()].into_iter().collect();
+                let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 
                 SignedCheckpoint::new(1, *name, k, &set)

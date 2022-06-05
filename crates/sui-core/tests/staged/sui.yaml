@@ -55,6 +55,12 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
+ExecutionDigests:
+  STRUCT:
+    - transaction:
+        TYPENAME: TransactionDigest
+    - effects:
+        TYPENAME: TransactionEffectsDigest
 ExecutionStatus:
   ENUM:
     0:
@@ -648,6 +654,8 @@ SuiError:
           - error: STR
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
+TransactionEffectsDigest:
+  NEWTYPESTRUCT: BYTES
 TransactionKind:
   ENUM:
     0:
@@ -710,7 +718,7 @@ UpdateItem:
         NEWTYPE:
           TUPLE:
             - U64
-            - TYPENAME: TransactionDigest
+            - TYPENAME: ExecutionDigests
     1:
       Batch:
         NEWTYPE:

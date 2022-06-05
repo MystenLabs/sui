@@ -1,24 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{AuthorityName, TransactionDigest};
+use crate::base_types::{AuthorityName, ExecutionDigests};
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
 use crate::error::SuiError;
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
 
-/// Either a freshly sequenced transaction hash or a batch
+/// Either a freshly sequenced transaction/effects tuple of hashes or a batch
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
-    Transaction((TxSequenceNumber, TransactionDigest)),
+    Transaction((TxSequenceNumber, ExecutionDigests)),
     Batch(SignedBatch),
 }
 
 pub type BatchDigest = [u8; 32];
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
-pub struct TransactionBatch(pub Vec<(TxSequenceNumber, TransactionDigest)>);
+pub struct TransactionBatch(pub Vec<(TxSequenceNumber, ExecutionDigests)>);
 impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
@@ -62,11 +62,11 @@ impl AuthorityBatch {
         }
     }
 
-    /// Make a batch, containing some transactions, and following the previous
+    /// Make a batch, containing some transaction/effects, and following the previous
     /// batch.
     pub fn make_next(
         previous_batch: &AuthorityBatch,
-        transactions: &[(TxSequenceNumber, TransactionDigest)],
+        transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<AuthorityBatch, SuiError> {
         let transaction_vec = transactions.to_vec();
         if transaction_vec.is_empty() {

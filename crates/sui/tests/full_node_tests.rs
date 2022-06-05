@@ -78,7 +78,7 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
                     // Upon receiving a transaction digest we store it, if it is not processed already.
                     Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
                         info!(?digest, "Received Transaction");
-                        if wait_digest == digest {
+                        if wait_digest == digest.transaction {
                             info!(?digest, "Digest found");
                             break;
                         }

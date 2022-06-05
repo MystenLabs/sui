@@ -11,7 +11,7 @@ use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use signature::Signer;
 use std::{fs::File, io::Write};
 use sui_types::{
-    base_types::{self, ObjectDigest, ObjectID, TransactionDigest},
+    base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
     batch::UpdateItem,
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
@@ -53,6 +53,9 @@ fn get_registry() -> Result<Registry> {
     let td = TransactionDigest::random();
     tracer.trace_value(&mut samples, &od)?;
     tracer.trace_value(&mut samples, &td)?;
+
+    let teff = TransactionEffectsDigest::random();
+    tracer.trace_value(&mut samples, &teff)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<SuiError>(&samples)?;

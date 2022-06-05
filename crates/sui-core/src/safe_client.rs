@@ -183,7 +183,7 @@ impl<C> SafeClient<C> {
         _request: BatchInfoRequest,
         signed_batch: &SignedBatch,
         transactions_and_last_batch: &Option<(
-            Vec<(TxSequenceNumber, TransactionDigest)>,
+            Vec<(TxSequenceNumber, ExecutionDigests)>,
             AuthorityBatch,
         )>,
     ) -> SuiResult {
@@ -263,7 +263,8 @@ where
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => None,
                         Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
                             // Download the full transaction info
-                            let transaction_info_request = TransactionInfoRequest::from(*digest);
+                            let transaction_info_request =
+                                TransactionInfoRequest::from(digest.transaction);
                             let res = _client
                                 .handle_transaction_info_request(transaction_info_request)
                                 .await
