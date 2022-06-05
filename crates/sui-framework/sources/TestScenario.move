@@ -210,21 +210,20 @@ module Sui::TestScenario {
     /// This function tells you whether calling `take_owned_by_id` would succeed.
     /// It provides a way to check without triggering assertions.
     public fun can_take_owned_by_id<T: key>(scenario: &Scenario, id: ID): bool {
+        // Check that the object has not been removed from the inventory.
+        if (Vector::contains(&scenario.removed, &id)) {
+            return false
+        };
         let sender = sender(scenario);
         let objects: vector<T> = get_account_owned_inventory<T>(
             sender,
             last_tx_start_index(scenario)
         );
+        // And the object with the specified ID is indeed one of the owned.
         let object_opt: Option<T> = find_object_by_id_in_inventory(objects, &id);
-        if (Option::is_none(&object_opt)) {
-            Option::destroy_none(object_opt);
-            return false
-        };
-        let object = Option::extract(&mut object_opt);
-        Option::destroy_none(object_opt);
-        drop_object_for_testing(object);
-
-        return !Vector::contains(&scenario.removed, &id)
+        let res =  Option::is_some(&object_opt);
+        drop_object_for_testing(object_opt);
+        res
     }
 
     /// Same as `take_child_object`, but returns the child object of type `T` with object ID `id`.
@@ -287,7 +286,13 @@ module Sui::TestScenario {
             sender(scenario),
             last_tx_start_index(scenario)
         );
-        let res = !Vector::is_empty(&objects);
+        // Check that there is one unique such object, and it has not
+        // yet been removed from the inventory.
+        let res = Vector::length(&objects) == 1;
+        if (res) {
+            let id = ID::id(Vector::borrow(&objects, 0));
+            res = !Vector::contains(&scenario.removed, id);
+        };
         drop_object_for_testing(objects);
         res
     }
