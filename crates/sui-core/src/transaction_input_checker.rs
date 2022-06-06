@@ -222,7 +222,7 @@ fn check_one_lock(
                 SuiError::MovePackageAsObject { object_id }
             );
             fp_ensure!(
-                sequence_number <= SequenceNumber::MAX,
+                sequence_number < SequenceNumber::MAX,
                 SuiError::InvalidSequenceNumber
             );
 
@@ -278,6 +278,10 @@ fn check_one_lock(
             };
         }
         InputObjectKind::SharedMoveObject(..) => {
+            fp_ensure!(
+                object.version() < SequenceNumber::MAX,
+                SuiError::InvalidSequenceNumber
+            );
             // When someone locks an object as shared it must be shared already.
             fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
         }
