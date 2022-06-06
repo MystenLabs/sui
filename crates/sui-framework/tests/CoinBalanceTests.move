@@ -7,6 +7,11 @@ module Sui::TestCoin {
     use Sui::Coin;
     use Sui::Balance;
     use Sui::SUI::SUI;
+    use Sui::LockedCoin::LockedCoin;
+    use Std::Errors;
+    use Sui::TxContext;
+    use Sui::LockedCoin;
+    use Sui::Coin::Coin;
 
     #[test]
     fun type_morphing() {
@@ -32,5 +37,55 @@ module Sui::TestCoin {
 
         let coin = Coin::from_balance(balance, ctx(test));
         Coin::keep(coin, ctx(test));
+    }
+
+    const TEST_SENDER_ADDR: address = @0xA11CE;
+    const TEST_RECIPIENT_ADDR: address = @0xB0B;
+
+    #[test]
+    public(script) fun test_locked_coin_valid() {
+        let scenario = &mut TestScenario::begin(&TEST_SENDER_ADDR);
+        let ctx = TestScenario::ctx(scenario);
+        let coin = Coin::mint_for_testing<SUI>(42, ctx);
+
+        TestScenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        // Lock up the coin until epoch 2.
+        LockedCoin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
+
+        // Advance the epoch by 2.
+        TestScenario::next_epoch(scenario);
+        TestScenario::next_epoch(scenario);
+        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 2, Errors::invalid_state(1));
+
+        TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
+        let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
+        // The unlock should go through since epoch requirement is met.
+        LockedCoin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
+
+        TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
+        let unlocked_coin = TestScenario::take_owned<Coin<SUI>>(scenario);
+        assert!(Coin::value(&unlocked_coin) == 42, Errors::invalid_state(2));
+        Coin::destroy_for_testing(unlocked_coin);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 263)]
+    public(script) fun test_locked_coin_invalid() {
+        let scenario = &mut TestScenario::begin(&TEST_SENDER_ADDR);
+        let ctx = TestScenario::ctx(scenario);
+        let coin = Coin::mint_for_testing<SUI>(42, ctx);
+
+        TestScenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        // Lock up the coin until epoch 2.
+        LockedCoin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
+
+        // Advance the epoch by 1.
+        TestScenario::next_epoch(scenario);
+        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 1, Errors::invalid_state(1));
+
+        TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
+        let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
+        // The unlock should fail.
+        LockedCoin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
     }
 }

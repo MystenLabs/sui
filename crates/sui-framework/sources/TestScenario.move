@@ -110,7 +110,13 @@ module Sui::TestScenario {
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
         let new_tx_digest_seed = (vector::length(&scenario.event_start_indexes) as u8);
-        scenario.ctx = TxContext::new_from_address(*sender, new_tx_digest_seed);
+        let epoch = TxContext::epoch(&scenario.ctx);
+        scenario.ctx = TxContext::new_with_epoch(*sender, epoch, new_tx_digest_seed);
+    }
+
+    /// Advance the scenario to a new epoch.
+    public fun next_epoch(scenario: &mut Scenario) {
+        TxContext::advance_epoch(&mut scenario.ctx);
     }
 
     /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`.
