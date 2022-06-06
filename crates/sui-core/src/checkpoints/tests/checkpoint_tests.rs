@@ -390,7 +390,7 @@ fn latest_proposal() {
         .collect();
 
     let transactions = CheckpointContents::new(ckp_items.clone().into_iter());
-    let summary = CheckpointSummary::new(0, &transactions);
+    let summary = CheckpointSummary::new(0, &transactions, None);
 
     cps1.handle_internal_set_checkpoint(summary.clone(), &transactions)
         .unwrap();
@@ -529,7 +529,7 @@ fn set_get_checkpoint() {
         .cloned();
 
     let transactions = CheckpointContents::new(ckp_items);
-    let summary = CheckpointSummary::new(0, &transactions);
+    let summary = CheckpointSummary::new(0, &transactions, None);
 
     cps1.handle_internal_set_checkpoint(summary.clone(), &transactions)
         .unwrap();
@@ -673,7 +673,13 @@ fn checkpoint_integration() {
             .chain(some_fresh_transactions.iter().cloned().map(|(_, d)| d))
             .collect();
         let transactions = CheckpointContents::new(unprocessed.clone().into_iter());
-        let summary = CheckpointSummary::new(cps.get_locals().next_checkpoint, &transactions);
+        let next_checkpoint = cps.get_locals().next_checkpoint;
+        let summary = CheckpointSummary::new(
+            next_checkpoint,
+            &transactions,
+            cps.get_prev_checkpoint_digest(next_checkpoint)
+                .expect("previous checkpoint should exist"),
+        );
 
         cps.handle_internal_set_checkpoint(summary.clone(), &transactions)
             .unwrap();
