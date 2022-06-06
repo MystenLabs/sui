@@ -465,6 +465,23 @@ impl Object {
         Self::with_id_owner_gas_for_testing(id, owner, GAS_VALUE_FOR_TESTING)
     }
 
+    pub fn with_id_owner_version_for_testing(
+        id: ObjectID,
+        version: SequenceNumber,
+        owner: SuiAddress,
+    ) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
+            contents: GasCoin::new(id, version, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+        });
+        Self {
+            owner: Owner::AddressOwner(owner),
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
     pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
         Self::with_id_owner_for_testing(ObjectID::random(), owner)
     }

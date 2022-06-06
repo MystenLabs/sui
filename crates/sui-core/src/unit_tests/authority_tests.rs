@@ -147,6 +147,99 @@ async fn test_handle_transfer_transaction_bad_signature() {
 }
 
 #[tokio::test]
+async fn test_handle_transfer_transaction_with_max_sequence_number() {
+    let (sender, sender_key) = get_key_pair();
+    let object_id: ObjectID = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let recipient = dbg_addr(2);
+    let authority_state = init_state_with_ids_and_versions(vec![
+        (sender, object_id, SequenceNumber::MAX),
+        (sender, gas_object_id, SequenceNumber::new()),
+    ])
+    .await;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let transfer_transaction = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+    );
+    let res = authority_state
+        .handle_transaction(transfer_transaction)
+        .await;
+    assert!(res.is_err());
+    assert_eq!(
+        res.err(),
+        Some(SuiError::LockErrors {
+            errors: vec![SuiError::InvalidSequenceNumber],
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_handle_shared_object_with_max_sequence_number() {
+    let (sender, keypair) = get_key_pair();
+
+    // Initialize an authority with a (owned) gas object and a shared object.
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::gas_coin::GasCoin;
+        use sui_types::object::MoveObject;
+
+        let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, 10);
+        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
+    };
+    let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
+
+    // Make a sample transaction.
+    let module = "ObjectBasics";
+    let function = "create";
+    let package_object_ref = authority.get_framework_object_ref().await.unwrap();
+
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        gas_object_ref,
+        /* args */
+        vec![
+            CallArg::SharedObject(shared_object_id),
+            CallArg::Pure(16u64.to_le_bytes().to_vec()),
+            CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+        ],
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    let transaction = Transaction::new(data, signature);
+    // Submit the transaction and assemble a certificate.
+    let response = authority.handle_transaction(transaction.clone()).await;
+    assert!(response.is_err());
+    assert_eq!(
+        response.err(),
+        Some(SuiError::LockErrors {
+            errors: vec![SuiError::InvalidSequenceNumber],
+        })
+    );
+}
+
+#[tokio::test]
 async fn test_handle_transfer_transaction_unknown_sender() {
     let sender = get_new_address();
     let (unknown_address, unknown_key) = get_key_pair();
@@ -1446,6 +1539,20 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
     state
 }
 
+#[cfg(test)]
+pub async fn init_state_with_ids_and_versions<
+    I: IntoIterator<Item = (SuiAddress, ObjectID, SequenceNumber)>,
+>(
+    objects: I,
+) -> AuthorityState {
+    let state = init_state().await;
+    for (address, object_id, version) in objects {
+        let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
+        state.insert_genesis_object(obj).await;
+    }
+    state
+}
+
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
     for o in objects {
@@ -1457,6 +1564,18 @@ pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I)
 #[cfg(test)]
 pub async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> AuthorityState {
     init_state_with_ids(std::iter::once((address, object))).await
+}
+
+#[cfg(test)]
+pub async fn update_state_with_object_id_and_version(
+    state: AuthorityState,
+    address: SuiAddress,
+    object_id: ObjectID,
+    version: SequenceNumber,
+) -> AuthorityState {
+    let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
+    state.insert_genesis_object(obj).await;
+    state
 }
 
 #[cfg(test)]
