@@ -190,8 +190,8 @@ async fn submit_transaction_to_consensus() {
     // that consensus may drop some transactions (so we may need to resubmit them).
     tokio::task::yield_now().await;
     let consensus_transaction = ConsensusTransaction::UserTransaction(Box::new(certificate));
-    let result = submitter.submit(&consensus_transaction).await;
     loop {
+        let result = submitter.submit(&consensus_transaction).await;
         match result {
             Ok(_) => break,
             Err(SuiError::ConsensusConnectionBroken(..)) => (),
