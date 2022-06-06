@@ -22,11 +22,11 @@ use crate::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventEnvelope {
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
-    timestamp: u64,
+    pub timestamp: u64,
     /// Transaction digest of associated transaction, if any
-    tx_digest: Option<TransactionDigest>,
+    pub tx_digest: Option<TransactionDigest>,
     /// Specific event type
-    event: Event,
+    pub event: Event,
 }
 
 impl EventEnvelope {

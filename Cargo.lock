@@ -6156,6 +6156,7 @@ name = "sui-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fdlimit",
  "flexstr",
  "futures",

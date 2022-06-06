@@ -11,10 +11,13 @@
 //! Events are also archived into checkpoints so this API should support that as well.
 //!
 
+use async_trait::async_trait;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::event::{EventEnvelope, EventType};
+
+pub mod sql;
 
 use flexstr::SharedStr;
 
@@ -57,13 +60,13 @@ pub enum EventValue {
 /// One can think of events as logs.  They represent a log of what is happening to Sui.
 /// Thus, all different kinds of events fit on a timeline, and one should be able to query for
 /// different types of events that happen over that timeline.
-trait EventStore<EventIt>
-where
-    EventIt: Iterator<Item = StoredEvent>,
-{
+#[async_trait]
+trait EventStore {
+    type EventIt: Iterator<Item = StoredEvent>;
+
     /// Adds events to the EventStore.
     /// Semantics: events are appended, no deduplication is done.
-    fn add_events(
+    async fn add_events(
         &self,
         events: &[EventEnvelope],
         checkpoint_num: u64,
@@ -71,41 +74,57 @@ where
 
     /// Queries for events emitted by a given transaction, returned in order emitted
     /// NOTE: Not all events come from transactions
-    fn events_for_transaction(&self, digest: TransactionDigest)
-        -> Result<EventIt, EventStoreError>;
+    async fn events_for_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Self::EventIt, EventStoreError>;
 
     /// Queries for all events of a certain EventType within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in ascending time.
-    fn events_by_type(
+    async fn events_by_type(
         &self,
         start_time: u64,
         end_time: u64,
         event_type: EventType,
         limit: usize,
-    ) -> Result<EventIt, EventStoreError>;
+    ) -> Result<Self::EventIt, EventStoreError>;
 
     /// Generic event iteration bounded by time.  Return in ingestion order.
-    fn event_iterator(&self, start_time: u64, end_time: u64) -> Result<EventIt, EventStoreError>;
+    async fn event_iterator(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Self::EventIt, EventStoreError>;
 
     /// Generic event iteration bounded by checkpoint number.  Return in ingestion order.
     /// Checkpoint numbers are inclusive on both ends.
-    fn events_by_checkpoint(
+    async fn events_by_checkpoint(
         &self,
         start_checkpoint: u64,
         end_checkpoint: u64,
-    ) -> Result<EventIt, EventStoreError>;
+        limit: usize,
+    ) -> Result<Self::EventIt, EventStoreError>;
 
     /// Queries all Move events belonging to a certain Module ID within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in ascending time.
-    fn events_by_module_id(
+    async fn events_by_module_id(
         &self,
         start_time: u64,
         end_time: u64,
         module: ModuleId,
         limit: usize,
-    ) -> Result<EventIt, EventStoreError>;
+    ) -> Result<Self::EventIt, EventStoreError>;
 }
 
+#[derive(Debug)]
 pub enum EventStoreError {
     GenericError(Box<dyn std::error::Error>),
+    SqlError(sqlx::Error),
+}
+
+impl From<sqlx::Error> for EventStoreError {
+    fn from(err: sqlx::Error) -> Self {
+        EventStoreError::SqlError(err)
+    }
 }
