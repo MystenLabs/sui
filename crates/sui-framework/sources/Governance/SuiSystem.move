@@ -7,6 +7,7 @@ module Sui::SuiSystem {
     use Sui::Delegation::{Self, Delegation};
     use Sui::EpochRewardRecord::{Self, EpochRewardRecord};
     use Sui::ID::{Self, VersionedID};
+    use Sui::LockedCoin::{Self, LockedCoin};
     use Sui::SUI::SUI;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
@@ -167,6 +168,20 @@ module Sui::SuiSystem {
         // Delegation starts from the next epoch.
         let starting_epoch = self.epoch + 1;
         Delegation::create(starting_epoch, validator_address, delegate_stake, ctx);
+    }
+
+    public entry fun request_add_delegation_with_locked_coin(
+        self: &mut SuiSystemState,
+        delegate_stake: LockedCoin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let amount = LockedCoin::value(&delegate_stake);
+        ValidatorSet::request_add_delegation(&mut self.validators, validator_address, amount);
+
+        // Delegation starts from the next epoch.
+        let starting_epoch = self.epoch + 1;
+        Delegation::create_from_locked_coin(starting_epoch, validator_address, delegate_stake, ctx);
     }
 
     public entry fun request_remove_delegation(
