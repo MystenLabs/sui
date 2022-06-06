@@ -505,7 +505,7 @@ impl<'a> SuiTestAdapter<'a> {
                 deleted: deleted_ids,
                 events,
             }),
-            ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(*error)),
+            ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(error.into())),
         }
     }
 

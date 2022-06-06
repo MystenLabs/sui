@@ -1358,13 +1358,9 @@
           {
             "type": "object",
             "required": [
-              "gas_cost",
               "status"
             ],
             "properties": {
-              "gas_cost": {
-                "$ref": "#/components/schemas/GasCostSummary"
-              },
               "status": {
                 "type": "string",
                 "enum": [
@@ -1377,15 +1373,11 @@
             "type": "object",
             "required": [
               "error",
-              "gas_cost",
               "status"
             ],
             "properties": {
               "error": {
                 "type": "string"
-              },
-              "gas_cost": {
-                "$ref": "#/components/schemas/GasCostSummary"
               },
               "status": {
                 "type": "string",
@@ -1396,31 +1388,6 @@
             }
           }
         ]
-      },
-      "GasCostSummary": {
-        "type": "object",
-        "required": [
-          "computationCost",
-          "storageCost",
-          "storageRebate"
-        ],
-        "properties": {
-          "computationCost": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storageCost": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storageRebate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
       },
       "Hex": {
         "type": "string"

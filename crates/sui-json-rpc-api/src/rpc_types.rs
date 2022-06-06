@@ -1123,14 +1123,9 @@ impl Display for SuiTransactionEffects {
 #[serde(rename = "ExecutionStatus", rename_all = "camelCase", tag = "status")]
 pub enum SuiExecutionStatus {
     // Gas used in the success case.
-    Success {
-        gas_cost: SuiGasCostSummary,
-    },
+    Success,
     // Gas used in the failed case, and the error.
-    Failure {
-        gas_cost: SuiGasCostSummary,
-        error: String,
-    },
+    Failure { error: String },
 }
 
 impl SuiExecutionStatus {
@@ -1145,12 +1140,9 @@ impl SuiExecutionStatus {
 impl From<ExecutionStatus> for SuiExecutionStatus {
     fn from(status: ExecutionStatus) -> Self {
         match status {
-            ExecutionStatus::Success { gas_cost } => Self::Success {
-                gas_cost: gas_cost.into(),
-            },
-            ExecutionStatus::Failure { gas_cost, error } => Self::Failure {
-                gas_cost: gas_cost.into(),
-                error: error.to_string(),
+            ExecutionStatus::Success => Self::Success,
+            ExecutionStatus::Failure { error } => Self::Failure {
+                error: format!("{:?}", error),
             },
         }
     }

@@ -1,4 +1,4 @@
 processed 1 task
 
 task 0 'publish'. lines 4-20:
-Error: Failed to publish the Move module(s), reason: "VMError with status WRITEREF_WITHOUT_DROP_ABILITY at location Module ModuleId { address: _, name: Identifier(\"m\") } at index 0 for function definition at code offset 5 in function definition 0".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: None } }

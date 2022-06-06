@@ -8,6 +8,8 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::committee::EpochId;
+use sui_types::error::ExecutionError;
+use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
@@ -41,7 +43,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
     let gas_object_ref = *transaction_data.gas_payment_object_ref();
-    let status = execute_transaction(
+    let (gas_cost_summary, status) = execute_transaction(
         temporary_store,
         transaction_data,
         gas_object_ref.0,
@@ -50,7 +52,6 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         native_functions,
         gas_status,
     );
-    let gas_cost_summary = status.gas_cost_summary();
     debug!(
         computation_gas_cost = gas_cost_summary.computation_cost,
         storage_gas_cost = gas_cost_summary.storage_cost,
@@ -66,6 +67,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
+        gas_cost_summary,
         status,
         gas_object_ref,
     );
@@ -75,7 +77,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 fn charge_gas_for_object_read<S>(
     temporary_store: &AuthorityTemporaryStore<S>,
     gas_status: &mut SuiGasStatus,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     // Charge gas for reading all objects from the DB.
     // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
     // fetching only unique objects.
@@ -96,7 +98,7 @@ fn execute_transaction<S: BackingPackageStore>(
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
-) -> ExecutionStatus {
+) -> (GasCostSummary, ExecutionStatus) {
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let mut result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -226,19 +228,18 @@ fn execute_transaction<S: BackingPackageStore>(
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
-    match result {
-        Ok(()) => ExecutionStatus::Success {
-            gas_cost: cost_summary,
-        },
-        Err(error) => ExecutionStatus::new_failure(cost_summary, error),
-    }
+    let status = match result {
+        Ok(()) => ExecutionStatus::Success,
+        Err(error) => ExecutionStatus::new_failure(error),
+    };
+    (cost_summary, status)
 }
 
 fn transfer_coin<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut object: Object,
     recipient: SuiAddress,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     object.transfer_and_increment_version(recipient)?;
     temporary_store.log_event(Event::TransferObject {
         object_id: object.id(),
@@ -263,7 +264,7 @@ fn transfer_sui<S>(
     recipient: SuiAddress,
     amount: Option<u64>,
     tx_ctx: &mut TxContext,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     #[cfg(debug_assertions)]
     let version = object.version();
 

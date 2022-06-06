@@ -897,22 +897,18 @@ pub enum CallResult {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
-    // Gas used in the success case.
-    Success {
-        gas_cost: GasCostSummary,
-    },
+    Success,
     // Gas used in the failed case, and the error.
-    Failure {
-        gas_cost: GasCostSummary,
-        error: Box<SuiError>,
-    },
+    Failure { error: ExecutionErrorKind },
+    // OutOfGas,
+    // MoveAbort(AbortLocation, /* code */ u64),
+    // MiscError
 }
 
 impl ExecutionStatus {
-    pub fn new_failure(gas_used: GasCostSummary, error: SuiError) -> ExecutionStatus {
+    pub fn new_failure(error: ExecutionError) -> ExecutionStatus {
         ExecutionStatus::Failure {
-            gas_cost: gas_used,
-            error: Box::new(error),
+            error: *error.kind(),
         }
     }
 
@@ -924,36 +920,21 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> GasCostSummary {
+    pub fn unwrap(self) {
         match self {
-            ExecutionStatus::Success { gas_cost: gas_used } => gas_used,
+            ExecutionStatus::Success => {}
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
         }
     }
 
-    pub fn unwrap_err(self) -> (GasCostSummary, SuiError) {
+    pub fn unwrap_err(self) -> ExecutionErrorKind {
         match self {
             ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure {
-                gas_cost: gas_used,
-                error,
-            } => (gas_used, *error),
-        }
-    }
-
-    /// Returns the gas used from the status
-    pub fn gas_cost_summary(&self) -> &GasCostSummary {
-        match &self {
-            ExecutionStatus::Success {
-                gas_cost: gas_used, ..
-            } => gas_used,
-            ExecutionStatus::Failure {
-                gas_cost: gas_used, ..
-            } => gas_used,
+            ExecutionStatus::Failure { error } => error,
         }
     }
 }
@@ -963,6 +944,7 @@ impl ExecutionStatus {
 pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
+    pub gas_used: GasCostSummary,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     pub shared_objects: Vec<ObjectRef>,
     // The transaction digest
@@ -999,6 +981,10 @@ impl TransactionEffects {
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
+    }
+
+    pub fn gas_cost_summary(&self) -> &GasCostSummary {
+        &self.gas_used
     }
 
     pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
