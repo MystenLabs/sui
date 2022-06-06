@@ -29,8 +29,11 @@ async fn checkpoint_active_flow_happy_path() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state =
-                ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
+            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
+                inner_state.authority.clone(),
+                clients,
+            )
+            .unwrap();
             active_state.spawn_all_active_processes().await
         });
     }
@@ -95,8 +98,11 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state =
-                ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
+            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
+                inner_state.authority.clone(),
+                clients,
+            )
+            .unwrap();
             // Spin the gossip service.
             active_state.spawn_active_processes(true, true).await;
         });
@@ -178,8 +184,11 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state =
-                ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
+            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
+                inner_state.authority.clone(),
+                clients,
+            )
+            .unwrap();
             // Spin the gossip service.
             active_state.spawn_active_processes(false, true).await;
         });
