@@ -62,6 +62,15 @@ pub struct ValidatorSet {
     pub next_epoch_validators: Vec<ValidatorMetadata>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Proposal {
+    pub epoch: u64,
+    pub quorum_threshold: u64,
+    pub allowed_voters: Vec<AccountAddress>,
+    pub voted: Vec<AccountAddress>,
+    pub total_weighted_vote: u64,
+}
+
 /// Rust version of the Move Sui::SuiSystem::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemState {
@@ -72,6 +81,7 @@ pub struct SuiSystemState {
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
     pub delegation_reward: Balance,
+    pub active_proposal_for_x: MoveOption<Proposal>,
     // TODO: Use getters instead of all pub.
 }
 
