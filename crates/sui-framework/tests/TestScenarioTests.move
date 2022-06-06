@@ -27,6 +27,12 @@ module Sui::TestScenarioTests {
         child: ChildRef<Object>,
     }
 
+    struct MultiChildParent has key {
+        id: ID::VersionedID,
+        child1: ChildRef<Object>,
+        child2: ChildRef<Object>,
+    }
+
     #[test]
     fun test_wrap_unwrap() {
         let sender = @0x0;
@@ -307,6 +313,45 @@ module Sui::TestScenarioTests {
         TestScenario::return_owned(&mut scenario, child);
 
         TestScenario::return_owned(&mut scenario, parent);
+    }
+
+    #[test]
+    fun test_take_child_object_by_id() {
+        let sender = @0x0;
+        let scenario = TestScenario::begin(&sender);
+        // Create two children and a parent object.
+        let child1 = Object {
+            id: TestScenario::new_id(&mut scenario),
+            value: 10,
+        };
+        let child1_id = *ID::id(&child1);
+        let child2 = Object {
+            id: TestScenario::new_id(&mut scenario),
+            value: 20,
+        };
+        let child2_id = *ID::id(&child2);
+        let parent_id = TestScenario::new_id(&mut scenario);
+        let (parent_id, child1_ref) = Transfer::transfer_to_object_id(child1, parent_id);
+        let (parent_id, child2_ref) = Transfer::transfer_to_object_id(child2, parent_id);
+
+        let parent = MultiChildParent {
+            id: parent_id,
+            child1: child1_ref,
+            child2: child2_ref,
+        };
+        Transfer::transfer(parent, sender);
+
+        TestScenario::next_tx(&mut scenario, &sender);
+            {
+                let parent = TestScenario::take_owned<MultiChildParent>(&mut scenario);
+                let child1 = TestScenario::take_child_object_by_id<MultiChildParent, Object>(&mut scenario, &parent, child1_id);
+                let child2 = TestScenario::take_child_object_by_id<MultiChildParent, Object>(&mut scenario, &parent, child2_id);
+                assert!(child1.value == 10, 0);
+                assert!(child2.value == 20, 0);
+                TestScenario::return_owned(&mut scenario, parent);
+                TestScenario::return_owned(&mut scenario, child1);
+                TestScenario::return_owned(&mut scenario, child2);
+            };
     }
 
     /// Create object and parent. object is a child of parent.

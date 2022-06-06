@@ -146,7 +146,7 @@ impl crate::authority::AuthorityState {
         // The structures we use to build the next batch. The current_batch holds the sequence
         // of transactions in order, following the last batch. The loose transactions holds
         // transactions we may have received out of order.
-        let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
+        let mut current_batch: Vec<(TxSequenceNumber, ExecutionDigests)> = Vec::new();
 
         while !exit {
             // Reset the flags.

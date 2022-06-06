@@ -1,0 +1,23 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# publish
+module 0x0.M {
+    import 0x2.TxContext;
+    public(script) t() {
+        label l0:
+        abort 0;
+    }
+}
+
+
+//# publish
+module 0x0.M {
+    import 0x2.TxContext;
+    import 0x2.ID;
+    struct Obj has key { id: ID.VersionedID }
+    public(script) t(flag: bool, arg: &mut Self.Obj) {
+        label l0:
+        abort 0;
+    }
+}

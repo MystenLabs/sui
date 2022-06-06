@@ -1,6 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    genesis,
+    genesis_config::{GenesisConfig, ValidatorGenesisInfo},
+    utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
+    CONSENSUS_DB_NAME, DEFAULT_STAKE,
+};
 use debug_ignore::DebugIgnore;
 use narwhal_config::{
     Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
@@ -9,14 +15,9 @@ use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
-
-use crate::{
-    genesis, new_network_address, utils, CommitteeConfig, ConsensusConfig, GenesisConfig,
-    NetworkConfig, NodeConfig, ValidatorGenesisInfo, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME, DEFAULT_STAKE,
-};
 
 pub struct ConfigBuilder<R = OsRng> {
     rng: R,
@@ -72,13 +73,13 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .map(|_| get_key_pair_from_rng(&mut self.rng).1)
             .map(|key_pair| ValidatorGenesisInfo {
                 key_pair,
-                network_address: new_network_address(),
+                network_address: utils::new_network_address(),
                 stake: DEFAULT_STAKE,
-                narwhal_primary_to_primary: new_network_address(),
-                narwhal_worker_to_primary: new_network_address(),
-                narwhal_primary_to_worker: new_network_address(),
-                narwhal_worker_to_worker: new_network_address(),
-                narwhal_consensus_address: new_network_address(),
+                narwhal_primary_to_primary: utils::new_network_address(),
+                narwhal_worker_to_primary: utils::new_network_address(),
+                narwhal_primary_to_worker: utils::new_network_address(),
+                narwhal_worker_to_worker: utils::new_network_address(),
+                narwhal_consensus_address: utils::new_network_address(),
             })
             .collect::<Vec<_>>();
 
@@ -86,8 +87,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     }
 
     pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
-        let epoch = 0;
-
         let validator_set = validators
             .iter()
             .map(|validator| {
@@ -121,8 +120,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 .add_move_modules(custom_modules)
                 .add_objects(objects);
 
-            for validator in &validator_set {
-                builder = builder.add_validator(validator.public_key(), validator.stake());
+            for validator in validator_set {
+                builder = builder.add_validator(validator);
             }
 
             builder.build()
@@ -159,15 +158,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 (name, authority)
             })
             .collect();
-        let consensus_committee = ConsensusCommittee {
+        let narwhal_committee = DebugIgnore(ConsensusCommittee {
             authorities: narwhal_committee,
-        };
-
-        let committee_config = CommitteeConfig {
-            epoch,
-            validator_set,
-            consensus_committee: DebugIgnore(consensus_committee),
-        };
+        });
 
         let validator_configs = validators
             .into_iter()
@@ -187,28 +180,23 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     consensus_address,
                     consensus_db_path,
                     narwhal_config: Default::default(),
+                    narwhal_committee: narwhal_committee.clone(),
                 };
 
-                let metrics_address = new_network_address();
-
                 NodeConfig {
-                    key_pair: validator.key_pair,
+                    key_pair: Arc::new(validator.key_pair),
                     db_path,
                     network_address,
-                    metrics_address,
-                    json_rpc_address: format!("127.0.0.1:{}", utils::get_available_port())
-                        .parse()
-                        .unwrap(),
+                    metrics_address: utils::available_local_socket_address(),
+                    json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
-                    committee_config: committee_config.clone(),
-                    genesis: genesis.clone(),
+                    genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })
             .collect();
 
         NetworkConfig {
             validator_configs,
-            loaded_move_packages: vec![],
             genesis,
             account_keys,
         }

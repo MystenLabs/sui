@@ -1,19 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
+use sui_types::base_types::ExecutionDigests;
+use sui_types::committee::StakeUnit;
 use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
+    base_types::AuthorityName,
     committee::Committee,
     error::SuiError,
+    messages::CertifiedTransaction,
     messages_checkpoint::{CheckpointFragment, CheckpointSummary},
     waypoint::{GlobalCheckpoint, WaypointError},
 };
 
 pub struct FragmentReconstruction {
     pub committee: Committee,
-    pub global: GlobalCheckpoint<AuthorityName, TransactionDigest>,
+    pub global: GlobalCheckpoint<AuthorityName, ExecutionDigests>,
+    pub extra_transactions: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
 
 impl FragmentReconstruction {
@@ -38,6 +42,7 @@ impl FragmentReconstruction {
         let mut span = SpanGraph::new(&committee);
         let mut fragments_used = Vec::new();
         let mut proposals: HashMap<AuthorityName, CheckpointSummary> = HashMap::new();
+        let mut extra_transactions = BTreeMap::new();
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
@@ -80,7 +85,9 @@ impl FragmentReconstruction {
                 let mut global = GlobalCheckpoint::new();
                 while let Some(link) = active_links.pop_front() {
                     match global.insert(link.diff.clone()) {
-                        Ok(_) | Err(WaypointError::NothingToDo) => {} // Do nothing
+                        Ok(_) | Err(WaypointError::NothingToDo) => {
+                            extra_transactions.extend(link.certs.clone());
+                        }
                         Err(WaypointError::CannotConnect) => {
                             // Reinsert the fragment at the end
                             active_links.push_back(link);
@@ -95,7 +102,11 @@ impl FragmentReconstruction {
                     }
                 }
 
-                return Ok(Some(FragmentReconstruction { global, committee }));
+                return Ok(Some(FragmentReconstruction {
+                    global,
+                    committee,
+                    extra_transactions,
+                }));
             }
         }
 
@@ -108,13 +119,13 @@ impl FragmentReconstruction {
 // A structure that stores a set of spanning trees, and that supports addition
 // of links to merge them, and construct ever growing components.
 struct SpanGraph {
-    nodes: HashMap<AuthorityName, (AuthorityName, usize)>,
+    nodes: HashMap<AuthorityName, (AuthorityName, StakeUnit)>,
 }
 
 impl SpanGraph {
     /// Initialize the graph with each authority just pointing to itself.
     pub fn new(committee: &Committee) -> SpanGraph {
-        let nodes: HashMap<AuthorityName, (AuthorityName, usize)> = committee
+        let nodes: HashMap<AuthorityName, (AuthorityName, StakeUnit)> = committee
             .voting_rights
             .iter()
             .map(|(n, w)| (*n, (*n, *w)))
@@ -126,7 +137,7 @@ impl SpanGraph {
     /// Follow pointer until you get to a node that only point to itself
     /// and return the node name, and the weight of the tree that points
     /// indirectly to it.
-    pub fn top_node(&self, name: &AuthorityName) -> (AuthorityName, usize) {
+    pub fn top_node(&self, name: &AuthorityName) -> (AuthorityName, StakeUnit) {
         let mut next_name = name;
         while self.nodes[next_name].0 != *next_name {
             next_name = &self.nodes[next_name].0
@@ -142,13 +153,15 @@ impl SpanGraph {
         &mut self,
         name1: &AuthorityName,
         name2: &AuthorityName,
-    ) -> (AuthorityName, usize) {
+    ) -> (AuthorityName, StakeUnit) {
         let top1 = self.top_node(name1).0;
         let top2 = self.top_node(name2).0;
         if top1 == top2 {
-            // They have been merged in the past, nothing to do.
+            // they are already merged
             return (top1, self.nodes[&top1].1);
         }
+
+        // They are not merged, so merge now
         let new_weight = self.nodes[&top1].1 + self.nodes[&top2].1;
         self.nodes.get_mut(&top1).unwrap().0 = top2;
         self.nodes.get_mut(&top2).unwrap().1 = new_weight;

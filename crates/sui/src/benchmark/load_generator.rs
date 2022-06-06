@@ -24,6 +24,7 @@ use tokio::{sync::Notify, time};
 use tracing::{error, info};
 
 use sui_config::NetworkConfig;
+use sui_types::committee::StakeUnit;
 
 pub fn check_transaction_response(reply_message: Result<TransactionInfoResponse, io::Error>) {
     match reply_message {
@@ -290,9 +291,9 @@ pub fn calculate_throughput(num_items: usize, elapsed_time_us: u128) -> f64 {
 async fn send_tx_chunks_for_quorum_notif(
     notif: Arc<Notify>,
     tx_chunk: Vec<Transaction>,
-    result_chann_tx: &mut MpscSender<(u128, usize)>,
+    result_chann_tx: &mut MpscSender<(u128, StakeUnit)>,
     address: Multiaddr,
-    stake: usize,
+    stake: StakeUnit,
     conn: usize,
 ) {
     notif.notified().await;
@@ -319,9 +320,9 @@ async fn send_tx_for_quorum(
     order_chunk: Vec<Transaction>,
     conf_chunk: Vec<CertifiedTransaction>,
     result_chann_tx: &mut MpscSender<u128>,
-    net_clients: Vec<(Multiaddr, usize)>,
+    net_clients: Vec<(Multiaddr, StakeUnit)>,
     conn: usize,
-    quorum_threshold: usize,
+    quorum_threshold: StakeUnit,
 ) {
     // For receiving info back from the subtasks
     let (order_chann_tx, mut order_chann_rx) = MpscChannel(net_clients.len() * 2);
@@ -451,7 +452,7 @@ impl MultiFixedRateLoadGenerator {
 
         network_cfg: &NetworkConfig,
     ) -> Self {
-        let network_clients_stake: Vec<(Multiaddr, usize)> = network_cfg
+        let network_clients_stake: Vec<(Multiaddr, StakeUnit)> = network_cfg
             .validator_set()
             .iter()
             .map(|q| (q.network_address().to_owned(), q.stake()))

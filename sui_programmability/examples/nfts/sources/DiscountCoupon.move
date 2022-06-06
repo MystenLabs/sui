@@ -46,11 +46,11 @@ module NFTs::DiscountCoupon {
             expiration,
         };
         Transfer::transfer(coupon, recipient);
-        SUI::transfer(coin, recipient, ctx);
+        SUI::transfer(coin, recipient);
     }
 
     /// Burn DiscountCoupon.
-    public(script) fun burn(nft: DiscountCoupon, _ctx: &mut TxContext) {
+    public(script) fun burn(nft: DiscountCoupon) {
         let DiscountCoupon { id, issuer: _, discount: _, expiration: _ } = nft;
         ID::delete(id);
     }
@@ -58,7 +58,7 @@ module NFTs::DiscountCoupon {
     /// Transfer DiscountCoupon to issuer only.
     //  TODO: Consider adding more valid recipients.
     //      If we stick with issuer-as-receiver only, then `recipient` input won't be required).
-    public(script) fun transfer(coupon: DiscountCoupon, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(coupon: DiscountCoupon, recipient: address) {
         assert!(&coupon.issuer == &recipient, EWrongRecipient);
         Transfer::transfer(coupon, recipient);
     }

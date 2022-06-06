@@ -55,7 +55,7 @@ module MyFirstPackage::M1 {
         forge.swords_created = forge.swords_created + 1;
     }
 
-    public(script) fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun sword_transfer(sword: Sword, recipient: address) {
         use Sui::Transfer;
         // transfer the sword
         Transfer::transfer(sword, recipient);

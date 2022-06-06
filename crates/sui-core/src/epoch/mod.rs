@@ -4,6 +4,12 @@
 use serde::{Deserialize, Serialize};
 use sui_types::committee::Committee;
 
+pub mod reconfiguration;
+
+#[cfg(test)]
+#[path = "./tests/reconfiguration_tests.rs"]
+mod reconfiguration_tests;
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EpochInfoLocals {
     pub committee: Committee,

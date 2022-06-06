@@ -1,264 +1,39 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use anyhow::Result;
-use debug_ignore::DebugIgnore;
-use move_binary_format::CompiledModule;
-use multiaddr::Multiaddr;
-use narwhal_config::Committee as ConsensusCommittee;
-use narwhal_config::Parameters as ConsensusParameters;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
-use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use serde::Serialize;
 use std::fs;
-use std::net::SocketAddr;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use sui_types::base_types::{ObjectID, SuiAddress, TxContext};
-use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair, PublicKeyBytes};
-use sui_types::object::Object;
-use tracing::{info, trace};
+use sui_types::committee::StakeUnit;
+use tracing::trace;
 
 pub mod builder;
 pub mod genesis;
+pub mod genesis_config;
+pub mod node;
+mod swarm;
 pub mod utils;
 
-const DEFAULT_STAKE: usize = 1;
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct NodeConfig {
-    pub key_pair: KeyPair,
-    pub db_path: PathBuf,
-    pub network_address: Multiaddr,
-    pub metrics_address: Multiaddr,
-    pub json_rpc_address: SocketAddr,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub consensus_config: Option<ConsensusConfig>,
-    pub committee_config: CommitteeConfig,
-
-    genesis: genesis::Genesis,
-}
-
-impl Config for NodeConfig {}
-
-impl NodeConfig {
-    pub fn key_pair(&self) -> &KeyPair {
-        &self.key_pair
-    }
-
-    pub fn public_key(&self) -> PublicKeyBytes {
-        *self.key_pair.public_key_bytes()
-    }
-
-    pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
-    }
-
-    pub fn db_path(&self) -> &Path {
-        &self.db_path
-    }
-
-    pub fn network_address(&self) -> &Multiaddr {
-        &self.network_address
-    }
-
-    pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
-        self.consensus_config.as_ref()
-    }
-
-    pub fn committee_config(&self) -> &CommitteeConfig {
-        &self.committee_config
-    }
-
-    pub fn genesis(&self) -> &genesis::Genesis {
-        &self.genesis
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ConsensusConfig {
-    consensus_address: Multiaddr,
-    consensus_db_path: PathBuf,
-
-    //TODO make narwhal config serializable
-    #[serde(skip_serializing)]
-    #[serde(default)]
-    pub narwhal_config: DebugIgnore<ConsensusParameters>,
-}
-
-impl ConsensusConfig {
-    pub fn address(&self) -> &Multiaddr {
-        &self.consensus_address
-    }
-
-    pub fn db_path(&self) -> &Path {
-        &self.consensus_db_path
-    }
-
-    pub fn narwhal_config(&self) -> &ConsensusParameters {
-        &self.narwhal_config
-    }
-}
-
-//TODO get this information from on-chain + some way to do network discovery
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CommitteeConfig {
-    epoch: EpochId,
-    validator_set: Vec<ValidatorInfo>,
-    consensus_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
-}
-
-impl CommitteeConfig {
-    pub fn epoch(&self) -> EpochId {
-        self.epoch
-    }
-
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        &self.validator_set
-    }
-
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
-        &self.consensus_committee
-    }
-
-    pub fn committee(&self) -> Committee {
-        let voting_rights = self
-            .validator_set()
-            .iter()
-            .map(|validator| (validator.public_key(), validator.stake()))
-            .collect();
-        Committee::new(self.epoch(), voting_rights)
-    }
-}
-
-/// Publicly known information about a validator
-/// TODO read most of this from on-chain
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ValidatorInfo {
-    public_key: PublicKeyBytes,
-    stake: usize,
-    network_address: Multiaddr,
-}
-
-impl ValidatorInfo {
-    pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
-    }
-
-    pub fn public_key(&self) -> PublicKeyBytes {
-        self.public_key
-    }
-
-    pub fn stake(&self) -> usize {
-        self.stake
-    }
-
-    pub fn network_address(&self) -> &Multiaddr {
-        &self.network_address
-    }
-}
-
-/// This is a config that is used for testing or local use as it contains the config and keys for
-/// all validators
-#[derive(Debug, Deserialize, Serialize)]
-pub struct NetworkConfig {
-    pub validator_configs: Vec<NodeConfig>,
-    loaded_move_packages: Vec<(PathBuf, ObjectID)>,
-    genesis: genesis::Genesis,
-    pub account_keys: Vec<KeyPair>,
-}
-
-impl Config for NetworkConfig {}
-
-impl NetworkConfig {
-    pub fn validator_configs(&self) -> &[NodeConfig] {
-        &self.validator_configs
-    }
-
-    pub fn loaded_move_packages(&self) -> &[(PathBuf, ObjectID)] {
-        &self.loaded_move_packages
-    }
-
-    pub fn add_move_package(&mut self, path: PathBuf, object_id: ObjectID) {
-        self.loaded_move_packages.push((path, object_id))
-    }
-
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        self.validator_configs()[0]
-            .committee_config()
-            .validator_set()
-    }
-
-    pub fn committee(&self) -> Committee {
-        self.validator_configs()[0].committee_config().committee()
-    }
-
-    pub fn into_validator_configs(self) -> Vec<NodeConfig> {
-        self.validator_configs
-    }
-
-    pub fn generate_with_rng<R: rand::CryptoRng + rand::RngCore>(
-        config_dir: &Path,
-        quorum_size: usize,
-        rng: R,
-    ) -> Self {
-        builder::ConfigBuilder::new(config_dir)
-            .committee_size(NonZeroUsize::new(quorum_size).unwrap())
-            .rng(rng)
-            .build()
-    }
-
-    pub fn generate(config_dir: &Path, quorum_size: usize) -> Self {
-        Self::generate_with_rng(config_dir, quorum_size, OsRng)
-    }
-
-    /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
-    /// a fullnode and have it connect to a network defined by this `NetworkConfig`.
-    pub fn generate_fullnode_config(&self) -> NodeConfig {
-        let key_pair = get_key_pair_from_rng(&mut OsRng).1;
-        let validator_config = &self.validator_configs[0];
-
-        let mut db_path = validator_config.db_path.clone();
-        db_path.pop();
-
-        NodeConfig {
-            key_pair,
-            db_path: db_path.join("fullnode"),
-            network_address: new_network_address(),
-            metrics_address: new_network_address(),
-            json_rpc_address: format!("127.0.0.1:{}", utils::get_available_port())
-                .parse()
-                .unwrap(),
-
-            consensus_config: None,
-            committee_config: validator_config.committee_config.clone(),
-
-            genesis: validator_config.genesis.clone(),
-        }
-    }
-}
-
-fn new_network_address() -> Multiaddr {
-    format!("/dns/localhost/tcp/{}/http", utils::get_available_port())
-        .parse()
-        .unwrap()
-}
+pub use node::{ConsensusConfig, NodeConfig, ValidatorInfo};
+pub use swarm::NetworkConfig;
 
 const SUI_DIR: &str = ".sui";
 const SUI_CONFIG_DIR: &str = "sui_config";
-pub const SUI_NETWORK_CONFIG: &str = "network.conf";
-pub const SUI_FULLNODE_CONFIG: &str = "fullnode.conf";
-pub const SUI_WALLET_CONFIG: &str = "wallet.conf";
-pub const SUI_GATEWAY_CONFIG: &str = "gateway.conf";
+pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
+pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
+pub const SUI_WALLET_CONFIG: &str = "wallet.yaml";
+pub const SUI_GATEWAY_CONFIG: &str = "gateway.yaml";
+pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";
 pub const SUI_DEV_NET_URL: &str = "https://gateway.devnet.sui.io:443";
 
 pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
-pub const DEFAULT_STARTING_PORT: u16 = 10000;
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
+pub const FULL_NODE_DB_PATH: &str = "full_node_db";
+
+const DEFAULT_STAKE: StakeUnit = 1;
 
 pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     match std::env::var_os("SUI_CONFIG_DIR") {
@@ -276,216 +51,6 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     })
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct GenesisConfig {
-    pub validator_genesis_info: Option<Vec<ValidatorGenesisInfo>>,
-    pub committee_size: usize,
-    pub accounts: Vec<AccountConfig>,
-    pub move_packages: Vec<PathBuf>,
-    pub sui_framework_lib_path: Option<PathBuf>,
-    pub move_framework_lib_path: Option<PathBuf>,
-}
-
-impl Config for GenesisConfig {}
-
-impl GenesisConfig {
-    pub fn generate_accounts<R: ::rand::RngCore + ::rand::CryptoRng>(
-        &self,
-        mut rng: R,
-    ) -> Result<(Vec<KeyPair>, Vec<Object>)> {
-        let mut addresses = Vec::new();
-        let mut preload_objects = Vec::new();
-        let mut all_preload_objects_set = BTreeSet::new();
-
-        info!("Creating accounts and gas objects...");
-
-        let mut keys = Vec::new();
-        for account in &self.accounts {
-            let address = if let Some(address) = account.address {
-                address
-            } else {
-                let (address, keypair) = get_key_pair_from_rng(&mut rng);
-                keys.push(keypair);
-                address
-            };
-
-            addresses.push(address);
-            let mut preload_objects_map = BTreeMap::new();
-
-            // Populate gas itemized objects
-            account.gas_objects.iter().for_each(|q| {
-                if !all_preload_objects_set.contains(&q.object_id) {
-                    preload_objects_map.insert(q.object_id, q.gas_value);
-                }
-            });
-
-            // Populate ranged gas objects
-            if let Some(ranges) = &account.gas_object_ranges {
-                for rg in ranges {
-                    let ids = ObjectID::in_range(rg.offset, rg.count)?;
-
-                    for obj_id in ids {
-                        if !preload_objects_map.contains_key(&obj_id)
-                            && !all_preload_objects_set.contains(&obj_id)
-                        {
-                            preload_objects_map.insert(obj_id, rg.gas_value);
-                            all_preload_objects_set.insert(obj_id);
-                        }
-                    }
-                }
-            }
-
-            for (object_id, value) in preload_objects_map {
-                let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                    object_id,
-                    sui_types::base_types::SequenceNumber::new(),
-                    address,
-                    value,
-                );
-                preload_objects.push(new_object);
-            }
-        }
-
-        Ok((keys, preload_objects))
-    }
-
-    pub fn generate_custom_move_modules(
-        &self,
-        genesis_ctx: &mut TxContext,
-    ) -> Result<Vec<Vec<CompiledModule>>> {
-        let mut custom_modules = Vec::new();
-        // Build custom move packages
-        if !self.move_packages.is_empty() {
-            info!(
-                "Loading {} Move packages from {:?}",
-                self.move_packages.len(),
-                self.move_packages,
-            );
-
-            for path in &self.move_packages {
-                let mut modules = sui_framework::build_move_package(
-                    path,
-                    move_package::BuildConfig::default(),
-                    false,
-                )?;
-
-                let package_id =
-                    sui_adapter::adapter::generate_package_id(&mut modules, genesis_ctx)?;
-
-                info!("Loaded package [{}] from {:?}.", package_id, path);
-                custom_modules.push(modules)
-            }
-        }
-        Ok(custom_modules)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ValidatorGenesisInfo {
-    pub key_pair: KeyPair,
-    pub network_address: Multiaddr,
-    pub stake: usize,
-    pub narwhal_primary_to_primary: Multiaddr,
-    pub narwhal_worker_to_primary: Multiaddr,
-    pub narwhal_primary_to_worker: Multiaddr,
-    pub narwhal_worker_to_worker: Multiaddr,
-    pub narwhal_consensus_address: Multiaddr,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AccountConfig {
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "SuiAddress::optional_address_as_hex",
-        deserialize_with = "SuiAddress::optional_address_from_hex"
-    )]
-    pub address: Option<SuiAddress>,
-    pub gas_objects: Vec<ObjectConfig>,
-    pub gas_object_ranges: Option<Vec<ObjectConfigRange>>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ObjectConfigRange {
-    /// Starting object id
-    pub offset: ObjectID,
-    /// Number of object ids
-    pub count: u64,
-    /// Gas value per object id
-    pub gas_value: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ObjectConfig {
-    #[serde(default = "ObjectID::random")]
-    pub object_id: ObjectID,
-    #[serde(default = "default_gas_value")]
-    pub gas_value: u64,
-}
-
-fn default_gas_value() -> u64 {
-    DEFAULT_GAS_AMOUNT
-}
-
-const DEFAULT_GAS_AMOUNT: u64 = 100000;
-const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
-const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
-const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
-
-impl GenesisConfig {
-    pub fn for_local_testing() -> Result<Self, anyhow::Error> {
-        Self::custom_genesis(
-            DEFAULT_NUMBER_OF_AUTHORITIES,
-            DEFAULT_NUMBER_OF_ACCOUNT,
-            DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
-        )
-    }
-
-    pub fn custom_genesis(
-        num_authorities: usize,
-        num_accounts: usize,
-        num_objects_per_account: usize,
-    ) -> Result<Self, anyhow::Error> {
-        assert!(
-            num_authorities > 0,
-            "num_authorities should be larger than 0"
-        );
-
-        let mut accounts = Vec::new();
-        for _ in 0..num_accounts {
-            let mut objects = Vec::new();
-            for _ in 0..num_objects_per_account {
-                objects.push(ObjectConfig {
-                    object_id: ObjectID::random(),
-                    gas_value: DEFAULT_GAS_AMOUNT,
-                })
-            }
-            accounts.push(AccountConfig {
-                address: None,
-                gas_objects: objects,
-                gas_object_ranges: Some(Vec::new()),
-            })
-        }
-
-        Ok(Self {
-            accounts,
-            ..Default::default()
-        })
-    }
-}
-
-impl Default for GenesisConfig {
-    fn default() -> Self {
-        Self {
-            validator_genesis_info: None,
-            committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
-            accounts: vec![],
-            move_packages: vec![],
-            sui_framework_lib_path: None,
-            move_framework_lib_path: None,
-        }
-    }
-}
-
 pub trait Config
 where
     Self: DeserializeOwned + Serialize,
@@ -495,6 +60,23 @@ where
             inner: self,
             path: path.to_path_buf(),
         }
+    }
+
+    fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Reading config from {}", path.display());
+        let reader = fs::File::open(path)
+            .with_context(|| format!("Unable to load config from {}", path.display()))?;
+        Ok(serde_yaml::from_reader(reader)?)
+    }
+
+    fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Writing config to {}", path.display());
+        let config = serde_yaml::to_string(&self)?;
+        fs::write(path, config)
+            .with_context(|| format!("Unable to save config to {}", path.display()))?;
+        Ok(())
     }
 }
 
@@ -508,16 +90,11 @@ where
     C: Config,
 {
     pub fn read(path: &Path) -> Result<C, anyhow::Error> {
-        trace!("Reading config from '{:?}'", path);
-        let reader = fs::File::open(path)?;
-        Ok(serde_json::from_reader(reader)?)
+        Config::load(path)
     }
 
     pub fn save(&self) -> Result<(), anyhow::Error> {
-        trace!("Writing config to '{:?}'", &self.path);
-        let config = serde_json::to_string_pretty(&self.inner)?;
-        fs::write(&self.path, config)?;
-        Ok(())
+        self.inner.save(&self.path)
     }
 
     pub fn into_inner(self) -> C {

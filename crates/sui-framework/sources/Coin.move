@@ -8,8 +8,8 @@ module Sui::Coin {
     use Sui::TxContext::{Self, TxContext};
     use Std::Vector;
 
-    /// A coin of type `T` worth `value`. Transferable but not storable
-    struct Coin<phantom T> has key {
+    /// A coin of type `T` worth `value`. Transferable and storable
+    struct Coin<phantom T> has key, store {
         id: VersionedID,
         balance: Balance<T>
     }
@@ -178,12 +178,12 @@ module Sui::Coin {
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public(script) fun join_<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
+    public(script) fun join_<T>(self: &mut Coin<T>, c: Coin<T>) {
         join(self, c)
     }
 
     /// Join everything in `coins` with `self`
-    public(script) fun join_vec_<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, _ctx: &mut TxContext) {
+    public(script) fun join_vec_<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
         join_vec(self, coins)
     }
 

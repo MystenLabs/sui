@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::account_address::AccountAddress;
-use sui_types::{event::Event, gas::SuiGasStatus};
+use sui_types::{event::Event, gas::SuiGasStatus, object::Owner};
 
 use super::*;
 
@@ -100,10 +100,12 @@ impl<S> AuthorityTemporaryStore<S> {
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
     /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
-    /// We skip the last object, which is always the gas object, because gas object will be
-    /// updated after this.
-    pub fn ensure_active_inputs_mutated(&mut self) {
-        for (id, _seq, _) in self.active_inputs[..self.active_inputs.len() - 1].iter() {
+    /// We skip the gas object, because gas object will be updated separately.
+    pub fn ensure_active_inputs_mutated(&mut self, gas_object_id: &ObjectID) {
+        for (id, _seq, _) in &self.active_inputs {
+            if id == gas_object_id {
+                continue;
+            }
             if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.
@@ -184,9 +186,16 @@ impl<S> AuthorityTemporaryStore<S> {
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
-        gas_object_id: &ObjectID,
+        gas_object_ref: ObjectRef,
     ) -> TransactionEffects {
-        let (gas_reference, gas_object) = &self.written[gas_object_id];
+        // In the case of special transactions that don't require a gas object,
+        // we don't really care about the effects to gas, just use the input for it.
+        let updated_gas_object_info = if gas_object_ref.0 == ObjectID::ZERO {
+            (gas_object_ref, Owner::AddressOwner(SuiAddress::default()))
+        } else {
+            let (gas_reference, gas_object) = &self.written[&gas_object_ref.0];
+            (*gas_reference, gas_object.owner)
+        };
         TransactionEffects {
             status,
             shared_objects: shared_object_refs,
@@ -233,7 +242,7 @@ impl<S> AuthorityTemporaryStore<S> {
                     }
                 })
                 .collect(),
-            gas_object: (*gas_reference, gas_object.owner),
+            gas_object: updated_gas_object_info,
             events: self.events.clone(),
             dependencies: transaction_dependencies,
         }

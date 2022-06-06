@@ -348,7 +348,7 @@ pub fn get_object_owned_inventory(
 }
 
 /// Delete the given object
-pub fn delete_object_for_testing(
+pub fn drop_object_for_testing(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,

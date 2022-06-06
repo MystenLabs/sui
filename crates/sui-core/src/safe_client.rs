@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
-use async_trait::async_trait;
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::PublicKeyBytes;
@@ -31,8 +30,12 @@ impl<C> SafeClient<C> {
         }
     }
 
+    pub fn authority_client(&self) -> &C {
+        &self.authority_client
+    }
+
     #[cfg(test)]
-    pub fn authority_client(&mut self) -> &mut C {
+    pub fn authority_client_mut(&mut self) -> &mut C {
         &mut self.authority_client
     }
 
@@ -180,7 +183,7 @@ impl<C> SafeClient<C> {
         _request: BatchInfoRequest,
         signed_batch: &SignedBatch,
         transactions_and_last_batch: &Option<(
-            Vec<(TxSequenceNumber, TransactionDigest)>,
+            Vec<(TxSequenceNumber, ExecutionDigests)>,
             AuthorityBatch,
         )>,
     ) -> SuiResult {
@@ -260,7 +263,8 @@ where
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => None,
                         Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
                             // Download the full transaction info
-                            let transaction_info_request = TransactionInfoRequest::from(*digest);
+                            let transaction_info_request =
+                                TransactionInfoRequest::from(digest.transaction);
                             let res = _client
                                 .handle_transaction_info_request(transaction_info_request)
                                 .await
@@ -274,15 +278,9 @@ where
 
         Ok(new_stream)
     }
-}
 
-#[async_trait]
-impl<C> AuthorityAPI for SafeClient<C>
-where
-    C: AuthorityAPI + Send + Sync + Clone + 'static,
-{
     /// Initiate a new transfer to a Sui or Primary account.
-    async fn handle_transaction(
+    pub async fn handle_transaction(
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -299,7 +297,7 @@ where
     }
 
     /// Confirm a transfer to a Sui or Primary account.
-    async fn handle_confirmation_transaction(
+    pub async fn handle_confirmation_transaction(
         &self,
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -316,7 +314,7 @@ where
         Ok(transaction_info)
     }
 
-    async fn handle_consensus_transaction(
+    pub async fn handle_consensus_transaction(
         &self,
         transaction: ConsensusTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -326,7 +324,7 @@ where
             .await
     }
 
-    async fn handle_account_info_request(
+    pub async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
@@ -335,7 +333,7 @@ where
             .await
     }
 
-    async fn handle_object_info_request(
+    pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
@@ -351,7 +349,7 @@ where
     }
 
     /// Handle Object information requests for this account.
-    async fn handle_transaction_info_request(
+    pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -368,7 +366,7 @@ where
         Ok(transaction_info)
     }
 
-    async fn handle_checkpoint(
+    pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
@@ -378,7 +376,7 @@ where
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_stream(
+    pub async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {

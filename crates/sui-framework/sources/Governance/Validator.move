@@ -21,7 +21,7 @@ module Sui::Validator {
     #[test_only]
     friend Sui::ValidatorSetTests;
 
-    struct Validator has store {
+    struct ValidatorMetadata has store, drop, copy {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
         /// and also the address to send validator/coins to during withdraws.
         sui_address: address,
@@ -32,6 +32,14 @@ module Sui::Validator {
         name: vector<u8>,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
         net_address: vector<u8>,
+        /// Total amount of validator stake that would be active in the next epoch.
+        /// This only includes validator stake, and does not include delegation.
+        next_epoch_stake: u64,
+    }
+
+    struct Validator has store {
+        /// Summary of the validator.
+        metadata: ValidatorMetadata,
         /// The current active stake. This will not change during an epoch. It can only
         /// be updated at the end of epoch.
         stake: Balance<SUI>,
@@ -70,10 +78,13 @@ module Sui::Validator {
         // Check that the name is human-readable.
         ASCII::string(copy name);
         Validator {
-            sui_address,
-            pubkey_bytes,
-            name,
-            net_address,
+            metadata: ValidatorMetadata {
+                sui_address,
+                pubkey_bytes,
+                name,
+                net_address,
+                next_epoch_stake: Balance::value(&stake),
+            },
             stake,
             delegation: 0,
             pending_stake: Option::none(),
@@ -88,10 +99,7 @@ module Sui::Validator {
 
     public(friend) fun destroy(self: Validator, ctx: &mut TxContext) {
         let Validator {
-            sui_address,
-            pubkey_bytes: _,
-            name: _,
-            net_address: _,
+            metadata,
             stake,
             delegation: _,
             pending_stake,
@@ -103,9 +111,14 @@ module Sui::Validator {
             pending_delegator_withdraw_count: _,
         } = self;
 
-        Transfer::transfer(Coin::from_balance(stake, ctx), sui_address);
-        assert!(pending_withdraw == 0 && Option::is_none(&pending_stake), 0);
+        assert!(pending_withdraw == 0, 0);
+        if (Option::is_some(&pending_stake)) {
+            // pending_stake can be non-empty as it can contain the gas reward from the last epoch.
+            let pending_stake_balance = Option::extract(&mut pending_stake);
+            Balance::join(&mut stake, pending_stake_balance);
+        };
         Option::destroy_none(pending_stake);
+        Transfer::transfer(Coin::from_balance(stake, ctx), metadata.sui_address);
     }
 
     /// Add stake to an active validator. The new stake is added to the pending_stake field,
@@ -113,43 +126,31 @@ module Sui::Validator {
     public(friend) fun request_add_stake(
         self: &mut Validator,
         new_stake: Balance<SUI>,
-        max_validator_stake: u64,
     ) {
-        let cur_stake = Balance::value(&self.stake);
-        if (Option::is_none(&self.pending_stake)) {
-            assert!(
-                cur_stake + Balance::value(&new_stake) <= max_validator_stake,
-                0
-            );
-            Option::fill(&mut self.pending_stake, new_stake)
-        } else {
+        let new_stake_value = Balance::value(&new_stake);
+        let pending_stake = if (Option::is_some(&self.pending_stake)) {
             let pending_stake = Option::extract(&mut self.pending_stake);
             Balance::join(&mut pending_stake, new_stake);
-            assert!(
-                cur_stake + Balance::value(&pending_stake) <= max_validator_stake,
-                0
-            );
-            Option::fill(&mut self.pending_stake, pending_stake);
-        }
+            pending_stake
+        } else {
+            new_stake
+        };
+        Option::fill(&mut self.pending_stake, pending_stake);
+        self.metadata.next_epoch_stake = self.metadata.next_epoch_stake + new_stake_value;
     }
 
     /// Withdraw stake from an active validator. Since it's active, we need
     /// to add it to the pending withdraw amount and process it at the end
-    /// of epoch. We also need to make sure there is sufficient amount to withdraw.
+    /// of epoch. We also need to make sure there is sufficient amount to withdraw such that the validator's
+    /// stake still satisfy the minimum requirement.
     public(friend) fun request_withdraw_stake(
         self: &mut Validator,
         withdraw_amount: u64,
         min_validator_stake: u64,
     ) {
+        assert!(self.metadata.next_epoch_stake >= withdraw_amount + min_validator_stake, 0);
         self.pending_withdraw = self.pending_withdraw + withdraw_amount;
-
-        let pending_stake_amount = if (Option::is_none(&self.pending_stake)) {
-            0
-        } else {
-            Balance::value(Option::borrow(&self.pending_stake))
-        };
-        let total_stake = Balance::value(&self.stake) + pending_stake_amount;
-        assert!(total_stake >= self.pending_withdraw + min_validator_stake, 0);
+        self.metadata.next_epoch_stake = self.metadata.next_epoch_stake - withdraw_amount;
     }
 
     /// Process pending stake and pending withdraws.
@@ -160,9 +161,11 @@ module Sui::Validator {
         };
         if (self.pending_withdraw > 0) {
             let coin = Coin::withdraw(&mut self.stake, self.pending_withdraw, ctx);
-            Coin::transfer(coin, self.sui_address);
+            Coin::transfer(coin, self.metadata.sui_address);
             self.pending_withdraw = 0;
         };
+        assert!(Balance::value(&self.stake) == self.metadata.next_epoch_stake, 0);
+
         self.delegation = self.delegation + self.pending_delegation - self.pending_delegation_withdraw;
         self.pending_delegation = 0;
         self.pending_delegation_withdraw = 0;
@@ -183,13 +186,12 @@ module Sui::Validator {
         self.pending_delegator_withdraw_count = self.pending_delegator_withdraw_count + 1;
     }
 
-    public(friend) fun deposit_reward(self: &mut Validator, reward: Balance<SUI>) {
-        Balance::join(&mut self.stake, reward)
+    public fun metadata(self: &Validator): &ValidatorMetadata {
+        &self.metadata
     }
 
-
     public fun sui_address(self: &Validator): address {
-        self.sui_address
+        self.metadata.sui_address
     }
 
     public fun stake_amount(self: &Validator): u64 {
@@ -217,8 +219,8 @@ module Sui::Validator {
     }
 
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
-         self.sui_address == other.sui_address
-            || self.name == other.name
-            || self.net_address == other.net_address
+         self.metadata.sui_address == other.metadata.sui_address
+            || self.metadata.name == other.metadata.name
+            || self.metadata.net_address == other.metadata.net_address
     }
 }

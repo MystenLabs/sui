@@ -7,9 +7,12 @@ use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeSet;
 use std::path::Path;
-use sui_storage::{default_db_options, LockService};
+use sui_storage::{
+    default_db_options,
+    mutex_table::{LockGuard, MutexTable},
+    LockService,
+};
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
@@ -56,7 +59,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     lock_service: LockService,
 
     /// Internal vector of locks to manage concurrent writes to the database
-    lock_table: Vec<tokio::sync::Mutex<()>>,
+    mutex_table: MutexTable<ObjectDigest>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -97,7 +100,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
 
     // Tables used for authority batch structure
     /// A sequence on all executed certificates and effects.
-    pub executed_sequence: DBMap<TxSequenceNumber, TransactionDigest>,
+    pub executed_sequence: DBMap<TxSequenceNumber, ExecutionDigests>,
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
@@ -186,10 +189,7 @@ impl<
             objects,
             all_object_versions,
             lock_service,
-            lock_table: (0..NUM_SHARDS)
-                .into_iter()
-                .map(|_| tokio::sync::Mutex::new(()))
-                .collect(),
+            mutex_table: MutexTable::new(NUM_SHARDS),
             owner_index,
             transactions,
             certificates,
@@ -252,34 +252,19 @@ impl<
     }
 
     #[cfg(test)]
-    pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &TransactionDigest) {
+    pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &ExecutionDigests) {
         self.executed_sequence.insert(&seq, digest).unwrap();
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks<'a, 'b>(
-        &'a self,
-        input_objects: &'b [ObjectRef],
-    ) -> Vec<tokio::sync::MutexGuard<'a, ()>> {
+    async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard<'a>> {
         if !USE_LOCKS {
             return vec![];
         }
 
-        let num_locks = self.lock_table.len();
-        // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
-        let lock_numbers: BTreeSet<usize> = input_objects
-            .iter()
-            .map(|(_, _, digest)| {
-                usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
-            })
-            .collect();
-        // Note: we need to iterate over the sorted unique elements, hence the use of a Set
-        //       in order to prevent deadlocks when trying to acquire many locks.
-        let mut locks = Vec::new();
-        for lock_seq in lock_numbers {
-            locks.push(self.lock_table[lock_seq].lock().await);
-        }
-        locks
+        self.mutex_table
+            .acquire_locks(input_objects.iter().map(|(_, _, digest)| digest))
+            .await
     }
 
     // Methods to read the store
@@ -362,11 +347,10 @@ impl<
             .ok_or(SuiError::TransactionLockDoesNotExist)?;
 
         match transaction_option {
-            Some(tx_digest) => Ok(Some(
-                self.transactions
-                    .get(&tx_digest)?
-                    .expect("Stored a lock without storing transaction?"),
-            )),
+            Some(tx_digest) => {
+                return Ok(self.transactions.get(&tx_digest)?);
+                // .expect("Stored a lock without storing transaction?"),
+            }
             None => Ok(None),
         }
     }
@@ -577,6 +561,7 @@ impl<
         )?;
 
         // Store the signed effects of the transaction
+        let effects_digest = effects.effects.digest();
         write_batch = write_batch.insert_batch(
             &self.effects,
             std::iter::once((transaction_digest, effects)),
@@ -591,7 +576,7 @@ impl<
             write_batch,
             temporary_store,
             *transaction_digest,
-            sequence_number,
+            sequence_number.map(|seq| (seq, effects_digest)),
         )
         .await
     }
@@ -641,6 +626,7 @@ impl<
         )?;
 
         // Store the unsigned effects of the transaction
+        let effects_digest = effects.effects.digest();
         write_batch = write_batch.insert_batch(
             &self.effects,
             std::iter::once((transaction_digest, effects)),
@@ -655,7 +641,7 @@ impl<
             write_batch,
             temporary_store,
             *transaction_digest,
-            Some(sequence_number),
+            Some((sequence_number, effects_digest)),
         )
         .await
     }
@@ -666,7 +652,7 @@ impl<
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
-        seq_opt: Option<TxSequenceNumber>,
+        seq_opt: Option<(TxSequenceNumber, TransactionEffectsDigest)>,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
@@ -774,11 +760,20 @@ impl<
             // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
             //    (But the lock should exist which means previous transactions finished)
             // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
+            // 4. Locks may have existed when we started processing this tx, but could have since
+            //    been deleted by a concurrent tx that finished first. In that case, check if the tx effects exist.
             if USE_LOCKS {
-                self.lock_service.locks_exist(owned_inputs.clone()).await?;
+                if let Err(e) = self.lock_service.locks_exist(owned_inputs.clone()).await {
+                    if self.effects_exists(&transaction_digest)? {
+                        debug!(digest = ?transaction_digest, "locks were deleted due to concurrent processing of tx");
+                        return Ok(());
+                    } else {
+                        return Err(e);
+                    }
+                }
             }
 
-            if let Some(next_seq) = seq_opt {
+            if let Some((next_seq, effects_digest)) = seq_opt {
                 // Now we are sure we are going to execute, add to the sequence
                 // number and insert into authority sequence.
                 //
@@ -788,7 +783,10 @@ impl<
                 //       full sequence, and the batching logic needs to deal with this.
                 write_batch = write_batch.insert_batch(
                     &self.executed_sequence,
-                    std::iter::once((next_seq, transaction_digest)),
+                    std::iter::once((
+                        next_seq,
+                        ExecutionDigests::new(transaction_digest, effects_digest),
+                    )),
                 )?;
             }
 
@@ -929,6 +927,7 @@ impl<
             .iter()
             .skip_to(&start)?
             .take_while(|(seq, _tx)| *seq < end)
+            .map(|(seq, exec)| (seq, exec.transaction))
             .collect())
     }
 
@@ -949,7 +948,7 @@ impl<
         &self,
         start: u64,
         end: u64,
-    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
+    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, ExecutionDigests)>), SuiError> {
         /*
         Get all batches that include requested transactions. This includes the signed batch
         prior to the first requested transaction, the batch including the last requested
@@ -1009,7 +1008,7 @@ impl<
         sequence misses items. This will confuse calling logic, so we filter them out and allow
         callers to use the subscription API to catch the latest items in order. */
 
-        let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = self
+        let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = self
             .executed_sequence
             .iter()
             .skip_to(&first_seq)?
@@ -1133,6 +1132,16 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
                     .get(module_id.name().as_str())
                     .cloned()
             }))
+    }
+}
+
+/// A wrapper to make Orphan Rule happy
+pub struct AuthorityStoreWrapper(pub Arc<AuthorityStore>);
+
+impl ModuleResolver for AuthorityStoreWrapper {
+    type Error = SuiError;
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.0.get_module(module_id)
     }
 }
 

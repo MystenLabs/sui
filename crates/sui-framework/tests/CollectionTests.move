@@ -9,7 +9,7 @@ module Sui::CollectionTests {
     use Sui::TestScenario;
     use Sui::TxContext;
 
-    struct Object has key {
+    struct Object has key, store {
         id: VersionedID,
     }
 
@@ -114,7 +114,7 @@ module Sui::CollectionTests {
         // Sui::Collection::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, max_capacity + 1);
-        Collection::transfer(collection, TxContext::sender(&ctx), &mut ctx);
+        Collection::transfer_(collection, TxContext::sender(&ctx));
     }
 
     #[test]
@@ -122,7 +122,7 @@ module Sui::CollectionTests {
     public(script) fun test_init_with_zero() {
         let ctx = TxContext::dummy();
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, 0);
-        Collection::transfer(collection, TxContext::sender(&ctx), &mut ctx);
+        Collection::transfer_(collection, TxContext::sender(&ctx));
     }
 
     #[test]
@@ -135,6 +135,6 @@ module Sui::CollectionTests {
         Collection::add(&mut collection, obj1);
         let obj2 = Object { id: TxContext::new_id(&mut ctx) };
         Collection::add(&mut collection, obj2);
-        Collection::transfer(collection, TxContext::sender(&ctx), &mut ctx);
+        Collection::transfer_(collection, TxContext::sender(&ctx));
     }
 }

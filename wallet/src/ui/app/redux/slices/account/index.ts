@@ -32,6 +32,14 @@ export const createMnemonic = createAsyncThunk(
     }
 );
 
+export const logout = createAsyncThunk(
+    'account/logout',
+    async (): Promise<void> => {
+        await Browser.storage.local.set({ mnemonic: null });
+        window.location.reload();
+    }
+);
+
 type AccountState = {
     loading: boolean;
     mnemonic: string | null;
@@ -91,7 +99,8 @@ export const accountCoinsSelector = createSelector(
     }
 );
 
-export const accountBalancesSelector = createSelector(
+// return an aggregate balance for each coin type
+export const accountAggregateBalancesSelector = createSelector(
     accountCoinsSelector,
     (coins) => {
         return coins.reduce((acc, aCoin) => {
@@ -104,6 +113,23 @@ export const accountBalancesSelector = createSelector(
             }
             return acc;
         }, {} as Record<string, bigint>);
+    }
+);
+
+// return a list of balances for each coin object for each coin type
+export const accountItemizedBalancesSelector = createSelector(
+    accountCoinsSelector,
+    (coins) => {
+        return coins.reduce((acc, aCoin) => {
+            const coinType = Coin.getCoinTypeArg(aCoin);
+            if (coinType) {
+                if (typeof acc[coinType] === 'undefined') {
+                    acc[coinType] = [];
+                }
+                acc[coinType].push(Coin.getBalance(aCoin));
+            }
+            return acc;
+        }, {} as Record<string, bigint[]>);
     }
 );
 

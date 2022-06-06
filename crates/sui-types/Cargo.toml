@@ -22,11 +22,11 @@ thiserror = "1.0.31"
 hex = "0.4.3"
 serde_bytes = "0.11.6"
 serde_json = "1.0.80"
-serde_with = "1.13.0"
+serde_with = "1.14.0"
 signature = "1.5.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 base64ct = { version = "1.5.0", features = ["alloc"] }
 sha2 = "0.10.2"
 zeroize = "1.5.4"
@@ -36,8 +36,8 @@ schemars ="0.8.10"
 tonic = "0.7"
 strum_macros = "^0.24"
 
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe" }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b" }

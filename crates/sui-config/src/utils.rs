@@ -31,3 +31,15 @@ fn get_ephemeral_port() -> ::std::io::Result<u16> {
 
     Ok(addr.port())
 }
+
+pub fn new_network_address() -> multiaddr::Multiaddr {
+    format!("/dns/localhost/tcp/{}/http", get_available_port())
+        .parse()
+        .unwrap()
+}
+
+pub fn available_local_socket_address() -> std::net::SocketAddr {
+    format!("127.0.0.1:{}", get_available_port())
+        .parse()
+        .unwrap()
+}

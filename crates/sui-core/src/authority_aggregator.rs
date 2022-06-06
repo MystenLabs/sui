@@ -17,11 +17,12 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::{debug, info, trace, Instrument};
+use tracing::{debug, info, instrument, trace, Instrument};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::time::Duration;
+use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 
@@ -56,6 +57,24 @@ impl<A> AuthorityAggregator<A> {
                 .collect(),
             metrics: &METRICS,
         }
+    }
+
+    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
+    where
+        A: Clone,
+    {
+        self.authority_clients[name].clone()
+    }
+
+    pub fn clone_inner_clients(&self) -> BTreeMap<AuthorityName, A>
+    where
+        A: Clone,
+    {
+        let mut clients = BTreeMap::new();
+        for (name, client) in &self.authority_clients {
+            clients.insert(*name, client.authority_client().clone());
+        }
+        clients
     }
 }
 
@@ -104,6 +123,11 @@ where
     /// Note: Both source and destination may be byzantine, therefore one should always
     /// time limit the call to this function to avoid byzantine authorities consuming
     /// an unbounded amount of resources.
+    #[instrument(
+        name = "sync_authority_source_to_destination",
+        level = "trace",
+        skip_all
+    )]
     pub async fn sync_authority_source_to_destination<
         CertHandler: ConfirmationTransactionHandler,
     >(
@@ -119,18 +143,26 @@ where
         // represent certificates that earlier insertions depend on. Thus updating an
         // authority in the order we pop() the certificates from this stack should ensure
         // certificates are uploaded in causal order.
-        let digest = *cert.certificate.digest();
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid duplicates
-        let mut candidate_certificates: HashSet<TransactionDigest> =
-            vec![digest].into_iter().collect();
+        let mut processed_certificates: HashSet<TransactionDigest> = HashSet::new();
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
 
         while let Some(target_cert) = missing_certificates.pop() {
-            debug!(?digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+            let cert_digest = *target_cert.certificate.digest();
+
+            if processed_certificates.contains(&cert_digest) {
+                continue;
+            }
+
+            debug!(digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+
             match cert_handler.handle(target_cert.clone()).await {
-                Ok(_) => continue,
+                Ok(_) => {
+                    processed_certificates.insert(cert_digest);
+                    continue;
+                }
                 Err(SuiError::LockErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
@@ -139,18 +171,18 @@ where
             // the previous certificates, so we need to read them from the source
             // authority.
             debug!(
-                ?digest,
+                digest = ?cert_digest,
                 "Missing previous certificates, need to find parents from source authorities"
             );
 
             // The first time we cannot find the cert from the destination authority
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
-            let cert_digest = target_cert.certificate.digest();
-            if attempted_certificates.contains(cert_digest) {
+            if attempted_certificates.contains(&cert_digest) {
+                trace!(digest = ?cert_digest, "bailing out after second attempt to fetch");
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
-            attempted_certificates.insert(*cert_digest);
+            attempted_certificates.insert(cert_digest);
 
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
@@ -188,7 +220,7 @@ where
                 );
                 source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
-                        transaction_digest: *cert_digest,
+                        transaction_digest: cert_digest,
                     })
                     .await?
             };
@@ -199,30 +231,24 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
+            trace!(digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
             for returned_digest in &signed_effects.effects.dependencies {
                 trace!(digest =? returned_digest, "Found parent of missing cert");
-                // We check that we are not processing twice the same certificate, as
-                // it would be common if two objects used by one transaction, were also both
-                // mutated by the same preceding transaction.
-                if !candidate_certificates.contains(returned_digest) {
-                    // Add this cert to the set we have processed
-                    candidate_certificates.insert(*returned_digest);
 
-                    let inner_transaction_info = source_client
-                        .handle_transaction_info_request(TransactionInfoRequest {
-                            transaction_digest: *returned_digest,
-                        })
-                        .await?;
-                    trace!(?returned_digest, source =? source_authority, "Got transaction info from source");
+                let inner_transaction_info = source_client
+                    .handle_transaction_info_request(TransactionInfoRequest {
+                        transaction_digest: *returned_digest,
+                    })
+                    .await?;
+                trace!(?returned_digest, source =? source_authority, "Got transaction info from source");
 
-                    let returned_certificate = inner_transaction_info
-                        .certified_transaction
-                        .ok_or(SuiError::AuthorityInformationUnavailable)?;
+                let returned_certificate = inner_transaction_info
+                    .certified_transaction
+                    .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-                    // Add it to the list of certificates to sync
-                    missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
-                }
+                // Add it to the list of certificates to sync
+                trace!(?returned_digest, source =? source_authority, "Pushing transaction onto stack");
+                missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
             }
         }
 
@@ -236,7 +262,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    async fn sync_certificate_to_authority_with_timeout(
+    pub async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: ConfirmationTransaction,
         destination_authority: AuthorityName,
@@ -357,7 +383,7 @@ where
     /// This function provides a flexible way to communicate with a quorum of authorities, processing and
     /// processing their results into a safe overall result, and also safely allowing operations to continue
     /// past the quorum to ensure all authorities are up to date (up to a timeout).
-    async fn quorum_map_then_reduce_with_timeout<'a, S, V, FMap, FReduce>(
+    pub(crate) async fn quorum_map_then_reduce_with_timeout<'a, S, V, FMap, FReduce>(
         &'a self,
         // The initial state that will be used to fold in values from authorities.
         initial_state: S,
@@ -375,7 +401,7 @@ where
         FReduce: Fn(
             S,
             AuthorityName,
-            usize,
+            StakeUnit,
             Result<V, SuiError>,
         ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
@@ -452,8 +478,8 @@ where
     > {
         #[derive(Default)]
         struct GetObjectByIDRequestState {
-            good_weight: usize,
-            bad_weight: usize,
+            good_weight: StakeUnit,
+            bad_weight: StakeUnit,
             responses: Vec<(AuthorityName, SuiResult<ObjectInfoResponse>)>,
         }
         let initial_state = GetObjectByIDRequestState::default();
@@ -599,8 +625,8 @@ where
     ) -> Result<(BTreeMap<ObjectRef, Vec<AuthorityName>>, Vec<AuthorityName>), SuiError> {
         #[derive(Default)]
         struct OwnedObjectQueryState {
-            good_weight: usize,
-            bad_weight: usize,
+            good_weight: StakeUnit,
+            bad_weight: StakeUnit,
             object_map: BTreeMap<ObjectRef, Vec<AuthorityName>>,
             responded_authorities: Vec<AuthorityName>,
             errors: Vec<(AuthorityName, SuiError)>,
@@ -863,8 +889,8 @@ where
             // The list of errors gathered at any point
             errors: Vec<SuiError>,
             // Tally of stake for good vs bad responses.
-            good_stake: usize,
-            bad_stake: usize,
+            good_stake: StakeUnit,
+            bad_stake: StakeUnit,
         }
 
         let state = ProcessTransactionState {
@@ -936,8 +962,12 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                             // In case we don't get an error but also don't get a valid value
-                            _ => {
-                                state.errors.push(SuiError::ErrorWhileProcessingTransaction);
+                            ret => {
+                                state.errors.push(
+                                    SuiError::ErrorWhileProcessingTransactionTransaction {
+                                        err: format!("Unexpected: {:?}", ret),
+                                    },
+                                );
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                         };
@@ -996,7 +1026,9 @@ where
         // If we have some certificate return it, or return an error.
         state
             .certificate
-            .ok_or(SuiError::ErrorWhileProcessingTransaction)
+            .ok_or_else(|| SuiError::ErrorWhileProcessingTransactionTransaction {
+                err: format!("No certificate: {:?}", state.errors),
+            })
     }
 
     /// Process a certificate assuming that 2f+1 authorities already are up to date.
@@ -1014,8 +1046,8 @@ where
             // Different authorities could return different effects.  We want at least one effect to come
             // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
             // The map here allows us to count the stake for each unique effect.
-            effects_map: HashMap<[u8; 32], (usize, TransactionEffects)>,
-            bad_stake: usize,
+            effects_map: HashMap<[u8; 32], (StakeUnit, TransactionEffects)>,
+            bad_stake: StakeUnit,
         }
 
         let state = ProcessCertificateState {
@@ -1044,17 +1076,18 @@ where
                         // - we try to update the authority with the cert, and on error return Err.
                         // - we try to re-process the certificate and return the result.
 
-                        let handle = if contains_shared_object {
+                        let res = if contains_shared_object {
                             client.handle_consensus_transaction(ConsensusTransaction::UserTransaction(Box::new(cert_ref.clone())))
+                                .instrument(tracing::trace_span!("handle_consensus_cert", authority =? name))
+                                .await
                         } else {
                             client
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
+                                .instrument(tracing::trace_span!("handle_cert", authority =? name))
+                                .await
                         };
-                        let res = handle
-                            .instrument(tracing::trace_span!("handle_cert", authority =? name))
-                            .await;
 
                         if res.is_ok() {
                             // We got an ok answer, so returning the result of processing
@@ -1105,7 +1138,7 @@ where
                             let entry = state
                                 .effects_map
                                 .entry(inner_effects.digest())
-                                .or_insert((0usize, inner_effects.effects));
+                                .or_insert((0, inner_effects.effects));
                             entry.0 += weight;
 
                             if entry.0 >= threshold {
@@ -1154,7 +1187,7 @@ where
         Err(SuiError::ErrorWhileRequestingCertificate)
     }
 
-    /// Find the highest sequence number that is known to a quorum of authorities.
+    /// Find the higgest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
     async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
@@ -1170,13 +1203,22 @@ where
         &self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        self.execute_transaction_with_timeout(transaction, Duration::from_secs(60))
+            .await
+    }
+
+    pub async fn execute_transaction_with_timeout(
+        &self,
+        transaction: &Transaction,
+        timeout: Duration,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let new_certificate = self
-            .process_transaction(transaction.clone(), Duration::from_secs(60))
+            .process_transaction(transaction.clone(), timeout)
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         self.metrics.total_tx_certificates.inc();
         let response = self
-            .process_certificate(new_certificate.clone(), Duration::from_secs(60))
+            .process_certificate(new_certificate.clone(), timeout)
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
@@ -1192,7 +1234,7 @@ where
         while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
             object_ref_stack.pop()
         {
-            let stake: usize = authorities
+            let stake: StakeUnit = authorities
                 .iter()
                 .map(|(name, _)| self.committee.weight(name))
                 .sum();

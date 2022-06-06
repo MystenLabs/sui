@@ -14,11 +14,13 @@ use sui_types::{
     event::{Event, TransferType},
     gas::{self, SuiGasStatus},
     messages::{
-        ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind, TransactionData,
-        TransactionEffects, TransferCoin,
+        CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
+        TransactionData, TransactionEffects, TransferCoin,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
+    sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tracing::{debug, instrument, trace};
 
@@ -36,11 +38,11 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 ) -> SuiResult<TransactionEffects> {
     let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
-    let gas_object_id = transaction_data.gas_payment_object_ref().0;
+    let gas_object_ref = *transaction_data.gas_payment_object_ref();
     let status = execute_transaction(
         temporary_store,
         transaction_data,
-        gas_object_id,
+        gas_object_ref.0,
         &mut tx_ctx,
         move_vm,
         native_functions,
@@ -63,7 +65,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
         status,
-        &gas_object_id,
+        gas_object_ref,
     );
     Ok(effects)
 }
@@ -93,13 +95,6 @@ fn execute_transaction<S: BackingPackageStore>(
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
 ) -> ExecutionStatus {
-    let mut gas_object = temporary_store
-        .objects()
-        .get(&gas_object_id)
-        .expect("We constructed the object map so it should always have the gas object id")
-        .clone();
-    trace!(?gas_object_id, "Obtained gas object");
-
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let mut result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -146,6 +141,30 @@ fn execute_transaction<S: BackingPackageStore>(
                     tx_ctx,
                     &mut gas_status,
                 ),
+                SingleTransactionKind::ChangeEpoch(ChangeEpoch {
+                    epoch,
+                    storage_charge,
+                    computation_charge,
+                }) => {
+                    let module_id =
+                        ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned());
+                    let function = ADVANCE_EPOCH_FUNCTION_NAME.to_owned();
+                    adapter::execute(
+                        move_vm,
+                        temporary_store,
+                        module_id,
+                        &function,
+                        vec![],
+                        vec![
+                            CallArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID),
+                            CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
+                            CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
+                            CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
+                        ],
+                        &mut gas_status,
+                        tx_ctx,
+                    )
+                }
             };
             if result.is_err() {
                 break;
@@ -160,35 +179,41 @@ fn execute_transaction<S: BackingPackageStore>(
     // Make sure every mutable object's version number is incremented.
     // This needs to happen before `charge_gas_for_storage_changes` so that it
     // can charge gas for all mutated objects properly.
-    temporary_store.ensure_active_inputs_mutated();
-    if let Err(err) =
-        temporary_store.charge_gas_for_storage_changes(&mut gas_status, &mut gas_object)
-    {
-        // If `result` is already `Err`, we basically have two errors at the same time.
-        // Users should be generally more interested in the actual execution error, so we
-        // let that shadow the out of gas error. Also in this case, we don't need to reset
-        // the `temporary_store` because `charge_gas_for_storage_changes` won't mutate
-        // `temporary_store` if gas charge failed.
-        //
-        // If `result` is `Ok`, now we failed when charging gas, we have to reset
-        // the `temporary_store` to eliminate all effects caused by the execution,
-        // and re-ensure all mutable objects' versions are incremented.
-        if result.is_ok() {
-            temporary_store.reset();
-            temporary_store.ensure_active_inputs_mutated();
-            result = Err(err);
+    temporary_store.ensure_active_inputs_mutated(&gas_object_id);
+    if !gas_status.is_unmetered() {
+        let mut gas_object = temporary_store
+            .objects()
+            .get(&gas_object_id)
+            .expect("We constructed the object map so it should always have the gas object id")
+            .clone();
+        trace!(?gas_object_id, "Obtained gas object");
+        if let Err(err) =
+            temporary_store.charge_gas_for_storage_changes(&mut gas_status, &mut gas_object)
+        {
+            // If `result` is already `Err`, we basically have two errors at the same time.
+            // Users should be generally more interested in the actual execution error, so we
+            // let that shadow the out of gas error. Also in this case, we don't need to reset
+            // the `temporary_store` because `charge_gas_for_storage_changes` won't mutate
+            // `temporary_store` if gas charge failed.
+            //
+            // If `result` is `Ok`, now we failed when charging gas, we have to reset
+            // the `temporary_store` to eliminate all effects caused by the execution,
+            // and re-ensure all mutable objects' versions are incremented.
+            if result.is_ok() {
+                temporary_store.reset();
+                temporary_store.ensure_active_inputs_mutated(&gas_object_id);
+                result = Err(err);
+            }
         }
+        let cost_summary = gas_status.summary(result.is_ok());
+        let gas_used = cost_summary.gas_used();
+        let gas_rebate = cost_summary.storage_rebate;
+        gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
+        trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
+        temporary_store.write_object(gas_object);
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
-    let gas_used = cost_summary.gas_used();
-    let gas_rebate = cost_summary.storage_rebate;
-    gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
-    trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
-    temporary_store.write_object(gas_object);
-
-    // TODO: Return cost_summary so that the detailed summary exists in TransactionEffects for
-    // gas and rebate distribution.
     match result {
         Ok(()) => ExecutionStatus::Success {
             gas_cost: cost_summary,

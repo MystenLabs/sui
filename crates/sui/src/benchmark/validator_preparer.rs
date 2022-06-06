@@ -4,8 +4,8 @@
 #![allow(clippy::large_enum_variant)]
 use crate::benchmark::bench_types::RunningMode;
 use crate::benchmark::load_generator::spawn_authority_server;
+use sui_config::genesis_config::ObjectConfig;
 use sui_config::NetworkConfig;
-use sui_config::ObjectConfig;
 
 use multiaddr::Multiaddr;
 use rocksdb::Options;
@@ -96,13 +96,14 @@ impl ValidatorPreparer {
             RunningMode::SingleValidatorThread => {
                 // Pick the first validator and create state.
                 let validator_config = &network_config.validator_configs()[0];
+                let committee = network_config.committee();
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
                 let auth_state = make_authority_state(
                     &path,
                     db_cpus as i32,
-                    &validator_config.committee_config().committee(),
+                    &committee,
                     &validator_config.public_key(),
                     validator_config.key_pair().copy(),
                 );

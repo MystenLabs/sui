@@ -97,9 +97,7 @@ pub enum SuiError {
     ConflictingTransaction {
         pending_transaction: TransactionDigest,
     },
-    #[error("Transaction was processed but no signature was produced by authority")]
-    ErrorWhileProcessingTransaction,
-    #[error("Transaction transaction processing failed: {err}")]
+    #[error("Transaction processing failed: {err}")]
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
     ErrorWhileProcessingConfirmationTransaction { err: String },
@@ -118,6 +116,8 @@ pub enum SuiError {
         object_id: ObjectID,
         current_sequence_number: VersionNumber,
     },
+    #[error("System Transaction not accepted")]
+    InvalidSystemTransaction,
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
@@ -289,6 +289,9 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
+    #[error("Failed to dispatch event: {error:?}")]
+    EventFailedToDispatch { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
@@ -336,6 +339,12 @@ pub enum SuiError {
     HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
+
+    // Epoch related errors.
+    #[error("Validator temporarily stopped processing transactions due to epoch change")]
+    ValidatorHaltedAtEpochEnd,
+    #[error("Inconsistent state detected during epoch change: {:?}", error)]
+    InconsistentEpochState { error: String },
 
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status

@@ -5,11 +5,54 @@
 .container {
     display: flex;
     flex-flow: column nowrap;
-    align-items: center;
-    width: 350px;
-    padding: 12px;
+    width: 400px;
+    padding-bottom: 12px;
+    min-height: calc(100vh - 12px);
 
     :global(.is-popup) & {
-        min-height: 300px;
+        min-height: 400px;
+        width: 350px;
+        padding-bottom: 0;
     }
+}
+
+.outer-container {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    padding: 8px 12px;
+    justify-content: space-between;
+}
+
+.inner-container {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    background-color: #d1d9e1;
+    padding: 22px;
+    border-radius: 2px;
+    flex: 1;
+    box-shadow: 0 0 3px 0 #365876;
+
+    :global(.is-popup) & {
+        padding: 12px;
+        box-shadow: none;
+    }
+}
+
+.network {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.network-icon {
+    font-size: 10px;
+}
+
+.network-name {
+    color: #000;
+    font-weight: 300;
+    margin-left: 4px;
 }

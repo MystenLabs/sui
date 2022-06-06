@@ -9,7 +9,7 @@ use sui_config::NodeConfig;
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::{gossip::gossip_process, ActiveAuthority},
+    authority_active::{gossip::gossip_process_with_start_seq, ActiveAuthority},
     authority_client::NetworkAuthorityClient,
     checkpoints::CheckpointStore,
 };
@@ -33,6 +33,8 @@ impl SuiNode {
             "Initializing sui-node listening on {}", config.network_address
         );
 
+        let genesis = config.genesis()?;
+
         let secret = Arc::pin(config.key_pair().copy());
         let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
         let checkpoint_store = if config.consensus_config().is_some() {
@@ -40,7 +42,6 @@ impl SuiNode {
                 config.db_path().join("checkpoints"),
                 None,
                 config.public_key(),
-                config.committee_config().committee(),
                 secret.clone(),
             )?)))
         } else {
@@ -58,13 +59,13 @@ impl SuiNode {
 
         let state = Arc::new(
             AuthorityState::new(
-                config.committee_config().committee(),
+                genesis.committee(),
                 config.public_key(),
                 secret,
                 store,
                 index_store,
                 checkpoint_store,
-                config.genesis(),
+                genesis,
             )
             .await,
         );
@@ -77,7 +78,7 @@ impl SuiNode {
             net_config.request_timeout = Some(Duration::from_secs(5));
 
             let mut authority_clients = BTreeMap::new();
-            for validator in config.committee_config().validator_set() {
+            for validator in genesis.validator_set() {
                 let channel = net_config
                     .connect_lazy(validator.network_address())
                     .unwrap();
@@ -89,10 +90,12 @@ impl SuiNode {
 
             // Start following validators
             Some(tokio::task::spawn(async move {
-                gossip_process(
+                gossip_process_with_start_seq(
                     &active_authority,
                     // listen to all authorities (note that gossip_process caps this to total minus 1.)
-                    active_authority.state.committee.voting_rights.len(),
+                    active_authority.state.committee.load().voting_rights.len(),
+                    // start receiving the earliest TXes the validator has.
+                    Some(0),
                 )
                 .await;
             }))

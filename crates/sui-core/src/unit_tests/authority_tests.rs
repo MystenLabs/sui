@@ -375,7 +375,8 @@ pub async fn send_and_confirm_transaction(
     let vote = response.signed_transaction.unwrap();
 
     // Collect signatures from a quorum of authorities
-    let mut builder = SignatureAggregator::try_new(transaction, &authority.committee).unwrap();
+    let committee = authority.committee.load();
+    let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     let certificate = builder
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
@@ -1255,6 +1256,43 @@ async fn test_genesis_sui_sysmtem_state_object() {
     assert_eq!(move_object.type_, SuiSystemState::type_());
 }
 
+#[tokio::test]
+async fn test_change_epoch_transaction() {
+    let authority_state = init_state().await;
+    let signed_tx = SignedTransaction::new_change_epoch(
+        0,
+        100,
+        100,
+        authority_state.name,
+        &*authority_state.secret,
+    );
+    // Make sure that the raw transaction will never be accepted by the validator.
+    assert_eq!(
+        authority_state
+            .handle_transaction(signed_tx.clone().to_transaction())
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSystemTransaction
+    );
+    let committee = authority_state.committee.load();
+    let mut builder =
+        SignatureAggregator::try_new(signed_tx.clone().to_transaction(), &committee).unwrap();
+    let certificate = builder
+        .append(
+            signed_tx.auth_sign_info.authority,
+            signed_tx.auth_sign_info.signature,
+        )
+        .unwrap()
+        .unwrap();
+    let result = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction::new(certificate))
+        .await
+        .unwrap();
+    assert!(result.signed_effects.unwrap().effects.status.is_ok());
+    let sui_system_object = authority_state.get_sui_system_state_object().await.unwrap();
+    assert_eq!(sui_system_object.epoch, 1);
+}
+
 // helpers
 
 #[cfg(test)]
@@ -1347,8 +1385,8 @@ fn init_certified_transfer_transaction(
         authority_state.name,
         &*authority_state.secret,
     );
-    let mut builder =
-        SignatureAggregator::try_new(transfer_transaction, &authority_state.committee).unwrap();
+    let committee = authority_state.committee.load();
+    let mut builder = SignatureAggregator::try_new(transfer_transaction, &committee).unwrap();
     builder
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
@@ -1486,7 +1524,7 @@ async fn shared_object() {
         .await
         .unwrap();
     let vote = response.signed_transaction.unwrap();
-    let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
+    let certificate = SignatureAggregator::try_new(transaction, &authority.committee.load())
         .unwrap()
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()

@@ -3,8 +3,8 @@
 
 use clap::*;
 use std::path::Path;
-use sui::config::Config;
-use sui_config::{AccountConfig, GenesisConfig, ObjectConfigRange};
+use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfigRange};
+use sui_config::Config;
 
 use sui_types::{base_types::ObjectID, crypto::get_key_pair};
 

@@ -91,8 +91,10 @@ async fn test_open_manager() {
 
         store
             .executed_sequence
-            .insert(&0, &TransactionDigest::new([0; 32]))
+            .insert(&0, &ExecutionDigests::random())
             .expect("no error on write");
+        drop(store);
+        drop(authority_state);
     }
     // drop all
     let (committee, _, authority_key) =
@@ -111,8 +113,10 @@ async fn test_open_manager() {
         // TEST 3: If the database contains out of order transactions we just make a block with gaps
         store
             .executed_sequence
-            .insert(&2, &TransactionDigest::new([0; 32]))
+            .insert(&2, &ExecutionDigests::random())
             .expect("no error on write");
+        drop(store);
+        drop(authority_state);
     }
     // drop all
     let (committee, _, authority_key) =
@@ -127,6 +131,8 @@ async fn test_open_manager() {
         assert_eq!(last_block.next_sequence_number, 3);
         assert_eq!(last_block.initial_sequence_number, 2);
         assert_eq!(last_block.size, 1);
+        drop(store);
+        drop(authority_state);
     }
 }
 
@@ -158,7 +164,7 @@ async fn test_batch_manager_happy_path() {
     // Send a transaction.
     {
         let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-        store.side_sequence(t0.seq(), &TransactionDigest::random());
+        store.side_sequence(t0.seq(), &ExecutionDigests::random());
     }
 
     // First we get a transaction update
@@ -173,7 +179,7 @@ async fn test_batch_manager_happy_path() {
 
     {
         let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-        store.side_sequence(t0.seq(), &TransactionDigest::random());
+        store.side_sequence(t0.seq(), &ExecutionDigests::random());
     }
 
     // When we close the sending channel we also also end the service task
@@ -220,10 +226,10 @@ async fn test_batch_manager_out_of_order() {
         let t2 = &authority_state.batch_notifier.ticket().expect("ok");
         let t3 = &authority_state.batch_notifier.ticket().expect("ok");
 
-        store.side_sequence(t1.seq(), &TransactionDigest::random());
-        store.side_sequence(t3.seq(), &TransactionDigest::random());
-        store.side_sequence(t2.seq(), &TransactionDigest::random());
-        store.side_sequence(t0.seq(), &TransactionDigest::random());
+        store.side_sequence(t1.seq(), &ExecutionDigests::random());
+        store.side_sequence(t3.seq(), &ExecutionDigests::random());
+        store.side_sequence(t2.seq(), &ExecutionDigests::random());
+        store.side_sequence(t0.seq(), &ExecutionDigests::random());
     }
 
     // Get transactions in order then batch.
@@ -286,11 +292,11 @@ async fn test_batch_manager_drop_out_of_order() {
     let t2 = authority_state.batch_notifier.ticket().expect("ok");
     let t3 = authority_state.batch_notifier.ticket().expect("ok");
 
-    store.side_sequence(t1.seq(), &TransactionDigest::random());
+    store.side_sequence(t1.seq(), &ExecutionDigests::random());
     drop(t1);
-    store.side_sequence(t3.seq(), &TransactionDigest::random());
+    store.side_sequence(t3.seq(), &ExecutionDigests::random());
     drop(t3);
-    store.side_sequence(t2.seq(), &TransactionDigest::random());
+    store.side_sequence(t2.seq(), &ExecutionDigests::random());
     drop(t2);
 
     // Give a chance to send signals
@@ -298,7 +304,7 @@ async fn test_batch_manager_drop_out_of_order() {
     // Still nothing has arrived out of order
     assert_eq!(rx.len(), 0);
 
-    store.side_sequence(t0.seq(), &TransactionDigest::random());
+    store.side_sequence(t0.seq(), &ExecutionDigests::random());
     drop(t0);
 
     // Get transactions in order then batch.
@@ -361,7 +367,7 @@ async fn test_handle_move_order_with_batch() {
     println!("{:?}", y);
     assert!(matches!(
         y,
-        UpdateItem::Transaction((0, x)) if x == effects.transaction_digest
+        UpdateItem::Transaction((0, x)) if x.transaction == effects.transaction_digest
     ));
 
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
@@ -393,7 +399,7 @@ async fn test_batch_store_retrieval() {
             .await
     });
     // Send transactions out of order
-    let tx_zero = TransactionDigest::new([0; 32]);
+    let tx_zero = ExecutionDigests::random();
 
     let inner_store = store.clone();
     for _i in 0u64..105 {
@@ -578,7 +584,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         while last_batch.next_sequence_number < request.length {
             let mut transactions = Vec::new();
             for _i in 0..batch_size {
-                let rnd = TransactionDigest::random();
+                let rnd = ExecutionDigests::random();
                 transactions.push((seq, rnd));
                 items.push(BatchInfoResponseItem(UpdateItem::Transaction((seq, rnd))));
                 seq += 1;
@@ -705,7 +711,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         while last_batch.next_sequence_number < request.length {
             let mut transactions = Vec::new();
             for _i in 0..batch_size {
-                let rnd = TransactionDigest::random();
+                let rnd = ExecutionDigests::random();
                 transactions.push((seq, rnd));
                 items.push(BatchInfoResponseItem(UpdateItem::Transaction((seq, rnd))));
                 seq += 1;
@@ -715,7 +721,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             // Pop last transaction
             let (seq, _) = transactions.pop().unwrap();
             // Insert a different one
-            transactions.push((seq, TransactionDigest::random()));
+            transactions.push((seq, ExecutionDigests::random()));
 
             let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
             last_batch = new_batch;

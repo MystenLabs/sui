@@ -85,7 +85,7 @@ impl AuthorityServer {
         let consensus_adapter = ConsensusAdapter::new(
             state.clone(),
             consensus_address,
-            state.committee.clone(),
+            state.clone_committee(),
             tx_consensus_listener,
             /* max_delay */ Duration::from_millis(5_000),
         );
@@ -173,7 +173,7 @@ impl ValidatorService {
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
             consensus_keypair,
-            config.committee_config().narwhal_committee().to_owned(),
+            consensus_config.narwhal_committee().to_owned(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
             /* consensus */ true, // Indicate that we want to run consensus.
@@ -184,7 +184,7 @@ impl ValidatorService {
         narwhal_node::Node::spawn_workers(
             consensus_name,
             /* ids */ vec![0], // We run a single worker with id '0'.
-            config.committee_config().narwhal_committee().to_owned(),
+            consensus_config.narwhal_committee().to_owned(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
         );
@@ -201,7 +201,7 @@ impl ValidatorService {
         let consensus_adapter = ConsensusAdapter::new(
             state.clone(),
             consensus_config.address().to_owned(),
-            state.committee.clone(),
+            state.clone_committee(),
             tx_sui_to_consensus.clone(),
             /* max_delay */ Duration::from_millis(5_000),
         );
@@ -281,7 +281,7 @@ impl Validator for ValidatorService {
 
         let mut obligation = VerificationObligation::default();
         transaction
-            .add_to_verification_obligation(&self.state.committee, &mut obligation)
+            .add_to_verification_obligation(&self.state.committee.load(), &mut obligation)
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         obligation
             .verify_all()
@@ -411,17 +411,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CheckpointRequest>,
     ) -> Result<tonic::Response<CheckpointResponse>, tonic::Status> {
-        if let Some(checkpoint) = &self.state.checkpoints() {
-            let request = request.into_inner();
+        let request = request.into_inner();
 
-            let response = checkpoint
-                .lock()
-                .handle_checkpoint_request(&request)
-                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let response = self
+            .state
+            .handle_checkpoint_request(&request)
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-            return Ok(tonic::Response::new(response));
-        }
-
-        Err(tonic::Status::internal("Unsupported".to_string()))
+        return Ok(tonic::Response::new(response));
     }
 }

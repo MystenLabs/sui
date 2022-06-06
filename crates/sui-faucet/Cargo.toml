@@ -23,6 +23,7 @@ tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit
 sui = { path = "../sui" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
+sui-config = { path = "../sui-config" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]

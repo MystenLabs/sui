@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use futures::stream::FuturesOrdered;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{collections::HashSet, sync::Arc, time::Duration};
+use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::AuthorityName,
     batch::{TxSequenceNumber, UpdateItem},
@@ -26,7 +27,7 @@ use tracing::{debug, error, info};
 mod configurable_batch_action_client;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 struct PeerGossip<A> {
     peer_name: AuthorityName,
@@ -46,14 +47,21 @@ pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: us
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    gossip_process_with_start_seq(active_authority, degree, None).await
+}
+
+pub async fn gossip_process_with_start_seq<A>(
+    active_authority: &ActiveAuthority<A>,
+    degree: usize,
+    start_seq: Option<TxSequenceNumber>,
+) where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
     // A copy of the committee
     let committee = &active_authority.net.committee;
 
     // Number of tasks at most "degree" and no more than committee - 1
-    let target_num_tasks: usize = usize::min(
-        active_authority.state.committee.voting_rights.len() - 1,
-        degree,
-    );
+    let target_num_tasks: usize = usize::min(committee.voting_rights.len() - 1, degree);
 
     // If we do not expect to connect to anyone
     if target_num_tasks == 0 {
@@ -93,21 +101,21 @@ where
 
             peer_names.insert(name);
             gossip_tasks.push(async move {
-                let peer_gossip = PeerGossip::new(name, active_authority);
+                let peer_gossip = PeerGossip::new(name, active_authority, start_seq);
                 // Add more duration if we make more than 1 to ensure overlap
                 debug!("Starting gossip from peer {:?}", name);
                 peer_gossip
-                    .spawn(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15))
+                    .start(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15))
                     .await
             });
             k += 1;
 
             // If we have already used all the good stake, then stop here and
             // wait for some node to become available.
-            let total_stake_used: usize = peer_names
+            let total_stake_used = peer_names
                 .iter()
                 .map(|name| committee.weight(name))
-                .sum::<usize>()
+                .sum::<StakeUnit>()
                 + committee.weight(&active_authority.state.name);
             if total_stake_used >= committee.quorum_threshold() {
                 break;
@@ -163,18 +171,18 @@ where
 {
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
-    let mut tries_remaining = active_authority.state.committee.voting_rights.len();
+    let mut tries_remaining = active_authority.state.committee.load().voting_rights.len();
     while tries_remaining > 0 {
-        let name = active_authority.state.committee.sample();
-        if peer_names.contains(name)
-            || *name == my_name
-            || !active_authority.can_contact(*name).await
+        let name = *active_authority.state.committee.load().sample();
+        if peer_names.contains(&name)
+            || name == my_name
+            || !active_authority.can_contact(name).await
         {
             tries_remaining -= 1;
             tokio::time::sleep(Duration::from_millis(10)).await;
             continue;
         }
-        return Ok(*name);
+        return Ok(name);
     }
     Err(SuiError::GenericAuthorityError {
         error: "Could not connect to any peer".to_string(),
@@ -185,30 +193,24 @@ impl<A> PeerGossip<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(peer_name: AuthorityName, active_authority: &ActiveAuthority<A>) -> PeerGossip<A> {
+    pub fn new(
+        peer_name: AuthorityName,
+        active_authority: &ActiveAuthority<A>,
+        start_seq: Option<TxSequenceNumber>,
+    ) -> PeerGossip<A> {
         PeerGossip {
             peer_name,
             client: active_authority.net.authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
-            max_seq: None,
+            max_seq: start_seq,
             aggregator: active_authority.net.clone(),
         }
     }
 
-    pub async fn spawn(mut self, duration: Duration) -> (AuthorityName, Result<(), SuiError>) {
+    pub async fn start(mut self, duration: Duration) -> (AuthorityName, Result<(), SuiError>) {
         let peer_name = self.peer_name;
-        let result =
-            tokio::task::spawn(async move { self.peer_gossip_for_duration(duration).await }).await;
-
-        match result {
-            Err(_e) => (
-                peer_name,
-                Err(SuiError::GenericAuthorityError {
-                    error: "Gossip Join Error".to_string(),
-                }),
-            ),
-            Ok(r) => (peer_name, r),
-        }
+        let result = self.peer_gossip_for_duration(duration).await;
+        (peer_name, result)
     }
 
     async fn peer_gossip_for_duration(&mut self, duration: Duration) -> Result<(), SuiError> {
@@ -236,7 +238,7 @@ where
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
-                            if !self.state.database.effects_exists(&digest)? {
+                            if !self.state.database.effects_exists(&digest.transaction)? {
                                 queue.push(async move {
                                     tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
                                     digest
@@ -265,9 +267,9 @@ where
                 },
                 digest = &mut queue.next() , if !queue.is_empty() => {
                     let digest = digest.unwrap();
-                    if !self.state.database.effects_exists(&digest)? {
+                    if !self.state.database.effects_exists(&digest.transaction)? {
                         // Download the certificate
-                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
+                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest.transaction)).await?;
                         self.process_response(response).await?;
                     }
                 }
@@ -278,7 +280,6 @@ where
 
     async fn process_response(&self, response: TransactionInfoResponse) -> Result<(), SuiError> {
         if let Some(certificate) = response.certified_transaction {
-            // Process the certificate from one authority to ourselves
             // Process the certificate from one authority to ourselves
             self.aggregator
                 .sync_authority_source_to_destination(

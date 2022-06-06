@@ -15,15 +15,14 @@ use tracing::debug;
 
 use colored::Colorize;
 use sui::{
-    config::{
-        sui_config_dir, Config, GatewayType, WalletConfig, SUI_DEV_NET_URL, SUI_WALLET_CONFIG,
-    },
+    config::{GatewayType, WalletConfig},
     keystore::KeystoreType,
     shell::{
         install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
     },
     wallet_commands::*,
 };
+use sui_config::{sui_config_dir, Config, SUI_DEV_NET_URL, SUI_WALLET_CONFIG};
 use sui_types::exit_main;
 
 const SUI: &str = "   _____       _    _       __      ____     __
@@ -54,15 +53,11 @@ struct ClientOpt {
 }
 
 async fn try_main() -> Result<(), anyhow::Error> {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "wallet".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        log_file: Some("wallet.log".into()),
-        ..Default::default()
-    };
-    #[allow(unused)]
-    let guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_log_file("wallet.log")
+        .with_env()
+        .init();
+
     if let Some(git_rev) = std::option_env!("GIT_REV") {
         debug!("Wallet built at git revision {git_rev}");
     }

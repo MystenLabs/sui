@@ -8,14 +8,12 @@ All updates to the Sui ledger happen via a transaction. This section describes t
 
 All Sui transactions have the following common metadata:
 * Sender address: The address of the user sending this transaction.
-* Gas Input: An object reference pointing to the object that will be used to pay for this transaction's execution and storage. This object must be owned by the user and must be of type `Sui::Coin::Coin<GAS>` (i.e., the Sui native currency).
+* Gas Input: An object reference pointing to the object that will be used to pay for this transaction's execution and storage. This object must be owned by the user and must be of type `Sui::Coin::Coin<SUI>` (i.e., the Sui native currency).
 * Gas Price: An unsigned integer specifying the number of native tokens per gas unit this transaction will pay. The gas price must always be nonzero.
 * Maximum Gas Budget: The maximum number of gas units that can be expended by executing this transaction. If this budget is exceeded, transaction execution will abort and have no effects other than debiting the gas input. The gas input object must have a value higher than the gas price multiplied by the max gas, and this product is the maximum amount that the gas input object will be debited for the transaction.
 * Epoch: The Sui epoch this transaction is intended for.
 * Type: A call, publish, or native transaction and its type-specific-data (see below).
 * Authenticator: A cryptographic signature on the [Binary Canonical Serialization (BCS)](https://docs.rs/bcs/latest/bcs/)-encoded bytes of the data above, and a public key that both verifies against the signature and is cryptographically committed to by the sender address.
-
-EDITORIAL NOTE: things are organized slightly differently today. Gas input and max gas live in types, but I think they should be moved up here since all transactions need them. Gas price does not exist yet, but eventually should. Epoch does not exist yet, but eventually should. Authenticator does not yet exist in the current form, but will eventually.
 
 ## Move call transaction
 
@@ -43,7 +41,7 @@ Native transactions are optimized versions of common Sui operations. Each native
 
 This transaction type transfers coins from the sender to the specified recipients.
 
-In addition to the common metadata above, a publish transfer includes the following fields:
+In addition to the common metadata above, a transfer transaction includes the following fields:
 * Input: An object reference pointing to a mutable object owned by the sender. The object must be of type `Sui::Coin::Coin<T>` with arbitrary `T`--that is, any fungible token. The gas input object from above cannot also appear as an object input.
 * Recipients: The addresses that will receive payments from this transfer. This list must be non-empty.
 * Amounts: A list of unsigned integers encoding the amount that each recipient will receive. This list must be the same length as the recipients list. Each amount will be debited from the input object, wrapped in a freshly created coin object, and sent to the corresponding recipient address. The value of the input object must be greater than or equal to the sum of the amounts.

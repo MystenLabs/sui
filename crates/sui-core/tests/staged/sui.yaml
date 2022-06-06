@@ -40,6 +40,11 @@ CallArg:
       SharedObject:
         NEWTYPE:
           TYPENAME: ObjectID
+ChangeEpoch:
+  STRUCT:
+    - epoch: U64
+    - storage_charge: U64
+    - computation_charge: U64
 Data:
   ENUM:
     0:
@@ -50,6 +55,12 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
+ExecutionDigests:
+  STRUCT:
+    - transaction:
+        TYPENAME: TransactionDigest
+    - effects:
+        TYPENAME: TransactionEffectsDigest
 ExecutionStatus:
   ENUM:
     0:
@@ -214,6 +225,10 @@ SingleTransactionKind:
       Call:
         NEWTYPE:
           TYPENAME: MoveCall
+    3:
+      ChangeEpoch:
+        NEWTYPE:
+          TYPENAME: ChangeEpoch
 StructTag:
   STRUCT:
     - address:
@@ -304,40 +319,40 @@ SuiError:
           - pending_transaction:
               TYPENAME: TransactionDigest
     19:
-      ErrorWhileProcessingTransaction: UNIT
-    20:
       ErrorWhileProcessingTransactionTransaction:
         STRUCT:
           - err: STR
-    21:
+    20:
       ErrorWhileProcessingConfirmationTransaction:
         STRUCT:
           - err: STR
-    22:
+    21:
       ErrorWhileRequestingCertificate: UNIT
-    23:
+    22:
       ErrorWhileProcessingPublish:
         STRUCT:
           - err: STR
-    24:
+    23:
       ErrorWhileProcessingMoveCall:
         STRUCT:
           - err: STR
-    25:
+    24:
       ErrorWhileRequestingInformation: UNIT
-    26:
+    25:
       ObjectFetchFailed:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - err: STR
-    27:
+    26:
       MissingEarlierConfirmations:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - current_sequence_number:
               TYPENAME: SequenceNumber
+    27:
+      InvalidSystemTransaction: UNIT
     28:
       UnexpectedTransactionIndex: UNIT
     29:
@@ -564,20 +579,24 @@ SuiError:
         STRUCT:
           - error: STR
     92:
+      EventFailedToDispatch:
+        STRUCT:
+          - error: STR
+    93:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    93:
+    94:
       ObjectSerializationError:
         STRUCT:
           - error: STR
-    94:
-      ConcurrentTransactionError: UNIT
     95:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     96:
+      IncorrectRecipientError: UNIT
+    97:
       TooManyIncorrectAuthorities:
         STRUCT:
           - errors:
@@ -585,49 +604,57 @@ SuiError:
                 TUPLE:
                   - TYPENAME: PublicKeyBytes
                   - TYPENAME: SuiError
-    97:
+    98:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
-    98:
+    99:
       GatewayInvalidTxRangeQuery:
         STRUCT:
           - error: STR
-    99:
-      OnlyOneConsensusClientPermitted: UNIT
     100:
+      OnlyOneConsensusClientPermitted: UNIT
+    101:
       ConsensusConnectionBroken:
         NEWTYPE: STR
-    101:
+    102:
       FailedToHearBackFromConsensus:
         NEWTYPE: STR
-    102:
+    103:
       SharedObjectLockingFailure:
         NEWTYPE: STR
-    103:
-      ListenerCapacityExceeded: UNIT
     104:
+      ListenerCapacityExceeded: UNIT
+    105:
       ConsensusSuiSerializationError:
         NEWTYPE: STR
-    105:
-      NotASharedObjectTransaction: UNIT
     106:
+      NotASharedObjectTransaction: UNIT
+    107:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    107:
+    108:
       HkdfError:
         NEWTYPE: STR
-    108:
+    109:
       SignatureKeyGenError:
         NEWTYPE: STR
-    109:
+    110:
+      ValidatorHaltedAtEpochEnd: UNIT
+    111:
+      InconsistentEpochState:
+        STRUCT:
+          - error: STR
+    112:
       RpcError:
         NEWTYPE: STR
-    110:
+    113:
       UnsupportedFeatureError:
         STRUCT:
           - error: STR
 TransactionDigest:
+  NEWTYPESTRUCT: BYTES
+TransactionEffectsDigest:
   NEWTYPESTRUCT: BYTES
 TransactionKind:
   ENUM:
@@ -691,7 +718,7 @@ UpdateItem:
         NEWTYPE:
           TUPLE:
             - U64
-            - TYPENAME: TransactionDigest
+            - TYPENAME: ExecutionDigests
     1:
       Batch:
         NEWTYPE:

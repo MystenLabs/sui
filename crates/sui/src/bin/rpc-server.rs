@@ -7,6 +7,7 @@ use std::{
     path::PathBuf,
 };
 use sui_config::sui_config_dir;
+use sui_config::SUI_GATEWAY_CONFIG;
 use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
 use sui_gateway::{json_rpc::JsonRpcServerBuilder, rpc_gateway::RpcGatewayImpl};
 use tracing::info;
@@ -37,18 +38,14 @@ struct RpcGatewayOpt {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "rpc_gateway".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        ..Default::default()
-    };
-    #[allow(unused)]
-    let guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_env()
+        .init();
+
     let options: RpcGatewayOpt = RpcGatewayOpt::parse();
     let config_path = options
         .config
-        .unwrap_or(sui_config_dir()?.join("gateway.conf"));
+        .unwrap_or(sui_config_dir()?.join(SUI_GATEWAY_CONFIG));
     info!(?config_path, "Gateway config file path");
 
     let prom_binding = PROM_PORT_ADDR.parse().unwrap();

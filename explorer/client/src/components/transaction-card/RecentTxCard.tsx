@@ -11,7 +11,7 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
 import { NetworkContext } from '../../context';
@@ -23,6 +23,7 @@ import {
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
+import Pagination from '../pagination/Pagination';
 
 import type {
     CertifiedTransaction,
@@ -49,14 +50,49 @@ type TxnData = {
     From: string;
 };
 
+function generateStartEndRange(
+    txCount: number,
+    txNum: number,
+    pageNum?: number
+): { startGatewayTxSeqNumber: number; endGatewayTxSeqNumber: number } {
+    // Pagination pageNum from query params - default to 0; No negative values
+    const txPaged = pageNum && pageNum > 0 ? pageNum - 1 : 0;
+    const endGatewayTxSeqNumber: number = txCount - txNum * txPaged;
+    const tempStartGatewayTxSeqNumber: number = endGatewayTxSeqNumber - txNum;
+    // If startGatewayTxSeqNumber is less than 0, then set it 1 the first transaction sequence number
+    const startGatewayTxSeqNumber: number =
+        tempStartGatewayTxSeqNumber > 0 ? tempStartGatewayTxSeqNumber : 1;
+    return {
+        startGatewayTxSeqNumber,
+        endGatewayTxSeqNumber,
+    };
+}
+
 async function getRecentTransactions(
     network: Network | string,
-    txNum: number
+    totalTx: number,
+    txNum: number,
+    pageNum?: number
 ): Promise<TxnData[]> {
     try {
         // Get the latest transactions
+
+        // Instead of getRecentTransactions, use getTransactionCount
+        // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
+        // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
+        const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
+            generateStartEndRange(totalTx, txNum, pageNum);
+
+        // TODO: Add error page
+        // If paged tx value is less than 0, out of range
+        if (endGatewayTxSeqNumber < 0) {
+            throw new Error('Invalid transaction number');
+        }
         const transactions = await rpc(network)
-            .getRecentTransactions(txNum)
+            .getTransactionDigestsInRange(
+                startGatewayTxSeqNumber,
+                endGatewayTxSeqNumber
+            )
             .then((res: GetTxnDigestsResponse) => res);
 
         const digests = transactions.map((tx) => tx[1]);
@@ -208,27 +244,38 @@ function LatestTxView({
     );
 }
 
-function LatestTxCardStatic() {
+function LatestTxCardStatic({ count }: { count: number }) {
     const latestTx = getAllMockTransaction().map((tx) => ({
         ...tx,
         status: tx.status as ExecutionStatusType,
         kind: tx.kind as TransactionKindName,
     }));
+    const [searchParams] = useSearchParams();
+    const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
+
     const results = {
         loadState: 'loaded',
         latestTx: latestTx,
     };
-    return <LatestTxView results={results} />;
+    return (
+        <>
+            <LatestTxView results={results} />
+            <Pagination totalTxCount={count} txNum={pagedNum} />
+        </>
+    );
 }
 
-function LatestTxCardAPI() {
+function LatestTxCardAPI({ count }: { count: number }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
+    const [searchParams] = useSearchParams();
+    const [txNumPerPage] = useState(15);
     useEffect(() => {
         let isMounted = true;
-        getRecentTransactions(network, 15)
-            .then((resp: any) => {
+        const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
+        getRecentTransactions(network, count, txNumPerPage, pagedNum)
+            .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
                 }
@@ -248,7 +295,8 @@ function LatestTxCardAPI() {
         return () => {
             isMounted = false;
         };
-    }, [network]);
+    }, [count, network, searchParams, txNumPerPage]);
+
     if (results.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
@@ -270,10 +318,19 @@ function LatestTxCardAPI() {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
-    return <LatestTxView results={results} />;
+    return (
+        <>
+            <LatestTxView results={results} />
+            <Pagination totalTxCount={count} txNum={txNumPerPage} />
+        </>
+    );
 }
 
-const LatestTxCard = () =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI />;
+const LatestTxCard = ({ count }: { count: number }) =>
+    IS_STATIC_ENV ? (
+        <LatestTxCardStatic count={count} />
+    ) : (
+        <LatestTxCardAPI count={count} />
+    );
 
 export default LatestTxCard;

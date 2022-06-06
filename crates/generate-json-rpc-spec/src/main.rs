@@ -9,9 +9,9 @@ use serde_json::json;
 use std::fs::File;
 use std::io::Write;
 
-use sui::config::SUI_WALLET_CONFIG;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
+use sui_config::SUI_WALLET_CONFIG;
 use sui_core::gateway_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
@@ -97,10 +97,8 @@ async fn main() {
 
 async fn create_response_sample(
 ) -> Result<(ObjectResponseSample, TransactionResponseSample), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    let working_dir = working_dir.path();
-    let _network = start_test_network(working_dir, None).await?;
-    let config = working_dir.join(SUI_WALLET_CONFIG);
+    let network = start_test_network(None).await?;
+    let config = network.dir().join(SUI_WALLET_CONFIG);
 
     let mut context = WalletContext::new(&config)?;
     let address = context.config.accounts.first().cloned().unwrap();
