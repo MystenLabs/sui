@@ -227,6 +227,9 @@ where
         active_authority: &ActiveAuthority<A>,
         start_seq: Option<TxSequenceNumber>,
     ) -> PeerGossip<A> {
+        // TODO: for validator gossip, we should always use None as the start_seq, but we should
+        // consult the start_seq we retrieved from the db to make sure that the peer is giving
+        // us new txes.
         let start_seq = match active_authority
             .follower_store
             .get_next_sequence(&peer_name)
