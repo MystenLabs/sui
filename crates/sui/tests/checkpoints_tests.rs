@@ -58,7 +58,7 @@ async fn sequence_fragments() {
             .checkpoints()
             .unwrap()
             .lock()
-            .handle_receive_fragment(&fragment, &committee);
+            .handle_receive_fragment(&fragment, committee);
     }
 
     // Wait until all validators sequence and process the fragment.
