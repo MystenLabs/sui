@@ -58,7 +58,7 @@ pub async fn gossip_process_with_start_seq<A>(
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // A copy of the committee
-    let committee = &active_authority.net.committee;
+    let committee = &active_authority.net.load().committee;
 
     // Number of tasks at most "degree" and no more than committee - 1
     let target_num_tasks: usize = usize::min(committee.voting_rights.len() - 1, degree);
@@ -200,10 +200,10 @@ where
     ) -> PeerGossip<A> {
         PeerGossip {
             peer_name,
-            client: active_authority.net.authority_clients[&peer_name].clone(),
+            client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
             max_seq: start_seq,
-            aggregator: active_authority.net.clone(),
+            aggregator: active_authority.net.load().clone(),
         }
     }
 

@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use sui::wallet_commands::WalletContext;
-use sui_core::gateway_types::{SuiExecutionStatus, SuiObject};
+use sui_core::gateway_types::{SuiExecutionStatus, SuiParsedObject};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
@@ -66,7 +66,7 @@ impl SimpleFaucet {
         })
     }
 
-    async fn get_coins(&self, amounts: &[u64]) -> Result<Vec<SuiObject>, FaucetError> {
+    async fn get_coins(&self, amounts: &[u64]) -> Result<Vec<SuiParsedObject>, FaucetError> {
         let result = self
             .split_coins(
                 amounts,
@@ -107,7 +107,7 @@ impl SimpleFaucet {
         gas_object_id: ObjectID,
         signer: SuiAddress,
         budget: u64,
-    ) -> Result<Vec<SuiObject>, anyhow::Error> {
+    ) -> Result<Vec<SuiParsedObject>, anyhow::Error> {
         // TODO: move this function to impl WalletContext{} and reuse in wallet_commands
         let context = &self.wallet;
         let data = context

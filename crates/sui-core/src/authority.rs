@@ -689,7 +689,8 @@ impl AuthorityState {
             return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
         }
 
-        // If we do not have a start, pick the low watermark from the notifier.
+        // If we do not have a start, pick next sequence number that has
+        // not yet been put into a batch.
         let start = match request.start {
             Some(start) => start,
             None => {
