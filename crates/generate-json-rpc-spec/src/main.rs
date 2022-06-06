@@ -16,6 +16,7 @@ use sui_core::gateway_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_gateway::api::SuiRpcModule;
+use sui_gateway::bcs_api::BcsApiImpl;
 use sui_gateway::json_rpc::sui_rpc_doc;
 use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_gateway::rpc_gateway::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
@@ -66,6 +67,7 @@ async fn main() {
     open_rpc.add_module(GatewayReadApiImpl::rpc_doc_module());
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
+    open_rpc.add_module(BcsApiImpl::rpc_doc_module());
 
     match options.action {
         Action::Print => {

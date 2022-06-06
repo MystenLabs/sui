@@ -9,13 +9,15 @@ use tokio::runtime::Handle;
 
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_core::gateway_types::{
-    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, GetRawObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse,
+    TransactionResponse,
 };
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 
+use crate::api::RpcBcsApiClient;
 use crate::api::RpcReadApiClient;
 use crate::api::RpcTransactionBuilderClient;
 use crate::api::{RpcGatewayApiClient, TransactionBytes};
@@ -145,6 +147,10 @@ impl GatewayAPI for RpcGatewayClient {
 
     async fn get_object(&self, object_id: ObjectID) -> Result<GetObjectDataResponse, Error> {
         Ok(self.client.get_object(object_id).await?)
+    }
+
+    async fn get_raw_object(&self, object_id: ObjectID) -> Result<GetRawObjectDataResponse, Error> {
+        Ok(self.client.get_raw_object(object_id).await?)
     }
 
     async fn get_objects_owned_by_address(

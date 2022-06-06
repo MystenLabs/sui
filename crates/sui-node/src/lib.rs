@@ -13,6 +13,7 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
     checkpoints::CheckpointStore,
 };
+use sui_gateway::bcs_api::BcsApiImpl;
 use sui_gateway::json_rpc::JsonRpcServerBuilder;
 use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_network::api::ValidatorServer;
@@ -138,6 +139,7 @@ impl SuiNode {
             let mut server = JsonRpcServerBuilder::new()?;
             server.register_module(ReadApi::new(state.clone()))?;
             server.register_module(FullNodeApi::new(state.clone()))?;
+            server.register_module(BcsApiImpl::new(state.clone()))?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
             Some(server_handle)

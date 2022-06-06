@@ -8,9 +8,11 @@ use std::{
 };
 use sui_config::sui_config_dir;
 use sui_config::SUI_GATEWAY_CONFIG;
+use sui_gateway::bcs_api::BcsApiImpl;
 use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
 use sui_gateway::{json_rpc::JsonRpcServerBuilder, rpc_gateway::RpcGatewayImpl};
 use tracing::info;
+
 const DEFAULT_RPC_SERVER_PORT: &str = "5001";
 const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
@@ -58,7 +60,8 @@ async fn main() -> anyhow::Result<()> {
     let mut server = JsonRpcServerBuilder::new()?;
     server.register_module(RpcGatewayImpl::new(client.clone()))?;
     server.register_module(GatewayReadApiImpl::new(client.clone()))?;
-    server.register_module(TransactionBuilderImpl::new(client))?;
+    server.register_module(TransactionBuilderImpl::new(client.clone()))?;
+    server.register_module(BcsApiImpl::new_with_gateway(client))?;
 
     let server_handle = server.start(address).await?;
 
