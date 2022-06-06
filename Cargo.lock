@@ -5258,6 +5258,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1847b767a3d62d95cbf3d8a9f0e421cf57a0d8aa4f411d4b16525afb0284d4ed"
 dependencies = [
  "dyn-clone",
+ "either",
  "schemars_derive",
  "serde 1.0.137",
  "serde_json",
@@ -5952,6 +5953,7 @@ dependencies = [
  "crypto",
  "curve25519-dalek",
  "ed25519-dalek",
+ "either",
  "executor",
  "futures",
  "hex",

@@ -10,6 +10,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 
 use colored::Colorize;
+use either::Either;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -20,6 +21,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use serde_with::serde_as;
+use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -34,10 +37,8 @@ use sui_types::messages::{
     SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
 };
 use sui_types::move_package::disassemble_modules;
-use sui_types::object::{Data, Object, ObjectRead, Owner};
+use sui_types::object::{Data, MoveObject, Object, ObjectRead, Owner};
 use sui_types::sui_serde::{Base64, Encoding};
-
-use sui_json::SuiJsonValue;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_types_tests.rs"]
@@ -93,11 +94,11 @@ pub struct SplitCoinResponse {
     /// Certificate of the transaction
     pub certificate: SuiCertifiedTransaction,
     /// The updated original coin object after split
-    pub updated_coin: SuiObject,
+    pub updated_coin: SuiParsedObject,
     /// All the newly created coin objects generated from the split
-    pub new_coins: Vec<SuiObject>,
+    pub new_coins: Vec<SuiParsedObject>,
     /// The updated gas payment object after deducting payment
-    pub updated_gas: SuiObject,
+    pub updated_gas: SuiParsedObject,
 }
 
 impl Display for SplitCoinResponse {
@@ -131,9 +132,9 @@ pub struct MergeCoinResponse {
     /// Certificate of the transaction
     pub certificate: SuiCertifiedTransaction,
     /// The updated original coin object after merge
-    pub updated_coin: SuiObject,
+    pub updated_coin: SuiParsedObject,
     /// The updated gas payment object after deducting payment
-    pub updated_gas: SuiObject,
+    pub updated_gas: SuiParsedObject,
 }
 
 impl Display for MergeCoinResponse {
@@ -151,11 +152,14 @@ impl Display for MergeCoinResponse {
     }
 }
 
+pub type SuiRawObject = SuiObject<SuiRawMoveObject>;
+pub type SuiParsedObject = SuiObject<SuiParsedMoveObject>;
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "Object")]
-pub struct SuiObject {
+pub struct SuiObject<T: SuiMoveObject> {
     /// The meat of the object
-    pub data: SuiData,
+    pub data: SuiData<T>,
     /// The owner that unlocks this object
     pub owner: Owner,
     /// The digest of the transaction that created or last mutated this object
@@ -194,7 +198,7 @@ impl From<ObjectRef> for SuiObjectRef {
     }
 }
 
-impl Display for SuiObject {
+impl Display for SuiParsedObject {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let type_ = if self.data.type_().is_some() {
             "Move Object"
@@ -237,7 +241,7 @@ impl Display for SuiObject {
     }
 }
 
-impl SuiObject {
+impl<T: SuiMoveObject> SuiObject<T> {
     pub fn id(&self) -> ObjectID {
         self.reference.object_id
     }
@@ -248,25 +252,7 @@ impl SuiObject {
     pub fn try_from(o: Object, layout: Option<MoveStructLayout>) -> Result<Self, anyhow::Error> {
         let oref = o.compute_object_reference();
         let data = match o.data {
-            Data::Move(m) => {
-                let move_struct = m
-                    .to_move_struct(&layout.ok_or(SuiError::ObjectSerializationError {
-                        error: "Layout is required to convert Move object to json".to_owned(),
-                    })?)?
-                    .into();
-
-                if let SuiMoveStruct::WithTypes { type_, fields } = move_struct {
-                    SuiData::MoveObject(SuiMoveObject {
-                        type_,
-                        fields: SuiMoveStruct::WithFields(fields),
-                    })
-                } else {
-                    SuiData::MoveObject(SuiMoveObject {
-                        type_: m.type_.to_string(),
-                        fields: move_struct,
-                    })
-                }
-            }
+            Data::Move(m) => SuiData::MoveObject(T::try_from(m, layout)?),
             Data::Package(p) => SuiData::Package(SuiMovePackage {
                 disassembled: p.disassemble()?,
             }),
@@ -283,12 +269,13 @@ impl SuiObject {
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(tag = "dataType", rename_all = "camelCase", rename = "Data")]
-pub enum SuiData {
-    MoveObject(SuiMoveObject),
+pub enum SuiData<T: SuiMoveObject> {
+    // Manually handle generic schema generation
+    MoveObject(#[schemars(with = "Either<SuiParsedMoveObject,SuiRawMoveObject>")] T),
     Package(SuiMovePackage),
 }
 
-impl Display for SuiData {
+impl Display for SuiData<SuiParsedMoveObject> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut writer = String::new();
         match self {
@@ -316,17 +303,84 @@ fn indent<T: Display>(d: &T, indent: usize) -> String {
         .join("\n")
 }
 
+pub trait SuiMoveObject: Sized {
+    fn try_from(
+        object: MoveObject,
+        layout: Option<MoveStructLayout>,
+    ) -> Result<Self, anyhow::Error>;
+
+    fn type_(&self) -> &str;
+}
+
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "MoveObject")]
-pub struct SuiMoveObject {
+pub struct SuiParsedMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
     pub fields: SuiMoveStruct,
 }
 
-impl TryFrom<&SuiObject> for GasCoin {
+impl SuiMoveObject for SuiParsedMoveObject {
+    fn try_from(
+        object: MoveObject,
+        layout: Option<MoveStructLayout>,
+    ) -> Result<Self, anyhow::Error> {
+        let move_struct = object
+            .to_move_struct(&layout.ok_or(SuiError::ObjectSerializationError {
+                error: "Layout is required to convert Move object to json".to_owned(),
+            })?)?
+            .into();
+
+        Ok(
+            if let SuiMoveStruct::WithTypes { type_, fields } = move_struct {
+                SuiParsedMoveObject {
+                    type_,
+                    fields: SuiMoveStruct::WithFields(fields),
+                }
+            } else {
+                SuiParsedMoveObject {
+                    type_: object.type_.to_string(),
+                    fields: move_struct,
+                }
+            },
+        )
+    }
+
+    fn type_(&self) -> &str {
+        &self.type_
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
+#[serde(rename = "RawMoveObject")]
+pub struct SuiRawMoveObject {
+    #[serde(rename = "type")]
+    pub type_: String,
+    #[serde_as(as = "Base64")]
+    #[schemars(with = "Base64")]
+    pub bcs_bytes: Vec<u8>,
+}
+
+impl SuiMoveObject for SuiRawMoveObject {
+    fn try_from(
+        object: MoveObject,
+        _layout: Option<MoveStructLayout>,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            type_: object.type_.to_string(),
+            bcs_bytes: object.into_contents(),
+        })
+    }
+
+    fn type_(&self) -> &str {
+        &self.type_
+    }
+}
+
+impl TryFrom<&SuiParsedObject> for GasCoin {
     type Error = SuiError;
-    fn try_from(object: &SuiObject) -> Result<Self, Self::Error> {
+    fn try_from(object: &SuiParsedObject) -> Result<Self, Self::Error> {
         match &object.data {
             SuiData::MoveObject(o) => {
                 if GasCoin::type_().to_string() == o.type_ {
@@ -364,8 +418,8 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     }
 }
 
-impl SuiData {
-    pub fn try_as_move(&self) -> Option<&SuiMoveObject> {
+impl<T: SuiMoveObject> SuiData<T> {
+    pub fn try_as_move(&self) -> Option<&T> {
         match self {
             SuiData::MoveObject(o) => Some(o),
             SuiData::Package(_) => None,
@@ -379,7 +433,7 @@ impl SuiData {
     }
     pub fn type_(&self) -> Option<&str> {
         match self {
-            SuiData::MoveObject(m) => Some(&m.type_),
+            SuiData::MoveObject(m) => Some(m.type_()),
             SuiData::Package(_) => None,
         }
     }
@@ -393,9 +447,9 @@ pub struct PublishResponse {
     /// The newly published package object reference.
     pub package: SuiObjectRef,
     /// List of Move objects created as part of running the module initializers in the package
-    pub created_objects: Vec<SuiObject>,
+    pub created_objects: Vec<SuiParsedObject>,
     /// The updated gas payment object after deducting payment
-    pub updated_gas: SuiObject,
+    pub updated_gas: SuiParsedObject,
 }
 
 impl Display for PublishResponse {
@@ -424,18 +478,21 @@ impl Display for PublishResponse {
     }
 }
 
+pub type GetObjectDataResponse = SuiObjectRead<SuiParsedMoveObject>;
+pub type GetRawObjectDataResponse = SuiObjectRead<SuiRawMoveObject>;
+
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum GetObjectDataResponse {
-    Exists(SuiObject),
+pub enum SuiObjectRead<T: SuiMoveObject> {
+    Exists(SuiObject<T>),
     NotExists(ObjectID),
     Deleted(SuiObjectRef),
 }
 
-impl GetObjectDataResponse {
+impl<T: SuiMoveObject> SuiObjectRead<T> {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn object(&self) -> Result<&SuiObject, SuiError> {
+    pub fn object(&self) -> Result<&SuiObject<T>, SuiError> {
         match &self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
@@ -447,7 +504,7 @@ impl GetObjectDataResponse {
 
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn into_object(self) -> Result<SuiObject, SuiError> {
+    pub fn into_object(self) -> Result<SuiObject<T>, SuiError> {
         match self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted {
                 object_ref: oref.to_object_ref(),
@@ -458,16 +515,16 @@ impl GetObjectDataResponse {
     }
 }
 
-impl TryFrom<ObjectRead> for GetObjectDataResponse {
+impl<T: SuiMoveObject> TryFrom<ObjectRead> for SuiObjectRead<T> {
     type Error = anyhow::Error;
 
     fn try_from(value: ObjectRead) -> Result<Self, Self::Error> {
         match value {
-            ObjectRead::NotExists(id) => Ok(GetObjectDataResponse::NotExists(id)),
-            ObjectRead::Exists(_, o, layout) => Ok(GetObjectDataResponse::Exists(
-                SuiObject::try_from(o, layout)?,
-            )),
-            ObjectRead::Deleted(oref) => Ok(GetObjectDataResponse::Deleted(oref.into())),
+            ObjectRead::NotExists(id) => Ok(SuiObjectRead::NotExists(id)),
+            ObjectRead::Exists(_, o, layout) => {
+                Ok(SuiObjectRead::Exists(SuiObject::try_from(o, layout)?))
+            }
+            ObjectRead::Deleted(oref) => Ok(SuiObjectRead::Deleted(oref.into())),
         }
     }
 }

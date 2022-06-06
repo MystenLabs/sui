@@ -16,15 +16,13 @@ use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use serde::Serialize;
 use serde_json::json;
 use sui_core::gateway_types::{
-    MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
+    GetObjectDataResponse, MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
+    SuiParsedObject,
 };
 use tracing::info;
 
 use sui_core::gateway_state::GatewayClient;
-use sui_core::gateway_types::{
-    GetObjectDataResponse, SuiCertifiedTransaction, SuiExecutionStatus, SuiObject,
-    SuiTransactionEffects,
-};
+use sui_core::gateway_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_types::object::Owner;
@@ -518,7 +516,7 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiObject)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiParsedObject)>, anyhow::Error> {
         let object_refs = self.gateway.get_objects_owned_by_address(address).await?;
 
         // TODO: We should ideally fetch the objects from local cache
@@ -561,7 +559,7 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiObject), anyhow::Error> {
+    ) -> Result<(u64, SuiParsedObject), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
                 return Ok(o);
