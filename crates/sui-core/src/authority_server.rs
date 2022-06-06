@@ -4,7 +4,10 @@
 
 use crate::{
     authority::AuthorityState,
-    consensus_adapter::{ConsensusAdapter, ConsensusListener, ConsensusListenerMessage},
+    consensus_adapter::{
+        CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusListener,
+        ConsensusListenerMessage,
+    },
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -19,7 +22,10 @@ use sui_network::{
 };
 
 use sui_types::{crypto::VerificationObligation, error::*, messages::*};
-use tokio::sync::mpsc::{channel, Sender};
+use tokio::{
+    sync::mpsc::{channel, Sender},
+    task::JoinHandle,
+};
 
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
@@ -129,6 +135,7 @@ impl AuthorityServer {
             .add_service(ValidatorServer::new(ValidatorService {
                 state: self.state,
                 consensus_adapter: self.consensus_adapter,
+                _checkpoint_consensus_handle: None,
             }))
             .bind(&address)
             .await
@@ -147,6 +154,7 @@ impl AuthorityServer {
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: ConsensusAdapter,
+    _checkpoint_consensus_handle: Option<JoinHandle<()>>,
 }
 
 impl ValidatorService {
@@ -189,17 +197,41 @@ impl ValidatorService {
             /* max_pending_transactions */ 1_000_000,
         );
 
+        // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
             state.clone(),
             consensus_config.address().to_owned(),
             state.clone_committee(),
-            tx_sui_to_consensus,
+            tx_sui_to_consensus.clone(),
             /* max_delay */ Duration::from_millis(5_000),
         );
+
+        // Update the checkpoint store with a consensus client.
+        let checkpoint_consensus_handle = if let Some(checkpoint_store) = state.checkpoints() {
+            let (tx_checkpoint_consensus_adapter, rx_checkpoint_consensus_adapter) = channel(1_000);
+            let consensus_sender = CheckpointSender::new(tx_checkpoint_consensus_adapter);
+            checkpoint_store
+                .lock()
+                .set_consensus(Box::new(consensus_sender))?;
+
+            let handle = CheckpointConsensusAdapter::new(
+                /* consensus_address */ consensus_config.address().to_owned(),
+                /* tx_consensus_listener */ tx_sui_to_consensus,
+                rx_checkpoint_consensus_adapter,
+                /* checkpoint_locals */ checkpoint_store.lock().get_locals(),
+                /* retry_delay */ Duration::from_millis(5_000),
+                /* max_pending_transactions */ 10_000,
+            )
+            .spawn();
+            Some(handle)
+        } else {
+            None
+        };
 
         Ok(Self {
             state,
             consensus_adapter,
+            _checkpoint_consensus_handle: checkpoint_consensus_handle,
         })
     }
 }
