@@ -856,7 +856,7 @@ impl CheckpointStore {
     // Helper write functions
 
     /// Set the next checkpoint proposal.
-    fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    pub fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.

@@ -79,7 +79,8 @@ workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 pretty_assertions = "1.2.0"
-
+tokio-util = { version = "0.7.2", features = ["codec"] }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223"}
 test-utils = { path = "../test-utils" }
 
 [features]

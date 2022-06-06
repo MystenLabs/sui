@@ -883,6 +883,10 @@ impl AuthorityState {
         state
     }
 
+    pub fn checkpoints(&self) -> Option<Arc<Mutex<CheckpointStore>>> {
+        self.checkpoints.clone()
+    }
+
     pub(crate) fn insert_new_epoch_info(&self, new_committee: &Committee) -> SuiResult {
         let current_epoch_info = self.database.get_last_epoch_info()?;
         fp_ensure!(
