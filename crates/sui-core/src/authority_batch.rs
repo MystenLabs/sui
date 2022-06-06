@@ -102,7 +102,7 @@ impl crate::authority::AuthorityState {
             // Make a new batch, to put the old transactions not in a batch in.
             let last_signed_batch = SignedBatch::new(
                 // Unwrap safe due to check not empty
-                AuthorityBatch::make_next(&last_batch, &transactions[..])?,
+                AuthorityBatch::make_next(&last_batch, &transactions)?,
                 &*self.secret,
                 self.name,
             );
@@ -154,28 +154,28 @@ impl crate::authority::AuthorityState {
 
             // check if we should make a new block
             tokio::select! {
-              _ = interval.tick() => {
-                // Every so often we check if we should make a batch
-                // but it should never be empty. But never empty.
-                  make_batch = true;
-              },
-              item_option = transaction_stream.next() => {
-                match item_option {
-                    None => {
-                        make_batch = true;
-                        exit = true;
-                    },
-                    Some((seq, tx_digest)) => {
-                        // Add to batch and broadcast
-                        current_batch.push((seq, tx_digest));
-                        let _ = self.batch_channels.send(UpdateItem::Transaction((seq, tx_digest)));
-
-                        if current_batch.len() as TxSequenceNumber >= min_batch_size {
+                _ = interval.tick() => {
+                    // Every so often we check if we should make a batch
+                    // but it should never be empty. But never empty.
+                    make_batch = true;
+                },
+                item_option = transaction_stream.next() => {
+                    match item_option {
+                        None => {
                             make_batch = true;
+                            exit = true;
+                        },
+                        Some((seq, tx_digest)) => {
+                            // Add to batch and broadcast
+                            current_batch.push((seq, tx_digest));
+                            let _ = self.batch_channels.send(UpdateItem::Transaction((seq, tx_digest)));
+
+                            if current_batch.len() as TxSequenceNumber >= min_batch_size {
+                                make_batch = true;
                             }
                         }
                     }
-               }
+                }
             }
 
             // Logic to make a batch
@@ -299,7 +299,7 @@ impl crate::authority::AuthorityState {
                                         }
                                     }
                                     UpdateItem::Batch(signed_batch) => {
-                                        // Do not re-send transactions already sent from the database
+                                        // Do not re-send batches already sent from the database
                                         if !(local_state.next_expected_batch
                                             <= signed_batch.batch.next_sequence_number)
                                         {
@@ -308,18 +308,14 @@ impl crate::authority::AuthorityState {
                                     }
                                 };
 
-                                let response = BatchInfoResponseItem(item);
-
                                 // Only stop at the batch boundary, once we have covered the last item.
-                                if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) =
-                                    &response
-                                {
-                                    if end < signed_batch.batch.next_sequence_number {
+                                if let UpdateItem::Batch(signed_batch) = &item {
+                                    if end <= signed_batch.batch.next_sequence_number {
                                         local_state.exit = true;
                                     }
                                 }
 
-                                return Some((Ok(response), local_state));
+                                return Some((Ok(BatchInfoResponseItem(item)), local_state));
                             }
                             Err(RecvError::Closed) => {
                                 // The service closed the channel, so we tell the client.
