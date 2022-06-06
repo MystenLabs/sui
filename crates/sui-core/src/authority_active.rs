@@ -133,6 +133,16 @@ impl<A> ActiveAuthority<A> {
         })
     }
 
+    #[cfg(test)]
+    pub fn new_with_ephemeral_follower_store(
+        authority: Arc<AuthorityState>,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> SuiResult<Self> {
+        let working_dir = tempfile::tempdir().unwrap();
+        let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
+        Self::new(authority, follower_store, authority_clients)
+    }
+
     /// Returns the amount of time we should wait to be able to contact at least
     /// 2/3 of the nodes in the committee according to the `no_contact_before`
     /// instant stored in the authority health records. A network needs 2/3 stake

@@ -58,7 +58,11 @@ async fn test_start_epoch_change() {
         })
         .unwrap();
     // Create an active authority for the first authority state.
-    let active = ActiveAuthority::new(state.clone(), net.clone_inner_clients()).unwrap();
+    let active = ActiveAuthority::new_with_ephemeral_follower_store(
+        state.clone(),
+        net.clone_inner_clients(),
+    )
+    .unwrap();
     // Make the high watermark differ from low watermark.
     let ticket = state.batch_notifier.ticket().unwrap();
 
@@ -170,7 +174,13 @@ async fn test_finish_epoch_change() {
     .await;
     let actives: Vec<_> = states
         .iter()
-        .map(|state| ActiveAuthority::new(state.clone(), net.clone_inner_clients()).unwrap())
+        .map(|state| {
+            ActiveAuthority::new_with_ephemeral_follower_store(
+                state.clone(),
+                net.clone_inner_clients(),
+            )
+            .unwrap()
+        })
         .collect();
     let results: Vec<_> = states
         .iter()
