@@ -90,11 +90,11 @@ function Search() {
             setInput(e.currentTarget.value),
         [setInput]
     );
-    const handleCategoryChange = useCallback(
+    /* const handleCategoryChange = useCallback(
         (e: React.ChangeEvent<HTMLSelectElement>) =>
             setCategory(e.currentTarget.value as SearchCategory),
         [setCategory]
-    );
+    );*/
 
     return (
         <form
@@ -110,16 +110,7 @@ function Search() {
                 onChange={handleTextChange}
                 type="text"
             />
-            <select
-                className={styles.categorydropdown}
-                onChange={handleCategoryChange}
-                value={category}
-            >
-                <option value="all">All</option>
-                <option value="transactions">Transactions</option>
-                <option value="objects">Objects</option>
-                <option value="addresses">Addresses</option>
-            </select>
+
             <input
                 type="submit"
                 id="searchBtn"
