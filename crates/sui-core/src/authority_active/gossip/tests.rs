@@ -39,7 +39,7 @@ pub async fn test_gossip() {
         for digest in &digests {
             let result1 = client
                 .handle_transaction_info_request(TransactionInfoRequest {
-                    transaction_digest: *digest,
+                    transaction_digest: digest.transaction,
                 })
                 .await;
 
@@ -78,7 +78,7 @@ pub async fn test_gossip_error() {
         for digest in &digests {
             let result1 = client
                 .handle_transaction_info_request(TransactionInfoRequest {
-                    transaction_digest: *digest,
+                    transaction_digest: digest.transaction,
                 })
                 .await;
 

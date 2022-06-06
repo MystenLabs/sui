@@ -10,7 +10,9 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::Encoding;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
+use ed25519_dalek::Sha512;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -30,6 +32,7 @@ use crate::object::{Object, Owner};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Hex;
 use crate::sui_serde::Readable;
+use crate::waypoint::IntoPoint;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -225,6 +228,12 @@ pub struct TransactionDigest(
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
+impl IntoPoint for TransactionDigest {
+    fn into_point(&self) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
+    }
+}
+
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -235,12 +244,55 @@ pub struct ObjectDigest(
 ); // We use SHA3-256 hence 32 bytes here
 
 #[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema, Debug,
+)]
 pub struct TransactionEffectsDigest(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
     pub [u8; TRANSACTION_DIGEST_LENGTH],
 );
+
+impl TransactionEffectsDigest {
+    // for testing
+    pub fn random() -> Self {
+        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        Self(random_bytes)
+    }
+}
+
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema, Debug,
+)]
+pub struct ExecutionDigests {
+    pub transaction: TransactionDigest,
+    pub effects: TransactionEffectsDigest,
+}
+
+impl ExecutionDigests {
+    pub fn new(transaction: TransactionDigest, effects: TransactionEffectsDigest) -> Self {
+        Self {
+            transaction,
+            effects,
+        }
+    }
+
+    pub fn random() -> Self {
+        Self {
+            transaction: TransactionDigest::random(),
+            effects: TransactionEffectsDigest::random(),
+        }
+    }
+}
+
+impl IntoPoint for ExecutionDigests {
+    fn into_point(&self) -> RistrettoPoint {
+        let mut data = [0; 64];
+        data[0..32].clone_from_slice(&self.transaction.0);
+        data[32..64].clone_from_slice(&self.effects.0);
+        RistrettoPoint::from_uniform_bytes(&data)
+    }
+}
 
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("Option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = STD_OPTION_MODULE_NAME;

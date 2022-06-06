@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
 use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
+    base_types::{AuthorityName, ExecutionDigests},
     batch::TxSequenceNumber,
     committee::Committee,
     error::SuiError,
@@ -82,30 +82,30 @@ pub struct CheckpointStore {
     /// The signature key of the authority.
     pub secret: StableSyncAuthoritySigner,
 
-    /// The list of all transactions that are checkpointed mapping to the checkpoint
+    /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
     pub transactions_to_checkpoint:
-        DBMap<TransactionDigest, (CheckpointSequenceNumber, TxSequenceNumber)>,
+        DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
 
-    /// The mapping from checkpoint to transactions contained within the checkpoint.
+    /// The mapping from checkpoint to transaction/effects contained within the checkpoint.
     /// The second part of the key is the local sequence number if the transaction was
     /// processed or Max(u64) / 2 + offset if not. It allows the authority to store and serve
     /// checkpoints in a causal order that can be processed in order. (Note the set
     /// of transactions in the checkpoint is global but not the order.)
-    pub checkpoint_contents: DBMap<(CheckpointSequenceNumber, TxSequenceNumber), TransactionDigest>,
+    pub checkpoint_contents: DBMap<(CheckpointSequenceNumber, TxSequenceNumber), ExecutionDigests>,
 
-    /// The set of pending transactions that were included in the last checkpoint
+    /// The set of pending transaction/effects that were included in the last checkpoint
     /// but that this authority has not yet processed.
-    pub unprocessed_transactions: DBMap<TransactionDigest, CheckpointSequenceNumber>,
-    /// The content of transactions we have received through the checkpoint creation process,
+    pub unprocessed_transactions: DBMap<ExecutionDigests, CheckpointSequenceNumber>,
+    /// The content of transaction/effects we have received through the checkpoint creation process,
     /// that we should process before we move on to make a new proposal. This may be a only
     /// a subset of the digests contained in `unprocessed_transactions.`
-    pub unprocessed_contents: DBMap<TransactionDigest, CertifiedTransaction>,
+    pub unprocessed_contents: DBMap<ExecutionDigests, CertifiedTransaction>,
 
-    /// The set of transactions this authority has processed but have not yet been
+    /// The set of transaction/effects this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
     /// of this authority.
-    pub extra_transactions: DBMap<TransactionDigest, TxSequenceNumber>,
+    pub extra_transactions: DBMap<ExecutionDigests, TxSequenceNumber>,
 
     /// The list of checkpoint, along with their authentication information
     pub checkpoints: DBMap<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
@@ -244,11 +244,11 @@ impl CheckpointStore {
             locals,
         ) = reopen! (
             &db,
-            "transactions_to_checkpoint";<TransactionDigest,(CheckpointSequenceNumber, TxSequenceNumber)>,
-            "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),TransactionDigest>,
-            "unprocessed_transactions";<TransactionDigest,CheckpointSequenceNumber>,
-            "unprocessed_contents";<TransactionDigest, CertifiedTransaction>,
-            "extra_transactions";<TransactionDigest,TxSequenceNumber>,
+            "transactions_to_checkpoint";<ExecutionDigests,(CheckpointSequenceNumber, TxSequenceNumber)>,
+            "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),ExecutionDigests>,
+            "unprocessed_transactions";<ExecutionDigests,CheckpointSequenceNumber>,
+            "unprocessed_contents";<ExecutionDigests, CertifiedTransaction>,
+            "extra_transactions";<ExecutionDigests,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
             "local_fragments";<AuthorityName, CheckpointFragment>,
             "fragments";<ExecutionIndices, CheckpointFragment>,
@@ -436,7 +436,7 @@ impl CheckpointStore {
     pub fn handle_internal_batch(
         &mut self,
         next_sequence_number: TxSequenceNumber,
-        transactions: &[(TxSequenceNumber, TransactionDigest)],
+        transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
         self.update_processed_transactions(transactions)?;
 
@@ -905,7 +905,7 @@ impl CheckpointStore {
     pub fn update_new_checkpoint(
         &mut self,
         seq: CheckpointSequenceNumber,
-        transactions: &[TransactionDigest],
+        transactions: &[ExecutionDigests],
     ) -> Result<(), SuiError> {
         let batch = self.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
@@ -917,7 +917,7 @@ impl CheckpointStore {
     fn update_new_checkpoint_inner(
         &mut self,
         seq: CheckpointSequenceNumber,
-        transactions: &[TransactionDigest],
+        transactions: &[ExecutionDigests],
         batch: DBBatch,
     ) -> Result<(), SuiError> {
         // Check that this checkpoint seq is new, and directly follows the last
@@ -1019,7 +1019,7 @@ impl CheckpointStore {
     /// unprocessed transactions (this is the low watermark).
     fn update_processed_transactions(
         &mut self, // We take by &mut to prevent concurrent access.
-        transactions: &[(TxSequenceNumber, TransactionDigest)],
+        transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<CheckpointSequenceNumber, SuiError> {
         let in_checkpoint = self
             .transactions_to_checkpoint

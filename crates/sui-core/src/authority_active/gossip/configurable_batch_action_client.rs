@@ -38,7 +38,7 @@ fn fix() {
 
 #[derive(Clone)]
 pub struct TestBatch {
-    pub digests: Vec<TransactionDigest>,
+    pub digests: Vec<ExecutionDigests>,
 }
 
 #[derive(Clone)]
@@ -210,7 +210,7 @@ pub async fn init_configurable_authorities(
 ) -> (
     BTreeMap<AuthorityName, ConfigurableBatchActionClient>,
     Vec<Arc<AuthorityState>>,
-    Vec<TransactionDigest>,
+    Vec<ExecutionDigests>,
 ) {
     let authority_count = 4;
     let (addr1, key1) = get_key_pair();
@@ -248,7 +248,7 @@ pub async fn init_configurable_authorities(
 
     // Execute transactions for every EmitUpdateItem Action, use the digest of the transaction to
     // create a batch action internal sequence.
-    let mut executed_digests = Vec::new();
+    let mut to_be_executed_digests = Vec::new();
     let mut batch_action_internal = Vec::new();
     let framework_obj_ref = genesis::get_framework_object_ref();
 
@@ -269,10 +269,14 @@ pub async fn init_configurable_authorities(
             }
             // Add the digest and number to the internal actions.
             let t_b = TestBatch {
-                digests: vec![*transaction.digest()],
+                // TODO: need to put in here the real effects digest
+                digests: vec![ExecutionDigests::new(
+                    *transaction.digest(),
+                    TransactionEffectsDigest::random(),
+                )],
             };
             batch_action_internal.push(BatchActionInternal::EmitUpdateItem(t_b));
-            executed_digests.push(*transaction.digest());
+            to_be_executed_digests.push(*transaction.digest());
         }
         if let BatchAction::EmitError() = action {
             batch_action_internal.push(BatchActionInternal::EmitError());
@@ -285,8 +289,9 @@ pub async fn init_configurable_authorities(
         authority_clients.insert(name, client);
     }
 
+    let mut executed_digests = Vec::new();
     // Execute certificate for each digest, and register the action sequence on the authorities who executed the certificates.
-    for digest in executed_digests.clone() {
+    for digest in to_be_executed_digests.clone() {
         // Get a cert
         let authority_clients_ref: Vec<_> = authority_clients.values().collect();
         let authority_clients_slice = authority_clients_ref.as_slice();
@@ -298,7 +303,8 @@ pub async fn init_configurable_authorities(
             // TODO: This only works when every validator has equal stake
             .take(committee.quorum_threshold() as usize)
         {
-            _ = do_cert(cert_client, &cert1).await;
+            let effects = do_cert(cert_client, &cert1).await;
+            executed_digests.push(ExecutionDigests::new(digest, effects.digest()));
 
             // Register the internal actions to client
             cert_client
