@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use sui_types::{base_types::TransactionDigest, messages_checkpoint::CheckpointRequest};
+use rocksdb::Options;
+use sui_storage::default_db_options;
+use sui_types::base_types::ExecutionDigests;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 use tokio::time::sleep;
 use tokio::time::Duration;
@@ -11,11 +13,12 @@ async fn sequence_fragments() {
     // Spawn a quorum of authorities.
     let configs = test_authority_configs();
     let mut handles = spawn_test_authorities(vec![], &configs).await;
+    let committee = &handles[0].state().clone_committee();
 
     // Get checkpoint proposals.
-    let t1 = TransactionDigest::random();
-    let t2 = TransactionDigest::random();
-    let t3 = TransactionDigest::random();
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
     let transactions = [(1, t1), (2, t2), (3, t3)];
     let next_sequence_number = (transactions.len() + 1) as u64;
 
@@ -51,14 +54,13 @@ async fn sequence_fragments() {
     let p2 = proposals.pop().unwrap();
     let fragment = p1.fragment_with(&p2);
 
-    let request = CheckpointRequest::set_fragment(fragment);
     for handle in handles.iter_mut() {
         let _response = handle
             .state()
             .checkpoints()
             .unwrap()
             .lock()
-            .handle_checkpoint_request(&request);
+            .handle_receive_fragment(&fragment, &committee);
     }
 
     // Wait until all validators sequence and process the fragment.
