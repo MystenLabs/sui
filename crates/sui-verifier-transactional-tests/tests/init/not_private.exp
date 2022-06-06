@@ -1,10 +1,10 @@
 processed 3 tasks
 
 task 0 'publish'. lines 4-11:
-Error: Failed to verify the Move module, reason: "_::m. 'init' function must be private".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
 
 task 1 'publish'. lines 13-20:
-Error: Failed to verify the Move module, reason: "_::m. 'init' function must be private".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
 
 task 2 'publish'. lines 22-29:
-Error: Failed to verify the Move module, reason: "_::m. 'init' function must be private".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }

@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId};
+use crate::{base_types::*, committee::EpochId, messages::ExecutionStatus};
 use move_binary_format::errors::{PartialVMError, VMError};
 use narwhal_executor::{ExecutionStateError, SubscriberError};
 use serde::{Deserialize, Serialize};
@@ -361,6 +361,9 @@ pub enum SuiError {
 
     #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
     QuorumDriverCommunicationError { error: String },
+
+    #[error("Error executing {0}")]
+    ExecutionError(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -371,6 +374,12 @@ impl std::convert::From<PartialVMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
+    }
+}
+
+impl std::convert::From<ExecutionError> for SuiError {
+    fn from(error: ExecutionError) -> Self {
+        SuiError::ExecutionError(error.to_string())
     }
 }
 
@@ -391,6 +400,12 @@ impl std::convert::From<SubscriberError> for SuiError {
 impl From<tonic::Status> for SuiError {
     fn from(status: tonic::Status) -> Self {
         Self::RpcError(status.message().to_owned())
+    }
+}
+
+impl From<ExecutionErrorKind> for SuiError {
+    fn from(kind: ExecutionErrorKind) -> Self {
+        ExecutionError::from_kind(kind).into()
     }
 }
 
@@ -415,5 +430,119 @@ impl ExecutionStateError for SuiError {
 
     fn to_string(&self) -> String {
         ToString::to_string(&self)
+    }
+}
+
+type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+#[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Serialize, Deserialize)]
+pub enum ExecutionErrorKind {
+    InsufficientGas,
+
+    // Naitive Transfer errors
+    TransferUnowned,
+    TransferNonCoin,
+    TransferInsufficientBalance,
+
+    InvalidTransactionUpdate,
+
+    ObjectNotFound,
+    /// An object that's owned by another object cannot be deleted or wrapped. It must be
+    /// transferred to an account address first before deletion
+    DeleteObjectOwnedObject,
+    /// #[error("Function resolution failure: {error:?}.")]
+    FunctionNotFound,
+    /// #[error("Module not found in package: {module_name:?}.")]
+    ModuleNotFound,
+    /// #[error("Function signature is invalid: {error:?}.")]
+    InvalidFunctionSignature,
+    /// #[error("Function visibility is invalid for an entry point to execution: {error:?}.")]
+    InvalidFunctionVisibility,
+    InvalidNonEntryFunction,
+    ExecutionInvariantViolation,
+    /// #[error("Type error while binding function arguments: {error:?}.")]
+    TypeError,
+    /// Circular object ownership detected
+    CircularObjectOwnership,
+    MissingObjectOwner,
+    InvalidSharedChildUse,
+
+    ModulePublishFailure,
+    ModuleVerificationFailure,
+
+    // Move Error
+    VmError,
+}
+
+impl std::fmt::Display for ExecutionErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExecutionErrorKind: {:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionErrorKind {}
+
+#[derive(Debug)]
+pub struct ExecutionError {
+    inner: Box<ExecutionErrorInner>,
+}
+
+#[derive(Debug)]
+struct ExecutionErrorInner {
+    kind: ExecutionErrorKind,
+    source: Option<BoxError>,
+}
+
+impl ExecutionError {
+    pub fn new(kind: ExecutionErrorKind, source: Option<BoxError>) -> Self {
+        Self {
+            inner: Box::new(ExecutionErrorInner { kind, source }),
+        }
+    }
+
+    pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
+        Self::new(kind, Some(source.into()))
+    }
+
+    pub fn from_kind(kind: ExecutionErrorKind) -> Self {
+        Self::new(kind, None)
+    }
+
+    pub fn kind(&self) -> &ExecutionErrorKind {
+        &self.inner.kind
+    }
+
+    pub fn to_execution_status(&self) -> ExecutionStatus {
+        todo!()
+    }
+}
+
+impl std::fmt::Display for ExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExecutionError: {:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source.as_ref().map(|e| &**e as _)
+    }
+}
+
+impl From<ExecutionErrorKind> for ExecutionError {
+    fn from(kind: ExecutionErrorKind) -> Self {
+        Self::from_kind(kind)
+    }
+}
+
+impl From<VMError> for ExecutionError {
+    fn from(error: VMError) -> Self {
+        Self::new_with_source(ExecutionErrorKind::VmError, error)
+    }
+}
+
+impl From<PartialVMError> for ExecutionError {
+    fn from(error: PartialVMError) -> Self {
+        Self::new_with_source(ExecutionErrorKind::VmError, error)
     }
 }

@@ -419,10 +419,10 @@ async fn test_transfer_package() {
         package_object_ref,
         gas_object.compute_object_reference(),
     );
-    let result = authority_state
+    authority_state
         .handle_transaction(transfer_transaction.clone())
-        .await;
-    assert_eq!(result.unwrap_err(), SuiError::TransferUnownedError);
+        .await
+        .unwrap_err();
 }
 
 // This test attempts to use an immutable gas object to pay for gas.
@@ -1431,7 +1431,7 @@ async fn test_transfer_sui_no_amount() {
     )
     .unwrap();
     assert_eq!(
-        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage(),
+        new_balance as i64 + effects.gas_cost_summary().net_gas_usage(),
         init_balance as i64
     );
 }
@@ -1484,7 +1484,7 @@ async fn test_transfer_sui_with_amount() {
     )
     .unwrap();
     assert_eq!(
-        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage() + 500,
+        new_balance as i64 + effects.gas_cost_summary().net_gas_usage() + 500,
         init_balance as i64
     );
 }

@@ -18,6 +18,7 @@ use serde_with::Bytes;
 
 use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
+use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
 use crate::move_package::MovePackage;
 use crate::{
@@ -419,7 +420,10 @@ impl Object {
 
     /// Change the owner of `self` to `new_owner`. This function does not increase the version
     /// number of the object.
-    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) -> SuiResult {
+    pub fn transfer_without_version_change(
+        &mut self,
+        new_owner: SuiAddress,
+    ) -> Result<(), ExecutionError> {
         self.is_transfer_eligible()?;
         self.owner = Owner::AddressOwner(new_owner);
         Ok(())
@@ -427,7 +431,10 @@ impl Object {
 
     /// Change the owner of `self` to `new_owner`. This function will increment the version
     /// number of the object after transfer.
-    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) -> SuiResult {
+    pub fn transfer_and_increment_version(
+        &mut self,
+        new_owner: SuiAddress,
+    ) -> Result<(), ExecutionError> {
         self.transfer_without_version_change(new_owner)?;
         let data = self.data.try_as_move_mut().unwrap();
         data.increment_version();
@@ -518,13 +525,20 @@ impl Object {
         Ok(type_tag)
     }
 
-    pub fn is_transfer_eligible(&self) -> SuiResult {
-        fp_ensure!(self.is_owned(), SuiError::TransferUnownedError);
+    pub fn is_transfer_eligible(&self) -> Result<(), ExecutionError> {
+        if !self.is_owned() {
+            return Err(ExecutionErrorKind::TransferUnowned.into());
+        }
+
         let is_coin = match &self.data {
             Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
             Data::Package(_) => false,
         };
-        fp_ensure!(is_coin, SuiError::TransferNonCoinError);
+
+        if !is_coin {
+            return Err(ExecutionErrorKind::TransferNonCoin.into());
+        }
+
         Ok(())
     }
 }

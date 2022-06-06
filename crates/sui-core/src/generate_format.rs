@@ -14,7 +14,7 @@ use sui_types::{
     base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
     batch::UpdateItem,
     crypto::{get_key_pair, AuthoritySignature, Signature},
-    error::SuiError,
+    error::ExecutionErrorKind,
     messages::{
         CallArg, ExecutionStatus, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
     },
@@ -58,7 +58,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &teff)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<SuiError>(&samples)?;
+    // tracer.trace_type::<SuiError>(&samples)?;
+    tracer.trace_type::<ExecutionErrorKind>(&samples)?;
     tracer.trace_type::<Owner>(&samples)?;
     tracer.trace_type::<ExecutionStatus>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;

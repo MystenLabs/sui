@@ -7,13 +7,13 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     file_format::{CompiledModule, SignatureToken},
 };
-use sui_types::{error::SuiResult, fp_ensure, SUI_FRAMEWORK_ADDRESS};
+use sui_types::{error::ExecutionError, fp_ensure, SUI_FRAMEWORK_ADDRESS};
 
-pub fn verify_module(module: &CompiledModule) -> SuiResult {
+pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     verify_key_structs(module)
 }
 
-fn verify_key_structs(module: &CompiledModule) -> SuiResult {
+fn verify_key_structs(module: &CompiledModule) -> Result<(), ExecutionError> {
     let view = BinaryIndexedView::Module(module);
     let struct_defs = &module.struct_defs;
     for def in struct_defs {
@@ -26,13 +26,12 @@ fn verify_key_structs(module: &CompiledModule) -> SuiResult {
         // A struct with key ability represents a sui object.
         // We want to ensure that sui objects cannot be arbitrarily dropped.
         // For example, *x = new_object shouldn't work for a key object x.
-        fp_ensure!(
-            !handle.abilities.has_drop(),
-            verification_failure(format!(
+        if handle.abilities.has_drop() {
+            return Err(verification_failure(format!(
                 "Struct {} cannot have both key and drop abilities",
                 name
-            ))
-        );
+            )));
+        }
 
         // Check that the first field of the struct must be named "id".
         let first_field = match def.field(0) {
@@ -45,13 +44,12 @@ fn verify_key_structs(module: &CompiledModule) -> SuiResult {
             }
         };
         let first_field_name = view.identifier_at(first_field.name).as_str();
-        fp_ensure!(
-            first_field_name == "id",
-            verification_failure(format!(
+        if first_field_name != "id" {
+            return Err(verification_failure(format!(
                 "First field of struct {} must be 'id', {} found",
                 name, first_field_name
-            ))
-        );
+            )));
+        }
         // Check that the "id" field must have a struct type.
         let id_field_type = &first_field.signature.0;
         let id_field_type = match id_field_type {
@@ -80,8 +78,7 @@ fn verify_key_structs(module: &CompiledModule) -> SuiResult {
                 id_type_module_address,
                 id_type_module_name,
                 id_type_struct_name
-            ))
-        );
+            )));
     }
     Ok(())
 }

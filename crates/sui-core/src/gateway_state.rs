@@ -606,7 +606,7 @@ where
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
     ) -> Result<TransactionResponse, anyhow::Error> {
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(
@@ -704,7 +704,7 @@ where
         };
         let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
 
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         let created = &effects.created;
@@ -757,7 +757,7 @@ where
         };
         let (gas_payment, _, _) = certificate.data.gas();
 
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(

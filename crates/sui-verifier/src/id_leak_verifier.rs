@@ -27,7 +27,7 @@ use move_bytecode_verifier::absint::{
 };
 use std::collections::BTreeMap;
 use sui_types::{
-    error::{SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorKind},
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -47,11 +47,11 @@ impl AbstractValue {
     }
 }
 
-pub fn verify_module(module: &CompiledModule) -> SuiResult {
+pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     verify_id_leak(module)
 }
 
-fn verify_id_leak(module: &CompiledModule) -> SuiResult {
+fn verify_id_leak(module: &CompiledModule) -> Result<(), ExecutionError> {
     let binary_view = BinaryIndexedView::Module(module);
     for (index, func_def) in module.function_defs.iter().enumerate() {
         let code = match func_def.code.as_ref() {
@@ -67,15 +67,13 @@ fn verify_id_leak(module: &CompiledModule) -> SuiResult {
         // Report all the join failures
         for (_block_id, BlockInvariant { post, .. }) in inv_map {
             match post {
-                BlockPostcondition::Error(err) => match err {
-                    SuiError::ModuleVerificationFailure { error } => {
-                        return Err(SuiError::ModuleVerificationFailure {
-                            error: format!(
-                                "ID leak detected in function {}: {}",
-                                binary_view.identifier_at(handle.name),
-                                error
-                            ),
-                        });
+                BlockPostcondition::Error(error) => match error.kind() {
+                    ExecutionErrorKind::ModuleVerificationFailure => {
+                        return Err(verification_failure(format!(
+                            "ID leak detected in function {}: {}",
+                            binary_view.identifier_at(handle.name),
+                            error
+                        )));
                     }
                     _ => {
                         panic!("Unexpected error type");
@@ -147,7 +145,7 @@ impl<'a> IDLeakAnalysis<'a> {
 
 impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
     type State = AbstractState;
-    type AnalysisError = SuiError;
+    type AnalysisError = ExecutionError;
 
     fn execute(
         &mut self,
@@ -190,7 +188,10 @@ fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHan
                 == "delete_child_object")
 }
 
-fn call(verifier: &mut IDLeakAnalysis, function_handle: &FunctionHandle) -> SuiResult {
+fn call(
+    verifier: &mut IDLeakAnalysis,
+    function_handle: &FunctionHandle,
+) -> Result<(), ExecutionError> {
     let guaranteed_safe = is_call_safe_to_leak(verifier, function_handle);
     let parameters = verifier
         .binary_view
@@ -253,7 +254,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     _: CodeOffset,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     // TODO: Better dianostics with location
     match bytecode {
         Bytecode::Pop => {

@@ -13,9 +13,9 @@ use move_binary_format::{
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
-    error::{SuiError, SuiResult},
+    error::ExecutionError,
+    error::{ExecutionErrorKind, SuiError},
     event::{Event, TransferType},
-    fp_ensure,
     gas::SuiGasStatus,
     id::VersionedID,
     messages::{CallArg, InputObjectKind},
@@ -67,7 +67,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     args: Vec<CallArg>,
     gas_status: &mut SuiGasStatus,
     ctx: &mut TxContext,
-) -> SuiResult<()> {
+) -> Result<(), ExecutionError> {
     let objects = args
         .iter()
         .filter_map(|arg| match arg {
@@ -126,7 +126,7 @@ fn execute_internal<
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
-) -> SuiResult<()> {
+) -> Result<(), ExecutionError> {
     // object_owner_map maps from object ID to its exclusive object owner.
     // This map will be used for detecting circular ownership among
     // objects, which can only happen to objects exclusively owned
@@ -141,7 +141,13 @@ fn execute_internal<
 
     let mut session = vm.new_session(state_view);
     // script visibility checked manually for entry points
-    let result = session
+    let (
+        SerializedReturnValues {
+            mut mutable_reference_outputs,
+            return_values,
+        },
+        (change_set, events),
+    ) = session
         .execute_function_bypass_visibility(
             module_id,
             function,
@@ -149,70 +155,56 @@ fn execute_internal<
             args,
             gas_status.get_move_gas_status(),
         )
-        .and_then(|ret| Ok((ret, session.finish()?)));
+        .and_then(|ret| Ok((ret, session.finish()?)))?;
 
-    match result {
-        Ok((
-            SerializedReturnValues {
-                mut mutable_reference_outputs,
-                return_values,
-            },
-            (change_set, events),
-        )) => {
-            // Sui Move programs should never touch global state, so ChangeSet should be empty
-            debug_assert!(change_set.accounts().is_empty());
-            // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
-            let num_mut_objects = if has_ctx_arg {
-                mutable_ref_objects.len() + 1
-            } else {
-                mutable_ref_objects.len()
-            };
-            debug_assert!(num_mut_objects == mutable_reference_outputs.len());
+    // Sui Move programs should never touch global state, so ChangeSet should be empty
+    debug_assert!(change_set.accounts().is_empty());
+    // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
+    let num_mut_objects = if has_ctx_arg {
+        mutable_ref_objects.len() + 1
+    } else {
+        mutable_ref_objects.len()
+    };
+    debug_assert!(num_mut_objects == mutable_reference_outputs.len());
 
-            // When this function is used during publishing, it
-            // may be executed several times, with objects being
-            // created in the Move VM in each Move call. In such
-            // case, we need to update TxContext value so that it
-            // reflects what happened each time we call into the
-            // Move VM (e.g. to account for the number of created
-            // objects).
-            if has_ctx_arg {
-                let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
-                let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
-                ctx.update_state(updated_ctx)?;
-            }
-
-            let mutable_refs = mutable_reference_outputs
-                .into_iter()
-                .map(|(local_idx, bytes, _layout)| {
-                    let object_id = mutable_ref_objects.remove(&local_idx).unwrap();
-                    debug_assert!(!by_value_objects.contains(&object_id));
-                    (object_id, bytes)
-                })
-                .collect();
-            // All mutable references should have been marked as updated
-            debug_assert!(mutable_ref_objects.is_empty());
-            let by_value_object_map = object_data
-                .into_iter()
-                .filter(|(id, _obj)| by_value_objects.contains(id))
-                .collect();
-            process_successful_execution(
-                state_view,
-                by_value_object_map,
-                mutable_refs,
-                events,
-                ctx,
-                object_owner_map,
-            )?;
-
-            debug_assert!(return_values.is_empty());
-            Ok(())
-        }
-        // charge for all computations so far
-        Err(error) => Err(SuiError::AbortedExecution {
-            error: error.to_string(),
-        }),
+    // When this function is used during publishing, it
+    // may be executed several times, with objects being
+    // created in the Move VM in each Move call. In such
+    // case, we need to update TxContext value so that it
+    // reflects what happened each time we call into the
+    // Move VM (e.g. to account for the number of created
+    // objects).
+    if has_ctx_arg {
+        let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
+        let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
+        ctx.update_state(updated_ctx)?;
     }
+
+    let mutable_refs = mutable_reference_outputs
+        .into_iter()
+        .map(|(local_idx, bytes, _layout)| {
+            let object_id = mutable_ref_objects.remove(&local_idx).unwrap();
+            debug_assert!(!by_value_objects.contains(&object_id));
+            (object_id, bytes)
+        })
+        .collect();
+    // All mutable references should have been marked as updated
+    debug_assert!(mutable_ref_objects.is_empty());
+    let by_value_object_map = object_data
+        .into_iter()
+        .filter(|(id, _obj)| by_value_objects.contains(id))
+        .collect();
+    process_successful_execution(
+        state_view,
+        by_value_object_map,
+        mutable_refs,
+        events,
+        ctx,
+        object_owner_map,
+    )?;
+
+    debug_assert!(return_values.is_empty());
+    Ok(())
 }
 
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
@@ -221,22 +213,16 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     gas_status.charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
     let mut modules = module_bytes
         .iter()
         .map(|b| CompiledModule::deserialize(b))
-        .collect::<PartialVMResult<Vec<CompiledModule>>>()
-        .map_err(|err| SuiError::ModuleDeserializationFailure {
-            error: err.to_string(),
-        })?;
+        .collect::<PartialVMResult<Vec<CompiledModule>>>()?;
 
-    fp_ensure!(
-        !modules.is_empty(),
-        SuiError::ModulePublishFailure {
-            error: "Publishing empty list of modules".to_string(),
-        }
-    );
+    if modules.is_empty() {
+        return Err(ExecutionErrorKind::ModulePublishFailure.into());
+    }
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
@@ -254,7 +240,7 @@ pub fn store_package_and_init_modules<
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
@@ -283,7 +269,7 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
     module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
     for module_id in module_ids_to_init {
         let args = vec![ctx.to_vec()];
@@ -319,7 +305,7 @@ pub fn verify_and_link<
     package_id: ObjectID,
     natives: NativeFunctionTable,
     gas_status: &mut SuiGasStatus,
-) -> Result<MoveVM, SuiError> {
+) -> Result<MoveVM, ExecutionError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
@@ -335,17 +321,13 @@ pub fn verify_and_link<
             bytes
         })
         .collect();
-    session
-        .publish_module_bundle(
-            new_module_bytes,
-            AccountAddress::from(package_id),
-            // TODO: publish_module_bundle() currently doesn't charge gas.
-            // Do we want to charge there?
-            gas_status.get_move_gas_status(),
-        )
-        .map_err(|e| SuiError::ModulePublishFailure {
-            error: e.to_string(),
-        })?;
+    session.publish_module_bundle(
+        new_module_bytes,
+        AccountAddress::from(package_id),
+        // TODO: publish_module_bundle() currently doesn't charge gas.
+        // Do we want to charge there?
+        gas_status.get_move_gas_status(),
+    )?;
 
     // run the Sui verifier
     for module in modules.iter() {
@@ -364,7 +346,7 @@ pub fn verify_and_link<
 pub fn generate_package_id(
     modules: &mut [CompiledModule],
     ctx: &mut TxContext,
-) -> Result<ObjectID, SuiError> {
+) -> Result<ObjectID, ExecutionError> {
     let mut sub_map = BTreeMap::new();
     let package_id = ctx.fresh_id();
     for module in modules.iter() {
@@ -373,18 +355,20 @@ pub fn generate_package_id(
         if old_address != AccountAddress::ZERO {
             let handle = module.module_handle_at(module.self_module_handle_idx);
             let name = module.identifier_at(handle.name);
-            return Err(SuiError::ModulePublishFailure {
-                error: format!("Publishing module {name} with non-zero address is not allowed"),
-            });
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::ModulePublishFailure,
+                format!("Publishing module {name} with non-zero address is not allowed"),
+            ));
         }
         let new_module_id = ModuleId::new(
             AccountAddress::from(package_id),
             old_module_id.name().to_owned(),
         );
         if sub_map.insert(old_module_id, new_module_id).is_some() {
-            return Err(SuiError::ModulePublishFailure {
-                error: "Publishing two modules with the same ID".to_string(),
-            });
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::ModulePublishFailure,
+                "Publishing two modules with the same ID",
+            ));
         }
     }
 
@@ -414,7 +398,7 @@ fn process_successful_execution<
     events: Vec<MoveEvent>,
     ctx: &TxContext,
     mut object_owner_map: BTreeMap<SuiAddress, SuiAddress>,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     for (obj_id, new_contents) in mutable_refs {
         // update contents and increment sequence number
         let mut obj = state_view
@@ -479,7 +463,7 @@ fn process_successful_execution<
                             // the child object to an account address, or call through transfer::delete_child_object(),
                             // which would consume both the child object and the ChildRef ownership reference,
                             // and emit the DeleteChildObject event. These child objects can be safely deleted.
-                            return Err(SuiError::DeleteObjectOwnedObject);
+                            return Err(ExecutionErrorKind::DeleteObjectOwnedObject.into());
                         }
                         Some(_) => {
                             state_view.log_event(Event::DeleteObject(*obj_id));
@@ -548,7 +532,7 @@ fn handle_transfer<
     state_view: &mut S,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     match type_ {
         TypeTag::Struct(s_type) => {
             let mut move_obj = MoveObject::new(s_type, contents);
@@ -620,7 +604,7 @@ fn handle_transfer<
                     parent = *object_owner_map.get(&parent).unwrap();
                 }
                 if parent == obj_address {
-                    return Err(SuiError::CircularObjectOwnership);
+                    return Err(ExecutionErrorKind::CircularObjectOwnership.into());
                 }
                 object_owner_map.insert(obj_address, new_owner);
             }
@@ -666,7 +650,7 @@ pub fn resolve_and_type_check(
     type_args: &[TypeTag],
     args: Vec<CallArg>,
     is_genesis: bool,
-) -> Result<TypeCheckSuccess, SuiError> {
+) -> Result<TypeCheckSuccess, ExecutionError> {
     // Resolve the function we are calling
     let view = &BinaryIndexedView::Module(module);
     let function_str = function.as_ident_str();
@@ -677,12 +661,13 @@ pub fn resolve_and_type_check(
     let fdef = match fdef_opt {
         Some(fdef) => fdef,
         None => {
-            return Err(SuiError::FunctionNotFound {
-                error: format!(
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::FunctionNotFound,
+                format!(
                     "Could not resolve function '{}' in module {}",
                     function, &module_id,
                 ),
-            })
+            ));
         }
     };
     // Check for entry modifier, but ignore for genesis.
@@ -691,21 +676,23 @@ pub fn resolve_and_type_check(
     // In other words, this is an implementation detail that we are using `execute` for genesis
     // functions, and as such need to bypass this check.
     if !fdef.is_entry && !is_genesis {
-        return Err(SuiError::InvalidNonEntryFunction {
-            error: "Can only call `entry` functions".to_string(),
-        });
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::InvalidNonEntryFunction,
+            "Can only call `entry` functions",
+        ));
     }
     let fhandle = module.function_handle_at(fdef.function);
 
     // check arity of type and value arguments
     if fhandle.type_parameters.len() != type_args.len() {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: format!(
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::InvalidFunctionSignature,
+            format!(
                 "Expected {:?} type arguments, but found {:?}",
                 fhandle.type_parameters.len(),
                 type_args.len()
             ),
-        });
+        ));
     }
 
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
@@ -720,14 +707,15 @@ pub fn resolve_and_type_check(
         args.len()
     };
     if parameters.len() != num_args {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: format!(
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::InvalidFunctionSignature,
+            format!(
                 "Expected {:?} arguments calling function '{}', but found {:?}",
                 parameters.len(),
                 function,
                 num_args
             ),
-        });
+        ));
     }
 
     // type check object arguments passed in by value and by reference
@@ -746,13 +734,15 @@ pub fn resolve_and_type_check(
             let object_kind = match arg {
                 CallArg::Pure(arg) => {
                     if !is_primitive(view, type_args, param_type) {
-                        return Err(SuiError::TypeError {
-                            error: format!(
-                                "Non-primitive argument at index {}. If it is an object, it must \
-                                be populated by an object ID",
-                                idx
-                            ),
-                        });
+                        return Err(
+                            ExecutionError::new_with_source(
+                                ExecutionErrorKind::TypeError,
+                                format!(
+                                    "Non-primitive argument at index {}. If it is an object, it must be populated by an object ID",
+                                    idx,
+                                ),
+                            )
+                        );
                     }
                     return Ok(arg);
                 }
@@ -769,7 +759,7 @@ pub fn resolve_and_type_check(
                         "Object map not populated for arg {} with id {}",
                         idx, id
                     );
-                    return Err(SuiError::ExecutionInvariantViolation);
+                    return Err(ExecutionErrorKind::ExecutionInvariantViolation.into());
                 }
             };
             match object_kind {
@@ -779,7 +769,10 @@ pub fn resolve_and_type_check(
                         but an immutable or owned object was expected",
                         idx, id
                     );
-                    return Err(SuiError::TypeError { error });
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::TypeError,
+                        error,
+                    ));
                 }
                 InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
                     let error = format!(
@@ -787,7 +780,10 @@ pub fn resolve_and_type_check(
                         but an shared object was expected",
                         idx, id
                     );
-                    return Err(SuiError::TypeError { error });
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::TypeError,
+                        error,
+                    ));
                 }
                 _ => (),
             }
@@ -800,7 +796,10 @@ pub fn resolve_and_type_check(
                         "Found module argument, but function expects {:?}",
                         param_type
                     );
-                    return Err(SuiError::TypeError { error });
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::TypeError,
+                        error,
+                    ));
                 }
             };
             let object_arg = move_object.contents().to_vec();
@@ -813,7 +812,10 @@ pub fn resolve_and_type_check(
                             "Argument {} is expected to be mutable, immutable object found",
                             idx
                         );
-                        return Err(SuiError::TypeError { error });
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::TypeError,
+                            error,
+                        ));
                     }
                     mutable_ref_objects.insert(idx as LocalIndex, id);
                     &**inner_t
@@ -824,31 +826,32 @@ pub fn resolve_and_type_check(
                     if !object.is_owned() {
                         // Forbid passing shared (both mutable and immutable) object by value.
                         // This ensures that shared object cannot be transferred, deleted or wrapped.
-                        return Err(SuiError::TypeError {
-                            error: format!(
-                                "Only owned object can be passed by-value, violation found \
-                                        in argument {}",
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::TypeError,
+                            format!(
+                                "Only owned object can be passed by-value, violation found in argument {}",
                                 idx
                             ),
-                        });
+                        ));
                     }
                     by_value_objects.insert(id);
                     t
                 }
                 t => {
-                    return Err(SuiError::TypeError {
-                        error: format!(
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::TypeError,
+                        format!(
                             "Found object argument {}, but function expects {:?}",
                             move_object.type_, t
                         ),
-                    })
+                    ));
                 }
             };
             type_check_struct(view, type_args, &move_object.type_, inner_param_type)?;
             object_type_map.insert(id, move_object.type_.module_id());
             Ok(object_arg)
         })
-        .collect::<SuiResult<Vec<_>>>()?;
+        .collect::<Result<Vec<_>, _>>()?;
 
     check_child_object_of_shared_object(objects, &object_type_map, module.self_id())?;
 
@@ -869,7 +872,7 @@ fn check_child_object_of_shared_object(
     objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
     object_type_map: &BTreeMap<ObjectID, ModuleId>,
     current_module: ModuleId,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     let object_owner_map = objects
         .iter()
         .map(|(id, obj)| (*id, obj.borrow().owner))
@@ -885,16 +888,19 @@ fn check_child_object_of_shared_object(
             // unwrap safe because the object ID exists in object_owner_map.
             let child_module = object_type_map.get(&object_id).unwrap();
             let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
-            fp_ensure!(
-                child_module == &current_module || ancestor_module == &current_module,
-                SuiError::InvalidSharedChildUse {
-                    child: object_id,
-                    child_module: current_module.to_string(),
-                    ancestor: ancestor_id,
-                    ancestor_module: ancestor_module.to_string(),
-                    current_module: current_module.to_string(),
-                }
-            );
+            if !(child_module == &current_module || ancestor_module == &current_module) {
+                return Err(ExecutionError::new_with_source(ExecutionErrorKind::InvalidSharedChildUse,
+                    format!(
+        "When an (either direct or indirect) child object of a shared object is passed as a Move argument,\
+        either the child object's type or the shared object's type must be defined in the same module \
+        as the called function. This is violated by object {child} (defined in module '{child_module}'), \
+        whose ancestor {ancestor} is a shared object (defined in module '{ancestor_module}'), \
+        and neither are defined in this module '{current_module}'",
+                    child = object_id,
+                    child_module = current_module,
+                    ancestor = ancestor_id,
+                    )));
+            }
         }
     }
     Ok(())
@@ -967,15 +973,16 @@ fn type_check_struct(
     function_type_arguments: &[TypeTag],
     arg_type: &StructTag,
     param_type: &SignatureToken,
-) -> Result<(), SuiError> {
+) -> Result<(), ExecutionError> {
     if !struct_tag_equals_sig_token(view, function_type_arguments, arg_type, param_type) {
-        Err(SuiError::TypeError {
-            error: format!(
+        Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::TypeError,
+            format!(
                 "Expected argument of type {}, but found type {}",
                 sui_verifier::format_signature_token(view, param_type),
                 arg_type
             ),
-        })
+        ))
     } else {
         Ok(())
     }
