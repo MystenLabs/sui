@@ -13,7 +13,7 @@ use crate::{
     transaction_input_checker,
 };
 use anyhow::anyhow;
-use arc_swap::{ArcSwap, ArcSwapOption};
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
@@ -232,7 +232,6 @@ pub struct AuthorityState {
     /// A global lock to halt all transaction/cert processing.
     #[allow(dead_code)]
     pub(crate) halted: AtomicBool,
-    pub(crate) change_epoch_tx: ArcSwapOption<SignedTransaction>,
 
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
@@ -281,12 +280,6 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        // Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.data.kind.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
-
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
         if self.database.transaction_exists(&transaction_digest)? {
@@ -294,6 +287,12 @@ impl AuthorityState {
             let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
+
+        // Validators should never sign an external system transaction.
+        fp_ensure!(
+            !transaction.data.kind.is_system_tx(),
+            SuiError::InvalidSystemTransaction
+        );
 
         if self.halted.load(Ordering::SeqCst) {
             // TODO: Do we want to include the new validator set?
@@ -371,7 +370,13 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.halted.load(Ordering::SeqCst) {
+        if self.halted.load(Ordering::SeqCst)
+            && !confirmation_transaction
+                .certificate
+                .data
+                .kind
+                .is_system_tx()
+        {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
@@ -825,7 +830,6 @@ impl AuthorityState {
             secret,
             committee: ArcSwap::from(Arc::new(current_epoch_info.committee)),
             halted: AtomicBool::new(current_epoch_info.validator_halted),
-            change_epoch_tx: ArcSwapOption::empty(),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
@@ -903,7 +907,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub(crate) fn begin_new_epoch(&self) -> SuiResult {
+    pub(crate) fn unhalt_validator(&self) -> SuiResult {
         let epoch_info = self.database.get_last_epoch_info()?;
         assert_eq!(
             &epoch_info.committee,
@@ -1145,7 +1149,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.halted.load(Ordering::SeqCst) {
+        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);

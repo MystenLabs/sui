@@ -608,14 +608,14 @@ impl SignedTransaction {
     }
 
     pub fn new_change_epoch(
-        cur_epoch: EpochId,
+        next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
-            epoch: cur_epoch + 1,
+            epoch: next_epoch,
             storage_charge,
             computation_charge,
         }));
@@ -633,7 +633,7 @@ impl SignedTransaction {
             data,
             tx_signature: Signature::new_empty(),
             auth_sign_info: AuthoritySignInfo {
-                epoch: cur_epoch,
+                epoch: next_epoch,
                 authority,
                 signature,
             },
