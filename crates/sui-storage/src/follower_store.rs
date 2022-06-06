@@ -12,14 +12,16 @@ use typed_store::{reopen, traits::Map};
 
 use crate::default_db_options;
 
+use tracing::debug;
+
 /// FollowerStore tracks the next tx sequence numbers that we should expect after the previous
 /// batch.
-struct FollowerStore {
+pub struct FollowerStore {
     next_sequence: DBMap<AuthorityName, TxSequenceNumber>,
 }
 
 impl FollowerStore {
-    fn open<P: AsRef<Path>>(path: P) -> Result<Self, SuiError> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, SuiError> {
         let (options, _) = default_db_options(None);
 
         let db = {
@@ -40,6 +42,7 @@ impl FollowerStore {
     }
 
     pub fn record_next_sequence(&self, name: &AuthorityName, seq: TxSequenceNumber) -> SuiResult {
+        debug!(peer = ?name, ?seq, "record_next_sequence");
         self.next_sequence
             .insert(name, &seq)
             .map_err(SuiError::StorageError)
