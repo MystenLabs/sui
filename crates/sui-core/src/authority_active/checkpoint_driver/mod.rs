@@ -9,7 +9,7 @@ use std::{
 
 use parking_lot::Mutex;
 use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
+    base_types::{AuthorityName, ExecutionDigests, TransactionDigest},
     error::SuiError,
     messages::{CertifiedTransaction, ConfirmationTransaction, TransactionInfoRequest},
     messages_checkpoint::{
@@ -685,17 +685,17 @@ pub async fn augment_fragment_with_diff_transactions<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let mut diff_certs: BTreeMap<TransactionDigest, CertifiedTransaction> = BTreeMap::new();
+    let mut diff_certs: BTreeMap<ExecutionDigests, CertifiedTransaction> = BTreeMap::new();
 
     // These are the trasnactions that we have that the other validator does not
     // have, so we can read them from our local database.
     for tx_digest in &fragment.diff.second.items {
         let cert = active_authority
             .state
-            .read_certificate(tx_digest)
+            .read_certificate(&tx_digest.transaction)
             .await?
             .ok_or(SuiError::CertificateNotfound {
-                certificate_digest: *tx_digest,
+                certificate_digest: tx_digest.transaction,
             })?;
         diff_certs.insert(*tx_digest, cert);
     }
@@ -707,12 +707,12 @@ where
         .clone_client(&fragment.other.0.authority);
     for tx_digest in &fragment.diff.first.items {
         let response = client
-            .handle_transaction_info_request(TransactionInfoRequest::from(*tx_digest))
+            .handle_transaction_info_request(TransactionInfoRequest::from(tx_digest.transaction))
             .await?;
         let cert = response
             .certified_transaction
             .ok_or(SuiError::CertificateNotfound {
-                certificate_digest: *tx_digest,
+                certificate_digest: tx_digest.transaction,
             })?;
         diff_certs.insert(*tx_digest, cert);
     }
@@ -772,7 +772,11 @@ where
 
     for digest in &unprocessed_digests {
         // If we have processed this continue with the next cert, nothing to do
-        if active_authority.state.database.effects_exists(digest)? {
+        if active_authority
+            .state
+            .database
+            .effects_exists(&digest.transaction)?
+        {
             continue;
         }
 
@@ -781,7 +785,7 @@ where
         if let Err(err) = sync_digest(
             active_authority.state.name,
             active_authority.net.clone(),
-            *digest,
+            digest.transaction,
             per_other_authority_delay,
         )
         .await

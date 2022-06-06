@@ -238,7 +238,7 @@ where
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
-                            if !self.state.database.effects_exists(&digest)? {
+                            if !self.state.database.effects_exists(&digest.transaction)? {
                                 queue.push(async move {
                                     tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
                                     digest
@@ -267,9 +267,9 @@ where
                 },
                 digest = &mut queue.next() , if !queue.is_empty() => {
                     let digest = digest.unwrap();
-                    if !self.state.database.effects_exists(&digest)? {
+                    if !self.state.database.effects_exists(&digest.transaction)? {
                         // Download the certificate
-                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
+                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest.transaction)).await?;
                         self.process_response(response).await?;
                     }
                 }

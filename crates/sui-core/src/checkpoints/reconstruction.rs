@@ -3,9 +3,10 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
+use sui_types::base_types::ExecutionDigests;
 use sui_types::committee::StakeUnit;
 use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
+    base_types::AuthorityName,
     committee::Committee,
     error::SuiError,
     messages::CertifiedTransaction,
@@ -15,8 +16,8 @@ use sui_types::{
 
 pub struct FragmentReconstruction {
     pub committee: Committee,
-    pub global: GlobalCheckpoint<AuthorityName, TransactionDigest>,
-    pub extra_transactions: BTreeMap<TransactionDigest, CertifiedTransaction>,
+    pub global: GlobalCheckpoint<AuthorityName, ExecutionDigests>,
+    pub extra_transactions: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
 
 impl FragmentReconstruction {

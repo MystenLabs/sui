@@ -860,7 +860,7 @@ impl AuthorityState {
                 .skip_to(&next_expected_tx)
                 .expect("Seeking batches should never fail at this point")
             {
-                let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = state
+                let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                     .database
                     .executed_sequence
                     .iter()

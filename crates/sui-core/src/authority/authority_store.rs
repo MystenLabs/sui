@@ -100,7 +100,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
 
     // Tables used for authority batch structure
     /// A sequence on all executed certificates and effects.
-    pub executed_sequence: DBMap<TxSequenceNumber, TransactionDigest>,
+    pub executed_sequence: DBMap<TxSequenceNumber, ExecutionDigests>,
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
@@ -252,7 +252,7 @@ impl<
     }
 
     #[cfg(test)]
-    pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &TransactionDigest) {
+    pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &ExecutionDigests) {
         self.executed_sequence.insert(&seq, digest).unwrap();
     }
 
@@ -561,6 +561,7 @@ impl<
         )?;
 
         // Store the signed effects of the transaction
+        let effects_digest = effects.effects.digest();
         write_batch = write_batch.insert_batch(
             &self.effects,
             std::iter::once((transaction_digest, effects)),
@@ -575,7 +576,7 @@ impl<
             write_batch,
             temporary_store,
             *transaction_digest,
-            sequence_number,
+            sequence_number.map(|seq| (seq, effects_digest)),
         )
         .await
     }
@@ -625,6 +626,7 @@ impl<
         )?;
 
         // Store the unsigned effects of the transaction
+        let effects_digest = effects.effects.digest();
         write_batch = write_batch.insert_batch(
             &self.effects,
             std::iter::once((transaction_digest, effects)),
@@ -639,7 +641,7 @@ impl<
             write_batch,
             temporary_store,
             *transaction_digest,
-            Some(sequence_number),
+            Some((sequence_number, effects_digest)),
         )
         .await
     }
@@ -650,7 +652,7 @@ impl<
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
-        seq_opt: Option<TxSequenceNumber>,
+        seq_opt: Option<(TxSequenceNumber, TransactionEffectsDigest)>,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
@@ -771,7 +773,7 @@ impl<
                 }
             }
 
-            if let Some(next_seq) = seq_opt {
+            if let Some((next_seq, effects_digest)) = seq_opt {
                 // Now we are sure we are going to execute, add to the sequence
                 // number and insert into authority sequence.
                 //
@@ -781,7 +783,10 @@ impl<
                 //       full sequence, and the batching logic needs to deal with this.
                 write_batch = write_batch.insert_batch(
                     &self.executed_sequence,
-                    std::iter::once((next_seq, transaction_digest)),
+                    std::iter::once((
+                        next_seq,
+                        ExecutionDigests::new(transaction_digest, effects_digest),
+                    )),
                 )?;
             }
 
@@ -922,6 +927,7 @@ impl<
             .iter()
             .skip_to(&start)?
             .take_while(|(seq, _tx)| *seq < end)
+            .map(|(seq, exec)| (seq, exec.transaction))
             .collect())
     }
 
@@ -942,7 +948,7 @@ impl<
         &self,
         start: u64,
         end: u64,
-    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
+    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, ExecutionDigests)>), SuiError> {
         /*
         Get all batches that include requested transactions. This includes the signed batch
         prior to the first requested transaction, the batch including the last requested
@@ -1002,7 +1008,7 @@ impl<
         sequence misses items. This will confuse calling logic, so we filter them out and allow
         callers to use the subscription API to catch the latest items in order. */
 
-        let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = self
+        let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = self
             .executed_sequence
             .iter()
             .skip_to(&first_seq)?

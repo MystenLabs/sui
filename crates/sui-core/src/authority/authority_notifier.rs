@@ -77,7 +77,7 @@ impl TransactionNotifier {
     pub fn iter_from(
         self: &Arc<Self>,
         next_seq: u64,
-    ) -> SuiResult<impl futures::Stream<Item = (TxSequenceNumber, TransactionDigest)> + Unpin> {
+    ) -> SuiResult<impl futures::Stream<Item = (TxSequenceNumber, ExecutionDigests)> + Unpin> {
         if self
             .has_stream
             .compare_exchange(
@@ -93,7 +93,7 @@ impl TransactionNotifier {
 
         // The state we inject in the async stream
         let transaction_notifier = self.clone();
-        let temp_buffer: VecDeque<(TxSequenceNumber, TransactionDigest)> = VecDeque::new();
+        let temp_buffer: VecDeque<(TxSequenceNumber, ExecutionDigests)> = VecDeque::new();
         let uniquess_guard = IterUniquenessGuard(transaction_notifier.clone());
         let initial_state = (transaction_notifier, temp_buffer, next_seq, uniquess_guard);
 
@@ -238,17 +238,17 @@ mod tests {
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         let mut iter = notifier.iter_from(0).unwrap();
@@ -276,7 +276,7 @@ mod tests {
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         let x = iter.next().await;
@@ -293,15 +293,15 @@ mod tests {
         let t7 = notifier.ticket().expect("ok");
         let t8 = notifier.ticket().expect("ok");
 
-        store.side_sequence(t6.seq(), &TransactionDigest::random());
+        store.side_sequence(t6.seq(), &ExecutionDigests::random());
         drop(t6);
 
-        store.side_sequence(t5.seq(), &TransactionDigest::random());
+        store.side_sequence(t5.seq(), &ExecutionDigests::random());
         drop(t5);
 
         drop(t7);
 
-        store.side_sequence(t8.seq(), &TransactionDigest::random());
+        store.side_sequence(t8.seq(), &ExecutionDigests::random());
         drop(t8);
 
         assert!(matches!(iter.next().await, Some((5, _))));

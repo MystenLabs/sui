@@ -9,7 +9,6 @@ use thiserror::Error;
 use std::collections::{BTreeMap, BTreeSet};
 
 use curve25519_dalek::ristretto::RistrettoPoint;
-use ed25519_dalek::Sha512;
 
 use crate::committee::StakeUnit;
 use crate::{base_types::AuthorityName, committee::Committee};
@@ -35,6 +34,20 @@ impl WaypointError {
     }
 }
 
+#[allow(clippy::wrong_self_convention)]
+pub trait IntoPoint {
+    fn into_point(&self) -> RistrettoPoint;
+}
+
+impl<T> IntoPoint for &T
+where
+    T: IntoPoint,
+{
+    fn into_point(&self) -> RistrettoPoint {
+        (*self).into_point()
+    }
+}
+
 /*
    A MulHash accumulator: each element is mapped to a
    point on an elliptic curve on which the DL problem is
@@ -53,20 +66,20 @@ impl Accumulator {
     /// Insert one item in the accumulator
     pub fn insert<I>(&mut self, item: &I)
     where
-        I: AsRef<[u8]>,
+        I: IntoPoint,
     {
-        let point = RistrettoPoint::hash_from_bytes::<Sha512>(item.as_ref());
+        let point: RistrettoPoint = item.into_point();
         self.accumulator += point;
     }
 
     // Insert all items from an iterator into the accumulator
-    pub fn insert_all<'a, It>(&'a mut self, items: It)
+    pub fn insert_all<'a, I, It>(&'a mut self, items: It)
     where
-        It: IntoIterator,
-        It::Item: 'a + AsRef<[u8]>,
+        It: 'a + IntoIterator<Item = &'a I>,
+        I: 'a + IntoPoint,
     {
         for i in items {
-            self.insert(&i);
+            self.insert(i);
         }
     }
 }
@@ -106,7 +119,8 @@ where
 
 impl<K, I> WaypointWithItems<K, I>
 where
-    I: AsRef<[u8]> + Ord,
+    K: 'static,
+    I: 'static + Ord,
 {
     pub fn new(key: K) -> WaypointWithItems<K, I> {
         WaypointWithItems {
@@ -115,7 +129,12 @@ where
             items: BTreeSet::new(),
         }
     }
+}
 
+impl<K, I> WaypointWithItems<K, I>
+where
+    I: IntoPoint + Ord,
+{
     /// Insert an element in the accumulator and list of items
     pub fn insert_full(&mut self, item: I) {
         self.waypoint.insert(&item);
@@ -130,7 +149,7 @@ where
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WaypointDiff<K, I>
 where
-    I: AsRef<[u8]> + Ord,
+    I: Ord,
 {
     pub first: WaypointWithItems<K, I>,
     pub second: WaypointWithItems<K, I>,
@@ -138,7 +157,8 @@ where
 
 impl<K, I> WaypointDiff<K, I>
 where
-    I: AsRef<[u8]> + Ord,
+    K: 'static,
+    I: 'static + Ord,
 {
     pub fn new<V1, V2>(
         first_key: K,
@@ -176,7 +196,13 @@ where
             second: self.first,
         }
     }
+}
 
+impl<'a, K, I> WaypointDiff<K, I>
+where
+    I: 'static + Ord + IntoPoint,
+    K: 'static,
+{
     /// Check the internal invariants: ie that adding to both
     /// waypoints the missing elements makes them point to the
     /// accumulated same set.
@@ -207,8 +233,7 @@ where
 
 impl<K, I> Default for GlobalCheckpoint<K, I>
 where
-    K: Eq + Ord + Clone,
-    I: AsRef<[u8]> + Ord + Clone,
+    I: Ord,
 {
     fn default() -> Self {
         Self::new()
@@ -217,8 +242,7 @@ where
 
 impl<K, I> GlobalCheckpoint<K, I>
 where
-    K: Eq + Ord + Clone,
-    I: AsRef<[u8]> + Ord + Clone,
+    I: Ord,
 {
     /// Initializes an empty global checkpoint at a specific
     /// sequence number.
@@ -227,6 +251,121 @@ where
             reference_waypoint: Waypoint::default(),
             authority_waypoints: BTreeMap::new(),
         }
+    }
+}
+
+impl<I> GlobalCheckpoint<AuthorityName, I>
+where
+    I: AsRef<[u8]> + Ord,
+{
+    /// In case keys are authority names we can check if the set of
+    /// authorities represented in this checkpoint represent a quorum
+    pub fn has_quorum(&self, committee: &Committee) -> bool {
+        let authority_weights: StakeUnit = self
+            .authority_waypoints
+            .keys()
+            .map(|name| committee.weight(name))
+            .sum();
+        authority_weights >= committee.quorum_threshold()
+    }
+}
+
+impl<K, I> GlobalCheckpoint<K, I>
+where
+    K: 'static + Eq + Ord + Clone,
+    I: 'static + Ord + Clone + IntoPoint,
+{
+    /// Checks the internal invariants of the checkpoint, namely that
+    /// all the contained waypoints + the associated items lead to the
+    /// reference waypoint.
+    pub fn check(&self) -> bool {
+        let root = self.reference_waypoint.clone();
+        for v in self.authority_waypoints.values() {
+            let mut inner_root = v.waypoint.clone();
+            inner_root.insert_all(v.items.iter());
+
+            if inner_root != root {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Given our proposal, a waypoint us-other, and a global checkpoint
+    /// that either contains us, or the other, what is the actual set of
+    /// items in the checkpoint?
+    pub fn checkpoint_items(
+        &self,
+        diff: &WaypointDiff<K, I>,
+        mut own_proposal: BTreeSet<I>,
+    ) -> Result<BTreeSet<I>, WaypointError> {
+        // Case 1 -- we are in the checkpoint (easy)
+
+        // If the authority is one of the participants in the checkpoint
+        // just add our proposal to the diff with the global waypoint, and
+        // this is the checkpoint.
+        if self.authority_waypoints.contains_key(&diff.first.key) {
+            let mut all_elements = self.authority_waypoints[&diff.first.key].items.clone();
+            all_elements.extend(own_proposal);
+            return Ok(all_elements);
+        }
+
+        // Case 2 -- the other side of our diff is in the checkpoint (harder)
+
+        // If not then we need to compute the difference.
+        if !self.authority_waypoints.contains_key(&diff.second.key) {
+            return Err(WaypointError::generic(
+                "Need the second key at least to link into the checkpoint.".to_string(),
+            ));
+        }
+
+        // Union of items, to catch up with second
+        own_proposal.extend(diff.first.items.clone());
+        // Remove items not in second
+        let mut second_items: BTreeSet<I> = own_proposal
+            .difference(&diff.second.items)
+            .cloned()
+            .collect();
+        // Add items from second to global checkpoint
+        second_items.extend(self.authority_waypoints[&diff.second.key].items.clone());
+
+        Ok(second_items)
+    }
+
+    /// Provides the set of element that need to be added to the first party
+    /// to catch up with the checkpoint.
+    pub fn catch_up_items(&self, diff: WaypointDiff<K, I>) -> Result<BTreeSet<I>, WaypointError> {
+        // If the authority is one of the participants in the checkpoint
+        // just read the different.
+        if self.authority_waypoints.contains_key(&diff.first.key) {
+            return Ok(self.authority_waypoints[&diff.first.key].items.clone());
+        }
+
+        // If not then we need to compute the difference.
+        if !self.authority_waypoints.contains_key(&diff.second.key) {
+            return Err(WaypointError::generic(
+                "Need the second key at least to link into the checkpoint.".to_string(),
+            ));
+        }
+        let item_sum: BTreeSet<_> = diff
+            .first
+            .items
+            .union(&self.authority_waypoints[&diff.second.key].items)
+            .cloned()
+            .collect();
+        let item_sum: BTreeSet<_> = item_sum.difference(&diff.second.items).cloned().collect();
+
+        // The root after we add the extra items should be the same as if we constructed
+        // a checkpoint including the first waypoint.
+        debug_assert!({
+            let mut first_root = diff.first.waypoint.clone();
+            first_root.insert_all(item_sum.iter());
+
+            let mut ck2 = self.clone();
+            ck2.insert(diff.swap()).is_ok() && first_root == ck2.reference_waypoint
+        });
+
+        Ok(item_sum)
     }
 
     /// Inserts a waypoint diff into the checkpoint. If the checkpoint
@@ -305,114 +444,5 @@ where
         }
 
         Ok(())
-    }
-
-    /// Checks the internal invariants of the checkpoint, namely that
-    /// all the contained waypoints + the associated items lead to the
-    /// reference waypoint.
-    pub fn check(&self) -> bool {
-        let root = self.reference_waypoint.clone();
-        for v in self.authority_waypoints.values() {
-            let mut inner_root = v.waypoint.clone();
-            inner_root.insert_all(v.items.iter());
-
-            if inner_root != root {
-                return false;
-            }
-        }
-        true
-    }
-
-    /// Provides the set of element that need to be added to the first party
-    /// to catch up with the checkpoint.
-    pub fn catch_up_items(&self, diff: WaypointDiff<K, I>) -> Result<BTreeSet<I>, WaypointError> {
-        // If the authority is one of the participants in the checkpoint
-        // just read the different.
-        if self.authority_waypoints.contains_key(&diff.first.key) {
-            return Ok(self.authority_waypoints[&diff.first.key].items.clone());
-        }
-
-        // If not then we need to compute the difference.
-        if !self.authority_waypoints.contains_key(&diff.second.key) {
-            return Err(WaypointError::generic(
-                "Need the second key at least to link into the checkpoint.".to_string(),
-            ));
-        }
-        let item_sum: BTreeSet<_> = diff
-            .first
-            .items
-            .union(&self.authority_waypoints[&diff.second.key].items)
-            .cloned()
-            .collect();
-        let item_sum: BTreeSet<_> = item_sum.difference(&diff.second.items).cloned().collect();
-
-        // The root after we add the extra items should be the same as if we constructed
-        // a checkpoint including the first waypoint.
-        debug_assert!({
-            let mut first_root = diff.first.waypoint.clone();
-            first_root.insert_all(item_sum.iter());
-
-            let mut ck2 = self.clone();
-            ck2.insert(diff.swap()).is_ok() && first_root == ck2.reference_waypoint
-        });
-
-        Ok(item_sum)
-    }
-
-    /// Given our proposal, a waypoint us-other, and a global checkpoint
-    /// that either contains us, or the other, what is the actual set of
-    /// items in the checkpoint?
-    pub fn checkpoint_items(
-        &self,
-        diff: &WaypointDiff<K, I>,
-        mut own_proposal: BTreeSet<I>,
-    ) -> Result<BTreeSet<I>, WaypointError> {
-        // Case 1 -- we are in the checkpoint (easy)
-
-        // If the authority is one of the participants in the checkpoint
-        // just add our proposal to the diff with the global waypoint, and
-        // this is the checkpoint.
-        if self.authority_waypoints.contains_key(&diff.first.key) {
-            let mut all_elements = self.authority_waypoints[&diff.first.key].items.clone();
-            all_elements.extend(own_proposal);
-            return Ok(all_elements);
-        }
-
-        // Case 2 -- the other side of our diff is in the checkpoint (harder)
-
-        // If not then we need to compute the difference.
-        if !self.authority_waypoints.contains_key(&diff.second.key) {
-            return Err(WaypointError::generic(
-                "Need the second key at least to link into the checkpoint.".to_string(),
-            ));
-        }
-
-        // Union of items, to catch up with second
-        own_proposal.extend(diff.first.items.clone());
-        // Remove items not in second
-        let mut second_items: BTreeSet<I> = own_proposal
-            .difference(&diff.second.items)
-            .cloned()
-            .collect();
-        // Add items from second to global checkpoint
-        second_items.extend(self.authority_waypoints[&diff.second.key].items.clone());
-
-        Ok(second_items)
-    }
-}
-
-impl<I> GlobalCheckpoint<AuthorityName, I>
-where
-    I: AsRef<[u8]> + Ord,
-{
-    /// In case keys are authority names we can check if the set of
-    /// authorities represented in this checkpoint represent a quorum
-    pub fn has_quorum(&self, committee: &Committee) -> bool {
-        let authority_weights: StakeUnit = self
-            .authority_waypoints
-            .keys()
-            .map(|name| committee.weight(name))
-            .sum();
-        authority_weights >= committee.quorum_threshold()
     }
 }
