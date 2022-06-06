@@ -368,7 +368,7 @@ rustls-pemfile = { version = "1", default-features = false }
 rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
 ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
-schemars = { version = "0.8", features = ["derive", "schemars_derive"] }
+schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 scopeguard = { version = "1", features = ["use_std"] }
 sct = { version = "0.7", default-features = false }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
@@ -916,7 +916,7 @@ rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
 rustyline-derive = { version = "0.6", default-features = false }
 ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
-schemars = { version = "0.8", features = ["derive", "schemars_derive"] }
+schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 schemars_derive = { version = "0.8", default-features = false }
 scopeguard = { version = "1", features = ["use_std"] }
 sct = { version = "0.7", default-features = false }
