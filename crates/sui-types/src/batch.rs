@@ -68,8 +68,8 @@ impl AuthorityBatch {
         previous_batch: &AuthorityBatch,
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<AuthorityBatch, SuiError> {
-        let transaction_vec = transactions.to_vec();
-        if transaction_vec.is_empty() {
+        let len = transactions.len();
+        if len == 0 {
             return Err(SuiError::GenericAuthorityError {
                 error: "Transaction number must be positive.".to_string(),
             });
@@ -81,16 +81,16 @@ impl AuthorityBatch {
         //     });
         // }
 
-        let initial_sequence_number = transaction_vec[0].0 as u64;
-        let next_sequence_number = (transaction_vec[transaction_vec.len() - 1].0 + 1) as u64;
+        let initial_sequence_number = transactions[0].0 as u64;
+        let next_sequence_number = (transactions[len - 1].0 + 1) as u64;
 
-        let transaction_batch = TransactionBatch(transaction_vec);
+        let transaction_batch = TransactionBatch(transactions.to_vec());
         let transactions_digest = sha3_hash(&transaction_batch);
 
         Ok(AuthorityBatch {
             next_sequence_number,
             initial_sequence_number,
-            size: transactions.len() as u64,
+            size: len as u64,
             previous_digest: Some(previous_batch.digest()),
             transactions_digest,
         })

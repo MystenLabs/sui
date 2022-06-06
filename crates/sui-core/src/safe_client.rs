@@ -243,7 +243,7 @@ where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     /// Uses the follower API and augments each digest received with a full transactions info structure.
-    pub async fn handle_transaction_info_request_to_transaction_info(
+    pub async fn handle_batch_stream_request_to_transaction_info(
         &self,
         request: BatchInfoRequest,
     ) -> Result<
