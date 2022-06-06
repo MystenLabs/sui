@@ -1,12 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use rocksdb::Options;
-use sui_storage::default_db_options;
 use sui_types::base_types::ExecutionDigests;
 use test_utils::authority::{spawn_test_authorities, test_authority_configs};
 use tokio::time::sleep;
 use tokio::time::Duration;
-use typed_store::traits::Map;
+use typed_store::Map;
 
 #[tokio::test]
 async fn sequence_fragments() {
