@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 4-15:
-Error: Failed to verify the Move module, reason: "Access to Move global storage is not allowed. Found in function no: [ImmBorrowGlobal(StructDefinitionIndex(0))]".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
 
 task 1 'publish'. lines 17-27:
-Error: Failed to verify the Move module, reason: "Access to Move global storage is not allowed. Found in function no: [ImmBorrowGlobalGeneric(StructDefInstantiationIndex(0))]".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }

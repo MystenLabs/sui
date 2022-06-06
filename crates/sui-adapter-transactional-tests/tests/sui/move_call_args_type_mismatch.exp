@@ -5,7 +5,7 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 14-16:
-Error: Function signature is invalid: "Expected 2 arguments calling function 'create', but found 1".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidFunctionSignature, source: None } }
 
 task 3 'run'. lines 17-17:
-Error: Execution aborted: "VMError with status FAILED_TO_DESERIALIZE_ARGUMENT at location UNDEFINED".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: None } }

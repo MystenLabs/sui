@@ -5,10 +5,10 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 26-26:
-Error: Non-`entry` function used for entry point to execution: "Can only call `entry` functions".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: None } }
 
 task 3 'run'. lines 28-28:
-Error: Non-`entry` function used for entry point to execution: "Can only call `entry` functions".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: None } }
 
 task 4 'run'. lines 30-30:
-Error: Non-`entry` function used for entry point to execution: "Can only call `entry` functions".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: None } }

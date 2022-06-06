@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 6-21:
-Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: _::m::Obj<_::m::NoStore>".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
 
 task 1 'publish'. lines 23-35:
-Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: _::m::Obj<T0>".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }

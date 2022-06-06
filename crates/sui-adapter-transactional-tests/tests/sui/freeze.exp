@@ -11,7 +11,7 @@ task 2 'run'. lines 10-10:
 written: object(104), object(105)
 
 task 3 'run'. lines 12-12:
-Error: Type error while binding function arguments: "Only owned object can be passed by-value, violation found in argument 0".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeError, source: None } }
 
 task 4 'run'. lines 14-14:
-Error: Type error while binding function arguments: "Argument 0 is expected to be mutable, immutable object found".
+Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeError, source: None } }
