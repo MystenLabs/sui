@@ -186,11 +186,18 @@ async fn submit_transaction_to_consensus() {
         replier.send(result).unwrap();
     });
 
-    // Submit the transaction and ensure the submitter reports success to the caller.
+    // Submit the transaction and ensure the submitter reports success to the caller. Note
+    // that consensus may drop some transactions (so we may need to resubmit them).
     tokio::task::yield_now().await;
     let consensus_transaction = ConsensusTransaction::UserTransaction(Box::new(certificate));
     let result = submitter.submit(&consensus_transaction).await;
-    assert!(result.is_ok());
+    loop {
+        match result {
+            Ok(_) => break,
+            Err(SuiError::ConsensusConnectionBroken(..)) => (),
+            Err(e) => panic!("Unexpected error message: {e}"),
+        }
+    }
 
     // Ensure the consensus node got the transaction.
     let bytes = handle.recv().await.unwrap().transaction;
