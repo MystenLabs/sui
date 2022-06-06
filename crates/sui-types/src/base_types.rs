@@ -250,7 +250,7 @@ pub struct ObjectDigest(
 pub struct TransactionEffectsDigest(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; 32],
+    pub [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
 impl TransactionEffectsDigest {
