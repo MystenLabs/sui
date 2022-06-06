@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
+    base_types::{AuthorityName, ExecutionDigests},
     messages_checkpoint::{
         CheckpointContents, CheckpointFragment, CheckpointSequenceNumber, CheckpointSummary,
         SignedCheckpointProposal,
@@ -40,8 +40,8 @@ impl CheckpointProposal {
         self.proposal.0.checkpoint.sequence_number()
     }
 
-    // Iterate over all transactions
-    pub fn transactions(&self) -> impl Iterator<Item = &TransactionDigest> {
+    // Iterate over all transaction/effects
+    pub fn transactions(&self) -> impl Iterator<Item = &ExecutionDigests> {
         self.transactions.transactions.iter()
     }
 

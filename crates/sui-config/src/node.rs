@@ -12,15 +12,16 @@ use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct NodeConfig {
     #[serde(default = "default_key_pair")]
-    pub key_pair: KeyPair,
+    pub key_pair: Arc<KeyPair>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
@@ -35,8 +36,8 @@ pub struct NodeConfig {
     pub genesis: Genesis,
 }
 
-fn default_key_pair() -> KeyPair {
-    sui_types::crypto::get_key_pair().1
+fn default_key_pair() -> Arc<KeyPair> {
+    Arc::new(sui_types::crypto::get_key_pair().1)
 }
 
 fn default_grpc_address() -> Multiaddr {
@@ -199,7 +200,7 @@ enum GenesisLocation {
 #[cfg(test)]
 mod tests {
     use super::Genesis;
-    use crate::genesis;
+    use crate::{genesis, NodeConfig};
 
     #[test]
     fn serialize_genesis_config_from_file() {
@@ -235,5 +236,12 @@ mod tests {
 
         let loaded_genesis = genesis_config.genesis().unwrap();
         assert_eq!(&genesis, loaded_genesis);
+    }
+
+    #[test]
+    fn fullnode_template() {
+        const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
+
+        let _template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
     }
 }

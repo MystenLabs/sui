@@ -58,7 +58,7 @@ pub async fn gossip_process_with_start_seq<A>(
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // A copy of the committee
-    let committee = &active_authority.net.committee;
+    let committee = &active_authority.net.load().committee;
 
     // Number of tasks at most "degree" and no more than committee - 1
     let target_num_tasks: usize = usize::min(committee.voting_rights.len() - 1, degree);
@@ -200,10 +200,10 @@ where
     ) -> PeerGossip<A> {
         PeerGossip {
             peer_name,
-            client: active_authority.net.authority_clients[&peer_name].clone(),
+            client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
             max_seq: start_seq,
-            aggregator: active_authority.net.clone(),
+            aggregator: active_authority.net.load().clone(),
         }
     }
 
@@ -238,7 +238,7 @@ where
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
-                            if !self.state.database.effects_exists(&digest)? {
+                            if !self.state.database.effects_exists(&digest.transaction)? {
                                 queue.push(async move {
                                     tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
                                     digest
@@ -267,17 +267,10 @@ where
                 },
                 digest = &mut queue.next() , if !queue.is_empty() => {
                     let digest = digest.unwrap();
-                    if !self.state.database.effects_exists(&digest)? {
+                    if !self.state.database.effects_exists(&digest.transaction)? {
                         // Download the certificate
-                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
-                        if let Err(err) = self.process_response(response).await {
-                            // Check again whether the failure is due to a concurrent execution.
-                            // TODO: a concurrent execution should not really have returned an
-                            //       error but it seems it does? Check correctness?
-                            if !self.state.database.effects_exists(&digest)?{
-                                return Err(err);
-                            }
-                        }
+                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest.transaction)).await?;
+                        self.process_response(response).await?;
                     }
                 }
             };

@@ -11,7 +11,7 @@ use crate::{
 use futures::StreamExt;
 use std::sync::Arc;
 use sui_types::{
-    base_types::{dbg_addr, dbg_object_id, TransactionDigest},
+    base_types::{dbg_addr, dbg_object_id, ExecutionDigests},
     batch::UpdateItem,
     object::ObjectFormatOptions,
 };
@@ -118,7 +118,7 @@ async fn test_subscription() {
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    let tx_zero = TransactionDigest::new([0; 32]);
+    let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = state.batch_notifier.ticket().expect("all good");
         db.executed_sequence
@@ -313,7 +313,7 @@ async fn test_subscription_safe_client() {
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    let tx_zero = TransactionDigest::new([0; 32]);
+    let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = server.state.batch_notifier.ticket().expect("all good");
         db.executed_sequence

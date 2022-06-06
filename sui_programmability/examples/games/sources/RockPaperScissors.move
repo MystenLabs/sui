@@ -144,7 +144,7 @@ module Games::RockPaperScissors {
 
     /// Add a hashed gesture to the game. Store it as a `hash_one` or `hash_two` depending
     /// on the player number (one or two)
-    public(script) fun add_hash(game: &mut Game, cap: PlayerTurn, _ctx: &mut TxContext) {
+    public(script) fun add_hash(game: &mut Game, cap: PlayerTurn) {
         let PlayerTurn { hash, id, player } = cap;
         let status = status(game);
 
@@ -175,7 +175,7 @@ module Games::RockPaperScissors {
     /// Use submitted [`Secret`]'s salt to find the gesture played by the player and set it
     /// in the [`Game`] object.
     /// TODO: think of ways to
-    public(script) fun match_secret(game: &mut Game, secret: Secret, _ctx: &mut TxContext) {
+    public(script) fun match_secret(game: &mut Game, secret: Secret) {
         let Secret { salt, player, id } = secret;
 
         assert!(player == game.player_one || player == game.player_two, 0);

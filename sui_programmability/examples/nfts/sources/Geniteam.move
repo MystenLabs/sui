@@ -58,7 +58,7 @@ module NFTs::Geniteam {
         applied_farm_cosmetic_1:  Option<ChildRef<FarmCosmetic>>,
     }
 
-    struct Monster has key {
+    struct Monster has key, store {
         id: VersionedID,
         monster_name: String,
         monster_img_index: u64,
@@ -79,13 +79,13 @@ module NFTs::Geniteam {
 
     }
 
-    struct FarmCosmetic has key {
+    struct FarmCosmetic has key, store{
         id: VersionedID,
         cosmetic_type: u8,
         display: String,
     }
 
-    struct MonsterCosmetic has key {
+    struct MonsterCosmetic has key, store {
         id: VersionedID,
         cosmetic_type: u8,
         display: String,
@@ -204,7 +204,6 @@ module NFTs::Geniteam {
         fire_runes_count: u64,
         wind_runes_count: u64,
         earth_runes_count: u64,
-        _ctx: &mut TxContext
     ) {
         player.water_runes_count = water_runes_count;
         player.fire_runes_count = fire_runes_count;
@@ -224,7 +223,6 @@ module NFTs::Geniteam {
         affection_level: u64,
         buddy_level: u8,
         display: vector<u8>,
-        _ctx: &mut TxContext
     ) {
         self.monster_affinity = monster_affinity;
         self.monster_level = monster_level;
@@ -240,7 +238,6 @@ module NFTs::Geniteam {
     /// Update the attributes of the farm
     public fun update_farm_stats(
         _player: &mut Player, farm: &mut Farm, level: u64, current_xp: u64,
-        _ctx: &mut TxContext
     ) {
         farm.current_xp = current_xp;
         farm.level = level;
@@ -249,7 +246,7 @@ module NFTs::Geniteam {
     /// Apply the cosmetic to the Farm from the inventory
     public fun update_farm_cosmetics(
         _player: &mut Player, farm: &mut Farm, _inventory: &mut Bag,
-        farm_cosmetic: FarmCosmetic, cosmetic_slot_id: u64, _ctx: &mut TxContext
+        farm_cosmetic: FarmCosmetic, cosmetic_slot_id: u64
     ) {
         // Only 2 slots allowed
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
@@ -272,7 +269,6 @@ module NFTs::Geniteam {
         _player: &mut Player, _farm: &mut Farm, monster: &mut Monster,
         _inventory: &mut Bag, monster_cosmetic: MonsterCosmetic,
         _pet_monsters: &mut Collection<Monster>, cosmetic_slot_id: u64,
-         _ctx: &mut TxContext
     ) {
         // Only 2 slots allowed
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
@@ -303,7 +299,7 @@ module NFTs::Geniteam {
         let inventory = Bag::new(ctx);
 
         // Transfer ownership of inventory to player.
-        let (id, child_ref) = Transfer::transfer_to_object_id(inventory, id);
+        let (id, child_ref) = Bag::transfer_to_object_id(inventory, id);
 
         let player = Player {
             id,
@@ -331,7 +327,7 @@ module NFTs::Geniteam {
         let pet_monsters = Collection::new<Monster>(ctx);
 
         // Transfer ownership of pet monsters to farm.
-        let (id, child_ref) = Transfer::transfer_to_object_id(pet_monsters, id);
+        let (id, child_ref) = Collection::transfer_to_object_id(pet_monsters, id);
 
 
         let farm = Farm {

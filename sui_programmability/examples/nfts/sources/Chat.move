@@ -77,7 +77,7 @@ module NFTs::Chat {
     }
 
     /// Burn a Chat object.
-    public(script) fun burn(chat: Chat, _ctx: &mut TxContext) {
+    public(script) fun burn(chat: Chat) {
         let Chat { id, app_id: _, text: _, ref_id: _, metadata: _ } = chat;
         ID::delete(id);
     }

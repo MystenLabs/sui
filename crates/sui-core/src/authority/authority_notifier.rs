@@ -77,15 +77,10 @@ impl TransactionNotifier {
     pub fn iter_from(
         self: &Arc<Self>,
         next_seq: u64,
-    ) -> SuiResult<impl futures::Stream<Item = (TxSequenceNumber, TransactionDigest)> + Unpin> {
+    ) -> SuiResult<impl futures::Stream<Item = (TxSequenceNumber, ExecutionDigests)> + Unpin> {
         if self
             .has_stream
-            .compare_exchange(
-                false,
-                true,
-                std::sync::atomic::Ordering::SeqCst,
-                std::sync::atomic::Ordering::SeqCst,
-            )
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
             return Err(SuiError::ConcurrentIteratorError);
@@ -93,28 +88,37 @@ impl TransactionNotifier {
 
         // The state we inject in the async stream
         let transaction_notifier = self.clone();
-        let temp_buffer: VecDeque<(TxSequenceNumber, TransactionDigest)> = VecDeque::new();
-        let uniquess_guard = IterUniquenessGuard(transaction_notifier.clone());
-        let initial_state = (transaction_notifier, temp_buffer, next_seq, uniquess_guard);
+        let temp_buffer: VecDeque<(TxSequenceNumber, ExecutionDigests)> = VecDeque::new();
+        let uniqueness_guard = IterUniquenessGuard(transaction_notifier.clone());
+        let initial_state = (
+            transaction_notifier,
+            temp_buffer,
+            next_seq,
+            uniqueness_guard,
+        );
 
         Ok(Box::pin(futures::stream::unfold(
             initial_state,
             |state| async move {
-                let (transaction_notifier, mut temp_buffer, mut next_seq, uniquess_guard) = state;
+                let (transaction_notifier, mut temp_buffer, mut next_seq, uniqueness_guard) = state;
 
                 loop {
                     // If we have data in the buffer return that first
                     if let Some(item) = temp_buffer.pop_front() {
                         return Some((
                             item,
-                            (transaction_notifier, temp_buffer, next_seq, uniquess_guard),
+                            (
+                                transaction_notifier,
+                                temp_buffer,
+                                next_seq,
+                                uniqueness_guard,
+                            ),
                         ));
                     }
 
-                    // It means we got a notification
-                    let last_safe = transaction_notifier
-                        .low_watermark
-                        .load(std::sync::atomic::Ordering::SeqCst);
+                    // Always stop at low watermark guarantees that transactions are
+                    // always returned in order.
+                    let last_safe = transaction_notifier.low_watermark();
 
                     // Get the stream of updates since the last point we requested ...
                     if let Ok(iter) = transaction_notifier
@@ -139,7 +143,12 @@ impl TransactionNotifier {
                         if let Some(item) = temp_buffer.pop_front() {
                             return Some((
                                 item,
-                                (transaction_notifier, temp_buffer, next_seq, uniquess_guard),
+                                (
+                                    transaction_notifier,
+                                    temp_buffer,
+                                    next_seq,
+                                    uniqueness_guard,
+                                ),
                             ));
                         } else {
                             // If the notifier is closed, then exit
@@ -191,8 +200,8 @@ impl TransactionNotifierTicket {
     }
 }
 
-/// A custom drop that indicates that there may not be a item
-/// associated with this sequence number,
+/// A custom drop to notify authority state's transaction_notifier
+/// that a new certified transaction's has just been executed and committed.
 impl Drop for TransactionNotifierTicket {
     fn drop(&mut self) {
         let mut inner = self.transaction_notifier.inner.lock();
@@ -238,17 +247,17 @@ mod tests {
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         let mut iter = notifier.iter_from(0).unwrap();
@@ -276,7 +285,7 @@ mod tests {
 
         {
             let t0 = &notifier.ticket().expect("ok");
-            store.side_sequence(t0.seq(), &TransactionDigest::random());
+            store.side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         let x = iter.next().await;
@@ -293,15 +302,15 @@ mod tests {
         let t7 = notifier.ticket().expect("ok");
         let t8 = notifier.ticket().expect("ok");
 
-        store.side_sequence(t6.seq(), &TransactionDigest::random());
+        store.side_sequence(t6.seq(), &ExecutionDigests::random());
         drop(t6);
 
-        store.side_sequence(t5.seq(), &TransactionDigest::random());
+        store.side_sequence(t5.seq(), &ExecutionDigests::random());
         drop(t5);
 
         drop(t7);
 
-        store.side_sequence(t8.seq(), &TransactionDigest::random());
+        store.side_sequence(t8.seq(), &ExecutionDigests::random());
         drop(t8);
 
         assert!(matches!(iter.next().await, Some((5, _))));

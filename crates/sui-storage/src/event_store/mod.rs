@@ -62,7 +62,7 @@ pub enum EventValue {
 /// different types of events that happen over that timeline.
 #[async_trait]
 trait EventStore {
-    type EventIt: Iterator<Item = StoredEvent>;
+    type EventIt: IntoIterator<Item = StoredEvent>;
 
     /// Adds events to the EventStore.
     /// Semantics: events are appended, no deduplication is done.
@@ -90,6 +90,7 @@ trait EventStore {
     ) -> Result<Self::EventIt, EventStoreError>;
 
     /// Generic event iteration bounded by time.  Return in ingestion order.
+    /// start_time is inclusive and end_time is exclusive.
     async fn event_iterator(
         &self,
         start_time: u64,
@@ -115,6 +116,9 @@ trait EventStore {
         module: ModuleId,
         limit: usize,
     ) -> Result<Self::EventIt, EventStoreError>;
+
+    /// Number of records in Event Store.  Not meant to be fast, but good for monitoring and testing.
+    async fn total_event_count(&self) -> Result<usize, EventStoreError>;
 }
 
 #[derive(Debug)]

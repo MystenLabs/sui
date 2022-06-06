@@ -279,7 +279,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let arguments = args
             .into_iter()
             .map(|arg| arg.into_call_args(self))
-            .collect();
+            .collect::<anyhow::Result<_>>()?;
         let package_id = ObjectID::from(*module_id.address());
         let package_ref = match self.storage.get_object(&package_id) {
             Some(obj) => obj.compute_object_reference(),

@@ -36,7 +36,7 @@ module Games::RockPaperScissorsTests {
 
             assert!(Game::status(&game) == 0, 0); // STATUS_READY
 
-            Game::add_hash(&mut game, cap, TestScenario::ctx(scenario));
+            Game::add_hash(&mut game, cap);
 
             assert!(Game::status(&game) == 1, 0); // STATUS_HASH_SUBMISSION
 
@@ -54,7 +54,7 @@ module Games::RockPaperScissorsTests {
         {
             let game = TestScenario::take_owned<Game>(scenario);
             let cap = TestScenario::take_owned<PlayerTurn>(scenario);
-            Game::add_hash(&mut game, cap, TestScenario::ctx(scenario));
+            Game::add_hash(&mut game, cap);
 
             assert!(Game::status(&game) == 2, 0); // STATUS_HASHES_SUBMITTED
 
@@ -71,7 +71,7 @@ module Games::RockPaperScissorsTests {
         {
             let game = TestScenario::take_owned<Game>(scenario);
             let secret = TestScenario::take_owned<Secret>(scenario);
-            Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
+            Game::match_secret(&mut game, secret);
 
             assert!(Game::status(&game) == 3, 0); // STATUS_REVEALING
 
@@ -87,7 +87,7 @@ module Games::RockPaperScissorsTests {
         {
             let game = TestScenario::take_owned<Game>(scenario);
             let secret = TestScenario::take_owned<Secret>(scenario);
-            Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
+            Game::match_secret(&mut game, secret);
 
             assert!(Game::status(&game) == 4, 0); // STATUS_REVEALED
 

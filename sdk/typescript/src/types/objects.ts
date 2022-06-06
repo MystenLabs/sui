@@ -157,9 +157,9 @@ export function getObjectFields(
 }
 
 export function getMoveObject(
-  resp: GetObjectDataResponse
+  data: GetObjectDataResponse | SuiObject
 ): SuiMoveObject | undefined {
-  const suiObject = getObjectExistsResponse(resp);
+  const suiObject = 'data' in data ? data : getObjectExistsResponse(data);
   if (suiObject?.data.dataType !== 'moveObject') {
     return undefined;
   }

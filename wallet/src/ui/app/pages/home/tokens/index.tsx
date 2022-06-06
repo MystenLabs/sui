@@ -6,10 +6,10 @@ import { useMemo } from 'react';
 import CoinBalance from '_components/coin-balance';
 import ObjectsLayout from '_components/objects-layout';
 import { useAppSelector } from '_hooks';
-import { accountBalancesSelector } from '_redux/slices/account';
+import { accountAggregateBalancesSelector } from '_redux/slices/account';
 
 function TokensPage() {
-    const balances = useAppSelector(accountBalancesSelector);
+    const balances = useAppSelector(accountAggregateBalancesSelector);
     const coinTypes = useMemo(() => Object.keys(balances), [balances]);
     return (
         <ObjectsLayout

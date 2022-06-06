@@ -16,6 +16,7 @@ use sui_core::gateway_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_gateway::api::SuiRpcModule;
+use sui_gateway::bcs_api::BcsApiImpl;
 use sui_gateway::json_rpc::sui_rpc_doc;
 use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_gateway::rpc_gateway::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
@@ -66,6 +67,7 @@ async fn main() {
     open_rpc.add_module(GatewayReadApiImpl::rpc_doc_module());
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
+    open_rpc.add_module(BcsApiImpl::rpc_doc_module());
 
     match options.action {
         Action::Print => {
@@ -97,10 +99,8 @@ async fn main() {
 
 async fn create_response_sample(
 ) -> Result<(ObjectResponseSample, TransactionResponseSample), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    let working_dir = working_dir.path();
-    let _network = start_test_network(working_dir, None).await?;
-    let config = working_dir.join(SUI_WALLET_CONFIG);
+    let network = start_test_network(None).await?;
+    let config = network.dir().join(SUI_WALLET_CONFIG);
 
     let mut context = WalletContext::new(&config)?;
     let address = context.config.accounts.first().cloned().unwrap();

@@ -36,24 +36,24 @@ module Tutorial::ColorObject {
     // == Functions covered in Chapter 2 ==
 
     /// Copies the values of `from_object` into `into_object`.
-    public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject, _ctx: &mut TxContext) {
+    public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject) {
         into_object.red = from_object.red;
         into_object.green = from_object.green;
         into_object.blue = from_object.blue;
     }
 
-    public(script) fun delete(object: ColorObject, _ctx: &mut TxContext) {
+    public(script) fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         ID::delete(id);
     }
 
-    public(script) fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
+    public(script) fun transfer(object: ColorObject, recipient: address) {
         Transfer::transfer(object, recipient)
     }
 
     // == Functions covered in Chapter 3 ==
 
-    public(script) fun freeze_object(object: ColorObject, _ctx: &mut TxContext) {
+    public(script) fun freeze_object(object: ColorObject) {
         Transfer::freeze_object(object)
     }
 
@@ -65,7 +65,6 @@ module Tutorial::ColorObject {
     public(script) fun update(
         object: &mut ColorObject,
         red: u8, green: u8, blue: u8,
-        _ctx: &mut TxContext,
     ) {
         object.red = red;
         object.green = green;
@@ -129,8 +128,7 @@ module Tutorial::ColorObjectTests {
             let (red, green, blue) = ColorObject::get_color(&obj1);
             assert!(red == 255 && green == 255 && blue == 255, 0);
 
-            let ctx = TestScenario::ctx(scenario);
-            ColorObject::copy_into(&obj2, &mut obj1, ctx);
+            ColorObject::copy_into(&obj2, &mut obj1);
             TestScenario::return_owned(scenario, obj1);
             TestScenario::return_owned(scenario, obj2);
         };
@@ -156,8 +154,7 @@ module Tutorial::ColorObjectTests {
         TestScenario::next_tx(scenario, &owner);
         {
             let object = TestScenario::take_owned<ColorObject>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            ColorObject::delete(object, ctx);
+            ColorObject::delete(object);
         };
         // Verify that the object was indeed deleted.
         TestScenario::next_tx(scenario, &owner);
@@ -180,8 +177,7 @@ module Tutorial::ColorObjectTests {
         TestScenario::next_tx(scenario, &owner);
         {
             let object = TestScenario::take_owned<ColorObject>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            ColorObject::transfer(object, recipient, ctx);
+            ColorObject::transfer(object, recipient);
         };
         // Check that owner no longer owns the object.
         TestScenario::next_tx(scenario, &owner);

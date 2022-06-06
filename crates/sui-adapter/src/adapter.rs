@@ -23,7 +23,7 @@ use sui_types::{
     storage::{DeleteKind, Storage},
 };
 use sui_verifier::{
-    entry_points_verifier::{INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
+    entry_points_verifier::{is_tx_context, INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
     verifier,
 };
 
@@ -80,14 +80,16 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     let is_genesis = ctx.digest() == TransactionDigest::genesis();
     let TypeCheckSuccess {
         module_id,
-        args,
+        mut args,
         object_data,
         by_value_objects,
         mutable_ref_objects,
+        has_ctx_arg,
     } = resolve_and_type_check(&objects, &module, function, &type_args, args, is_genesis)?;
 
-    let mut args = args;
-    args.push(ctx.to_vec());
+    if has_ctx_arg {
+        args.push(ctx.to_vec());
+    }
     execute_internal(
         vm,
         state_view,
@@ -95,6 +97,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         function,
         type_args,
         args,
+        has_ctx_arg,
         object_data,
         by_value_objects,
         mutable_ref_objects,
@@ -116,6 +119,7 @@ fn execute_internal<
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
+    has_ctx_arg: bool,
     object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     by_value_objects: BTreeSet<ObjectID>,
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
@@ -157,7 +161,12 @@ fn execute_internal<
             // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
-            debug_assert!(mutable_ref_objects.len() + 1 == mutable_reference_outputs.len());
+            let num_mut_objects = if has_ctx_arg {
+                mutable_ref_objects.len() + 1
+            } else {
+                mutable_ref_objects.len()
+            };
+            debug_assert!(num_mut_objects == mutable_reference_outputs.len());
 
             // When this function is used during publishing, it
             // may be executed several times, with objects being
@@ -166,9 +175,11 @@ fn execute_internal<
             // reflects what happened each time we call into the
             // Move VM (e.g. to account for the number of created
             // objects).
-            let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
-            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
-            ctx.update_state(updated_ctx)?;
+            if has_ctx_arg {
+                let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
+                let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
+                ctx.update_state(updated_ctx)?;
+            }
 
             let mutable_refs = mutable_reference_outputs
                 .into_iter()
@@ -246,17 +257,12 @@ pub fn store_package_and_init_modules<
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
-            let init_fdef = module.function_defs.iter().find(|fdef| {
+            module.function_defs.iter().find(|fdef| {
                 let fhandle = module.function_handle_at(fdef.function).name;
                 let fname = module.identifier_at(fhandle);
                 fname == INIT_FN_NAME
             })?;
-
-            let fhandle = module.function_handle_at(init_fdef.function);
-            let parameters = &module.signature_at(fhandle.parameters).0;
-            debug_assert!(parameters.len() <= 1);
-            let needs_tx_context = !parameters.is_empty();
-            Some((module.self_id(), needs_tx_context))
+            Some(module.self_id())
         })
         .collect();
 
@@ -273,17 +279,14 @@ pub fn store_package_and_init_modules<
 fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     vm: &MoveVM,
-    module_ids_to_init: Vec<(ModuleId, /* needs TxContext */ bool)>,
+    module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> SuiResult {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
-    for (module_id, needs_tx_context) in module_ids_to_init {
-        let args = if needs_tx_context {
-            vec![ctx.to_vec()]
-        } else {
-            vec![]
-        };
+    for module_id in module_ids_to_init {
+        let args = vec![ctx.to_vec()];
+        let has_ctx_arg = true;
 
         execute_internal(
             vm,
@@ -292,6 +295,7 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             &init_ident,
             Vec::new(),
             args,
+            has_ctx_arg,
             BTreeMap::new(),
             BTreeSet::new(),
             BTreeMap::new(),
@@ -646,6 +650,8 @@ pub struct TypeCheckSuccess {
     pub by_value_objects: BTreeSet<ObjectID>,
     pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     pub args: Vec<Vec<u8>>,
+    /// is TxContext included in the arguments?
+    pub has_ctx_arg: bool,
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -661,6 +667,7 @@ pub fn resolve_and_type_check(
     is_genesis: bool,
 ) -> Result<TypeCheckSuccess, SuiError> {
     // Resolve the function we are calling
+    let view = &BinaryIndexedView::Module(module);
     let function_str = function.as_ident_str();
     let module_id = module.self_id();
     let fdef_opt = module.function_defs.iter().find(|fdef| {
@@ -701,8 +708,16 @@ pub fn resolve_and_type_check(
     }
 
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
-    let num_args = args.len() + 1;
     let parameters = &module.signature_at(fhandle.parameters).0;
+    let has_ctx_arg = parameters
+        .last()
+        .map(|t| is_tx_context(view, t))
+        .unwrap_or(false);
+    let num_args = if has_ctx_arg {
+        args.len() + 1
+    } else {
+        args.len()
+    };
     if parameters.len() != num_args {
         return Err(SuiError::InvalidFunctionSignature {
             error: format!(
@@ -722,7 +737,6 @@ pub fn resolve_and_type_check(
     // Track the mapping from each input object to its Move type.
     // This will be needed latter in `check_child_object_of_shared_object`.
     let mut object_type_map = BTreeMap::new();
-    let view = &BinaryIndexedView::Module(module);
     let bcs_args = args
         .into_iter()
         .enumerate()
@@ -843,6 +857,7 @@ pub fn resolve_and_type_check(
         by_value_objects,
         mutable_ref_objects,
         args: bcs_args,
+        has_ctx_arg,
     })
 }
 

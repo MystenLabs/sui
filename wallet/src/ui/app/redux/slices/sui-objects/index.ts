@@ -8,6 +8,8 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { ExampleNFT } from './NFT';
+
 import type { SuiObject } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -41,6 +43,16 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     return allSuiObjects;
 });
 
+export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
+    'mintDemoNFT',
+    async (_, { extra: { api, keypairVault }, dispatch }) => {
+        await ExampleNFT.mintExampleNFT(
+            api.getSignerInstance(keypairVault.getKeyPair())
+        );
+        await dispatch(fetchAllOwnedObjects());
+    }
+);
+
 interface SuiObjectsManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };
@@ -55,9 +67,7 @@ const initialState = objectsAdapter.getInitialState<SuiObjectsManualState>({
 const slice = createSlice({
     name: 'sui-objects',
     initialState: initialState,
-    reducers: {
-        setOwnedObjects: objectsAdapter.setAll,
-    },
+    reducers: {},
     extraReducers: (builder) => {
         builder
             .addCase(fetchAllOwnedObjects.fulfilled, (state, action) => {

@@ -6,6 +6,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import HomePage from './pages/home';
 import NftsPage from './pages/home/nfts';
+import SettingsPage from './pages/home/settings';
 import TokensPage from './pages/home/tokens';
 import InitializePage from './pages/initialize';
 import BackupPage from './pages/initialize/backup';
@@ -39,7 +40,7 @@ const App = () => {
                 />
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
-                <Route path="settings" element={<h1>Settings</h1>} />
+                <Route path="settings" element={<SettingsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route
                     path="tx/:txDigest"
