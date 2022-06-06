@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -93,10 +94,16 @@ pub async fn checkpoint_process<A>(
     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
 
     loop {
-        let committee = &active_authority.net.committee;
+        let net = active_authority.net.load().deref().clone();
+        let committee = &net.committee;
+        if committee != active_authority.state.committee.load().deref().deref() {
+            warn!("Inconsistent committee between authority state and authority active");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            continue;
+        }
         // (1) Get the latest summaries and proposals
         let state_of_world = get_latest_proposal_and_checkpoint_from_all(
-            active_authority.net.clone(),
+            net.clone(),
             timing.extra_time_after_quorum,
             timing.timeout_until_quorum,
         )
@@ -123,7 +130,7 @@ pub async fn checkpoint_process<A>(
                 // TODO log error
                 if let Err(err) = sync_to_checkpoint(
                     active_authority.state.name,
-                    active_authority.net.clone(),
+                    net.clone(),
                     state_checkpoints.clone(),
                     checkpoint.clone(),
                 )
@@ -144,7 +151,7 @@ pub async fn checkpoint_process<A>(
                 state_checkpoints.lock().handle_checkpoint_certificate(
                     &checkpoint,
                     &None,
-                    &active_authority.state.committee.load(),
+                    committee,
                 )
             }; // unlock
 
@@ -156,18 +163,15 @@ pub async fn checkpoint_process<A>(
                 // the full contents of the checkpoint. So we try to download it.
                 // TODO: clean up the errors to get here only when the error is
                 //       "No checkpoint set at this sequence."
-                if let Ok(contents) = get_checkpoint_contents(
-                    active_authority.state.name,
-                    active_authority.net.clone(),
-                    &checkpoint,
-                )
-                .await
+                if let Ok(contents) =
+                    get_checkpoint_contents(active_authority.state.name, net.clone(), &checkpoint)
+                        .await
                 {
                     // Retry with contents
                     let _ = state_checkpoints.lock().handle_checkpoint_certificate(
                         &checkpoint,
                         &Some(contents),
-                        &active_authority.state.committee.load(),
+                        committee,
                     );
                 }
             }
@@ -603,10 +607,10 @@ pub async fn diff_proposals<A>(
             break;
         }
 
-        let random_authority = active_authority.net.committee.sample();
-        if available_authorities.remove(random_authority) {
+        let random_authority = *active_authority.net.load().committee.sample();
+        if available_authorities.remove(&random_authority) {
             // Get a client
-            let client = active_authority.net.authority_clients[random_authority].clone();
+            let client = active_authority.net.load().authority_clients[&random_authority].clone();
 
             if let Ok(response) = client
                 .handle_checkpoint(CheckpointRequest::latest(true))
@@ -704,6 +708,7 @@ where
     // download them from the remote node.
     let client = active_authority
         .net
+        .load()
         .clone_client(&fragment.other.0.authority);
     for tx_digest in &fragment.diff.first.items {
         let response = client
@@ -760,6 +765,7 @@ where
     {
         active_authority
             .net
+            .load()
             .sync_certificate_to_authority_with_timeout(
                 ConfirmationTransaction::new(cert.clone()),
                 active_authority.state.name,
@@ -784,7 +790,7 @@ where
         debug!("Try sync for digest: {digest:?}");
         if let Err(err) = sync_digest(
             active_authority.state.name,
-            active_authority.net.clone(),
+            active_authority.net.load().clone(),
             digest.transaction,
             per_other_authority_delay,
         )
