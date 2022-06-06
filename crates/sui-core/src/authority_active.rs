@@ -35,6 +35,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use sui_storage::follower_store::FollowerStore;
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
 use tracing::error;
@@ -100,6 +101,7 @@ impl AuthorityHealth {
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
+    pub follower_store: Arc<FollowerStore>,
     // The network interfaces to other authorities
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
@@ -109,6 +111,7 @@ pub struct ActiveAuthority<A> {
 impl<A> ActiveAuthority<A> {
     pub fn new(
         authority: Arc<AuthorityState>,
+        follower_store: Arc<FollowerStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
@@ -122,11 +125,22 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
+            follower_store,
             net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
                 committee,
                 authority_clients,
             ))),
         })
+    }
+
+    #[cfg(test)]
+    pub fn new_with_ephemeral_follower_store(
+        authority: Arc<AuthorityState>,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> SuiResult<Self> {
+        let working_dir = tempfile::tempdir().unwrap();
+        let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
+        Self::new(authority, follower_store, authority_clients)
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -179,6 +193,7 @@ impl<A> Clone for ActiveAuthority<A> {
     fn clone(&self) -> Self {
         ActiveAuthority {
             state: self.state.clone(),
+            follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
         }

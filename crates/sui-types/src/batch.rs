@@ -23,7 +23,7 @@ impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
-    // TODO: Add epoch
+    // TODO: Add epoch, and update follower_store.rs to store the epoch of the last seen batch
     /// The next sequence number after the end of this batch
     pub next_sequence_number: u64,
 
