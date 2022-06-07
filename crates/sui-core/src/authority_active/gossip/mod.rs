@@ -307,7 +307,7 @@ where
 
                         // The stream has closed, re-request:
                         None => {
-                            tokio::time::sleep(Duration::from_millis(10)).await;
+                            tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {
                                 start: self.max_seq,
                                 length: REQUEST_FOLLOW_NUM_DIGESTS,
