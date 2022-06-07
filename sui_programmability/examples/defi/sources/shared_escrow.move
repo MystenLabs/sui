@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// An escrow for atomic swap of objects without a trusted third party
-module DeFi::SharedEscrow {
+module defi::shared_escrow {
     use Std::Option::{Self, Option};
 
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {

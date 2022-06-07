@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module DeFi::EscrowTests {
-    use Sui::ID::{Self, VersionedID};
-    use Sui::TestScenario::{Self, Scenario};
-    use Sui::TxContext::{Self};
+module defi::escrow_tests {
+    use sui::ID::{Self, VersionedID};
+    use sui::TestScenario::{Self, Scenario};
+    use sui::TxContext::{Self};
 
-    use DeFi::Escrow::{Self, EscrowedObj};
+    use defi::escrow::{Self, EscrowedObj};
 
     const ALICE_ADDRESS: address = @0xACE;
     const BOB_ADDRESS: address = @0xACEB;
@@ -48,10 +48,10 @@ module DeFi::EscrowTests {
         TestScenario::next_tx(scenario, &THIRD_PARTY_ADDRESS);
         {
             let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
-            Escrow::return_to_sender<ItemA, ItemB>(item_a);
+            escrow::return_to_sender<ItemA, ItemB>(item_a);
 
             let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
-            Escrow::return_to_sender<ItemB, ItemA>(item_b);
+            escrow::return_to_sender<ItemB, ItemA>(item_b);
         };
 
         // Alice now owns item A, and Bob now owns item B
@@ -82,7 +82,7 @@ module DeFi::EscrowTests {
         {
             let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
             let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
-            Escrow::swap(item_a, item_b);
+            escrow::swap(item_a, item_b);
         };
     }
 
@@ -125,7 +125,7 @@ module DeFi::EscrowTests {
             if (override_recipient) {
                 recipient = RANDOM_ADDRESS;
             };
-            Escrow::create<ItemA, ItemB>(
+            escrow::create<ItemA, ItemB>(
                 recipient,
                 THIRD_PARTY_ADDRESS,
                 item_b_id,
@@ -141,7 +141,7 @@ module DeFi::EscrowTests {
             let escrowed = ItemB {
                 id: item_b_versioned_id
             };
-            Escrow::create<ItemB, ItemA>(
+            escrow::create<ItemB, ItemA>(
                 alice,
                 THIRD_PARTY_ADDRESS,
                 item_a_id,
