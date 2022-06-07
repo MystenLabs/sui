@@ -357,19 +357,19 @@ where
             .await?)
     }
 
-    // Get object locally, try get from the network if not found.
+    /// This function now always fetch the latest state of the object from validators.
+    /// We need to do so because it's possible for the state on the gateway to be out-of-dated.
+    /// TODO: Once we move the gateway to the wallet SDK and serve the wallet locally,
+    /// we should be able to speculate that the object state is up-to-date most of the time.
+    /// And when it's out-of-dated in the rare case, we need to be able to understand the error
+    /// returned from validators and update the object locally so that the wallet can retry.
     async fn get_object_internal(&self, object_id: &ObjectID) -> SuiResult<Object> {
-        Ok(if let Some(object) = self.store.get_object(object_id)? {
-            debug!(?object_id, ?object, "Fetched object from local store");
-            object
-        } else {
-            let object = self
-                .download_object_from_authorities(*object_id)
-                .await?
-                .into_object()?;
-            debug!(?object_id, ?object, "Fetched object from validators");
-            object
-        })
+        let object = self
+            .download_object_from_authorities(*object_id)
+            .await?
+            .into_object()?;
+        debug!(?object_id, ?object, "Fetched object from validators");
+        Ok(object)
     }
 
     async fn get_sui_object<T: SuiMoveObject>(
