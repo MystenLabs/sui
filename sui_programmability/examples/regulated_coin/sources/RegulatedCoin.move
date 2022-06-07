@@ -15,12 +15,12 @@ module RC::RegulatedCoin {
     use Sui::ID::VersionedID;
 
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
-    /// with all the other Coins and methods, as well as the `owner` field, which
+    /// with all the other Coins and methods, as well as the `creator` field, which
     /// can be used for additional security/regulation implementations.
     struct RegulatedCoin<phantom T> has key {
         id: VersionedID,
         balance: Balance<T>,
-        owner: address
+        creator: address
     }
 
     /// Get the `RegulatedCoin.balance.value` field;
@@ -28,9 +28,9 @@ module RC::RegulatedCoin {
         Balance::value(&c.balance)
     }
 
-    /// Get the `RegulatedCoin.owner` field;
-    public fun owner<T>(c: &RegulatedCoin<T>): address {
-        c.owner
+    /// Get the `RegulatedCoin.creator` field;
+    public fun creator<T>(c: &RegulatedCoin<T>): address {
+        c.creator
     }
 
     // === Necessary set of Methods (provide security guarantees and balance access) ===
@@ -46,20 +46,20 @@ module RC::RegulatedCoin {
     }
 
     /// Author of the currency can restrict who is allowed to create new balances;
-    public fun zero<T: drop>(_: T, owner: address, ctx: &mut TxContext): RegulatedCoin<T> {
-        RegulatedCoin { id: TxContext::new_id(ctx), balance: Balance::zero(), owner }
+    public fun zero<T: drop>(_: T, creator: address, ctx: &mut TxContext): RegulatedCoin<T> {
+        RegulatedCoin { id: TxContext::new_id(ctx), balance: Balance::zero(), creator }
     }
 
     /// Build a transferable `RegulatedCoin` from a `Balance`;
     public fun from_balance<T: drop>(
-        _: T, balance: Balance<T>, owner: address, ctx: &mut TxContext
+        _: T, balance: Balance<T>, creator: address, ctx: &mut TxContext
     ): RegulatedCoin<T> {
-        RegulatedCoin { id: TxContext::new_id(ctx), balance, owner }
+        RegulatedCoin { id: TxContext::new_id(ctx), balance, creator }
     }
 
     /// Destroy `RegulatedCoin` and return its `Balance`;
     public fun into_balance<T: drop>(_: T, coin: RegulatedCoin<T>): Balance<T> {
-        let RegulatedCoin { balance, owner: _, id } = coin;
+        let RegulatedCoin { balance, creator: _, id } = coin;
         Sui::ID::delete(id);
         balance
     }
@@ -77,10 +77,10 @@ module RC::RegulatedCoin {
     /// behavior of `RegulatedCoin::zero()` when a value is 0. So in case empty balances
     /// should not be allowed, this method should be additionally protected against zero value.
     public fun split<T: drop>(
-        witness: T, c1: &mut RegulatedCoin<T>, owner: address, value: u64, ctx: &mut TxContext
+        witness: T, c1: &mut RegulatedCoin<T>, creator: address, value: u64, ctx: &mut TxContext
     ): RegulatedCoin<T> {
         let balance = Balance::split(&mut c1.balance, value);
-        from_balance(witness, balance, owner, ctx)
+        from_balance(witness, balance, creator, ctx)
     }
 }
 
@@ -181,12 +181,12 @@ module ABC::ABC {
 
     /// Transfer entrypoint - create a restricted `Transfer` instance and transfer it to the
     /// `to` account for being accepted later.
-    /// Fails if sender is not an owner of the `RegulatedCoin` or if any of the parties is in
+    /// Fails if sender is not an creator of the `RegulatedCoin` or if any of the parties is in
     /// the ban list in Registry.
     public(script) fun transfer(r: &Registry, coin: &mut RCoin<ABC>, value: u64, to: address, ctx: &mut TxContext) {
         let sender = TxContext::sender(ctx);
 
-        assert!(RCoin::owner(coin) == sender, ENotOwner);
+        assert!(RCoin::creator(coin) == sender, ENotOwner);
         assert!(Vector::contains(&r.banned, &to) == false, EAddressBanned);
         assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
@@ -200,12 +200,12 @@ module ABC::ABC {
     /// Accept an incoming transfer by joining an incoming balance with an owned one.
     ///
     /// Fails if:
-    /// 1. the `RegulatedCoin<ABC>.owner` does not match `Transfer.to`;
-    /// 2. the address of the owner/recipient is banned;
+    /// 1. the `RegulatedCoin<ABC>.creator` does not match `Transfer.to`;
+    /// 2. the address of the creator/recipient is banned;
     public(script) fun accept_transfer(r: &Registry, coin: &mut RCoin<ABC>, transfer: Transfer, _: &mut TxContext) {
         let Transfer { id, balance, to } = transfer;
 
-        assert!(RCoin::owner(coin) == to, ENotOwner);
+        assert!(RCoin::creator(coin) == to, ENotOwner);
         assert!(Vector::contains(&r.banned, &to) == false, EAddressBanned);
 
         Balance::join(borrow_mut(coin), balance);
@@ -218,12 +218,12 @@ module ABC::ABC {
     /// a `Coin`. Update `Registry` to keep track of the swapped amount.
     ///
     /// Fails if:
-    /// 1. `RegulatedCoin<ABC>.owner` was banned;
+    /// 1. `RegulatedCoin<ABC>.creator` was banned;
     /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
     public(script) fun take(r: &mut Registry, coin: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
         let sender = TxContext::sender(ctx);
 
-        assert!(RCoin::owner(coin) == sender, ENotOwner);
+        assert!(RCoin::creator(coin) == sender, ENotOwner);
         assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         // Update swapped amount for Registry to keep track of non-regulated amounts.
@@ -235,13 +235,13 @@ module ABC::ABC {
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
     ///
     /// Fails if:
-    /// 1. `RegulatedCoin<ABC>.owner` was banned;
+    /// 1. `RegulatedCoin<ABC>.creator` was banned;
     /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
     public(script) fun put_back(r: &mut Registry, rc_coin: &mut RCoin<ABC>, coin: Coin<ABC>, ctx: &mut TxContext) {
         let balance = Coin::into_balance(coin);
         let sender = TxContext::sender(ctx);
 
-        assert!(RCoin::owner(rc_coin) == sender, ENotOwner);
+        assert!(RCoin::creator(rc_coin) == sender, ENotOwner);
         assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         // Update swapped amount as in `swap_regulated`.
@@ -254,11 +254,11 @@ module ABC::ABC {
 
     fun borrow(coin: &RCoin<ABC>): &Balance<ABC> { RCoin::borrow(ABC {}, coin) }
     fun borrow_mut(coin: &mut RCoin<ABC>): &mut Balance<ABC> { RCoin::borrow_mut(ABC {}, coin) }
-    fun zero(owner: address, ctx: &mut TxContext): RCoin<ABC> { RCoin::zero(ABC {}, owner, ctx) }
+    fun zero(creator: address, ctx: &mut TxContext): RCoin<ABC> { RCoin::zero(ABC {}, creator, ctx) }
 
     fun into_balance(coin: RCoin<ABC>): Balance<ABC> { RCoin::into_balance(ABC {}, coin) }
-    fun from_balance(balance: Balance<ABC>, owner: address, ctx: &mut TxContext): RCoin<ABC> {
-        RCoin::from_balance(ABC {}, balance, owner, ctx)
+    fun from_balance(balance: Balance<ABC>, creator: address, ctx: &mut TxContext): RCoin<ABC> {
+        RCoin::from_balance(ABC {}, balance, creator, ctx)
     }
 
     // === Testing utilities ===
@@ -360,7 +360,7 @@ module ABC::Tests {
         next_tx(test, &user1); {
             let coin = TestScenario::take_owned<RCoin<ABC>>(test);
 
-            assert!(RCoin::owner(&coin) == user1, 1);
+            assert!(RCoin::creator(&coin) == user1, 1);
             assert!(RCoin::value(&coin) == 0, 2);
 
             TestScenario::return_owned(test, coin);
