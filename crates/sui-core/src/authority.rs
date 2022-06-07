@@ -80,9 +80,7 @@ mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-pub use authority_store::{
-    AuthorityStore, AuthorityStoreWrapper, GatewayStore, ReplicaStore, SuiDataStore,
-};
+pub use authority_store::{AuthorityStore, AuthorityStoreWrapper, GatewayStore, SuiDataStore};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };

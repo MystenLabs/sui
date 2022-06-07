@@ -22,10 +22,8 @@ use tracing::{debug, error, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
-pub type AuthorityStore = SuiDataStore<false, true, AuthoritySignInfo>;
-#[allow(dead_code)]
-pub type ReplicaStore = SuiDataStore<true, false, EmptySignInfo>;
-pub type GatewayStore = SuiDataStore<false, true, EmptySignInfo>;
+pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
+pub type GatewayStore = SuiDataStore<false, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -36,12 +34,10 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
 /// them, but other entities such as replicas will.
-/// USE_LOCKS determines whether we maintain locks when updating state
-/// this is because replicas for example don't currently require locks`
 /// S is a template on Authority signature state. This allows SuiDataStore to be used on either
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
-pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
+pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -115,11 +111,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     epochs: DBMap<EpochId, EpochInfoLocals>,
 }
 
-impl<
-        const ALL_OBJ_VER: bool,
-        const USE_LOCKS: bool,
-        S: Eq + Serialize + for<'de> Deserialize<'de>,
-    > SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>
+impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
+    SuiDataStore<ALL_OBJ_VER, S>
 {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
@@ -258,10 +251,6 @@ impl<
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
     async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard<'a>> {
-        if !USE_LOCKS {
-            return vec![];
-        }
-
         self.mutex_table
             .acquire_locks(input_objects.iter().map(|(_, _, digest)| digest))
             .await
@@ -762,14 +751,12 @@ impl<
             // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
             // 4. Locks may have existed when we started processing this tx, but could have since
             //    been deleted by a concurrent tx that finished first. In that case, check if the tx effects exist.
-            if USE_LOCKS {
-                if let Err(e) = self.lock_service.locks_exist(owned_inputs.clone()).await {
-                    if self.effects_exists(&transaction_digest)? {
-                        debug!(digest = ?transaction_digest, "locks were deleted due to concurrent processing of tx");
-                        return Ok(());
-                    } else {
-                        return Err(e);
-                    }
+            if let Err(e) = self.lock_service.locks_exist(owned_inputs.clone()).await {
+                if self.effects_exists(&transaction_digest)? {
+                    debug!(digest = ?transaction_digest, "locks were deleted due to concurrent processing of tx");
+                    return Ok(());
+                } else {
+                    return Err(e);
                 }
             }
 
@@ -794,28 +781,26 @@ impl<
             write_batch.write()?;
             trace!("Finished writing batch");
 
-            if USE_LOCKS {
-                // Initialize object locks for new objects.  After this point, transactions on new objects
-                // can run.  So it is critical this is done AFTER objects are done writing.
-                // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
-                let new_locks_to_init: Vec<_> = written
-                    .iter()
-                    .filter_map(|(_, (object_ref, new_object))| {
-                        if new_object.is_owned() {
-                            Some(*object_ref)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                self.lock_service
-                    .initialize_locks(&new_locks_to_init, false /* is_force_reset */)
-                    .await?;
+            // Initialize object locks for new objects.  After this point, transactions on new objects
+            // can run.  So it is critical this is done AFTER objects are done writing.
+            // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
+            let new_locks_to_init: Vec<_> = written
+                .iter()
+                .filter_map(|(_, (object_ref, new_object))| {
+                    if new_object.is_owned() {
+                        Some(*object_ref)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            self.lock_service
+                .initialize_locks(&new_locks_to_init, false /* is_force_reset */)
+                .await?;
 
-                // Remove the old lock - timing of this matters less
-                let locks_to_remove = owned_inputs;
-                self.lock_service.remove_locks(locks_to_remove).await?;
-            }
+            // Remove the old lock - timing of this matters less
+            let locks_to_remove = owned_inputs;
+            self.lock_service.remove_locks(locks_to_remove).await?;
 
             // implicit: drop(_mutexes);
         }
@@ -1075,7 +1060,7 @@ impl<
     }
 }
 
-impl<const A: bool, const B: bool> SuiDataStore<A, B, AuthoritySignInfo> {
+impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1088,14 +1073,14 @@ impl<const A: bool, const B: bool> SuiDataStore<A, B, AuthoritySignInfo> {
     }
 }
 
-impl<const A: bool, const B: bool> SuiDataStore<A, B, EmptySignInfo> {
+impl<const A: bool> SuiDataStore<A, EmptySignInfo> {
     pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
         &self.transactions
     }
 }
 
-impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
-    BackingPackageStore for SuiDataStore<A, B, S>
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
+    for SuiDataStore<A, S>
 {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
@@ -1111,8 +1096,8 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
     }
 }
 
-impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
-    for SuiDataStore<A, B, S>
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
+    for SuiDataStore<A, S>
 {
     type Error = SuiError;
 
@@ -1173,10 +1158,9 @@ impl From<&ObjectRef> for ObjectKey {
 /// Persist the Genesis package to DB along with the side effects for module initialization
 pub async fn store_package_and_init_modules_for_genesis<
     const A: bool,
-    const B: bool,
     S: Eq + Serialize + for<'de> Deserialize<'de>,
 >(
-    store: &Arc<SuiDataStore<A, B, S>>,
+    store: &Arc<SuiDataStore<A, S>>,
     native_functions: &NativeFunctionTable,
     ctx: &mut TxContext,
     modules: Vec<CompiledModule>,
@@ -1235,10 +1219,9 @@ pub async fn store_package_and_init_modules_for_genesis<
 
 pub async fn generate_genesis_system_object<
     const A: bool,
-    const B: bool,
     S: Eq + Serialize + for<'de> Deserialize<'de>,
 >(
-    store: &Arc<SuiDataStore<A, B, S>>,
+    store: &Arc<SuiDataStore<A, S>>,
     move_vm: &Arc<MoveVM>,
     committee: &Committee,
     genesis_ctx: &mut TxContext,
