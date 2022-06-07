@@ -143,7 +143,7 @@ async fn create_package_object_response(
     context: &mut WalletContext,
 ) -> Result<GetObjectDataResponse, anyhow::Error> {
     let result = WalletCommands::Publish {
-        path: "sui_programmability/tutorial".to_string(),
+        path: "sui_programmability/examples/move_tutorial".to_string(),
         gas: None,
         gas_budget: 10000,
     }
