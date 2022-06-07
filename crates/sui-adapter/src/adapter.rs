@@ -72,9 +72,9 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         .iter()
         .filter_map(|arg| match arg {
             CallArg::Pure(_) => None,
-            CallArg::ImmOrOwnedObject((id, _, _)) | CallArg::SharedObject(id) => {
-                Some((*id, state_view.read_object(id)?))
-            }
+            CallArg::ImmOrOwnedObject((id, _, _))
+            | CallArg::SharedObject(id)
+            | CallArg::QuasiSharedObject(id) => Some((*id, state_view.read_object(id)?)),
         })
         .collect();
     let module = vm.load_module(&module_id, state_view)?;
@@ -758,6 +758,7 @@ pub fn resolve_and_type_check(
                 }
                 CallArg::ImmOrOwnedObject(ref_) => InputObjectKind::ImmOrOwnedMoveObject(ref_),
                 CallArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+                CallArg::QuasiSharedObject(id) => InputObjectKind::QuasiSharedMoveObject(id),
             };
 
             let id = object_kind.object_id();

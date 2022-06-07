@@ -905,10 +905,9 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     .into_iter()
                     .map(|arg| match arg {
                         CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
-                        CallArg::ImmOrOwnedObject((id, _, _)) => {
-                            SuiJsonValue::new(Value::String(id.to_hex_literal()))
-                        }
-                        CallArg::SharedObject(id) => {
+                        CallArg::ImmOrOwnedObject((id, _, _))
+                        | CallArg::SharedObject(id)
+                        | CallArg::QuasiSharedObject(id) => {
                             SuiJsonValue::new(Value::String(id.to_hex_literal()))
                         }
                     })
@@ -1222,6 +1221,8 @@ pub enum SuiInputObjectKind {
     ImmOrOwnedMoveObject(SuiObjectRef),
     // A Move object that's shared and mutable.
     SharedMoveObject(ObjectID),
+    // A Move object whose root ancestor is a shared object.
+    QuasiSharedMoveObject(ObjectID),
 }
 
 impl From<InputObjectKind> for SuiInputObjectKind {
@@ -1230,6 +1231,7 @@ impl From<InputObjectKind> for SuiInputObjectKind {
             InputObjectKind::MovePackage(id) => Self::MovePackage(id),
             InputObjectKind::ImmOrOwnedMoveObject(oref) => Self::ImmOrOwnedMoveObject(oref.into()),
             InputObjectKind::SharedMoveObject(id) => Self::SharedMoveObject(id),
+            InputObjectKind::QuasiSharedMoveObject(id) => Self::QuasiSharedMoveObject(id),
         }
     }
 }
