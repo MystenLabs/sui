@@ -281,7 +281,7 @@ this package, first [install Sui binaries](install.md#binaries) and
 you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move) file.
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move) file.
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
@@ -397,7 +397,7 @@ Sui = { local = "../../crates/sui-framework" }
 MyFirstPackage = "0x0"
 ```
 
-See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/tutorial/Move.toml)
+See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/Move.toml)
 file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
@@ -887,7 +887,7 @@ encounter compilation errors in the existing tests due to the
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move).
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move).
 
 ## Sui Move library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
