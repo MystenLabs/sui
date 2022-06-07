@@ -1,7 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use sui_types::base_types::ExecutionDigests;
-use test_utils::authority::{spawn_test_authorities, test_authority_configs};
+use rand::{rngs::StdRng, SeedableRng};
+use sui_core::authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority};
+use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::{base_types::ExecutionDigests, messages::ExecutionStatus};
+use test_utils::{
+    authority::{spawn_test_authorities, test_authority_aggregator, test_authority_configs},
+    messages::test_transactions,
+};
 use tokio::time::sleep;
 use tokio::time::Duration;
 use typed_store::Map;
@@ -78,5 +84,71 @@ async fn sequence_fragments() {
             break;
         }
         sleep(Duration::from_millis(10)).await;
+    }
+}
+
+#[tokio::test]
+async fn end_to_end() {
+    // Make a few test transactions.
+    let mut rng = StdRng::from_seed([0; 32]);
+    let keys = (0..3).map(|_| get_key_pair_from_rng(&mut rng).1);
+    let (mut transactions, input_objects) = test_transactions(keys);
+
+    // Spawn a quorum of authorities.
+    let configs = test_authority_configs();
+    let handles = spawn_test_authorities(input_objects, &configs).await;
+
+    // Make an authority's aggregator.
+    let aggregator = test_authority_aggregator(&configs);
+
+    // Start active part of each authority.
+    for authority in &handles {
+        let state = authority.state().clone();
+        let clients = aggregator.clone_inner_clients();
+        let _active_authority_handle = tokio::spawn(async move {
+            let active_state = ActiveAuthority::new(state, clients).unwrap();
+            let checkpoint_process_control = CheckpointProcessControl {
+                long_pause_between_checkpoints: Duration::from_millis(10),
+                ..CheckpointProcessControl::default()
+            };
+            active_state
+                .spawn_active_processes(true, true, checkpoint_process_control)
+                .await
+        });
+    }
+
+    // Send the transactions for execution.
+    while let Some(transaction) = transactions.pop() {
+        let (_, effects) = aggregator
+            .clone()
+            .execute_transaction(&transaction)
+            .await
+            .unwrap();
+
+        // If this check fails the transactions will not be included in the checkpoint.
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+        // Add some delay between transactions
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    // Wait for the transactions to be executed and end up in a checkpoint.
+    loop {
+        let ok = handles
+            .iter()
+            .map(|authority| {
+                authority
+                    .state()
+                    .checkpoints()
+                    .unwrap()
+                    .lock()
+                    .get_locals()
+                    .next_checkpoint
+            })
+            .all(|sequence| sequence >= 1);
+        if ok {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }

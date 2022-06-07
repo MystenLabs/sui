@@ -52,14 +52,14 @@ where
 }
 
 pub fn create_authority_aggregator(
-    authority_configs: &[ValidatorInfo],
+    configs: &[ValidatorInfo],
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
-    let voting_rights: BTreeMap<_, _> = authority_configs
+    let voting_rights: BTreeMap<_, _> = configs
         .iter()
         .map(|config| (config.public_key(), config.stake()))
         .collect();
     let committee = Committee::new(0, voting_rights);
-    let clients: BTreeMap<_, _> = authority_configs
+    let clients: BTreeMap<_, _> = configs
         .iter()
         .map(|config| {
             (
@@ -69,4 +69,11 @@ pub fn create_authority_aggregator(
         })
         .collect();
     AuthorityAggregator::new(committee, clients)
+}
+
+/// Create a test authority aggregator.
+pub fn test_authority_aggregator(
+    config: &NetworkConfig,
+) -> AuthorityAggregator<NetworkAuthorityClient> {
+    create_authority_aggregator(config.validator_set())
 }

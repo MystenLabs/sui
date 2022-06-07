@@ -190,11 +190,17 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub async fn spawn_all_active_processes(self) {
-        self.spawn_active_processes(true, true).await
+        self.spawn_active_processes(true, true, CheckpointProcessControl::default())
+            .await
     }
 
     /// Spawn all active tasks.
-    pub async fn spawn_active_processes(self, gossip: bool, checkpoint: bool) {
+    pub async fn spawn_active_processes(
+        self,
+        gossip: bool,
+        checkpoint: bool,
+        checkpoint_process_control: CheckpointProcessControl,
+    ) {
         let active = Arc::new(self);
         // Spawn a task to take care of gossip
         let gossip_locals = active.clone();
@@ -208,7 +214,7 @@ where
         let checkpoint_locals = active; // .clone();
         let _checkpoint_join = tokio::task::spawn(async move {
             if checkpoint {
-                checkpoint_process(&checkpoint_locals, &CheckpointProcessControl::default()).await;
+                checkpoint_process(&checkpoint_locals, &checkpoint_process_control).await;
             }
         });
 

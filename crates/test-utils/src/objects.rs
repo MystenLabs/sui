@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::test_keys;
-use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};
 
@@ -13,6 +13,22 @@ pub fn test_gas_objects() -> Vec<Object> {
             let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
             let (sender, _) = test_keys().pop().unwrap();
             Object::with_id_owner_for_testing(gas_object_id, sender)
+        })
+        .collect()
+}
+
+/// Make a few test gas objects with a specific owners.
+pub fn test_gas_objects_with_owners<O>(owners: O) -> Vec<Object>
+where
+    O: IntoIterator<Item = SuiAddress>,
+{
+    owners
+        .into_iter()
+        .enumerate()
+        .map(|(i, owner)| {
+            let seed = format!("0x555555555555555{i}");
+            let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
+            Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect()
 }
