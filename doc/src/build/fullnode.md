@@ -97,10 +97,10 @@ in how a fullnode is run.
     - `cmake`
 
 1. Set up your fork of the Sui repository:
-    - Go to the [Sui repository](https://github.com/MystenLabs/sui) on Github
+    - Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
       and click the *Fork* button in the top right-hand corner of the screen.
     - Clone your personal fork of the Sui repository to your local machine
-      (ensure that you insert your Github username into the URL):
+      (ensure that you insert your GitHub username into the URL):
     ```
     $ git clone https://github.com/<YOUR GITHUB USERNAME>/sui.git
     ```
