@@ -41,6 +41,7 @@ use std::{
     fmt::Debug,
 };
 
+use crate::object_root_ancestor_map::ObjectRootAncestorMap;
 pub use move_vm_runtime::move_vm::MoveVM;
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
@@ -869,61 +870,25 @@ fn check_child_object_of_shared_object(
     object_type_map: &BTreeMap<ObjectID, ModuleId>,
     current_module: ModuleId,
 ) -> SuiResult {
-    // ancestor_map is a cache that remembers the top ancestor of each object.
-    // Top ancestor is the root object at the top in the object ownership chain whose
-    // parent is no longer an object.
-    let mut ancestor_map: BTreeMap<ObjectID, ObjectID> = BTreeMap::new();
-    for (object_id, obj) in objects {
-        // We only need to look at objects that are owned by other objects.
-        if !matches!(obj.borrow().owner, Owner::ObjectOwner(_)) {
+    let object_owner_map = objects
+        .iter()
+        .map(|(id, obj)| (*id, obj.borrow().owner))
+        .collect();
+    let ancestor_map = ObjectRootAncestorMap::new(&object_owner_map)?;
+    for (object_id, owner) in object_owner_map {
+        // We are only interested in objects owned by objects.
+        if !matches!(owner, Owner::ObjectOwner(..)) {
             continue;
         }
-        // We trace the object up through the ownership chain, until we either hit
-        // the top (no more parent object), or we hit an object that's already
-        // in the `ancestor_map` (because we visited this object previously).
-        // We then have a pair between this object and its top ancestor. If the top
-        // ancestor is a shared object, we check on their types.
-        let mut ancestor_stack = vec![];
-        let mut cur_id = *object_id;
-        let mut cur_obj = obj;
-        let ancestor_id = loop {
-            if let Some(ancestor) = ancestor_map.get(&cur_id) {
-                break *ancestor;
-            }
-            ancestor_stack.push(cur_id);
-            match cur_obj.borrow().owner {
-                Owner::ObjectOwner(parent_id) => {
-                    cur_obj =
-                        objects
-                            .get(&parent_id.into())
-                            .ok_or(SuiError::MissingObjectOwner {
-                                child_id: cur_id,
-                                parent_id: parent_id.into(),
-                            })?;
-                    cur_id = parent_id.into();
-                    fp_ensure!(
-                        cur_id != ancestor_stack[0],
-                        SuiError::CircularObjectOwnership
-                    );
-                }
-                Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared => {
-                    break cur_id;
-                }
-            };
-        };
-        // For each ancestor we have visited, cache their top ancestor so that if we
-        // ever visit them in the future, we know the answer.
-        while let Some(id) = ancestor_stack.pop() {
-            ancestor_map.insert(id, ancestor_id);
-        }
-        // Check the orphan rule.
-        if objects.get(&ancestor_id).unwrap().borrow().is_shared() {
-            let child_module = object_type_map.get(object_id).unwrap();
+        let (ancestor_id, ancestor_owner) = ancestor_map.get_root_ancestor(&object_id)?;
+        if ancestor_owner.is_shared() {
+            // unwrap safe because the object ID exists in object_owner_map.
+            let child_module = object_type_map.get(&object_id).unwrap();
             let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
             fp_ensure!(
                 child_module == &current_module || ancestor_module == &current_module,
                 SuiError::InvalidSharedChildUse {
-                    child: *object_id,
+                    child: object_id,
                     child_module: current_module.to_string(),
                     ancestor: ancestor_id,
                     ancestor_module: ancestor_module.to_string(),
