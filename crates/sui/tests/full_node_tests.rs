@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::StreamExt;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_node::SuiNode;
@@ -202,5 +202,42 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     let txes = node.state().get_transactions_from_addr(sender).await?;
     assert_eq!(txes.last().unwrap().1, digest);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_full_node_event_count() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_transfered_object, sender, _receiver, digest) = transfer_coin(&mut context).await?;
+
+    sleep(Duration::from_millis(1000)).await;
+
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config).await?;
+
+    let mut stream = node.state().event_handler.clone().unwrap().subscribe();
+
+    let counter = Arc::new(RwLock::new(0usize));
+
+    let counter_ = counter.clone();
+    tokio::spawn(async move {
+        let counter = counter_;
+        while let Some(_) = stream.next().await {
+            *counter.write().unwrap() += 1;
+        }
+    });
+
+    wait_for_tx(digest, node.state().clone()).await;
+
+    let txes = node.state().get_transactions_from_addr(sender).await?;
+    let count = counter.read().unwrap().clone();
+    assert_eq!(4, txes.len());
+    assert_eq!(txes.len(), count);
     Ok(())
 }

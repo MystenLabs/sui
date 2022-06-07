@@ -171,12 +171,18 @@ impl SuiNode {
 
             let server_handle = server.start(config.json_rpc_address).await?;
 
-            let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
-            let server_addr = ws_server.local_addr()?;
-            let ws_handle = ws_server.start(EventApiImpl::new(state.clone()).into_rpc())?;
+            let ws_handle = if let Some(event_handler) = state.event_handler.clone() {
+                let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+                let server_addr = ws_server.local_addr()?;
+                let ws_handle =
+                    ws_server.start(EventApiImpl::new(state.clone(), event_handler).into_rpc())?;
 
-            info!("Starting WS endpoint at ws://{}", server_addr);
-            (Some(server_handle), Some(ws_handle))
+                info!("Starting WS endpoint at ws://{}", server_addr);
+                Some(ws_handle)
+            } else {
+                None
+            };
+            (Some(server_handle), ws_handle)
         };
 
         let node = Self {

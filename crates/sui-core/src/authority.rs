@@ -84,7 +84,6 @@ mod authority_store;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
-use sui_types::event::EventEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
@@ -245,7 +244,7 @@ pub struct AuthorityState {
 
     pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
-    event_handler: Arc<EventHandler>,
+    pub event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -1090,10 +1089,6 @@ impl AuthorityState {
         end: TxSequenceNumber,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         QueryHelpers::get_transactions_in_range(&self.database, start, end)
-    }
-
-    pub fn subscribe_event(&self) -> BroadcastStream<EventEnvelope> {
-        self.event_handler.subscribe()
     }
 
     pub fn get_recent_transactions(

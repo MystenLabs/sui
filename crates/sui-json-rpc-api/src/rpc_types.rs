@@ -1230,7 +1230,7 @@ pub enum SuiEvent {
 }
 
 impl SuiEvent {
-    fn try_from(event: Event, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
+    pub fn try_from(event: Event, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match event {
             Event::MoveEvent(event) => {
                 let bcs = event.contents().to_vec();
