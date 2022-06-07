@@ -4,6 +4,7 @@
 import latestTxData from './latest_transactions.json';
 import mockData from './mock_data.json';
 import mockOwnedObjectData from './owned_object.json';
+import mockTxData from './tx_for_id.json';
 
 const navigateWithUnknown = async (
     input: string,
@@ -34,9 +35,13 @@ const findOwnedObjectsfromID = (targetID: string | undefined) =>
 
 const getAllMockTransaction = () => latestTxData.data;
 
+const findTxfromID = (targetID: string | undefined) =>
+    mockTxData!.data!.find(({ id }) => id === targetID);
+
 export {
     findDataFromID,
     navigateWithUnknown,
     findOwnedObjectsfromID,
+    findTxfromID,
     getAllMockTransaction,
 };
