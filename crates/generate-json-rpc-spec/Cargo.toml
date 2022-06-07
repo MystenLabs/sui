@@ -17,9 +17,10 @@ tokio = { version = "1.18.2", features = ["full"] }
 
 sui = { path = "../sui" }
 sui-core = { path = "../sui-core" }
-sui-config = { path = "../sui-config" }
 sui-gateway = { path = "../sui-gateway" }
 sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
+sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
+hyper = { version = "0.14.18", features = ["full"] }
 workspace-hack = { path = "../workspace-hack"}

@@ -171,7 +171,7 @@ const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
-    pub fn for_local_testing() -> Result<Self, anyhow::Error> {
+    pub fn for_local_testing() -> Self {
         Self::custom_genesis(
             DEFAULT_NUMBER_OF_AUTHORITIES,
             DEFAULT_NUMBER_OF_ACCOUNT,
@@ -183,7 +183,7 @@ impl GenesisConfig {
         num_authorities: usize,
         num_accounts: usize,
         num_objects_per_account: usize,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Self {
         assert!(
             num_authorities > 0,
             "num_authorities should be larger than 0"
@@ -205,10 +205,10 @@ impl GenesisConfig {
             })
         }
 
-        Ok(Self {
+        Self {
             accounts,
             ..Default::default()
-        })
+        }
     }
 }
 

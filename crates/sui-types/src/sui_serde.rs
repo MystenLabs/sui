@@ -168,12 +168,16 @@ impl TryFrom<String> for Base64 {
 }
 
 impl Base64 {
-    pub fn to_vec(self) -> Result<Vec<u8>, anyhow::Error> {
+    pub fn to_vec(&self) -> Result<Vec<u8>, anyhow::Error> {
         Self::decode(&self.0)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
         Self(Self::encode(bytes))
+    }
+
+    pub fn encoded(&self) -> String {
+        self.0.clone()
     }
 }
 
