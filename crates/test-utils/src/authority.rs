@@ -5,7 +5,7 @@ use crate::TEST_COMMITTEE_SIZE;
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
 use std::time::Duration;
-use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_config::NetworkConfig;
 use sui_core::{
     authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
 };
@@ -51,15 +51,17 @@ where
     handles
 }
 
-pub fn create_authority_aggregator(
-    configs: &[ValidatorInfo],
+/// Create a test authority aggregator.
+pub fn test_authority_aggregator(
+    config: &NetworkConfig,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
-    let voting_rights: BTreeMap<_, _> = configs
+    let validators_info = config.validator_set();
+    let voting_rights: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| (config.public_key(), config.stake()))
         .collect();
     let committee = Committee::new(0, voting_rights);
-    let clients: BTreeMap<_, _> = configs
+    let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
             (
@@ -69,11 +71,4 @@ pub fn create_authority_aggregator(
         })
         .collect();
     AuthorityAggregator::new(committee, clients)
-}
-
-/// Create a test authority aggregator.
-pub fn test_authority_aggregator(
-    config: &NetworkConfig,
-) -> AuthorityAggregator<NetworkAuthorityClient> {
-    create_authority_aggregator(config.validator_set())
 }

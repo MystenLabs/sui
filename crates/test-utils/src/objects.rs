@@ -5,16 +5,10 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};
 
-/// Make a few test gas objects.
+/// Make a few test gas objects (all with the same owner).
 pub fn test_gas_objects() -> Vec<Object> {
-    (0..9)
-        .map(|i| {
-            let seed = format!("0x555555555555555{i}");
-            let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
-            let (sender, _) = test_keys().pop().unwrap();
-            Object::with_id_owner_for_testing(gas_object_id, sender)
-        })
-        .collect()
+    let owners = (0..9).map(|_| test_keys().pop().unwrap().0);
+    test_gas_objects_with_owners(owners)
 }
 
 /// Make a few test gas objects with a specific owners.

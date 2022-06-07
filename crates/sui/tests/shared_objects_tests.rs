@@ -17,7 +17,7 @@ use sui_types::{
     object::Object,
 };
 use test_utils::{
-    authority::{create_authority_aggregator, spawn_test_authorities, test_authority_configs},
+    authority::{spawn_test_authorities, test_authority_aggregator, test_authority_configs},
     messages::{
         make_certificates, move_transaction, parse_package_ref, publish_move_package_transaction,
         test_shared_object_transactions,
@@ -495,7 +495,7 @@ async fn shared_object_on_gateway() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let clients = create_authority_aggregator(configs.validator_set());
+    let clients = test_authority_aggregator(&configs);
     let path = tempfile::tempdir().unwrap().into_path();
     let gateway = Arc::new(GatewayState::new_with_authorities(path, clients).unwrap());
 
