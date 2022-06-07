@@ -96,7 +96,7 @@ in how a fullnode is run.
     - `git`
     - `cmake`
 
-1. Set up your fork of the Sui repository.
+1. Set up your fork of the Sui repository:
     - Go to the [Sui repository](https://github.com/MystenLabs/sui) on Github
       and click the *Fork* button in the top right-hand corner of the screen.
     - Clone your personal fork of the Sui repository to your local machine
@@ -158,40 +158,39 @@ it should issue read requests to query the blockchain. This enables you to
 point the explorer at your locally running fullnode and explore the
 transactions that it has synced from the network. You can do this by:
 
-1. Open a browser and go to https://explorer.devnet.sui.io/
-2. Select the button in the top right-hand corner of the page and select
+1. Open a browser and go to: https://explorer.devnet.sui.io/
+2. Click the button in the top right-hand corner of the page and select
    `Local` from the drop-down menu.
 
-The explorer will now be using your local fullnode to explore the state of the chain.
+The Explorer will now be using your local fullnode to explore the state of the chain.
 
 ## Monitoring
 
 Monitor your fullnode using the instructions at [Logging, Tracing, Metrics, and
 Observability](https://docs.sui.io/contribute/observability).
 
-## Updating your Fullnode with New Releases
+## Updating your fullnode with new releases
 
-Whenever a new release is deployed to `devnet` the blockchain state is
-generally wiped. In order to have your fullnode continue to properly
-synchronize with the new state of devnet you'll need to follow a few steps
-based on how you originally setup your node.
+Whenever a new release is deployed to `devnet`, the blockchain state is
+generally wiped clean. In order to have your fullnode continue to properly
+synchronize with the new state of devnet, you'll need to follow a few steps
+based on how you originally set up your node. See below.
 
-### Built from Source
+### Built from source
 
 If you followed the [Building from
-Source](#markdown-header-building-from-source) directions you can do the
-following to update:
+Source](#markdown-header-building-from-source) directions, update as follows:
 
-1. Shutdown your currently running fullnode.
-2. `cd` into where your local Sui repository is.
+1. Shut down your currently running fullnode.
+2. `cd` into your local Sui repository:
     ```
     $ cd sui
     ```
-3. Remove the old on-disk database and genesis.blob file
+3. Remove the old on-disk database and 'genesis.blob' file:
     ```
     $ rm -r suidb genesis.blob
     ```
-4. Fetch the source from the latest release.
+4. Fetch the source from the latest release:
     ```
     $ git fetch upstream
     $ git checkout -B devnet --track upstream/devnet
@@ -200,17 +199,17 @@ following to update:
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
    state for devnet.
 6. Update your `fullnode.yaml` configuration file if needed.
-7. Start your Sui fullnode
+7. Start your Sui fullnode:
     ```
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 
 ## Future plans
 
-Today a fullnode only relies on synchronizing with 2f+1 validators in order to
-ensure that it has seen all committed transactions. In the future we expect
+Today, a fullnode relies only on synchronizing with 2f+1 validators in order to
+ensure that it has seen all committed transactions. In the future, we expect
 fullnodes to fully participate in a peer-to-peer (p2p) environment where the
 load of disseminating new transactions can be shared with the whole network and
 not have the burden be solely on the validators. We also expect future
-features, like checkpoints, to enable improved performance of synchronizing the
-state of the chain from genesis. 
+features, such as checkpoints, to enable improved performance of synchronizing the
+state of the chain from genesis.
