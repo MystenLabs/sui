@@ -553,7 +553,7 @@ where
                 info: _info,
                 detail: Some(contents),
             }) => {
-                // TODO: check here that the digest of contents matches
+                // Check here that the digest of contents matches
                 if contents.digest() != checkpoint.checkpoint.content_digest {
                     // A byzantine authority!
                     // TODO: Report Byzantine authority
