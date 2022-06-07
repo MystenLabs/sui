@@ -10,9 +10,9 @@ use crate::{
     event_handler::EventHandler,
     execution_engine,
     gateway_types::TransactionEffectsResponse,
+    query_helpers::QueryHelpers,
     transaction_input_checker,
 };
-use anyhow::anyhow;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -97,7 +97,6 @@ pub mod authority_notifier;
 
 pub const MAX_ITEMS_LIMIT: u64 = 100_000;
 const BROADCAST_CAPACITY: usize = 10_000;
-const MAX_TX_RANGE_SIZE: u64 = 4096;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -967,7 +966,7 @@ impl AuthorityState {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some((obj_ref, _)) => {
                 if obj_ref.2.is_alive() {
-                    match self.database.get_object_version(object_id, obj_ref.1)? {
+                    match self.database.get_object_by_key(object_id, obj_ref.1)? {
                         None => {
                             error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
                             Err(SuiError::ObjectNotFound {
@@ -992,7 +991,7 @@ impl AuthorityState {
     }
 
     pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
-        Ok(self.database.next_sequence_number()?)
+        QueryHelpers::get_total_transaction_number(&self.database)
     }
 
     pub fn get_transactions_in_range(
@@ -1000,63 +999,21 @@ impl AuthorityState {
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            start <= end,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "start must not exceed end, (start={}, end={}) given",
-                    start, end
-                ),
-            }
-            .into()
-        );
-        fp_ensure!(
-            end - start <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE,
-                    end - start
-                ),
-            }
-            .into()
-        );
-        let res = self.database.transactions_in_seq_range(start, end)?;
-        debug!(?start, ?end, ?res, "Fetched transactions");
-        Ok(res)
+        QueryHelpers::get_transactions_in_range(&self.database, start, end)
     }
 
     pub fn get_recent_transactions(
         &self,
         count: u64,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            count <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE, count
-                ),
-            }
-            .into()
-        );
-        let end = self.get_total_transaction_number()?;
-        let start = if end >= count { end - count } else { 0 };
-        self.get_transactions_in_range(start, end)
+        QueryHelpers::get_recent_transactions(&self.database, count)
     }
 
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        let opt = self.database.get_certified_transaction(&digest)?;
-        match opt {
-            Some(certificate) => Ok(TransactionEffectsResponse {
-                certificate: certificate.try_into()?,
-                effects: self.database.get_effects(&digest)?.into(),
-            }),
-            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
-        }
+        QueryHelpers::get_transaction(&self.database, digest)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
@@ -1115,7 +1072,7 @@ impl AuthorityState {
     }
 
     /// Make an information response for a transaction
-    pub(crate) async fn make_transaction_info(
+    async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -1164,13 +1121,38 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        if let Some(indexes) = &self.indexes {
-            let inputs: Vec<_> = temporary_store.objects().iter().map(|(_, o)| o).collect();
+        // We want to call update_state before updating the indexes, however this is extremely
+        // awkward because update_state takes temporary_store by value.
+        // TODO: Move indexing either into update_state, or make it a batch consumer to clean this
+        // up.
+        let (inputs, outputs) = if self.indexes.is_some() {
+            let inputs: Vec<_> = temporary_store
+                .objects()
+                .iter()
+                .map(|(_, o)| o.clone())
+                .collect();
             let outputs: Vec<_> = temporary_store
                 .written()
                 .iter()
-                .map(|(_, (_, o))| o)
+                .map(|(_, (_, o))| o.clone())
                 .collect();
+            (Some(inputs), Some(outputs))
+        } else {
+            (None, None)
+        };
+
+        let res = self
+            .database
+            .update_state(temporary_store, certificate, signed_effects, Some(seq))
+            .await;
+
+        if let Some(indexes) = &self.indexes {
+            // unwrap ok because of previous if stmt.
+            let inputs = inputs.unwrap();
+            let outputs = outputs.unwrap();
+            // turn into vectors of references...
+            let inputs: Vec<_> = inputs.iter().collect();
+            let outputs: Vec<_> = outputs.iter().collect();
             if let Err(e) = indexes.index_tx(
                 certificate.sender_address(),
                 &inputs,
@@ -1182,9 +1164,7 @@ impl AuthorityState {
             }
         }
 
-        self.database
-            .update_state(temporary_store, certificate, signed_effects, Some(seq))
-            .await
+        res
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
