@@ -1,9 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS } from '../../src/experimental/bcs';
+import { bcs } from '../../src/experimental';
 import { Base64DataBuffer as B64 } from '../../src';
 import { BN } from 'bn.js';
+
+const { BCS } = bcs;
 
 describe('Move BCS', () => {
   beforeEach(() => {
