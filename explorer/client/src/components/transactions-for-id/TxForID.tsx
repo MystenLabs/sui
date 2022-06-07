@@ -100,7 +100,7 @@ function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
     return (
         <ErrorResult
             id={id}
-            errorMsg="Transactions could not be extracted on the following specified transaction ID"
+            errorMsg="Transactions could not be extracted on the following specified ID"
         />
     );
 }
