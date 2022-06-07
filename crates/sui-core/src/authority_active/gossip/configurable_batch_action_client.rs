@@ -298,6 +298,7 @@ pub async fn init_configurable_authorities(
         let authority_clients_slice = authority_clients_ref.as_slice();
         let cert1 = extract_cert(authority_clients_slice, &committee, &digest).await;
 
+        let mut effects_digest = TransactionEffectsDigest::random();
         // Submit the cert to 2f+1 authorities.
         for (_, cert_client) in authority_clients
             .iter_mut()
@@ -305,13 +306,14 @@ pub async fn init_configurable_authorities(
             .take(committee.quorum_threshold() as usize)
         {
             let effects = do_cert(cert_client, &cert1).await;
-            executed_digests.push(ExecutionDigests::new(digest, effects.digest()));
+            effects_digest = effects.digest();
 
             // Register the internal actions to client
             cert_client
                 .authority_client_mut()
                 .register_action_sequence(batch_action_internal.clone());
         }
+        executed_digests.push(ExecutionDigests::new(digest, effects_digest));
     }
 
     let authority_clients = authority_clients
