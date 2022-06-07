@@ -9,101 +9,32 @@ use jsonrpsee_core::error::SubscriptionClosed;
 use jsonrpsee_core::server::rpc_module::{PendingSubscription, SubscriptionSink};
 use jsonrpsee_proc_macros::rpc;
 use serde::Serialize;
-use tokio::sync::broadcast;
-use tokio::sync::broadcast::Sender;
-use tokio_stream::wrappers::BroadcastStream;
-use tokio_stream::StreamExt;
-use tracing::{debug, warn};
+use sui_core::authority::AuthorityState;
 
-use sui_core::gateway_types::{SuiCertifiedTransaction, SuiEvent};
-use sui_types::base_types::SuiAddress;
+use sui_types::event::EventEnvelope;
 
 #[rpc(server, client, namespace = "sui")]
 pub trait EventApi {
-    #[subscription(name = "subscribeMoveEvents", item = SuiEvent)]
+    #[subscription(name = "subscribeMoveEvents", item = EventEnvelope)]
     fn sub_move_event(&self, move_event_type: String);
-
-    #[subscription(name = "subscribeTransactions", item = SuiCertifiedTransaction)]
-    fn sub_transaction(&self, sender: SuiAddress);
-
-    #[subscription(name = "subscribeNetworkEvent", item = SuiEvent)]
-    fn sub_network_event(&self);
-}
-
-pub struct SuiEventManager {
-    move_event_broadcast: Sender<SuiEvent>,
-    transaction_broadcast: Sender<SuiCertifiedTransaction>,
-}
-
-impl Default for SuiEventManager {
-    fn default() -> Self {
-        Self {
-            move_event_broadcast: broadcast::channel(16).0,
-            transaction_broadcast: broadcast::channel(16).0,
-        }
-    }
-}
-
-impl SuiEventManager {
-    pub fn broadcast_event(&self, event: SuiEvent) {
-        if self.move_event_broadcast.receiver_count() > 0 {
-            let event_type = event.type_.clone();
-            match self.move_event_broadcast.send(event) {
-                Ok(num) => {
-                    debug!("Broadcast Move event [{event_type}] to {num} peers.")
-                }
-                Err(e) => {
-                    warn!("Error broadcasting event [{event_type}]. Error: {e}")
-                }
-            }
-        }
-    }
-
-    pub fn broadcast_transaction(&self, cert: SuiCertifiedTransaction) {
-        if self.transaction_broadcast.receiver_count() > 0 {
-            let tx_digest = cert.transaction_digest;
-            match self.transaction_broadcast.send(cert) {
-                Ok(num) => {
-                    debug!("Broadcast transaction [{tx_digest:?}] to {num} peers.")
-                }
-                Err(e) => {
-                    warn!("Error broadcasting transaction [{tx_digest:?}]. Error: {e}")
-                }
-            }
-        }
-    }
 }
 
 pub struct EventApiImpl {
-    manager: Arc<SuiEventManager>,
+    state: Arc<AuthorityState>,
 }
 
 impl EventApiImpl {
-    pub fn new(manager: Arc<SuiEventManager>) -> Self {
-        Self { manager }
+    pub fn new(state: Arc<AuthorityState>) -> Self {
+        Self { state }
     }
 }
 
 impl EventApiServer for EventApiImpl {
-    fn sub_move_event(&self, pending: PendingSubscription, event_type: String) {
+    fn sub_move_event(&self, pending: PendingSubscription, _event_type: String) {
         if let Some(sink) = pending.accept() {
-            let stream = BroadcastStream::new(self.manager.move_event_broadcast.subscribe());
-            let stream =
-                stream.filter(move |event| matches!(event, Ok(event) if event.type_ == event_type));
+            let stream = self.state.subscribe_event();
             spawn_subscript(sink, stream);
         }
-    }
-
-    fn sub_transaction(&self, pending: PendingSubscription, sender: SuiAddress) {
-        if let Some(sink) = pending.accept() {
-            let stream = BroadcastStream::new(self.manager.transaction_broadcast.subscribe());
-            let stream = stream.filter(move |tx| matches!(tx, Ok(tx) if tx.data.sender == sender));
-            spawn_subscript(sink, stream);
-        }
-    }
-
-    fn sub_network_event(&self, _pending: PendingSubscription) {
-        todo!()
     }
 }
 

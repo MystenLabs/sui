@@ -11,7 +11,6 @@ use tracing::info;
 
 use sui_config::NodeConfig;
 use sui_core::authority_server::ValidatorService;
-use sui_core::gateway_types::SuiEvent;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_active::ActiveAuthority,
@@ -19,8 +18,8 @@ use sui_core::{
     checkpoints::CheckpointStore,
 };
 use sui_gateway::bcs_api::BcsApiImpl;
+use sui_gateway::event_api::EventApiImpl;
 use sui_gateway::event_api::EventApiServer;
-use sui_gateway::event_api::{EventApiImpl, SuiEventManager};
 use sui_gateway::json_rpc::JsonRpcServerBuilder;
 use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::bcs_api::BcsApiImpl;
@@ -174,28 +173,9 @@ impl SuiNode {
 
             let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
             let server_addr = ws_server.local_addr()?;
-            let event_manager = Arc::new(SuiEventManager::default());
-            let ws_handle = ws_server.start(EventApiImpl::new(event_manager.clone()).into_rpc())?;
+            let ws_handle = ws_server.start(EventApiImpl::new(state.clone()).into_rpc())?;
 
             info!("Starting WS endpoint at ws://{}", server_addr);
-
-            // Stub event emitter.
-            std::thread::spawn(move || {
-                let mut num = 1;
-                loop {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    event_manager.broadcast_event(SuiEvent {
-                        type_: "Foo".to_string(),
-                        contents: vec![num],
-                    });
-                    event_manager.broadcast_event(SuiEvent {
-                        type_: "Bar".to_string(),
-                        contents: vec![num],
-                    });
-                    num += 1;
-                }
-            });
-
             (Some(server_handle), Some(ws_handle))
         };
 

@@ -11,22 +11,25 @@ use sui_types::{
     messages::TransactionEffects,
 };
 use tokio::sync::mpsc::{self, Sender};
+use tokio_stream::wrappers::BroadcastStream;
 use tracing::{debug, error};
 
-const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
+pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct EventHandler {
     module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     streamer_queue: Sender<EventEnvelope>,
+    streamer: Streamer,
 }
 
 impl EventHandler {
     pub fn new(validator_store: Arc<AuthorityStore>) -> Self {
         let (tx, rx) = mpsc::channel::<EventEnvelope>(EVENT_DISPATCH_BUFFER_SIZE);
-        Streamer::spawn(rx);
+        let streamer = Streamer::spawn(rx);
         Self {
             module_cache: SyncModuleCache::new(ResolverWrapper(validator_store)),
             streamer_queue: tx,
+            streamer,
         }
     }
 
@@ -34,13 +37,13 @@ impl EventHandler {
         // serializely dispatch event processing to honor events' orders.
         for event in &effects.events {
             if let Err(e) = self.process_event(event, timestamp_ms).await {
-                error!(error =? e, "Failed to send EventEnvolope to dispatch");
+                error!(error =? e, "Failed to send EventEnvelope to dispatch");
             }
         }
     }
 
     pub async fn process_event(&self, event: &Event, timestamp_ms: u64) -> SuiResult {
-        let envolope = match event {
+        let envelope = match event {
             Event::MoveEvent { .. } => {
                 debug!(event =? event, "Process MoveEvent.");
                 match event.extract_move_struct(&self.module_cache) {
@@ -62,10 +65,14 @@ impl EventHandler {
         // TODO store events here
 
         self.streamer_queue
-            .send(envolope)
+            .send(envelope)
             .await
             .map_err(|e| SuiError::EventFailedToDispatch {
                 error: e.to_string(),
             })
+    }
+
+    pub fn subscribe(&self) -> BroadcastStream<EventEnvelope> {
+        self.streamer.subscribe()
     }
 }
