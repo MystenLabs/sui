@@ -37,7 +37,7 @@ use sui_types::{
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority_client::AuthorityAPI, query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
@@ -53,7 +53,6 @@ pub type GatewayClient = Arc<dyn GatewayAPI + Sync + Send>;
 
 pub type GatewayTxSeqNumber = u64;
 
-const MAX_TX_RANGE_SIZE: u64 = 4096;
 /// Number of times to retry failed TX
 const MAX_NUM_TX_RETRIES: usize = 5;
 
@@ -1158,7 +1157,7 @@ where
     }
 
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
-        Ok(self.store.next_sequence_number()?)
+        QueryHelpers::get_total_transaction_number(&self.store)
     }
 
     fn get_transactions_in_range(
@@ -1166,62 +1165,20 @@ where
         start: GatewayTxSeqNumber,
         end: GatewayTxSeqNumber,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            start <= end,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "start must not exceed end, (start={}, end={}) given",
-                    start, end
-                ),
-            }
-            .into()
-        );
-        fp_ensure!(
-            end - start <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE,
-                    end - start
-                ),
-            }
-            .into()
-        );
-        let res = self.store.transactions_in_seq_range(start, end)?;
-        debug!(?start, ?end, ?res, "Fetched transactions");
-        Ok(res)
+        QueryHelpers::get_transactions_in_range(&self.store, start, end)
     }
 
     fn get_recent_transactions(
         &self,
         count: u64,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            count <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE, count
-                ),
-            }
-            .into()
-        );
-        let end = self.get_total_transaction_number()?;
-        let start = if end >= count { end - count } else { 0 };
-        self.get_transactions_in_range(start, end)
+        QueryHelpers::get_recent_transactions(&self.store, count)
     }
 
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        let opt = self.store.get_certified_transaction(&digest)?;
-        match opt {
-            Some(certificate) => Ok(TransactionEffectsResponse {
-                certificate: certificate.try_into()?,
-                effects: self.store.get_effects(&digest)?.into(),
-            }),
-            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
-        }
+        QueryHelpers::get_transaction(&self.store, digest)
     }
 }
