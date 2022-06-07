@@ -1195,11 +1195,19 @@ pub struct OwnedObjectRef {
     pub reference: SuiObjectRef,
 }
 
+#[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "Event", rename_all = "camelCase")]
 pub enum SuiEvent {
     /// Move-specific event
-    MoveEvent(SuiParsedMoveObject),
+    MoveEvent {
+        #[serde(rename = "type")]
+        type_: String,
+        fields: SuiMoveStruct,
+        #[serde_as(as = "Base64")]
+        #[schemars(with = "Base64")]
+        bcs: Vec<u8>,
+    },
     /// Module published
     #[serde(rename_all = "camelCase")]
     Publish { package_id: ObjectID },
@@ -1225,7 +1233,13 @@ impl SuiEvent {
     fn try_from(event: Event, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match event {
             Event::MoveEvent(event) => {
-                SuiEvent::MoveEvent(SuiMoveObject::try_from(event, resolver)?)
+                let bcs = event.contents().to_vec();
+                let move_obj: SuiParsedMoveObject = SuiMoveObject::try_from(event, resolver)?;
+                SuiEvent::MoveEvent {
+                    type_: move_obj.type_,
+                    fields: move_obj.fields,
+                    bcs,
+                }
             }
             Event::Publish { package_id } => SuiEvent::Publish { package_id },
             Event::TransferObject {

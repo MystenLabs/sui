@@ -1220,7 +1220,8 @@ where
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        let (cert, effect) = QueryHelpers::get_transaction(&self.store, digest)?;
+        let (cert, effect) =
+            QueryHelpers::get_transaction(&self.store, &self.module_cache, digest)?;
 
         Ok(TransactionEffectsResponse {
             certificate: cert.try_into()?,

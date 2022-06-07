@@ -20,6 +20,7 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
 };
 use schemars::JsonSchema;
+use serde_with::serde_as;
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +65,7 @@ pub enum TransferType {
 }
 
 /// Specific type of event
+#[serde_as]
 #[derive(
     Eq,
     Debug,
