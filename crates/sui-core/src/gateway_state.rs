@@ -963,6 +963,12 @@ where
             tx_kind = tx.data.kind_as_str()
         );
 
+        // TODO: Temporarily disable shared objects in transactions.
+        fp_ensure!(
+            !tx.contains_shared_object(),
+            SuiError::UnsupportedSharedObjectError.into()
+        );
+
         // Use start_coarse_time() if the below turns out to have a perf impact
         let timer = self.metrics.transaction_latency.start_timer();
         let mut res = self

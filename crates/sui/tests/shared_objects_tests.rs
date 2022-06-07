@@ -359,7 +359,7 @@ async fn replay_shared_object_transaction() {
 }
 
 #[tokio::test]
-//#[ignore] // cargo test gateway -p sui --test shared_objects_tests -- --nocapture
+#[ignore]
 async fn shared_object_on_gateway() {
     let mut gas_objects = test_gas_objects();
 
