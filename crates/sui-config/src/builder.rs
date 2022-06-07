@@ -190,6 +190,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address: utils::available_local_socket_address(),
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
+                    enable_event_processing: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })

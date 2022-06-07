@@ -726,6 +726,7 @@ async fn test_batch_to_checkpointing() {
         None,
         Some(checkpoints.clone()),
         &sui_config::genesis::Genesis::get_default_genesis(),
+        false,
     )
     .await;
     let authority_state = Arc::new(state);
@@ -814,6 +815,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             None,
             None,
             &sui_config::genesis::Genesis::get_default_genesis(),
+            false,
         )
         .await;
         let authority_state = Arc::new(state);
@@ -894,6 +896,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             None,
             Some(checkpoints.clone()),
             &sui_config::genesis::Genesis::get_default_genesis(),
+            false,
         )
         .await;
         let authority_state = Arc::new(state);
@@ -1382,6 +1385,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
             None,
             Some(checkpoint.clone()),
             &genesis,
+            false,
         )
         .await;
 
