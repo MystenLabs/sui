@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::transaction_input_checker::InputObjects;
 use move_core_types::account_address::AccountAddress;
 use sui_types::{event::Event, gas::SuiGasStatus, object::Owner};
 
@@ -36,27 +37,11 @@ impl<S> AuthorityTemporaryStore<S> {
     /// initial objects.
     pub fn new(
         package_store: Arc<S>,
-        input_objects: Vec<(InputObjectKind, Object)>,
+        input_objects: InputObjects,
         tx_digest: TransactionDigest,
     ) -> Self {
-        let active_inputs = input_objects
-            .iter()
-            .filter_map(|(kind, object)| match kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
-            })
-            .collect();
-        let objects = input_objects
-            .into_iter()
-            .map(|(_, object)| (object.id(), object))
-            .collect();
+        let active_inputs = input_objects.active_inputs();
+        let objects = input_objects.into_object_map();
         Self {
             package_store,
             tx_digest,

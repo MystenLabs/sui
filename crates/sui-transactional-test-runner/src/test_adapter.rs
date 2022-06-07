@@ -6,7 +6,6 @@
 use crate::{args::*, in_memory_storage::InMemoryStorage};
 use anyhow::{anyhow, bail};
 use bimap::btree::BiBTreeMap;
-use itertools::Itertools;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -38,6 +37,7 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::{adapter::new_move_vm, genesis};
+use sui_core::transaction_input_checker::InputObjects;
 use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
@@ -49,9 +49,7 @@ use sui_types::{
     error::SuiError,
     event::Event,
     gas,
-    messages::{
-        ExecutionStatus, InputObjectKind, Transaction, TransactionData, TransactionEffects,
-    },
+    messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -444,18 +442,11 @@ impl<'a> SuiTestAdapter<'a> {
                 Some((kind, obj))
             })
             .collect::<Vec<_>>();
-        let transaction_dependencies = objects_by_kind
-            .iter()
-            .map(|(_, obj)| obj.previous_transaction)
-            .collect();
-        let shared_object_refs: Vec<_> = objects_by_kind
-            .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
-            .map(|(_, obj)| obj.compute_object_reference())
-            .sorted()
-            .collect();
+        let input_objects = InputObjects::new(objects_by_kind);
+        let transaction_dependencies = input_objects.transaction_dependencies();
+        let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.storage.clone(), objects_by_kind, transaction_digest);
+            AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
         let TransactionEffects {
             status,
             events,
