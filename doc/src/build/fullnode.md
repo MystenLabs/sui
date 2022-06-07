@@ -48,7 +48,7 @@ Today this synchronization process is performed by:
 Today this synchronization process is far from ideal as it requires listening
 to at a minimum 2f+1 validators to ensure that a fullnode has properly seen all
 new transactions. Overtime we will improve this process (e.g. with the
-introduction of a checkpoints, ability to synchronize with other fullnodes,
+introduction of checkpoints, ability to synchronize with other fullnodes,
 etc) in order to have better guarantees around a fullnode’s ability to be
 confident it has seen all recent transactions.
 
@@ -59,7 +59,7 @@ validator nodes, fullnodes cannot sign transactions, although they can validate
 the integrity of the chain by re-executing transactions that were previously
 committed by a quorum of validators.
 
-Today a fullnode is expected to maintain the full history of the chain,
+Today, a fullnode is expected to maintain the full history of the chain,
 although in the future sufficiently old history may need to be pruned and
 offloaded to cheaper storage.
 
@@ -70,7 +70,7 @@ Conversely, a validator needs to store only the latest transactions on the
 
 Follow the instructions here to run your own Sui fullnode.
 
-### Hardware Requirements
+### Hardware requirements
 
 We recommend the following minimum hardware requirements for running a fullnode:
 
@@ -82,13 +82,13 @@ transaction rate, etc) although we don't anticipate running a fullnode on
 devnet will require more than a handful of GBs given it is reset upon each
 release roughly every two weeks.
 
-## Configuring your Fullnode
+## Configuring your fullnode
 
-Today the only supported way of running a fullnode requires building from
-source. In the future we plan on providing Docker images for more flexibility
+Currently, the only supported way of running a fullnode requires building from
+source. In the future, we plan on providing Docker images for more flexibility
 in how a fullnode is run.
 
-### Building from Source
+### Building from source
 
 0. *Prerequisite* Before beginning ensure that the following tools are
    installed in your environment:
@@ -96,7 +96,7 @@ in how a fullnode is run.
     - `git`
     - `cmake`
 
-1. Setup your fork of the Sui repository.
+1. Set up your fork of the Sui repository.
     - Go to the [Sui repository](https://github.com/MystenLabs/sui) on Github
       and click the *Fork* button in the top right-hand corner of the screen.
     - Clone your personal fork of the Sui repository to your local machine
@@ -104,20 +104,20 @@ in how a fullnode is run.
     ```
     $ git clone https://github.com/<YOUR GITHUB USERNAME>/sui.git
     ```
-2. `cd` into your `sui` repository.
+2. `cd` into your `sui` repository:
     ```
     $ cd sui
     ```
-3. Setup the Sui repository as a git remote
+3. Set up the Sui repository as a git remote:
     ```
     $ git remote add upstream https://github.com/MystenLabs/sui
     $ git fetch upstream
     ```
-4. Checkout the devnet branch
+4. Check out the 'devnet' branch:
     ```
     $ git checkout --track upstream/devnet
     ```
-5. Make a copy of the fullnode configuration template
+5. Make a copy of the fullnode configuration template:
    ```
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
@@ -128,7 +128,7 @@ in how a fullnode is run.
     ```
     $ curl -fO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-7. Edit your `fullnode.yaml` file
+7. Edit your `fullnode.yaml` file:
     - Update the `db-path` field with a path to where the fullnode's database
       will be located. By default this will create the database in a directory
       `./suidb` relative to your current directory:
@@ -142,16 +142,16 @@ in how a fullnode is run.
     genesis:
       genesis-file-location: "/path/to/genesis.blob"
     ```
-8. Start your Sui fullnode
+8. Start your Sui fullnode:
     ```
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 
 Your fullnode will now be serving the read endpoints of the [Sui JSON-RPC
-API](https://docs.sui.io/build/json-rpc#sui-json-rpc-api) at
+API](../build/json-rpc.md#sui-json-rpc-api) at
 `http://127.0.0.1:9000`.
 
-## Using the Explorer with your Fullnode
+## Using the Explorer with your fullnode
 
 The [Sui Explorer](https://explorer.devnet.sui.io/) supports configuring where
 it should issue read requests to query the blockchain. This enables you to
