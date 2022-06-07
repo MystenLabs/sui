@@ -48,7 +48,7 @@ pub async fn test_gossip_plain() {
             assert!(result1.is_ok());
             let result = result1.unwrap();
             let found_cert = result.certified_transaction.is_some();
-            println!("{:?}, {}", digest.transaction, found_cert);
+            assert!(found_cert);
         }
     }
 }
