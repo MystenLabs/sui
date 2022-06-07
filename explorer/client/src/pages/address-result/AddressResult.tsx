@@ -8,7 +8,6 @@ import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
 import theme from '../../styles/theme.module.css';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
 
 type DataType = {
     id: string;
@@ -40,9 +39,7 @@ function AddressResult() {
                         />
                     </div>
                 </div>
-                {!IS_STATIC_ENV && (
-                    <TxForID id={addressID} category="address" />
-                )}
+                <TxForID id={addressID} category="address" />
                 <div>
                     <div>Owned Objects</div>
                     <div>
