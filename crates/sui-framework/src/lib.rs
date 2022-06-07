@@ -170,6 +170,7 @@ mod tests {
             "defi",
             "fungible_tokens",
             "games",
+            "move_tutorial",
             "nfts",
             "objects_tutorial",
         ];

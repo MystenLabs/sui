@@ -106,7 +106,8 @@ async fn end_to_end() {
         let state = authority.state().clone();
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
-            let active_state = ActiveAuthority::new(state, clients).unwrap();
+            let active_state =
+                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap();
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
                 ..CheckpointProcessControl::default()

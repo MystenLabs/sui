@@ -12,9 +12,7 @@ pub struct MutexTable<K: Hash> {
 }
 
 // Opaque struct to hide tokio::sync::MutexGuard.
-pub struct LockGuard<'a> {
-    _guard: tokio::sync::MutexGuard<'a, ()>,
-}
+pub struct LockGuard<'a>(tokio::sync::MutexGuard<'a, ()>);
 
 impl<'b, K: Hash + 'b> MutexTable<K> {
     pub fn new(size: usize) -> Self {
@@ -56,17 +54,13 @@ impl<'b, K: Hash + 'b> MutexTable<K> {
 
         let mut guards = Vec::with_capacity(locks.len());
         for lock_idx in locks {
-            guards.push(LockGuard {
-                _guard: self.lock_table[lock_idx].lock().await,
-            });
+            guards.push(LockGuard(self.lock_table[lock_idx].lock().await));
         }
         guards
     }
 
     pub async fn acquire_lock<'a>(&'a self, k: &K) -> LockGuard<'a> {
         let lock_idx = self.get_lock_idx(k);
-        LockGuard {
-            _guard: self.lock_table[lock_idx].lock().await,
-        }
+        LockGuard(self.lock_table[lock_idx].lock().await)
     }
 }

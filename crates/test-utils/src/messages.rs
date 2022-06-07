@@ -37,7 +37,7 @@ where
     let mut keypairs = Vec::new(); // Keys are not copiable, move them here.
     for keypair in keys {
         let address = SuiAddress::from(keypair.public_key_bytes());
-        addresses_two_by_two.push(address.clone());
+        addresses_two_by_two.push(address);
         addresses_two_by_two.push(address);
         keypairs.push(keypair);
     }

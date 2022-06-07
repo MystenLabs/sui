@@ -114,7 +114,7 @@ module MyFirstPackage::M1 {
             // extract the sword owned by the initial owner
             let sword = TestScenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
-            sword_transfer(sword, final_owner, TestScenario::ctx(scenario));
+            sword_transfer(sword, final_owner);
         };
         // fourth transaction executed by the final sword owner
         TestScenario::next_tx(scenario, &final_owner);

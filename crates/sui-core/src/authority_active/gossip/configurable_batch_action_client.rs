@@ -67,7 +67,7 @@ impl ConfigurableBatchActionClient {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let store = Arc::new(AuthorityStore::open(path, None));
+        let store = Arc::new(AuthorityStore::open(path.clone(), None));
         let state = AuthorityState::new(
             committee.clone(),
             address,
@@ -76,6 +76,7 @@ impl ConfigurableBatchActionClient {
             None,
             None,
             &sui_config::genesis::Genesis::get_default_genesis(),
+            false,
         )
         .await;
 

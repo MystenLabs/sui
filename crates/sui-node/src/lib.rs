@@ -17,7 +17,7 @@ use sui_gateway::bcs_api::BcsApiImpl;
 use sui_gateway::json_rpc::JsonRpcServerBuilder;
 use sui_gateway::read_api::{FullNodeApi, ReadApi};
 use sui_network::api::ValidatorServer;
-use sui_storage::IndexStore;
+use sui_storage::{follower_store::FollowerStore, IndexStore};
 use tracing::info;
 
 pub struct SuiNode {
@@ -58,6 +58,8 @@ impl SuiNode {
             )))
         };
 
+        let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
+
         let state = Arc::new(
             AuthorityState::new(
                 genesis.committee(),
@@ -67,6 +69,7 @@ impl SuiNode {
                 index_store,
                 checkpoint_store,
                 genesis,
+                config.enable_event_processing,
             )
             .await,
         );
@@ -87,7 +90,8 @@ impl SuiNode {
                 authority_clients.insert(validator.public_key(), client);
             }
 
-            let active_authority = ActiveAuthority::new(state.clone(), authority_clients)?;
+            let active_authority =
+                ActiveAuthority::new(state.clone(), follower_store, authority_clients)?;
 
             // Start following validators
             Some(tokio::task::spawn(async move {

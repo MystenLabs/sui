@@ -13,6 +13,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use std::future::Future;
 use std::ops::Deref;
 use std::{collections::HashSet, sync::Arc, time::Duration};
+use sui_storage::follower_store::FollowerStore;
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::AuthorityName,
@@ -35,6 +36,7 @@ struct PeerGossip<A> {
     peer_name: AuthorityName,
     client: SafeClient<A>,
     state: Arc<AuthorityState>,
+    follower_store: Arc<FollowerStore>,
     max_seq: Option<TxSequenceNumber>,
     aggregator: Arc<AuthorityAggregator<A>>,
 }
@@ -119,7 +121,7 @@ pub async fn gossip_process_with_start_seq<A>(
             gossip_tasks.push(async move {
                 let peer_gossip = PeerGossip::new(name, &local_active_ref_copy, start_seq);
                 // Add more duration if we make more than 1 to ensure overlap
-                debug!("Starting gossip from peer {:?}", name);
+                debug!(peer = ?name, "Starting gossip from peer");
                 peer_gossip
                     .start(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15))
                     .await
@@ -160,7 +162,7 @@ async fn wait_for_one_gossip_task_to_finish<A>(
     if let Err(err) = _result {
         active_authority.set_failure_backoff(finished_name).await;
         active_authority.state.metrics.gossip_task_error_count.inc();
-        error!("Peer {:?} returned error: {:?}", finished_name, err);
+        error!(peer = ?finished_name, "Peer returned error: {:?}", err);
     } else {
         active_authority.set_success_backoff(finished_name).await;
         active_authority
@@ -168,7 +170,7 @@ async fn wait_for_one_gossip_task_to_finish<A>(
             .metrics
             .gossip_task_success_count
             .inc();
-        debug!("End gossip from peer {:?}", finished_name);
+        debug!(peer = ?finished_name, "End gossip from peer");
     }
     peer_names.remove(&finished_name);
 }
@@ -225,10 +227,29 @@ where
         active_authority: &ActiveAuthority<A>,
         start_seq: Option<TxSequenceNumber>,
     ) -> PeerGossip<A> {
-        PeerGossip {
+        // TODO: for validator gossip, we should always use None as the start_seq, but we should
+        // consult the start_seq we retrieved from the db to make sure that the peer is giving
+        // us new txes.
+        let start_seq = match active_authority
+            .follower_store
+            .get_next_sequence(&peer_name)
+        {
+            Err(e) => {
+                error!("Could not load next sequence from follower store, defaulting to None. Error: {}", e);
+                // It might seem like a good idea to return start_seq here, but if we are running
+                // as a full node start_seq will be Some(0), and if the gossip process is repeatedly
+                // restarting, we would in that case repeatedly re-request all txes from the
+                // beginning of the epoch which could DoS the validators we are following.
+                None
+            }
+            Ok(s) => s.or(start_seq),
+        };
+
+        Self {
             peer_name,
             client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
+            follower_store: active_authority.follower_store.clone(),
             max_seq: start_seq,
             aggregator: active_authority.net.load().clone(),
         }
@@ -261,7 +282,10 @@ where
 
                 items = &mut streamx.next() => {
                     match items {
-                        Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch)) )) => {},
+                        Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
+                            let next_seq = signed_batch.batch.next_sequence_number;
+                            self.follower_store.record_next_sequence(&self.peer_name, next_seq)?;
+                        },
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {

@@ -161,36 +161,44 @@ async fn submit_transaction_to_consensus() {
 
     // Notify the submitter when a consensus transaction has been sequenced and executed.
     tokio::spawn(async move {
-        let (serialized, replier) = match rx_consensus_listener.recv().await.unwrap() {
-            ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
-            message => panic!("Unexpected message {message:?}"),
-        };
-        let message =
-            bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
-        let certificate = match message {
-            ConsensusTransaction::UserTransaction(certificate) => certificate,
-            _ => panic!("Unexpected message {message:?}"),
-        };
+        while let Some(message) = rx_consensus_listener.recv().await {
+            let (serialized, replier) = match message {
+                ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
+                message => panic!("Unexpected message {message:?}"),
+            };
 
-        // Set the shared object locks.
-        state_guard
-            .handle_consensus_transaction(
-                ExecutionIndices::default(),
-                ConsensusTransaction::UserTransaction(certificate.clone()),
-            )
-            .await
-            .unwrap();
+            let message =
+                bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
+            let certificate = match message {
+                ConsensusTransaction::UserTransaction(certificate) => certificate,
+                _ => panic!("Unexpected message {message:?}"),
+            };
 
-        // Reply to the submitter.
-        let result = Ok(Vec::default());
-        replier.send(result).unwrap();
+            // Set the shared object locks.
+            state_guard
+                .handle_consensus_transaction(
+                    ExecutionIndices::default(),
+                    ConsensusTransaction::UserTransaction(certificate.clone()),
+                )
+                .await
+                .unwrap();
+
+            // Reply to the submitter.
+            let result = Ok(Vec::default());
+            replier.send(result).unwrap();
+        }
     });
 
-    // Submit the transaction and ensure the submitter reports success to the caller.
-    tokio::task::yield_now().await;
+    // Submit the transaction and ensure the submitter reports success to the caller. Note
+    // that consensus may drop some transactions (so we may need to resubmit them).
     let consensus_transaction = ConsensusTransaction::UserTransaction(Box::new(certificate));
-    let result = submitter.submit(&consensus_transaction).await;
-    assert!(result.is_ok());
+    loop {
+        match submitter.submit(&consensus_transaction).await {
+            Ok(_) => break,
+            Err(SuiError::ConsensusConnectionBroken(..)) => (),
+            Err(e) => panic!("Unexpected error message: {e}"),
+        }
+    }
 
     // Ensure the consensus node got the transaction.
     let bytes = handle.recv().await.unwrap().transaction;

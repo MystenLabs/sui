@@ -781,6 +781,7 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
+        enable_event_processing: bool,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -825,6 +826,11 @@ impl AuthorityState {
             .get_last_epoch_info()
             .expect("Fail to load the current epoch info");
 
+        let event_handler = if enable_event_processing {
+            Some(Arc::new(EventHandler::new(store.clone())))
+        } else {
+            None
+        };
         let mut state = AuthorityState {
             name,
             secret,
@@ -834,10 +840,10 @@ impl AuthorityState {
             move_vm,
             database: store.clone(),
             indexes,
-            module_cache: SyncModuleCache::new(AuthorityStoreWrapper(store.clone())),
-            // `event_handler` uses a separate in-mem cache from `module_cache`
+            // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            event_handler: Some(Arc::new(EventHandler::new(store.clone()))),
+            module_cache: SyncModuleCache::new(AuthorityStoreWrapper(store.clone())),
+            event_handler,
             checkpoints,
             batch_channels: tx,
             batch_notifier: Arc::new(

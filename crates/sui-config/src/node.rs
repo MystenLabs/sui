@@ -33,6 +33,9 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
 
+    #[serde(default)]
+    pub enable_event_processing: bool,
+
     pub genesis: Genesis,
 }
 

@@ -104,7 +104,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
         let initial_accounts_config = self
             .initial_accounts_config
-            .unwrap_or_else(|| GenesisConfig::for_local_testing().unwrap());
+            .unwrap_or_else(GenesisConfig::for_local_testing);
         let (account_keys, objects) = initial_accounts_config
             .generate_accounts(&mut self.rng)
             .unwrap();
@@ -190,6 +190,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     metrics_address: utils::available_local_socket_address(),
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
+                    enable_event_processing: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })

@@ -177,7 +177,7 @@ impl SuiCommand {
 
                 let mut genesis_conf = match from_config {
                     Some(q) => PersistedConfig::read(q)?,
-                    None => GenesisConfig::for_local_testing()?,
+                    None => GenesisConfig::for_local_testing(),
                 };
 
                 if let Some(path) = write_config {
