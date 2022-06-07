@@ -190,7 +190,12 @@ pub enum WalletCommands {
         #[clap(long)]
         coin_id: ObjectID,
         /// Amount to split out from the coin
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(
+            long,
+            multiple_occurrences = false,
+            multiple_values = true,
+            required = true
+        )]
         amounts: Vec<u64>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
