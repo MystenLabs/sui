@@ -15,8 +15,8 @@ use sui_types::{
     messages::{CertifiedTransaction, ConfirmationTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointFragment, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
-        SignedCheckpoint, SignedCheckpointProposal,
+        CheckpointDigest, CheckpointFragment, CheckpointRequest, CheckpointResponse,
+        CheckpointSequenceNumber, SignedCheckpoint, SignedCheckpointProposal,
     },
 };
 use tokio::time::timeout;
@@ -329,7 +329,7 @@ where
     // Attempt to construct a newer checkpoint from signed summaries.
     #[allow(clippy::type_complexity)]
     let mut partial_checkpoints: BTreeMap<
-        (CheckpointSequenceNumber, [u8; 32]),
+        (CheckpointSequenceNumber, CheckpointDigest),
         Vec<(AuthorityName, SignedCheckpoint)>,
     > = BTreeMap::new();
     final_state
@@ -553,8 +553,8 @@ where
                 info: _info,
                 detail: Some(contents),
             }) => {
-                // TODO: check here that the digest of contents matches
-                if contents.digest() != checkpoint.checkpoint.digest {
+                // Check here that the digest of contents matches
+                if contents.digest() != checkpoint.checkpoint.content_digest {
                     // A byzantine authority!
                     // TODO: Report Byzantine authority
                     warn!("Sync Error: Incorrect contents returned");

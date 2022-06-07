@@ -22,8 +22,8 @@ use sui_types::{
     messages::CertifiedTransaction,
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointFragment, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
-        CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
+        CheckpointDigest, CheckpointFragment, CheckpointRequest, CheckpointResponse,
+        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
     },
 };
 use typed_store::{
@@ -138,6 +138,26 @@ pub struct CheckpointStore {
 }
 
 impl CheckpointStore {
+    fn get_prev_checkpoint_digest(
+        &mut self,
+        checkpoint_sequence: CheckpointSequenceNumber,
+    ) -> Result<Option<CheckpointDigest>, SuiError> {
+        // Extract the previous checkpoint digest if there is one.
+        Ok(if checkpoint_sequence > 0 {
+            self.checkpoints
+                .get(&(checkpoint_sequence - 1))?
+                .map(|prev_checkpoint| match prev_checkpoint {
+                    AuthenticatedCheckpoint::Certified(cert) => cert.checkpoint.digest(),
+                    AuthenticatedCheckpoint::Signed(signed) => signed.checkpoint.digest(),
+                    _ => {
+                        unreachable!();
+                    }
+                })
+        } else {
+            None
+        })
+    }
+
     // Manage persistent local variables
 
     /// Loads the locals from the store -- do this at init
@@ -154,19 +174,20 @@ impl CheckpointStore {
 
         // Recreate the proposal
         if locals.proposal_next_transaction.is_some() {
-            let checkpoint = locals.next_checkpoint;
+            let checkpoint_sequence = locals.next_checkpoint;
             let transactions = self
                 .extra_transactions
                 .iter()
                 .filter(|(_, seq)| seq < locals.proposal_next_transaction.as_ref().unwrap())
                 .map(|(digest, _)| digest);
-
             let transactions = CheckpointContents::new(transactions);
+            let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
             let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
-                checkpoint,
+                checkpoint_sequence,
                 self.name,
                 &*self.secret,
                 &transactions,
+                previous_digest,
             ));
 
             let proposal_and_transactions = CheckpointProposal::new(proposal, transactions);
@@ -644,7 +665,11 @@ impl CheckpointStore {
                         .map_err(|e| FragmentInternalError::Error(e.into()))?;
 
                     // Now create the new checkpoint and move all locals forward.
-                    let summary = CheckpointSummary::new(next_sequence_number, &contents);
+                    let previous_digest = self
+                        .get_prev_checkpoint_digest(next_sequence_number)
+                        .map_err(FragmentInternalError::Error)?;
+                    let summary =
+                        CheckpointSummary::new(next_sequence_number, &contents, previous_digest);
                     self.handle_internal_set_checkpoint(summary, &contents)
                         .map_err(FragmentInternalError::Error)?;
                     return Ok(true);
@@ -693,7 +718,14 @@ impl CheckpointStore {
                             .map_err(|e| FragmentInternalError::Error(e.into()))?;
 
                         let contents = CheckpointContents::new(contents.into_iter());
-                        let summary = CheckpointSummary::new(next_sequence_number, &contents);
+                        let previous_digest = self
+                            .get_prev_checkpoint_digest(next_sequence_number)
+                            .map_err(FragmentInternalError::Error)?;
+                        let summary = CheckpointSummary::new(
+                            next_sequence_number,
+                            &contents,
+                            previous_digest,
+                        );
                         self.handle_internal_set_checkpoint(summary, &contents)
                             .map_err(FragmentInternalError::Error)?;
                         return Ok(true);
@@ -880,15 +912,19 @@ impl CheckpointStore {
 
         // Include the sequence number of all extra transactions not already in a
         // checkpoint. And make a list of the transactions.
-        let sequence_number = self.next_checkpoint();
+        let checkpoint_sequence = self.next_checkpoint();
         let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
+
+        // Extract the previous checkpoint digest if there is one.
+        let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
         let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
-            sequence_number,
+            checkpoint_sequence,
             self.name,
             &*self.secret,
             &transactions,
+            previous_digest,
         ));
 
         let proposal_and_transactions = CheckpointProposal::new(proposal, transactions);
