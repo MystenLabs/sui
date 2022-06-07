@@ -126,7 +126,7 @@ in how a fullnode is run.
    state for devnet by clicking the link or by running the following in your
    terminal:
     ```
-    $ curl -fO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+    $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
 7. Edit your `fullnode.yaml` file:
     - Update the `db-path` field with a path to where the fullnode's database
