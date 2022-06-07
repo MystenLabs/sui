@@ -69,6 +69,7 @@ impl SuiNode {
                 index_store,
                 checkpoint_store,
                 genesis,
+                config.enable_event_processing,
             )
             .await,
         );
