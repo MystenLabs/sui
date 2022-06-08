@@ -307,7 +307,9 @@ fn transfer_sui<S>(
 
     // TODO: Emit a new event type for this.
 
-    debug_assert_eq!(object.version(), version);
+    #[cfg(debug_assertions)]
+    assert_eq!(object.version(), version);
+
     temporary_store.write_object(object);
 
     Ok(())
