@@ -173,7 +173,7 @@ export default function TxForID({
     category,
 }: {
     id: string;
-    category: 'address';
+    category: categoryType;
 }) {
     return IS_STATIC_ENV ? (
         <TxForIDStatic id={id} category={category} />

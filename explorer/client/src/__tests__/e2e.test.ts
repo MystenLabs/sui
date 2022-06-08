@@ -403,7 +403,7 @@ describe('End-to-end Tests', () => {
         });
     });
     describe('Transactions for ID', () => {
-        it('are displayed deduplicated from and to', async () => {
+        it('are displayed deduplicated from and to address', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
@@ -411,6 +411,22 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(fromResults.replace(/\s/g, '')).toBe(
                 'TxIdTxTypeStatusAddressesDa4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=Transfer\u2714From:senderAddressTo:receiv...dressGHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Transfer\u2716From:senderAddressTo:receiv...dressXHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Transfer\u2714From:senderAddressTo:receiv...dress'
+            );
+        });
+        it('are displayed deduplicated for input and mutated object', async () => {
+            const address = 'CollectionObject';
+            await page.goto(`${BASE_URL}/objects/${address}`);
+            const fromResults = await cssInteract(page)
+                .with('#txMutated')
+                .get.textContent();
+            expect(fromResults.replace(/\s/g, '')).toBe(
+                'GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8='
+            );
+            const toResults = await cssInteract(page)
+                .with('#txInput')
+                .get.textContent();
+            expect(toResults.replace(/\s/g, '')).toBe(
+                'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4='
             );
         });
     });

@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
+import TxForID from '../../components/transactions-for-id/TxForID';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
@@ -243,7 +244,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     </div>
                                 </div>
                             )}
-
+                            <TxForID id={data.id} category="object" />
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
