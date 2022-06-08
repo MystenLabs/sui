@@ -23,12 +23,19 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
+    const [showTx, setShowTx] = useState(true);
 
     useEffect(() => {
         setShowDescription(true);
         setShowProperties(true);
         setShowConnectedEntities(true);
-    }, [setShowDescription, setShowProperties, setShowConnectedEntities]);
+        setShowTx(true);
+    }, [
+        setShowDescription,
+        setShowProperties,
+        setShowConnectedEntities,
+        setShowTx,
+    ]);
 
     const clickSetShowDescription = useCallback(
         () => setShowDescription(!showDescription),
@@ -42,6 +49,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
         () => setShowConnectedEntities(!showConnectedEntities),
         [showConnectedEntities]
     );
+    const clickSetShowTx = useCallback(() => setShowTx(!showTx), [showTx]);
     const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
@@ -244,7 +252,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     </div>
                                 </div>
                             )}
-                            <TxForID id={data.id} category="object" />
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
@@ -327,6 +334,17 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+                    <h2
+                        className={styles.clickableheader}
+                        onClick={clickSetShowTx}
+                    >
+                        Associated Transactions {showTx ? '' : '+'}
+                    </h2>
+                    {showTx && (
+                        <div className={theme.textresults}>
+                            <TxForID id={data.id} category="object" />
                         </div>
                     )}
                     {properties.length > 0 && data.objType !== 'Move Package' && (
