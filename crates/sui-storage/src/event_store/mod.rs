@@ -14,6 +14,7 @@
 use async_trait::async_trait;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
+use serde_json::Value;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::event::{EventEnvelope, EventType};
 
@@ -23,6 +24,7 @@ use flexstr::SharedStr;
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StoredEvent {
     /// UTC timestamp in milliseconds
     timestamp: u64,
@@ -31,29 +33,34 @@ pub struct StoredEvent {
     tx_digest: Option<TransactionDigest>,
     /// The variant name from SuiEvent, eg MoveEvent, Publish, etc.
     event_type: SharedStr,
-    /// Object ID of the Move package generating the event
-    package_id: Option<ObjectID>,
     /// Module name of the Move package generating the event
     module_name: Option<SharedStr>,
+    /// Object ID of NewObject, DeleteObject, package being published, or object being transferred
+    object_id: Option<ObjectID>,
     /// Individual event fields.  As much as possible these should be deconstructed and flattened,
     /// ie `{'obj': {'fieldA': 'A', 'fieldB': 'B'}}` should really be broken down to
     /// `[('obj.fieldA', 'A'), ('obj.fieldB', 'B')]
     ///
+    /// There is no guarantee of ordering in the fields.
+    ///
     /// ## Common field names
-    /// * `object_id` - used by TransferObject, DeleteObject
     /// * `version` - used by TransferObject
+    /// * `destination` - address, in hex bytes, used by TransferObject
+    /// * `type` - used by TransferObject (TransferType - Coin, ToAddress, ToObject)
     fields: Vec<(SharedStr, EventValue)>, // Change this to something based on CBOR for binary values, or our own value types for efficiency
 }
 
 /// Enum for different types of values returnable from events in the EventStore
 // This is distinct from MoveValue because we want to explicitly represent (and translate)
 // blobs and strings, allowing us to use more efficient representations.
+#[derive(Clone, Debug, PartialEq)]
 pub enum EventValue {
     Move(MoveValue),
     /// Efficient string representation, no allocation for small strings
     String(SharedStr),
     /// Arbitrary-length blob.  Please use MoveValue::Address for ObjectIDs and similar things.
     BinaryBlob(Vec<u8>),
+    Json(Value),
 }
 
 /// An EventStore supports event ingestion and flexible event querying

@@ -3,9 +3,10 @@
 use super::*;
 
 use async_trait::async_trait;
+use serde_json::{json, Value};
 
-use sqlx::Execute;
 use sqlx::{sqlite::SqliteRow, Executor, Row, SqlitePool};
+use sui_types::event::Event;
 use tracing::{debug, info};
 
 pub struct SqlEventStore {
@@ -96,23 +97,61 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
     });
     let event_type: String = row.get(3);
     let package_id = try_extract_object_id(&row, 4).expect("Error converting package ID bytes");
+    let object_id = try_extract_object_id(&row, 6).expect("Error converting object ID bytes");
     let module_name: Option<String> = row.get(5);
+    let fields_text: &str = row.get(7);
+    let fields: Vec<_> = if fields_text.is_empty() {
+        Vec::new()
+    } else {
+        let fields_json = serde_json::from_str(fields_text)
+            .expect(format!("Could not parse [{}] as JSON", fields_text).as_str());
+        if let Value::Object(map) = fields_json {
+            map.into_iter()
+                .map(|(k, v)| (flexstr::SharedStr::from(k), EventValue::Json(v)))
+                .collect()
+        } else {
+            debug!(?fields_json, "Could not parse JSON as object");
+            Vec::new()
+        }
+    };
 
     StoredEvent {
         timestamp: timestamp as u64,
         checkpoint_num: checkpoint as u64,
         tx_digest,
         event_type: event_type.into(),
-        package_id,
         module_name: module_name.map(|s| s.into()),
-        fields: Vec::new(),
+        object_id: object_id.or(package_id),
+        fields,
+    }
+}
+
+// Adds JSON fields for items not in any of the standard columns in table definition, eg for MOVE events.
+fn event_to_json(event: &EventEnvelope) -> String {
+    if let Some(json_value) = &event.move_struct_json_value {
+        json_value.to_string()
+    } else {
+        let maybe_json = match &event.event {
+            Event::TransferObject {
+                version,
+                destination_addr,
+                type_,
+                ..
+            } => Some(json!({"destination": destination_addr.to_string(),
+                       "version": version.value(),
+                       "type": type_.to_string() })),
+            _ => None,
+        };
+        maybe_json.map(|j| j.to_string()).unwrap_or(String::new())
     }
 }
 
 const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, checkpoint, tx_digest, event_type, \
-    package_id, module_name, object_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    package_id, module_name, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
 const TS_QUERY: &str = "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? LIMIT ?";
+
+const TX_QUERY: &str = "SELECT * FROM events WHERE tx_digest = ?";
 
 #[async_trait]
 impl EventStore for SqlEventStore {
@@ -140,6 +179,7 @@ impl EventStore for SqlEventStore {
                 .bind(module_id.clone().map(|mid| mid.address().to_vec()))
                 .bind(module_id.map(|mid| mid.name().to_string()))
                 .bind(event.event.object_id().map(|id| id.to_vec()))
+                .bind(event_to_json(event))
                 .execute(&self.pool)
                 .await?;
         }
@@ -150,7 +190,12 @@ impl EventStore for SqlEventStore {
         &self,
         digest: TransactionDigest,
     ) -> Result<Self::EventIt, EventStoreError> {
-        unimplemented!()
+        let rows = sqlx::query(TX_QUERY)
+            .bind(digest.to_bytes())
+            .map(sql_row_to_event)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows.into_iter())
     }
 
     async fn events_by_type(
@@ -211,6 +256,9 @@ impl EventStore for SqlEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flexstr::shared_str;
+    use serde_json::json;
+    use std::collections::BTreeMap;
 
     use sui_types::{
         base_types::SuiAddress,
@@ -248,12 +296,7 @@ mod tests {
                 new_test_newobj_event(),
                 None,
             ),
-            EventEnvelope::new(
-                1_001_000,
-                Some(TransactionDigest::random()),
-                new_test_publish_event(),
-                None,
-            ),
+            EventEnvelope::new(1_001_000, None, new_test_publish_event(), None),
             EventEnvelope::new(
                 1_002_000,
                 Some(TransactionDigest::random()),
@@ -267,6 +310,15 @@ mod tests {
                 None,
             ),
         ]
+    }
+
+    fn test_queried_event_vs_test_envelope(queried: &StoredEvent, orig: &EventEnvelope) {
+        assert_eq!(queried.timestamp, orig.timestamp);
+        assert_eq!(queried.checkpoint_num, 1);
+        assert_eq!(queried.tx_digest, orig.tx_digest);
+        assert_eq!(queried.event_type, shared_str!(orig.event_type()));
+        assert_eq!(queried.module_name, None);
+        assert_eq!(queried.object_id, orig.event.object_id());
     }
 
     #[tokio::test]
@@ -285,12 +337,61 @@ mod tests {
 
         assert_eq!(db.total_event_count().await?, 4);
 
-        // Query for records in time range, end should be exclusive
-        let events = db.event_iterator(1_000_000, 1_002_000, 10).await?;
+        // Query for records in time range, end should be exclusive - should get 2
+        let event_it = db.event_iterator(1_000_000, 1_002_000, 10).await?;
+        let queried_events: Vec<_> = event_it.collect();
 
-        let count = events.count();
-        assert_eq!(count, 2);
+        assert_eq!(queried_events.len(), 2);
+        for i in 0..2 {
+            test_queried_event_vs_test_envelope(&queried_events[i], &to_insert[i]);
+        }
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_eventstore_transfers_tx_read() -> Result<(), EventStoreError> {
+        telemetry_subscribers::init_for_testing();
+
+        // Initialize store
+        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        db.initialize().await?;
+
+        // Insert some records
+        info!("Inserting records!");
+        let to_insert = test_events();
+        db.add_events(&to_insert, 1).await?;
+        info!("Done inserting");
+
+        // Query for transfer event
+        let mut event_it = db
+            .events_for_transaction(to_insert[2].tx_digest.unwrap())
+            .await?;
+        let transfer_event = event_it.next().expect("No transfer events in result!!");
+        assert_eq!(event_it.next(), None); // Should be no more events, just that one
+
+        test_queried_event_vs_test_envelope(&transfer_event, &to_insert[2]);
+
+        // Now test for fields
+        assert_eq!(transfer_event.fields.len(), 3);
+        let field_map: BTreeMap<_, _> = transfer_event.fields.into_iter().collect();
+        let keys: Vec<_> = field_map.keys().collect();
+        assert_eq!(
+            keys,
+            vec![
+                shared_str!("destination"),
+                shared_str!("type"),
+                shared_str!("version")
+            ]
+        );
+
+        let type_str = field_map.get(&shared_str!("type")).unwrap();
+        assert_eq!(type_str, &EventValue::Json(json!("Coin")));
+
+        Ok(())
+    }
+
+    // TODO: test MoveEvents
+
+    // TODO: test limit
 }

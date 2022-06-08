@@ -52,7 +52,7 @@ impl EventEnvelope {
     }
 }
 
-#[derive(Eq, Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Eq, Debug, strum_macros::Display, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub enum TransferType {
     Coin,
     ToAddress,

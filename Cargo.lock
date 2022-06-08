@@ -6409,6 +6409,7 @@ dependencies = [
  "rand 0.7.3",
  "rocksdb",
  "serde 1.0.137",
+ "serde_json",
  "sqlx",
  "sui-types",
  "telemetry-subscribers",
