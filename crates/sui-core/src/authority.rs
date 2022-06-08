@@ -1143,7 +1143,8 @@ impl AuthorityState {
 
         let update_type = UpdateType::Transaction(seq, signed_effects.effects.digest());
 
-        let res = self.database
+        let res = self
+            .database
             .update_state(temporary_store, certificate, signed_effects, update_type)
             .await;
 

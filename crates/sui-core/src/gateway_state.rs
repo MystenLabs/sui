@@ -36,8 +36,10 @@ use sui_types::{
 
 use crate::transaction_input_checker;
 use crate::{
-    authority::{GatewayStore, UpdateType}, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI, query_helpers::QueryHelpers,
+    authority::{GatewayStore, UpdateType},
+    authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
+    query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
