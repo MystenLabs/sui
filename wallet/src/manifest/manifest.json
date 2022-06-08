@@ -10,7 +10,11 @@
     "action": {
         "default_popup": "ui.html?type=popup"
     },
-    "host_permissions": [],
+    "host_permissions": [
+        "http://127.0.0.1:5001/",
+        "https://gateway.devnet.sui.io/",
+        "https://gateway.staging.sui.io/"
+    ],
     "icons": {
         "16": "manifest/icons/sui-icon-16.png",
         "32": "manifest/icons/sui-icon-32.png",
