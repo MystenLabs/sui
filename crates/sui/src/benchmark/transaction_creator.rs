@@ -50,12 +50,7 @@ fn make_transfer_transaction(
 
 /// Creates an object for use in the microbench
 fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
-    Object::with_id_owner_gas_coin_object_for_testing(
-        object_id,
-        SequenceNumber::new(),
-        owner,
-        GAS_PER_TX,
-    )
+    Object::with_id_owner_gas_for_testing(object_id, owner, GAS_PER_TX)
 }
 
 /// This builds, signs a cert

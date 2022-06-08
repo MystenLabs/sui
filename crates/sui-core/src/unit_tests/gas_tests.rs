@@ -464,12 +464,7 @@ async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) 
     let recipient = dbg_addr(2);
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_coin_object_for_testing(
-        gas_object_id,
-        SequenceNumber::new(),
-        sender,
-        gas_balance,
-    );
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas_balance);
     let gas_object_ref = gas_object.compute_object_reference();
     authority_state.insert_genesis_object(gas_object).await;
     let object = authority_state

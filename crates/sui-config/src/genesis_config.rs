@@ -75,12 +75,7 @@ impl GenesisConfig {
             }
 
             for (object_id, value) in preload_objects_map {
-                let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                    object_id,
-                    sui_types::base_types::SequenceNumber::new(),
-                    address,
-                    value,
-                );
+                let new_object = Object::with_id_owner_gas_for_testing(object_id, address, value);
                 preload_objects.push(new_object);
             }
         }

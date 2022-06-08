@@ -173,7 +173,6 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_gas_for_testing(
         gas_object_id,
-        SequenceNumber::new(),
         sender,
         49999, // We need 50000
     );

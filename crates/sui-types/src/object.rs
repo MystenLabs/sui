@@ -80,7 +80,13 @@ impl MoveObject {
     }
 
     /// Update the contents of this object and increment its version
-    pub fn update_contents(&mut self, new_contents: Vec<u8>) {
+    pub fn update_contents_and_increment_version(&mut self, new_contents: Vec<u8>) {
+        self.update_contents_without_version_change(new_contents);
+        self.increment_version();
+    }
+
+    /// Update the contents of this object but does not increment its version
+    pub fn update_contents_without_version_change(&mut self, new_contents: Vec<u8>) {
         #[cfg(debug_assertions)]
         let old_id = self.id();
         #[cfg(debug_assertions)]
@@ -94,8 +100,6 @@ impl MoveObject {
             debug_assert_eq!(self.id(), old_id);
             debug_assert_eq!(self.version(), old_version);
         }
-
-        self.increment_version();
     }
 
     /// Increase the version of this object by one
@@ -413,11 +417,18 @@ impl Object {
         meta_data_size + data_size
     }
 
-    /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: SuiAddress) -> SuiResult {
+    /// Change the owner of `self` to `new_owner`. This function does not increase the version
+    /// number of the object.
+    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) -> SuiResult {
         self.is_transfer_eligible()?;
-        // unwrap safe as the above check guarantees it.
         self.owner = Owner::AddressOwner(new_owner);
+        Ok(())
+    }
+
+    /// Change the owner of `self` to `new_owner`. This function will increment the version
+    /// number of the object after transfer.
+    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) -> SuiResult {
+        self.transfer_without_version_change(new_owner)?;
         let data = self.data.try_as_move_mut().unwrap();
         data.increment_version();
         Ok(())
@@ -436,15 +447,10 @@ impl Object {
         }
     }
 
-    pub fn with_id_owner_gas_for_testing(
-        id: ObjectID,
-        version: SequenceNumber,
-        owner: SuiAddress,
-        gas: u64,
-    ) -> Self {
+    pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
-            contents: GasCoin::new(id, version, gas).to_bcs_bytes(),
+            contents: GasCoin::new(id, SequenceNumber::new(), gas).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),
@@ -456,32 +462,11 @@ impl Object {
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
         // For testing, we provide sufficient gas by default.
-        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
+        Self::with_id_owner_gas_for_testing(id, owner, GAS_VALUE_FOR_TESTING)
     }
 
     pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
         Self::with_id_owner_for_testing(ObjectID::random(), owner)
-    }
-
-    /// Create Coin object for use in Move object operation
-    pub fn with_id_owner_gas_coin_object_for_testing(
-        id: ObjectID,
-        version: SequenceNumber,
-        owner: SuiAddress,
-        value: u64,
-    ) -> Self {
-        let obj = GasCoin::new(id, version, value);
-
-        let data = Data::Move(MoveObject {
-            type_: GasCoin::type_(),
-            contents: bcs::to_bytes(&obj).unwrap(),
-        });
-        Self {
-            owner: Owner::AddressOwner(owner),
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-            storage_rebate: 0,
-        }
     }
 
     /// Get a `MoveStructLayout` for `self`.
