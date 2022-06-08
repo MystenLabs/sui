@@ -24,10 +24,7 @@ use typed_store::Map;
 
 /// Helper function determining whether the checkpoint store of an authority contains the input
 /// transactions' digests.
-fn checkpoint_contains_digests(
-    authority: &AuthorityState,
-    transaction_digests: &HashSet<TransactionDigest>,
-) -> bool {
+fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<TransactionDigest> {
     let checkpoints_store = authority.checkpoints().unwrap();
 
     // Get all transactions in the first 10 checkpoints.
@@ -46,7 +43,6 @@ fn checkpoint_contains_digests(
                 .collect::<HashSet<_>>()
         })
         .collect::<HashSet<_>>()
-        .is_superset(transaction_digests)
 }
 
 #[tokio::test]
@@ -152,7 +148,7 @@ async fn end_to_end() {
                 ..CheckpointProcessControl::default()
             };
             active_state
-                .spawn_active_processes(true, true, checkpoint_process_control)
+                .spawn_active_processes(true, Some(checkpoint_process_control))
                 .await
         });
     }
@@ -172,21 +168,13 @@ async fn end_to_end() {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
 
-    // Wait for the transactions to be executed and end up in a checkpoint. Ensure all authorities
-    // moved to the next checkpoint sequence number.
+    // Wait for the transactions to be executed and end up in a checkpoint.
     loop {
+        // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
             .iter()
-            .map(|authority| {
-                authority
-                    .state()
-                    .checkpoints()
-                    .unwrap()
-                    .lock()
-                    .get_locals()
-                    .next_checkpoint
-            })
-            .all(|sequence| sequence >= 1);
+            .map(|authority| transactions_in_checkpoint(&authority.state()))
+            .all(|digests| digests.is_superset(&transaction_digests));
 
         match ok {
             true => break,
@@ -194,15 +182,24 @@ async fn end_to_end() {
         }
     }
 
-    // Ensure all submitted transactions are in the checkpoint.
-    for authority in &handles {
-        let ok = checkpoint_contains_digests(&authority.state(), &transaction_digests);
-        assert!(ok);
-    }
+    // Ensure all authorities moved to the next checkpoint sequence number.
+    let ok = handles
+        .iter()
+        .map(|authority| {
+            authority
+                .state()
+                .checkpoints()
+                .unwrap()
+                .lock()
+                .get_locals()
+                .next_checkpoint
+        })
+        .all(|sequence| sequence >= 1);
+    assert!(ok);
 }
 
 #[tokio::test]
-async fn end_to_end_with_shared_objects() {
+async fn checkpoint_with_shared_objects() {
     // Get some gas objects to submit shared-objects transactions.
     let mut gas_objects = test_gas_objects();
 
@@ -232,7 +229,7 @@ async fn end_to_end_with_shared_objects() {
                 ..CheckpointProcessControl::default()
             };
             active_state
-                .spawn_active_processes(true, true, checkpoint_process_control)
+                .spawn_active_processes(true, Some(checkpoint_process_control))
                 .await
         });
     }
@@ -303,21 +300,13 @@ async fn end_to_end_with_shared_objects() {
     transaction_digests.insert(*create_counter_transaction.digest());
     transaction_digests.insert(*increment_counter_transaction.digest());
 
-    // Wait for the transactions to be executed and end up in a checkpoint. Ensure all authorities
-    // moved to the next checkpoint sequence number.
+    // Wait for the transactions to be executed and end up in a checkpoint.
     loop {
+        // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
             .iter()
-            .map(|authority| {
-                authority
-                    .state()
-                    .checkpoints()
-                    .unwrap()
-                    .lock()
-                    .get_locals()
-                    .next_checkpoint
-            })
-            .all(|sequence| sequence >= 2);
+            .map(|authority| transactions_in_checkpoint(&authority.state()))
+            .all(|digests| digests.is_superset(&transaction_digests));
 
         match ok {
             true => break,
@@ -325,9 +314,18 @@ async fn end_to_end_with_shared_objects() {
         }
     }
 
-    // Ensure all submitted transactions are in the checkpoint.
-    for authority in &handles {
-        let ok = checkpoint_contains_digests(&authority.state(), &transaction_digests);
-        assert!(ok);
-    }
+    // Ensure all authorities moved to the next checkpoint sequence number.
+    let ok = handles
+        .iter()
+        .map(|authority| {
+            authority
+                .state()
+                .checkpoints()
+                .unwrap()
+                .lock()
+                .get_locals()
+                .next_checkpoint
+        })
+        .all(|sequence| sequence >= 1);
+    assert!(ok);
 }

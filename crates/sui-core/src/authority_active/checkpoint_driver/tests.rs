@@ -110,7 +110,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             .unwrap();
             // Spin the gossip service.
             active_state
-                .spawn_active_processes(true, true, CheckpointProcessControl::default())
+                .spawn_active_processes(true, Some(CheckpointProcessControl::default()))
                 .await;
         });
     }
@@ -198,7 +198,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             .unwrap();
             // Spin the gossip service.
             active_state
-                .spawn_active_processes(false, true, CheckpointProcessControl::default())
+                .spawn_active_processes(false, Some(CheckpointProcessControl::default()))
                 .await;
         });
     }
