@@ -24,6 +24,7 @@ function TxForIDView({
 }: {
     showData: { to: string[][] | never[]; from: string[][] | never[] };
 }) {
+    if (!showData.from || !showData.to) return <></>;
     const deduplicate = (results: string[][]) =>
         results
             .map((result) => result[1])
