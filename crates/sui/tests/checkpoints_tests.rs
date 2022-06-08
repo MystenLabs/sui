@@ -24,10 +24,7 @@ use typed_store::Map;
 
 /// Helper function determining whether the checkpoint store of an authority contains the input
 /// transactions' digests.
-fn checkpoint_contains_digests(
-    authority: &AuthorityState,
-    transaction_digests: &HashSet<TransactionDigest>,
-) -> bool {
+fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<TransactionDigest> {
     let checkpoints_store = authority.checkpoints().unwrap();
 
     // Get all transactions in the first 10 checkpoints.
@@ -46,7 +43,6 @@ fn checkpoint_contains_digests(
                 .collect::<HashSet<_>>()
         })
         .collect::<HashSet<_>>()
-        .is_superset(transaction_digests)
 }
 
 #[tokio::test]
@@ -196,8 +192,8 @@ async fn end_to_end() {
 
     // Ensure all submitted transactions are in the checkpoint.
     for authority in &handles {
-        let ok = checkpoint_contains_digests(&authority.state(), &transaction_digests);
-        assert!(ok);
+        let digests = transactions_in_checkpoint(&authority.state());
+        assert!(digests.is_superset(&transaction_digests));
     }
 }
 
@@ -327,7 +323,7 @@ async fn end_to_end_with_shared_objects() {
 
     // Ensure all submitted transactions are in the checkpoint.
     for authority in &handles {
-        let ok = checkpoint_contains_digests(&authority.state(), &transaction_digests);
-        assert!(ok);
+        let digests = transactions_in_checkpoint(&authority.state());
+        assert!(digests.is_superset(&transaction_digests));
     }
 }
