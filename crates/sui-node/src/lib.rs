@@ -80,6 +80,7 @@ impl SuiNode {
             let mut net_config = mysten_network::config::Config::new();
             net_config.connect_timeout = Some(Duration::from_secs(5));
             net_config.request_timeout = Some(Duration::from_secs(5));
+            net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
 
             let mut authority_clients = BTreeMap::new();
             for validator in genesis.validator_set() {
