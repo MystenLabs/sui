@@ -45,10 +45,6 @@ enum LockServiceCommands {
         is_force_reset: bool,
         resp: oneshot::Sender<SuiResult>,
     },
-    RemoveLocks {
-        refs: Vec<ObjectRef>,
-        resp: oneshot::Sender<SuiResult>,
-    },
     SequenceTransaction {
         tx: TransactionDigest,
         seq: TxSequenceNumber,
@@ -367,11 +363,6 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
-                LockServiceCommands::RemoveLocks { refs, resp } => {
-                    if let Err(_e) = resp.send(self.delete_locks(&refs)) {
-                        warn!("Could not respond to sender, sender dropped!");
-                    }
-                }
                 LockServiceCommands::SequenceTransaction {
                     tx,
                     seq,
@@ -537,22 +528,6 @@ impl LockService {
             .send(LockServiceCommands::Initialize {
                 refs: Vec::from(refs),
                 is_force_reset,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
-    }
-
-    /// Removes locks for a given list of ObjectRefs.
-    pub async fn remove_locks(&self, refs: Vec<ObjectRef>) -> SuiResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-        self.inner
-            .sender()
-            .send(LockServiceCommands::RemoveLocks {
-                refs,
                 resp: os_sender,
             })
             .await
