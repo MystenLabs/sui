@@ -17,89 +17,16 @@ use sui_types::{
     object::Object,
 };
 use test_utils::{
-    authority::{spawn_test_authorities, test_authority_aggregator, test_authority_configs},
+    authority::{
+        publish_counter_package, spawn_test_authorities, submit_shared_object_transaction,
+        submit_single_owner_transaction, test_authority_aggregator, test_authority_configs,
+    },
     messages::{
         make_certificates, move_transaction, parse_package_ref, publish_move_package_transaction,
         test_shared_object_transactions,
     },
     objects::{test_gas_objects, test_shared_object},
 };
-
-/// Submit a certificate containing only owned-objects to all authorities.
-async fn submit_single_owner_transaction(
-    transaction: Transaction,
-    configs: &[ValidatorInfo],
-) -> Vec<TransactionInfoResponse> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let txn = ConfirmationTransaction { certificate };
-
-    let mut responses = Vec::new();
-    for config in configs {
-        let client = get_client(config);
-        let reply = client
-            .handle_confirmation_transaction(txn.clone())
-            .await
-            .unwrap();
-        responses.push(reply);
-    }
-    responses
-}
-
-fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
-    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
-}
-
-/// Keep submitting the certificates of a shared-object transaction until it is sequenced by
-/// at least one consensus node. We use the loop since some consensus protocols (like Tusk)
-/// may drop transactions. The certificate is submitted to every Sui authority.
-async fn submit_shared_object_transaction(
-    transaction: Transaction,
-    configs: &[ValidatorInfo],
-) -> Vec<SuiResult<TransactionInfoResponse>> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(Box::new(certificate));
-
-    loop {
-        let futures: Vec<_> = configs
-            .iter()
-            .map(|config| {
-                let client = get_client(config);
-                let txn = message.clone();
-                async move { client.handle_consensus_transaction(txn).await }
-            })
-            .collect();
-
-        let replies: Vec<_> = futures::future::join_all(futures)
-            .await
-            .into_iter()
-            // Remove all `FailedToHearBackFromConsensus` replies. Note that the original Sui error type
-            // `SuiError::FailedToHearBackFromConsensus(..)` is lost when the message is sent through the
-            // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
-            // `.filter(|result| !matches!(result, Err(SuiError::FailedToHearBackFromConsensus(..))))`.
-            .filter(|result| match result {
-                Err(e) => !e.to_string().contains("deadline has elapsed"),
-                _ => true,
-            })
-            .collect();
-
-        if !replies.is_empty() {
-            break replies;
-        }
-    }
-}
-
-/// Helper function to publish the move package of a simple shared counter.
-async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInfo]) -> ObjectRef {
-    let transaction = publish_move_package_transaction(gas_object);
-    let replies = submit_single_owner_transaction(transaction, configs).await;
-    let mut package_refs = Vec::new();
-    for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-        package_refs.push(parse_package_ref(&effects).unwrap());
-    }
-    package_refs.pop().unwrap()
-}
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[tokio::test]
