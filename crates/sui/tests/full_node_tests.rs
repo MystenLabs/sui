@@ -106,6 +106,8 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
 
 #[tokio::test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();

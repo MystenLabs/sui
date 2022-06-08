@@ -57,7 +57,8 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use tracing::{debug, error, instrument};
+use tokio::sync::broadcast::error::RecvError;
+use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -543,6 +544,75 @@ impl AuthorityState {
             certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
         })
+    }
+
+    async fn index_one_tx(
+        &self,
+        indexes: &IndexStore,
+        seq: TxSequenceNumber,
+        digest: &TransactionDigest,
+    ) -> SuiResult {
+        let info = self.make_transaction_info(digest).await?;
+
+        let (cert, effects) = match info {
+            TransactionInfoResponse {
+                certified_transaction: Some(cert),
+                signed_effects: Some(effects),
+                ..
+            } => (cert, effects),
+            _ => {
+                return Err(SuiError::CertificateNotfound {
+                    certificate_digest: *digest,
+                })
+            }
+        };
+
+        indexes.index_tx(
+            cert.sender_address(),
+            cert.data.input_objects()?.iter().map(|o| o.object_id()),
+            effects.effects.mutated_and_created(),
+            seq,
+            digest,
+        )?;
+
+        Ok(())
+    }
+
+    pub async fn run_indexing_service(&self) -> SuiResult {
+        let mut subscriber = self.subscribe_batch();
+        let indexes = self.get_indexes()?;
+
+        loop {
+            match subscriber.recv().await {
+                Ok(item) => {
+                    if let UpdateItem::Transaction((
+                        seq,
+                        ExecutionDigests {
+                            transaction: digest,
+                            ..
+                        },
+                    )) = item
+                    {
+                        if let Err(e) = self.index_one_tx(indexes.as_ref(), seq, &digest).await {
+                            warn!(?digest, "Couldn't index tx: {}", e);
+                        }
+                    }
+                }
+                Err(RecvError::Closed) => {
+                    // The service closed the channel.
+                    break;
+                }
+                Err(RecvError::Lagged(number_skipped)) => {
+                    // Should we do something more drastic here?
+                    warn!(
+                        "run_indexing_service too slow, skipped {} txes",
+                        number_skipped
+                    );
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
@@ -1121,52 +1191,11 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        // We want to call update_state before updating the indexes, however this is extremely
-        // awkward because update_state takes temporary_store by value.
-        // TODO: Move indexing either into update_state, or make it a batch consumer to clean this
-        // up.
-        let (inputs, outputs) = if self.indexes.is_some() {
-            let inputs: Vec<_> = temporary_store
-                .objects()
-                .iter()
-                .map(|(_, o)| o.clone())
-                .collect();
-            let outputs: Vec<_> = temporary_store
-                .written()
-                .iter()
-                .map(|(_, (_, o))| o.clone())
-                .collect();
-            (Some(inputs), Some(outputs))
-        } else {
-            (None, None)
-        };
-
         let update_type = UpdateType::Transaction(seq, signed_effects.effects.digest());
 
-        let res = self
-            .database
+        self.database
             .update_state(temporary_store, certificate, signed_effects, update_type)
-            .await;
-
-        if let Some(indexes) = &self.indexes {
-            // unwrap ok because of previous if stmt.
-            let inputs = inputs.unwrap();
-            let outputs = outputs.unwrap();
-            // turn into vectors of references...
-            let inputs: Vec<_> = inputs.iter().collect();
-            let outputs: Vec<_> = outputs.iter().collect();
-            if let Err(e) = indexes.index_tx(
-                certificate.sender_address(),
-                &inputs,
-                &outputs,
-                seq,
-                certificate.digest(),
-            ) {
-                error!("Error indexing certificate: {}", e);
-            }
-        }
-
-        res
+            .await
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }

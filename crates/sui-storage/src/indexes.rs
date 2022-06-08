@@ -13,7 +13,8 @@ use sui_types::batch::TxSequenceNumber;
 
 use sui_types::error::SuiResult;
 
-use sui_types::object::Object;
+use sui_types::base_types::ObjectRef;
+use sui_types::object::Owner;
 
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
@@ -77,11 +78,11 @@ impl IndexStore {
         }
     }
 
-    pub fn index_tx(
+    pub fn index_tx<'a>(
         &self,
         sender: SuiAddress,
-        active_inputs: &[&Object],
-        mutated_objects: &[&Object],
+        active_inputs: impl Iterator<Item = ObjectID>,
+        mutated_objects: impl Iterator<Item = &'a (ObjectRef, Owner)> + Clone,
         sequence: TxSequenceNumber,
         digest: &TransactionDigest,
     ) -> SuiResult {
@@ -94,23 +95,22 @@ impl IndexStore {
 
         let batch = batch.insert_batch(
             &self.transactions_by_input_object_id,
-            active_inputs
-                .iter()
-                .map(|object| ((object.id(), sequence), *digest)),
+            active_inputs.map(|id| ((id, sequence), *digest)),
         )?;
 
         let batch = batch.insert_batch(
             &self.transactions_by_mutated_object_id,
             mutated_objects
-                .iter()
-                .map(|object| ((object.id(), sequence), *digest)),
+                .clone()
+                .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
         )?;
 
         let batch = batch.insert_batch(
             &self.transactions_to_addr,
-            mutated_objects.iter().filter_map(|object| {
-                object
-                    .get_single_owner()
+            mutated_objects.filter_map(|(_, owner)| {
+                owner
+                    .get_owner_address()
+                    .ok()
                     .map(|addr| ((addr, sequence), digest))
             }),
         )?;
