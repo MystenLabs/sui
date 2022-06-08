@@ -460,9 +460,8 @@ async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = MAX_GAS;
-    let gas_seq = SequenceNumber::new();
     let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -696,7 +695,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
-        o.update_contents(old_contents);
+        o.update_contents_and_increment_version(old_contents);
         authority_state.insert_genesis_object(sender_object).await;
     }
 
@@ -1293,6 +1292,110 @@ async fn test_change_epoch_transaction() {
     assert_eq!(sui_system_object.epoch, 1);
 }
 
+#[tokio::test]
+async fn test_transfer_sui_no_amount() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let init_balance = sui_types::gas::get_gas_balance(&gas_object).unwrap();
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&tx_data, &sender_key);
+    let transaction = Transaction::new(tx_data, signature);
+
+    // Make sure transaction handling works as usual.
+    authority_state
+        .handle_transaction(transaction.clone())
+        .await
+        .unwrap();
+
+    let certificate = init_certified_transaction(transaction, &authority_state);
+    let response = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .await
+        .unwrap();
+    let effects = response.signed_effects.unwrap().effects;
+    // Check that the transaction was successful, and the gas object is the only mutated object,
+    // and got transferred. Also check on its version and new balance.
+    assert!(effects.status.is_ok());
+    assert!(effects.mutated_excluding_gas().next().is_none());
+    assert_eq!(effects.gas_object.0 .1, SequenceNumber::new().increment());
+    assert_eq!(effects.gas_object.1, Owner::AddressOwner(recipient));
+    let new_balance = sui_types::gas::get_gas_balance(
+        &authority_state
+            .get_object(&gas_object_id)
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage(),
+        init_balance as i64
+    );
+}
+
+#[tokio::test]
+async fn test_transfer_sui_with_amount() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let init_balance = sui_types::gas::get_gas_balance(&gas_object).unwrap();
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        Some(500),
+        gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&tx_data, &sender_key);
+    let transaction = Transaction::new(tx_data, signature);
+
+    let certificate = init_certified_transaction(transaction, &authority_state);
+    let response = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .await
+        .unwrap();
+    let effects = response.signed_effects.unwrap().effects;
+    // Check that the transaction was successful, the gas object remains in the original owner,
+    // and an amount is split out and send to the recipient.
+    assert!(effects.status.is_ok());
+    assert!(effects.mutated_excluding_gas().next().is_none());
+    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.created[0].1, Owner::AddressOwner(recipient));
+    let new_gas = authority_state
+        .get_object(&effects.created[0].0 .0)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(sui_types::gas::get_gas_balance(&new_gas).unwrap(), 500);
+    assert_eq!(effects.gas_object.0 .1, SequenceNumber::new().increment());
+    assert_eq!(effects.gas_object.1, Owner::AddressOwner(sender));
+    let new_balance = sui_types::gas::get_gas_balance(
+        &authority_state
+            .get_object(&gas_object_id)
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage() + 500,
+        init_balance as i64
+    );
+}
+
 // helpers
 
 #[cfg(test)]
@@ -1380,14 +1483,22 @@ fn init_certified_transfer_transaction(
 ) -> CertifiedTransaction {
     let transfer_transaction =
         init_transfer_transaction(sender, secret, recipient, object_ref, gas_object_ref);
+    init_certified_transaction(transfer_transaction, authority_state)
+}
+
+#[cfg(test)]
+fn init_certified_transaction(
+    transaction: Transaction,
+    authority_state: &AuthorityState,
+) -> CertifiedTransaction {
     let vote = SignedTransaction::new(
         0,
-        transfer_transaction.clone(),
+        transaction.clone(),
         authority_state.name,
         &*authority_state.secret,
     );
     let committee = authority_state.committee.load();
-    let mut builder = SignatureAggregator::try_new(transfer_transaction, &committee).unwrap();
+    let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     builder
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()

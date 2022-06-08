@@ -424,7 +424,7 @@ fn process_successful_execution<
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents(new_contents);
+            .update_contents_and_increment_version(new_contents);
         state_view.write_object(obj);
     }
     let tx_digest = ctx.digest();

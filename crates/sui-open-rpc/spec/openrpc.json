@@ -1955,6 +1955,19 @@
             "additionalProperties": false
           },
           {
+            "description": "Initiate a SUI coin transfer between addresses",
+            "type": "object",
+            "required": [
+              "TransferSui"
+            ],
+            "properties": {
+              "TransferSui": {
+                "$ref": "#/components/schemas/TransferSui"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "A system transaction that will update epoch information on-chain.",
             "type": "object",
             "required": [
@@ -2030,6 +2043,25 @@
         "properties": {
           "objectRef": {
             "$ref": "#/components/schemas/ObjectRef"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "TransferSui": {
+        "type": "object",
+        "required": [
+          "recipient"
+        ],
+        "properties": {
+          "amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
           },
           "recipient": {
             "$ref": "#/components/schemas/SuiAddress"
