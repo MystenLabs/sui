@@ -81,7 +81,7 @@ module Sui::ValidatorSetTests {
 
     fun create_validator(addr: address, hint: u8): (TxContext, Validator) {
         let stake_value = (hint as u64) * 100;
-        let ctx = TxContext::new_from_address(addr, hint);
+        let ctx = TxContext::new_from_hint(addr, hint, 0, 0);
         let init_stake = Coin::mint_for_testing(stake_value, &mut ctx);
         let init_stake = Coin::into_balance(init_stake);
         let validator = Validator::new(
