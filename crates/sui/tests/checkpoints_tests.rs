@@ -300,21 +300,13 @@ async fn checkpoint_with_shared_objects() {
     transaction_digests.insert(*create_counter_transaction.digest());
     transaction_digests.insert(*increment_counter_transaction.digest());
 
-    // Wait for the transactions to be executed and end up in a checkpoint. Ensure all authorities
-    // moved to the next checkpoint sequence number.
+    // Wait for the transactions to be executed and end up in a checkpoint.
     loop {
+        // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
             .iter()
-            .map(|authority| {
-                authority
-                    .state()
-                    .checkpoints()
-                    .unwrap()
-                    .lock()
-                    .get_locals()
-                    .next_checkpoint
-            })
-            .all(|sequence| sequence >= 2);
+            .map(|authority| transactions_in_checkpoint(&authority.state()))
+            .all(|digests| digests.is_superset(&transaction_digests));
 
         match ok {
             true => break,
@@ -322,9 +314,18 @@ async fn checkpoint_with_shared_objects() {
         }
     }
 
-    // Ensure all submitted transactions are in the checkpoint.
-    for authority in &handles {
-        let digests = transactions_in_checkpoint(&authority.state());
-        assert!(digests.is_superset(&transaction_digests));
-    }
+    // Ensure all authorities moved to the next checkpoint sequence number.
+    let ok = handles
+        .iter()
+        .map(|authority| {
+            authority
+                .state()
+                .checkpoints()
+                .unwrap()
+                .lock()
+                .get_locals()
+                .next_checkpoint
+        })
+        .all(|sequence| sequence >= 1);
+    assert!(ok);
 }
