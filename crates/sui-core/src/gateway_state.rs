@@ -36,8 +36,10 @@ use sui_types::{
 
 use crate::transaction_input_checker;
 use crate::{
-    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI, query_helpers::QueryHelpers,
+    authority::{GatewayStore, UpdateType},
+    authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
+    query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
@@ -478,14 +480,18 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
+        let update_type = UpdateType::Transaction(
+            self.next_tx_seq_number
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            effects.digest(),
+        );
         self.store
             .update_gateway_state(
                 all_objects,
                 mutated_objects,
                 new_certificate.clone(),
                 effects.clone().to_unsigned_effects(),
-                self.next_tx_seq_number
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                update_type,
             )
             .await?;
 

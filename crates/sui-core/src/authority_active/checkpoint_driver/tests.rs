@@ -85,6 +85,9 @@ async fn checkpoint_active_flow_happy_path() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_active_flow_crash_client_with_gossip() {
+    use telemetry_subscribers::init_for_testing;
+    init_for_testing();
+
     let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;
 
     let TestSetup {
