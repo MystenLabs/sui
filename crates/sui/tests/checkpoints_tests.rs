@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use rand::{rngs::StdRng, SeedableRng};
@@ -90,9 +92,11 @@ async fn sequence_fragments() {
 #[tokio::test]
 async fn end_to_end() {
     // Make a few test transactions.
+    let total_transactions = 3;
     let mut rng = StdRng::from_seed([0; 32]);
-    let keys = (0..3).map(|_| get_key_pair_from_rng(&mut rng).1);
-    let (mut transactions, input_objects) = test_transactions(keys);
+    let keys = (0..total_transactions).map(|_| get_key_pair_from_rng(&mut rng).1);
+    let (transactions, input_objects) = test_transactions(keys);
+    let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
 
     // Spawn a quorum of authorities.
     let configs = test_authority_configs();
@@ -119,10 +123,10 @@ async fn end_to_end() {
     }
 
     // Send the transactions for execution.
-    while let Some(transaction) = transactions.pop() {
+    for transaction in &transactions {
         let (_, effects) = aggregator
             .clone()
-            .execute_transaction(&transaction)
+            .execute_transaction(transaction)
             .await
             .unwrap();
 
@@ -133,7 +137,8 @@ async fn end_to_end() {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
 
-    // Wait for the transactions to be executed and end up in a checkpoint.
+    // Wait for the transactions to be executed and end up in a checkpoint. Ensure all authorities
+    // moved to the next checkpoint sequence number.
     loop {
         let ok = handles
             .iter()
@@ -147,9 +152,127 @@ async fn end_to_end() {
                     .next_checkpoint
             })
             .all(|sequence| sequence >= 1);
-        if ok {
-            break;
+
+        match ok {
+            true => break,
+            false => tokio::time::sleep(Duration::from_millis(10)).await,
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
     }
+
+    // Ensure all submitted transactions are in the checkpoint.
+    let ok = handles
+        .iter()
+        .map(|authority| {
+            (0..total_transactions)
+                .map(|i| {
+                    authority
+                        .state()
+                        .checkpoints()
+                        .unwrap()
+                        .lock()
+                        .checkpoint_contents
+                        .get(&(0, i))
+                        .unwrap()
+                        .unwrap()
+                        .transaction
+                })
+                .collect::<HashSet<_>>()
+        })
+        .all(|digests| digests == transaction_digests);
+
+    assert!(ok);
+}
+
+#[tokio::test]
+async fn end_to_end_with_shared_objects() {
+    // Make a few test transactions.
+    let total_transactions = 3;
+    let mut rng = StdRng::from_seed([0; 32]);
+    let keys = (0..total_transactions).map(|_| get_key_pair_from_rng(&mut rng).1);
+    let (transactions, input_objects) = test_transactions(keys);
+    let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
+
+    // Spawn a quorum of authorities.
+    let configs = test_authority_configs();
+    let handles = spawn_test_authorities(input_objects, &configs).await;
+
+    // Make an authority's aggregator.
+    let aggregator = test_authority_aggregator(&configs);
+
+    // Start active part of each authority.
+    for authority in &handles {
+        let state = authority.state().clone();
+        let clients = aggregator.clone_inner_clients();
+        let _active_authority_handle = tokio::spawn(async move {
+            let active_state =
+                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap();
+            let checkpoint_process_control = CheckpointProcessControl {
+                long_pause_between_checkpoints: Duration::from_millis(10),
+                ..CheckpointProcessControl::default()
+            };
+            active_state
+                .spawn_active_processes(true, true, checkpoint_process_control)
+                .await
+        });
+    }
+
+    // Send the transactions for execution.
+    for transaction in &transactions {
+        let (_, effects) = aggregator
+            .clone()
+            .execute_transaction(transaction)
+            .await
+            .unwrap();
+
+        // If this check fails the transactions will not be included in the checkpoint.
+        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+        // Add some delay between transactions
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    // Wait for the transactions to be executed and end up in a checkpoint. Ensure all authorities
+    // moved to the next checkpoint sequence number.
+    loop {
+        let ok = handles
+            .iter()
+            .map(|authority| {
+                authority
+                    .state()
+                    .checkpoints()
+                    .unwrap()
+                    .lock()
+                    .get_locals()
+                    .next_checkpoint
+            })
+            .all(|sequence| sequence >= 1);
+
+        match ok {
+            true => break,
+            false => tokio::time::sleep(Duration::from_millis(10)).await,
+        }
+    }
+
+    // Ensure all submitted transactions are in the checkpoint.
+    let ok = handles
+        .iter()
+        .map(|authority| {
+            (0..total_transactions)
+                .map(|i| {
+                    authority
+                        .state()
+                        .checkpoints()
+                        .unwrap()
+                        .lock()
+                        .checkpoint_contents
+                        .get(&(0, i))
+                        .unwrap()
+                        .unwrap()
+                        .transaction
+                })
+                .collect::<HashSet<_>>()
+        })
+        .all(|digests| digests == transaction_digests);
+
+    assert!(ok);
 }
