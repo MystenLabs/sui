@@ -777,7 +777,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                     // It also (not atomically) deletes the locks for input objects.
                     // After this call completes, new txes can run on the output locks, so all
                     // output objects must be written already.
-                    self.lock_service
+                    let assigned_seq = self
+                        .lock_service
                         .sequence_transaction(
                             transaction_digest,
                             seq,
@@ -786,12 +787,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                         )
                         .await?;
 
-                    // This write may be done repeatedly when retrying a tx. the
-                    // sequence_transaction call above ensures that it is only ever called with
-                    // exactly one seq->transaction_digest mapping, so we can't sequence the same
-                    // tx twice here.
+                    // This write may be done repeatedly when retrying a tx. The
+                    // sequence_transaction call above assigns a sequence number to the transaction
+                    // the first time it is called and will return that same sequence on subsequent
+                    // calls.
                     self.executed_sequence.insert(
-                        &seq,
+                        &assigned_seq,
                         &ExecutionDigests::new(transaction_digest, effects_digest),
                     )?;
                 }

@@ -56,10 +56,6 @@ type SuiLockResult = Result<Option<Option<TransactionDigest>>, SuiError>;
 /// Queries to the LockService state
 #[derive(Debug)]
 enum LockServiceQueries {
-    GetTxSequence {
-        tx: TransactionDigest,
-        resp: oneshot::Sender<SuiResult<Option<TxSequenceNumber>>>,
-    },
     GetLock {
         object: ObjectRef,
         resp: oneshot::Sender<SuiLockResult>,
@@ -73,7 +69,7 @@ enum LockServiceQueries {
         seq: TxSequenceNumber,
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
-        resp: oneshot::Sender<SuiResult>,
+        resp: oneshot::Sender<SuiResult<TxSequenceNumber>>,
     },
     CreateLocksForGenesisObjects {
         objects: Vec<ObjectRef>,
@@ -171,17 +167,11 @@ impl LockServiceImpl {
         seq: TxSequenceNumber,
         inputs: &[ObjectRef],
         outputs: &[ObjectRef],
-    ) -> SuiResult {
+    ) -> SuiResult<TxSequenceNumber> {
         // Assert that this tx has not been sequenced under a different number.
         match self.get_tx_sequence(tx)? {
-            Some(prev_seq) => {
-                if prev_seq != seq {
-                    Err(SuiError::TransactionSequenceConflicting)
-                } else {
-                    // tx has already been sequenced
-                    Ok(())
-                }
-            }
+            // tx has already been sequenced
+            Some(prev_seq) => Ok(prev_seq),
 
             None => {
                 // Assert that the tx locks exist
@@ -217,7 +207,7 @@ impl LockServiceImpl {
 
                     let write_batch = self.initialize_locks_impl(write_batch, outputs, false)?;
                     write_batch.write()?;
-                    Ok(())
+                    Ok(seq)
                 }
             }
         }
@@ -231,10 +221,16 @@ impl LockServiceImpl {
         inputs: &[ObjectRef],
         // The objects that we must create new locks for.
         outputs: &[ObjectRef],
-    ) -> SuiResult {
-        self.sequence_transaction_impl(tx, seq, inputs, outputs)?;
+    ) -> SuiResult<TxSequenceNumber> {
+        let seq = self.sequence_transaction_impl(tx, seq, inputs, outputs)?;
+
+        // delete_locks need not be atomic with sequence_transaction_impl
+        // - lock deletion is idempotent
+        // - this tx will not read the locks again if re-executed, as it will fail the
+        //   has-it-been-sequenced check.
+        // - no other certificate can exist that reads these locks.
         self.delete_locks(inputs)?;
-        Ok(())
+        Ok(seq)
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
@@ -376,11 +372,6 @@ impl LockServiceImpl {
         info!("LockService queries processing loop started");
         while let Some(msg) = receiver.blocking_recv() {
             match msg {
-                LockServiceQueries::GetTxSequence { tx, resp } => {
-                    if let Err(_e) = resp.send(self.get_tx_sequence(tx)) {
-                        warn!("Could not respond to sender!");
-                    }
-                }
                 LockServiceQueries::GetLock { object, resp } => {
                     if let Err(_e) = resp.send(self.get_lock(object)) {
                         warn!("Could not respond to sender!");
@@ -561,26 +552,6 @@ impl LockService {
             .expect("Response from lockservice was cancelled, should not happen!")
     }
 
-    /// Get the sequence number associated with tx. If tx has not yet been sequenced,
-    /// return None.
-    pub async fn get_tx_sequence(
-        &self,
-        tx: TransactionDigest,
-    ) -> SuiResult<Option<TxSequenceNumber>> {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult<Option<TxSequenceNumber>>>();
-        self.inner
-            .query_sender()
-            .send(LockServiceQueries::GetTxSequence {
-                tx,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
-    }
-
     /// Returns the state of a single lock.
     /// * None - lock does not exist and is not initialized
     /// * Some(None) - lock exists and is initialized, but not locked to a particular transaction
@@ -617,23 +588,23 @@ impl LockService {
 
     /// Attempts to sequence the given tx. Sequencing consists of:
     ///
-    /// 1. Ensure the tx has not been previously sequenced under a different sequence number.
+    /// 1. Check if the tx has been previously sequenced under a different sequence number,
+    ///    if so, return it.
     /// 2. If not, atomically record the tx->sequence number assignment and initialize locks for
     ///    the output objects of this tx.
     /// 3. Delete locks for the tx input objects (this step is not atomic).
     ///
     /// Return value:
-    /// - If tx already has been assigned to some other sequence number, return
-    ///   SuiError::TransactionSequenceConflicting.
-    /// - Otherwise, this is a new assignment of tx->seq, so we return Ok(())
+    /// - The sequence number that was assigned to tx - may differ from the `seq` parameter if the
+    ///   tx was previously sequenced.
     pub async fn sequence_transaction(
         &self,
         tx: TransactionDigest,
         seq: TxSequenceNumber,
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
-    ) -> SuiResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+    ) -> SuiResult<TxSequenceNumber> {
+        let (os_sender, os_receiver) = oneshot::channel::<SuiResult<TxSequenceNumber>>();
         self.inner
             .query_sender()
             .send(LockServiceQueries::SequenceTransaction {
