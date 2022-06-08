@@ -198,7 +198,7 @@ where
     }
 }
 
-impl<'a, K, I> WaypointDiff<K, I>
+impl<K, I> WaypointDiff<K, I>
 where
     I: 'static + Ord + IntoPoint,
     K: 'static,

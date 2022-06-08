@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority_active::ActiveAuthority, authority_client::LocalAuthorityClient,
-    checkpoints::checkpoint_tests::TestSetup, safe_client::SafeClient,
+    authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    authority_client::LocalAuthorityClient,
+    checkpoints::checkpoint_tests::TestSetup,
+    safe_client::SafeClient,
 };
 
 use std::{collections::BTreeSet, time::Duration};
@@ -107,7 +109,9 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             )
             .unwrap();
             // Spin the gossip service.
-            active_state.spawn_active_processes(true, true).await;
+            active_state
+                .spawn_active_processes(true, true, CheckpointProcessControl::default())
+                .await;
         });
     }
 
@@ -193,7 +197,9 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             )
             .unwrap();
             // Spin the gossip service.
-            active_state.spawn_active_processes(false, true).await;
+            active_state
+                .spawn_active_processes(false, true, CheckpointProcessControl::default())
+                .await;
         });
     }
 
