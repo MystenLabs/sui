@@ -174,7 +174,17 @@ impl LockServiceImpl {
             Some(prev_seq) => Ok(prev_seq),
 
             None => {
-                // Assert that the tx locks exist
+                // Assert that the tx locks exist.
+                //
+                // Note that the locks may not be set to this particular tx:
+                //
+                // 1. Lock existence prevents re-execution of old certs when objects have been
+                //    upgraded
+                // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+                //    (But the lock should exist which means previous transactions finished)
+                // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX
+                //    its fine
+                //
                 // TODO: it should be impossible for this to fail unless the store has been
                 // corrupted. Remove this check when we feel confident enough.
                 if let Err(e) = self.locks_exist(inputs) {
