@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
-use sui_core::authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority};
+use sui_core::{
+    authority::AuthorityState,
+    authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+};
 use sui_types::{
-    base_types::ExecutionDigests,
+    base_types::{ExecutionDigests, TransactionDigest},
     crypto::get_key_pair_from_rng,
     messages::{CallArg, ExecutionStatus},
 };
@@ -18,6 +21,33 @@ use test_utils::{
 };
 use tokio::time::{sleep, Duration};
 use typed_store::Map;
+
+/// Helper function determining whether the checkpoint store of an authority contains the input
+/// transactions' digests.
+fn checkpoint_contains_digests(
+    authority: &AuthorityState,
+    transaction_digests: &HashSet<TransactionDigest>,
+) -> bool {
+    let checkpoints_store = authority.checkpoints().unwrap();
+
+    // Get all transactions in the first 10 checkpoints.
+    (0..10)
+        .flat_map(|checkpoint_sequence| {
+            // Get enough sequence numbers (one or two are enough).
+            (0..10)
+                .filter_map(|i| {
+                    checkpoints_store
+                        .lock()
+                        .checkpoint_contents
+                        .get(&(checkpoint_sequence, i))
+                        .unwrap()
+                })
+                .map(|x| x.transaction)
+                .collect::<HashSet<_>>()
+        })
+        .collect::<HashSet<_>>()
+        .is_superset(transaction_digests)
+}
 
 #[tokio::test]
 async fn sequence_fragments() {
@@ -165,27 +195,10 @@ async fn end_to_end() {
     }
 
     // Ensure all submitted transactions are in the checkpoint.
-    let ok = handles
-        .iter()
-        .map(|authority| {
-            (0..total_transactions)
-                .map(|i| {
-                    authority
-                        .state()
-                        .checkpoints()
-                        .unwrap()
-                        .lock()
-                        .checkpoint_contents
-                        .get(&(0, i))
-                        .unwrap()
-                        .unwrap()
-                        .transaction
-                })
-                .collect::<HashSet<_>>()
-        })
-        .all(|digests| digests == transaction_digests);
-
-    assert!(ok);
+    for authority in &handles {
+        let ok = checkpoint_contains_digests(&authority.state(), &transaction_digests);
+        assert!(ok);
+    }
 }
 
 #[tokio::test]
@@ -314,23 +327,7 @@ async fn end_to_end_with_shared_objects() {
 
     // Ensure all submitted transactions are in the checkpoint.
     for authority in &handles {
-        let state = authority.state().checkpoints().unwrap();
-        // Get all transactions in the first two checkpoints.
-        let digests = (0..2)
-            .flat_map(|checkpoint_sequence| {
-                // Get enough sequence numbers (one or two are enough).
-                (0..10)
-                    .filter_map(|i| {
-                        state
-                            .lock()
-                            .checkpoint_contents
-                            .get(&(checkpoint_sequence, i))
-                            .unwrap()
-                    })
-                    .map(|x| x.transaction)
-                    .collect::<HashSet<_>>()
-            })
-            .collect::<HashSet<_>>();
-        assert!(digests.is_superset(&transaction_digests));
+        let ok = checkpoint_contains_digests(&authority.state(), &transaction_digests);
+        assert!(ok);
     }
 }
