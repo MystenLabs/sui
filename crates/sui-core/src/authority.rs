@@ -80,7 +80,9 @@ mod temporary_store;
 pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-pub use authority_store::{AuthorityStore, AuthorityStoreWrapper, GatewayStore, SuiDataStore};
+pub use authority_store::{
+    AuthorityStore, AuthorityStoreWrapper, GatewayStore, SuiDataStore, UpdateType,
+};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
@@ -1139,9 +1141,10 @@ impl AuthorityState {
             (None, None)
         };
 
-        let res = self
-            .database
-            .update_state(temporary_store, certificate, signed_effects, Some(seq))
+        let update_type = UpdateType::Transaction(seq, signed_effects.effects.digest());
+
+        let res = self.database
+            .update_state(temporary_store, certificate, signed_effects, update_type)
             .await;
 
         if let Some(indexes) = &self.indexes {

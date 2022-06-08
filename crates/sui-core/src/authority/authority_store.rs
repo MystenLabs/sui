@@ -536,7 +536,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         certificate: &CertifiedTransaction,
         effects: &TransactionEffectsEnvelope<S>,
-        sequence_number: Option<TxSequenceNumber>,
+        update_type: UpdateType,
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
@@ -550,7 +550,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         )?;
 
         // Store the signed effects of the transaction
-        let effects_digest = effects.effects.digest();
         write_batch = write_batch.insert_batch(
             &self.effects,
             std::iter::once((transaction_digest, effects)),
@@ -565,7 +564,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             write_batch,
             temporary_store,
             *transaction_digest,
-            sequence_number.map(|seq| (seq, effects_digest)),
+            update_type,
         )
         .await
     }
@@ -578,8 +577,13 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.certificates.batch();
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
-            .await
+        self.batch_update_objects(
+            write_batch,
+            temporary_store,
+            transaction_digest,
+            UpdateType::Genesis,
+        )
+        .await
     }
 
     /// This is used by the Gateway to update its local store after a transaction succeeded
@@ -591,7 +595,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
         effects: TransactionEffectsEnvelope<S>,
-        sequence_number: GatewayTxSeqNumber,
+        update_type: UpdateType,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
@@ -614,9 +618,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
-        // Store the unsigned effects of the transaction
-        let effects_digest = effects.effects.digest();
-
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
         // transactions.
@@ -626,7 +627,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             write_batch,
             temporary_store,
             *transaction_digest,
-            Some((sequence_number, effects_digest)),
+            update_type,
         )
         .await?;
 
@@ -644,7 +645,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
-        seq_opt: Option<(TxSequenceNumber, TransactionEffectsDigest)>,
+        update_type: UpdateType,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
@@ -769,8 +770,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 })
                 .collect();
 
-            match seq_opt {
-                Some((seq, effects_digest)) => {
+            match update_type {
+                UpdateType::Transaction(seq, effects_digest) => {
                     // sequence_transaction atomically assigns a sequence number to the tx and
                     // initializes locks for the output objects.
                     // It also (not atomically) deletes the locks for input objects.
@@ -794,7 +795,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                         &ExecutionDigests::new(transaction_digest, effects_digest),
                     )?;
                 }
-                None => {
+                UpdateType::Genesis => {
                     info!("Creating locks for genesis objects");
                     self.lock_service
                         .create_locks_for_genesis_objects(new_locks_to_init)
@@ -1153,6 +1154,11 @@ impl From<&ObjectRef> for ObjectKey {
     fn from(object_ref: &ObjectRef) -> Self {
         Self(object_ref.0, object_ref.1)
     }
+}
+
+pub enum UpdateType {
+    Transaction(TxSequenceNumber, TransactionEffectsDigest),
+    Genesis,
 }
 
 /// Persist the Genesis package to DB along with the side effects for module initialization
