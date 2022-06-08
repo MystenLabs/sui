@@ -8,7 +8,6 @@ module Sui::TestCoin {
     use Sui::Balance;
     use Sui::SUI::SUI;
     use Sui::LockedCoin::LockedCoin;
-    use Std::Errors;
     use Sui::TxContext;
     use Sui::LockedCoin;
     use Sui::Coin::Coin;
@@ -43,7 +42,7 @@ module Sui::TestCoin {
     const TEST_RECIPIENT_ADDR: address = @0xB0B;
 
     #[test]
-    public(script) fun test_locked_coin_valid() {
+    public entry fun test_locked_coin_valid() {
         let scenario = &mut TestScenario::begin(&TEST_SENDER_ADDR);
         let ctx = TestScenario::ctx(scenario);
         let coin = Coin::mint_for_testing<SUI>(42, ctx);
@@ -55,7 +54,7 @@ module Sui::TestCoin {
         // Advance the epoch by 2.
         TestScenario::next_epoch(scenario);
         TestScenario::next_epoch(scenario);
-        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 2, Errors::invalid_state(1));
+        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 2, 1);
 
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
@@ -64,13 +63,13 @@ module Sui::TestCoin {
 
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let unlocked_coin = TestScenario::take_owned<Coin<SUI>>(scenario);
-        assert!(Coin::value(&unlocked_coin) == 42, Errors::invalid_state(2));
+        assert!(Coin::value(&unlocked_coin) == 42, 2);
         Coin::destroy_for_testing(unlocked_coin);
     }
 
     #[test]
-    #[expected_failure(abort_code = 263)]
-    public(script) fun test_locked_coin_invalid() {
+    #[expected_failure(abort_code = 1)]
+    public entry fun test_locked_coin_invalid() {
         let scenario = &mut TestScenario::begin(&TEST_SENDER_ADDR);
         let ctx = TestScenario::ctx(scenario);
         let coin = Coin::mint_for_testing<SUI>(42, ctx);
@@ -81,7 +80,7 @@ module Sui::TestCoin {
 
         // Advance the epoch by 1.
         TestScenario::next_epoch(scenario);
-        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 1, Errors::invalid_state(1));
+        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 1, 1);
 
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);

@@ -81,7 +81,7 @@ module Sui::TestScenario {
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
     public fun begin(sender: &address): Scenario {
         Scenario {
-            ctx: TxContext::new_from_address(*sender, 0),
+            ctx: TxContext::new_from_hint(*sender, 0, 0, 0),
             removed: vector::empty(),
             event_start_indexes: vector[0],
         }
@@ -111,12 +111,12 @@ module Sui::TestScenario {
         // digest (and consequently, different object ID's) than the previous tx
         let new_tx_digest_seed = (vector::length(&scenario.event_start_indexes) as u8);
         let epoch = TxContext::epoch(&scenario.ctx);
-        scenario.ctx = TxContext::new_with_epoch(*sender, epoch, new_tx_digest_seed);
+        scenario.ctx = TxContext::new_from_hint(*sender, new_tx_digest_seed, epoch, 0);
     }
 
     /// Advance the scenario to a new epoch.
     public fun next_epoch(scenario: &mut Scenario) {
-        TxContext::advance_epoch(&mut scenario.ctx);
+        TxContext::increment_epoch_number(&mut scenario.ctx);
     }
 
     /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`.

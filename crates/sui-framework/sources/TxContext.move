@@ -73,31 +73,25 @@ module Sui::TxContext {
 
     #[test_only]
     /// Create a `TxContext` for testing
-    public fun new(signer: signer, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
+    public fun new(addr: address, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
         assert!(
             vector::length(&tx_hash) == TX_HASH_LENGTH,
             errors::invalid_argument(EBadTxHashLength)
         );
-        TxContext { signer, tx_hash, epoch, ids_created }
+        TxContext { signer: new_signer_from_address(addr), tx_hash, epoch, ids_created }
     }
 
     #[test_only]
     /// Create a `TxContext` for testing, with a potentially non-zero epoch number.
-    public fun new_with_epoch(a: address, epoch: u64, hint: u8): TxContext {
-        new(new_signer_from_address(a), dummy_tx_hash_with_hint(hint), epoch, 0)
-    }
-
-    #[test_only]
-    /// Create a `TxContext` with sender `a` for testing, and a tx hash derived from `hint`
-    public fun new_from_address(a: address, hint: u8): TxContext {
-        new(new_signer_from_address(a), dummy_tx_hash_with_hint(hint), 0, 0)
+    public fun new_from_hint(addr: address, hint: u8, epoch: u64, ids_created: u64): TxContext {
+        new(addr, dummy_tx_hash_with_hint(hint), epoch, ids_created)
     }
 
     #[test_only]
     /// Create a dummy `TxContext` for testing
     public fun dummy(): TxContext {
         let tx_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
-        new(new_signer_from_address(@0x0), tx_hash, 0, 0)
+        new(@0x0, tx_hash, 0, 0)
     }
 
     #[test_only]
@@ -127,7 +121,7 @@ module Sui::TxContext {
     }
 
     #[test_only]
-    public fun advance_epoch(self: &mut TxContext) {
+    public fun increment_epoch_number(self: &mut TxContext) {
         self.epoch = self.epoch + 1
     }
 
