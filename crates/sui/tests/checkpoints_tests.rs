@@ -168,21 +168,13 @@ async fn end_to_end() {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
 
-    // Wait for the transactions to be executed and end up in a checkpoint. Ensure all authorities
-    // moved to the next checkpoint sequence number.
+    // Wait for the transactions to be executed and end up in a checkpoint.
     loop {
+        // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
             .iter()
-            .map(|authority| {
-                authority
-                    .state()
-                    .checkpoints()
-                    .unwrap()
-                    .lock()
-                    .get_locals()
-                    .next_checkpoint
-            })
-            .all(|sequence| sequence >= 1);
+            .map(|authority| transactions_in_checkpoint(&authority.state()))
+            .all(|digests| digests.is_superset(&transaction_digests));
 
         match ok {
             true => break,
@@ -190,15 +182,24 @@ async fn end_to_end() {
         }
     }
 
-    // Ensure all submitted transactions are in the checkpoint.
-    for authority in &handles {
-        let digests = transactions_in_checkpoint(&authority.state());
-        assert!(digests.is_superset(&transaction_digests));
-    }
+    // Ensure all authorities moved to the next checkpoint sequence number.
+    let ok = handles
+        .iter()
+        .map(|authority| {
+            authority
+                .state()
+                .checkpoints()
+                .unwrap()
+                .lock()
+                .get_locals()
+                .next_checkpoint
+        })
+        .all(|sequence| sequence >= 1);
+    assert!(ok);
 }
 
 #[tokio::test]
-async fn end_to_end_with_shared_objects() {
+async fn checkpoint_with_shared_objects() {
     // Get some gas objects to submit shared-objects transactions.
     let mut gas_objects = test_gas_objects();
 
