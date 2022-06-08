@@ -29,7 +29,9 @@ function CoinBalance({ type, balance }: CoinProps) {
     );
     return (
         <div className={st.container}>
-            <span className={st.type}>{type}</span>
+            <span className={st.type} title={type}>
+                {type}
+            </span>
             <span>
                 <span className={st.value}>{balanceFormatted}</span>
                 <span className={st.symbol}>{symbol}</span>

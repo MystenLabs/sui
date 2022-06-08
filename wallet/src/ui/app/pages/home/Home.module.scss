@@ -7,7 +7,7 @@
     flex-flow: column nowrap;
     width: 400px;
     padding-bottom: 12px;
-    min-height: calc(100vh - 12px);
+    min-height: 450px;
 
     :global(.is-popup) & {
         min-height: 400px;
