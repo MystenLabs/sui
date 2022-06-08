@@ -356,7 +356,7 @@ pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u6
         balance + rebate_amount - deduct_amount,
     );
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap());
+    move_object.update_contents_and_increment_version(bcs::to_bytes(&new_gas_coin).unwrap());
 }
 
 pub fn refund_gas(gas_object: &mut Object, amount: u64) {
@@ -365,7 +365,7 @@ pub fn refund_gas(gas_object: &mut Object, amount: u64) {
     let balance = gas_coin.value();
     let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), balance + amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap());
+    move_object.update_contents_and_increment_version(bcs::to_bytes(&new_gas_coin).unwrap());
 }
 
 pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {

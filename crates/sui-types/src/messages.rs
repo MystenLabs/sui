@@ -98,6 +98,7 @@ pub enum SingleTransactionKind {
     Publish(MoveModulePublish),
     /// Call a function in a published Move module
     Call(MoveCall),
+    /// Initiate a SUI coin transfer between addresses
     TransferSui(TransferSui),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.

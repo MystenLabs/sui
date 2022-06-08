@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::SuiError;
 use crate::SUI_FRAMEWORK_ADDRESS;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -31,8 +32,16 @@ impl Balance {
         }
     }
 
-    pub fn withdraw(&mut self, amount: u64) {
+    pub fn withdraw(&mut self, amount: u64) -> Result<(), SuiError> {
+        fp_ensure!(
+            self.value >= amount,
+            SuiError::TransferInsufficientBalance {
+                balance: self.value,
+                required: amount,
+            }
+        );
         self.value -= amount;
+        Ok(())
     }
 
     pub fn value(&self) -> u64 {

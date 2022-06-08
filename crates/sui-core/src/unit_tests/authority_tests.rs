@@ -695,7 +695,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
-        o.update_contents(old_contents);
+        o.update_contents_and_increment_version(old_contents);
         authority_state.insert_genesis_object(sender_object).await;
     }
 

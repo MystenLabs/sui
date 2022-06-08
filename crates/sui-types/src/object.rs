@@ -80,7 +80,13 @@ impl MoveObject {
     }
 
     /// Update the contents of this object and increment its version
-    pub fn update_contents(&mut self, new_contents: Vec<u8>) {
+    pub fn update_contents_and_increment_version(&mut self, new_contents: Vec<u8>) {
+        self.update_contents_without_version_change(new_contents);
+        self.increment_version();
+    }
+
+    /// Update the contents of this object but does not increment its version
+    pub fn update_contents_without_version_change(&mut self, new_contents: Vec<u8>) {
         #[cfg(debug_assertions)]
         let old_id = self.id();
         #[cfg(debug_assertions)]
@@ -94,24 +100,12 @@ impl MoveObject {
             debug_assert_eq!(self.id(), old_id);
             debug_assert_eq!(self.version(), old_version);
         }
-
-        self.increment_version();
     }
 
     /// Increase the version of this object by one
     pub fn increment_version(&mut self) {
         let new_version = self.version().increment();
         // TODO: better bit tricks are probably possible here. for now, just do the obvious thing
-        self.version_bytes_mut()
-            .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
-    }
-
-    /// Decrease the version of this object by one.
-    /// This should only be called when a version is first increased, and needs to be reverted.
-    pub fn revert_version_increase(&mut self) {
-        let new_version = self.version().decrement().expect(
-            "Version decrement is only called after increment, and hence should never fail",
-        );
         self.version_bytes_mut()
             .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
     }
@@ -423,15 +417,20 @@ impl Object {
         meta_data_size + data_size
     }
 
-    /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: SuiAddress, should_update_version: bool) -> SuiResult {
+    /// Change the owner of `self` to `new_owner`. This function does not increase the version
+    /// number of the object.
+    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) -> SuiResult {
         self.is_transfer_eligible()?;
-        // unwrap safe as the above check guarantees it.
         self.owner = Owner::AddressOwner(new_owner);
-        if should_update_version {
-            let data = self.data.try_as_move_mut().unwrap();
-            data.increment_version();
-        }
+        Ok(())
+    }
+
+    /// Change the owner of `self` to `new_owner`. This function will increment the version
+    /// number of the object after transfer.
+    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) -> SuiResult {
+        self.transfer_without_version_change(new_owner)?;
+        let data = self.data.try_as_move_mut().unwrap();
+        data.increment_version();
         Ok(())
     }
 

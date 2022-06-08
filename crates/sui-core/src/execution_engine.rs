@@ -8,14 +8,12 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::committee::EpochId;
-use sui_types::error::SuiError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
     error::SuiResult,
     event::{Event, TransferType},
-    fp_ensure,
     gas::{self, SuiGasStatus},
     messages::{
         CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
@@ -241,7 +239,7 @@ fn transfer_coin<S>(
     mut object: Object,
     recipient: SuiAddress,
 ) -> SuiResult {
-    object.transfer(recipient, true)?;
+    object.transfer_and_increment_version(recipient)?;
     temporary_store.log_event(Event::TransferObject {
         object_id: object.id(),
         version: object.version(),
@@ -258,7 +256,7 @@ fn transfer_coin<S>(
 /// if `amount` is not specified, the entire object will be transferred to `recipient`.
 /// `tx_ctx` is needed to create new object ID for the split coin.
 /// We make sure that the gas object's version is not incremented after this function call, because
-/// when we charge gas latter, its version will be officially incremented.
+/// when we charge gas later, its version will be officially incremented.
 fn transfer_sui<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut object: Object,
@@ -268,16 +266,21 @@ fn transfer_sui<S>(
 ) -> SuiResult {
     #[cfg(debug_assertions)]
     let version = object.version();
+
     if let Some(amount) = amount {
+        // Deduct the amount from the gas coin and update it.
         let mut gas_coin = GasCoin::try_from(&object)?;
-        let balance = gas_coin.value();
-        fp_ensure!(
-            balance >= amount,
-            SuiError::TransferInsufficientBalance {
-                balance,
-                required: amount,
-            }
+        gas_coin.0.balance.withdraw(amount)?;
+        let move_object = object
+            .data
+            .try_as_move_mut()
+            .expect("Gas object must be Move object");
+        // We do not update the version number yet because gas charge will update it latter.
+        move_object.update_contents_without_version_change(
+            bcs::to_bytes(&gas_coin).expect("Serializing gas coin can never fail"),
         );
+
+        // Creat a new gas coin with the amount.
         let new_object = Object::new_move(
             MoveObject::new(
                 GasCoin::type_(),
@@ -296,21 +299,10 @@ fn transfer_sui<S>(
         // This is necessary for the temporary store to know this new object is not unwrapped.
         let newly_generated_ids = tx_ctx.recreate_all_ids();
         temporary_store.set_create_object_ids(newly_generated_ids);
-
-        // Safe because we have checked that balance covers amount.
-        gas_coin.0.balance.withdraw(amount);
-        let move_object = object
-            .data
-            .try_as_move_mut()
-            .expect("Gas object must be Move object");
-        move_object.update_contents(
-            bcs::to_bytes(&gas_coin).expect("Serializing gas coin can never fail"),
-        );
-        // update_contents increments object version, reverts it.
-        move_object.revert_version_increase();
     } else {
-        // Pass the second param as false so that transfer won't increment object version.
-        object.transfer(recipient, false)?;
+        // If amount is not specified, we simply transfer the entire coin object.
+        // We don't want to increment the version number yet because latter gas charge will do it.
+        object.transfer_without_version_change(recipient)?;
     }
 
     // TODO: Emit a new event type for this.
