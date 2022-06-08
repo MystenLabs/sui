@@ -1,30 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::sync::Arc;
-use sui_config::ValidatorInfo;
-use sui_core::{
-    authority_client::{AuthorityAPI, NetworkAuthorityClient},
-    gateway_state::{GatewayAPI, GatewayState},
-};
+use sui_core::gateway_state::{GatewayAPI, GatewayState};
+use sui_types::messages::{CallArg, ExecutionStatus};
 use sui_types::object::OBJECT_START_VERSION;
-use sui_types::{
-    base_types::ObjectRef,
-    error::SuiResult,
-    messages::{
-        CallArg, ConfirmationTransaction, ConsensusTransaction, ExecutionStatus, Transaction,
-        TransactionInfoResponse,
-    },
-    object::Object,
-};
 use test_utils::{
     authority::{
         publish_counter_package, spawn_test_authorities, submit_shared_object_transaction,
         submit_single_owner_transaction, test_authority_aggregator, test_authority_configs,
     },
-    messages::{
-        make_certificates, move_transaction, parse_package_ref, publish_move_package_transaction,
-        test_shared_object_transactions,
-    },
+    messages::{move_transaction, test_shared_object_transactions},
     objects::{test_gas_objects, test_shared_object},
 };
 

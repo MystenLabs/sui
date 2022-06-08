@@ -11,7 +11,7 @@ use sui_types::{
 use test_utils::{
     authority::{
         publish_counter_package, spawn_test_authorities, submit_shared_object_transaction,
-        submit_single_owner_transaction, test_authority_aggregator, test_authority_configs,
+        test_authority_aggregator, test_authority_configs,
     },
     messages::{move_transaction, test_transactions},
     objects::test_gas_objects,
@@ -238,19 +238,12 @@ async fn end_to_end_with_shared_objects() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let replies = submit_single_owner_transaction(
-        create_counter_transaction.clone(),
-        configs.validator_set(),
-    )
-    .await;
-    let mut counter_ids = Vec::new();
-    for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-        let ((shared_object_id, _, _), _) = effects.created[0];
-        counter_ids.push(shared_object_id);
-    }
-    let counter_id = counter_ids.pop().unwrap();
+    let (_, effects) = aggregator
+        .execute_transaction(&create_counter_transaction)
+        .await
+        .unwrap();
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    let ((counter_id, _, _), _) = effects.created[0];
 
     // We can finally make a valid shared-object transaction (incrementing the counter).
     tokio::task::yield_now().await;
@@ -320,30 +313,24 @@ async fn end_to_end_with_shared_objects() {
     }
 
     // Ensure all submitted transactions are in the checkpoint.
-    let ok = handles
-        .iter()
-        .map(|authority| {
-            // Get all transactions in the first two checkpoints.
-            (0..2)
-                .map(|checkpoint_sequence| {
-                    (0..10)
-                        .filter_map(|i| {
-                            authority
-                                .state()
-                                .checkpoints()
-                                .unwrap()
-                                .lock()
-                                .checkpoint_contents
-                                .get(&(checkpoint_sequence, i))
-                                .unwrap()
-                        })
-                        .map(|x| x.transaction)
-                        .collect::<HashSet<_>>()
-                })
-                .flatten()
-                .collect::<HashSet<_>>()
-        })
-        .all(|digests| digests.is_superset(&transaction_digests));
-
-    assert!(ok);
+    for authority in &handles {
+        let state = authority.state().checkpoints().unwrap();
+        // Get all transactions in the first two checkpoints.
+        let digests = (0..2)
+            .flat_map(|checkpoint_sequence| {
+                // Get enough sequence numbers (one or two are enough).
+                (0..10)
+                    .filter_map(|i| {
+                        state
+                            .lock()
+                            .checkpoint_contents
+                            .get(&(checkpoint_sequence, i))
+                            .unwrap()
+                    })
+                    .map(|x| x.transaction)
+                    .collect::<HashSet<_>>()
+            })
+            .collect::<HashSet<_>>();
+        assert!(digests.is_superset(&transaction_digests));
+    }
 }
