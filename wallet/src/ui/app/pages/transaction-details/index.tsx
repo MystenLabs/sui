@@ -12,8 +12,9 @@ import { useParams } from 'react-router-dom';
 
 import Alert from '_components/alert';
 import BsIcon from '_components/bs-icon';
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useAppSelector } from '_hooks';
-import { Explorer } from '_redux/slices/sui-objects/Explorer';
 import { txSelectors } from '_redux/slices/transactions';
 
 import type { TransactionKindName } from '@mysten/sui.js';
@@ -34,10 +35,6 @@ function TransactionDetailsPage() {
     const txSelector = useMemo(
         () => (state: RootState) =>
             txDigest ? txSelectors.selectById(state, txDigest) : null,
-        [txDigest]
-    );
-    const explorerLink = useMemo(
-        () => (txDigest ? Explorer.getTransactionUrl(txDigest) : null),
         [txDigest]
     );
     // TODO: load tx if not found locally
@@ -64,31 +61,27 @@ function TransactionDetailsPage() {
                             {status === 'success' ? 'was successful' : 'failed'}
                         </span>
                     ) : null}
-                    {explorerLink ? (
-                        <a
+                    {txDigest ? (
+                        <ExplorerLink
                             className={cl('link')}
-                            href={explorerLink}
-                            target="_blank"
-                            rel="noreferrer"
+                            type={ExplorerLinkType.transaction}
+                            transactionID={txDigest}
                             title="View on Sui Explorer"
-                        >
-                            <BsIcon icon="box-arrow-up-right" />
-                        </a>
+                        />
                     ) : null}
                 </>
             ) : (
                 <Alert className={cl('error')}>
                     <strong>Transaction not found.</strong>{' '}
-                    {explorerLink ? (
+                    {txDigest ? (
                         <span>
                             Click{' '}
-                            <a
-                                href={explorerLink}
-                                target="_blank"
-                                rel="noreferrer"
+                            <ExplorerLink
+                                type={ExplorerLinkType.transaction}
+                                transactionID={txDigest}
                             >
                                 here
-                            </a>{' '}
+                            </ExplorerLink>{' '}
                             to go to Sui Explorer.
                         </span>
                     ) : null}
