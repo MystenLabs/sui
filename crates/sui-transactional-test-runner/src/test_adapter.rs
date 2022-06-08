@@ -31,6 +31,7 @@ use move_vm_runtime::{
 };
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::fmt::Write;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -184,7 +185,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             if !output.is_empty() {
                 output.push_str(", ")
             }
-            output.push_str(&format!("{}: object({})", account, fake))
+            write!(output, "{}: object({})", account, fake).unwrap()
         }
         for object_id in object_ids {
             test_adapter.enumerate_fake(object_id);
@@ -564,26 +565,26 @@ impl<'a> SuiTestAdapter<'a> {
             if events.is_empty() {
                 out += "No events"
             } else {
-                out += &format!("events: {}", self.list_events(events))
+                write!(out, "events: {}", self.list_events(events)).unwrap();
             }
         }
         if !created.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("created: {}", self.list_objs(created));
+            write!(out, "created: {}", self.list_objs(created)).unwrap();
         }
         if !written.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("written: {}", self.list_objs(written));
+            write!(out, "written: {}", self.list_objs(written)).unwrap();
         }
         if !deleted.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("deleted: {}", self.list_objs(deleted));
+            write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
         }
 
         if out.is_empty() {

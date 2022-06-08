@@ -3,7 +3,7 @@
 
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum FaucetError {
     #[error("Faucet does not have enough balance")]
     InsuffientBalance,

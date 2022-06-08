@@ -90,7 +90,7 @@ fn verify_id_leak(module: &CompiledModule) -> SuiResult {
     Ok(())
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AbstractState {
     locals: BTreeMap<LocalIndex, AbstractValue>,
 }

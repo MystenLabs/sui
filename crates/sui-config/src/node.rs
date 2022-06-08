@@ -150,7 +150,7 @@ impl ValidatorInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
 pub struct Genesis {
     #[serde(flatten)]
     location: GenesisLocation,
@@ -188,7 +188,7 @@ impl Genesis {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
 #[serde(untagged)]
 enum GenesisLocation {
     InPlace {

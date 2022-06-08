@@ -378,7 +378,6 @@ impl LocalAuthorityClient {
         client
     }
 
-    #[cfg(test)]
     pub fn new_from_authority(state: Arc<AuthorityState>) -> Self {
         Self {
             state,

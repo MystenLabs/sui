@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::objects::test_gas_objects;
 use crate::objects::test_shared_object;
+use crate::objects::{test_gas_objects, test_gas_objects_with_owners};
 use crate::test_committee;
 use crate::test_keys;
 use move_core_types::account_address::AccountAddress;
@@ -10,15 +10,59 @@ use move_package::BuildConfig;
 use std::path::PathBuf;
 use sui_adapter::genesis;
 use sui_types::base_types::ObjectRef;
-use sui_types::crypto::Signature;
-use sui_types::messages::{CallArg, TransactionEffects};
 use sui_types::messages::{
     CertifiedTransaction, SignatureAggregator, SignedTransaction, Transaction, TransactionData,
 };
 use sui_types::object::{Object, Owner};
+use sui_types::{base_types::SuiAddress, crypto::Signature};
+use sui_types::{
+    crypto::KeyPair,
+    messages::{CallArg, TransactionEffects},
+};
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
+
+/// Make a few different single-writer test transactions owned by specific addresses.
+pub fn test_transactions<K>(keys: K) -> (Vec<Transaction>, Vec<Object>)
+where
+    K: Iterator<Item = KeyPair>,
+{
+    // The key pair of the recipient of the transaction.
+    let (recipient, _) = test_keys().pop().unwrap();
+
+    // The gas objects and the objects used in the transfer transactions. Ever two
+    // consecutive objects must have the same owner for the transaction to be valid.
+    let mut addresses_two_by_two = Vec::new();
+    let mut keypairs = Vec::new(); // Keys are not copiable, move them here.
+    for keypair in keys {
+        let address = SuiAddress::from(keypair.public_key_bytes());
+        addresses_two_by_two.push(address);
+        addresses_two_by_two.push(address);
+        keypairs.push(keypair);
+    }
+    let gas_objects = test_gas_objects_with_owners(addresses_two_by_two);
+
+    // Make one transaction for every two gas objects.
+    let mut transactions = Vec::new();
+    for (objects, keypair) in gas_objects.chunks(2).zip(keypairs) {
+        let [o1, o2]: &[Object; 2] = match objects.try_into() {
+            Ok(x) => x,
+            Err(_) => break,
+        };
+
+        let data = TransactionData::new_transfer(
+            recipient,
+            o1.compute_object_reference(),
+            /* sender */ o1.owner.get_owner_address().unwrap(),
+            /* gas_object_ref */ o2.compute_object_reference(),
+            MAX_GAS,
+        );
+        let signature = Signature::new(&data, &keypair);
+        transactions.push(Transaction::new(data, signature));
+    }
+    (transactions, gas_objects)
+}
 
 /// Make a few different test transaction containing the same shared object.
 pub fn test_shared_object_transactions() -> Vec<Transaction> {

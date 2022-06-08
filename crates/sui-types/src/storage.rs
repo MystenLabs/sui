@@ -10,7 +10,7 @@ use crate::{
     object::Object,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum DeleteKind {
     /// An object is provided in the call input, and gets deleted.
     Normal,

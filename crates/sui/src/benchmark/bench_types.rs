@@ -61,7 +61,7 @@ pub struct Benchmark {
     pub bench_type: BenchmarkType,
 }
 
-#[derive(Parser, Debug, Clone, PartialEq, EnumString)]
+#[derive(Parser, Debug, Clone, PartialEq, EnumString, Eq)]
 #[clap(rename_all = "kebab-case")]
 pub enum BenchmarkType {
     #[clap(name = "microbench")]
