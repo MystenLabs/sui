@@ -93,10 +93,24 @@ in how a fullnode is run.
 0. *Prerequisite* Before beginning ensure that the following tools are
    installed in your environment:
     - Rust toolchain managed by [rustup](https://rustup.rs/)
+        - install by `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
     - `git`
-    - `cmake`
-
-1. Set up your fork of the Sui repository:
+    - [cmake](https://cmake.org/install/)
+1. (Optional) If you are using Linux, it's likely you want to install extra dependencies. For example, in Ubuntu, run
+```
+    apt-get update \
+    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y --no-install-recommends \
+    tzdata \
+    git \
+    ca-certificates \
+    curl \
+    build-essential \
+    libssl-dev \
+    pkg-config \
+    libclang-dev \
+    cmake
+```
+2. Set up your fork of the Sui repository:
     - Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
       and click the *Fork* button in the top right-hand corner of the screen.
     - Clone your personal fork of the Sui repository to your local machine
