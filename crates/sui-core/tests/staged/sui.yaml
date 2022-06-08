@@ -588,24 +588,29 @@ SuiError:
         STRUCT:
           - error: STR
     93:
+      CheckpointTxEffectsNotFound:
+        STRUCT:
+          - tx_digest:
+              TYPENAME: TransactionDigest
+    94:
       EventFailedToDispatch:
         STRUCT:
           - error: STR
-    94:
+    95:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    95:
+    96:
       ObjectSerializationError:
         STRUCT:
           - error: STR
-    96:
-      ConcurrentTransactionError: UNIT
     97:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     98:
+      IncorrectRecipientError: UNIT
+    99:
       TooManyIncorrectAuthorities:
         STRUCT:
           - errors:
@@ -613,51 +618,51 @@ SuiError:
                 TUPLE:
                   - TYPENAME: PublicKeyBytes
                   - TYPENAME: SuiError
-    99:
+    100:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
-    100:
+    101:
       GatewayInvalidTxRangeQuery:
         STRUCT:
           - error: STR
-    101:
-      OnlyOneConsensusClientPermitted: UNIT
     102:
+      OnlyOneConsensusClientPermitted: UNIT
+    103:
       ConsensusConnectionBroken:
         NEWTYPE: STR
-    103:
+    104:
       FailedToHearBackFromConsensus:
         NEWTYPE: STR
-    104:
+    105:
       SharedObjectLockingFailure:
         NEWTYPE: STR
-    105:
-      ListenerCapacityExceeded: UNIT
     106:
+      ListenerCapacityExceeded: UNIT
+    107:
       ConsensusSuiSerializationError:
         NEWTYPE: STR
-    107:
-      NotASharedObjectTransaction: UNIT
     108:
+      NotASharedObjectTransaction: UNIT
+    109:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    109:
+    110:
       HkdfError:
         NEWTYPE: STR
-    110:
+    111:
       SignatureKeyGenError:
         NEWTYPE: STR
-    111:
-      ValidatorHaltedAtEpochEnd: UNIT
     112:
+      ValidatorHaltedAtEpochEnd: UNIT
+    113:
       InconsistentEpochState:
         STRUCT:
           - error: STR
-    113:
+    114:
       RpcError:
         NEWTYPE: STR
-    114:
+    115:
       UnsupportedFeatureError:
         STRUCT:
           - error: STR

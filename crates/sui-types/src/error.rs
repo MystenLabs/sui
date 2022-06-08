@@ -290,6 +290,8 @@ pub enum SuiError {
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
+    #[error("All transactions in the latest checkpoint have been processed, however we cannot find effects for transaction {tx_digest:?}")]
+    CheckpointTxEffectsNotFound { tx_digest: TransactionDigest },
 
     #[error("Failed to dispatch event: {error:?}")]
     EventFailedToDispatch { error: String },

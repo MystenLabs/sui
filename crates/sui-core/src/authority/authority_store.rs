@@ -210,6 +210,18 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             })
     }
 
+    pub fn multi_get_effects(
+        &self,
+        transaction_digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        Ok(self
+            .effects
+            .multi_get(transaction_digests)?
+            .into_iter()
+            .map(|data_opt| data_opt.map(|data| data.effects))
+            .collect())
+    }
+
     /// Returns true if we have an effects structure for this transaction digest
     pub fn effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
         self.effects

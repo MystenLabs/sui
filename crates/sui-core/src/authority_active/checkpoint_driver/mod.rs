@@ -26,7 +26,10 @@ use crate::{
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
+use sui_types::batch::TxSequenceNumber;
 use sui_types::committee::StakeUnit;
+use sui_types::gas::GasCostSummary;
+use sui_types::messages::TransactionEffects;
 use tracing::{debug, info, warn};
 use typed_store::Map;
 
@@ -190,6 +193,23 @@ pub async fn checkpoint_process<A>(
             // Nothing happens until we catch up with the unprocessed transactions of the
             // previous checkpoint.
             continue;
+        }
+
+        match aggregate_gas_cost_of_latest_checkpoint(active_authority, state_checkpoints.clone())
+            .await
+        {
+            Ok(_total_gas) => {
+                let _locals = state_checkpoints.lock().get_locals();
+                // Set _total_gas to _locals?
+                // Should it be serde_skip?
+            }
+            Err(err) => {
+                warn!(
+                    "Error aggregating total gas cost of the latest checkpoint: {:?}",
+                    err
+                );
+                continue;
+            }
         }
 
         // (4) Check if we need to advance to the next checkpoint, in case >2/3
@@ -900,4 +920,53 @@ where
     // Eventually we should add more information to this error about the destination
     // and maybe event the certificate.
     Err(SuiError::AuthorityUpdateFailure)
+}
+
+/// Assuming all transactions in the latest checkpoint has been executed.
+/// This function goes through all effects in the transactions in the latest checkpoint,
+/// and aggregate the gas cost of each transaction.
+async fn aggregate_gas_cost_of_latest_checkpoint<A>(
+    active_authority: &ActiveAuthority<A>,
+    checkpoint_db: Arc<Mutex<CheckpointStore>>,
+) -> Result<GasCostSummary, SuiError>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let init_cost = GasCostSummary {
+        computation_cost: 0,
+        storage_cost: 0,
+        storage_rebate: 0,
+    };
+    let next_checkpoint = checkpoint_db.lock().next_checkpoint();
+    if next_checkpoint == 0 {
+        return Ok(init_cost);
+    }
+    let cur_checkpoint = next_checkpoint - 1;
+    let tx_digests: Vec<_> = checkpoint_db
+        .lock()
+        .checkpoint_contents
+        .iter()
+        .skip_to(&(cur_checkpoint, TxSequenceNumber::MIN))?
+        .take_while(|((cp, _), _)| cp == &cur_checkpoint)
+        .map(|(_, digest)| digest.transaction)
+        .collect();
+    let all_effects: Vec<Option<TransactionEffects>> = active_authority
+        .state
+        .database
+        .multi_get_effects(&tx_digests)?;
+    all_effects.into_iter().zip(tx_digests).try_fold(
+        init_cost,
+        |cur_cost, (effects_opt, tx_digest)| {
+            let effects_cost = effects_opt
+                .ok_or(SuiError::CheckpointTxEffectsNotFound { tx_digest })?
+                .status
+                .gas_cost_summary()
+                .clone();
+            Ok(GasCostSummary {
+                computation_cost: cur_cost.computation_cost + effects_cost.computation_cost,
+                storage_cost: cur_cost.storage_cost + effects_cost.storage_cost,
+                storage_rebate: cur_cost.storage_rebate + effects_cost.storage_rebate,
+            })
+        },
+    )
 }
