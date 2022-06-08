@@ -18,14 +18,12 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::{Owner, OBJECT_START_VERSION};
-use tracing::{debug, error, trace};
+use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
-pub type AuthorityStore = SuiDataStore<false, true, AuthoritySignInfo>;
-#[allow(dead_code)]
-pub type ReplicaStore = SuiDataStore<true, false, EmptySignInfo>;
-pub type GatewayStore = SuiDataStore<false, true, EmptySignInfo>;
+pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
+pub type GatewayStore = SuiDataStore<false, EmptySignInfo>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -36,12 +34,10 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
 /// them, but other entities such as replicas will.
-/// USE_LOCKS determines whether we maintain locks when updating state
-/// this is because replicas for example don't currently require locks`
 /// S is a template on Authority signature state. This allows SuiDataStore to be used on either
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
-pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
+pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -115,11 +111,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
     epochs: DBMap<EpochId, EpochInfoLocals>,
 }
 
-impl<
-        const ALL_OBJ_VER: bool,
-        const USE_LOCKS: bool,
-        S: Eq + Serialize + for<'de> Deserialize<'de>,
-    > SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>
+impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
+    SuiDataStore<ALL_OBJ_VER, S>
 {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
@@ -258,10 +251,6 @@ impl<
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
     async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard<'a>> {
-        if !USE_LOCKS {
-            return vec![];
-        }
-
         self.mutex_table
             .acquire_locks(input_objects.iter().map(|(_, _, digest)| digest))
             .await
@@ -547,7 +536,7 @@ impl<
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         certificate: &CertifiedTransaction,
         effects: &TransactionEffectsEnvelope<S>,
-        sequence_number: Option<TxSequenceNumber>,
+        update_type: UpdateType,
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
@@ -561,7 +550,6 @@ impl<
         )?;
 
         // Store the signed effects of the transaction
-        let effects_digest = effects.effects.digest();
         write_batch = write_batch.insert_batch(
             &self.effects,
             std::iter::once((transaction_digest, effects)),
@@ -576,7 +564,7 @@ impl<
             write_batch,
             temporary_store,
             *transaction_digest,
-            sequence_number.map(|seq| (seq, effects_digest)),
+            update_type,
         )
         .await
     }
@@ -589,8 +577,13 @@ impl<
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.certificates.batch();
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
-            .await
+        self.batch_update_objects(
+            write_batch,
+            temporary_store,
+            transaction_digest,
+            UpdateType::Genesis,
+        )
+        .await
     }
 
     /// This is used by the Gateway to update its local store after a transaction succeeded
@@ -602,7 +595,7 @@ impl<
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
         effects: TransactionEffectsEnvelope<S>,
-        sequence_number: GatewayTxSeqNumber,
+        update_type: UpdateType,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
@@ -625,13 +618,6 @@ impl<
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
-        // Store the unsigned effects of the transaction
-        let effects_digest = effects.effects.digest();
-        write_batch = write_batch.insert_batch(
-            &self.effects,
-            std::iter::once((transaction_digest, effects)),
-        )?;
-
         // Once a transaction is done processing and effects committed, we no longer
         // need it in the transactions table. This also allows us to track pending
         // transactions.
@@ -641,9 +627,16 @@ impl<
             write_batch,
             temporary_store,
             *transaction_digest,
-            Some((sequence_number, effects_digest)),
+            update_type,
         )
-        .await
+        .await?;
+
+        // Store the unsigned effects of the transaction. Must be done after batch_update_objects
+        // returns, as we use digest-in-effects? as a proxy for cert-has-been-fully-processed
+        // throughout the code.
+        self.effects
+            .insert(transaction_digest, &effects)
+            .map_err(SuiError::from)
     }
 
     /// Helper function for updating the objects in the state
@@ -652,7 +645,7 @@ impl<
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
-        seq_opt: Option<(TxSequenceNumber, TransactionEffectsDigest)>,
+        update_type: UpdateType,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
@@ -747,6 +740,10 @@ impl<
                 .map(|(_, (obj_ref, new_object))| (ObjectKey::from(obj_ref), new_object)),
         )?;
 
+        // Atomic write of all data other than locks
+        write_batch.write()?;
+        trace!("Finished writing batch");
+
         // Need to have a critical section for now because we need to prevent execution of older
         // certs which may overwrite newer objects with older ones.  This can be removed once we have
         // an object storage supporting multiple object versions at once, then there is idempotency and
@@ -762,59 +759,49 @@ impl<
             // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its fine
             // 4. Locks may have existed when we started processing this tx, but could have since
             //    been deleted by a concurrent tx that finished first. In that case, check if the tx effects exist.
-            if USE_LOCKS {
-                if let Err(e) = self.lock_service.locks_exist(owned_inputs.clone()).await {
-                    if self.effects_exists(&transaction_digest)? {
-                        debug!(digest = ?transaction_digest, "locks were deleted due to concurrent processing of tx");
-                        return Ok(());
+            let new_locks_to_init: Vec<_> = written
+                .iter()
+                .filter_map(|(_, (object_ref, new_object))| {
+                    if new_object.is_owned() {
+                        Some(*object_ref)
                     } else {
-                        return Err(e);
+                        None
                     }
+                })
+                .collect();
+
+            match update_type {
+                UpdateType::Transaction(seq, effects_digest) => {
+                    // sequence_transaction atomically assigns a sequence number to the tx and
+                    // initializes locks for the output objects.
+                    // It also (not atomically) deletes the locks for input objects.
+                    // After this call completes, new txes can run on the output locks, so all
+                    // output objects must be written already.
+                    let assigned_seq = self
+                        .lock_service
+                        .sequence_transaction(
+                            transaction_digest,
+                            seq,
+                            owned_inputs,
+                            new_locks_to_init,
+                        )
+                        .await?;
+
+                    // This write may be done repeatedly when retrying a tx. The
+                    // sequence_transaction call above assigns a sequence number to the transaction
+                    // the first time it is called and will return that same sequence on subsequent
+                    // calls.
+                    self.executed_sequence.insert(
+                        &assigned_seq,
+                        &ExecutionDigests::new(transaction_digest, effects_digest),
+                    )?;
                 }
-            }
-
-            if let Some((next_seq, effects_digest)) = seq_opt {
-                // Now we are sure we are going to execute, add to the sequence
-                // number and insert into authority sequence.
-                //
-                // NOTE: it is possible that we commit to the database transactions
-                //       out of order with respect to their sequence number. It is also
-                //       possible for the authority to crash without committing the
-                //       full sequence, and the batching logic needs to deal with this.
-                write_batch = write_batch.insert_batch(
-                    &self.executed_sequence,
-                    std::iter::once((
-                        next_seq,
-                        ExecutionDigests::new(transaction_digest, effects_digest),
-                    )),
-                )?;
-            }
-
-            // Atomic write of all data other than locks
-            write_batch.write()?;
-            trace!("Finished writing batch");
-
-            if USE_LOCKS {
-                // Initialize object locks for new objects.  After this point, transactions on new objects
-                // can run.  So it is critical this is done AFTER objects are done writing.
-                // TODO: add retries https://github.com/MystenLabs/sui/issues/1993
-                let new_locks_to_init: Vec<_> = written
-                    .iter()
-                    .filter_map(|(_, (object_ref, new_object))| {
-                        if new_object.is_owned() {
-                            Some(*object_ref)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                self.lock_service
-                    .initialize_locks(&new_locks_to_init, false /* is_force_reset */)
-                    .await?;
-
-                // Remove the old lock - timing of this matters less
-                let locks_to_remove = owned_inputs;
-                self.lock_service.remove_locks(locks_to_remove).await?;
+                UpdateType::Genesis => {
+                    info!("Creating locks for genesis objects");
+                    self.lock_service
+                        .create_locks_for_genesis_objects(new_locks_to_init)
+                        .await?;
+                }
             }
 
             // implicit: drop(_mutexes);
@@ -1075,7 +1062,7 @@ impl<
     }
 }
 
-impl<const A: bool, const B: bool> SuiDataStore<A, B, AuthoritySignInfo> {
+impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
     pub fn get_signed_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
@@ -1088,14 +1075,14 @@ impl<const A: bool, const B: bool> SuiDataStore<A, B, AuthoritySignInfo> {
     }
 }
 
-impl<const A: bool, const B: bool> SuiDataStore<A, B, EmptySignInfo> {
+impl<const A: bool> SuiDataStore<A, EmptySignInfo> {
     pub fn pending_transactions(&self) -> &DBMap<TransactionDigest, Transaction> {
         &self.transactions
     }
 }
 
-impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
-    BackingPackageStore for SuiDataStore<A, B, S>
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
+    for SuiDataStore<A, S>
 {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
@@ -1111,8 +1098,8 @@ impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>
     }
 }
 
-impl<const A: bool, const B: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
-    for SuiDataStore<A, B, S>
+impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolver
+    for SuiDataStore<A, S>
 {
     type Error = SuiError;
 
@@ -1170,13 +1157,17 @@ impl From<&ObjectRef> for ObjectKey {
     }
 }
 
+pub enum UpdateType {
+    Transaction(TxSequenceNumber, TransactionEffectsDigest),
+    Genesis,
+}
+
 /// Persist the Genesis package to DB along with the side effects for module initialization
 pub async fn store_package_and_init_modules_for_genesis<
     const A: bool,
-    const B: bool,
     S: Eq + Serialize + for<'de> Deserialize<'de>,
 >(
-    store: &Arc<SuiDataStore<A, B, S>>,
+    store: &Arc<SuiDataStore<A, S>>,
     native_functions: &NativeFunctionTable,
     ctx: &mut TxContext,
     modules: Vec<CompiledModule>,
@@ -1235,10 +1226,9 @@ pub async fn store_package_and_init_modules_for_genesis<
 
 pub async fn generate_genesis_system_object<
     const A: bool,
-    const B: bool,
     S: Eq + Serialize + for<'de> Deserialize<'de>,
 >(
-    store: &Arc<SuiDataStore<A, B, S>>,
+    store: &Arc<SuiDataStore<A, S>>,
     move_vm: &Arc<MoveVM>,
     committee: &Committee,
     genesis_ctx: &mut TxContext,

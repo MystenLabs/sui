@@ -9,7 +9,7 @@ use tracing::debug;
 
 const MAX_TX_RANGE_SIZE: u64 = 4096;
 
-pub struct QueryHelpers<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
+pub struct QueryHelpers<const ALL_OBJ_VER: bool, S> {
     _s: std::marker::PhantomData<S>,
 }
 
@@ -17,20 +17,17 @@ pub struct QueryHelpers<const ALL_OBJ_VER: bool, const USE_LOCKS: bool, S> {
 // be duplicated between AuthorityState and GatewayState. The gateway read API will be removed
 // soon, since nodes will be handling that. At that point we should delete this struct and move the
 // code back to AuthorityState.
-impl<
-        const ALL_OBJ_VER: bool,
-        const USE_LOCKS: bool,
-        S: Eq + Serialize + for<'de> Deserialize<'de>,
-    > QueryHelpers<ALL_OBJ_VER, USE_LOCKS, S>
+impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
+    QueryHelpers<ALL_OBJ_VER, S>
 {
     pub fn get_total_transaction_number(
-        database: &SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>,
+        database: &SuiDataStore<ALL_OBJ_VER, S>,
     ) -> Result<u64, anyhow::Error> {
         Ok(database.next_sequence_number()?)
     }
 
     pub fn get_transactions_in_range(
-        database: &SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>,
+        database: &SuiDataStore<ALL_OBJ_VER, S>,
         start: TxSequenceNumber,
         end: TxSequenceNumber,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
@@ -61,7 +58,7 @@ impl<
     }
 
     pub fn get_recent_transactions(
-        database: &SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>,
+        database: &SuiDataStore<ALL_OBJ_VER, S>,
         count: u64,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         fp_ensure!(
@@ -80,7 +77,7 @@ impl<
     }
 
     pub fn get_transaction(
-        database: &SuiDataStore<ALL_OBJ_VER, USE_LOCKS, S>,
+        database: &SuiDataStore<ALL_OBJ_VER, S>,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
         let opt = database.get_certified_transaction(&digest)?;
