@@ -244,6 +244,16 @@ pub trait GatewayAPI {
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
 
+    /// Send SUI coin object to a Sui address. The SUI object is also used as the gas object.
+    async fn transfer_sui(
+        &self,
+        signer: SuiAddress,
+        sui_object_id: ObjectID,
+        gas_budget: u64,
+        recipient: SuiAddress,
+        amount: Option<u64>,
+    ) -> Result<TransactionData, anyhow::Error>;
+
     /// Synchronise account state with a random authorities, updates all object_ids
     /// from account_addr, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, caller will have to handle potential byzantine authority
@@ -937,6 +947,21 @@ where
         let object_ref = object.compute_object_reference();
         let data =
             TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
+        Ok(data)
+    }
+
+    async fn transfer_sui(
+        &self,
+        signer: SuiAddress,
+        sui_object_id: ObjectID,
+        gas_budget: u64,
+        recipient: SuiAddress,
+        amount: Option<u64>,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let object = self.get_object_internal(&sui_object_id).await?;
+        let object_ref = object.compute_object_reference();
+        let data =
+            TransactionData::new_transfer_sui(recipient, signer, amount, object_ref, gas_budget);
         Ok(data)
     }
 
