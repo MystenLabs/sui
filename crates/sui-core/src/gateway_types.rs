@@ -460,13 +460,17 @@ impl Display for PublishResponse {
         writeln!(writer, "{}", "----- Publish Results ----".bold())?;
         writeln!(
             writer,
-            "The newly published package object ID: {:?}",
-            self.package.object_id
+            "{}",
+            format!(
+                "The newly published package object ID: {:?}\n",
+                self.package.object_id
+            )
+            .bold()
         )?;
         if !self.created_objects.is_empty() {
             writeln!(
                 writer,
-                "List of objects created by running module initializers:\n"
+                "List of objects created by running module initializers:"
             )?;
             for obj in &self.created_objects {
                 writeln!(writer, "{}\n", obj)?;
