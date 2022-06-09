@@ -791,6 +791,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                     // sequence_transaction call above assigns a sequence number to the transaction
                     // the first time it is called and will return that same sequence on subsequent
                     // calls.
+                    trace!(
+                        "assigning seq {:?} -> {:?}",
+                        transaction_digest,
+                        effects_digest
+                    );
                     self.executed_sequence.insert(
                         &assigned_seq,
                         &ExecutionDigests::new(transaction_digest, effects_digest),

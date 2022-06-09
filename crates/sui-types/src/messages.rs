@@ -967,7 +967,7 @@ impl TransactionEffects {
     /// Return an iterator that iterates through both mutated and
     /// created objects.
     /// It doesn't include deleted objects.
-    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
+    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> + Clone {
         self.mutated.iter().chain(self.created.iter())
     }
 

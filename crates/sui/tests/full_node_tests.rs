@@ -106,6 +106,8 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
 
 #[tokio::test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
@@ -138,23 +140,29 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         .state()
         .get_transactions_by_input_object(transfered_object)
         .await?;
+
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     let txes = node
         .state()
         .get_transactions_by_mutated_object(transfered_object)
         .await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     let txes = node.state().get_transactions_from_addr(sender).await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     let txes = node.state().get_transactions_to_addr(receiver).await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
     let txes = node.state().get_transactions_to_addr(sender).await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     // No transactions have originated from the receiver

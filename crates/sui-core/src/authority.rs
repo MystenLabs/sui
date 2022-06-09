@@ -57,7 +57,8 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use tracing::{debug, error, instrument};
+use tokio::sync::broadcast::error::RecvError;
+use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -533,16 +534,102 @@ impl AuthorityState {
         self.update_state(temporary_store, &certificate, &signed_effects)
             .await?;
 
-        // Each certificate only reaches here once
-        if let Some(event_handler) = &self.event_handler {
-            event_handler.process_events(&signed_effects.effects).await;
-        }
-
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&transaction_digest)?,
             certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
         })
+    }
+
+    fn index_tx(
+        &self,
+        indexes: &IndexStore,
+        seq: TxSequenceNumber,
+        digest: &TransactionDigest,
+        cert: &CertifiedTransaction,
+        effects: &SignedTransactionEffects,
+    ) -> SuiResult {
+        indexes.index_tx(
+            cert.sender_address(),
+            cert.data.input_objects()?.iter().map(|o| o.object_id()),
+            effects.effects.mutated_and_created(),
+            seq,
+            digest,
+        )
+    }
+
+    async fn process_one_tx(&self, seq: TxSequenceNumber, digest: &TransactionDigest) -> SuiResult {
+        // Load cert and effects.
+        let info = self.make_transaction_info(digest).await?;
+        let (cert, effects) = match info {
+            TransactionInfoResponse {
+                certified_transaction: Some(cert),
+                signed_effects: Some(effects),
+                ..
+            } => (cert, effects),
+            _ => {
+                return Err(SuiError::CertificateNotfound {
+                    certificate_digest: *digest,
+                })
+            }
+        };
+
+        // Index tx
+        if let Some(indexes) = &self.indexes {
+            if let Err(e) = self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects) {
+                warn!(?digest, "Couldn't index tx: {}", e);
+            }
+        }
+
+        // Emit events
+        if let Some(event_handler) = &self.event_handler {
+            event_handler.process_events(&effects.effects).await;
+        }
+
+        Ok(())
+    }
+
+    // TODO: This should persist the last successfully-processed sequence to disk, and upon
+    // starting up, look for any sequences in the store since then and process them.
+    pub async fn run_tx_post_processing_process(&self) -> SuiResult {
+        let mut subscriber = self.subscribe_batch();
+
+        loop {
+            match subscriber.recv().await {
+                Ok(item) => {
+                    if let UpdateItem::Transaction((
+                        seq,
+                        ExecutionDigests {
+                            transaction: digest,
+                            ..
+                        },
+                    )) = item
+                    {
+                        if let Err(e) = self.process_one_tx(seq, &digest).await {
+                            warn!(?digest, "Couldn't process tx: {}", e);
+                        }
+                    }
+                }
+
+                // For both the error cases, we exit the loop which ends this task.
+                // TODO: Automatically restart the task, which in combination with the todo above,
+                // will process any skipped txes and then begin listening for new ones.
+                Err(RecvError::Closed) => {
+                    // The service closed the channel.
+                    error!("run_tx_post_processing_process receiver channel closed");
+                    break;
+                }
+                Err(RecvError::Lagged(number_skipped)) => {
+                    error!(
+                        "run_tx_post_processing_process too slow, skipped {} txes",
+                        number_skipped
+                    );
+                    break;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
@@ -1121,52 +1208,11 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        // We want to call update_state before updating the indexes, however this is extremely
-        // awkward because update_state takes temporary_store by value.
-        // TODO: Move indexing either into update_state, or make it a batch consumer to clean this
-        // up.
-        let (inputs, outputs) = if self.indexes.is_some() {
-            let inputs: Vec<_> = temporary_store
-                .objects()
-                .iter()
-                .map(|(_, o)| o.clone())
-                .collect();
-            let outputs: Vec<_> = temporary_store
-                .written()
-                .iter()
-                .map(|(_, (_, o))| o.clone())
-                .collect();
-            (Some(inputs), Some(outputs))
-        } else {
-            (None, None)
-        };
-
         let update_type = UpdateType::Transaction(seq, signed_effects.effects.digest());
 
-        let res = self
-            .database
+        self.database
             .update_state(temporary_store, certificate, signed_effects, update_type)
-            .await;
-
-        if let Some(indexes) = &self.indexes {
-            // unwrap ok because of previous if stmt.
-            let inputs = inputs.unwrap();
-            let outputs = outputs.unwrap();
-            // turn into vectors of references...
-            let inputs: Vec<_> = inputs.iter().collect();
-            let outputs: Vec<_> = outputs.iter().collect();
-            if let Err(e) = indexes.index_tx(
-                certificate.sender_address(),
-                &inputs,
-                &outputs,
-                seq,
-                certificate.digest(),
-            ) {
-                error!("Error indexing certificate: {}", e);
-            }
-        }
-
-        res
+            .await
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
