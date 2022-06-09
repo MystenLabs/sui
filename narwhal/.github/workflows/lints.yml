@@ -34,7 +34,7 @@ jobs:
               - 'Docker/**'
       - name: Lint Docker file
         if: steps.filter.outputs.docker == 'true'
-        uses: hadolint/hadolint-action@v2.0.0
+        uses: hadolint/hadolint-action@v2.1.0
         with:
           failure-threshold: error
           dockerfile: Docker/Dockerfile
