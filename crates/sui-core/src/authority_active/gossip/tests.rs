@@ -28,7 +28,7 @@ pub async fn test_gossip_plain() {
             let active_state =
                 ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
                     .unwrap();
-            active_state.spawn_all_active_processes().await;
+            active_state.spawn_gossip_process(3).await;
         });
 
         active_authorities.push(handle);
@@ -70,7 +70,7 @@ pub async fn test_gossip_error() {
             let active_state =
                 ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
                     .unwrap();
-            active_state.spawn_all_active_processes().await;
+            active_state.spawn_gossip_process(3).await;
         });
         active_authorities.push(handle);
     }

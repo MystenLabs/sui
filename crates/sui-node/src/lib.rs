@@ -6,7 +6,6 @@ use futures::TryFutureExt;
 use parking_lot::Mutex;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
-use sui_core::authority_active::gossip::gossip_process;
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -96,17 +95,15 @@ impl SuiNode {
             let active_authority =
                 ActiveAuthority::new(state.clone(), follower_store, authority_clients)?;
 
+            let degree = active_authority.state.committee.load().voting_rights.len();
             // Start following validators
-            Some(tokio::task::spawn(async move {
-                gossip_process(
-                    &active_authority,
+            let handle = active_authority
+                .spawn_gossip_process(
                     // listen to all authorities (note that gossip_process caps this to total minus 1.)
-                    active_authority.state.committee.load().voting_rights.len(),
-                    // start receiving the earliest TXes the validator has.
-                    //Some(0),
+                    degree,
                 )
                 .await;
-            }))
+            Some(handle)
         };
 
         let batch_subsystem_handle = {
