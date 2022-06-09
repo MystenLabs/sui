@@ -10,8 +10,8 @@ use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{serde_as, Bytes};
-use strum_macros::{EnumDiscriminants, EnumVariantNames};
 use strum::VariantNames;
+use strum_macros::{EnumDiscriminants, EnumVariantNames};
 
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
@@ -61,9 +61,19 @@ pub enum TransferType {
 }
 
 /// Specific type of event
+// Developer note: PLEASE only append new entries, do not modify existing entries (binary compat)
 #[serde_as]
 #[derive(
-    Eq, Debug, Clone, PartialEq, NamedVariant, Deserialize, Serialize, Hash, EnumDiscriminants, EnumVariantNames
+    Eq,
+    Debug,
+    Clone,
+    PartialEq,
+    NamedVariant,
+    Deserialize,
+    Serialize,
+    Hash,
+    EnumDiscriminants,
+    EnumVariantNames,
 )]
 #[strum_discriminants(name(EventType))]
 pub enum Event {

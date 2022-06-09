@@ -3,12 +3,14 @@
 use super::*;
 
 use async_trait::async_trait;
-use futures::TryFutureExt;
 use serde_json::{json, Value};
 
 use sqlx::{sqlite::SqliteRow, Executor, Row, SqlitePool};
 use sui_types::event::Event;
 use tracing::{debug, info};
+
+/// Maximum number of events one can ask for right now
+const MAX_LIMIT: usize = 5000;
 
 /// Sqlite-based Event Store
 ///
@@ -164,6 +166,20 @@ const TX_QUERY: &str = "SELECT * FROM events WHERE tx_digest = ?";
 const QUERY_BY_TYPE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
     timestamp < ? AND event_type = ? ORDER BY timestamp DESC LIMIT ?";
 
+const QUERY_BY_MODULE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
+    timestamp < ? AND package_id = ? AND module_name = ? ORDER BY timestamp DESC LIMIT ?";
+
+const QUERY_BY_CHECKPOINT: &str =
+    "SELECT * FROM events WHERE checkpoint >= ? AND checkpoint <= ? LIMIT ?";
+
+fn check_limit(limit: usize) -> Result<(), EventStoreError> {
+    if limit <= MAX_LIMIT {
+        Ok(())
+    } else {
+        Err(EventStoreError::LimitTooHigh(limit))
+    }
+}
+
 #[async_trait]
 impl EventStore for SqlEventStore {
     type EventIt = std::vec::IntoIter<StoredEvent>;
@@ -218,6 +234,7 @@ impl EventStore for SqlEventStore {
         event_type: EventType,
         limit: usize,
     ) -> Result<Self::EventIt, EventStoreError> {
+        check_limit(limit)?;
         let rows = sqlx::query(QUERY_BY_TYPE)
             .persistent(true)
             .bind(start_time as i64)
@@ -236,7 +253,7 @@ impl EventStore for SqlEventStore {
         end_time: u64,
         limit: usize,
     ) -> Result<Self::EventIt, EventStoreError> {
-        // TODO: check limit is not too high
+        check_limit(limit)?;
         let rows = sqlx::query(TS_QUERY)
             .bind(start_time as i64)
             .bind(end_time as i64)
@@ -253,7 +270,16 @@ impl EventStore for SqlEventStore {
         end_checkpoint: u64,
         limit: usize,
     ) -> Result<Self::EventIt, EventStoreError> {
-        unimplemented!()
+        // TODO: a limit maybe doesn't make sense here.  May change to unbounded iterator?
+        check_limit(limit)?;
+        let rows = sqlx::query(QUERY_BY_CHECKPOINT)
+            .bind(start_checkpoint as i64)
+            .bind(end_checkpoint as i64)
+            .bind(limit as i64)
+            .map(sql_row_to_event)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows.into_iter())
     }
 
     async fn events_by_module_id(
@@ -263,7 +289,18 @@ impl EventStore for SqlEventStore {
         module: ModuleId,
         limit: usize,
     ) -> Result<Self::EventIt, EventStoreError> {
-        unimplemented!()
+        check_limit(limit)?;
+        let rows = sqlx::query(QUERY_BY_MODULE)
+            .persistent(true)
+            .bind(start_time as i64)
+            .bind(end_time as i64)
+            .bind(module.address().to_vec())
+            .bind(module.name().to_string())
+            .bind(limit as i64)
+            .map(sql_row_to_event)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows.into_iter())
     }
 
     async fn total_event_count(&self) -> Result<usize, EventStoreError> {
@@ -457,5 +494,17 @@ mod tests {
 
     // TODO: test MoveEvents
 
-    // TODO: test limit
+    #[tokio::test]
+    async fn test_eventstore_max_limit() -> Result<(), EventStoreError> {
+        telemetry_subscribers::init_for_testing();
+
+        // Initialize store
+        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        db.initialize().await?;
+
+        let res = db.event_iterator(1_000_000, 1_002_000, 100_000).await;
+        assert!(matches!(res, Err(EventStoreError::LimitTooHigh(100_000))));
+
+        Ok(())
+    }
 }

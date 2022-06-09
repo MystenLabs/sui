@@ -132,6 +132,7 @@ trait EventStore {
 pub enum EventStoreError {
     GenericError(Box<dyn std::error::Error>),
     SqlError(sqlx::Error),
+    LimitTooHigh(usize),
 }
 
 impl From<sqlx::Error> for EventStoreError {
