@@ -10,6 +10,8 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
 };
 use sui_node::SuiNode;
+use sui_types::base_types::ObjectID;
+use sui_types::messages::ObjectInfoRequest;
 use sui_types::{
     committee::Committee,
     error::SuiResult,
@@ -83,6 +85,17 @@ pub fn test_authority_aggregator(
 /// Get a network client to communicate with the consensus.
 pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
     NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
+}
+
+pub async fn get_latest_object(config: &ValidatorInfo, object_id: ObjectID) -> Option<Object> {
+    get_client(config)
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
+        .await
+        .unwrap()
+        .object()
+        .cloned()
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.
