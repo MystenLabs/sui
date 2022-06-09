@@ -11,10 +11,11 @@ use sui_types::{
     crypto::get_key_pair_from_rng,
     messages::{CallArg, ExecutionStatus},
 };
+use test_utils::transaction::publish_counter_package;
 use test_utils::{
     authority::{
-        publish_counter_package, spawn_test_authorities, submit_shared_object_transaction,
-        test_authority_aggregator, test_authority_configs,
+        spawn_test_authorities, submit_shared_object_transaction, test_authority_aggregator,
+        test_authority_configs,
     },
     messages::{move_transaction, test_transactions},
     objects::test_gas_objects,
