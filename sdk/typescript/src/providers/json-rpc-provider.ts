@@ -105,11 +105,10 @@ export class JsonRpcProvider extends Provider {
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        (_:any) : _ is object => true 
+        (_:any) : _ is Array<string> => true 
       )
       return {
-        "input": results[0],
-        "mutated": results[1]
+        "data": [...results[0], ...results[1]]
       }
     } catch (err) {
       throw new Error(`Error getting transactions for object: ${err} for id ${objectID}`)
