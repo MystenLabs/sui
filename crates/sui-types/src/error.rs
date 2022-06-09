@@ -144,8 +144,8 @@ pub enum SuiError {
     CertificateAuthorityReuse,
     #[error("Sequence numbers above the maximal value are not usable for transfers.")]
     InvalidSequenceNumber,
-    #[error("Sequence number overflow for object: {object_id}")]
-    SequenceOverflow { object_id: ObjectID },
+    #[error("Sequence number overflow.")]
+    SequenceOverflow,
     #[error("Sequence number underflow.")]
     SequenceUnderflow,
     #[error("Wrong shard used.")]
