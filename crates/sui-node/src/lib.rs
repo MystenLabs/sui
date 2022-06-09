@@ -75,9 +75,7 @@ impl SuiNode {
             .await,
         );
 
-        let gossip_handle = if config.consensus_config().is_some() {
-            None
-        } else {
+        let gossip_handle = if config.enable_gossip {
             let mut net_config = mysten_network::config::Config::new();
             net_config.connect_timeout = Some(Duration::from_secs(5));
             net_config.request_timeout = Some(Duration::from_secs(5));
@@ -104,6 +102,8 @@ impl SuiNode {
                 )
                 .await;
             Some(handle)
+        } else {
+            None
         };
 
         let batch_subsystem_handle = {

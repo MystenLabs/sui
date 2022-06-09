@@ -234,10 +234,8 @@ where
         let active = Arc::new(self);
 
         let gossip_locals = active;
-        let gossip_join = tokio::task::spawn(async move {
+        tokio::task::spawn(async move {
             gossip_process(&gossip_locals, degree).await;
-        });
-
-        gossip_join
+        })
     }
 }
