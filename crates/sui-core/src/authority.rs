@@ -15,7 +15,6 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
-use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{
@@ -299,14 +298,14 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
+        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             &transaction,
             &self.metrics.shared_obj_tx,
         )
         .await?;
 
-        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
+        let owned_objects = input_objects.filter_owned_objects();
 
         let signed_transaction = SignedTransaction::new(
             self.committee.load().epoch,
@@ -464,7 +463,7 @@ impl AuthorityState {
         let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
 
-        let (gas_status, objects_by_kind) = transaction_input_checker::check_transaction_input(
+        let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             &certificate,
             &self.metrics.shared_obj_tx,
@@ -473,14 +472,8 @@ impl AuthorityState {
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
-        let shared_object_refs: Vec<_> = objects_by_kind
-            .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
-            .map(|(_, obj)| obj.compute_object_reference())
-            .sorted()
-            .collect();
-
-        let shared_objects_ids = shared_object_refs.iter().map(|(id, _, _)| *id);
+        let shared_object_refs = input_objects.filter_shared_objects();
+        let shared_objects_ids = shared_object_refs.iter().map(|(id, _, _)| id);
         let tombstones = self.database.tombstones_exist(shared_objects_ids)?;
 
         if !shared_object_refs.is_empty() && !certificate.data.kind.is_system_tx() {
@@ -499,7 +492,7 @@ impl AuthorityState {
 
         self.metrics
             .num_input_objs
-            .observe(objects_by_kind.len() as f64);
+            .observe(input_objects.len() as f64);
         self.metrics
             .num_shared_objects
             .observe(shared_object_refs.len() as f64);
@@ -507,19 +500,13 @@ impl AuthorityState {
             .batch_size
             .observe(certificate.data.kind.batch_size() as f64);
         debug!(
-            num_inputs = objects_by_kind.len(),
+            num_inputs = input_objects.len(),
             "Read inputs for transaction from DB"
         );
 
-        let transaction_dependencies = objects_by_kind
-            .iter()
-            .map(|(_, obj)| obj.previous_transaction)
-            .collect();
-        let mut temporary_store = AuthorityTemporaryStore::new(
-            self.database.clone(),
-            objects_by_kind,
-            transaction_digest,
-        );
+        let transaction_dependencies = input_objects.transaction_dependencies();
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
         let effects = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
@@ -1230,10 +1217,17 @@ impl AuthorityState {
 
     /// Check whether a shared-object certificate has already been given shared-locks.
     async fn shared_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+        // Check the locks.
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
         let shared_locks = self.database.sequenced(digest, shared_inputs)?;
-        Ok(shared_locks[0].is_some())
+
+        // Check the tombstones
+        let shared_inputs = certificate.shared_input_objects();
+        let tombstones = self.database.tombstones_exist(shared_inputs)?;
+
+        // We consider locks exist if we either have the locks or a tombstone.
+        Ok(shared_locks[0].is_some() || !tombstones.is_empty())
     }
 
     /// Get a read reference to an object/seq lock
@@ -1306,6 +1300,9 @@ impl ExecutionState for AuthorityState {
                     SuiError::NotASharedObjectTransaction
                 );
 
+                // Check if we already assigned locks to the shared objects.
+                let shared_locks = self.shared_locks_exist(&certificate).await?;
+
                 // If we already executed this transaction, return the signed effects.
                 let digest = certificate.digest();
                 if self.database.effects_exists(digest)? {
@@ -1315,7 +1312,7 @@ impl ExecutionState for AuthorityState {
                 }
 
                 // If we didn't already assigned shared-locks to this transaction, we do it now.
-                if !self.shared_locks_exist(&certificate).await? {
+                if !shared_locks {
                     // Check the certificate. Remember that Byzantine authorities may input anything into
                     // consensus.
                     certificate.verify(&self.committee.load())?;
