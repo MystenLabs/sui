@@ -1,14 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use std::sync::Arc;
 use sui_core::gateway_state::{GatewayAPI, GatewayState};
 use sui_types::messages::{CallArg, ExecutionStatus};
 use sui_types::object::OBJECT_START_VERSION;
+use test_utils::authority::test_authority_aggregator;
+use test_utils::transaction::{
+    publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
+};
 use test_utils::{
-    authority::{
-        publish_counter_package, spawn_test_authorities, submit_shared_object_transaction,
-        submit_single_owner_transaction, test_authority_aggregator, test_authority_configs,
-    },
+    authority::{spawn_test_authorities, test_authority_configs},
     messages::{move_transaction, test_shared_object_transactions},
     objects::{test_gas_objects, test_shared_object},
 };
@@ -30,12 +32,9 @@ async fn shared_object_transaction() {
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
     tokio::task::yield_now().await;
-    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
+    let _effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
-        .pop()
         .unwrap();
-    let info = reply.unwrap();
-    assert!(info.signed_effects.is_some());
 }
 
 /// Same as `shared_object_transaction` but every authorities submit the transaction.
@@ -56,13 +55,9 @@ async fn many_shared_object_transactions() {
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
     tokio::task::yield_now().await;
-    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
-    for reply in replies {
-        match reply {
-            Ok(_) => (),
-            Err(error) => panic!("{error}"),
-        }
-    }
+    let _effects = submit_shared_object_transaction(transaction, configs.validator_set())
+        .await
+        .unwrap();
 }
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client, wallet,
@@ -90,15 +85,9 @@ async fn call_shared_object_contract() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let replies = submit_single_owner_transaction(transaction, configs.validator_set()).await;
-    let mut counter_ids = Vec::new();
-    for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-        let ((shared_object_id, _, _), _) = effects.created[0];
-        counter_ids.push(shared_object_id);
-    }
-    let counter_id = counter_ids.pop().unwrap();
+    let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    let ((counter_id, _, _), _) = effects.created[0];
 
     // Ensure the value of the counter is `0`.
     tokio::task::yield_now().await;
@@ -112,12 +101,9 @@ async fn call_shared_object_contract() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
+    let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
-        .pop()
         .unwrap();
-    let info = reply.unwrap();
-    let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Make a transaction to increment the counter.
@@ -129,12 +115,9 @@ async fn call_shared_object_contract() {
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
+    let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
-        .pop()
         .unwrap();
-    let info = reply.unwrap();
-    let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
@@ -149,12 +132,9 @@ async fn call_shared_object_contract() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let reply = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
+    let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
-        .pop()
         .unwrap();
-    let info = reply.unwrap();
-    let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
 
@@ -183,15 +163,9 @@ async fn shared_object_flood() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let replies = submit_single_owner_transaction(transaction, configs.validator_set()).await;
-    let mut counter_ids = Vec::new();
-    for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-        let ((shared_object_id, _, _), _) = effects.created[0];
-        counter_ids.push(shared_object_id);
-    }
-    let counter_id = counter_ids.pop().unwrap();
+    let effects = submit_single_owner_transaction(transaction, configs.validator_set()).await;
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    let ((counter_id, _, _), _) = effects.created[0];
 
     // Ensure the value of the counter is `0`.
     tokio::task::yield_now().await;
@@ -205,16 +179,10 @@ async fn shared_object_flood() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
-    for reply in replies {
-        match reply {
-            Ok(info) => {
-                let effects = info.signed_effects.unwrap().effects;
-                assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-            }
-            Err(error) => panic!("{error}"),
-        }
-    }
+    let effects = submit_shared_object_transaction(transaction, configs.validator_set())
+        .await
+        .unwrap();
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Make a transaction to increment the counter.
     tokio::task::yield_now().await;
@@ -225,16 +193,10 @@ async fn shared_object_flood() {
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
     );
-    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
-    for reply in replies {
-        match reply {
-            Ok(info) => {
-                let effects = info.signed_effects.unwrap().effects;
-                assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-            }
-            Err(error) => panic!("{error}"),
-        }
-    }
+    let effects = submit_shared_object_transaction(transaction, configs.validator_set())
+        .await
+        .unwrap();
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Ensure the value of the counter is `1`.
     tokio::task::yield_now().await;
@@ -248,16 +210,10 @@ async fn shared_object_flood() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let replies = submit_shared_object_transaction(transaction, configs.validator_set()).await;
-    for reply in replies {
-        match reply {
-            Ok(info) => {
-                let effects = info.signed_effects.unwrap().effects;
-                assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-            }
-            Err(error) => panic!("{error}"),
-        }
-    }
+    let effects = submit_shared_object_transaction(transaction, configs.validator_set())
+        .await
+        .unwrap();
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
 
 #[tokio::test]
@@ -283,13 +239,11 @@ async fn shared_object_sync() {
         package_ref,
         /* arguments */ Vec::default(),
     );
-    let mut replies = submit_single_owner_transaction(
+    let effects = submit_single_owner_transaction(
         create_counter_transaction.clone(),
         &configs.validator_set()[0..1],
     )
     .await;
-    let reply = replies.pop().unwrap();
-    let effects = reply.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let ((counter_id, _, _), _) = effects.created[0];
 
@@ -304,58 +258,40 @@ async fn shared_object_sync() {
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).
-    let reply = submit_shared_object_transaction(
+    let effects = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
         &configs.validator_set()[0..1],
     )
     .await
-    .pop()
     .unwrap();
-    let info = reply.unwrap();
-    let effects = info.signed_effects.unwrap().effects;
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Let's submit the transaction to the out-of-date authorities.
-    let replies = submit_shared_object_transaction(
+    // Right now grpc doesn't send back the error message in a recoverable way.
+    // Ideally we expect Err(SuiError::SharedObjectLockingFailure(_)).
+    let _err = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
         &configs.validator_set()[1..],
     )
-    .await;
-    for reply in replies {
-        match reply {
-            // Right now grpc doesn't send back the error message in a recoverable way
-            // Err(SuiError::SharedObjectLockingFailure(_)) => (),
-            Err(_) => (),
-            _ => panic!("Unexpected protocol message"),
-        }
-    }
+    .await
+    .unwrap_err();
 
     // Now send the missing certificates to the outdated authorities. We also re-send
     // the transaction to the first authority who should simply ignore it.
     tokio::task::yield_now().await;
-    let replies =
+    let effects =
         submit_single_owner_transaction(create_counter_transaction, configs.validator_set()).await;
-    for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    }
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // Now we can try again with the shared-object transaction who failed before.
     tokio::task::yield_now().await;
-    let replies = submit_shared_object_transaction(
+    let effects = submit_shared_object_transaction(
         increment_counter_transaction,
         &configs.validator_set()[1..],
     )
-    .await;
-    for reply in replies {
-        match reply {
-            Ok(info) => {
-                let effects = info.signed_effects.unwrap().effects;
-                assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-            }
-            Err(error) => panic!("{error}"),
-        }
-    }
+    .await
+    .unwrap();
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
@@ -383,13 +319,11 @@ async fn replay_shared_object_transaction() {
         /* arguments */ Vec::default(),
     );
     for _ in 0..2 {
-        let mut replies = submit_single_owner_transaction(
+        let effects = submit_single_owner_transaction(
             create_counter_transaction.clone(),
             &configs.validator_set()[0..1],
         )
         .await;
-        let reply = replies.pop().unwrap();
-        let effects = reply.signed_effects.unwrap().effects;
         assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
         // Ensure the sequence number of the shared object did not change.

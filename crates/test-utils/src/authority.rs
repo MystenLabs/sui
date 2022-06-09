@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    messages::{make_certificates, parse_package_ref, publish_move_package_transaction},
-    TEST_COMMITTEE_SIZE,
-};
+use crate::{messages::make_certificates, TEST_COMMITTEE_SIZE};
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -14,12 +11,10 @@ use sui_core::{
 };
 use sui_node::SuiNode;
 use sui_types::{
-    base_types::ObjectRef,
     committee::Committee,
     error::SuiResult,
     messages::{
-        ConfirmationTransaction, ConsensusTransaction, ExecutionStatus, Transaction,
-        TransactionInfoResponse,
+        ConfirmationTransaction, ConsensusTransaction, Transaction, TransactionInfoResponse,
     },
     object::Object,
 };
@@ -147,17 +142,4 @@ pub async fn submit_shared_object_transaction(
             break replies;
         }
     }
-}
-
-/// Publish the move package of a simple shared counter.
-pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInfo]) -> ObjectRef {
-    let transaction = publish_move_package_transaction(gas_object);
-    let replies = submit_single_owner_transaction(transaction, configs).await;
-    let mut package_refs = Vec::new();
-    for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-        package_refs.push(parse_package_ref(&effects).unwrap());
-    }
-    package_refs.pop().unwrap()
 }
