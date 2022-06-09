@@ -24,7 +24,7 @@ pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<jsonrpsee::http_server::HttpServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
-    _indexing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
+    _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
 }
@@ -119,18 +119,18 @@ impl SuiNode {
             })
         };
 
-        let indexing_subsystem_handle = match index_store {
-            None => None,
-            Some(_) => {
+        let post_processing_subsystem_handle =
+            if index_store.is_some() || config.enable_event_processing {
                 let indexing_state = state.clone();
                 Some(tokio::task::spawn(async move {
                     indexing_state
-                        .run_indexing_service()
+                        .run_tx_post_processing_process()
                         .await
                         .map_err(Into::into)
                 }))
-            }
-        };
+            } else {
+                None
+            };
 
         let validator_service = if config.consensus_config().is_some() {
             Some(ValidatorService::new(config, state.clone()).await?)
@@ -169,7 +169,7 @@ impl SuiNode {
             _json_rpc_service: json_rpc_service,
             _gossip_handle: gossip_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
-            _indexing_subsystem_handle: indexing_subsystem_handle,
+            _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
         };
 

@@ -534,11 +534,6 @@ impl AuthorityState {
         self.update_state(temporary_store, &certificate, &signed_effects)
             .await?;
 
-        // Each certificate only reaches here once
-        if let Some(event_handler) = &self.event_handler {
-            event_handler.process_events(&signed_effects.effects).await;
-        }
-
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&transaction_digest)?,
             certified_transaction: Some(certificate),
@@ -546,14 +541,26 @@ impl AuthorityState {
         })
     }
 
-    async fn index_one_tx(
+    fn index_tx(
         &self,
         indexes: &IndexStore,
         seq: TxSequenceNumber,
         digest: &TransactionDigest,
+        cert: &CertifiedTransaction,
+        effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        let info = self.make_transaction_info(digest).await?;
+        indexes.index_tx(
+            cert.sender_address(),
+            cert.data.input_objects()?.iter().map(|o| o.object_id()),
+            effects.effects.mutated_and_created(),
+            seq,
+            digest,
+        )
+    }
 
+    async fn process_one_tx(&self, seq: TxSequenceNumber, digest: &TransactionDigest) -> SuiResult {
+        // Load cert and effects.
+        let info = self.make_transaction_info(digest).await?;
         let (cert, effects) = match info {
             TransactionInfoResponse {
                 certified_transaction: Some(cert),
@@ -567,20 +574,25 @@ impl AuthorityState {
             }
         };
 
-        indexes.index_tx(
-            cert.sender_address(),
-            cert.data.input_objects()?.iter().map(|o| o.object_id()),
-            effects.effects.mutated_and_created(),
-            seq,
-            digest,
-        )?;
+        // Index tx
+        if let Some(indexes) = &self.indexes {
+            if let Err(e) = self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects) {
+                warn!(?digest, "Couldn't index tx: {}", e);
+            }
+        }
+
+        // Emit events
+        if let Some(event_handler) = &self.event_handler {
+            event_handler.process_events(&effects.effects).await;
+        }
 
         Ok(())
     }
 
-    pub async fn run_indexing_service(&self) -> SuiResult {
+    // TODO: This should persist the last successfully-processed sequence to disk, and upon
+    // starting up, look for any sequences in the store since then and process them.
+    pub async fn run_tx_post_processing_process(&self) -> SuiResult {
         let mut subscriber = self.subscribe_batch();
-        let indexes = self.get_indexes()?;
 
         loop {
             match subscriber.recv().await {
@@ -593,21 +605,26 @@ impl AuthorityState {
                         },
                     )) = item
                     {
-                        if let Err(e) = self.index_one_tx(indexes.as_ref(), seq, &digest).await {
-                            warn!(?digest, "Couldn't index tx: {}", e);
+                        if let Err(e) = self.process_one_tx(seq, &digest).await {
+                            warn!(?digest, "Couldn't process tx: {}", e);
                         }
                     }
                 }
+
+                // For both the error cases, we exit the loop which ends this task.
+                // TODO: Automatically restart the task, which in combination with the todo above,
+                // will process any skipped txes and then begin listening for new ones.
                 Err(RecvError::Closed) => {
                     // The service closed the channel.
+                    error!("run_tx_post_processing_process receiver channel closed");
                     break;
                 }
                 Err(RecvError::Lagged(number_skipped)) => {
-                    // Should we do something more drastic here?
-                    warn!(
-                        "run_indexing_service too slow, skipped {} txes",
+                    error!(
+                        "run_tx_post_processing_process too slow, skipped {} txes",
                         number_skipped
                     );
+                    break;
                 }
             }
         }
