@@ -845,6 +845,28 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }))
     }
 
+    /// Check whether there is a tombstone for a particular object.
+    pub fn tombstones_exist<I>(&self, object_ids: I) -> SuiResult<HashSet<ObjectID>>
+    where
+        I: IntoIterator<Item = ObjectID>,
+    {
+        let mut tombstones = HashSet::new();
+        for object_id in object_ids {
+            if self
+                .parent_sync
+                .get(&(
+                    object_id,
+                    SequenceNumber::MAX,
+                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                ))?
+                .is_some()
+            {
+                tombstones.insert(object_id);
+            }
+        }
+        Ok(tombstones)
+    }
+
     /// Remove the shared objects locks. This function is not safety-critical and is only need to cleanup the store.
     pub fn remove_shared_objects_locks(
         &self,

@@ -402,7 +402,8 @@ impl AuthorityState {
         transaction_digest: &TransactionDigest,
         // inputs: &[(InputObjectKind, Object)],
         shared_object_refs: &[ObjectRef],
-    ) -> Result<(), SuiError> {
+        tombstones: &HashSet<ObjectID>,
+    ) -> SuiResult {
         debug!("Validating shared object sequence numbers from consensus...");
 
         // Internal consistency check
@@ -421,12 +422,14 @@ impl AuthorityState {
         // the consensus. Bail if the transaction contains even one shared object that either:
         // (i) was not assigned a sequence number, or
         // (ii) has a different sequence number than the current one.
-
         let lock_errors: Vec<_> = shared_object_refs
             .iter()
             .filter_map(|(object_id, version, _)| {
                 if !shared_locks.contains_key(object_id) {
-                    Some(SuiError::SharedObjectLockNotSetObject)
+                    match tombstones.contains(object_id) {
+                        true => None,
+                        false => Some(SuiError::SharedObjectLockNotSetObject),
+                    }
                 } else if shared_locks[object_id] != *version {
                     Some(SuiError::UnexpectedSequenceNumber {
                         object_id: *object_id,
@@ -476,15 +479,23 @@ impl AuthorityState {
             .map(|(_, obj)| obj.compute_object_reference())
             .sorted()
             .collect();
+
+        let shared_objects_ids = shared_object_refs.iter().map(|(id, _, _)| *id);
+        let tombstones = self.database.tombstones_exist(shared_objects_ids)?;
+
         if !shared_object_refs.is_empty() && !certificate.data.kind.is_system_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
             // only be executed at a time when consensus is turned off.
             // TODO: Add some assert here to make sure consensus is indeed off with is_system_tx.
-            self.check_shared_locks(&transaction_digest, &shared_object_refs)
+            self.check_shared_locks(&transaction_digest, &shared_object_refs, &tombstones)
                 .await?;
         }
+
+        // If there is a tombstone for even a single shared object, we need unlock all
+        // owned-objects and increment the sequence number of all existing shared-objects.
+        // TODO
 
         self.metrics
             .num_input_objs
