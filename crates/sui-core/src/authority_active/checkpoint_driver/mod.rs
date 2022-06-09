@@ -195,23 +195,6 @@ pub async fn checkpoint_process<A>(
             continue;
         }
 
-        match aggregate_gas_cost_of_latest_checkpoint(active_authority, state_checkpoints.clone())
-            .await
-        {
-            Ok(_total_gas) => {
-                let _locals = state_checkpoints.lock().get_locals();
-                // Set _total_gas to _locals?
-                // Should it be serde_skip?
-            }
-            Err(err) => {
-                warn!(
-                    "Error aggregating total gas cost of the latest checkpoint: {:?}",
-                    err
-                );
-                continue;
-            }
-        }
-
         // (4) Check if we need to advance to the next checkpoint, in case >2/3
         // have a proposal out. If so we start creating and injecting fragments
         // into the consensus protocol to make the new checkpoint.
@@ -925,6 +908,8 @@ where
 /// Assuming all transactions in the latest checkpoint has been executed.
 /// This function goes through all effects in the transactions in the latest checkpoint,
 /// and aggregate the gas cost of each transaction.
+/// TODO: Add callsite.
+#[allow(dead_code)]
 async fn aggregate_gas_cost_of_latest_checkpoint<A>(
     active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
