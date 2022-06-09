@@ -62,8 +62,7 @@ module FungibleTokens::BASKET {
     public fun burn(
         reserve: &mut Reserve, basket: Coin<BASKET>, ctx: &mut TxContext
     ): (Coin<SUI>, Coin<MANAGED>) {
-        let num_basket = Coin::value(&basket);
-        Coin::burn(basket, &mut reserve.treasury_cap);
+        let num_basket = Coin::burn(basket, &mut reserve.treasury_cap);
         let sui = Coin::withdraw(&mut reserve.sui, num_basket, ctx);
         let managed = Coin::withdraw(&mut reserve.managed, num_basket, ctx);
         (sui, managed)

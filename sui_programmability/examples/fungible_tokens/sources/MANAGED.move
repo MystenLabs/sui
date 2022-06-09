@@ -29,7 +29,7 @@ module FungibleTokens::MANAGED {
 
     /// Manager can burn coins
     public(script) fun burn(treasury_cap: &mut TreasuryCap<MANAGED>, coin: Coin<MANAGED>) {
-        Coin::burn(coin, treasury_cap)
+        Coin::burn(coin, treasury_cap);
     }
 
     /// Manager can transfer the treasury capability to a new manager
