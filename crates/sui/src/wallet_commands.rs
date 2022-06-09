@@ -153,6 +153,27 @@ pub enum WalletCommands {
         #[clap(long)]
         gas_budget: u64,
     },
+    /// Transfer SUI, and pay gas with the same SUI coin object.
+    /// If amount is specified, only the amount is transferred; otherwise the entire object
+    /// is transferred.
+    #[clap(name = "transfer-sui")]
+    TransferSui {
+        /// Recipient address
+        #[clap(long)]
+        to: SuiAddress,
+
+        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
+        #[clap(long)]
+        sui_coin_object_id: ObjectID,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// The amount to transfer, if not specified, the entire coin object will be transferred.
+        #[clap(long)]
+        amount: Option<u64>,
+    },
     /// Synchronize client state with authorities.
     #[clap(name = "sync")]
     SyncClientState {
@@ -326,6 +347,33 @@ impl WalletCommands {
                     return Err(anyhow!("Error transferring object: {:#?}", effects.status));
                 }
                 WalletCommandResult::Transfer(time_total, cert, effects)
+            }
+
+            WalletCommands::TransferSui {
+                to,
+                sui_coin_object_id: object_id,
+                gas_budget,
+                amount,
+            } => {
+                let from = context.get_object_owner(&object_id).await?;
+
+                let data = context
+                    .gateway
+                    .transfer_sui(from, object_id, gas_budget, to, amount)
+                    .await?;
+                let signature = context.keystore.sign(&from, &data.to_bytes())?;
+                let response = context
+                    .gateway
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?
+                    .to_effect_response()?;
+                let cert = response.certificate;
+                let effects = response.effects;
+
+                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status));
+                }
+                WalletCommandResult::TransferSui(cert, effects)
             }
 
             WalletCommands::Addresses => {
@@ -595,6 +643,9 @@ impl Display for WalletCommandResult {
                 writeln!(writer, "Transfer confirmed after {} us", time_elapsed)?;
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
+            WalletCommandResult::TransferSui(cert, effects) => {
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            }
             WalletCommandResult::Addresses(addresses) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
@@ -789,6 +840,7 @@ pub enum WalletCommandResult {
         SuiCertifiedTransaction,
         SuiTransactionEffects,
     ),
+    TransferSui(SuiCertifiedTransaction, SuiTransactionEffects),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
