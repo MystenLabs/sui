@@ -37,7 +37,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
     epoch: EpochId,
-) -> SuiResult<TransactionEffects> {
+) -> TransactionEffects {
     let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
     let gas_object_ref = *transaction_data.gas_payment_object_ref();
@@ -62,14 +62,13 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     // Remove from dependencies the generic hash
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
-    let effects = temporary_store.to_effects(
+    temporary_store.to_effects(
         shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
         status,
         gas_object_ref,
-    );
-    Ok(effects)
+    )
 }
 
 fn charge_gas_for_object_read<S>(

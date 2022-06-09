@@ -479,7 +479,7 @@ impl<'a> SuiTestAdapter<'a> {
             gas_status,
             // TODO: Support different epochs in transactional tests.
             0,
-        )?;
+        );
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();

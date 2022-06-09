@@ -519,7 +519,7 @@ impl AuthorityState {
             &self._native_functions,
             gas_status,
             self.committee.load().epoch,
-        )?;
+        );
 
         self.metrics.total_effects.inc();
         self.metrics

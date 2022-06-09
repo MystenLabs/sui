@@ -149,8 +149,7 @@ async fn test_start_epoch_change() {
         &state._native_functions,
         SuiGasStatus::new_with_budget(1000, 1, 1),
         state.committee.load().epoch,
-    )
-    .unwrap();
+    );
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state
