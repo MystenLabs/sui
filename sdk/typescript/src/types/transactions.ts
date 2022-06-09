@@ -93,6 +93,11 @@ export type TransactionEffectsResponse = {
   effects: TransactionEffects;
 };
 
+export type TransactionsForAddressResponse = {
+  "to": GetTxnDigestsResponse,
+  "from": GetTxnDigestsResponse
+}
+
 export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];

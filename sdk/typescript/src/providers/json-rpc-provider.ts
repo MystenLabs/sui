@@ -8,7 +8,7 @@ import {
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
   isTransactionEffectsResponse,
-  isTransactionResponse,
+  isTransactionResponse
 } from '../index.guard';
 import {
   GatewayTxSeqNumber,
@@ -18,6 +18,7 @@ import {
   TransactionDigest,
   TransactionEffectsResponse,
   TransactionResponse,
+  TransactionsForAddressResponse
 } from '../types';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
@@ -92,7 +93,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   //Addresses
-  async getTransactionsForAddress(addressID: string) {
+  async getTransactionsForAddress(addressID: string): Promise<TransactionsForAddressResponse> {
     const requests = [
       {
         method: 'sui_getTransactionsToAddress',
@@ -107,7 +108,7 @@ export class JsonRpcProvider extends Provider {
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        (_:any) : _ is object => true 
+        isGetTxnDigestsResponse
       )
       return {
         "to": results[0],
