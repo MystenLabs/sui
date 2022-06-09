@@ -17,8 +17,7 @@ import {
   SuiObjectInfo,
   TransactionDigest,
   TransactionEffectsResponse,
-  TransactionResponse,
-  TransactionsForAddressResponse
+  TransactionResponse
 } from '../types';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
@@ -93,7 +92,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   //Addresses
-  async getTransactionsForAddress(addressID: string): Promise<TransactionsForAddressResponse> {
+  async getTransactionsForAddress(addressID: string): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
         method: 'sui_getTransactionsToAddress',
@@ -110,10 +109,7 @@ export class JsonRpcProvider extends Provider {
         requests,
         isGetTxnDigestsResponse
       )
-      return {
-        "to": results[0],
-        "from": results[1]
-      }
+      return [...results[0], ...results[1]];
     } catch (err) {
       throw new Error(`Error getting transactions for address: ${err} for id ${addressID}`)
     }

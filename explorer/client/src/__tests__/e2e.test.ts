@@ -407,16 +407,10 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
-                .with('#txFrom')
+                .with('#tx')
                 .get.textContent();
             expect(fromResults.replace(/\s/g, '')).toBe(
-                'GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8='
-            );
-            const toResults = await cssInteract(page)
-                .with('#txTo')
-                .get.textContent();
-            expect(toResults.replace(/\s/g, '')).toBe(
-                'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4='
+                'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8='
             );
         });
     });
