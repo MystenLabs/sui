@@ -87,7 +87,7 @@ trait EventStore {
     ) -> Result<Self::EventIt, EventStoreError>;
 
     /// Queries for all events of a certain EventType within a given time window.
-    /// Will return at most limit of the most recent events within the window, sorted in ascending time.
+    /// Will return at most limit of the most recent events within the window, sorted in descending time.
     async fn events_by_type(
         &self,
         start_time: u64,
@@ -115,7 +115,7 @@ trait EventStore {
     ) -> Result<Self::EventIt, EventStoreError>;
 
     /// Queries all Move events belonging to a certain Module ID within a given time window.
-    /// Will return at most limit of the most recent events within the window, sorted in ascending time.
+    /// Will return at most limit of the most recent events within the window, sorted in descending time.
     async fn events_by_module_id(
         &self,
         start_time: u64,

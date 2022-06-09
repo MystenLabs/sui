@@ -10,7 +10,8 @@ use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{serde_as, Bytes};
-use strum_macros::EnumDiscriminants;
+use strum_macros::{EnumDiscriminants, EnumVariantNames};
+use strum::VariantNames;
 
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
@@ -62,7 +63,7 @@ pub enum TransferType {
 /// Specific type of event
 #[serde_as]
 #[derive(
-    Eq, Debug, Clone, PartialEq, NamedVariant, Deserialize, Serialize, Hash, EnumDiscriminants,
+    Eq, Debug, Clone, PartialEq, NamedVariant, Deserialize, Serialize, Hash, EnumDiscriminants, EnumVariantNames
 )]
 #[strum_discriminants(name(EventType))]
 pub enum Event {
@@ -94,6 +95,10 @@ pub enum Event {
 impl Event {
     pub fn move_event(type_: StructTag, contents: Vec<u8>) -> Self {
         Event::MoveEvent { type_, contents }
+    }
+
+    pub fn name_from_ordinal(ordinal: usize) -> &'static str {
+        Event::VARIANTS[ordinal]
     }
 
     /// Returns the EventType associated with an Event

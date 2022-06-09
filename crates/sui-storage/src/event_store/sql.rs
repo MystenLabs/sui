@@ -3,12 +3,20 @@
 use super::*;
 
 use async_trait::async_trait;
+use futures::TryFutureExt;
 use serde_json::{json, Value};
 
 use sqlx::{sqlite::SqliteRow, Executor, Row, SqlitePool};
 use sui_types::event::Event;
 use tracing::{debug, info};
 
+/// Sqlite-based Event Store
+///
+/// ## Data Model
+/// - Main columns hold most common fields
+/// - object_id is used for multiple purposes, including the Publish package ID
+/// - event_type is an integer in order to save space and corresponds to EventType discriminant
+/// - fields is JSON for now (for easy JSON filtering) and contains all fields not in main columns
 pub struct SqlEventStore {
     pool: SqlitePool,
 }
@@ -18,7 +26,7 @@ const SQL_TABLE_CREATE: &str = "\
         timestamp INTEGER NOT NULL,
         checkpoint INTEGER,
         tx_digest BLOB,
-        event_type TEXT,
+        event_type INTEGER,
         package_id BLOB,
         module_name TEXT,
         object_id BLOB,
@@ -95,7 +103,7 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
                 .expect("Cannot convert digest bytes to TxDigest"),
         )
     });
-    let event_type: String = row.get(3);
+    let event_type: u16 = row.get(3);
     let package_id = try_extract_object_id(&row, 4).expect("Error converting package ID bytes");
     let object_id = try_extract_object_id(&row, 6).expect("Error converting object ID bytes");
     let module_name: Option<String> = row.get(5);
@@ -104,7 +112,7 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
         Vec::new()
     } else {
         let fields_json = serde_json::from_str(fields_text)
-            .expect(format!("Could not parse [{}] as JSON", fields_text).as_str());
+            .unwrap_or_else(|e| panic!("Could not parse [{}] as JSON: {}", fields_text, e));
         if let Value::Object(map) = fields_json {
             map.into_iter()
                 .map(|(k, v)| (flexstr::SharedStr::from(k), EventValue::Json(v)))
@@ -119,7 +127,7 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
         timestamp: timestamp as u64,
         checkpoint_num: checkpoint as u64,
         tx_digest,
-        event_type: event_type.into(),
+        event_type: SharedStr::from(Event::name_from_ordinal(event_type as usize)),
         module_name: module_name.map(|s| s.into()),
         object_id: object_id.or(package_id),
         fields,
@@ -142,7 +150,7 @@ fn event_to_json(event: &EventEnvelope) -> String {
                        "type": type_.to_string() })),
             _ => None,
         };
-        maybe_json.map(|j| j.to_string()).unwrap_or(String::new())
+        maybe_json.map(|j| j.to_string()).unwrap_or_default()
     }
 }
 
@@ -152,6 +160,9 @@ const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, checkpoint, tx_diges
 const TS_QUERY: &str = "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? LIMIT ?";
 
 const TX_QUERY: &str = "SELECT * FROM events WHERE tx_digest = ?";
+
+const QUERY_BY_TYPE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
+    timestamp < ? AND event_type = ? ORDER BY timestamp DESC LIMIT ?";
 
 #[async_trait]
 impl EventStore for SqlEventStore {
@@ -170,12 +181,13 @@ impl EventStore for SqlEventStore {
             // If batching, turn off persistent to avoid caching as we may fill up the prepared statement cache
             let insert_tx_q = sqlx::query(SQL_INSERT_TX).persistent(true);
             let module_id = event.event.module_id();
+            let event_type = EventType::from(&event.event);
             // TODO: use batched API?
             insert_tx_q
                 .bind(event.timestamp as i64)
                 .bind(checkpoint_num as i64)
                 .bind(event.tx_digest.map(|txd| txd.to_bytes()))
-                .bind(event.event_type())
+                .bind(event_type as u16)
                 .bind(module_id.clone().map(|mid| mid.address().to_vec()))
                 .bind(module_id.map(|mid| mid.name().to_string()))
                 .bind(event.event.object_id().map(|id| id.to_vec()))
@@ -191,6 +203,7 @@ impl EventStore for SqlEventStore {
         digest: TransactionDigest,
     ) -> Result<Self::EventIt, EventStoreError> {
         let rows = sqlx::query(TX_QUERY)
+            .persistent(true)
             .bind(digest.to_bytes())
             .map(sql_row_to_event)
             .fetch_all(&self.pool)
@@ -205,7 +218,16 @@ impl EventStore for SqlEventStore {
         event_type: EventType,
         limit: usize,
     ) -> Result<Self::EventIt, EventStoreError> {
-        unimplemented!()
+        let rows = sqlx::query(QUERY_BY_TYPE)
+            .persistent(true)
+            .bind(start_time as i64)
+            .bind(end_time as i64)
+            .bind(event_type as u16)
+            .bind(limit as i64)
+            .map(sql_row_to_event)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows.into_iter())
     }
 
     async fn event_iterator(
@@ -309,6 +331,12 @@ mod tests {
                 new_test_deleteobj_event(),
                 None,
             ),
+            EventEnvelope::new(
+                1_004_000,
+                Some(TransactionDigest::random()),
+                new_test_transfer_event(TransferType::ToAddress),
+                None,
+            ),
         ]
     }
 
@@ -335,7 +363,7 @@ mod tests {
         db.add_events(&to_insert, 1).await?;
         info!("Done inserting");
 
-        assert_eq!(db.total_event_count().await?, 4);
+        assert_eq!(db.total_event_count().await?, 5);
 
         // Query for records in time range, end should be exclusive - should get 2
         let event_it = db.event_iterator(1_000_000, 1_002_000, 10).await?;
@@ -387,6 +415,42 @@ mod tests {
 
         let type_str = field_map.get(&shared_str!("type")).unwrap();
         assert_eq!(type_str, &EventValue::Json(json!("Coin")));
+
+        Ok(())
+    }
+
+    // Test for reads by event type, plus returning events in desc timestamp and limit
+    #[tokio::test]
+    async fn test_eventstore_query_by_type() -> Result<(), EventStoreError> {
+        telemetry_subscribers::init_for_testing();
+
+        // Initialize store
+        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        db.initialize().await?;
+
+        // Insert some records
+        info!("Inserting records!");
+        let to_insert = test_events();
+        db.add_events(&to_insert, 1).await?;
+        info!("Done inserting");
+
+        let event_it = db
+            .events_by_type(1_000_000, 1_005_000, EventType::TransferObject, 2)
+            .await?;
+        let queried_events: Vec<_> = event_it.collect();
+        assert_eq!(queried_events.len(), 2);
+
+        // Desc timestamp order, so the last transfer event should be first
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
+        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[2]);
+
+        // Query again with limit of 1, it should return only the last transfer event
+        let event_it = db
+            .events_by_type(1_000_000, 1_005_000, EventType::TransferObject, 1)
+            .await?;
+        let queried_events: Vec<_> = event_it.collect();
+        assert_eq!(queried_events.len(), 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
 
         Ok(())
     }
