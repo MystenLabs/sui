@@ -128,6 +128,17 @@ pub trait RpcTransactionBuilder {
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
 
+    /// Send SUI coin object to a Sui address. The SUI object is also used as the gas object.
+    #[method(name = "transferSui")]
+    async fn transfer_sui(
+        &self,
+        signer: SuiAddress,
+        sui_object_id: ObjectID,
+        gas_budget: u64,
+        recipient: SuiAddress,
+        amount: Option<u64>,
+    ) -> RpcResult<TransactionBytes>;
+
     /// Execute a Move call transaction by calling the specified function in the module of a given package.
     #[method(name = "moveCall")]
     async fn move_call(
