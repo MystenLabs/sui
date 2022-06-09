@@ -4,20 +4,19 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use futures::{TryStream, TryStreamExt};
+use futures::{StreamExt, TryStream};
 use jsonrpsee_core::error::SubscriptionClosed;
 use jsonrpsee_core::server::rpc_module::{PendingSubscription, SubscriptionSink};
 use jsonrpsee_proc_macros::rpc;
 use serde::Serialize;
 
 use sui_core::authority::AuthorityState;
-use sui_core::event_handler::EventHandler;
+use sui_core::event_handler::{EventFieldFilter, EventFilter, EventHandler};
 use sui_core::gateway_types::SuiEvent;
-
 #[rpc(server, client, namespace = "sui")]
 pub trait EventApi {
-    #[subscription(name = "subscribeMoveEvents", item = SuiEvent)]
-    fn sub_move_event(&self, move_event_type: String);
+    #[subscription(name = "subscribeMoveEventsByType", item = SuiEvent)]
+    fn subscribe_move_event_by_type(&self, event: String, filter: EventFieldFilter);
 }
 
 pub struct EventApiImpl {
@@ -35,12 +34,18 @@ impl EventApiImpl {
 }
 
 impl EventApiServer for EventApiImpl {
-    fn sub_move_event(&self, pending: PendingSubscription, _event_type: String) {
+    fn subscribe_move_event_by_type(
+        &self,
+        pending: PendingSubscription,
+        event: String,
+        filter: EventFieldFilter,
+    ) {
         if let Some(sink) = pending.accept() {
             let state = self.state.clone();
-            let stream = self.event_handler.subscribe();
-            let stream =
-                stream.map_ok(move |e| SuiEvent::try_from(e.event, &state.module_cache).unwrap());
+            let stream = self
+                .event_handler
+                .subscribe(EventFilter::ByType(event, filter));
+            let stream = stream.map(move |e| SuiEvent::try_from(e.event, &state.module_cache));
             spawn_subscript(sink, stream);
         }
     }

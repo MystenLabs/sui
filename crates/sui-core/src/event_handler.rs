@@ -3,22 +3,35 @@
 
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::streamer::Streamer;
-use move_bytecode_utils::module_cache::SyncModuleCache;
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::sync::Arc;
+
+use chrono::prelude::*;
+use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::parser::parse_struct_tag;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+use std::sync::Arc;
+use tokio_stream::Stream;
+use tracing::{debug, error};
+
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{
     error::{SuiError, SuiResult},
     event::{Event, EventEnvelope},
     messages::TransactionEffects,
 };
-use tokio_stream::wrappers::BroadcastStream;
-use tracing::{debug, error};
 
-const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
+use crate::authority::{AuthorityStore, ResolverWrapper};
+use crate::streamer::{Filter, Streamer};
+
+pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct EventHandler {
     module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>,
-    streamer: Streamer<EventEnvelope>,
+    event_streamer: Streamer<EventEnvelope, EventFilter>,
 }
 
 impl EventHandler {
@@ -26,7 +39,7 @@ impl EventHandler {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
             module_cache: SyncModuleCache::new(ResolverWrapper(validator_store)),
-            streamer,
+            event_streamer: streamer,
         }
     }
 
@@ -57,10 +70,56 @@ impl EventHandler {
         };
         let envelope = EventEnvelope::new(timestamp_ms, None, event.clone(), json_value);
         // TODO store events here
-        self.streamer.send(envelope).await
+        self.event_streamer.send(envelope).await
     }
 
-    pub fn subscribe(&self) -> BroadcastStream<EventEnvelope> {
-        self.streamer.subscribe()
+    pub fn subscribe(&self, filter: EventFilter) -> impl Stream<Item = EventEnvelope> {
+        self.event_streamer.subscribe(filter)
+    }
+}
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct EventFieldFilter {
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+}
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub enum EventFilter {
+    ByContract(String, Option<String>, Option<String>, EventFieldFilter),
+    ByType(String, EventFieldFilter),
+    ByAddress,
+}
+// TODO: implement other filter types
+impl EventFilter {
+    fn try_matches(&self, item: &EventEnvelope) -> Result<bool, anyhow::Error> {
+        Ok(match self {
+            EventFilter::ByType(event_type, fields_filter) => match &item.event {
+                Event::MoveEvent(event_obj) => {
+                    let event_type = parse_struct_tag(event_type)?;
+                    if let Some(json) = &item.move_struct_json_value {
+                        for (pointer, value) in &fields_filter.fields {
+                            if let Some(v) = json.pointer(pointer) {
+                                if &v.to_string() != value {
+                                    return Ok(false);
+                                }
+                            } else {
+                                return Ok(false);
+                            }
+                        }
+                    }
+                    event_obj.type_ == event_type
+                }
+                _ => false,
+            },
+            EventFilter::ByContract(..) => true,
+            EventFilter::ByAddress => true,
+        })
+    }
+}
+
+impl Filter<EventEnvelope> for EventFilter {
+    fn matches(&self, item: &EventEnvelope) -> bool {
+        self.try_matches(item).unwrap_or_default()
     }
 }
