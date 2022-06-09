@@ -2,20 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    isGetTxnDigestsResponse,
     type GetTxnDigestsResponse,
+    type ExecutionStatusType,
+    type TransactionKindName,
 } from '@mysten/sui.js';
 import { useState, useEffect, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import {
+    DefaultRpcClient as rpc,
+    getDataOnTxDigests,
+} from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { findTxfromID } from '../../utils/static/searchUtil';
+// import { findTxfromID } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
 
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
+};
+
+type TxnData = {
+    seq: number;
+    txId: string;
+    status: ExecutionStatusType;
+    kind: TransactionKindName | undefined;
 };
 
 const getTx = async (
@@ -24,29 +35,26 @@ const getTx = async (
     category: 'address'
 ): Promise<GetTxnDigestsResponse> => rpc(network).getTransactionsForAddress(id);
 
-function TxForIDView({
-    showData,
-}: {
-    showData: [number, string][] | undefined;
-}) {
+function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData) return <></>;
-    const deduplicate = (results: [number, string][]) =>
-        results
-            .map((result) => result[1])
-            .filter((value, index, self) => self.indexOf(value) === index);
 
     return (
         <>
             <div>
                 <div>Transactions</div>
                 <div id="tx">
-                    {deduplicate(showData).map((x, index) => (
-                        <div key={`from-${index}`}>
+                    {showData.map((x, index) => (
+                        <div key={`txid-${index}`}>
+                            <div>TxId</div>
                             <Longtext
-                                text={x}
+                                text={x.txId}
                                 category="transactions"
                                 isLink={true}
                             />
+                            <div>TxType</div>
+                            <div>{x.kind}</div>
+                            <div>Status</div>
+                            <div>{x.status}</div>
                         </div>
                     ))}
                 </div>
@@ -55,33 +63,32 @@ function TxForIDView({
     );
 }
 
-function HandleMethodUndefined({ data }: { data: any }) {
-    if (isGetTxnDigestsResponse(data)) {
-        return <TxForIDView showData={data} />;
-    } else {
-        return <></>;
-    }
-}
-
+/*
 function TxForIDStatic({ id, category }: { id: string; category: 'address' }) {
     const data = findTxfromID(id)?.data;
     return <HandleMethodUndefined data={data} />;
 }
+*/
 
 function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
     const [showData, setData] =
-        useState<{ data?: GetTxnDigestsResponse; loadState: string }>(
-            DATATYPE_DEFAULT
-        );
+        useState<{ data?: TxnData[]; loadState: string }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
         getTx(id, network, category)
-            .then((data) =>
+            .then((transactions) => getDataOnTxDigests(network, transactions))
+            .then((data) => {
+                const subData = data.map((el) => ({
+                    seq: el!.seq,
+                    txId: el!.txId,
+                    status: el!.status,
+                    kind: el!.kind,
+                }));
                 setData({
-                    data: data,
+                    data: subData,
                     loadState: 'loaded',
-                })
-            )
+                });
+            })
             .catch((error) => {
                 console.log(error);
                 setData({ ...DATATYPE_DEFAULT, loadState: 'fail' });
@@ -94,7 +101,7 @@ function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
 
     if (showData.loadState === 'loaded') {
         const data = showData.data;
-        return <HandleMethodUndefined data={data} />;
+        return <TxForIDView showData={data} />;
     }
 
     return (
@@ -113,8 +120,9 @@ export default function TxForID({
     category: 'address';
 }) {
     return IS_STATIC_ENV ? (
-        <TxForIDStatic id={id} category={category} />
+        <></>
     ) : (
+        //<TxForIDStatic id={id} category={category} />
         <TxForIDAPI id={id} category={category} />
     );
 }
