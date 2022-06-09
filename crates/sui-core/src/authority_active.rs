@@ -38,6 +38,7 @@ use std::{
 use sui_storage::follower_store::FollowerStore;
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tracing::error;
 
 use crate::{
@@ -203,25 +204,17 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub async fn spawn_all_active_processes(self) {
-        self.spawn_active_processes(true, Some(CheckpointProcessControl::default()))
+    pub async fn spawn_checkpoint_process(self) {
+        self._spawn_checkpoint_process(Some(CheckpointProcessControl::default()))
             .await
     }
 
     /// Spawn all active tasks.
-    pub async fn spawn_active_processes(
+    pub async fn _spawn_checkpoint_process(
         self,
-        gossip: bool,
         checkpoint_process_control: Option<CheckpointProcessControl>,
     ) {
         let active = Arc::new(self);
-        // Spawn a task to take care of gossip
-        let gossip_locals = active.clone();
-        let _gossip_join = tokio::task::spawn(async move {
-            if gossip {
-                gossip_process(&gossip_locals, 4).await;
-            }
-        });
 
         // Spawn task to take care of checkpointing
         let checkpoint_locals = active; // .clone();
@@ -231,11 +224,20 @@ where
             }
         });
 
-        if let Err(err) = _gossip_join.await {
-            error!("Join gossip task end error: {:?}", err);
-        }
         if let Err(err) = _checkpoint_join.await {
             error!("Join checkpoint task end error: {:?}", err);
         }
+    }
+
+    /// Spawn gossip process
+    pub async fn spawn_gossip_process(self, degree: usize) -> JoinHandle<()> {
+        let active = Arc::new(self);
+
+        let gossip_locals = active;
+        let gossip_join = tokio::task::spawn(async move {
+            gossip_process(&gossip_locals, degree).await;
+        });
+
+        gossip_join
     }
 }
