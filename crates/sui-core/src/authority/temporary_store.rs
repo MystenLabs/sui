@@ -21,7 +21,7 @@ pub struct AuthorityTemporaryStore<S> {
     package_store: Arc<S>,
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
-    active_inputs: Vec<ObjectRef>, // Inputs that are not read only
+    mutable_inputs: Vec<ObjectRef>, // Inputs that are mutable
     written: BTreeMap<ObjectID, (ObjectRef, Object)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
@@ -40,13 +40,13 @@ impl<S> AuthorityTemporaryStore<S> {
         input_objects: InputObjects,
         tx_digest: TransactionDigest,
     ) -> Self {
-        let active_inputs = input_objects.active_inputs();
+        let mutable_inputs = input_objects.mutable_inputs();
         let objects = input_objects.into_object_map();
         Self {
             package_store,
             tx_digest,
             objects,
-            active_inputs,
+            mutable_inputs,
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
@@ -75,7 +75,7 @@ impl<S> AuthorityTemporaryStore<S> {
         }
         (
             self.objects,
-            self.active_inputs,
+            self.mutable_inputs,
             self.written,
             self.deleted,
             self.events,
@@ -87,7 +87,7 @@ impl<S> AuthorityTemporaryStore<S> {
     /// sequence number. This is required to achieve safety.
     /// We skip the gas object, because gas object will be updated separately.
     pub fn ensure_active_inputs_mutated(&mut self, gas_object_id: &ObjectID) {
-        for (id, _seq, _) in &self.active_inputs {
+        for (id, _seq, _) in &self.mutable_inputs {
             if id == gas_object_id {
                 continue;
             }
@@ -253,7 +253,7 @@ impl<S> AuthorityTemporaryStore<S> {
                 self.written.iter().all(|(elt, _)| used.insert(elt));
                 self.deleted.iter().all(|elt| used.insert(elt.0));
 
-                self.active_inputs.iter().all(|elt| !used.insert(&elt.0))
+                self.mutable_inputs.iter().all(|elt| !used.insert(&elt.0))
             },
             "Mutable input neither written nor deleted."
         );

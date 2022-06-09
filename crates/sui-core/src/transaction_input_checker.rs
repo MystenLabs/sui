@@ -75,7 +75,7 @@ impl InputObjects {
             .collect()
     }
 
-    pub fn active_inputs(&self) -> Vec<ObjectRef> {
+    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
         self.objects
             .iter()
             .filter_map(|(kind, object)| match kind {
