@@ -133,6 +133,22 @@ async fn test_native_transfer_gas_price_is_used() {
         gas_summary_1.computation_cost * 2,
         gas_summary_2.computation_cost
     );
+
+    // test overflow with insufficient gas
+    let gas_balance = *MAX_GAS_BUDGET;
+    let gas_budget = *MAX_GAS_BUDGET;
+    let gas_price = u64::MAX;
+    let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
+    let err = result.response.unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::InsufficientGas {
+            error: format!(
+                "Gas balance is {}, not enough to pay {} units with unit price of {}",
+                gas_balance, gas_budget, gas_price
+            )
+        }
+    );
 }
 
 #[tokio::test]

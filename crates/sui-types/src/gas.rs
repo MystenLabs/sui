@@ -321,7 +321,7 @@ pub fn check_gas_balance(gas_object: &Object, gas_budget: u64, gas_price: u64) -
 
     let balance = get_gas_balance(gas_object)?;
     ok_or_gas_error!(
-        balance >= gas_budget * gas_price,
+        (balance as u128) >= (gas_budget as u128) * (gas_price as u128),
         format!("Gas balance is {balance}, not enough to pay {gas_budget} units with unit price of {gas_price}")
     )
 }
