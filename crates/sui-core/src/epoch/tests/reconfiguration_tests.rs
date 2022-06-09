@@ -20,6 +20,7 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::transaction_input_checker::InputObjects;
 use crate::{
     authority::AuthorityTemporaryStore, authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
@@ -130,13 +131,15 @@ async fn test_start_epoch_change() {
     let tx_digest = *transaction.digest();
     let mut temporary_store = AuthorityTemporaryStore::new(
         state.database.clone(),
-        transaction
-            .data
-            .input_objects()
-            .unwrap()
-            .into_iter()
-            .zip(genesis_objects)
-            .collect(),
+        InputObjects::new(
+            transaction
+                .data
+                .input_objects()
+                .unwrap()
+                .into_iter()
+                .zip(genesis_objects)
+                .collect(),
+        ),
         tx_digest,
     );
     let effects = execution_engine::execute_transaction_to_effects(
