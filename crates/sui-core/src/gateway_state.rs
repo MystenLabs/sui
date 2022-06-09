@@ -44,6 +44,7 @@ use crate::{
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 
 use crate::gateway_types::*;
+use crate::transaction_input_checker::InputObjects;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
@@ -445,7 +446,7 @@ where
 
     async fn execute_transaction_impl_inner(
         &self,
-        all_objects: Vec<(InputObjectKind, Object)>,
+        input_objects: InputObjects,
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         // If execute_transaction ever fails due to panic, we should fix the panic and make sure it doesn't.
@@ -497,7 +498,7 @@ where
         );
         self.store
             .update_gateway_state(
-                all_objects,
+                input_objects,
                 mutated_objects,
                 new_certificate.clone(),
                 effects.clone().to_unsigned_effects(),
@@ -520,20 +521,20 @@ where
         self.sync_input_objects_with_authorities(&transaction)
             .await?;
 
-        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
+        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.store,
             &transaction,
             &self.metrics.shared_obj_tx,
         )
         .await?;
 
-        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
+        let owned_objects = input_objects.filter_owned_objects();
         self.set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
         let exec_result = self
-            .execute_transaction_impl_inner(all_objects, transaction)
+            .execute_transaction_impl_inner(input_objects, transaction)
             .await;
         if exec_result.is_err() && is_last_retry {
             // If we cannot successfully execute this transaction, even after all the retries,
