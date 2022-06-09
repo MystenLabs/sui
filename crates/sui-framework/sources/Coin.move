@@ -151,11 +151,13 @@ module Sui::Coin {
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
-    public fun burn<T>(c: Coin<T>, cap: &mut TreasuryCap<T>) {
+    /// Returns the value of the destroyed `Coin`.
+    public fun burn<T>(c: Coin<T>, cap: &mut TreasuryCap<T>): u64 {
         let Coin { id, balance } = c;
         let value = Balance::destroy<T>(balance);
         ID::delete(id);
-        cap.total_supply = cap.total_supply - value
+        cap.total_supply = cap.total_supply - value;
+        value
     }
 
     /// Return the total number of `T`'s in circulation
