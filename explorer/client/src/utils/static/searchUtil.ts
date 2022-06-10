@@ -38,10 +38,14 @@ const getAllMockTransaction = () => latestTxData.data;
 const findTxfromID = (targetID: string | undefined) =>
     mockTxData!.data!.find(({ id }) => id === targetID);
 
+const findTxDatafromID = (targetID: string | undefined) =>
+    latestTxData!.data!.find(({ txId }) => txId === targetID);
+
 export {
     findDataFromID,
     navigateWithUnknown,
     findOwnedObjectsfromID,
     findTxfromID,
+    findTxDatafromID,
     getAllMockTransaction,
 };

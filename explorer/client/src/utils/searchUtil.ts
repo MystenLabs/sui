@@ -1,5 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+const deduplicate = (results: [number, string][] | undefined) =>
+    results
+        ? results
+              .map((result) => result[1])
+              .filter((value, index, self) => self.indexOf(value) === index)
+        : [];
 
 let navigateWithUnknown: Function;
 let overrideTypeChecks = false;
@@ -15,4 +21,4 @@ if (process.env.REACT_APP_DATA === 'static') {
     );
 }
 
-export { navigateWithUnknown, overrideTypeChecks };
+export { navigateWithUnknown, overrideTypeChecks, deduplicate };

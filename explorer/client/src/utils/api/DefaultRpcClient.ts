@@ -11,6 +11,7 @@ import {
     JsonRpcProvider,
 } from '@mysten/sui.js';
 
+import { deduplicate } from '../searchUtil';
 import { getEndpoint, Network } from './rpcSetting';
 
 import type {
@@ -30,11 +31,6 @@ export { Network, getEndpoint };
 
 export const DefaultRpcClient = (network: Network | string) =>
     new JsonRpcProvider(getEndpoint(network));
-
-const deduplicate = (results: [number, string][]) =>
-    results
-        .map((result) => result[1])
-        .filter((value, index, self) => self.indexOf(value) === index);
 
 export const getDataOnTxDigests = (
     network: Network | string,

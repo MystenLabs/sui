@@ -15,7 +15,8 @@ import {
     getDataOnTxDigests,
 } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
-// import { findTxfromID } from '../../utils/static/searchUtil';
+import { deduplicate } from '../../utils/searchUtil';
+import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
 
@@ -39,7 +40,7 @@ const getTx = async (
 ): Promise<GetTxnDigestsResponse> => rpc(network).getTransactionsForAddress(id);
 
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
-    if (!showData) return <></>;
+    if (!showData || showData.length === 0) return <></>;
 
     return (
         <>
@@ -68,7 +69,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                                     styles[x.status.toLowerCase()]
                                 )}
                             >
-                                {x.status === 'success' ? '✔' : '✖'}
+                                {x.status === 'success' ? '\u2714' : '\u2716'}
                             </div>
                         </div>
                     ))}
@@ -78,12 +79,15 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     );
 }
 
-/*
 function TxForIDStatic({ id, category }: { id: string; category: 'address' }) {
-    const data = findTxfromID(id)?.data;
-    return <HandleMethodUndefined data={data} />;
+    const data = deduplicate(
+        findTxfromID(id)?.data as [number, string][] | undefined
+    )
+        .map((id) => findTxDatafromID(id))
+        .filter((x) => x !== undefined) as TxnData[];
+    if (!data) return <></>;
+    return <TxForIDView showData={data} />;
 }
-*/
 
 function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
     const [showData, setData] =
@@ -143,9 +147,8 @@ export default function TxForID({
     category: 'address';
 }) {
     return IS_STATIC_ENV ? (
-        <></>
+        <TxForIDStatic id={id} category={category} />
     ) : (
-        //<TxForIDStatic id={id} category={category} />
         <TxForIDAPI id={id} category={category} />
     );
 }

@@ -157,7 +157,7 @@ function LatestTxView({
                                     styles.txstatus
                                 )}
                             >
-                                {tx.status === 'success' ? '✔' : '✖'}
+                                {tx.status === 'success' ? '\u2714' : '\u2716'}
                             </div>
                             <div className={styles.txgas}>{tx.txGas}</div>
                             <div className={styles.txadd}>
