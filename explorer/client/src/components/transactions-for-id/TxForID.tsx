@@ -75,24 +75,32 @@ function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
         useState<{ data?: TxnData[]; loadState: string }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
-        getTx(id, network, category)
-            .then((transactions) => getDataOnTxDigests(network, transactions))
-            .then((data) => {
-                const subData = data.map((el) => ({
-                    seq: el!.seq,
-                    txId: el!.txId,
-                    status: el!.status,
-                    kind: el!.kind,
-                }));
+        getTx(id, network, category).then((transactions) => {
+            //If the API method does not exist, the transactions will be undefined
+            if (!transactions?.[0]) {
                 setData({
-                    data: subData,
                     loadState: 'loaded',
                 });
-            })
-            .catch((error) => {
-                console.log(error);
-                setData({ ...DATATYPE_DEFAULT, loadState: 'fail' });
-            });
+            } else {
+                getDataOnTxDigests(network, transactions)
+                    .then((data) => {
+                        const subData = data.map((el) => ({
+                            seq: el!.seq,
+                            txId: el!.txId,
+                            status: el!.status,
+                            kind: el!.kind,
+                        }));
+                        setData({
+                            data: subData,
+                            loadState: 'loaded',
+                        });
+                    })
+                    .catch((error) => {
+                        console.log(error);
+                        setData({ ...DATATYPE_DEFAULT, loadState: 'fail' });
+                    });
+            }
+        });
     }, [id, network, category]);
 
     if (showData.loadState === 'pending') {
