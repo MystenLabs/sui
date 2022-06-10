@@ -8,6 +8,7 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useState, useEffect, useContext } from 'react';
+import { Link } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
 import {
@@ -31,6 +32,8 @@ type TxnData = {
     txId: string;
     status: ExecutionStatusType;
     kind: TransactionKindName | undefined;
+    From: string;
+    To?: string;
 };
 
 const getTx = async (
@@ -50,7 +53,8 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                     <div className={styles.txheader}>
                         <div className={styles.txid}>TxId</div>
                         <div className={styles.txtype}>TxType</div>
-                        <div className={styles.Status}>Status</div>
+                        <div className={styles.txstatus}>Status</div>
+                        <div className={styles.txadd}>Addresses</div>
                     </div>
 
                     {showData.map((x, index) => (
@@ -65,11 +69,33 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                             <div className={styles.txtype}>{x.kind}</div>
                             <div
                                 className={cl(
-                                    styles.status,
+                                    styles.txstatus,
                                     styles[x.status.toLowerCase()]
                                 )}
                             >
                                 {x.status === 'success' ? '\u2714' : '\u2716'}
+                            </div>
+                            <div className={styles.txadd}>
+                                <div>
+                                    From:
+                                    <Link
+                                        className={styles.txlink}
+                                        to={'addresses/' + x.From}
+                                    >
+                                        {x.From}
+                                    </Link>
+                                </div>
+                                {x.To && (
+                                    <div>
+                                        To :
+                                        <Link
+                                            className={styles.txlink}
+                                            to={'addresses/' + x.To}
+                                        >
+                                            {x.To}
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -108,6 +134,8 @@ function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
                             txId: el!.txId,
                             status: el!.status,
                             kind: el!.kind,
+                            From: el!.From,
+                            To: el!.To,
                         }));
                         setData({
                             data: subData,

@@ -410,7 +410,7 @@ describe('End-to-end Tests', () => {
                 .with('#tx')
                 .get.textContent();
             expect(fromResults.replace(/\s/g, '')).toBe(
-                'TxIdTxTypeStatusDa4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=Transfer\u2714GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Transfer\u2716XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Transfer\u2714'
+                'TxIdTxTypeStatusAddressesDa4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=Transfer\u2714From:senderAddressTo:receiverAddressGHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Transfer\u2716From:senderAddressTo:receiverAddressXHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=Transfer\u2714From:senderAddressTo:receiverAddress'
             );
         });
     });
