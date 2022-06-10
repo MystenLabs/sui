@@ -559,24 +559,27 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             std::iter::once((transaction_digest, certificate)),
         )?;
 
-        // Store the signed effects of the transaction
-        write_batch = write_batch.insert_batch(
-            &self.effects,
-            std::iter::once((transaction_digest, effects)),
-        )?;
-
         // Cleanup the lock of the shared objects.
         let write_batch =
             self.remove_shared_objects_locks(write_batch, transaction_digest, certificate)?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
-        self.batch_update_objects(
-            write_batch,
-            temporary_store,
-            *transaction_digest,
-            update_type,
-        )
-        .await
+        let res = self
+            .batch_update_objects(
+                write_batch,
+                temporary_store,
+                *transaction_digest,
+                update_type,
+            )
+            .await?;
+
+        // Store the signed effects of the transaction
+        // We can't write this until after sequencing succeeds (which happens in
+        // batch_update_objects), as effects_exists is used as a check in many places
+        // for "did the tx finish".
+        self.effects.insert(transaction_digest, effects)?;
+
+        Ok(res)
     }
 
     /// Persist temporary storage to DB for genesis modules
