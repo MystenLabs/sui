@@ -101,6 +101,7 @@ pub mod authority_notifier;
 pub const MAX_ITEMS_LIMIT: u64 = 100_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
+const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -1058,13 +1059,35 @@ impl AuthorityState {
         state
     }
 
+    // Continually pop in-progress txes from the WAL and try to drive them to completion.
     async fn process_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
             if let Some(tx_guard) = self.database.wal.pop_one_recoverable_tx().await {
-                let cert = self.database.wal.get_tx_data(&tx_guard)?;
-                self.process_certificate(tx_guard, cert).await?;
+                let digest = tx_guard.tx_id();
+
+                let (cert, retry_count) = self.database.wal.get_tx_data(&tx_guard)?;
+
+                if retry_count >= MAX_TX_RECOVERY_RETRY {
+                    // This tx will be only partially executed, however the store will be in a safe
+                    // state. We will simply never reach eventual consistency for this TX.
+                    // TODO: Should we revert the tx entirely? I'm not sure the effort is
+                    // warranted, since the only way this can happen is if we are repeatedly
+                    // failing to write to the db, in which case a revert probably won't succeed
+                    // either.
+                    error!(
+                        ?digest,
+                        "Abandoning in-progress TX after {} retries.", MAX_TX_RECOVERY_RETRY
+                    );
+                    // prevent the tx from going back into the recovery list again.
+                    tx_guard.commit_tx();
+                    continue;
+                }
+
+                if let Err(e) = self.process_certificate(tx_guard, cert).await {
+                    warn!(?digest, "Failed to process in-progress certificate: {}", e);
+                }
             } else {
                 break;
             }
