@@ -66,8 +66,10 @@ async fn test_tx_gas_balance_less_than_budget() {
         err,
         SuiError::InsufficientGas {
             error: format!(
-                "Gas balance is {}, not enough to pay {} units with unit price of {}",
-                gas_balance, budget, gas_price
+                "Gas balance is {}, not enough to pay {} with gas price of {}",
+                gas_balance,
+                gas_price * budget,
+                gas_price
             )
         }
     );
@@ -144,8 +146,10 @@ async fn test_native_transfer_gas_price_is_used() {
         err,
         SuiError::InsufficientGas {
             error: format!(
-                "Gas balance is {}, not enough to pay {} units with unit price of {}",
-                gas_balance, gas_budget, gas_price
+                "Gas balance is {}, not enough to pay {} with gas price of {}",
+                gas_balance,
+                (gas_budget as u128) * (gas_price as u128),
+                gas_price
             )
         }
     );
