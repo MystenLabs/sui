@@ -12,7 +12,7 @@ function AccountAddress() {
     const address = useAppSelector(
         ({ account: { address } }) => address && `0x${address}`
     );
-    const shortenAddress = useMiddleEllipsis(address || '');
+    const shortenAddress = useMiddleEllipsis(address || '', 20);
     return address ? (
         <span className={st['address-container']}>
             <CopyToClipboard txt={address}>
