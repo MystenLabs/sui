@@ -2,7 +2,11 @@
   "move_call": {
     "EffectResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "3OR/i3o6y2eB2P1pG8HcazfcmRSl2n6KOemT8Z25S5c=",
+=======
+        "transactionDigest": "ng2Oy/XpQ/1DET1c1Tr/50m2pFKOH3s8poEFuMKLs6Y=",
+>>>>>>> d4772849 (Add QuorumDriver)
         "data": {
           "transactions": [
             {
@@ -22,6 +26,7 @@
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x9bdf05607f01739b73c082af418327be9dcf6015",
           "gasPayment": {
             "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
@@ -31,10 +36,22 @@
           "gasBudget": 10000
         },
         "txSignature": "hCT3us6n+gGy850fOUqi3BFgNpbuSNBwTrjgetUZqp4adM0CVnQ5qkc5Sy89ONuIPxjw7Ll9hj+qhIKOEG8uB48ZGyC/nPIvOOjwU9oylE8f/8sJ5vIn/491pE/nEMGx",
+=======
+          "sender": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724",
+          "gasPayment": {
+            "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+            "version": 0,
+            "digest": "ApW86bD0pjIlwjwGM/dKeO5BdRIRHRUb8dmWYzYk72Y="
+          },
+          "gasBudget": 10000
+        },
+        "txSignature": "7sDWKki+xr6G7hkgyRPNbwWl/jR18Ly5+VlHjEGx2AGnewjDWRUkv4ARAufTuc0oAm9cvhU4HP/NdyJ52LpVAZGtPec0lZkmw5YpdY3NVoJwElkOgAbDdfYF0bpqdu+O",
+>>>>>>> d4772849 (Add QuorumDriver)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "FVves6SM5J5mREHpkA+DbA3N5X7smp2ojrx+dBcbiTk=",
               "VTE36H9/3eQguiJBhKCb26Uc643fftuta6toQ4akPWPIn/NhdWHruoQnz5BhP2+9jFZpKkgRacc+2GTnZLToAw=="
             ],
@@ -45,6 +62,18 @@
             [
               "IPXYcNI9XZ+Fc08M3e7ydFzC2CH4JzvJsA12hxtXNsw=",
               "X6Ci6gaPJmH80ZtqKaMf0wyOrv85F1oi7RHFecIwtXw48+aWi8mnzdqvKRDDpgcFc5OCDphKtBvSNwMI74pYCw=="
+=======
+              "qhw4OKXE+YGYlhWFAVKAVHnXOInU8lWBvJoD81EtLPo=",
+              "N1FOVRUCQySsWO8aK45L8T2hO8pozPEofbc1wuVsPFG+qxNcHLKcYqhvRFnct22HF0eEFIygCt90DvLbGzR5BQ=="
+            ],
+            [
+              "G9SQE4JRcHDG98HZApzmw2tQPbXyf7lgnopm1Hkj5MA=",
+              "QSyFHKnkTMsBSK1elTwqciwu2nqOV2DEddFhn5cQseZ8LyS6NMgvH73Gahf3ES1UUKJR6obCnpqJ6OSOr+BZCg=="
+            ],
+            [
+              "iiddGcnFg03I9BXQa0pc4gpry4Kiula94AZI8isupUo=",
+              "4/l/EnNXvlwMLN8lzXVMwXeZcz6tak1RbXuuWFyf0MOcN1M7kEMAdOpnn8toqUslSd2R8DaYQOeg7ijBTHl2Cg=="
+>>>>>>> d4772849 (Add QuorumDriver)
             ]
           ]
         }
@@ -58,6 +87,7 @@
             "storageRebate": 0
           }
         },
+<<<<<<< HEAD
         "transactionDigest": "3OR/i3o6y2eB2P1pG8HcazfcmRSl2n6KOemT8Z25S5c=",
         "created": [
           {
@@ -68,35 +98,66 @@
               "objectId": "0x335e6f185f5b30b1a0813f16334cc617f7a07486",
               "version": 1,
               "digest": "NPSrjJNi5MTCVYkOJDVNhMuw7XKKCXk2qn+EJMHib2Q="
+=======
+        "transactionDigest": "ng2Oy/XpQ/1DET1c1Tr/50m2pFKOH3s8poEFuMKLs6Y=",
+        "created": [
+          {
+            "owner": {
+              "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+            },
+            "reference": {
+              "objectId": "0xea0356964151681dfa67122b94e4e2f3c781f3f4",
+              "version": 1,
+              "digest": "t0FyIr7dwGW213oZLdl4ATRtFMyQWBrbGY2f2Iumbt4="
+>>>>>>> d4772849 (Add QuorumDriver)
             }
           }
         ],
         "mutated": [
           {
             "owner": {
+<<<<<<< HEAD
               "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
             },
             "reference": {
               "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
               "version": 1,
               "digest": "07smp6lARiWs0vRHcXBDOSDrsY51V8cg2DB9wcWPWoY="
+=======
+              "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+            },
+            "reference": {
+              "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+              "version": 1,
+              "digest": "Bh7tOVVZbo0YMcSdiwBWMPUV/b0F0FamnMtMKS5EuzY="
+>>>>>>> d4772849 (Add QuorumDriver)
             }
           }
         ],
         "gasObject": {
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "reference": {
             "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
             "version": 1,
             "digest": "07smp6lARiWs0vRHcXBDOSDrsY51V8cg2DB9wcWPWoY="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "reference": {
+            "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+            "version": 1,
+            "digest": "Bh7tOVVZbo0YMcSdiwBWMPUV/b0F0FamnMtMKS5EuzY="
+>>>>>>> d4772849 (Add QuorumDriver)
           }
         },
         "events": [
           {
             "type_": "0x2::DevNetNFT::MintNFTEvent",
             "contents": [
+<<<<<<< HEAD
               51,
               94,
               111,
@@ -137,6 +198,48 @@
               207,
               96,
               21,
+=======
+              234,
+              3,
+              86,
+              150,
+              65,
+              81,
+              104,
+              29,
+              250,
+              103,
+              18,
+              43,
+              148,
+              228,
+              226,
+              243,
+              199,
+              129,
+              243,
+              244,
+              62,
+              157,
+              221,
+              131,
+              210,
+              67,
+              141,
+              254,
+              126,
+              167,
+              45,
+              203,
+              85,
+              122,
+              191,
+              230,
+              189,
+              85,
+              199,
+              36,
+>>>>>>> d4772849 (Add QuorumDriver)
               11,
               69,
               120,
@@ -158,20 +261,33 @@
   "transfer": {
     "EffectResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "OfuYY2FekijRpSljCK+IfshK9FVhL81iDPnM7xf78iU=",
+=======
+        "transactionDigest": "0xu64sgdJg3gXCmxPHIbcxW2kGKBZo678uSM1yS6ZUk=",
+>>>>>>> d4772849 (Add QuorumDriver)
         "data": {
           "transactions": [
             {
               "TransferCoin": {
+<<<<<<< HEAD
                 "recipient": "0x9bdf05607f01739b73c082af418327be9dcf6015",
                 "objectRef": {
                   "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
                   "version": 4,
                   "digest": "te0vcWfpcBubz2fspMZ9H9aY6LzCUc/ODw3nWPHcd78="
+=======
+                "recipient": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724",
+                "objectRef": {
+                  "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+                  "version": 4,
+                  "digest": "O0EwHYZLi1bKjsk8XgdHEPr/6Aa6oxaG05dZjN85o5U="
+>>>>>>> d4772849 (Add QuorumDriver)
                 }
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x9bdf05607f01739b73c082af418327be9dcf6015",
           "gasPayment": {
             "objectId": "0x19767c94c49924b98de538c815362d747378cdf2",
@@ -181,10 +297,22 @@
           "gasBudget": 1000
         },
         "txSignature": "H24+bBhRSomQOo9Q+D2QN4QeuDDjTt5atnmJc8jaWmddwLskh05W2JZwRxJ3+a+hk2waXwwnGqBz/b2yoqYIBo8ZGyC/nPIvOOjwU9oylE8f/8sJ5vIn/491pE/nEMGx",
+=======
+          "sender": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724",
+          "gasPayment": {
+            "objectId": "0x1401d9f4f224a7c19c524e758d0c120980473f31",
+            "version": 1,
+            "digest": "kCxFKJm7DW8qzK/gfSdPbDCGCNWpPQxiB2eK0heUOF0="
+          },
+          "gasBudget": 1000
+        },
+        "txSignature": "0K8fMBvWwOQCzzh96wdmoRDjrfgjxmDrRMuxMqhwOudvOcvfERViVxyT2xKWDHbTa1q2uVyMhr3Ly7rLNVRpDpGtPec0lZkmw5YpdY3NVoJwElkOgAbDdfYF0bpqdu+O",
+>>>>>>> d4772849 (Add QuorumDriver)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "FVves6SM5J5mREHpkA+DbA3N5X7smp2ojrx+dBcbiTk=",
               "/nWws8umv2/CkivVy3LebmfiZK+kBtSk3hVP5AXfSZBbwROHqR2M8RgtnR8ZMjKlTg0ztyXVDhTT8h6QvXEkAg=="
             ],
@@ -195,6 +323,18 @@
             [
               "gRDboBQYnYkdQ33GTwipODaPmUmKvZMSRPeGMFme2zw=",
               "QK8uZ3U4Wrk+e+LOBieKXMn0KwByk41TlK+A9DT6loyKxkZ0nF3AKZMw0gxk6Q4cetNKCWWmoS2lE4z2qXEOCw=="
+=======
+              "G9SQE4JRcHDG98HZApzmw2tQPbXyf7lgnopm1Hkj5MA=",
+              "Yuqd6Hr07g48D8vzuAl6FuQeW1tPkzKuw75x/QcIFtYG12wkNG9RS/gnzo7DjsHynDgEkPfiIY3LcqAqMg9oAA=="
+            ],
+            [
+              "qhw4OKXE+YGYlhWFAVKAVHnXOInU8lWBvJoD81EtLPo=",
+              "ym0DOYxMw+QYVU3pJ3jyQMsyRbkyTpA/xe11d+HyvLmxsId52CI7j5X4pIGUH4KBYbvjXAzngVBfyrZfsPMwAQ=="
+            ],
+            [
+              "iiddGcnFg03I9BXQa0pc4gpry4Kiula94AZI8isupUo=",
+              "Xlsyv/G/Cux+FAtb4xsuhGMuJFMlMncFE3mNt8hxTDEVK3JzzsXTuUUpT/M9PzlLiy6ueIOuvbxgSIl2ZE7OAw=="
+>>>>>>> d4772849 (Add QuorumDriver)
             ]
           ]
         }
@@ -208,6 +348,7 @@
             "storageRebate": 30
           }
         },
+<<<<<<< HEAD
         "transactionDigest": "OfuYY2FekijRpSljCK+IfshK9FVhL81iDPnM7xf78iU=",
         "mutated": [
           {
@@ -218,21 +359,43 @@
               "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
               "version": 5,
               "digest": "9IFoNOwI2esBO17mDD4rLEF7XYyovbt6HYEjKGHCz2U="
+=======
+        "transactionDigest": "0xu64sgdJg3gXCmxPHIbcxW2kGKBZo678uSM1yS6ZUk=",
+        "mutated": [
+          {
+            "owner": {
+              "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+            },
+            "reference": {
+              "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+              "version": 5,
+              "digest": "X7M3CPOibjiSGyAibBEqRnuxcRT/oT3Pqqnd+ThGprM="
+>>>>>>> d4772849 (Add QuorumDriver)
             }
           },
           {
             "owner": {
+<<<<<<< HEAD
               "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
             },
             "reference": {
               "objectId": "0x19767c94c49924b98de538c815362d747378cdf2",
               "version": 2,
               "digest": "8wWuZeiFEVH4OtNwswk2O7U/hoc2AkRxCqoZyRDvfW0="
+=======
+              "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+            },
+            "reference": {
+              "objectId": "0x1401d9f4f224a7c19c524e758d0c120980473f31",
+              "version": 2,
+              "digest": "TVuFi5EJ5YMzTWq9gjq+FpcbbIA6x+SUOaJeHr5AOZs="
+>>>>>>> d4772849 (Add QuorumDriver)
             }
           }
         ],
         "gasObject": {
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "reference": {
@@ -243,6 +406,18 @@
         },
         "dependencies": [
           "u4MC7Z8cx7Al/FsWWqFUrmxeyiTuQzoln0E59LaO3dE="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "reference": {
+            "objectId": "0x1401d9f4f224a7c19c524e758d0c120980473f31",
+            "version": 2,
+            "digest": "TVuFi5EJ5YMzTWq9gjq+FpcbbIA6x+SUOaJeHr5AOZs="
+          }
+        },
+        "dependencies": [
+          "aLPGIJTcKmwQgEkiXIK+DsjG1F36Z3W63SsYaCichnw="
+>>>>>>> d4772849 (Add QuorumDriver)
         ]
       }
     }
@@ -250,7 +425,11 @@
   "coin_split": {
     "SplitCoinResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
+=======
+        "transactionDigest": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+>>>>>>> d4772849 (Add QuorumDriver)
         "data": {
           "transactions": [
             {
@@ -266,7 +445,11 @@
                   "0x2::SUI::SUI"
                 ],
                 "arguments": [
+<<<<<<< HEAD
                   "0x6b066a852eca1458799bc6f735b92ed660863c5",
+=======
+                  "0x10b05df189e0b561d477394aaccbe9a52125011f",
+>>>>>>> d4772849 (Add QuorumDriver)
                   [
                     20,
                     20,
@@ -278,6 +461,7 @@
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x9bdf05607f01739b73c082af418327be9dcf6015",
           "gasPayment": {
             "objectId": "0x19767c94c49924b98de538c815362d747378cdf2",
@@ -287,10 +471,22 @@
           "gasBudget": 1000
         },
         "txSignature": "njkmubqFz2cpCTaegbkOtlq7UD0lf1As5Mr1anUWvbcF2QBqE2h2bE6q/XTIt7qnk7XKD+z20DKukc+op95YAo8ZGyC/nPIvOOjwU9oylE8f/8sJ5vIn/491pE/nEMGx",
+=======
+          "sender": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724",
+          "gasPayment": {
+            "objectId": "0x1401d9f4f224a7c19c524e758d0c120980473f31",
+            "version": 2,
+            "digest": "TVuFi5EJ5YMzTWq9gjq+FpcbbIA6x+SUOaJeHr5AOZs="
+          },
+          "gasBudget": 1000
+        },
+        "txSignature": "1ovHh/Ad+RKgzJCz31yg8nup9waa8h7yK/CTB4O6DFMeHKf3TPPoQibu5TapPJAtXVT5t6zNO616R6cAHlZ7A5GtPec0lZkmw5YpdY3NVoJwElkOgAbDdfYF0bpqdu+O",
+>>>>>>> d4772849 (Add QuorumDriver)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "FVves6SM5J5mREHpkA+DbA3N5X7smp2ojrx+dBcbiTk=",
               "HXW/TL/2VUkMUbTKSx6xzQSosoTaKnWxNTT4RjcebUCp7Y3hy7Wyd52NaLNwhi7Rdv7iqAdjTJjZ+MNDJE3+BA=="
             ],
@@ -301,6 +497,18 @@
             [
               "egPCyrsRV7ECc84Q1yC4OK+I9P+PrNxnL7TNxSRJrN8=",
               "y402/rCLBkIJvQcjf5TEBn2Xrf9wNJihzODhbPvUpD+clayGvd8jbSH077Aw2JbGHD7h/AToGUEJT+wPVbdOAA=="
+=======
+              "G9SQE4JRcHDG98HZApzmw2tQPbXyf7lgnopm1Hkj5MA=",
+              "Aa5DguAXhUKH1CVqdnV2Yt4TqVlZ+h0YevHmS/IxG/vPZB5ZRaVJaslNolvFLaHh9njAIN0rfq5Hd9MUfSixDw=="
+            ],
+            [
+              "qhw4OKXE+YGYlhWFAVKAVHnXOInU8lWBvJoD81EtLPo=",
+              "wUedcw8pWiSYnS7WrHJ4+QkrSZg2tRMPBLOgg2V0DHh7kgh+sKVXotHDRAQgRoK4hEVFNIsl2B9WZapBEawGBw=="
+            ],
+            [
+              "l0ZUOo/lBUv0q+j0ks3h9+1MY/Qgqq1MAZi7GBWPVLY=",
+              "H/+mSDRtucKILrDhqn6UYq3r10E7wqd2UumtWUkZYWxqleudIJe91qFIGAkibn/YBKlWpZjji3r/2vC2fSelAA=="
+>>>>>>> d4772849 (Add QuorumDriver)
             ]
           ]
         }
@@ -312,12 +520,17 @@
           "fields": {
             "balance": 95653,
             "id": {
+<<<<<<< HEAD
               "id": "0x06b066a852eca1458799bc6f735b92ed660863c5",
+=======
+              "id": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+>>>>>>> d4772849 (Add QuorumDriver)
               "version": 6
             }
           }
         },
         "owner": {
+<<<<<<< HEAD
           "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
         },
         "previousTransaction": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
@@ -326,6 +539,16 @@
           "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
           "version": 6,
           "digest": "JUt1dyrrg2T/iBX2B2QZgSOz3IRqLS6rO4bCklB7dSs="
+=======
+          "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+        },
+        "previousTransaction": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+        "storageRebate": 15,
+        "reference": {
+          "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+          "version": 6,
+          "digest": "Tp+3xv9+bLl7AkYLX0XBTR3DIzXAASRAEwHSQrAhi6Y="
+>>>>>>> d4772849 (Add QuorumDriver)
         }
       },
       "newCoins": [
@@ -336,12 +559,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0x04fe465e8cf8f2fdda96d82e13715ad253331919",
+=======
+                "id": "0x6fe6c1f13a601af5013f9840d5b395825df116c3",
+>>>>>>> d4772849 (Add QuorumDriver)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "previousTransaction": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
@@ -350,6 +578,16 @@
             "objectId": "0x04fe465e8cf8f2fdda96d82e13715ad253331919",
             "version": 1,
             "digest": "8rAJrJdkICQOmqg2Xq842CawwuHTWe1hulkAmtvD8+M="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "previousTransaction": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0x6fe6c1f13a601af5013f9840d5b395825df116c3",
+            "version": 1,
+            "digest": "pgWS2HyNg8ZN0TJzAyj1nyPmnXH4H6EcPpnLzV7CLMs="
+>>>>>>> d4772849 (Add QuorumDriver)
           }
         },
         {
@@ -359,12 +597,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0x971966cb6cbbeabac3373784561fdb2cde111019",
+=======
+                "id": "0x72ebe45d51c8955b634bdfb3a866b7e33b3737ec",
+>>>>>>> d4772849 (Add QuorumDriver)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "previousTransaction": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
@@ -373,6 +616,16 @@
             "objectId": "0x971966cb6cbbeabac3373784561fdb2cde111019",
             "version": 1,
             "digest": "70xjrZu3oCTBl1MqGdCeWT3Hk1QfV7Sq8gsDFXJFXgI="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "previousTransaction": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0x72ebe45d51c8955b634bdfb3a866b7e33b3737ec",
+            "version": 1,
+            "digest": "MaplnWtnL2pALs+h8QflWFrhyNAdSeUVbCXznGDjKgc="
+>>>>>>> d4772849 (Add QuorumDriver)
           }
         },
         {
@@ -382,12 +635,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0x9f81e448afae9d6f159950e6ab69233ca7dc43e7",
+=======
+                "id": "0x796924c42679fce9b1969ce8974ac6824b668f2d",
+>>>>>>> d4772849 (Add QuorumDriver)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "previousTransaction": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
@@ -396,6 +654,16 @@
             "objectId": "0x9f81e448afae9d6f159950e6ab69233ca7dc43e7",
             "version": 1,
             "digest": "Rqih1zBn/b7+dwKW1l90MG8UelxV8+mw8NOzE5S0/8Y="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "previousTransaction": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0x796924c42679fce9b1969ce8974ac6824b668f2d",
+            "version": 1,
+            "digest": "GqchWICviSck6mIDjKpO54zkRuDJ3S6K8HzMQhI7ddM="
+>>>>>>> d4772849 (Add QuorumDriver)
           }
         },
         {
@@ -405,12 +673,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0xd1c9faf978dd033f7b9aac14629ab50286192892",
+=======
+                "id": "0xd221508acccfde7094d6b804dd6c47cad01008fa",
+>>>>>>> d4772849 (Add QuorumDriver)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "previousTransaction": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
@@ -419,6 +692,16 @@
             "objectId": "0xd1c9faf978dd033f7b9aac14629ab50286192892",
             "version": 1,
             "digest": "1Q0+p3u2lpCyGnSIBw8+nGB0ybK6afwGbG5bXjQyS24="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "previousTransaction": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0xd221508acccfde7094d6b804dd6c47cad01008fa",
+            "version": 1,
+            "digest": "Oqoj8JA3gS63C10/PniQJdTpwF/qCWRTqDoj9ZPtWvg="
+>>>>>>> d4772849 (Add QuorumDriver)
           }
         },
         {
@@ -428,12 +711,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0xeefe4dccc18859c552e54cc32a36650f5a1cfad3",
+=======
+                "id": "0xd5d3e302069f522c6711bd4272c4bdbec5743923",
+>>>>>>> d4772849 (Add QuorumDriver)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "previousTransaction": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
@@ -442,6 +730,16 @@
             "objectId": "0xeefe4dccc18859c552e54cc32a36650f5a1cfad3",
             "version": 1,
             "digest": "epbjPc7TAp8T7Vfbin+c5X6H2+UjdAO9LBjS+kL+Zn8="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "previousTransaction": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0xd5d3e302069f522c6711bd4272c4bdbec5743923",
+            "version": 1,
+            "digest": "RDEuylObkBn07yKrjRQ87eo0wNUgloOn8D4cYP79IZs="
+>>>>>>> d4772849 (Add QuorumDriver)
           }
         }
       ],
@@ -452,12 +750,17 @@
           "fields": {
             "balance": 98958,
             "id": {
+<<<<<<< HEAD
               "id": "0x19767c94c49924b98de538c815362d747378cdf2",
+=======
+              "id": "0x1401d9f4f224a7c19c524e758d0c120980473f31",
+>>>>>>> d4772849 (Add QuorumDriver)
               "version": 3
             }
           }
         },
         "owner": {
+<<<<<<< HEAD
           "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
         },
         "previousTransaction": "MyKrB330lZLd/tMgULWRkEMBL8ENUFNLL/G5mw/0Rvc=",
@@ -466,6 +769,16 @@
           "objectId": "0x19767c94c49924b98de538c815362d747378cdf2",
           "version": 3,
           "digest": "YOzl21qN/Q69KzJYo6WQjjDkIAg2GG4HQSgHp13q24o="
+=======
+          "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+        },
+        "previousTransaction": "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY=",
+        "storageRebate": 15,
+        "reference": {
+          "objectId": "0x1401d9f4f224a7c19c524e758d0c120980473f31",
+          "version": 3,
+          "digest": "ze6fsBR6Or7TtXJcJ0mvblWzN/DI8wRDkWqktSKI5ww="
+>>>>>>> d4772849 (Add QuorumDriver)
         }
       }
     }
@@ -473,7 +786,11 @@
   "publish": {
     "PublishResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "nOIeKrwslhm80kuRNrK5bV6pgOfy0iBKHlc7VLPF4TM=",
+=======
+        "transactionDigest": "ufVYBudi+Y4LjMnikwW2V9xIy0Hd4TGvpfKeIhYXAlI=",
+>>>>>>> d4772849 (Add QuorumDriver)
         "data": {
           "transactions": [
             {
@@ -484,6 +801,7 @@
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x9bdf05607f01739b73c082af418327be9dcf6015",
           "gasPayment": {
             "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
@@ -493,10 +811,22 @@
           "gasBudget": 10000
         },
         "txSignature": "jsVevM72I3jg36OS9mxdyLzayML0Y3igSlKyCKaeNp1MGhGJ6lSa+887xomYyPc9DiZp8oUJMpeBsaFDYTV4Do8ZGyC/nPIvOOjwU9oylE8f/8sJ5vIn/491pE/nEMGx",
+=======
+          "sender": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724",
+          "gasPayment": {
+            "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+            "version": 1,
+            "digest": "Bh7tOVVZbo0YMcSdiwBWMPUV/b0F0FamnMtMKS5EuzY="
+          },
+          "gasBudget": 10000
+        },
+        "txSignature": "dstFpoef1FRJpSrWMj4tzeex1+MDDYHVf77NH7OU6AUqXfM029JqQaGpLPqCJnBegMIvf8PHASK7Agy2vWP5DJGtPec0lZkmw5YpdY3NVoJwElkOgAbDdfYF0bpqdu+O",
+>>>>>>> d4772849 (Add QuorumDriver)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "gRDboBQYnYkdQ33GTwipODaPmUmKvZMSRPeGMFme2zw=",
               "q539CSkE+Sv2RSISs8zXdF77xcMnhht4YnpWibiZp8mPG8P9zcMqX6cgOnZqlZNhJlJH0R3qsjyxo/hhv2AhBw=="
             ],
@@ -507,29 +837,55 @@
             [
               "FVves6SM5J5mREHpkA+DbA3N5X7smp2ojrx+dBcbiTk=",
               "h/f1w8sWxx1stfdOVSJWAOYdhI5pNc03MKqIGurZB1MbEvFc7kiwUt/h4Dre/nRrgFEP2zlHH4CaFd6Rv90YBQ=="
+=======
+              "G9SQE4JRcHDG98HZApzmw2tQPbXyf7lgnopm1Hkj5MA=",
+              "dHr6OQMcQCnrOAvKpqEjTB+vk9Mo+UI7vwp+vXEgjcyuILcnT3WBGhVDy8ebr6NXGuXlTiTiKhEV6TJl/z4DCg=="
+            ],
+            [
+              "qhw4OKXE+YGYlhWFAVKAVHnXOInU8lWBvJoD81EtLPo=",
+              "E/oxClerHv9WcDc/BsfY3mfdft2xCGon6gUkeK1021WKQHE5IFrolYRpZzrQybwyb4D6fe/4g2CjbhsvioUgAQ=="
+            ],
+            [
+              "iiddGcnFg03I9BXQa0pc4gpry4Kiula94AZI8isupUo=",
+              "DX96CLHPGVrPxAINhGASQJBCfWjKS4Q4Zd8O9FKieH0u8/ztML6Xx17OOnLO630jNZ+Swexkad5VaG7+SFkvCg=="
+>>>>>>> d4772849 (Add QuorumDriver)
             ]
           ]
         }
       },
       "package": {
+<<<<<<< HEAD
         "objectId": "0x803bf11ade99118bd1cdc5f8acc8583431eb90cb",
         "version": 1,
         "digest": "XaJuHx/LIq0aIaT2eMdbpJSZDUCMujg6vuY2iCBu0s0="
+=======
+        "objectId": "0x8a7ffae681cc5eb0739741d287f27178c768a134",
+        "version": 1,
+        "digest": "J+F8BrMF2F8s288gzQvuU9u9+z9/gl5+8U3pLHkIzs4="
+>>>>>>> d4772849 (Add QuorumDriver)
       },
       "createdObjects": [
         {
           "data": {
             "dataType": "moveObject",
+<<<<<<< HEAD
             "type": "0x803bf11ade99118bd1cdc5f8acc8583431eb90cb::M1::Forge",
             "fields": {
               "id": {
                 "id": "0x51f64bfa351b70d7181335f09e2da0e2b84a9b57",
+=======
+            "type": "0x8a7ffae681cc5eb0739741d287f27178c768a134::M1::Forge",
+            "fields": {
+              "id": {
+                "id": "0xa91b3369dd5ba04514c37fde6b46bd8a97e757b2",
+>>>>>>> d4772849 (Add QuorumDriver)
                 "version": 1
               },
               "swords_created": 0
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
           },
           "previousTransaction": "nOIeKrwslhm80kuRNrK5bV6pgOfy0iBKHlc7VLPF4TM=",
@@ -538,6 +894,16 @@
             "objectId": "0x51f64bfa351b70d7181335f09e2da0e2b84a9b57",
             "version": 1,
             "digest": "GYsD45MRi/jV/go9eirEZHp+EKvqLiP+OYZUa327DLg="
+=======
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "previousTransaction": "ufVYBudi+Y4LjMnikwW2V9xIy0Hd4TGvpfKeIhYXAlI=",
+          "storageRebate": 12,
+          "reference": {
+            "objectId": "0xa91b3369dd5ba04514c37fde6b46bd8a97e757b2",
+            "version": 1,
+            "digest": "4Au3tqOPe3dUTQLMHhksBF8MB9MKFORnofhV/2n5oGE="
+>>>>>>> d4772849 (Add QuorumDriver)
           }
         }
       ],
@@ -548,12 +914,17 @@
           "fields": {
             "balance": 98731,
             "id": {
+<<<<<<< HEAD
               "id": "0x06b066a852eca1458799bc6f735b92ed660863c5",
+=======
+              "id": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+>>>>>>> d4772849 (Add QuorumDriver)
               "version": 2
             }
           }
         },
         "owner": {
+<<<<<<< HEAD
           "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
         },
         "previousTransaction": "nOIeKrwslhm80kuRNrK5bV6pgOfy0iBKHlc7VLPF4TM=",
@@ -562,6 +933,16 @@
           "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
           "version": 2,
           "digest": "lxW6oNnMFR/FJ9CcxZNL6tqnhVpq2E9VbL3lrpPzCVU="
+=======
+          "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+        },
+        "previousTransaction": "ufVYBudi+Y4LjMnikwW2V9xIy0Hd4TGvpfKeIhYXAlI=",
+        "storageRebate": 15,
+        "reference": {
+          "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+          "version": 2,
+          "digest": "2xY/XVQ3jBBHruS5kTglUHJZCdiXNlCFBQYcPDqy1UM="
+>>>>>>> d4772849 (Add QuorumDriver)
         }
       }
     }
@@ -573,6 +954,7 @@
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "IPXYcNI9XZ+Fc08M3e7ydFzC2CH4JzvJsA12hxtXNsw=",
               "PjxPc4jxV1Z87yu4YdcOsTE9xLpX0X/ZYYxLLzzpdzXQTJ8a7ZA4eK9tCFbB4Wh8Cf/TSc69hUO7VoawZrY3Cw=="
             ],
@@ -583,31 +965,57 @@
             [
               "egPCyrsRV7ECc84Q1yC4OK+I9P+PrNxnL7TNxSRJrN8=",
               "oKnt9qmJBpVKYXW/rilaLTfgqyYPJ4eFfbpKOdP/wYIL4jd0LlaQvGjdkqMqJITBmZELSFunrwVwDVN3UOcmCA=="
+=======
+              "l0ZUOo/lBUv0q+j0ks3h9+1MY/Qgqq1MAZi7GBWPVLY=",
+              "7Zk/qgw+uLWd0+iXaqo5wu1jhqrVFqRxXNZLriWHKqmmQ/MvURDhOcYu9fkSHnojDxHOZuq8HL5uujivxfg4Dw=="
+            ],
+            [
+              "iiddGcnFg03I9BXQa0pc4gpry4Kiula94AZI8isupUo=",
+              "G7G1Hxp5tvedwv0hKsMCAOIagbPw4JolFjrlC0Vh8EvSUomWpDLp5h/rkgS4fAr9nZnq620HN2SSrEvx4ibqDA=="
+            ],
+            [
+              "qhw4OKXE+YGYlhWFAVKAVHnXOInU8lWBvJoD81EtLPo=",
+              "ysIlLcGgr2TeYNLXlxuiJEouX6W8Kpm3r2LiAq+0u89r7n6TMMC1fUbSgdWUtduE2h3sDBmuV/kan0NmX6VVDA=="
+>>>>>>> d4772849 (Add QuorumDriver)
             ]
           ]
         },
         "data": {
           "gasBudget": 100,
           "gasPayment": {
+<<<<<<< HEAD
             "digest": "JUt1dyrrg2T/iBX2B2QZgSOz3IRqLS6rO4bCklB7dSs=",
             "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
             "version": 6
           },
           "sender": "0x9bdf05607f01739b73c082af418327be9dcf6015",
+=======
+            "digest": "Tp+3xv9+bLl7AkYLX0XBTR3DIzXAASRAEwHSQrAhi6Y=",
+            "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+            "version": 6
+          },
+          "sender": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724",
+>>>>>>> d4772849 (Add QuorumDriver)
           "transactions": [
             {
               "Call": {
                 "function": "new_game",
                 "module": "Hero",
                 "package": {
+<<<<<<< HEAD
                   "digest": "bJVbcXyPzqHeoLvQaG7fHI+1kWvwFdARaHt1yWquL+E=",
                   "objectId": "0x2661e3b0b6931e01ea04506bdaa2c35edb675fa2",
+=======
+                  "digest": "zHxTbiGCknG0rTTP0OyxQLp+89fYyZI+Y8qsK1Xvhbo=",
+                  "objectId": "0xd91c0a47dcd15439c04145cb60919ee862b174ff",
+>>>>>>> d4772849 (Add QuorumDriver)
                   "version": 1
                 }
               }
             }
           ]
         },
+<<<<<<< HEAD
         "transactionDigest": "5fL2Bt7XoVxLNxHz9xfYiUK+2JPbqZGO1zhzsN5sMPI=",
         "txSignature": "XS4a/Tu90Pz+IbSIZamgQOu8tEf1Sf+Ofk1cGWLnMO8XhoO+15HyhkZI8dDa4RgS1SEs52ckfrmAUSOOae9UDY8ZGyC/nPIvOOjwU9oylE8f/8sJ5vIn/491pE/nEMGx"
       },
@@ -623,17 +1031,42 @@
           "reference": {
             "digest": "nKM9cIm9/M+//c7OoedmfhYKKZmdEWDQTVWOyRSyydw=",
             "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
+=======
+        "transactionDigest": "DDh5mkMAMfDsL36Mpmnk4pjz3OPuVhDXYjOufuqXAsQ=",
+        "txSignature": "YMXfgeqy1z0DzSrz2PEeo1XXU9kC9a2kOA/GuS4ha6s/tgwJb/W6wT/oGCIPIKBuKF80R8Q6CdzIfKadSOGiApGtPec0lZkmw5YpdY3NVoJwElkOgAbDdfYF0bpqdu+O"
+      },
+      "effects": {
+        "dependencies": [
+          "dZr3jjtNHxu6VbwSzRRyz+IE/xVqN/jdsT32n1Jdp1w=",
+          "sLGvfCUuZ547pYm7pY/ekapwPvqVjRGgSYWBtU6+aWY="
+        ],
+        "gasObject": {
+          "owner": {
+            "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+          },
+          "reference": {
+            "digest": "Z5eFR12j7zCUXbipeKG4Wo3FOhaMDG8nSplemKz+BS4=",
+            "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+>>>>>>> d4772849 (Add QuorumDriver)
             "version": 7
           }
         },
         "mutated": [
           {
             "owner": {
+<<<<<<< HEAD
               "AddressOwner": "0x9bdf05607f01739b73c082af418327be9dcf6015"
             },
             "reference": {
               "digest": "nKM9cIm9/M+//c7OoedmfhYKKZmdEWDQTVWOyRSyydw=",
               "objectId": "0x06b066a852eca1458799bc6f735b92ed660863c5",
+=======
+              "AddressOwner": "0x3e9ddd83d2438dfe7ea72dcb557abfe6bd55c724"
+            },
+            "reference": {
+              "digest": "Z5eFR12j7zCUXbipeKG4Wo3FOhaMDG8nSplemKz+BS4=",
+              "objectId": "0x10b05df189e0b561d477394aaccbe9a52125011f",
+>>>>>>> d4772849 (Add QuorumDriver)
               "version": 7
             }
           }
@@ -647,7 +1080,11 @@
           },
           "status": "failure"
         },
+<<<<<<< HEAD
         "transactionDigest": "5fL2Bt7XoVxLNxHz9xfYiUK+2JPbqZGO1zhzsN5sMPI="
+=======
+        "transactionDigest": "DDh5mkMAMfDsL36Mpmnk4pjz3OPuVhDXYjOufuqXAsQ="
+>>>>>>> d4772849 (Add QuorumDriver)
       }
     }
   }

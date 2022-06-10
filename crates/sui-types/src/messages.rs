@@ -28,10 +28,12 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use std::time::Duration;
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
@@ -1082,6 +1084,7 @@ pub struct TransactionEffectsEnvelope<S> {
 
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
+pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityQuorumSignInfo>;
 
 impl SignedTransactionEffects {
     pub fn digest(&self) -> [u8; 32] {
@@ -1352,4 +1355,24 @@ impl ConsensusTransaction {
             Self::Checkpoint(fragment) => fragment.verify(committee),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionRequestType {
+    ImmediateReturn,
+    WaitForTxCert(Duration),
+    WaitForEffectsCert(Duration),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecuteTransactionRequest {
+    pub transaction: Transaction,
+    pub request_type: ExecuteTransactionRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    EffectsCert(Box<(CertifiedTransaction, TransactionEffects)>),
 }

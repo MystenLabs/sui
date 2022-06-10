@@ -665,6 +665,10 @@ SuiError:
       UnsupportedFeatureError:
         STRUCT:
           - error: STR
+    115:
+      QuorumDriverCommunicationError:
+        STRUCT:
+          - error: STR
 TransactionDigest:
   NEWTYPESTRUCT: BYTES
 TransactionEffectsDigest:
