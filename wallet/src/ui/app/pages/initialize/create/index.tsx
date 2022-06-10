@@ -4,6 +4,7 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import ExternalLink from '_components/external-link';
 import { ToS_LINK } from '_shared/constants';
 import Loading from '_src/ui/app/components/loading';
 import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
@@ -44,9 +45,9 @@ const CreatePage = () => {
                 />
                 <span>
                     I have read and agree to the{' '}
-                    <a href={ToS_LINK} target="_blank" rel="noreferrer">
+                    <ExternalLink href={ToS_LINK}>
                         Terms of Service
-                    </a>
+                    </ExternalLink>
                 </span>
             </label>
             <div>
