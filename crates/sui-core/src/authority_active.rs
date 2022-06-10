@@ -205,12 +205,12 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub async fn spawn_checkpoint_process(self) {
-        self._spawn_checkpoint_process(Some(CheckpointProcessControl::default()))
+        self.spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
             .await
     }
 
     /// Spawn all active tasks.
-    pub async fn _spawn_checkpoint_process(
+    pub async fn spawn_checkpoint_process_with_config(
         self,
         checkpoint_process_control: Option<CheckpointProcessControl>,
     ) {

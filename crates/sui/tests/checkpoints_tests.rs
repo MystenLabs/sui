@@ -149,7 +149,7 @@ async fn end_to_end() {
                 ..CheckpointProcessControl::default()
             };
             active_state
-                ._spawn_checkpoint_process(Some(checkpoint_process_control))
+                .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
                 .await
         });
     }
@@ -230,7 +230,7 @@ async fn checkpoint_with_shared_objects() {
                 ..CheckpointProcessControl::default()
             };
             active_state
-                ._spawn_checkpoint_process(Some(checkpoint_process_control))
+                .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
                 .await
         });
     }
