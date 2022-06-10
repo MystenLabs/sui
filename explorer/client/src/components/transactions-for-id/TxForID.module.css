@@ -1,0 +1,29 @@
+.txheader {
+    @apply hidden bg-offblack text-offwhite;
+}
+
+.txheader,
+.txrow {
+    @apply md:flex;
+}
+
+.txheader > div,
+.txrow > div {
+    @apply md:ml-[2vw];
+}
+
+.txid {
+    @apply md:w-[50vw];
+}
+
+.txtype {
+    @apply md:w-[10vw];
+}
+
+.failure {
+    @apply text-red-300;
+}
+
+.success {
+    @apply text-green-400;
+}

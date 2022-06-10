@@ -6,6 +6,7 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
+import cl from 'classnames';
 import { useState, useEffect, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
@@ -17,6 +18,8 @@ import { IS_STATIC_ENV } from '../../utils/envUtil';
 // import { findTxfromID } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
+
+import styles from './TxForID.module.css';
 
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
@@ -43,18 +46,30 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
             <div>
                 <div>Transactions</div>
                 <div id="tx">
+                    <div className={styles.txheader}>
+                        <div className={styles.txid}>TxId</div>
+                        <div className={styles.txtype}>TxType</div>
+                        <div className={styles.Status}>Status</div>
+                    </div>
+
                     {showData.map((x, index) => (
-                        <div key={`txid-${index}`}>
-                            <div>TxId</div>
-                            <Longtext
-                                text={x.txId}
-                                category="transactions"
-                                isLink={true}
-                            />
-                            <div>TxType</div>
-                            <div>{x.kind}</div>
-                            <div>Status</div>
-                            <div>{x.status}</div>
+                        <div key={`txid-${index}`} className={styles.txrow}>
+                            <div className={styles.txid}>
+                                <Longtext
+                                    text={x.txId}
+                                    category="transactions"
+                                    isLink={true}
+                                />
+                            </div>
+                            <div className={styles.txtype}>{x.kind}</div>
+                            <div
+                                className={cl(
+                                    styles.status,
+                                    styles[x.status.toLowerCase()]
+                                )}
+                            >
+                                {x.status === 'success' ? '✔' : '✖'}
+                            </div>
                         </div>
                     ))}
                 </div>
