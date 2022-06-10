@@ -269,27 +269,25 @@ where
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
                             let next_seq = signed_batch.batch.next_sequence_number;
                             self.follower_store.record_next_sequence(&self.peer_name, next_seq)?;
+                             match self.max_seq {
+                                Some(max_seq) => {
+                                    if next_seq < max_seq {
+                                        info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
+                                    }
+                                }
+                                None => {}
+                            }
                         },
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
-                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
+                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
                             if !self.state.database.effects_exists(&digest.transaction)? {
                                 queue.push(async move {
                                     tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
                                     digest
                                 });
                                 self.state.metrics.gossip_queued_count.inc();
-
                             }
-                            match self.max_seq {
-                                Some(max_seq) => {
-                                    if seq < max_seq {
-                                        info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", seq, max_seq);
-                                    }
-                                }
-                                None => {}
-                            }
-                            self.max_seq = Some(seq + 1);
                         },
 
                         // Return any errors.
