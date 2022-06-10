@@ -214,4 +214,11 @@ module Sui::Coin {
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
         Coin { id: TxContext::new_id(ctx), balance: Balance::create_with_value(value) }
     }
+
+    #[test_only]
+    /// Burns any coins. Testing purposes only!
+    public fun burn_for_testing<T>(coin: Coin<T>):u64 {
+        let balance = into_balance(coin);
+        Balance::destroy_for_testing(balance)
+    }
 }
