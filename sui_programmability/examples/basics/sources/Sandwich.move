@@ -57,7 +57,7 @@ module Basics::Sandwich {
     }
 
     /// Exchange `c` for some ham
-    public(script) fun buy_ham(
+    public entry fun buy_ham(
         grocery: &mut Grocery,
         c: Coin<SUI>,
         ctx: &mut TxContext
@@ -69,7 +69,7 @@ module Basics::Sandwich {
     }
 
     /// Exchange `c` for some bread
-    public(script) fun buy_bread(
+    public entry fun buy_bread(
         grocery: &mut Grocery,
         c: Coin<SUI>,
         ctx: &mut TxContext
@@ -81,7 +81,7 @@ module Basics::Sandwich {
     }
 
     /// Combine the `ham` and `bread` into a delicious sandwich
-    public(script) fun make_sandwich(
+    public entry fun make_sandwich(
         ham: Ham, bread: Bread, ctx: &mut TxContext
     ) {
         let Ham { id: ham_id } = ham;
@@ -97,7 +97,7 @@ module Basics::Sandwich {
     }
 
     /// Owner of the grocery can collect profits by passing his capability
-    public(script) fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
+    public entry fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
         let amount = Balance::value(&grocery.profits);
 
         assert!(amount > 0, ENoProfits);
@@ -122,7 +122,7 @@ module Basics::TestSandwich {
     use Sui::SUI::SUI;
 
     #[test]
-    public(script) fun test_make_sandwich() {
+    public entry fun test_make_sandwich() {
         let owner = @0x1;
         let the_guy = @0x2;
 

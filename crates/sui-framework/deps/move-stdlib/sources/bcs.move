@@ -5,7 +5,7 @@
 /// Serialization). BCS is the binary encoding for Move resources and other non-module values
 /// published on-chain. See https://github.com/diem/bcs#binary-canonical-serialization-bcs for more
 /// details on BCS.
-module Std::BCS {
+module std::bcs {
     /// Return the binary representation of `v` in BCS (Binary Canonical Serialization) format
     native public fun to_bytes<MoveValue>(v: &MoveValue): vector<u8>;
 

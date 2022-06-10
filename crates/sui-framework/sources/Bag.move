@@ -10,9 +10,9 @@
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
 module Sui::Bag {
-    use Std::Errors;
-    use Std::Option::{Self, Option};
-    use Std::Vector::Self;
+    use std::errors;
+    use std::option::{Self, Option};
+    use std::vector::Self;
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer::{Self, ChildRef};
     use Sui::TxContext::{Self, TxContext};
@@ -51,23 +51,23 @@ module Sui::Bag {
     public fun new_with_max_capacity(ctx: &mut TxContext, max_capacity: u64): Bag {
         assert!(
             max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            Errors::limit_exceeded(EInvalidMaxCapacity)
+            errors::limit_exceeded(EInvalidMaxCapacity)
         );
         Bag {
             id: TxContext::new_id(ctx),
-            objects: Vector::empty(),
+            objects: vector::empty(),
             max_capacity,
         }
     }
 
     /// Create a new Bag and transfer it to the signer.
-    public(script) fun create(ctx: &mut TxContext) {
+    public entry fun create(ctx: &mut TxContext) {
         Transfer::transfer(new(ctx), TxContext::sender(ctx))
     }
 
     /// Returns the size of the Bag.
     public fun size(c: &Bag): u64 {
-        Vector::length(&c.objects)
+        vector::length(&c.objects)
     }
 
     /// Add an object to the Bag.
@@ -77,54 +77,54 @@ module Sui::Bag {
     fun add_impl<T: key + store>(c: &mut Bag, object: T, old_child_ref: Option<ChildRef<T>>) {
         assert!(
             size(c) + 1 <= c.max_capacity,
-            Errors::limit_exceeded(EMaxCapacityExceeded)
+            errors::limit_exceeded(EMaxCapacityExceeded)
         );
         let id = ID::id(&object);
         if (contains(c, id)) {
             abort EObjectDoubleAdd
         };
-        Vector::push_back(&mut c.objects, *id);
+        vector::push_back(&mut c.objects, *id);
         Transfer::transfer_to_object_unsafe(object, old_child_ref, c);
     }
 
     /// Add a new object to the Bag.
     /// Abort if the object is already in the Bag.
     public fun add<T: key + store>(c: &mut Bag, object: T) {
-        add_impl(c, object, Option::none())
+        add_impl(c, object, option::none())
     }
 
     /// Transfer a object that was owned by another object to the bag.
     /// Since the object is a child object of another object, an `old_child_ref`
     /// is around and needs to be consumed.
     public fun add_child_object<T: key + store>(c: &mut Bag, object: T, old_child_ref: ChildRef<T>) {
-        add_impl(c, object, Option::some(old_child_ref))
+        add_impl(c, object, option::some(old_child_ref))
     }
 
     /// Check whether the Bag contains a specific object,
     /// identified by the object id in bytes.
     public fun contains(c: &Bag, id: &ID): bool {
-        Option::is_some(&find(c, id))
+        option::is_some(&find(c, id))
     }
 
     /// Remove and return the object from the Bag.
     /// Abort if the object is not found.
     public fun remove<T: key + store>(c: &mut Bag, object: T): T {
         let idx = find(c, ID::id(&object));
-        if (Option::is_none(&idx)) {
+        if (option::is_none(&idx)) {
             abort EObjectNotFound
         };
-        Vector::remove(&mut c.objects, *Option::borrow(&idx));
+        vector::remove(&mut c.objects, *option::borrow(&idx));
         object
     }
 
     /// Remove the object from the Bag, and then transfer it to the signer.
-    public(script) fun remove_and_take<T: key + store>(c: &mut Bag, object: T, ctx: &mut TxContext) {
+    public entry fun remove_and_take<T: key + store>(c: &mut Bag, object: T, ctx: &mut TxContext) {
         let object = remove(c, object);
         Transfer::transfer(object, TxContext::sender(ctx));
     }
 
     /// Transfer the entire Bag to `recipient`.
-    public(script) fun transfer_(c: Bag, recipient: address) {
+    public entry fun transfer_(c: Bag, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -146,11 +146,11 @@ module Sui::Bag {
         let i = 0;
         let len = size(c);
         while (i < len) {
-            if (Vector::borrow(&c.objects, i) == id) {
-                return Option::some(i)
+            if (vector::borrow(&c.objects, i) == id) {
+                return option::some(i)
             };
             i = i + 1;
         };
-        return Option::none()
+        return option::none()
     }
 }

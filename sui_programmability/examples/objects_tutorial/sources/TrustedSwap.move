@@ -24,7 +24,7 @@ module Tutorial::TrustedSwap {
         fee: Balance<SUI>,
     }
 
-    public(script) fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
+    public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
         let object = Object {
             id: TxContext::new_id(ctx),
             scarcity,
@@ -33,13 +33,13 @@ module Tutorial::TrustedSwap {
         Transfer::transfer(object, TxContext::sender(ctx))
     }
 
-    public(script) fun transfer_object(object: Object, ctx: &mut TxContext) {
+    public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
         Transfer::transfer(object, TxContext::sender(ctx))
     }
 
     /// Anyone owns an `Object` can request swapping their object. This object
     /// will be wrapped into `ObjectWrapper` and sent to `service_address`.
-    public(script) fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
+    public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
         assert!(Coin::value(&fee) >= MIN_FEE, 0);
         let wrapper = ObjectWrapper {
             id: TxContext::new_id(ctx),
@@ -52,7 +52,7 @@ module Tutorial::TrustedSwap {
 
     /// When the admin has two swap requests with objects that are trade-able,
     /// the admin can execute the swap and send them back to the opposite owner.
-    public(script) fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext) {
+    public entry fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext) {
         // Only swap if their scarcity is the same and style is different.
         assert!(wrapper1.to_swap.scarcity == wrapper2.to_swap.scarcity, 0);
         assert!(wrapper1.to_swap.style != wrapper2.to_swap.style, 0);

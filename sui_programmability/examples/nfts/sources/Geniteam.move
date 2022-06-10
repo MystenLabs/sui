@@ -6,10 +6,10 @@ module NFTs::Geniteam {
     use Sui::Collection::{Self, Collection};
     use Sui::ID::VersionedID;
     use Sui::TxContext::{Self, TxContext};
-    use Std::Option::{Self, Option};
+    use std::option::{Self, Option};
     use Sui::Transfer::{Self, ChildRef};
-    use Std::ASCII::{Self, String};
-    use Std::Vector;
+    use std::ascii::{Self, String};
+    use std::vector;
 
     /// Trying to add more than 1 farm to a Player
     const ETooManyFarms: u64 = 1;
@@ -94,7 +94,7 @@ module NFTs::Geniteam {
     // ============================ Entry functions ============================
 
     /// Create a player and transfer it to the transaction sender
-    public(script) fun create_player(
+    public entry fun create_player(
         player_name: vector<u8>, ctx: &mut TxContext
     ) {
         // Create player simply and transfer to caller
@@ -103,12 +103,12 @@ module NFTs::Geniteam {
     }
 
     /// Create a Farm and add it to the Player
-    public(script) fun create_farm(
+    public entry fun create_farm(
         player: &mut Player, farm_img_index: u64, farm_name: vector<u8>,
         total_monster_slots: u64, ctx: &mut TxContext
     ) {
         // We only allow one farm for now
-        assert!(Option::is_none(&player.owned_farm), ETooManyFarms);
+        assert!(option::is_none(&player.owned_farm), ETooManyFarms);
 
         let farm = new_farm(farm_name, farm_img_index, total_monster_slots, ctx);
 
@@ -116,12 +116,12 @@ module NFTs::Geniteam {
         let child_ref = Transfer::transfer_to_object(farm, player);
 
         // Store the farm
-        Option::fill(&mut player.owned_farm, child_ref)
+        option::fill(&mut player.owned_farm, child_ref)
     }
 
     /// Create a Monster and add it to the Farm's collection of Monsters, which
     /// is unbounded
-    public(script) fun create_monster(_player: &mut Player,
+    public entry fun create_monster(_player: &mut Player,
                               farm: &mut Farm,
                               pet_monsters: &mut Collection<Monster>,
                               monster_name: vector<u8>,
@@ -168,7 +168,7 @@ module NFTs::Geniteam {
         let farm_cosmetic = FarmCosmetic {
             id: TxContext::new_id(ctx),
             cosmetic_type,
-            display: ASCII::string(display)
+            display: ascii::string(display)
             };
 
         // Add it to the player's inventory
@@ -190,7 +190,7 @@ module NFTs::Geniteam {
         let monster_cosmetic = MonsterCosmetic {
             id: TxContext::new_id(ctx),
             cosmetic_type,
-            display: ASCII::string(display)
+            display: ascii::string(display)
             };
 
         // Add it to the player's inventory
@@ -229,8 +229,8 @@ module NFTs::Geniteam {
         self.hunger_level = hunger_level;
         self.affection_level = affection_level;
         self.buddy_level = buddy_level;
-        if (Vector::length<u8>(&display) != 0) {
-            self.display = ASCII::string(display);
+        if (vector::length<u8>(&display) != 0) {
+            self.display = ascii::string(display);
         }
     }
 
@@ -257,10 +257,10 @@ module NFTs::Geniteam {
         // Assign by slot
         if (cosmetic_slot_id == 0) {
             // Store the cosmetic
-            Option::fill(&mut farm.applied_farm_cosmetic_0, child_ref)
+            option::fill(&mut farm.applied_farm_cosmetic_0, child_ref)
         } else {
             // Store the cosmetic
-            Option::fill(&mut farm.applied_farm_cosmetic_1, child_ref)
+            option::fill(&mut farm.applied_farm_cosmetic_1, child_ref)
         };
     }
 
@@ -279,10 +279,10 @@ module NFTs::Geniteam {
         // Assign by slot
         if (cosmetic_slot_id == 0) {
             // Store the cosmetic
-            Option::fill(&mut monster.applied_monster_cosmetic_0, child_ref)
+            option::fill(&mut monster.applied_monster_cosmetic_0, child_ref)
         } else {
             // Store the cosmetic
-            Option::fill(&mut monster.applied_monster_cosmetic_1, child_ref)
+            option::fill(&mut monster.applied_monster_cosmetic_1, child_ref)
         };
     }
 
@@ -303,12 +303,12 @@ module NFTs::Geniteam {
 
         let player = Player {
             id,
-            player_name: ASCII::string(player_name),
+            player_name: ascii::string(player_name),
             water_runes_count: 0,
             fire_runes_count: 0,
             wind_runes_count: 0,
             earth_runes_count: 0,
-            owned_farm: Option::none(),
+            owned_farm: option::none(),
             inventory: child_ref
         };
 
@@ -332,15 +332,15 @@ module NFTs::Geniteam {
 
         let farm = Farm {
             id,
-            farm_name: ASCII::string(farm_name),
+            farm_name: ascii::string(farm_name),
             total_monster_slots,
             farm_img_index,
             level: 0,
             current_xp: 0,
             occupied_monster_slots: 0,
             pet_monsters: child_ref,
-            applied_farm_cosmetic_0: Option::none(),
-            applied_farm_cosmetic_1: Option::none(),
+            applied_farm_cosmetic_0: option::none(),
+            applied_farm_cosmetic_1: option::none(),
         };
 
         farm
@@ -359,19 +359,19 @@ module NFTs::Geniteam {
 
         Monster {
             id: TxContext::new_id(ctx),
-            monster_name: ASCII::string(monster_name),
+            monster_name: ascii::string(monster_name),
             monster_img_index,
             breed,
             monster_affinity,
-            monster_description: ASCII::string(monster_description),
+            monster_description: ascii::string(monster_description),
             monster_level: 0,
             monster_xp: 0,
             hunger_level: 0,
             affection_level: 0,
             buddy_level: 0,
-            display: ASCII::string(display),
-            applied_monster_cosmetic_0: Option::none(),
-            applied_monster_cosmetic_1: Option::none(),
+            display: ascii::string(display),
+            applied_monster_cosmetic_0: option::none(),
+            applied_monster_cosmetic_1: option::none(),
         }
     }
 }

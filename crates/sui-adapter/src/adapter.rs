@@ -8,7 +8,7 @@ use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::PartialVMResult,
-    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex, Visibility},
+    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use sui_framework::EventType;
 use sui_types::{
@@ -685,14 +685,14 @@ pub fn resolve_and_type_check(
             })
         }
     };
-    // Check for script visibility, but ignore for genesis.
-    // Genesis calls private functions, and bypasses this rule. This is helpful for ensuring the
-    // functions are not called again later.
+    // Check for entry modifier, but ignore for genesis.
+    // Genesis calls non-entry, private functions, and bypasses this rule. This is helpful for
+    // ensuring the functions are not called again later.
     // In other words, this is an implementation detail that we are using `execute` for genesis
     // functions, and as such need to bypass this check.
-    if fdef.visibility != Visibility::Script && !is_genesis {
-        return Err(SuiError::InvalidFunctionVisibility {
-            error: "Can only call functions with 'public(script)' visibility".to_string(),
+    if !fdef.is_entry && !is_genesis {
+        return Err(SuiError::InvalidNonEntryFunction {
+            error: "Can only call `entry` functions".to_string(),
         });
     }
     let fhandle = module.function_handle_at(fdef.function);

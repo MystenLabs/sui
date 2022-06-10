@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::Chat {
-    use Std::ASCII::{Self, String};
-    use Std::Option::{Self, Option, some};
+    use std::ascii::{Self, String};
+    use std::option::{Self, Option, some};
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
-    use Std::Vector::length;
+    use std::vector::length;
 
     /// Max text length.
     const MAX_TEXT_LENGTH: u64 = 512;
@@ -46,7 +46,7 @@ module NFTs::Chat {
         let chat = Chat {
             id: TxContext::new_id(ctx),
             app_id,
-            text: ASCII::string(text),
+            text: ascii::string(text),
             ref_id,
             metadata,
         };
@@ -54,19 +54,19 @@ module NFTs::Chat {
     }
 
     /// Mint (post) a Chat object without referencing another object.
-    public(script) fun post(
+    public entry fun post(
         app_identifier: address,
         text: vector<u8>,
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        post_internal(ID::new(app_identifier), text, Option::none(), metadata, ctx);
+        post_internal(ID::new(app_identifier), text, option::none(), metadata, ctx);
     }
 
     /// Mint (post) a Chat object and reference another object (i.e., to simulate retweet, reply, like, attach).
     /// TODO: Using `address` as `app_identifier` & `ref_identifier` type, because we cannot pass `ID` to entry
     ///     functions. Using `vector<u8>` for `text` instead of `String`  for the same reason.
-    public(script) fun post_with_ref(
+    public entry fun post_with_ref(
         app_identifier: address,
         text: vector<u8>,
         ref_identifier: address,
@@ -77,7 +77,7 @@ module NFTs::Chat {
     }
 
     /// Burn a Chat object.
-    public(script) fun burn(chat: Chat) {
+    public entry fun burn(chat: Chat) {
         let Chat { id, app_id: _, text: _, ref_id: _, metadata: _ } = chat;
         ID::delete(id);
     }

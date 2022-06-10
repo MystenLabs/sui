@@ -4,7 +4,7 @@
 #[test_only]
 module NFTs::ChatTests {
     use NFTs::Chat::{Self, Chat};
-    use Std::ASCII::Self;
+    use std::ascii::Self;
     use Sui::TestScenario::Self;
 
     const USER1_ADDRESS: address = @0xA001;
@@ -12,7 +12,7 @@ module NFTs::ChatTests {
     const HELLO: vector<u8> = vector[72, 101, 108, 108, 111]; // "Hello" in ASCII.
 
     #[test]
-    public(script) fun test_chat() {
+    public entry fun test_chat() {
         let scenario = &mut TestScenario::begin(&USER1_ADDRESS);
         {
             Chat::post(
@@ -27,7 +27,7 @@ module NFTs::ChatTests {
         {
             assert!(TestScenario::can_take_owned<Chat>(scenario), 0);
             let chat = TestScenario::take_owned<Chat>(scenario); // if can remove, object exists
-            assert!(Chat::text(&chat) == ASCII::string(HELLO), 0);
+            assert!(Chat::text(&chat) == ascii::string(HELLO), 0);
             TestScenario::return_owned(scenario, chat);
         }
     }

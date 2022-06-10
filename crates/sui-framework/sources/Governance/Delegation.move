@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::Delegation {
-    use Std::Option::{Self, Option};
+    use std::option::{Self, Option};
     use Sui::Balance::Balance;
     use Sui::Coin::{Self, Coin};
     use Sui::ID::{Self, VersionedID};
@@ -48,8 +48,8 @@ module Sui::Delegation {
         let delegate_amount = Coin::value(&stake);
         let delegation = Delegation {
             id: TxContext::new_id(ctx),
-            active_delegation: Option::some(Coin::into_balance(stake)),
-            ending_epoch: Option::none(),
+            active_delegation: option::some(Coin::into_balance(stake)),
+            ending_epoch: option::none(),
             delegate_amount,
             next_reward_unclaimed_epoch: starting_epoch,
             validator_address,
@@ -66,11 +66,11 @@ module Sui::Delegation {
         assert!(is_active(self), 0);
         assert!(ending_epoch >= self.next_reward_unclaimed_epoch, 0);
 
-        let stake = Option::extract(&mut self.active_delegation);
+        let stake = option::extract(&mut self.active_delegation);
         let sender = TxContext::sender(ctx);
         Transfer::transfer(Coin::from_balance(stake, ctx), sender);
 
-        self.ending_epoch = Option::some(ending_epoch);
+        self.ending_epoch = option::some(ending_epoch);
     }
 
     /// Claim delegation reward. Increment next_reward_unclaimed_epoch.
@@ -87,7 +87,7 @@ module Sui::Delegation {
 
     /// Destroy the delegation object. This can be done only when the delegation
     /// is inactive and all reward have been claimed.
-    public(script) fun burn(self: Delegation) {
+    public entry fun burn(self: Delegation) {
         assert!(!is_active(&self), 0);
 
         let Delegation {
@@ -99,12 +99,12 @@ module Sui::Delegation {
             validator_address: _,
         } = self;
         ID::delete(id);
-        Option::destroy_none(active_delegation);
-        let ending_epoch = *Option::borrow(&ending_epoch);
+        option::destroy_none(active_delegation);
+        let ending_epoch = *option::borrow(&ending_epoch);
         assert!(next_reward_unclaimed_epoch == ending_epoch, 0);
     }
 
-    public(script) fun transfer(self: Delegation, recipient: address) {
+    public entry fun transfer(self: Delegation, recipient: address) {
         Transfer::transfer(self, recipient)
     }
 
@@ -120,7 +120,7 @@ module Sui::Delegation {
         } else if (is_active(self)) {
             self.next_reward_unclaimed_epoch <= epoch_to_claim
         } else {
-            let ending_epoch = *Option::borrow(&self.ending_epoch);
+            let ending_epoch = *option::borrow(&self.ending_epoch);
             ending_epoch > epoch_to_claim
         }
     }
@@ -134,6 +134,6 @@ module Sui::Delegation {
     }
 
     fun is_active(self: &Delegation): bool {
-        Option::is_some(&self.active_delegation) && Option::is_none(&self.ending_epoch)
+        option::is_some(&self.active_delegation) && option::is_none(&self.ending_epoch)
     }
 }

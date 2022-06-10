@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::ERC721Metadata {
-    use Std::ASCII;
+    use std::ascii;
     use Sui::Url::{Self, Url};
     use Sui::UTF8;
 
@@ -32,7 +32,7 @@ module Sui::ERC721Metadata {
     /// on `token_uri` or `name`
     public fun new(token_id: TokenID, name: vector<u8>, token_uri: vector<u8>): ERC721Metadata {
         // Note: this will abort if `token_uri` is not valid ASCII
-        let uri_str = ASCII::string(token_uri);
+        let uri_str = ascii::string(token_uri);
         ERC721Metadata {
             token_id,
             name: UTF8::string_unsafe(name),

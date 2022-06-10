@@ -11,14 +11,14 @@ module Test::M {
         value: u64
     }
 
-    public(script) fun mint(ctx: &mut TxContext) {
+    public entry fun mint(ctx: &mut TxContext) {
         Sui::Transfer::transfer(
             Obj { id: TxContext::new_id(ctx), value: 0 },
             TxContext::sender(ctx),
         )
     }
 
-    public(script) fun incr(obj: &mut Obj) {
+    public entry fun incr(obj: &mut Obj) {
         obj.value = obj.value + 1
     }
 }

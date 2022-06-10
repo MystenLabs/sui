@@ -29,7 +29,7 @@ module DeFi::SharedEscrowTests {
     }
 
     #[test]
-    public(script) fun test_escrow_flow() {
+    public entry fun test_escrow_flow() {
         // Alice creates the escrow
         let (scenario, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
 
@@ -42,7 +42,7 @@ module DeFi::SharedEscrowTests {
     }
 
     #[test]
-    public(script) fun test_cancel() {
+    public entry fun test_cancel() {
         // Alice creates the escrow
         let (scenario, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         ID::delete(id);
@@ -59,7 +59,7 @@ module DeFi::SharedEscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 0)]
-    public(script) fun test_cancel_with_wrong_owner() {
+    public entry fun test_cancel_with_wrong_owner() {
         // Alice creates the escrow
         let (scenario, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         ID::delete(id);
@@ -71,7 +71,7 @@ module DeFi::SharedEscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 2)]
-    public(script) fun test_swap_wrong_objects() {
+    public entry fun test_swap_wrong_objects() {
         // Alice creates the escrow in exchange for item b
         let (scenario, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         ID::delete(item_b_versioned_id);
@@ -86,7 +86,7 @@ module DeFi::SharedEscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 1)]
-    public(script) fun test_swap_wrong_recipient() {
+    public entry fun test_swap_wrong_recipient() {
          // Alice creates the escrow in exchange for item b
         let (scenario, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         let scenario = &mut scenario;
@@ -97,7 +97,7 @@ module DeFi::SharedEscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 3)]
-    public(script) fun test_cancel_twice() {
+    public entry fun test_cancel_twice() {
         // Alice creates the escrow
         let (scenario, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         ID::delete(id);
@@ -115,7 +115,7 @@ module DeFi::SharedEscrowTests {
         cancel(scenario, &ALICE_ADDRESS);
     }
 
-    public(script) fun cancel(scenario: &mut Scenario, initiator: &address) {
+    public entry fun cancel(scenario: &mut Scenario, initiator: &address) {
         TestScenario::next_tx(scenario, initiator);
         {
             let escrow_wrapper = TestScenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
@@ -126,7 +126,7 @@ module DeFi::SharedEscrowTests {
         };
     }
 
-    public(script) fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: VersionedID) {
+    public entry fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: VersionedID) {
         TestScenario::next_tx(scenario, bob);
         {
             let escrow_wrapper = TestScenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
