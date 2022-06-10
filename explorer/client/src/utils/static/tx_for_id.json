@@ -1,0 +1,16 @@
+{
+    "data": [
+        {
+            "id": "ownsAllAddress",
+            "data": [
+                [0, "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4="],
+                [1, "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4="],
+                [0, "GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="],
+                [1, "GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="],
+                [2, "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4="],
+                [3, "GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="],
+                [4, "XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="]
+            ]
+        }
+    ]
+}
