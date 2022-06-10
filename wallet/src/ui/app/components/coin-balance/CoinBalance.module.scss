@@ -23,6 +23,9 @@
     font-weight: 700;
     letter-spacing: -0.6px;
     color: #8bc3df;
+    max-width: 95%;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 
 .value {

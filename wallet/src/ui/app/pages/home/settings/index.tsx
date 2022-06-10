@@ -6,6 +6,9 @@ import { useCallback, useEffect, useState } from 'react';
 
 import Alert from '_components/alert';
 import BsIcon from '_components/bs-icon';
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import ExternalLink from '_components/external-link';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppDispatch } from '_hooks';
 import { logout } from '_redux/slices/account';
@@ -55,14 +58,18 @@ function SettingsPage() {
     return (
         <div className={st.container}>
             <div className={st.item}>
-                <a
+                <ExplorerLink
                     className="btn"
-                    target="_blank"
-                    href={ToS_LINK}
-                    rel="noreferrer"
+                    type={ExplorerLinkType.address}
+                    useActiveAddress={true}
                 >
-                    Terms of Service <BsIcon icon="link-45deg" />
-                </a>
+                    View account on Sui Explorer
+                </ExplorerLink>
+            </div>
+            <div className={st.item}>
+                <ExternalLink className="btn" href={ToS_LINK}>
+                    Terms of Service
+                </ExternalLink>
             </div>
             <div className={st.item}>
                 <button
