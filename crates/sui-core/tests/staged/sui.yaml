@@ -479,7 +479,7 @@ SuiError:
         STRUCT:
           - error: STR
     67:
-      InvalidFunctionVisibility:
+      InvalidNonEntryFunction:
         STRUCT:
           - error: STR
     68:

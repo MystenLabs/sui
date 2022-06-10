@@ -13,7 +13,7 @@ module 0x0.M {
 //# publish
 module 0x0.M {
     import 0x2.TxContext;
-    public(script) init(ctx: &mut TxContext.TxContext) {
+    public entry init(ctx: &mut TxContext.TxContext) {
         label l0:
         abort 0;
     }
