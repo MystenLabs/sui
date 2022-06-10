@@ -897,8 +897,6 @@ where
             .map(|o| o.object_id())
             .collect();
 
-        let timeout_after_quorum = self.timeouts.post_quorum_timeout;
-
         let (_active_objects, _deleted_objects) =
             self.sync_all_given_objects(&required_ids).await?;
 
@@ -908,7 +906,6 @@ where
         debug!(
             quorum_threshold = threshold,
             validity_threshold = validity,
-            ?timeout_after_quorum,
             "Broadcasting transaction request to authorities"
         );
         trace!("Transaction data: {:?}", transaction.data);
