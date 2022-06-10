@@ -22,7 +22,13 @@ module defi::pool {
 
     /// For when pool fee is set incorrectly.
     /// Allowed values are: 0-1000.
-    const EWrongFee: u64 = 0;
+    const EWrongFee: u64 = 1;
+
+    /// For when someone tries to swap in an empty pool.
+    const EReservesEmpty: u64 = 2;
+
+    /// For when initial LSP amount is zero.
+    const EShareEmpty: u64 = 3;
 
     /// The Capability to create new pools.
     struct PoolCreatorCap has key, store {
@@ -84,6 +90,7 @@ module defi::pool {
         assert!(Coin::value(&sui) > 0, EZeroAmount);
         assert!(Coin::value(&token) > 0, EZeroAmount);
         assert!(fee_percent >= 0 && fee_percent < 1000, EWrongFee);
+        assert!(share > 0, EShareEmpty);
 
         let lsp_treasury = Coin::create_currency(LSP<T> {}, ctx);
         let lsp = Coin::mint(share, &mut lsp_treasury, ctx);
@@ -152,8 +159,6 @@ module defi::pool {
         assert!(Coin::value(&token) > 0, EZeroAmount);
 
         let tok_balance = Coin::into_balance(token);
-
-        // Calculate the output amount - fee
         let (sui_reserve, token_reserve, _) = get_amounts(pool);
         let output_amount = get_input_price(
             Balance::value(&tok_balance),
@@ -161,6 +166,8 @@ module defi::pool {
             sui_reserve,
             pool.fee_percent
         );
+
+        assert!(sui_reserve > 0 && token_reserve > 0, EReservesEmpty);
 
         Balance::join(&mut pool.token, tok_balance);
         Coin::withdraw(&mut pool.sui, output_amount, ctx)
@@ -237,6 +244,21 @@ module defi::pool {
         )
     }
 
+    /// Public getter for the price of SUI in token T.
+    /// - How much SUI one will get if they send `to_sell` amount of T;
+    public fun sui_price<T>(pool: &Pool<T>, to_sell: u64): u64 {
+        let (sui_amt, tok_amt, _) = get_amounts(pool);
+        get_input_price(to_sell, tok_amt, sui_amt, pool.fee_percent)
+    }
+
+    /// Public getter for the price of token T in SUI.
+    /// - How much T one will get if they send `to_sell` amount of SUI;
+    public fun token_price<T>(pool: &Pool<T>, to_sell: u64): u64 {
+        let (sui_amt, tok_amt, _) = get_amounts(pool);
+        get_input_price(to_sell, sui_amt, tok_amt, pool.fee_percent)
+    }
+
+
     /// Get most used values in a handy way:
     /// - amount of SUI
     /// - amount of token
@@ -258,16 +280,6 @@ module defi::pool {
         let denominator = (input_reserve * 1000) + input_amount_with_fee;
 
         numerator / denominator
-    }
-
-    public fun sui_price_in_token<T>(pool: &Pool<T>, to_sell: u64): u64 {
-        let (sui_amt, tok_amt, _) = get_amounts(pool);
-        get_input_price(to_sell, tok_amt, sui_amt, pool.fee_percent)
-    }
-
-    public fun token_price_in_sui<T>(pool: &Pool<T>, to_sell: u64): u64 {
-        let (sui_amt, tok_amt, _) = get_amounts(pool);
-        get_input_price(to_sell, sui_amt, tok_amt, pool.fee_percent)
     }
 
     #[test_only]
