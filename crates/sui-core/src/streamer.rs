@@ -14,11 +14,10 @@ use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, warn};
 
-type Subscribers<T> = BTreeMap<String, Sender<T>>;
-type FilterMap<F, T> = Arc<RwLock<BTreeMap<F, T>>>;
+type Subscribers<T, F> = Arc<RwLock<BTreeMap<String, (Sender<T>, F)>>>;
 pub struct Streamer<T, F: Filter<T>> {
     streamer_queue: Sender<T>,
-    subscribers: FilterMap<F, Subscribers<T>>,
+    subscribers: Subscribers<T, F>,
 }
 
 impl<T, F> Streamer<T, F>
@@ -33,7 +32,6 @@ where
             subscribers: Default::default(),
         };
         let mut rx = rx;
-
         let subscribers = streamer.subscribers.clone();
         tokio::spawn(async move {
             while let Some(data) = rx.recv().await {
@@ -43,31 +41,24 @@ where
         streamer
     }
 
-    async fn send_to_all_subscribers(filter_map: FilterMap<F, Subscribers<T>>, data: T) {
-        for (filter, subscribers) in filter_map.clone().read().await.clone() {
+    async fn send_to_all_subscribers(subscribers: Subscribers<T, F>, data: T) {
+        for (id, (subscriber, filter)) in subscribers.read().await.clone() {
             if !(filter.matches(&data)) {
                 continue;
             }
-            for (id, subscriber) in subscribers {
-                let data = data.clone();
-                let filter_map = filter_map.clone();
-                let filter = filter.clone();
-                tokio::spawn(async move {
-                    match subscriber.send(data).await {
-                        Ok(_) => {
-                            debug!("Sending Move event to peer [{id}].")
-                        }
-                        Err(e) => {
-                            if let Some(subscribers) =
-                                filter_map.clone().write().await.get_mut(&filter)
-                            {
-                                subscribers.remove(&id);
-                            }
-                            warn!("Error sending event, removing peer [{id}] from subscriber list. Error: {e}");
-                        }
+            let data = data.clone();
+            let subscribers = subscribers.clone();
+            tokio::spawn(async move {
+                match subscriber.send(data).await {
+                    Ok(_) => {
+                        debug!("Sending Move event to peer [{id}].")
                     }
-                });
-            }
+                    Err(e) => {
+                        subscribers.write().await.remove(&id);
+                        warn!("Error sending event, removing peer [{id}] from subscriber list. Error: {e}");
+                    }
+                }
+            });
         }
     }
 
@@ -75,9 +66,8 @@ where
         let handle = Handle::current();
         let _ = handle.enter();
         let mut subscribers = futures::executor::block_on(async { self.subscribers.write().await });
-        let senders = subscribers.entry(filter).or_default();
         let (tx, rx) = mpsc::channel::<T>(EVENT_DISPATCH_BUFFER_SIZE);
-        senders.insert(ObjectID::random().to_string(), tx);
+        subscribers.insert(ObjectID::random().to_string(), (tx, filter));
         ReceiverStream::new(rx)
     }
 
