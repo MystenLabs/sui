@@ -72,7 +72,15 @@ pub async fn init_local_authorities_with_genesis(
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
-    (AuthorityAggregator::new(committee, clients), states)
+    let timeouts = TimeoutConfig {
+        authority_request_timeout: Duration::from_secs(5),
+        pre_quorum_timeout: Duration::from_secs(5),
+        post_quorum_timeout: Duration::from_secs(5),
+    };
+    (
+        AuthorityAggregator::new_with_timeouts(committee, clients, timeouts),
+        states,
+    )
 }
 
 pub fn get_local_client(
@@ -341,9 +349,7 @@ async fn execute_transaction_with_fault_configs(
         gas_object1.compute_object_reference(),
         gas_object2.compute_object_reference(),
     );
-    let cert = authorities
-        .process_transaction(tx, Duration::from_secs(5))
-        .await?;
+    let cert = authorities.process_transaction(tx).await?;
 
     for client in authorities.authority_clients.values_mut() {
         client.authority_client_mut().fault_config.reset();
@@ -352,9 +358,7 @@ async fn execute_transaction_with_fault_configs(
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
 
-    authorities
-        .process_certificate(cert, Duration::from_secs(5))
-        .await?;
+    authorities.process_certificate(cert).await?;
     Ok(())
 }
 
@@ -720,7 +724,7 @@ async fn test_process_transaction1() {
     // on all of them. Note that one authority has processed cert 1, and none cert2,
     // and auth 3 has no seen either.
     authorities
-        .process_transaction(create2.clone(), Duration::from_secs(10))
+        .process_transaction(create2.clone())
         .await
         .unwrap();
 
@@ -793,10 +797,7 @@ async fn test_process_certificate() {
 
     // Test: process the certificate, including bring up to date authority 3.
     //       which is 2 certs behind.
-    authorities
-        .process_certificate(cert2, Duration::from_secs(10))
-        .await
-        .unwrap();
+    authorities.process_certificate(cert2).await.unwrap();
 
     // As a result, we have 2 gas objects and 1 created object.
     let owned_object = get_owned_objects(&authorities, addr1).await;

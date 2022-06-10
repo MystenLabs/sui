@@ -120,7 +120,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
         while let Some(t) = transactions.pop() {
             // Get a cert
             let new_certificate = sender_aggregator
-                .process_transaction(t.clone(), Duration::from_secs(60))
+                .process_transaction(t.clone())
                 .await
                 .expect("Unexpected crash");
 
@@ -208,7 +208,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
         while let Some(t) = transactions.pop() {
             // Get a cert
             let new_certificate = sender_aggregator
-                .process_transaction(t.clone(), Duration::from_secs(60))
+                .process_transaction(t.clone())
                 .await
                 .expect("Unexpected crash");
 
