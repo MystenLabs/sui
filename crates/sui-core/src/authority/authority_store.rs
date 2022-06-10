@@ -15,6 +15,8 @@ use sui_storage::{
     write_ahead_log::DBWriteAheadLog,
     LockService,
 };
+
+use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
@@ -26,6 +28,8 @@ use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<false, AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<false, EmptySignInfo>;
+
+pub type InternalSequenceNumber = u64;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -79,6 +83,17 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
     certificates: DBMap<TransactionDigest, CertifiedTransaction>,
+
+    /// The pending execution table holds a sequence of transactions that are present
+    /// in the certificates table, but may not have yet been executed, and should be executed.
+    /// The source of these certificates might be (1) the checkpoint proposal process (2) the
+    /// gossip processes (3) the shared object post-consensus task. An active authority process
+    /// reads this table and executes the certificates. The order is a hint as to their
+    /// causal dependencies. Note that there is no guarantee digests are unique. Once executed, and
+    /// effects are written the entry should be deleted.
+    pending_execution: DBMap<InternalSequenceNumber, TransactionDigest>,
+    // The next sequence number.
+    next_pending_seq: AtomicU64,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -155,6 +170,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             owner_index,
             transactions,
             certificates,
+            pending_execution,
             parent_sync,
             effects,
             sequenced,
@@ -169,6 +185,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             "owner_index";<(Owner, ObjectID), ObjectInfo>,
             "transactions";<TransactionDigest, TransactionEnvelope<S>>,
             "certificates";<TransactionDigest, CertifiedTransaction>,
+            "pending_execution";<InternalSequenceNumber, TransactionDigest>,
             "parent_sync";<ObjectRef, TransactionDigest>,
             "effects";<TransactionDigest, TransactionEffectsEnvelope<S>>,
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
@@ -186,6 +203,15 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
         let wal_path = path.as_ref().join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
+        
+        // Get the last sequence item
+        let pending_seq = pending_execution
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(seq, _)| seq + 1)
+            .unwrap_or(0);
+        let next_pending_seq = AtomicU64::new(pending_seq);
 
         Self {
             wal,
@@ -196,6 +222,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             owner_index,
             transactions,
             certificates,
+            pending_execution,
+            next_pending_seq,
             parent_sync,
             effects,
             sequenced,
@@ -257,6 +285,41 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     #[cfg(test)]
     pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &ExecutionDigests) {
         self.executed_sequence.insert(&seq, digest).unwrap();
+    }
+
+    /// Add a number of certificates to the pending transactions as well as the
+    /// certificates structure if they are not already executed.
+    pub fn add_pending_certificates(
+        &self,
+        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+    ) -> SuiResult<()> {
+        let first_index = self
+            .next_pending_seq
+            .fetch_add(certs.len() as u64, std::sync::atomic::Ordering::Relaxed);
+
+        let batch = self.pending_execution.batch();
+        let batch = batch.insert_batch(
+            &self.pending_execution,
+            certs
+                .iter()
+                .enumerate()
+                .map(|(num, (digest, _))| ((num as u64) + first_index, digest)),
+        )?;
+        let batch = batch.insert_batch(
+            &self.certificates,
+            certs.iter().map(|(digest, cert)| (digest, cert)),
+        )?;
+        batch.write()?;
+
+        Ok(())
+    }
+
+    /// Remove entries from pending certificates
+    pub fn remove_pending_certificates(&self, seqs: Vec<InternalSequenceNumber>) -> SuiResult<()> {
+        let batch = self.pending_execution.batch();
+        let batch = batch.delete_batch(&self.pending_execution, seqs.iter())?;
+        batch.write()?;
+        Ok(())
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
@@ -916,7 +979,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
-        let certificate_to_write = std::iter::once((transaction_digest, &certificate));
+        // let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects();
@@ -946,9 +1009,15 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // Make an iterator to update the last consensus index.
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
+        // Schedule the certificate for execution
+        self.add_pending_certificates(vec![(transaction_digest, certificate.clone())])?;
+        // Note: if we crash here we are not in an inconsistent state since
+        //       it is ok to just update the pending list without updating the sequence.
+
         // Atomically store all elements.
         let mut write_batch = self.sequenced.batch();
-        write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
+        // Note: we have written it as part of the pending certificates above.
+        // write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
         write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
