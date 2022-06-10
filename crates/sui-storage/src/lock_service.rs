@@ -45,8 +45,15 @@ enum LockServiceCommands {
         is_force_reset: bool,
         resp: oneshot::Sender<SuiResult>,
     },
-    RemoveLocks {
-        refs: Vec<ObjectRef>,
+    SequenceTransaction {
+        tx: TransactionDigest,
+        seq: TxSequenceNumber,
+        inputs: Vec<ObjectRef>,
+        outputs: Vec<ObjectRef>,
+        resp: oneshot::Sender<SuiResult<TxSequenceNumber>>,
+    },
+    CreateLocksForGenesisObjects {
+        objects: Vec<ObjectRef>,
         resp: oneshot::Sender<SuiResult>,
     },
 }
@@ -61,17 +68,6 @@ enum LockServiceQueries {
         resp: oneshot::Sender<SuiLockResult>,
     },
     CheckLocksExist {
-        objects: Vec<ObjectRef>,
-        resp: oneshot::Sender<SuiResult>,
-    },
-    SequenceTransaction {
-        tx: TransactionDigest,
-        seq: TxSequenceNumber,
-        inputs: Vec<ObjectRef>,
-        outputs: Vec<ObjectRef>,
-        resp: oneshot::Sender<SuiResult<TxSequenceNumber>>,
-    },
-    CreateLocksForGenesisObjects {
         objects: Vec<ObjectRef>,
         resp: oneshot::Sender<SuiResult>,
     },
@@ -174,7 +170,17 @@ impl LockServiceImpl {
             Some(prev_seq) => Ok(prev_seq),
 
             None => {
-                // Assert that the tx locks exist
+                // Assert that the tx locks exist.
+                //
+                // Note that the locks may not be set to this particular tx:
+                //
+                // 1. Lock existence prevents re-execution of old certs when objects have been
+                //    upgraded
+                // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+                //    (But the lock should exist which means previous transactions finished)
+                // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX
+                //    its fine
+                //
                 // TODO: it should be impossible for this to fail unless the store has been
                 // corrupted. Remove this check when we feel confident enough.
                 if let Err(e) = self.locks_exist(inputs) {
@@ -357,9 +363,22 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender, sender dropped!");
                     }
                 }
-                LockServiceCommands::RemoveLocks { refs, resp } => {
-                    if let Err(_e) = resp.send(self.delete_locks(&refs)) {
-                        warn!("Could not respond to sender, sender dropped!");
+                LockServiceCommands::SequenceTransaction {
+                    tx,
+                    seq,
+                    inputs,
+                    outputs,
+                    resp,
+                } => {
+                    if let Err(_e) =
+                        resp.send(self.sequence_transaction(tx, seq, &inputs, &outputs))
+                    {
+                        warn!("Could not respond to sender!");
+                    }
+                }
+                LockServiceCommands::CreateLocksForGenesisObjects { objects, resp } => {
+                    if let Err(_e) = resp.send(self.create_locks_for_genesis_objects(&objects)) {
+                        warn!("Could not respond to sender!");
                     }
                 }
             }
@@ -380,24 +399,6 @@ impl LockServiceImpl {
                 LockServiceQueries::CheckLocksExist { objects, resp } => {
                     if let Err(_e) = resp.send(self.locks_exist(&objects)) {
                         warn!("Could not respond to sender, sender dropped!");
-                    }
-                }
-                LockServiceQueries::SequenceTransaction {
-                    tx,
-                    seq,
-                    inputs,
-                    outputs,
-                    resp,
-                } => {
-                    if let Err(_e) =
-                        resp.send(self.sequence_transaction(tx, seq, &inputs, &outputs))
-                    {
-                        warn!("Could not respond to sender!");
-                    }
-                }
-                LockServiceQueries::CreateLocksForGenesisObjects { objects, resp } => {
-                    if let Err(_e) = resp.send(self.create_locks_for_genesis_objects(&objects)) {
-                        warn!("Could not respond to sender!");
                     }
                 }
             }
@@ -536,22 +537,6 @@ impl LockService {
             .expect("Response from lockservice was cancelled, should not happen!")
     }
 
-    /// Removes locks for a given list of ObjectRefs.
-    pub async fn remove_locks(&self, refs: Vec<ObjectRef>) -> SuiResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-        self.inner
-            .sender()
-            .send(LockServiceCommands::RemoveLocks {
-                refs,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
-    }
-
     /// Returns the state of a single lock.
     /// * None - lock does not exist and is not initialized
     /// * Some(None) - lock exists and is initialized, but not locked to a particular transaction
@@ -574,8 +559,8 @@ impl LockService {
     pub async fn create_locks_for_genesis_objects(&self, objects: Vec<ObjectRef>) -> SuiResult {
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
         self.inner
-            .query_sender()
-            .send(LockServiceQueries::CreateLocksForGenesisObjects {
+            .sender()
+            .send(LockServiceCommands::CreateLocksForGenesisObjects {
                 objects,
                 resp: os_sender,
             })
@@ -606,8 +591,8 @@ impl LockService {
     ) -> SuiResult<TxSequenceNumber> {
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult<TxSequenceNumber>>();
         self.inner
-            .query_sender()
-            .send(LockServiceQueries::SequenceTransaction {
+            .sender()
+            .send(LockServiceCommands::SequenceTransaction {
                 tx,
                 seq,
                 inputs,
