@@ -18,6 +18,7 @@ import {
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { deduplicate } from '../../utils/searchUtil';
 import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
+import { truncate } from '../../utils/stringUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
 
@@ -82,7 +83,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                                         className={styles.txlink}
                                         to={'addresses/' + x.From}
                                     >
-                                        {x.From}
+                                        {truncate(x.From, 14, '...')}
                                     </Link>
                                 </div>
                                 {x.To && (
@@ -92,7 +93,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                                             className={styles.txlink}
                                             to={'addresses/' + x.To}
                                         >
-                                            {x.To}
+                                            {truncate(x.To, 14, '...')}
                                         </Link>
                                     </div>
                                 )}
