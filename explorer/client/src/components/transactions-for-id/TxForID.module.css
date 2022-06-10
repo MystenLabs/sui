@@ -17,7 +17,7 @@
 }
 
 .txtype {
-    @apply md:w-[10vw];
+    @apply md:w-[15vw];
 }
 
 .failure {
