@@ -324,9 +324,9 @@ impl Validator for ValidatorService {
         };
 
         // In some cases we can skip consensus for shared-object transactions: (i) we already executed
-        // the transaction, (ii) we already assigned locks to the transaction but failed to execute it.
-        // The later scenario happens when the authority missed some of the transaction's dependencies;
-        // we can thus try to re-execute it now.
+        // the transaction, (ii) all shared objects are already dead, (iii) we already assigned locks to
+        // the transaction but failed to execute it. The later scenario happens when the authority missed
+        // some of the transaction's dependencies; we can thus try to re-execute it now.
         let info = match self
             .state
             .try_skip_consensus(*certificate)

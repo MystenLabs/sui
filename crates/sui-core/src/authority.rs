@@ -650,10 +650,23 @@ impl AuthorityState {
             return self.make_transaction_info(digest).await.map(Some);
         }
 
+        // If the transaction contains only deleted shared-objects, we can execute it immediately.
+        // (Since there are no shared-objects that need a lock.)
+        let shared_inputs = certificate.shared_input_objects();
+        let tombstones = self.database.tombstones_exist(shared_inputs)?;
+        let all_dead = tombstones
+            == certificate
+                .shared_input_objects()
+                .cloned()
+                .collect::<HashSet<_>>();
+
         // If we already assigned locks to this transaction, we can try to execute it immediately.
         // This can happen to transaction previously submitted to consensus that failed execution
         // due to missing dependencies.
-        if self.shared_locks_exist(&certificate).await? {
+        let transaction_already_locked = self.transaction_locks_exist(&certificate).await?;
+
+        // Check whether we can skip consensus and execute immediately.
+        if transaction_already_locked || all_dead {
             // Attempt to execute the transaction. This will only succeed if the authority
             // already executed all its dependencies and if the locks are correctly attributed to
             // the transaction (ie. this transaction is the next to be executed).
@@ -1216,18 +1229,11 @@ impl AuthorityState {
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.
-    async fn shared_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
-        // Check the locks.
+    async fn transaction_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
         let shared_locks = self.database.sequenced(digest, shared_inputs)?;
-
-        // Check the tombstones
-        let shared_inputs = certificate.shared_input_objects();
-        let tombstones = self.database.tombstones_exist(shared_inputs)?;
-
-        // We consider locks exist if we either have the locks or a tombstone.
-        Ok(shared_locks[0].is_some() || !tombstones.is_empty())
+        Ok(shared_locks[0].is_some())
     }
 
     /// Get a read reference to an object/seq lock
@@ -1301,7 +1307,7 @@ impl ExecutionState for AuthorityState {
                 );
 
                 // Check if we already assigned locks to the shared objects.
-                let shared_locks = self.shared_locks_exist(&certificate).await?;
+                let shared_locks = self.transaction_locks_exist(&certificate).await?;
 
                 // If we already executed this transaction, return the signed effects.
                 let digest = certificate.digest();
