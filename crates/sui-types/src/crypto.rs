@@ -516,11 +516,11 @@ impl AuthorityQuorumSignInfo {
             }
         );
 
-        // First check the quorum is sufficient
-
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
-        for (authority, _) in self.signatures.iter() {
+
+        // Create obligations for the committee signatures
+        for (authority, signature) in self.signatures.iter() {
             // Check that each authority only appears once.
             fp_ensure!(
                 !used_authorities.contains(authority),
@@ -531,30 +531,18 @@ impl AuthorityQuorumSignInfo {
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
             weight += voting_rights;
+
+            obligation
+                .public_keys
+                .push(committee.public_key(authority)?);
+            obligation.signatures.push(signature.0);
+            obligation.message_index.push(message_index);
         }
+
         fp_ensure!(
             weight >= committee.quorum_threshold(),
             SuiError::CertificateRequiresQuorum
         );
-
-        // Create obligations for the committee signatures
-
-        for (authority, signature) in self.signatures.iter() {
-            // do we know, or can we build a valid public key?
-            match committee.expanded_keys.get(authority) {
-                Some(v) => obligation.public_keys.push(*v),
-                None => {
-                    let public_key = (*authority).try_into()?;
-                    obligation.public_keys.push(public_key);
-                }
-            }
-
-            // build a signature
-            obligation.signatures.push(signature.0);
-
-            // collect the message
-            obligation.message_index.push(message_index);
-        }
 
         Ok(())
     }

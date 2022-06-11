@@ -676,12 +676,19 @@ impl SignedTransaction {
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn verify(&self, committee: &Committee) -> Result<u64, SuiError> {
-        self.verify_signature()?;
+        let mut obligation = VerificationObligation::default();
+        self.add_sender_sig_to_verification_obligation(&mut obligation)?;
         let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.auth_sign_info
-            .signature
-            .verify(&self.data, self.auth_sign_info.authority)?;
+        let mut message = Vec::new();
+        self.data.write(&mut message);
+        let idx = obligation.add_message(message);
+        obligation
+            .public_keys
+            .push(committee.public_key(&self.auth_sign_info.authority)?);
+        obligation.signatures.push(self.auth_sign_info.signature.0);
+        obligation.message_index.push(idx);
+        obligation.verify_all()?;
         Ok(weight)
     }
 
