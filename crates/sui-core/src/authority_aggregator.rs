@@ -26,8 +26,6 @@ use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 
-// TODO: Make timeout duration configurable.
-const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -38,6 +36,23 @@ pub mod authority_aggregator_tests;
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
+pub struct TimeoutConfig {
+    pub authority_request_timeout: Duration,
+    pub pre_quorum_timeout: Duration,
+    pub post_quorum_timeout: Duration,
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            authority_request_timeout: Duration::from_secs(60),
+            pre_quorum_timeout: Duration::from_secs(60),
+            post_quorum_timeout: Duration::from_secs(30),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,
@@ -45,10 +60,19 @@ pub struct AuthorityAggregator<A> {
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     // Metrics
     pub metrics: &'static GatewayMetrics,
+    pub timeouts: TimeoutConfig,
 }
 
 impl<A> AuthorityAggregator<A> {
     pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
+        Self::new_with_timeouts(committee, authority_clients, Default::default())
+    }
+
+    pub fn new_with_timeouts(
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+        timeouts: TimeoutConfig,
+    ) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
@@ -56,6 +80,7 @@ impl<A> AuthorityAggregator<A> {
                 .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
                 .collect(),
             metrics: &METRICS,
+            timeouts,
         }
     }
 
@@ -253,6 +278,21 @@ where
         }
 
         Ok(())
+    }
+
+    pub async fn sync_certificate_to_authority(
+        &self,
+        cert: ConfirmationTransaction,
+        destination_authority: AuthorityName,
+        retries: usize,
+    ) -> Result<(), SuiError> {
+        self.sync_certificate_to_authority_with_timeout(
+            cert,
+            destination_authority,
+            self.timeouts.authority_request_timeout,
+            retries,
+        )
+        .await
     }
 
     /// Sync a certificate to an authority.
@@ -461,7 +501,6 @@ where
     async fn get_object_by_id(
         &self,
         object_id: ObjectID,
-        timeout_after_quorum: Duration,
     ) -> Result<
         (
             BTreeMap<
@@ -534,13 +573,13 @@ where
                             // After we reach threshold we wait for potentially less time.
                             Ok(ReduceOutput::ContinueWithTimeout(
                                 state,
-                                timeout_after_quorum,
+                                self.timeouts.post_quorum_timeout,
                             ))
                         }
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
 
@@ -697,7 +736,7 @@ where
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
         Ok((final_state.object_map, final_state.responded_authorities))
@@ -708,7 +747,6 @@ where
     pub async fn sync_all_given_objects(
         &self,
         objects: &[ObjectID],
-        timeout_after_quorum: Duration,
     ) -> Result<
         (
             Vec<(
@@ -733,9 +771,7 @@ where
                 .map(|(name, _)| *name)
                 .collect();
 
-            let (aggregate_object_info, certificates) = self
-                .get_object_by_id(*object_id, timeout_after_quorum)
-                .await?;
+            let (aggregate_object_info, certificates) = self.get_object_by_id(*object_id).await?;
 
             let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
 
@@ -798,10 +834,9 @@ where
                 // NOTE: this is right now done sequentially, we should do them in parallel using
                 //       the usual FuturesUnordered.
                 let _result = self
-                    .sync_certificate_to_authority_with_timeout(
+                    .sync_certificate_to_authority(
                         ConfirmationTransaction::new(cert.clone()),
                         name,
-                        timeout_after_quorum,
                         DEFAULT_RETRIES,
                     )
                     .await;
@@ -843,11 +878,8 @@ where
         let all_object_ids: HashSet<_> = object_map.keys().map(|object_ref| object_ref.0).collect();
 
         // Then sync all the owned objects
-        self.sync_all_given_objects(
-            &all_object_ids.into_iter().collect::<Vec<_>>(),
-            timeout_after_quorum,
-        )
-        .await
+        self.sync_all_given_objects(&all_object_ids.into_iter().collect::<Vec<_>>())
+            .await
     }
 
     /// Takes a transaction, brings all authorities up to date with the versions of the
@@ -855,7 +887,6 @@ where
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
-        timeout_after_quorum: Duration,
     ) -> Result<CertifiedTransaction, SuiError> {
         // Find out which objects are required by this transaction and
         // ensure they are synced on authorities.
@@ -866,9 +897,8 @@ where
             .map(|o| o.object_id())
             .collect();
 
-        let (_active_objects, _deleted_objects) = self
-            .sync_all_given_objects(&required_ids, timeout_after_quorum)
-            .await?;
+        let (_active_objects, _deleted_objects) =
+            self.sync_all_given_objects(&required_ids).await?;
 
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
@@ -876,7 +906,6 @@ where
         debug!(
             quorum_threshold = threshold,
             validity_threshold = validity,
-            ?timeout_after_quorum,
             "Broadcasting transaction request to authorities"
         );
         trace!("Transaction data: {:?}", transaction.data);
@@ -1007,7 +1036,7 @@ where
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
 
@@ -1040,7 +1069,6 @@ where
     async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
-        timeout_after_quorum: Duration,
     ) -> Result<TransactionEffects, SuiError> {
         struct ProcessCertificateState {
             // Different authorities could return different effects.  We want at least one effect to come
@@ -1054,6 +1082,8 @@ where
             effects_map: HashMap::new(),
             bad_stake: 0,
         };
+
+        let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
@@ -1106,10 +1136,9 @@ where
                         debug!(authority =? name, error =? res, ?timeout_after_quorum, "Authority out of date - syncing certificates");
                         // If we got LockErrors, we try to update the authority.
                         self
-                            .sync_certificate_to_authority_with_timeout(
+                            .sync_certificate_to_authority(
                                 ConfirmationTransaction::new(cert_ref.clone()),
                                 name,
-                                timeout_after_quorum,
                                 DEFAULT_RETRIES,
                             )
                             .instrument(tracing::trace_span!("sync_cert", authority =? name))
@@ -1161,7 +1190,7 @@ where
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
 
@@ -1191,10 +1220,7 @@ where
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
     async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let (object_infos, _certificates) = self
-            .get_object_by_id(object_id, Duration::from_secs(60))
-            .await
-            .unwrap(); // Not safe, but want to blow up if testing.
+        let (object_infos, _certificates) = self.get_object_by_id(object_id).await.unwrap(); // Not safe, but want to blow up if testing.
         let top_ref = object_infos.keys().last().unwrap().0;
         top_ref.1
     }
@@ -1203,22 +1229,13 @@ where
         &self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        self.execute_transaction_with_timeout(transaction, Duration::from_secs(60))
-            .await
-    }
-
-    pub async fn execute_transaction_with_timeout(
-        &self,
-        transaction: &Transaction,
-        timeout: Duration,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let new_certificate = self
-            .process_transaction(transaction.clone(), timeout)
+            .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         self.metrics.total_tx_certificates.inc();
         let response = self
-            .process_certificate(new_certificate.clone(), timeout)
+            .process_certificate(new_certificate.clone())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
@@ -1226,9 +1243,7 @@ where
     }
 
     pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
-        let (object_map, cert_map) = self
-            .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
-            .await?;
+        let (object_map, cert_map) = self.get_object_by_id(object_id).await?;
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
         while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
@@ -1246,10 +1261,7 @@ where
             } else if cert_map.contains_key(&tx_digest) {
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
-                if let Ok(effects) = self
-                    .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
-                    .await
-                {
+                if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {
                     if effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
@@ -1285,7 +1297,7 @@ where
             tokio::spawn(Self::fetch_one_object(
                 self.authority_clients.clone(),
                 object_ref,
-                AUTHORITY_REQUEST_TIMEOUT,
+                self.timeouts.authority_request_timeout,
                 sender,
             ));
         }

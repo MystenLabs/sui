@@ -124,10 +124,7 @@ where
         // and execute it locally.
         loop {
             if let Ok(certificate) = new_net
-                .process_transaction(
-                    advance_epoch_tx.clone().to_transaction(),
-                    Duration::from_secs(0),
-                )
+                .process_transaction(advance_epoch_tx.clone().to_transaction())
                 .await
             {
                 self.state
