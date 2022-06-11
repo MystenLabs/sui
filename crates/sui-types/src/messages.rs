@@ -1150,7 +1150,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction::new(transaction),
+            partial: CertifiedTransaction::new(committee.epoch, transaction),
         }
     }
 
@@ -1188,17 +1188,8 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedTransaction {
-    pub fn new(transaction: Transaction) -> CertifiedTransaction {
-        CertifiedTransaction {
-            transaction_digest: transaction.transaction_digest,
-            is_verified: false,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityQuorumSignInfo {
-                epoch: 0,
-                signatures: Vec::new(),
-            },
-        }
+    pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
+        Self::new_with_signatures(epoch, transaction, vec![])
     }
 
     pub fn new_with_signatures(
