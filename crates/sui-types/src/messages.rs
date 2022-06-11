@@ -1245,64 +1245,16 @@ impl CertifiedTransaction {
         committee: &Committee,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
-        // Check epoch
-        fp_ensure!(
-            self.auth_sign_info.epoch == committee.epoch(),
-            SuiError::WrongEpoch {
-                expected_epoch: committee.epoch()
-            }
-        );
-
-        // First check the quorum is sufficient
-
-        let mut weight = 0;
-        let mut used_authorities = HashSet::new();
-        for (authority, _) in self.auth_sign_info.signatures.iter() {
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
-            // Update weight.
-            let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-            weight += voting_rights;
-        }
-        fp_ensure!(
-            weight >= committee.quorum_threshold(),
-            SuiError::CertificateRequiresQuorum
-        );
-
-        // Add the obligation of the transaction
+        // Add the obligation of the sender signature verification.
         self.add_tx_sig_to_verification_obligation(obligation)?;
 
-        // Create obligations for the committee signatures
-
+        // Add the obligation of the authority signature verifications.
         let mut message = Vec::new();
         self.data.write(&mut message);
-
         let idx = obligation.add_message(message);
 
-        for tuple in self.auth_sign_info.signatures.iter() {
-            let (authority, signature) = tuple;
-            // do we know, or can we build a valid public key?
-            match committee.expanded_keys.get(authority) {
-                Some(v) => obligation.public_keys.push(*v),
-                None => {
-                    let public_key = (*authority).try_into()?;
-                    obligation.public_keys.push(public_key);
-                }
-            }
-
-            // build a signature
-            obligation.signatures.push(signature.0);
-
-            // collect the message
-            obligation.message_index.push(idx);
-        }
-
-        Ok(())
+        self.auth_sign_info
+            .add_to_verification_obligation(committee, obligation, idx)
     }
 }
 

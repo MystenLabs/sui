@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::base_types::{AuthorityName, SuiAddress};
-use crate::committee::EpochId;
+use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
@@ -20,7 +20,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
@@ -500,6 +500,65 @@ pub struct AuthorityQuorumSignInfo {
 //
 static_assertions::assert_not_impl_any!(AuthorityQuorumSignInfo: Hash, Eq, PartialEq);
 impl AuthoritySignInfoTrait for AuthorityQuorumSignInfo {}
+
+impl AuthorityQuorumSignInfo {
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()> {
+        // Check epoch
+        fp_ensure!(
+            self.epoch == committee.epoch(),
+            SuiError::WrongEpoch {
+                expected_epoch: committee.epoch()
+            }
+        );
+
+        // First check the quorum is sufficient
+
+        let mut weight = 0;
+        let mut used_authorities = HashSet::new();
+        for (authority, _) in self.signatures.iter() {
+            // Check that each authority only appears once.
+            fp_ensure!(
+                !used_authorities.contains(authority),
+                SuiError::CertificateAuthorityReuse
+            );
+            used_authorities.insert(*authority);
+            // Update weight.
+            let voting_rights = committee.weight(authority);
+            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
+            weight += voting_rights;
+        }
+        fp_ensure!(
+            weight >= committee.quorum_threshold(),
+            SuiError::CertificateRequiresQuorum
+        );
+
+        // Create obligations for the committee signatures
+
+        for (authority, signature) in self.signatures.iter() {
+            // do we know, or can we build a valid public key?
+            match committee.expanded_keys.get(authority) {
+                Some(v) => obligation.public_keys.push(*v),
+                None => {
+                    let public_key = (*authority).try_into()?;
+                    obligation.public_keys.push(public_key);
+                }
+            }
+
+            // build a signature
+            obligation.signatures.push(signature.0);
+
+            // collect the message
+            obligation.message_index.push(message_index);
+        }
+
+        Ok(())
+    }
+}
 
 mod private {
     pub trait SealedAuthoritySignInfoTrait {}
