@@ -164,7 +164,7 @@ where
             let db_options = Some(options.clone());
             let opt_cfs: &[(&str, &rocksdb::Options)] = &[
                 ("tx_write_ahead_log", &options),
-                ("tx_retry_count", &options)
+                ("tx_retry_count", &options),
             ];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
         }
