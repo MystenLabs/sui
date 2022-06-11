@@ -685,11 +685,9 @@ impl SignedTransaction {
         let mut message = Vec::new();
         self.data.write(&mut message);
         let idx = obligation.add_message(message);
-        obligation
-            .public_keys
-            .push(committee.public_key(&self.auth_sign_info.authority)?);
-        obligation.signatures.push(self.auth_sign_info.signature.0);
-        obligation.message_index.push(idx);
+        self.auth_sign_info
+            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+
         obligation.verify_all()?;
         Ok(weight)
     }

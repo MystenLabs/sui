@@ -481,6 +481,22 @@ impl PartialEq for AuthoritySignInfo {
     }
 }
 
+impl AuthoritySignInfo {
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()> {
+        obligation
+            .public_keys
+            .push(committee.public_key(&self.authority)?);
+        obligation.signatures.push(self.signature.0);
+        obligation.message_index.push(message_index);
+        Ok(())
+    }
+}
+
 /// Represents at least a quorum (could be more) of authority signatures.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthorityQuorumSignInfo {
