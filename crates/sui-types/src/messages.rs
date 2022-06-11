@@ -468,7 +468,7 @@ pub struct TransactionEnvelope<S> {
 }
 
 impl<S> TransactionEnvelope<S> {
-    pub fn add_sender_sig_to_verification_obligation(
+    fn add_sender_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
@@ -1249,7 +1249,7 @@ impl CertifiedTransaction {
         obligation.verify_all().map(|_| ())
     }
 
-    pub fn add_to_verification_obligation(
+    fn add_to_verification_obligation(
         &self,
         committee: &Committee,
         obligation: &mut VerificationObligation,
