@@ -452,6 +452,8 @@ pub struct TransactionEnvelope<S> {
     #[serde(skip)]
     transaction_digest: OnceCell<TransactionDigest>,
     // Deserialization sets this to "false"
+    // TODO: is_verified is only set to true in some callsites after verification.
+    // Hence it's not optimal.
     #[serde(skip)]
     pub is_verified: bool,
 
