@@ -1076,11 +1076,13 @@ where
             // The map here allows us to count the stake for each unique effect.
             effects_map: HashMap<[u8; 32], (StakeUnit, TransactionEffects)>,
             bad_stake: StakeUnit,
+            errors: Vec<SuiError>,
         }
 
         let state = ProcessCertificateState {
             effects_map: HashMap::new(),
             bad_stake: 0,
+            errors: vec![],
         };
 
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
@@ -1154,38 +1156,47 @@ where
                             .await
                     })
                 },
-                |mut state, _name, weight, result| {
+                |mut state, name, weight, result| {
                     Box::pin(async move {
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
-                        if let Ok(TransactionInfoResponse {
-                            signed_effects: Some(inner_effects),
-                            ..
-                        }) = result
-                        {
-                            // Note: here we aggregate votes by the hash of the effects structure
-                            let entry = state
-                                .effects_map
-                                .entry(inner_effects.digest())
-                                .or_insert((0, inner_effects.effects));
-                            entry.0 += weight;
+                        match result {
+                            Ok(TransactionInfoResponse {
+                                signed_effects: Some(inner_effects),
+                                ..
+                            }) => {
+                                // Note: here we aggregate votes by the hash of the effects structure
+                                let entry = state
+                                    .effects_map
+                                    .entry(inner_effects.digest())
+                                    .or_insert((0, inner_effects.effects));
+                                entry.0 += weight;
 
-                            if entry.0 >= threshold {
-                                // It will set the timeout quite high.
-                                return Ok(ReduceOutput::ContinueWithTimeout(
-                                    state,
-                                    timeout_after_quorum,
-                                ));
+                                if entry.0 >= threshold {
+                                    // It will set the timeout quite high.
+                                    return Ok(ReduceOutput::ContinueWithTimeout(
+                                        state,
+                                        timeout_after_quorum,
+                                    ));
+                                }
                             }
-                        } else {
-                            state.bad_stake += weight;
-                            if state.bad_stake > validity {
-                                debug!(bad_stake = state.bad_stake,
-                                    "Too many bad responses from cert processing, validity threshold exceeded.");
-                                return Err(SuiError::ErrorWhileRequestingCertificate);
+                            maybe_err => {
+                                // Returning Ok but without signed effects is unexpected.
+                                let err = match maybe_err {
+                                    Err(err) => err,
+                                    Ok(_) => SuiError::ByzantineAuthoritySuspicion {
+                                        authority: name,
+                                    }
+                                };
+                                state.errors.push(err);
+                                state.bad_stake += weight;
+                                if state.bad_stake > validity {
+                                    debug!(bad_stake = state.bad_stake,
+                                        "Too many bad responses from cert processing, validity threshold exceeded.");
+                                    return Err(SuiError::QuorumFailedToExecuteCertificate { errors: state.errors });
+                                }
                             }
                         }
-
                         Ok(ReduceOutput::Continue(state))
                     })
                 },
@@ -1213,7 +1224,9 @@ where
         }
 
         // If none has, fail.
-        Err(SuiError::ErrorWhileRequestingCertificate)
+        Err(SuiError::QuorumFailedToExecuteCertificate {
+            errors: state.errors,
+        })
     }
 
     /// Find the higgest sequence number that is known to a quorum of authorities.

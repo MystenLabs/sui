@@ -103,8 +103,11 @@ pub enum SuiError {
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
     ErrorWhileProcessingConfirmationTransaction { err: String },
-    #[error("An invalid answer was returned by the authority while requesting a certificate")]
-    ErrorWhileRequestingCertificate,
+    #[error(
+    "Failed to execute certificate on a quorum of validators, cause by : {:#?}",
+    errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
+    )]
+    QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },
     #[error("Move call failed: {err}")]

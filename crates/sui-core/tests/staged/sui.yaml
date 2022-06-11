@@ -336,7 +336,11 @@ SuiError:
         STRUCT:
           - err: STR
     22:
-      ErrorWhileRequestingCertificate: UNIT
+      QuorumFailedToExecuteCertificate:
+        STRUCT:
+          - errors:
+              SEQ:
+                TYPENAME: SuiError
     23:
       ErrorWhileProcessingPublish:
         STRUCT:
