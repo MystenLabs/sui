@@ -40,6 +40,10 @@ CallArg:
       SharedObject:
         NEWTYPE:
           TYPENAME: ObjectID
+    3:
+      QuasiSharedObject:
+        NEWTYPE:
+          TYPENAME: ObjectID
 ChangeEpoch:
   STRUCT:
     - epoch: U64
@@ -283,37 +287,43 @@ SuiError:
     8:
       NotSharedObjectError: UNIT
     9:
-      DeleteObjectOwnedObject: UNIT
+      NotQuasiSharedObjectError:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+          - reason: STR
     10:
-      SharedObjectLockNotSetObject: UNIT
+      DeleteObjectOwnedObject: UNIT
     11:
+      SharedObjectLockNotSetObject: UNIT
+    12:
       InvalidBatchTransaction:
         STRUCT:
           - error: STR
-    12:
+    13:
       MissingObjectOwner:
         STRUCT:
           - child_id:
               TYPENAME: ObjectID
           - parent_id:
               TYPENAME: ObjectID
-    13:
+    14:
       InvalidSignature:
         STRUCT:
           - error: STR
-    14:
+    15:
       IncorrectSigner:
         STRUCT:
           - error: STR
-    15:
-      UnknownSigner: UNIT
     16:
+      UnknownSigner: UNIT
+    17:
       WrongEpoch:
         STRUCT:
           - expected_epoch: U64
-    17:
-      CertificateRequiresQuorum: UNIT
     18:
+      CertificateRequiresQuorum: UNIT
+    19:
       UnexpectedSequenceNumber:
         STRUCT:
           - object_id:
@@ -322,181 +332,181 @@ SuiError:
               TYPENAME: SequenceNumber
           - given_sequence:
               TYPENAME: SequenceNumber
-    19:
+    20:
       ConflictingTransaction:
         STRUCT:
           - pending_transaction:
               TYPENAME: TransactionDigest
-    20:
+    21:
       ErrorWhileProcessingTransactionTransaction:
         STRUCT:
           - err: STR
-    21:
+    22:
       ErrorWhileProcessingConfirmationTransaction:
         STRUCT:
           - err: STR
-    22:
-      ErrorWhileRequestingCertificate: UNIT
     23:
+      ErrorWhileRequestingCertificate: UNIT
+    24:
       ErrorWhileProcessingPublish:
         STRUCT:
           - err: STR
-    24:
+    25:
       ErrorWhileProcessingMoveCall:
         STRUCT:
           - err: STR
-    25:
-      ErrorWhileRequestingInformation: UNIT
     26:
+      ErrorWhileRequestingInformation: UNIT
+    27:
       ObjectFetchFailed:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - err: STR
-    27:
+    28:
       MissingEarlierConfirmations:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - current_sequence_number:
               TYPENAME: SequenceNumber
-    28:
-      InvalidSystemTransaction: UNIT
     29:
-      UnexpectedTransactionIndex: UNIT
+      InvalidSystemTransaction: UNIT
     30:
-      ConcurrentIteratorError: UNIT
+      UnexpectedTransactionIndex: UNIT
     31:
-      ClosedNotifierError: UNIT
+      ConcurrentIteratorError: UNIT
     32:
+      ClosedNotifierError: UNIT
+    33:
       CertificateNotfound:
         STRUCT:
           - certificate_digest:
               TYPENAME: TransactionDigest
-    33:
+    34:
       ParentNotfound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - sequence:
               TYPENAME: SequenceNumber
-    34:
-      UnknownSenderAccount: UNIT
     35:
-      CertificateAuthorityReuse: UNIT
+      UnknownSenderAccount: UNIT
     36:
-      InvalidSequenceNumber: UNIT
+      CertificateAuthorityReuse: UNIT
     37:
-      SequenceOverflow: UNIT
+      InvalidSequenceNumber: UNIT
     38:
-      SequenceUnderflow: UNIT
+      SequenceOverflow: UNIT
     39:
-      WrongShard: UNIT
+      SequenceUnderflow: UNIT
     40:
-      InvalidCrossShardUpdate: UNIT
+      WrongShard: UNIT
     41:
-      InvalidAuthenticator: UNIT
+      InvalidCrossShardUpdate: UNIT
     42:
-      InvalidAddress: UNIT
+      InvalidAuthenticator: UNIT
     43:
-      InvalidTransactionDigest: UNIT
+      InvalidAddress: UNIT
     44:
+      InvalidTransactionDigest: UNIT
+    45:
       InvalidObjectDigest:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - expected_digest:
               TYPENAME: ObjectDigest
-    45:
-      InvalidDecoding: UNIT
     46:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     47:
-      DuplicateObjectRefInput: UNIT
+      UnexpectedMessage: UNIT
     48:
+      DuplicateObjectRefInput: UNIT
+    49:
       ClientIoError:
         STRUCT:
           - error: STR
-    49:
-      TransferImmutableError: UNIT
     50:
+      TransferImmutableError: UNIT
+    51:
       TooManyItemsError:
         NEWTYPE: U64
-    51:
-      InvalidSequenceRangeError: UNIT
     52:
-      NoBatchesFoundError: UNIT
+      InvalidSequenceRangeError: UNIT
     53:
-      CannotSendClientMessageError: UNIT
+      NoBatchesFoundError: UNIT
     54:
+      CannotSendClientMessageError: UNIT
+    55:
       SubscriptionItemsDroppedError:
         NEWTYPE: U64
-    55:
-      SubscriptionServiceClosed: UNIT
     56:
+      SubscriptionServiceClosed: UNIT
+    57:
       CheckpointingError:
         STRUCT:
           - error: STR
-    57:
+    58:
       ModuleLoadFailure:
         STRUCT:
           - error: STR
-    58:
+    59:
       ModuleVerificationFailure:
         STRUCT:
           - error: STR
-    59:
+    60:
       ModuleDeserializationFailure:
         STRUCT:
           - error: STR
-    60:
+    61:
       ModulePublishFailure:
         STRUCT:
           - error: STR
-    61:
+    62:
       ModuleBuildFailure:
         STRUCT:
           - error: STR
-    62:
+    63:
       DependentPackageNotFound:
         STRUCT:
           - package_id:
               TYPENAME: ObjectID
-    63:
+    64:
       MoveUnitTestFailure:
         STRUCT:
           - error: STR
-    64:
+    65:
       FunctionNotFound:
         STRUCT:
           - error: STR
-    65:
+    66:
       ModuleNotFound:
         STRUCT:
           - module_name: STR
-    66:
+    67:
       InvalidFunctionSignature:
         STRUCT:
           - error: STR
-    67:
+    68:
       InvalidFunctionVisibility:
         STRUCT:
           - error: STR
-    68:
+    69:
       TypeError:
         STRUCT:
           - error: STR
-    69:
+    70:
       AbortedExecution:
         STRUCT:
           - error: STR
-    70:
+    71:
       InvalidMoveEvent:
         STRUCT:
           - error: STR
-    71:
-      CircularObjectOwnership: UNIT
     72:
+      CircularObjectOwnership: UNIT
+    73:
       InvalidSharedChildUse:
         STRUCT:
           - child:
@@ -506,17 +516,17 @@ SuiError:
               TYPENAME: ObjectID
           - ancestor_module: STR
           - current_module: STR
-    73:
+    74:
       GasBudgetTooHigh:
         STRUCT:
           - error: STR
-    74:
+    75:
       InsufficientGas:
         STRUCT:
           - error: STR
-    75:
-      InvalidTxUpdate: UNIT
     76:
+      InvalidTxUpdate: UNIT
+    77:
       TransactionLockExists:
         STRUCT:
           - refs:
@@ -525,21 +535,21 @@ SuiError:
                   - TYPENAME: ObjectID
                   - TYPENAME: SequenceNumber
                   - TYPENAME: ObjectDigest
-    77:
-      TransactionLockDoesNotExist: UNIT
     78:
-      TransactionLockReset: UNIT
+      TransactionLockDoesNotExist: UNIT
     79:
+      TransactionLockReset: UNIT
+    80:
       TransactionNotFound:
         STRUCT:
           - digest:
               TYPENAME: TransactionDigest
-    80:
+    81:
       ObjectNotFound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    81:
+    82:
       ObjectDeleted:
         STRUCT:
           - object_ref:
@@ -547,26 +557,26 @@ SuiError:
                 - TYPENAME: ObjectID
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
-    82:
+    83:
       BadObjectType:
         STRUCT:
           - error: STR
-    83:
-      MoveExecutionFailure: UNIT
     84:
-      ObjectInputArityViolation: UNIT
+      MoveExecutionFailure: UNIT
     85:
-      ExecutionInvariantViolation: UNIT
+      ObjectInputArityViolation: UNIT
     86:
-      AuthorityInformationUnavailable: UNIT
+      ExecutionInvariantViolation: UNIT
     87:
-      AuthorityUpdateFailure: UNIT
+      AuthorityInformationUnavailable: UNIT
     88:
+      AuthorityUpdateFailure: UNIT
+    89:
       ByzantineAuthoritySuspicion:
         STRUCT:
           - authority:
               TYPENAME: PublicKeyBytes
-    89:
+    90:
       PairwiseSyncFailed:
         STRUCT:
           - xsource:
@@ -577,35 +587,35 @@ SuiError:
               TYPENAME: TransactionDigest
           - error:
               TYPENAME: SuiError
-    90:
+    91:
       StorageError:
         NEWTYPE:
           TYPENAME: TypedStoreError
-    91:
-      BatchErrorSender: UNIT
     92:
+      BatchErrorSender: UNIT
+    93:
       GenericAuthorityError:
         STRUCT:
           - error: STR
-    93:
+    94:
       EventFailedToDispatch:
         STRUCT:
           - error: STR
-    94:
+    95:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    95:
+    96:
       ObjectSerializationError:
         STRUCT:
           - error: STR
-    96:
-      ConcurrentTransactionError: UNIT
     97:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     98:
+      IncorrectRecipientError: UNIT
+    99:
       TooManyIncorrectAuthorities:
         STRUCT:
           - errors:
@@ -613,51 +623,51 @@ SuiError:
                 TUPLE:
                   - TYPENAME: PublicKeyBytes
                   - TYPENAME: SuiError
-    99:
+    100:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
-    100:
+    101:
       GatewayInvalidTxRangeQuery:
         STRUCT:
           - error: STR
-    101:
-      OnlyOneConsensusClientPermitted: UNIT
     102:
+      OnlyOneConsensusClientPermitted: UNIT
+    103:
       ConsensusConnectionBroken:
         NEWTYPE: STR
-    103:
+    104:
       FailedToHearBackFromConsensus:
         NEWTYPE: STR
-    104:
+    105:
       SharedObjectLockingFailure:
         NEWTYPE: STR
-    105:
-      ListenerCapacityExceeded: UNIT
     106:
+      ListenerCapacityExceeded: UNIT
+    107:
       ConsensusSuiSerializationError:
         NEWTYPE: STR
-    107:
-      NotASharedObjectTransaction: UNIT
     108:
+      NotASharedObjectTransaction: UNIT
+    109:
       SignatureSeedInvalidLength:
         NEWTYPE: U64
-    109:
+    110:
       HkdfError:
         NEWTYPE: STR
-    110:
+    111:
       SignatureKeyGenError:
         NEWTYPE: STR
-    111:
-      ValidatorHaltedAtEpochEnd: UNIT
     112:
+      ValidatorHaltedAtEpochEnd: UNIT
+    113:
       InconsistentEpochState:
         STRUCT:
           - error: STR
-    113:
+    114:
       RpcError:
         NEWTYPE: STR
-    114:
+    115:
       UnsupportedFeatureError:
         STRUCT:
           - error: STR

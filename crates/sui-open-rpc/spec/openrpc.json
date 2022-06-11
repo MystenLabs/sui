@@ -1290,6 +1290,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "QuasiSharedMoveObject"
+            ],
+            "properties": {
+              "QuasiSharedMoveObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
