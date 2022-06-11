@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 6-16:
-Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: Std::Option::Option<T0>".
+Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: std::option::Option<T0>".
 
 task 1 'publish'. lines 18-28:
-Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: vector<Std::Option::Option<T0>>".
+Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: vector<std::option::Option<T0>>".

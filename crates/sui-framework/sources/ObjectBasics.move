@@ -22,42 +22,42 @@ module Sui::ObjectBasics {
         new_value: u64
     }
 
-    public(script) fun create(value: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(
             Object { id: TxContext::new_id(ctx), value },
             recipient
         )
     }
 
-    public(script) fun transfer(o: Object, recipient: address) {
+    public entry fun transfer(o: Object, recipient: address) {
         Transfer::transfer(o, recipient)
     }
 
-    public(script) fun freeze_object(o: Object) {
+    public entry fun freeze_object(o: Object) {
         Transfer::freeze_object(o)
     }
 
-    public(script) fun set_value(o: &mut Object, value: u64) {
+    public entry fun set_value(o: &mut Object, value: u64) {
         o.value = value;
     }
 
     // test that reading o2 and updating o1 works
-    public(script) fun update(o1: &mut Object, o2: &Object) {
+    public entry fun update(o1: &mut Object, o2: &Object) {
         o1.value = o2.value;
         // emit an event so the world can see the new value
         Event::emit(NewValueEvent { new_value: o2.value })
     }
 
-    public(script) fun delete(o: Object) {
+    public entry fun delete(o: Object) {
         let Object { id, value: _ } = o;
         ID::delete(id);
     }
 
-    public(script) fun wrap(o: Object, ctx: &mut TxContext) {
+    public entry fun wrap(o: Object, ctx: &mut TxContext) {
         Transfer::transfer(Wrapper { id: TxContext::new_id(ctx), o }, TxContext::sender(ctx))
     }
 
-    public(script) fun unwrap(w: Wrapper, ctx: &mut TxContext) {
+    public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
         ID::delete(id);
         Transfer::transfer(o, TxContext::sender(ctx))

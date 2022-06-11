@@ -29,8 +29,8 @@ module Games::RockPaperScissors {
     use Sui::ID::{Self, VersionedID};
     use Sui::TxContext::{Self, TxContext};
     use Sui::Transfer::{Self};
-    use Std::Vector;
-    use Std::Hash;
+    use std::vector;
+    use std::hash;
 
     // -- Gestures and additional consts -- //
 
@@ -95,8 +95,8 @@ module Games::RockPaperScissors {
     /// entry point and limits the ability to select a winner, if one of the secrets hasn't
     /// been revealed yet.
     public fun status(game: &Game): u8 {
-        let h1_len = Vector::length(&game.hash_one);
-        let h2_len = Vector::length(&game.hash_two);
+        let h1_len = vector::length(&game.hash_one);
+        let h2_len = vector::length(&game.hash_two);
 
         if (game.gesture_one != NONE && game.gesture_two != NONE) {
             STATUS_REVEALED
@@ -117,7 +117,7 @@ module Games::RockPaperScissors {
     /// is initiated with default/empty values which will be filled later in the game.
     ///
     /// todo: extend with generics + T as prize
-    public(script) fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
+    public entry fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
         Transfer::transfer(Game {
             id: TxContext::new_id(ctx),
             prize: ThePrize { id: TxContext::new_id(ctx) },
@@ -134,7 +134,7 @@ module Games::RockPaperScissors {
     /// is encoded inside the [`hash`] argument.
     ///
     /// Currently there's no check on whether the game exists.
-    public(script) fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
+    public entry fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(PlayerTurn {
             hash,
             id: TxContext::new_id(ctx),
@@ -144,16 +144,16 @@ module Games::RockPaperScissors {
 
     /// Add a hashed gesture to the game. Store it as a `hash_one` or `hash_two` depending
     /// on the player number (one or two)
-    public(script) fun add_hash(game: &mut Game, cap: PlayerTurn) {
+    public entry fun add_hash(game: &mut Game, cap: PlayerTurn) {
         let PlayerTurn { hash, id, player } = cap;
         let status = status(game);
 
         assert!(status == STATUS_HASH_SUBMISSION || status == STATUS_READY, 0);
         assert!(game.player_one == player || game.player_two == player, 0);
 
-        if (player == game.player_one && Vector::length(&game.hash_one) == 0) {
+        if (player == game.player_one && vector::length(&game.hash_one) == 0) {
             game.hash_one = hash;
-        } else if (player == game.player_two && Vector::length(&game.hash_two) == 0) {
+        } else if (player == game.player_two && vector::length(&game.hash_two) == 0) {
             game.hash_two = hash;
         } else {
             abort 0 // unreachable!()
@@ -164,7 +164,7 @@ module Games::RockPaperScissors {
 
     /// Submit a [`Secret`] to the game owner who then matches the hash and saves the
     /// gesture in the [`Game`] object.
-    public(script) fun reveal(at: address, salt: vector<u8>, ctx: &mut TxContext) {
+    public entry fun reveal(at: address, salt: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(Secret {
             id: TxContext::new_id(ctx),
             salt,
@@ -175,7 +175,7 @@ module Games::RockPaperScissors {
     /// Use submitted [`Secret`]'s salt to find the gesture played by the player and set it
     /// in the [`Game`] object.
     /// TODO: think of ways to
-    public(script) fun match_secret(game: &mut Game, secret: Secret) {
+    public entry fun match_secret(game: &mut Game, secret: Secret) {
         let Secret { salt, player, id } = secret;
 
         assert!(player == game.player_one || player == game.player_two, 0);
@@ -191,7 +191,7 @@ module Games::RockPaperScissors {
 
     /// The final accord to the game logic. After both secrets have been revealed,
     /// the game owner can choose a winner and release the prize.
-    public(script) fun select_winner(game: Game, ctx: &mut TxContext) {
+    public entry fun select_winner(game: Game, ctx: &mut TxContext) {
         assert!(status(&game) == STATUS_REVEALED, 0);
 
         let Game {
@@ -251,7 +251,7 @@ module Games::RockPaperScissors {
     /// that nobody knows the gesture until the end, but at the same time each player commits
     /// to the result with his hash;
     fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
-        Vector::push_back(&mut salt, gesture);
-        Hash::sha2_256(salt)
+        vector::push_back(&mut salt, gesture);
+        hash::sha2_256(salt)
     }
 }

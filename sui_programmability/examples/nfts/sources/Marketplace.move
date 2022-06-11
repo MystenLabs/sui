@@ -28,7 +28,7 @@ module NFTs::Marketplace {
     }
 
     /// Create a new shared Marketplace.
-    public(script) fun create(ctx: &mut TxContext) {
+    public entry fun create(ctx: &mut TxContext) {
         let id = TxContext::new_id(ctx);
         let objects = Bag::new(ctx);
         let (id, objects) = Bag::transfer_to_object_id(objects, id);
@@ -40,7 +40,7 @@ module NFTs::Marketplace {
     }
 
     /// List an item at the Marketplace.
-    public(script) fun list<T: key + store, C>(
+    public entry fun list<T: key + store, C>(
         _marketplace: &Marketplace,
         objects: &mut Bag,
         item: T,
@@ -73,7 +73,7 @@ module NFTs::Marketplace {
     }
 
     /// Call [`delist`] and transfer item to the sender.
-    public(script) fun delist_and_take<T: key + store, C>(
+    public entry fun delist_and_take<T: key + store, C>(
         _marketplace: &Marketplace,
         objects: &mut Bag,
         listing: Listing<T, C>,
@@ -101,7 +101,7 @@ module NFTs::Marketplace {
     }
 
     /// Call [`buy`] and transfer item to the sender.
-    public(script) fun buy_and_take<T: key + store, C>(
+    public entry fun buy_and_take<T: key + store, C>(
         _marketplace: &Marketplace,
         listing: Listing<T, C>,
         objects: &mut Bag,
@@ -144,7 +144,7 @@ module NFTs::MarketplaceTests {
     const BUYER: address = @0x00B;
 
     /// Create a shared [`Marketplace`].
-    public(script) fun create_marketplace(scenario: &mut Scenario) {
+    public entry fun create_marketplace(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &ADMIN);
         Marketplace::create(TestScenario::ctx(scenario));
     }
@@ -164,7 +164,7 @@ module NFTs::MarketplaceTests {
     }
 
     // SELLER lists Kitty at the Marketplace for 100 SUI.
-    public(script) fun list_kitty(scenario: &mut Scenario) {
+    public entry fun list_kitty(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &SELLER);
         let mkp_wrapper = TestScenario::take_shared<Marketplace>(scenario);
         let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
@@ -177,7 +177,7 @@ module NFTs::MarketplaceTests {
     }
 
     #[test]
-    public(script) fun list_and_delist() {
+    public entry fun list_and_delist() {
         let scenario = &mut TestScenario::begin(&ADMIN);
 
         create_marketplace(scenario);
@@ -204,7 +204,7 @@ module NFTs::MarketplaceTests {
 
     #[test]
     #[expected_failure(abort_code = 1)]
-    public(script) fun fail_to_delist() {
+    public entry fun fail_to_delist() {
         let scenario = &mut TestScenario::begin(&ADMIN);
 
         create_marketplace(scenario);
@@ -230,7 +230,7 @@ module NFTs::MarketplaceTests {
     }
 
     #[test]
-    public(script) fun buy_kitty() {
+    public entry fun buy_kitty() {
         let scenario = &mut TestScenario::begin(&ADMIN);
 
         create_marketplace(scenario);
@@ -262,7 +262,7 @@ module NFTs::MarketplaceTests {
 
     #[test]
     #[expected_failure(abort_code = 0)]
-    public(script) fun fail_to_buy() {
+    public entry fun fail_to_buy() {
         let scenario = &mut TestScenario::begin(&ADMIN);
 
         create_marketplace(scenario);

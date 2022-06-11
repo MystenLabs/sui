@@ -6,14 +6,14 @@
 //# publish
 module 0x0.M {
     import 0x2.TxContext;
-    import 0x1.Option;
+    import 0x1.option;
 
-    public(script) yes<T>(
-        l0: Option.Option<u64>,
-        l1: Option.Option<Option.Option<u64>>,
-        l2: Option.Option<vector<u64>>,
-        l3: vector<Option.Option<u64>>,
-        l4: Option.Option<Option.Option<T>>,
+    public entry yes<T>(
+        l0: option.Option<u64>,
+        l1: option.Option<option.Option<u64>>,
+        l2: option.Option<vector<u64>>,
+        l3: vector<option.Option<u64>>,
+        l4: option.Option<option.Option<T>>,
         ctx: &mut TxContext.TxContext
     ) {
         label l0:

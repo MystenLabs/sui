@@ -9,7 +9,7 @@ module 0x0.M {
 
     struct S has copy, drop, store { value: u64 }
 
-    public(script) no(s: Self.S, ctx: &mut TxContext.TxContext) {
+    public entry no(s: Self.S, ctx: &mut TxContext.TxContext) {
         label l0:
         abort 0;
     }

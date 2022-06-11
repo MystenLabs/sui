@@ -14,7 +14,7 @@ module Sui::CollectionTests {
     }
 
     #[test]
-    public(script) fun test_collection() {
+    public entry fun test_collection() {
         let sender = @0x0;
         let scenario = &mut TestScenario::begin(&sender);
 
@@ -47,7 +47,7 @@ module Sui::CollectionTests {
     }
 
     #[test]
-    public(script) fun test_collection_bag_interaction() {
+    public entry fun test_collection_bag_interaction() {
         let sender = @0x0;
         let scenario = &mut TestScenario::begin(&sender);
 
@@ -109,7 +109,7 @@ module Sui::CollectionTests {
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public(script) fun test_init_with_invalid_max_capacity() {
+    public entry fun test_init_with_invalid_max_capacity() {
         let ctx = TxContext::dummy();
         // Sui::Collection::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
@@ -119,7 +119,7 @@ module Sui::CollectionTests {
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public(script) fun test_init_with_zero() {
+    public entry fun test_init_with_zero() {
         let ctx = TxContext::dummy();
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, 0);
         Collection::transfer_(collection, TxContext::sender(&ctx));
@@ -127,7 +127,7 @@ module Sui::CollectionTests {
 
     #[test]
     #[expected_failure(abort_code = 776)]
-    public(script) fun test_exceed_max_capacity() {
+    public entry fun test_exceed_max_capacity() {
         let ctx = TxContext::dummy();
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, 1);
 

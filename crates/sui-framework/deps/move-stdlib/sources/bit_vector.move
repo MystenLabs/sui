@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Std::BitVector {
-    use Std::Vector;
-    use Std::Errors;
+module std::bit_vector {
+    use std::vector;
+    use std::errors;
 
     /// The provided index is out of bounds
     const EINDEX: u64 = 0;
@@ -20,16 +20,16 @@ module Std::BitVector {
     }
 
     public fun new(length: u64): BitVector {
-        assert!(length > 0, Errors::invalid_argument(ELENGTH));
-        assert!(length < MAX_SIZE, Errors::invalid_argument(ELENGTH));
+        assert!(length > 0, errors::invalid_argument(ELENGTH));
+        assert!(length < MAX_SIZE, errors::invalid_argument(ELENGTH));
         let counter = 0;
-        let bit_field = Vector::empty();
+        let bit_field = vector::empty();
         while ({spec {
             invariant counter <= length;
             invariant len(bit_field) == counter;
         };
             (counter < length)}) {
-            Vector::push_back(&mut bit_field, false);
+            vector::push_back(&mut bit_field, false);
             counter = counter + 1;
         };
         spec {
@@ -49,14 +49,14 @@ module Std::BitVector {
     }
     spec schema NewAbortsIf {
         length: u64;
-        aborts_if length <= 0 with Errors::INVALID_ARGUMENT;
-        aborts_if length >= MAX_SIZE with Errors::INVALID_ARGUMENT;
+        aborts_if length <= 0 with errors::INVALID_ARGUMENT;
+        aborts_if length >= MAX_SIZE with errors::INVALID_ARGUMENT;
     }
 
     /// Set the bit at `bit_index` in the `bitvector` regardless of its previous state.
     public fun set(bitvector: &mut BitVector, bit_index: u64) {
-        assert!(bit_index < Vector::length(&bitvector.bit_field), Errors::invalid_argument(EINDEX));
-        let x = Vector::borrow_mut(&mut bitvector.bit_field, bit_index);
+        assert!(bit_index < vector::length(&bitvector.bit_field), errors::invalid_argument(EINDEX));
+        let x = vector::borrow_mut(&mut bitvector.bit_field, bit_index);
         *x = true;
     }
     spec set {
@@ -66,13 +66,13 @@ module Std::BitVector {
     spec schema SetAbortsIf {
         bitvector: BitVector;
         bit_index: u64;
-        aborts_if bit_index >= length(bitvector) with Errors::INVALID_ARGUMENT;
+        aborts_if bit_index >= length(bitvector) with errors::INVALID_ARGUMENT;
     }
 
     /// Unset the bit at `bit_index` in the `bitvector` regardless of its previous state.
     public fun unset(bitvector: &mut BitVector, bit_index: u64) {
-        assert!(bit_index < Vector::length(&bitvector.bit_field), Errors::invalid_argument(EINDEX));
-        let x = Vector::borrow_mut(&mut bitvector.bit_field, bit_index);
+        assert!(bit_index < vector::length(&bitvector.bit_field), errors::invalid_argument(EINDEX));
+        let x = vector::borrow_mut(&mut bitvector.bit_field, bit_index);
         *x = false;
     }
     spec set {
@@ -82,17 +82,17 @@ module Std::BitVector {
     spec schema UnsetAbortsIf {
         bitvector: BitVector;
         bit_index: u64;
-        aborts_if bit_index >= length(bitvector) with Errors::INVALID_ARGUMENT;
+        aborts_if bit_index >= length(bitvector) with errors::INVALID_ARGUMENT;
     }
 
     /// Shift the `bitvector` left by `amount`. If `amount` is greater than the
     /// bitvector's length the bitvector will be zeroed out.
     public fun shift_left(bitvector: &mut BitVector, amount: u64) {
         if (amount >= bitvector.length) {
-           let len = Vector::length(&bitvector.bit_field);
+           let len = vector::length(&bitvector.bit_field);
            let i = 0;
            while (i < len) {
-               let elem = Vector::borrow_mut(&mut bitvector.bit_field, i);
+               let elem = vector::borrow_mut(&mut bitvector.bit_field, i);
                *elem = false;
                i = i + 1;
            };
@@ -117,8 +117,8 @@ module Std::BitVector {
     /// Return the value of the bit at `bit_index` in the `bitvector`. `true`
     /// represents "1" and `false` represents a 0
     public fun is_index_set(bitvector: &BitVector, bit_index: u64): bool {
-        assert!(bit_index < Vector::length(&bitvector.bit_field), Errors::invalid_argument(EINDEX));
-        *Vector::borrow(&bitvector.bit_field, bit_index)
+        assert!(bit_index < vector::length(&bitvector.bit_field), errors::invalid_argument(EINDEX));
+        *vector::borrow(&bitvector.bit_field, bit_index)
     }
     spec is_index_set {
         include IsIndexSetAbortsIf;
@@ -127,7 +127,7 @@ module Std::BitVector {
     spec schema IsIndexSetAbortsIf {
         bitvector: BitVector;
         bit_index: u64;
-        aborts_if bit_index >= length(bitvector) with Errors::INVALID_ARGUMENT;
+        aborts_if bit_index >= length(bitvector) with errors::INVALID_ARGUMENT;
     }
     spec fun spec_is_index_set(bitvector: BitVector, bit_index: u64): bool {
         if (bit_index >= length(bitvector)) {
@@ -139,14 +139,14 @@ module Std::BitVector {
 
     /// Return the length (number of usable bits) of this bitvector
     public fun length(bitvector: &BitVector): u64 {
-        Vector::length(&bitvector.bit_field)
+        vector::length(&bitvector.bit_field)
     }
 
     /// Returns the length of the longest sequence of set bits starting at (and
     /// including) `start_index` in the `bitvector`. If there is no such
     /// sequence, then `0` is returned.
     public fun longest_set_sequence_starting_at(bitvector: &BitVector, start_index: u64): u64 {
-        assert!(start_index < bitvector.length, Errors::invalid_argument(EINDEX));
+        assert!(start_index < bitvector.length, errors::invalid_argument(EINDEX));
         let index = start_index;
 
         // Find the greatest index in the vector such that all indices less than it are set.

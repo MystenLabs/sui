@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::TxContext {
-    use Std::Signer;
+    use std::signer;
     use Sui::ID::{Self, VersionedID};
 
     #[test_only]
-    use Std::Errors;
+    use std::errors;
     #[test_only]
-    use Std::Vector;
+    use std::vector;
     #[test_only]
     use Sui::ID::ID;
 
@@ -40,7 +40,7 @@ module Sui::TxContext {
     /// Return the address of the user that signed the current
     /// transaction
     public fun sender(self: &TxContext): address {
-        Signer::address_of(&self.signer)
+        signer::address_of(&self.signer)
     }
 
     /// Return a `signer` for the user that signed the current transaction
@@ -75,8 +75,8 @@ module Sui::TxContext {
     /// Create a `TxContext` for testing
     public fun new(signer: signer, tx_hash: vector<u8>, ids_created: u64): TxContext {
         assert!(
-            Vector::length(&tx_hash) == TX_HASH_LENGTH,
-            Errors::invalid_argument(EBadTxHashLength)
+            vector::length(&tx_hash) == TX_HASH_LENGTH,
+            errors::invalid_argument(EBadTxHashLength)
         );
         TxContext { signer, tx_hash, epoch: 0, ids_created }
     }
@@ -85,8 +85,8 @@ module Sui::TxContext {
     /// Create a `TxContext` for testing, with a potentially non-zero epoch number.
     public fun new_with_epoch(signer: signer, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
         assert!(
-            Vector::length(&tx_hash) == TX_HASH_LENGTH,
-            Errors::invalid_argument(EBadTxHashLength)
+            vector::length(&tx_hash) == TX_HASH_LENGTH,
+            errors::invalid_argument(EBadTxHashLength)
         );
         TxContext { signer, tx_hash, epoch, ids_created }
     }
@@ -107,13 +107,13 @@ module Sui::TxContext {
     #[test_only]
     /// Utility for creating 256 unique input hashes
     fun dummy_tx_hash_with_hint(hint: u8): vector<u8> {
-        let tx_hash = Vector::empty<u8>();
+        let tx_hash = vector::empty<u8>();
         let i = 0;
         while (i < TX_HASH_LENGTH - 1) {
-            Vector::push_back(&mut tx_hash, 0u8);
+            vector::push_back(&mut tx_hash, 0u8);
             i = i + 1;
         };
-        Vector::push_back(&mut tx_hash, hint);
+        vector::push_back(&mut tx_hash, hint);
         tx_hash
     }
 

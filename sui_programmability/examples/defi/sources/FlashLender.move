@@ -78,7 +78,7 @@ module DeFi::FlashLender {
     }
 
     /// Same as `new`, but transfer `WithdrawCap` to the transaction sender
-    public(script) fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
+    public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
         let balance = Coin::into_balance(to_lend);
         let withdraw_cap = new(balance, fee, ctx);
         Transfer::transfer(withdraw_cap, TxContext::sender(ctx))
@@ -129,7 +129,7 @@ module DeFi::FlashLender {
     }
 
     /// Allow admin to add more funds to `self`
-    public(script) fun deposit<T>(
+    public entry fun deposit<T>(
         self: &mut FlashLender<T>, admin_cap: &AdminCap, coin: Coin<T>
     ) {
         // only the holder of the `AdminCap` for `self` can deposit funds
@@ -138,7 +138,7 @@ module DeFi::FlashLender {
     }
 
     /// Allow admin to update the fee for `self`
-    public(script) fun update_fee<T>(
+    public entry fun update_fee<T>(
         self: &mut FlashLender<T>, admin_cap: &AdminCap, new_fee: u64
     ) {
         // only the holder of the `AdminCap` for `self` can update the fee

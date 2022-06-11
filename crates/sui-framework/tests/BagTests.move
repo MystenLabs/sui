@@ -20,7 +20,7 @@ module Sui::BagTests {
     }
 
     #[test]
-    public(script) fun test_bag() {
+    public entry fun test_bag() {
         let sender = @0x0;
         let scenario = &mut TestScenario::begin(&sender);
 
@@ -55,7 +55,7 @@ module Sui::BagTests {
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public(script) fun test_init_with_invalid_max_capacity() {
+    public entry fun test_init_with_invalid_max_capacity() {
         let ctx = TxContext::dummy();
         // Sui::Bag::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
@@ -65,7 +65,7 @@ module Sui::BagTests {
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public(script) fun test_init_with_zero() {
+    public entry fun test_init_with_zero() {
         let ctx = TxContext::dummy();
         let bag = Bag::new_with_max_capacity(&mut ctx, 0);
         Bag::transfer_(bag, TxContext::sender(&ctx));
@@ -73,7 +73,7 @@ module Sui::BagTests {
 
     #[test]
     #[expected_failure(abort_code = 776)]
-    public(script) fun test_exceed_max_capacity() {
+    public entry fun test_exceed_max_capacity() {
         let ctx = TxContext::dummy();
         let bag = Bag::new_with_max_capacity(&mut ctx, 1);
 

@@ -4,9 +4,9 @@
 /// Defines a fixed-point numeric type with a 32-bit integer part and
 /// a 32-bit fractional part.
 
-module Std::FixedPoint32 {
+module std::fixed_point32 {
 
-    use Std::Errors;
+    use std::errors;
 
     /// Define a fixed-point numeric type with 32 fractional bits.
     /// This is just a u64 integer but it is wrapped in a struct to
@@ -45,7 +45,7 @@ module Std::FixedPoint32 {
         // so rescale it by shifting away the low bits.
         let product = unscaled_product >> 32;
         // Check whether the value is too large.
-        assert!(product <= MAX_U64, Errors::limit_exceeded(EMULTIPLICATION));
+        assert!(product <= MAX_U64, errors::limit_exceeded(EMULTIPLICATION));
         (product as u64)
     }
     spec multiply_u64 {
@@ -56,7 +56,7 @@ module Std::FixedPoint32 {
     spec schema MultiplyAbortsIf {
         val: num;
         multiplier: FixedPoint32;
-        aborts_if spec_multiply_u64(val, multiplier) > MAX_U64 with Errors::LIMIT_EXCEEDED;
+        aborts_if spec_multiply_u64(val, multiplier) > MAX_U64 with errors::LIMIT_EXCEEDED;
     }
     spec fun spec_multiply_u64(val: num, multiplier: FixedPoint32): num {
         (val * multiplier.value) >> 32
@@ -67,13 +67,13 @@ module Std::FixedPoint32 {
     /// is zero or if the quotient overflows.
     public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
         // Check for division by zero.
-        assert!(divisor.value != 0, Errors::invalid_argument(EDIVISION_BY_ZERO));
+        assert!(divisor.value != 0, errors::invalid_argument(EDIVISION_BY_ZERO));
         // First convert to 128 bits and then shift left to
         // add 32 fractional zero bits to the dividend.
         let scaled_value = (val as u128) << 32;
         let quotient = scaled_value / (divisor.value as u128);
         // Check whether the value is too large.
-        assert!(quotient <= MAX_U64, Errors::limit_exceeded(EDIVISION));
+        assert!(quotient <= MAX_U64, errors::limit_exceeded(EDIVISION));
         // the value may be too large, which will cause the cast to fail
         // with an arithmetic error.
         (quotient as u64)
@@ -86,8 +86,8 @@ module Std::FixedPoint32 {
     spec schema DivideAbortsIf {
         val: num;
         divisor: FixedPoint32;
-        aborts_if divisor.value == 0 with Errors::INVALID_ARGUMENT;
-        aborts_if spec_divide_u64(val, divisor) > MAX_U64 with Errors::LIMIT_EXCEEDED;
+        aborts_if divisor.value == 0 with errors::INVALID_ARGUMENT;
+        aborts_if spec_divide_u64(val, divisor) > MAX_U64 with errors::LIMIT_EXCEEDED;
     }
     spec fun spec_divide_u64(val: num, divisor: FixedPoint32): num {
         (val << 32) / divisor.value
@@ -110,12 +110,12 @@ module Std::FixedPoint32 {
         // fractional bits.
         let scaled_numerator = (numerator as u128) << 64;
         let scaled_denominator = (denominator as u128) << 32;
-        assert!(scaled_denominator != 0, Errors::invalid_argument(EDENOMINATOR));
+        assert!(scaled_denominator != 0, errors::invalid_argument(EDENOMINATOR));
         let quotient = scaled_numerator / scaled_denominator;
-        assert!(quotient != 0 || numerator == 0, Errors::invalid_argument(ERATIO_OUT_OF_RANGE));
+        assert!(quotient != 0 || numerator == 0, errors::invalid_argument(ERATIO_OUT_OF_RANGE));
         // Return the quotient as a fixed-point number. We first need to check whether the cast
         // can succeed.
-        assert!(quotient <= MAX_U64, Errors::limit_exceeded(ERATIO_OUT_OF_RANGE));
+        assert!(quotient <= MAX_U64, errors::limit_exceeded(ERATIO_OUT_OF_RANGE));
         FixedPoint32 { value: (quotient as u64) }
     }
     spec create_from_rational {
@@ -129,9 +129,9 @@ module Std::FixedPoint32 {
         let scaled_numerator = numerator << 64;
         let scaled_denominator = denominator << 32;
         let quotient = scaled_numerator / scaled_denominator;
-        aborts_if scaled_denominator == 0 with Errors::INVALID_ARGUMENT;
-        aborts_if quotient == 0 && scaled_numerator != 0 with Errors::INVALID_ARGUMENT;
-        aborts_if quotient > MAX_U64 with Errors::LIMIT_EXCEEDED;
+        aborts_if scaled_denominator == 0 with errors::INVALID_ARGUMENT;
+        aborts_if quotient == 0 && scaled_numerator != 0 with errors::INVALID_ARGUMENT;
+        aborts_if quotient > MAX_U64 with errors::LIMIT_EXCEEDED;
     }
     spec fun spec_create_from_rational(numerator: num, denominator: num): FixedPoint32 {
         FixedPoint32{value: (numerator << 64) / (denominator << 32)}

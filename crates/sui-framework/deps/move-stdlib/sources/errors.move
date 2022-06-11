@@ -15,14 +15,18 @@
 ///     framework evolves.
 ///
 /// >TODO: determine what kind of stability guarantees we give about reasons/associated module.
-module Std::Errors {
+module std::errors {
     /// A function to create an error from from a category and a reason.
     fun make(category: u8, reason: u64): u64 {
         (category as u64) + (reason << 8)
     }
     spec make {
         pragma opaque = true;
-        ensures [concrete] result == category + (reason << 8);
+        // The % below is to account for bits that could be shifted off the left end.
+        // For correctness, we would like that never to happen, but I'm cautious about
+        // using assert! in this module (no other uses), and require is just going to
+        // cause verification errors in public calling functions below.
+        ensures [concrete] result == category + (reason << 8) % (1 << 64);
         aborts_if [abstract] false;
         ensures [abstract] result == category;
     }
