@@ -245,7 +245,7 @@ impl Validator for ValidatorService {
         let mut transaction = request.into_inner();
 
         transaction
-            .verify_signature()
+            .verify()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         //TODO This is really really bad, we should have different types for signature-verified transactions
         transaction.is_verified = true;

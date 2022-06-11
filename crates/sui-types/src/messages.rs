@@ -468,12 +468,6 @@ pub struct TransactionEnvelope<S> {
 }
 
 impl<S> TransactionEnvelope<S> {
-    pub fn verify_signature(&self) -> Result<(), SuiError> {
-        let mut obligation = VerificationObligation::default();
-        self.add_sender_sig_to_verification_obligation(&mut obligation)?;
-        obligation.verify_all().map(|_| ())
-    }
-
     pub fn add_sender_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation,
@@ -602,6 +596,12 @@ impl Transaction {
             tx_signature: signature,
             auth_sign_info: EmptySignInfo {},
         }
+    }
+
+    pub fn verify(&self) -> Result<(), SuiError> {
+        let mut obligation = VerificationObligation::default();
+        self.add_sender_sig_to_verification_obligation(&mut obligation)?;
+        obligation.verify_all().map(|_| ())
     }
 }
 
@@ -1164,7 +1164,7 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
-        transaction.verify_signature()?;
+        transaction.verify()?;
         Ok(Self::new_unsafe(transaction, committee))
     }
 

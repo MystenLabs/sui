@@ -517,7 +517,7 @@ where
         transaction: Transaction,
         is_last_retry: bool,
     ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
-        transaction.verify_signature()?;
+        transaction.verify()?;
 
         self.sync_input_objects_with_authorities(&transaction)
             .await?;
