@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+// import { JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import { RawSigner, JsonRpcProvider } from '@mysten/sui.js';
 
 import type { Ed25519Keypair } from '@mysten/sui.js';
 
@@ -16,9 +17,9 @@ type EnvInfo = {
     color: string;
 };
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
-    [API_ENV.local]: { name: 'Local', color: '#000' },
-    [API_ENV.devNet]: { name: 'DevNet', color: '#666' },
-    [API_ENV.staging]: { name: 'Staging', color: '#999' },
+    [API_ENV.local]: { name: 'Local', color: '#9064ff' },
+    [API_ENV.devNet]: { name: 'DevNet', color: '#29b6af' },
+    [API_ENV.staging]: { name: 'Staging', color: '#ff4a8d' },
 };
 
 export const ENV_TO_API: Record<API_ENV, string | undefined> = {
@@ -52,6 +53,14 @@ export default class ApiProvider {
 
     constructor() {
         this._apiProvider = new JsonRpcProvider(DEFAULT_API_ENDPOINT);
+    }
+
+    public setNewJsonRpcProvider(apiEnv: string) {
+        if (apiEnv) {
+            this._apiProvider = new JsonRpcProvider(
+                getDefaultAPI(API_ENV[apiEnv as keyof typeof API_ENV])
+            );
+        }
     }
 
     public get instance() {
