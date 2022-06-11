@@ -468,11 +468,11 @@ pub struct TransactionEnvelope<S> {
 impl<S> TransactionEnvelope<S> {
     pub fn verify_signature(&self) -> Result<(), SuiError> {
         let mut obligation = VerificationObligation::default();
-        self.add_tx_sig_to_verification_obligation(&mut obligation)?;
+        self.add_sender_sig_to_verification_obligation(&mut obligation)?;
         obligation.verify_all().map(|_| ())
     }
 
-    pub fn add_tx_sig_to_verification_obligation(
+    pub fn add_sender_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
@@ -1246,7 +1246,7 @@ impl CertifiedTransaction {
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
         // Add the obligation of the sender signature verification.
-        self.add_tx_sig_to_verification_obligation(obligation)?;
+        self.add_sender_sig_to_verification_obligation(obligation)?;
 
         // Add the obligation of the authority signature verifications.
         let mut message = Vec::new();

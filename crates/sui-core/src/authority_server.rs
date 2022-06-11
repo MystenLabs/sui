@@ -246,7 +246,7 @@ impl Validator for ValidatorService {
 
         let mut obligation = VerificationObligation::default();
         transaction
-            .add_tx_sig_to_verification_obligation(&mut obligation)
+            .add_sender_sig_to_verification_obligation(&mut obligation)
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         obligation
             .verify_all()
