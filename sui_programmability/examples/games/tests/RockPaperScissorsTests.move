@@ -9,7 +9,7 @@ module Games::RockPaperScissorsTests {
     use std::hash;
 
     #[test]
-    public entry fun play_rock_paper_scissors() {
+    fun play_rock_paper_scissors() {
         // So these are our heroes.
         let the_main_guy = @0xA1C05;
         let mr_lizard = @0xA55555;

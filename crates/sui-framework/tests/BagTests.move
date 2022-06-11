@@ -20,7 +20,7 @@ module Sui::BagTests {
     }
 
     #[test]
-    public entry fun test_bag() {
+    fun test_bag() {
         let sender = @0x0;
         let scenario = &mut TestScenario::begin(&sender);
 
@@ -55,25 +55,25 @@ module Sui::BagTests {
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public entry fun test_init_with_invalid_max_capacity() {
+    fun test_init_with_invalid_max_capacity() {
         let ctx = TxContext::dummy();
         // Sui::Bag::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
         let bag = Bag::new_with_max_capacity(&mut ctx, max_capacity + 1);
-        Bag::transfer_(bag, TxContext::sender(&ctx));
+        Bag::transfer(bag, TxContext::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public entry fun test_init_with_zero() {
+    fun test_init_with_zero() {
         let ctx = TxContext::dummy();
         let bag = Bag::new_with_max_capacity(&mut ctx, 0);
-        Bag::transfer_(bag, TxContext::sender(&ctx));
+        Bag::transfer(bag, TxContext::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 776)]
-    public entry fun test_exceed_max_capacity() {
+    fun test_exceed_max_capacity() {
         let ctx = TxContext::dummy();
         let bag = Bag::new_with_max_capacity(&mut ctx, 1);
 
@@ -81,6 +81,6 @@ module Sui::BagTests {
         Bag::add(&mut bag, obj1);
         let obj2 = Object2 { id: TxContext::new_id(&mut ctx) };
         Bag::add(&mut bag, obj2);
-        Bag::transfer_(bag, TxContext::sender(&ctx));
+        Bag::transfer(bag, TxContext::sender(&ctx));
     }
 }

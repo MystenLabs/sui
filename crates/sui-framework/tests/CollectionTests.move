@@ -14,7 +14,7 @@ module Sui::CollectionTests {
     }
 
     #[test]
-    public entry fun test_collection() {
+    fun test_collection() {
         let sender = @0x0;
         let scenario = &mut TestScenario::begin(&sender);
 
@@ -47,7 +47,7 @@ module Sui::CollectionTests {
     }
 
     #[test]
-    public entry fun test_collection_bag_interaction() {
+    fun test_collection_bag_interaction() {
         let sender = @0x0;
         let scenario = &mut TestScenario::begin(&sender);
 
@@ -109,25 +109,25 @@ module Sui::CollectionTests {
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public entry fun test_init_with_invalid_max_capacity() {
+    fun test_init_with_invalid_max_capacity() {
         let ctx = TxContext::dummy();
         // Sui::Collection::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, max_capacity + 1);
-        Collection::transfer_(collection, TxContext::sender(&ctx));
+        Collection::transfer(collection, TxContext::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 520)]
-    public entry fun test_init_with_zero() {
+    fun test_init_with_zero() {
         let ctx = TxContext::dummy();
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, 0);
-        Collection::transfer_(collection, TxContext::sender(&ctx));
+        Collection::transfer(collection, TxContext::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 776)]
-    public entry fun test_exceed_max_capacity() {
+    fun test_exceed_max_capacity() {
         let ctx = TxContext::dummy();
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, 1);
 
@@ -135,6 +135,6 @@ module Sui::CollectionTests {
         Collection::add(&mut collection, obj1);
         let obj2 = Object { id: TxContext::new_id(&mut ctx) };
         Collection::add(&mut collection, obj2);
-        Collection::transfer_(collection, TxContext::sender(&ctx));
+        Collection::transfer(collection, TxContext::sender(&ctx));
     }
 }

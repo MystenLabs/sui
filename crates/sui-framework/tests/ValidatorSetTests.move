@@ -11,7 +11,7 @@ module Sui::ValidatorSetTests {
     use Sui::ValidatorSet;
 
     #[test]
-    public entry fun test_validator_set_flow() {
+    fun test_validator_set_flow() {
         // Create 4 validators, with stake 100, 200, 300, 400.
         let (ctx1, validator1) = create_validator(@0x1, 1);
         let (_ctx2, validator2) = create_validator(@0x2, 2);

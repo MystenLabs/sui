@@ -87,7 +87,7 @@ module MyFirstPackage::M1 {
     }
 
     #[test]
-    public entry fun test_sword_transactions() {
+    fun test_sword_transactions() {
         use Sui::TestScenario;
 
         // create test addresses representing users
