@@ -560,7 +560,7 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
 #[derive(Default)]
 pub struct VerificationObligation {
     lookup: PubKeyLookup,
-    pub messages: Vec<Vec<u8>>,
+    messages: Vec<Vec<u8>>,
     pub message_index: Vec<usize>,
     pub signatures: Vec<dalek::Signature>,
     pub public_keys: Vec<dalek::PublicKey>,
@@ -586,6 +586,14 @@ impl VerificationObligation {
                 Ok(public_key)
             }
         }
+    }
+
+    /// Add a new message to the list of messages to be verified.
+    /// Returns the index of the message.
+    pub fn add_message(&mut self, message: Vec<u8>) -> usize {
+        let idx = self.messages.len();
+        self.messages.push(message);
+        idx
     }
 
     pub fn verify_all(self) -> SuiResult<PubKeyLookup> {

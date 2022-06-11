@@ -487,8 +487,7 @@ impl<S> TransactionEnvelope<S> {
         let (message, signature, public_key) = self
             .tx_signature
             .get_verification_inputs(&self.data, self.data.sender)?;
-        let idx = obligation.messages.len();
-        obligation.messages.push(message);
+        let idx = obligation.add_message(message);
         let key = obligation.lookup_public_key(&public_key)?;
         obligation.public_keys.push(key);
         obligation.signatures.push(signature);
@@ -1283,8 +1282,7 @@ impl CertifiedTransaction {
         let mut message = Vec::new();
         self.data.write(&mut message);
 
-        let idx = obligation.messages.len();
-        obligation.messages.push(message);
+        let idx = obligation.add_message(message);
 
         for tuple in self.auth_sign_info.signatures.iter() {
             let (authority, signature) = tuple;

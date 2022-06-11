@@ -357,8 +357,7 @@ impl CertifiedCheckpoint {
         let mut message = Vec::new();
         self.checkpoint.write(&mut message);
 
-        let idx = obligation.messages.len();
-        obligation.messages.push(message);
+        let idx = obligation.add_message(message);
 
         for tuple in self.signatures.iter() {
             let (authority, signature) = tuple;
