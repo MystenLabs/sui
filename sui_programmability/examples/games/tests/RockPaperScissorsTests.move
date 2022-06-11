@@ -5,11 +5,11 @@
 module Games::RockPaperScissorsTests {
     use Games::RockPaperScissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
     use Sui::TestScenario::{Self};
-    use Std::Vector;
-    use Std::Hash;
+    use std::vector;
+    use std::hash;
 
     #[test]
-    public(script) fun play_rock_paper_scissors() {
+    public entry fun play_rock_paper_scissors() {
         // So these are our heroes.
         let the_main_guy = @0xA1C05;
         let mr_lizard = @0xA55555;
@@ -103,7 +103,7 @@ module Games::RockPaperScissorsTests {
 
     // Copy of the hashing function from the main module.
     fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
-        Vector::push_back(&mut salt, gesture);
-        Hash::sha2_256(salt)
+        vector::push_back(&mut salt, gesture);
+        hash::sha2_256(salt)
     }
 }

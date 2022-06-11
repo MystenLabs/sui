@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::Validator {
-    use Std::ASCII;
-    use Std::Option::{Self, Option};
-    use Std::Vector;
+    use std::ascii;
+    use std::option::{Self, Option};
+    use std::vector;
 
     use Sui::Balance::{Self, Balance};
     use Sui::Coin;
@@ -72,11 +72,11 @@ module Sui::Validator {
     ): Validator {
         assert!(
             // TODO: These constants are arbitrary, will adjust once we know more.
-            Vector::length(&net_address) <= 100 && Vector::length(&name) <= 50 && Vector::length(&pubkey_bytes) <= 128,
+            vector::length(&net_address) <= 100 && vector::length(&name) <= 50 && vector::length(&pubkey_bytes) <= 128,
             0
         );
         // Check that the name is human-readable.
-        ASCII::string(copy name);
+        ascii::string(copy name);
         Validator {
             metadata: ValidatorMetadata {
                 sui_address,
@@ -87,7 +87,7 @@ module Sui::Validator {
             },
             stake,
             delegation: 0,
-            pending_stake: Option::none(),
+            pending_stake: option::none(),
             pending_withdraw: 0,
             pending_delegation: 0,
             pending_delegation_withdraw: 0,
@@ -112,12 +112,12 @@ module Sui::Validator {
         } = self;
 
         assert!(pending_withdraw == 0, 0);
-        if (Option::is_some(&pending_stake)) {
+        if (option::is_some(&pending_stake)) {
             // pending_stake can be non-empty as it can contain the gas reward from the last epoch.
-            let pending_stake_balance = Option::extract(&mut pending_stake);
+            let pending_stake_balance = option::extract(&mut pending_stake);
             Balance::join(&mut stake, pending_stake_balance);
         };
-        Option::destroy_none(pending_stake);
+        option::destroy_none(pending_stake);
         Transfer::transfer(Coin::from_balance(stake, ctx), metadata.sui_address);
     }
 
@@ -128,14 +128,14 @@ module Sui::Validator {
         new_stake: Balance<SUI>,
     ) {
         let new_stake_value = Balance::value(&new_stake);
-        let pending_stake = if (Option::is_some(&self.pending_stake)) {
-            let pending_stake = Option::extract(&mut self.pending_stake);
+        let pending_stake = if (option::is_some(&self.pending_stake)) {
+            let pending_stake = option::extract(&mut self.pending_stake);
             Balance::join(&mut pending_stake, new_stake);
             pending_stake
         } else {
             new_stake
         };
-        Option::fill(&mut self.pending_stake, pending_stake);
+        option::fill(&mut self.pending_stake, pending_stake);
         self.metadata.next_epoch_stake = self.metadata.next_epoch_stake + new_stake_value;
     }
 
@@ -155,8 +155,8 @@ module Sui::Validator {
 
     /// Process pending stake and pending withdraws.
     public(friend) fun adjust_stake(self: &mut Validator, ctx: &mut TxContext) {
-        if (Option::is_some(&self.pending_stake)) {
-            let pending_stake = Option::extract(&mut self.pending_stake);
+        if (option::is_some(&self.pending_stake)) {
+            let pending_stake = option::extract(&mut self.pending_stake);
             Balance::join(&mut self.stake, pending_stake);
         };
         if (self.pending_withdraw > 0) {
@@ -207,8 +207,8 @@ module Sui::Validator {
     }
 
     public fun pending_stake_amount(self: &Validator): u64 {
-        if (Option::is_some(&self.pending_stake)) {
-            Balance::value(Option::borrow(&self.pending_stake))
+        if (option::is_some(&self.pending_stake)) {
+            Balance::value(option::borrow(&self.pending_stake))
         } else {
             0
         }

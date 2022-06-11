@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// A module for generating globally unique identifiers
-module Std::GUID {
-    use Std::Signer;
+module std::guid {
+    use std::signer;
 
     /// A generator for new GUIDs.
     struct Generator has key {
@@ -35,7 +35,7 @@ module Std::GUID {
     /// Generates a capability to create the privileged GUID on behalf of the signer
     // (also makes sure that the Generator is published under the signer account)
     public fun gen_create_capability(account: &signer): CreateCapability {
-        let addr = Signer::address_of(account);
+        let addr = signer::address_of(account);
         if (!exists<Generator>(addr)) {
             move_to(account, Generator { counter: 0 })
         };
@@ -55,7 +55,7 @@ module Std::GUID {
     /// Create and return a new GUID. Creates a `Generator` under `account`
     /// if it does not already have one
     public fun create(account: &signer): GUID acquires Generator {
-        let addr = Signer::address_of(account);
+        let addr = signer::address_of(account);
         if (!exists<Generator>(addr)) {
             move_to(account, Generator { counter: 0 })
         };
@@ -84,7 +84,7 @@ module Std::GUID {
         guid.id.addr
     }
 
-    /// Return the account address that created the GUID::ID
+    /// Return the account address that created the guid::ID
     public fun id_creator_address(id: &ID): address {
         id.addr
     }
@@ -94,7 +94,7 @@ module Std::GUID {
         guid.id.creation_num
     }
 
-    /// Return the creation number associated with the GUID::ID
+    /// Return the creation number associated with the guid::ID
     public fun id_creation_num(id: &ID): u64 {
         id.creation_num
     }

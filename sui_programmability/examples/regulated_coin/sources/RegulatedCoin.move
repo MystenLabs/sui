@@ -96,7 +96,7 @@ module ABC::ABC {
     use Sui::Coin::{Self, Coin, TreasuryCap};
     use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
-    use Std::Vector;
+    use std::vector;
 
     /// The ticker of ABC regulated token
     struct ABC has drop {}
@@ -134,7 +134,7 @@ module ABC::ABC {
 
         Transfer::share_object(Registry {
             id: TxContext::new_id(ctx),
-            banned: Vector::empty(),
+            banned: vector::empty(),
             swapped_amount: 0,
         });
     }
@@ -155,26 +155,26 @@ module ABC::ABC {
 
     /// Create an empty `RCoin<ABC>` instance for account `for`. TreasuryCap is passed for
     /// authentification purposes - only admin can create new accounts.
-    public(script) fun create(_: &TreasuryCap<ABC>, for: address, ctx: &mut TxContext) {
+    public entry fun create(_: &TreasuryCap<ABC>, for: address, ctx: &mut TxContext) {
         Transfer::transfer(zero(for, ctx), for)
     }
 
     /// Mint more ABC. Requires TreasuryCap for authorization, so can only be done by admins.
-    public(script) fun mint(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, _: &mut TxContext) {
+    public entry fun mint(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, _: &mut TxContext) {
         Balance::join(borrow_mut(owned), Coin::mint_balance(value, treasury))
     }
 
     /// Burn `value` amount of `RCoin<ABC>`. Requires TreasuryCap for authorization, so can only be done by admins.
     ///
     /// TODO: Make TreasuryCap a part of Balance module instead of Coin.
-    public(script) fun burn(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
+    public entry fun burn(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
         Coin::burn(Coin::withdraw(borrow_mut(owned), value, ctx), treasury);
     }
 
     /// Ban some address and forbid making any transactions from or to this address.
     /// Only owner of the TreasuryCap can perform this action.
-    public(script) fun ban(_cap: &TreasuryCap<ABC>, registry: &mut Registry, to_ban: address, _: &mut TxContext) {
-        Vector::push_back(&mut registry.banned, to_ban)
+    public entry fun ban(_cap: &TreasuryCap<ABC>, registry: &mut Registry, to_ban: address, _: &mut TxContext) {
+        vector::push_back(&mut registry.banned, to_ban)
     }
 
     // === Public: Regulated transfers ===
@@ -183,12 +183,12 @@ module ABC::ABC {
     /// `to` account for being accepted later.
     /// Fails if sender is not an creator of the `RegulatedCoin` or if any of the parties is in
     /// the ban list in Registry.
-    public(script) fun transfer(r: &Registry, coin: &mut RCoin<ABC>, value: u64, to: address, ctx: &mut TxContext) {
+    public entry fun transfer(r: &Registry, coin: &mut RCoin<ABC>, value: u64, to: address, ctx: &mut TxContext) {
         let sender = TxContext::sender(ctx);
 
         assert!(RCoin::creator(coin) == sender, ENotOwner);
-        assert!(Vector::contains(&r.banned, &to) == false, EAddressBanned);
-        assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
+        assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
+        assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         Transfer::transfer(Transfer {
             to,
@@ -202,11 +202,11 @@ module ABC::ABC {
     /// Fails if:
     /// 1. the `RegulatedCoin<ABC>.creator` does not match `Transfer.to`;
     /// 2. the address of the creator/recipient is banned;
-    public(script) fun accept_transfer(r: &Registry, coin: &mut RCoin<ABC>, transfer: Transfer, _: &mut TxContext) {
+    public entry fun accept_transfer(r: &Registry, coin: &mut RCoin<ABC>, transfer: Transfer, _: &mut TxContext) {
         let Transfer { id, balance, to } = transfer;
 
         assert!(RCoin::creator(coin) == to, ENotOwner);
-        assert!(Vector::contains(&r.banned, &to) == false, EAddressBanned);
+        assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
 
         Balance::join(borrow_mut(coin), balance);
         ID::delete(id)
@@ -220,11 +220,11 @@ module ABC::ABC {
     /// Fails if:
     /// 1. `RegulatedCoin<ABC>.creator` was banned;
     /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
-    public(script) fun take(r: &mut Registry, coin: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
+    public entry fun take(r: &mut Registry, coin: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
         let sender = TxContext::sender(ctx);
 
         assert!(RCoin::creator(coin) == sender, ENotOwner);
-        assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
+        assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
@@ -237,12 +237,12 @@ module ABC::ABC {
     /// Fails if:
     /// 1. `RegulatedCoin<ABC>.creator` was banned;
     /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
-    public(script) fun put_back(r: &mut Registry, rc_coin: &mut RCoin<ABC>, coin: Coin<ABC>, ctx: &mut TxContext) {
+    public entry fun put_back(r: &mut Registry, rc_coin: &mut RCoin<ABC>, coin: Coin<ABC>, ctx: &mut TxContext) {
         let balance = Coin::into_balance(coin);
         let sender = TxContext::sender(ctx);
 
         assert!(RCoin::creator(rc_coin) == sender, ENotOwner);
-        assert!(Vector::contains(&r.banned, &sender) == false, EAddressBanned);
+        assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         // Update swapped amount as in `swap_regulated`.
         r.swapped_amount = r.swapped_amount - Balance::value(&balance);
@@ -291,29 +291,29 @@ module ABC::Tests {
 
     // === Test handlers; this trick helps reusing scenarios ==
 
-    #[test] public(script) fun test_minting() { test_minting_(&mut scenario()) }
-    #[test] public(script) fun test_creation() { test_creation_(&mut scenario()) }
-    #[test] public(script) fun test_transfer() { test_transfer_(&mut scenario()) }
-    #[test] public(script) fun test_burn() { test_burn_(&mut scenario()) }
-    #[test] public(script) fun test_take() { test_take_(&mut scenario()) }
-    #[test] public(script) fun test_put_back() { test_put_back_(&mut scenario()) }
-    #[test] public(script) fun test_ban() { test_ban_(&mut scenario()) }
+    #[test] public entry fun test_minting() { test_minting_(&mut scenario()) }
+    #[test] public entry fun test_creation() { test_creation_(&mut scenario()) }
+    #[test] public entry fun test_transfer() { test_transfer_(&mut scenario()) }
+    #[test] public entry fun test_burn() { test_burn_(&mut scenario()) }
+    #[test] public entry fun test_take() { test_take_(&mut scenario()) }
+    #[test] public entry fun test_put_back() { test_put_back_(&mut scenario()) }
+    #[test] public entry fun test_ban() { test_ban_(&mut scenario()) }
 
     #[test]
     #[expected_failure(abort_code = 2)]
-    public(script) fun test_address_banned_fail() {
+    public entry fun test_address_banned_fail() {
         test_address_banned_fail_(&mut scenario())
     }
 
     #[test]
     #[expected_failure(abort_code = 2)]
-    public(script) fun test_different_account_fail() {
+    public entry fun test_different_account_fail() {
         test_different_account_fail_(&mut scenario())
     }
 
     #[test]
     #[expected_failure(abort_code = 1)]
-    public(script) fun test_not_owned_balance_fail() {
+    public entry fun test_not_owned_balance_fail() {
         test_not_owned_balance_fail_(&mut scenario())
     }
 
@@ -323,7 +323,7 @@ module ABC::Tests {
     fun people(): (address, address, address) { (@0xABC, @0xE05, @0xFACE) }
 
     // Admin creates a regulated coin ABC and mints 1,000,000 of it.
-    public(script) fun test_minting_(test: &mut Scenario) {
+    public entry fun test_minting_(test: &mut Scenario) {
         let (admin, _, _) = people();
 
         next_tx(test, &admin); {
@@ -344,7 +344,7 @@ module ABC::Tests {
     }
 
     // Admin creates an empty balance for the `user1`.
-    public(script) fun test_creation_(test: &mut Scenario) {
+    public entry fun test_creation_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_minting_(test);
@@ -369,7 +369,7 @@ module ABC::Tests {
 
     // Admin transfers 500,000 coins to `user1`.
     // User1 accepts the transfer and checks his balance.
-    public(script) fun test_transfer_(test: &mut Scenario) {
+    public entry fun test_transfer_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_creation_(test);
@@ -401,7 +401,7 @@ module ABC::Tests {
     }
 
     // Admin burns 100,000 of `RCoin<ABC>`
-    public(script) fun test_burn_(test: &mut Scenario) {
+    public entry fun test_burn_(test: &mut Scenario) {
         let (admin, _, _) = people();
 
         test_transfer_(test);
@@ -421,7 +421,7 @@ module ABC::Tests {
 
     // User1 cashes 100,000 of his `RegulatedCoin` into a `Coin`;
     // User1 sends Coin<ABC> it to `user2`.
-    public(script) fun test_take_(test: &mut Scenario) {
+    public entry fun test_take_(test: &mut Scenario) {
         let (_, user1, user2) = people();
 
         test_transfer_(test);
@@ -448,7 +448,7 @@ module ABC::Tests {
 
     // User2 sends his `Coin<ABC>` to `admin`.
     // Admin puts this coin to his RegulatedCoin balance.
-    public(script) fun test_put_back_(test: &mut Scenario) {
+    public entry fun test_put_back_(test: &mut Scenario) {
         let (admin, _, user2) = people();
 
         test_take_(test);
@@ -472,7 +472,7 @@ module ABC::Tests {
     }
 
     // Admin bans user1 by adding his address to the registry.
-    public(script) fun test_ban_(test: &mut Scenario) {
+    public entry fun test_ban_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_transfer_(test);
@@ -490,7 +490,7 @@ module ABC::Tests {
     }
 
     // Banned User1 fails to create a Transfer.
-    public(script) fun test_address_banned_fail_(test: &mut Scenario) {
+    public entry fun test_address_banned_fail_(test: &mut Scenario) {
         let (_, user1, user2) = people();
 
         test_ban_(test);
@@ -508,7 +508,7 @@ module ABC::Tests {
     }
 
     // User1 is banned. Admin tries to make a Transfer to User1 and fails - user banned.
-    public(script) fun test_different_account_fail_(test: &mut Scenario) {
+    public entry fun test_different_account_fail_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_ban_(test);
@@ -527,7 +527,7 @@ module ABC::Tests {
 
     // User1 is banned and transfers the whole balance to User2.
     // User2 tries to use this balance and fails.
-    public(script) fun test_not_owned_balance_fail_(test: &mut Scenario) {
+    public entry fun test_not_owned_balance_fail_(test: &mut Scenario) {
         let (_, user1, user2) = people();
 
         test_ban_(test);

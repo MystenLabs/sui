@@ -9,7 +9,7 @@
 /// # Overview
 ///
 /// A capability is a unforgeable token which testifies that a signer has authorized a certain operation.
-/// The token is valid during the transaction where it is obtained. Since the type `Capability::Cap` has
+/// The token is valid during the transaction where it is obtained. Since the type `capability::Cap` has
 /// no ability to be stored in global memory, capabilities cannot leak out of a transaction. For every function
 /// called within a transaction which has a capability as a parameter, it is guaranteed that the capability
 /// has been obtained via a proper signer-based authorization step previously in the transaction's execution.
@@ -21,7 +21,7 @@
 ///
 /// ```
 /// module Pkg::Feature {
-///   use Std::Capability::Cap;
+///   use std::capability::Cap;
 ///
 ///   /// A type tag used in Cap<Feature>. Only this module can create an instance,
 ///   /// and there is no public function other than Self::acquire which returns a value of this type.
@@ -34,13 +34,13 @@
 ///     // One needs to provide a witness for being the owner of Feature
 ///     // in the 2nd parameter.
 ///     <<additional conditions allowing to initialize this capability>>
-///     Capability::create<Feature>(s, &Feature{});
+///     capability::create<Feature>(s, &Feature{});
 ///   }
 ///
 ///   /// Acquires the capability to work with this feature.
 ///   public fun acquire(s: &signer): Cap<Feature> {
 ///     <<additional conditions allowing to acquire this capability>>
-///     Capability::acquire<Feature>(s, &Feature{});
+///     capability::acquire<Feature>(s, &Feature{});
 ///   }
 ///
 ///   /// Does something related to the feature. The caller must pass a Cap<Feature>.
@@ -61,23 +61,23 @@
 /// all together for a capability, one can use the following invariant:
 ///
 /// ```
-///   invariant forall a: address where Capability::spec_has_cap<Feature>(a):
-///               len(Capability::spec_delegates<Feature>(a)) == 0;
+///   invariant forall a: address where capability::spec_has_cap<Feature>(a):
+///               len(capability::spec_delegates<Feature>(a)) == 0;
 /// ```
 ///
 /// Similarly, the following invariant would enforce that delegates, if existent, must satisfy a certain
 /// predicate:
 ///
 /// ```
-///   invariant forall a: address where Capability::spec_has_cap<Feature>(a):
-///               forall d in Capability::spec_delegates<Feature>(a):
+///   invariant forall a: address where capability::spec_has_cap<Feature>(a):
+///               forall d in capability::spec_delegates<Feature>(a):
 ///                  is_valid_delegate_for_feature(d);
 /// ```
 ///
-module Std::Capability {
-    use Std::Errors;
-    use Std::Signer;
-    use Std::Vector;
+module std::capability {
+    use std::errors;
+    use std::signer;
+    use std::vector;
 
     const ECAP: u64 = 0;
     const EDELEGATE: u64 = 1;
@@ -106,9 +106,9 @@ module Std::Capability {
     /// Creates a new capability class, owned by the passed signer. A caller must pass a witness that
     /// they own the `Feature` type parameter.
     public fun create<Feature>(owner: &signer, _feature_witness: &Feature) {
-        let addr = Signer::address_of(owner);
-        assert!(!exists<CapState<Feature>>(addr), Errors::already_published(ECAP));
-        move_to<CapState<Feature>>(owner, CapState{ delegates: Vector::empty() });
+        let addr = signer::address_of(owner);
+        assert!(!exists<CapState<Feature>>(addr), errors::already_published(ECAP));
+        move_to<CapState<Feature>>(owner, CapState{ delegates: vector::empty() });
     }
 
     /// Acquires a capability token. Only the owner of the capability class, or an authorized delegate,
@@ -129,16 +129,16 @@ module Std::Capability {
     /// Helper to validate an acquire. Returns the root address of the capability.
     fun validate_acquire<Feature>(requester: &signer): address
     acquires CapState, CapDelegateState {
-        let addr = Signer::address_of(requester);
+        let addr = signer::address_of(requester);
         if (exists<CapDelegateState<Feature>>(addr)) {
             let root_addr = borrow_global<CapDelegateState<Feature>>(addr).root;
             // double check that requester is actually registered as a delegate
-            assert!(exists<CapState<Feature>>(root_addr), Errors::invalid_state(EDELEGATE));
-            assert!(Vector::contains(&borrow_global<CapState<Feature>>(root_addr).delegates, &addr),
-                   Errors::invalid_state(EDELEGATE));
+            assert!(exists<CapState<Feature>>(root_addr), errors::invalid_state(EDELEGATE));
+            assert!(vector::contains(&borrow_global<CapState<Feature>>(root_addr).delegates, &addr),
+                   errors::invalid_state(EDELEGATE));
             root_addr
         } else {
-            assert!(exists<CapState<Feature>>(addr), Errors::not_published(ECAP));
+            assert!(exists<CapState<Feature>>(addr), errors::not_published(ECAP));
             addr
         }
     }
@@ -159,7 +159,7 @@ module Std::Capability {
     // TODO: explore whether this should be idempotent like now or abort
     public fun delegate<Feature>(cap: Cap<Feature>, _feature_witness: &Feature, to: &signer)
     acquires CapState {
-        let addr = Signer::address_of(to);
+        let addr = signer::address_of(to);
         if (exists<CapDelegateState<Feature>>(addr)) return;
         move_to(to, CapDelegateState<Feature>{root: cap.root});
         add_element(&mut borrow_global_mut<CapState<Feature>>(cap.root).delegates, addr);
@@ -177,16 +177,16 @@ module Std::Capability {
 
     /// Helper to remove an element from a vector.
     fun remove_element<E: drop>(v: &mut vector<E>, x: &E) {
-        let (found, index) = Vector::index_of(v, x);
+        let (found, index) = vector::index_of(v, x);
         if (found) {
-            Vector::remove(v, index);
+            vector::remove(v, index);
         }
     }
 
     /// Helper to add an element to a vector.
     fun add_element<E: drop>(v: &mut vector<E>, x: E) {
-        if (!Vector::contains(v, &x)) {
-            Vector::push_back(v, x)
+        if (!vector::contains(v, &x)) {
+            vector::push_back(v, x)
         }
     }
 

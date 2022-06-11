@@ -11,7 +11,7 @@ module Examples::Hero {
     use Sui::Math;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
-    use Std::Option::{Self, Option};
+    use std::option::{Self, Option};
 
     /// Our hero!
     struct Hero has key, store {
@@ -114,7 +114,7 @@ module Examples::Hero {
 
     /// Slay the `boar` with the `hero`'s sword, get experience.
     /// Aborts if the hero has 0 HP or is not strong enough to slay the boar
-    public(script) fun slay(hero: &mut Hero, boar: Boar, ctx: &mut TxContext) {
+    public entry fun slay(hero: &mut Hero, boar: Boar, ctx: &mut TxContext) {
         let Boar { id: boar_id, strength: boar_strength, hp } = boar;
         let hero_strength = hero_strength(hero);
         let boar_hp = hp;
@@ -134,8 +134,8 @@ module Examples::Hero {
         // hero gains experience proportional to the boar, sword grows in
         // strength by one (if hero is using a sword)
         hero.experience = hero.experience + hp;
-        if (Option::is_some(&hero.sword)) {
-            level_up_sword(Option::borrow_mut(&mut hero.sword), 1)
+        if (option::is_some(&hero.sword)) {
+            level_up_sword(option::borrow_mut(&mut hero.sword), 1)
         };
         // let the world know about the hero's triumph by emitting an event!
         Event::emit(BoarSlainEvent {
@@ -154,8 +154,8 @@ module Examples::Hero {
             return 0
         };
 
-        let sword_strength = if (Option::is_some(&hero.sword)) {
-            sword_strength(Option::borrow(&hero.sword))
+        let sword_strength = if (option::is_some(&hero.sword)) {
+            sword_strength(option::borrow(&hero.sword))
         } else {
             // hero can fight without a sword, but will not be very strong
             0
@@ -187,14 +187,14 @@ module Examples::Hero {
     /// Add `new_sword` to the hero's inventory and return the old sword
     /// (if any)
     public fun equip_sword(hero: &mut Hero, new_sword: Sword): Option<Sword> {
-        Option::swap_or_fill(&mut hero.sword, new_sword)
+        option::swap_or_fill(&mut hero.sword, new_sword)
     }
 
     /// Disarm the hero by returning their sword.
     /// Aborts if the hero does not have a sword.
     public fun remove_sword(hero: &mut Hero): Sword {
-        assert!(Option::is_some(&hero.sword), ENO_SWORD);
-        Option::extract(&mut hero.sword)
+        assert!(option::is_some(&hero.sword), ENO_SWORD);
+        option::extract(&mut hero.sword)
     }
 
     // --- Object creation ---
@@ -222,7 +222,7 @@ module Examples::Hero {
         }
     }
 
-    public(script) fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
+    public entry fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
         Transfer::transfer(hero, TxContext::sender(ctx))
@@ -235,7 +235,7 @@ module Examples::Hero {
             id: TxContext::new_id(ctx),
             hp: 100,
             experience: 0,
-            sword: Option::some(sword),
+            sword: option::some(sword),
         }
     }
 
@@ -283,7 +283,7 @@ module Examples::Hero {
     public fun delete_hero_for_testing(hero: Hero) {
         let Hero { id, hp: _, experience: _, sword } = hero;
         ID::delete(id);
-        let sword = Option::destroy_some(sword);
+        let sword = option::destroy_some(sword);
         let Sword { id, magic: _, strength: _ } = sword;
         ID::delete(id)
     }

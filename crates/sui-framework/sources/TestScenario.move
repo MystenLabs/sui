@@ -5,8 +5,8 @@
 module Sui::TestScenario {
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::TxContext::{Self, TxContext};
-    use Std::Option::{Self, Option};
-    use Std::Vector;
+    use std::option::{Self, Option};
+    use std::vector;
 
     /// Requested a transfer or user-defined event on an invalid transaction index
     const EInvalidTxIndex: u64 = 1;
@@ -82,7 +82,7 @@ module Sui::TestScenario {
     public fun begin(sender: &address): Scenario {
         Scenario {
             ctx: TxContext::new_from_address(*sender, 0),
-            removed: Vector::empty(),
+            removed: vector::empty(),
             event_start_indexes: vector[0],
         }
     }
@@ -99,17 +99,17 @@ module Sui::TestScenario {
         // - it does not appear in an event during the current transaction.
         emit_wrapped_object_events(last_tx_start_index, &scenario.removed);
         // reset `removed` for the next tx
-        scenario.removed = Vector::empty();
+        scenario.removed = vector::empty();
 
         // start index for the next tx is the end index for the current one
         let new_total_events = num_events();
         let tx_event_count = new_total_events - old_total_events;
         let event_end_index = last_tx_start_index + tx_event_count;
-        Vector::push_back(&mut scenario.event_start_indexes, event_end_index);
+        vector::push_back(&mut scenario.event_start_indexes, event_end_index);
 
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
-        let new_tx_digest_seed = (Vector::length(&scenario.event_start_indexes) as u8);
+        let new_tx_digest_seed = (vector::length(&scenario.event_start_indexes) as u8);
         scenario.ctx = TxContext::new_from_address(*sender, new_tx_digest_seed);
     }
 
@@ -197,13 +197,13 @@ module Sui::TestScenario {
         );
         let object_opt: Option<T> = find_object_by_id_in_inventory(inventory, &id);
 
-        let objects = if (Option::is_some(&object_opt)) {
-            let object = Option::extract(&mut object_opt);
-            Vector::singleton(object)
+        let objects = if (option::is_some(&object_opt)) {
+            let object = option::extract(&mut object_opt);
+            vector::singleton(object)
         } else {
             vector[]
         };
-        Option::destroy_none(object_opt);
+        option::destroy_none(object_opt);
         remove_unique_object_from_inventory(scenario, objects)
     }
 
@@ -211,7 +211,7 @@ module Sui::TestScenario {
     /// It provides a way to check without triggering assertions.
     public fun can_take_owned_by_id<T: key>(scenario: &Scenario, id: ID): bool {
         // Check that the object has not been removed from the inventory.
-        if (Vector::contains(&scenario.removed, &id)) {
+        if (vector::contains(&scenario.removed, &id)) {
             return false
         };
         let sender = sender(scenario);
@@ -221,7 +221,7 @@ module Sui::TestScenario {
         );
         // And the object with the specified ID is indeed one of the owned.
         let object_opt: Option<T> = find_object_by_id_in_inventory(objects, &id);
-        let res =  Option::is_some(&object_opt);
+        let res =  option::is_some(&object_opt);
         drop_object_for_testing(object_opt);
         res
     }
@@ -238,13 +238,13 @@ module Sui::TestScenario {
             last_tx_start_index(scenario),
         );
         let child_object_opt = find_object_by_id_in_inventory(objects, &child_id);
-        let child_objects = if (Option::is_some(&child_object_opt)) {
-            let child_object = Option::extract(&mut child_object_opt);
-            Vector::singleton(child_object)
+        let child_objects = if (option::is_some(&child_object_opt)) {
+            let child_object = option::extract(&mut child_object_opt);
+            vector::singleton(child_object)
         } else {
             vector[]
         };
-        Option::destroy_none(child_object_opt);
+        option::destroy_none(child_object_opt);
         remove_unique_object_from_inventory(scenario, child_objects)
     }
 
@@ -256,10 +256,10 @@ module Sui::TestScenario {
         let id = ID::id(&t);
         let removed = &mut scenario.removed;
         // TODO: add Vector::remove_element to Std that does this 3-liner
-        let (is_mem, idx) = Vector::index_of(removed, id);
+        let (is_mem, idx) = vector::index_of(removed, id);
         // can't return an object we haven't removed
         assert!(is_mem, ECantReturnObject);
-        Vector::remove(removed, idx);
+        vector::remove(removed, idx);
 
         // Update the object content in the inventory.
         // Because the events are the source of truth for all object values in the inventory,
@@ -288,10 +288,10 @@ module Sui::TestScenario {
         );
         // Check that there is one unique such object, and it has not
         // yet been removed from the inventory.
-        let res = Vector::length(&objects) == 1;
+        let res = vector::length(&objects) == 1;
         if (res) {
-            let id = ID::id(Vector::borrow(&objects, 0));
-            res = !Vector::contains(&scenario.removed, id);
+            let id = ID::id(vector::borrow(&objects, 0));
+            res = !vector::contains(&scenario.removed, id);
         };
         drop_object_for_testing(objects);
         res
@@ -315,15 +315,15 @@ module Sui::TestScenario {
     /// Return the number of concluded transactions in this scenario.
     /// This does not include the current transaction--e.g., this will return 0 if `next_tx` has never been called
     public fun num_concluded_txes(scenario: &Scenario): u64 {
-        Vector::length(&scenario.event_start_indexes) - 1
+        vector::length(&scenario.event_start_indexes) - 1
     }
 
     /// Return the index in the global transaction log where the events emitted by the `tx_idx`th transaction begin
     fun tx_start_index(scenario: &Scenario, tx_idx: u64): u64 {
         let idxs = &scenario.event_start_indexes;
-        let len = Vector::length(idxs);
+        let len = vector::length(idxs);
         assert!(tx_idx < len, EInvalidTxIndex);
-        *Vector::borrow(idxs, tx_idx)
+        *vector::borrow(idxs, tx_idx)
     }
 
     /// Return the tx start index of the current transaction. This is an index into the global event log
@@ -331,19 +331,19 @@ module Sui::TestScenario {
     fun last_tx_start_index(scenario: &Scenario): u64 {
         let idxs = &scenario.event_start_indexes;
         // Safe because because `event_start_indexes` is always non-empty
-        *Vector::borrow(idxs, Vector::length(idxs) - 1)
+        *vector::borrow(idxs, vector::length(idxs) - 1)
     }
 
     fun remove_unique_object_from_inventory<T: key>(scenario: &mut Scenario, inventory: vector<T>): T {
-        let objects_len = Vector::length(&inventory);
+        let objects_len = vector::length(&inventory);
         if (objects_len == 1) {
             // found a unique object. ensure that it hasn't already been removed, then return it
-            let t = Vector::pop_back(&mut inventory);
+            let t = vector::pop_back(&mut inventory);
             let id = ID::id(&t);
-            Vector::destroy_empty(inventory);
+            vector::destroy_empty(inventory);
 
-            assert!(!Vector::contains(&scenario.removed, id), EAlreadyRemovedObject);
-            Vector::push_back(&mut scenario.removed, *id);
+            assert!(!vector::contains(&scenario.removed, id), EAlreadyRemovedObject);
+            vector::push_back(&mut scenario.removed, *id);
             t
         } else if (objects_len == 0) {
             abort(EEmptyInventory)
@@ -353,19 +353,19 @@ module Sui::TestScenario {
     }
 
     fun find_object_by_id_in_inventory<T: key>(inventory: vector<T>, id: &ID): Option<T> {
-        let object_opt = Option::none();
-        while (!Vector::is_empty(&inventory)) {
-            let element = Vector::pop_back(&mut inventory);
+        let object_opt = option::none();
+        while (!vector::is_empty(&inventory)) {
+            let element = vector::pop_back(&mut inventory);
             if (ID::id(&element) == id) {
                 // Within the same test scenario, there is no way to
                 // create two objects with the same ID. So this should
                 // be unique.
-                Option::fill(&mut object_opt, element);
+                option::fill(&mut object_opt, element);
             } else {
                 drop_object_for_testing(element);
             }
         };
-        Vector::destroy_empty(inventory);
+        vector::destroy_empty(inventory);
 
         object_opt
     }

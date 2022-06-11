@@ -17,11 +17,11 @@ pub fn build_sui_framework_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModu
 
 pub fn build_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     let denylist = vec![
-        ident_str!("Capability").to_owned(),
-        ident_str!("Event").to_owned(),
-        ident_str!("GUID").to_owned(),
+        ident_str!("capability").to_owned(),
+        ident_str!("event").to_owned(),
+        ident_str!("guid").to_owned(),
         #[cfg(not(test))]
-        ident_str!("Debug").to_owned(),
+        ident_str!("debug").to_owned(),
     ];
     let modules: Vec<CompiledModule> = build_framework(lib_dir)?
         .into_iter()

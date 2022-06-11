@@ -4,7 +4,7 @@
 //# publish
 module 0x0.M {
     import 0x2.TxContext;
-    public(script) t() {
+    public entry t() {
         label l0:
         abort 0;
     }
@@ -16,7 +16,7 @@ module 0x0.M {
     import 0x2.TxContext;
     import 0x2.ID;
     struct Obj has key { id: ID.VersionedID }
-    public(script) t(flag: bool, arg: &mut Self.Obj) {
+    public entry t(flag: bool, arg: &mut Self.Obj) {
         label l0:
         abort 0;
     }

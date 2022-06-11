@@ -12,9 +12,9 @@
 /// access and operate on each individual object.
 /// In contrast to `Bag`, `Collection` requires all objects have the same type.
 module Sui::Collection {
-    use Std::Errors;
-    use Std::Option::{Self, Option};
-    use Std::Vector::Self;
+    use std::errors;
+    use std::option::{Self, Option};
+    use std::vector::Self;
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer::{Self, ChildRef};
     use Sui::TxContext::{Self, TxContext};
@@ -59,23 +59,23 @@ module Sui::Collection {
     ): Collection<T> {
         assert!(
             max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            Errors::limit_exceeded(EInvalidMaxCapacity)
+            errors::limit_exceeded(EInvalidMaxCapacity)
         );
         Collection {
             id: TxContext::new_id(ctx),
-            objects: Vector::empty(),
+            objects: vector::empty(),
             max_capacity,
         }
     }
 
     /// Create a new Collection and transfer it to the signer.
-    public(script) fun create<T: key + store>(ctx: &mut TxContext) {
+    public entry fun create<T: key + store>(ctx: &mut TxContext) {
         Transfer::transfer(new<T>(ctx), TxContext::sender(ctx))
     }
 
     /// Returns the size of the collection.
     public fun size<T: key + store>(c: &Collection<T>): u64 {
-        Vector::length(&c.objects)
+        vector::length(&c.objects)
     }
 
     /// Add an object to the collection.
@@ -89,24 +89,24 @@ module Sui::Collection {
     ) {
         assert!(
             size(c) + 1 <= c.max_capacity,
-            Errors::limit_exceeded(EMaxCapacityExceeded)
+            errors::limit_exceeded(EMaxCapacityExceeded)
         );
         let id = ID::id(&object);
         assert!(!contains(c, id), EObjectDoubleAdd);
-        let child_ref = if (Option::is_none(&old_child_ref)) {
+        let child_ref = if (option::is_none(&old_child_ref)) {
             Transfer::transfer_to_object(object, c)
         } else {
-            let old_child_ref = Option::extract(&mut old_child_ref);
+            let old_child_ref = option::extract(&mut old_child_ref);
             Transfer::transfer_child_to_object(object, old_child_ref, c)
         };
-        Vector::push_back(&mut c.objects, child_ref);
-        Option::destroy_none(old_child_ref);
+        vector::push_back(&mut c.objects, child_ref);
+        option::destroy_none(old_child_ref);
     }
 
     /// Add an object to the collection.
     /// Abort if the object is already in the collection.
     public fun add<T: key + store>(c: &mut Collection<T>, object: T) {
-        add_impl(c, object, Option::none())
+        add_impl(c, object, option::none())
     }
 
     /// Transfer an object that was owned by another object to the collection.
@@ -117,26 +117,26 @@ module Sui::Collection {
         object: T,
         old_child_ref: ChildRef<T>,
     ) {
-        add_impl(c, object, Option::some(old_child_ref))
+        add_impl(c, object, option::some(old_child_ref))
     }
 
     /// Check whether the collection contains a specific object,
     /// identified by the object id in bytes.
     public fun contains<T: key + store>(c: &Collection<T>, id: &ID): bool {
-        Option::is_some(&find(c, id))
+        option::is_some(&find(c, id))
     }
 
     /// Remove and return the object from the collection.
     /// Abort if the object is not found.
     public fun remove<T: key + store>(c: &mut Collection<T>, object: T): (T, ChildRef<T>) {
         let idx = find(c, ID::id(&object));
-        assert!(Option::is_some(&idx), EObjectNotFound);
-        let child_ref = Vector::remove(&mut c.objects, *Option::borrow(&idx));
+        assert!(option::is_some(&idx), EObjectNotFound);
+        let child_ref = vector::remove(&mut c.objects, *option::borrow(&idx));
         (object, child_ref)
     }
 
     /// Remove the object from the collection, and then transfer it to the signer.
-    public(script) fun remove_and_take<T: key + store>(
+    public entry fun remove_and_take<T: key + store>(
         c: &mut Collection<T>,
         object: T,
         ctx: &mut TxContext,
@@ -146,7 +146,7 @@ module Sui::Collection {
     }
 
     /// Transfer the entire collection to `recipient`.
-    public(script) fun transfer_<T: key + store>(c: Collection<T>, recipient: address) {
+    public entry fun transfer_<T: key + store>(c: Collection<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -168,12 +168,12 @@ module Sui::Collection {
         let i = 0;
         let len = size(c);
         while (i < len) {
-            let child_ref = Vector::borrow(&c.objects, i);
+            let child_ref = vector::borrow(&c.objects, i);
             if (Transfer::is_child_unsafe(child_ref,  id)) {
-                return Option::some(i)
+                return option::some(i)
             };
             i = i + 1;
         };
-        Option::none()
+        option::none()
     }
 }

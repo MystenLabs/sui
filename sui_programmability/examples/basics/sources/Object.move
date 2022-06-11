@@ -85,7 +85,7 @@ module Basics::Object {
     /// input objects + created objects + emitted events, increments the
     /// sequence number each object, creates a hash that commits to the
     /// outputs, etc.
-    public(script) fun main(
+    public entry fun main(
         to_read: &Object,
         to_write: &mut Object,
         to_consume: Object,

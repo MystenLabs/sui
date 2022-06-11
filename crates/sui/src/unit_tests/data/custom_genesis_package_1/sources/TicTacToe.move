@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Examples::TicTacToe {
-    use Std::Option::{Self, Option};
-    use Std::Vector;
+    use std::option::{Self, Option};
+    use std::vector;
 
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Event;
@@ -59,15 +59,15 @@ module Examples::TicTacToe {
     }
 
     /// `x_address` and `o_address` are the account address of the two players.
-    public(script) fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
+    public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = TxContext::new_id(ctx);
         let game_id = *ID::inner(&id);
         let gameboard = vector[
-            vector[Option::none(), Option::none(), Option::none()],
-            vector[Option::none(), Option::none(), Option::none()],
-            vector[Option::none(), Option::none(), Option::none()],
+            vector[option::none(), option::none(), option::none()],
+            vector[option::none(), option::none(), option::none()],
+            vector[option::none(), option::none(), option::none()],
         ];
         let game = TicTacToe {
             id,
@@ -94,7 +94,7 @@ module Examples::TicTacToe {
 
     /// Generate a new mark intended for location (row, col).
     /// This new mark is not yet placed, just transferred to the game.
-    public(script) fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext) {
+    public entry fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext) {
         if (row > 2 || col > 2) {
             abort INVALID_LOCATION
         };
@@ -108,7 +108,7 @@ module Examples::TicTacToe {
         Transfer::transfer(mark, game_address);
     }
 
-    public(script) fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
+    public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
         // If we are placing the mark at the wrong turn, or if game has ended,
         // destroy the mark.
         let addr = get_cur_turn_address(game);
@@ -117,13 +117,13 @@ module Examples::TicTacToe {
             return
         };
         let cell = get_cell_mut_ref(game, mark.row, mark.col);
-        if (Option::is_some(cell)) {
+        if (option::is_some(cell)) {
             // There is already a mark in the desired location.
             // Destroy the mark.
             delete_mark(mark);
             return
         };
-        Option::fill(cell, mark);
+        option::fill(cell, mark);
         update_winner(game);
         game.cur_turn = game.cur_turn + 1;
 
@@ -138,30 +138,30 @@ module Examples::TicTacToe {
         }
     }
 
-    public(script) fun delete_game(game: TicTacToe) {
+    public entry fun delete_game(game: TicTacToe) {
         let TicTacToe { id, gameboard, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
-        while (Vector::length(&gameboard) > 0) {
-            let row = Vector::pop_back(&mut gameboard);
-            while (Vector::length(&row) > 0) {
-                let element = Vector::pop_back(&mut row);
-                if (Option::is_some(&element)) {
-                    let mark = Option::extract(&mut element);
+        while (vector::length(&gameboard) > 0) {
+            let row = vector::pop_back(&mut gameboard);
+            while (vector::length(&row) > 0) {
+                let element = vector::pop_back(&mut row);
+                if (option::is_some(&element)) {
+                    let mark = option::extract(&mut element);
                     delete_mark(mark);
                 };
-                Option::destroy_none(element);
+                option::destroy_none(element);
             };
-            Vector::destroy_empty(row);
+            vector::destroy_empty(row);
         };
-        Vector::destroy_empty(gameboard);
+        vector::destroy_empty(gameboard);
         ID::delete(id);
     }
 
-    public(script) fun delete_trophy(trophy: Trophy) {
+    public entry fun delete_trophy(trophy: Trophy) {
         let Trophy { id } = trophy;
         ID::delete(id);
     }
 
-    public(script) fun delete_cap(cap: MarkMintCap) {
+    public entry fun delete_cap(cap: MarkMintCap) {
         let MarkMintCap { id, game_id: _, remaining_supply: _ } = cap;
         ID::delete(id);
     }
@@ -192,11 +192,11 @@ module Examples::TicTacToe {
     }
 
     fun get_cell_ref(game: &TicTacToe, row: u64, col: u64): &Option<Mark> {
-        Vector::borrow(Vector::borrow(&game.gameboard, row), col)
+        vector::borrow(vector::borrow(&game.gameboard, row), col)
     }
 
     fun get_cell_mut_ref(game: &mut TicTacToe, row: u64, col: u64): &mut Option<Mark> {
-        Vector::borrow_mut(Vector::borrow_mut(&mut game.gameboard, row), col)
+        vector::borrow_mut(vector::borrow_mut(&mut game.gameboard, row), col)
     }
 
     fun update_winner(game: &mut TicTacToe) {
@@ -225,8 +225,8 @@ module Examples::TicTacToe {
             return
         };
         let result = check_all_equal(game, row1, col1, row2, col2, row3, col3);
-        if (Option::is_some(&result)) {
-            let winner = Option::extract(&mut result);
+        if (option::is_some(&result)) {
+            let winner = option::extract(&mut result);
             game.game_status = if (&winner == &game.x_address) {
                 X_WIN
             } else {
@@ -239,15 +239,15 @@ module Examples::TicTacToe {
         let cell1 = get_cell_ref(game, row1, col1);
         let cell2 = get_cell_ref(game, row2, col2);
         let cell3 = get_cell_ref(game, row3, col3);
-        if (Option::is_some(cell1) && Option::is_some(cell2) && Option::is_some(cell3)) {
-            let cell1_player = *&Option::borrow(cell1).player;
-            let cell2_player = *&Option::borrow(cell2).player;
-            let cell3_player = *&Option::borrow(cell3).player;
+        if (option::is_some(cell1) && option::is_some(cell2) && option::is_some(cell3)) {
+            let cell1_player = *&option::borrow(cell1).player;
+            let cell2_player = *&option::borrow(cell2).player;
+            let cell3_player = *&option::borrow(cell3).player;
             if (&cell1_player == &cell2_player && &cell1_player == &cell3_player) {
-                return Option::some(cell1_player)
+                return option::some(cell1_player)
             };
         };
-        Option::none()
+        option::none()
     }
 
     fun delete_mark(mark: Mark) {

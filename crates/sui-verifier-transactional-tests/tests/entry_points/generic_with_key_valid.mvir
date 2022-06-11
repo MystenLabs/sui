@@ -6,9 +6,9 @@
 //# publish
 module 0x0.M {
     import 0x2.TxContext;
-    import 0x1.Option;
+    import 0x1.option;
 
-    public(script) yes<T:key>(l0: T, l1: &T, l2: &mut T, ctx: &mut TxContext.TxContext) {
+    public entry yes<T:key>(l0: T, l1: &T, l2: &mut T, ctx: &mut TxContext.TxContext) {
         label l0:
         abort 0;
     }

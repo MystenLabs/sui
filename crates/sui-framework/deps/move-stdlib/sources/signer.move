@@ -1,12 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Std::Signer {
+module std::signer {
     // Borrows the address of the signer
-    // Conceptually, you can think of the `signer` as being a struct wrapper around an
+    // Conceptually, you can think of the `signer` as being a struct wrapper arround an
     // address
     // ```
-    // struct Signer has drop { addr: address }
+    // struct signer has drop { addr: address }
     // ```
     // `borrow_address` borrows this inner field
     native public fun borrow_address(s: &signer): &address;

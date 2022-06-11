@@ -3,7 +3,7 @@
 
 #[test_only]
 module NFTs::AuctionTests {
-    use Std::Vector;
+    use std::vector;
 
     use Sui::Coin::{Self, Coin};
     use Sui::SUI::SUI;
@@ -27,15 +27,15 @@ module NFTs::AuctionTests {
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
-        while (!Vector::is_empty(&bidders)) {
-            let bidder = Vector::pop_back(&mut bidders);
+        while (!vector::is_empty(&bidders)) {
+            let bidder = vector::pop_back(&mut bidders);
             let coin = Coin::mint_for_testing(100, ctx);
             Coin::transfer<SUI>(coin, bidder);
         };
     }
 
     #[test]
-    public(script) fun simple_auction_test() {
+    public entry fun simple_auction_test() {
         let auctioneer = @0xABBA;
         let owner = @0xACE;
         let bidder1 = @0xFACE;
@@ -44,9 +44,9 @@ module NFTs::AuctionTests {
 
         let scenario = &mut TestScenario::begin(&auctioneer);
         {
-            let bidders = Vector::empty();
-            Vector::push_back(&mut bidders, bidder1);
-            Vector::push_back(&mut bidders, bidder2);
+            let bidders = vector::empty();
+            vector::push_back(&mut bidders, bidder1);
+            vector::push_back(&mut bidders, bidder2);
             init(TestScenario::ctx(scenario), bidders);
         };
 
