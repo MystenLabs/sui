@@ -56,6 +56,14 @@ where
     follower_process(active_authority, degree, GossipDigestHandler::new()).await;
 }
 
+pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    // TODO: special case follower for node sync.
+    follower_process(active_authority, degree, GossipDigestHandler::new()).await;
+}
+
 async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
     active_authority: &ActiveAuthority<A>,
     degree: usize,
