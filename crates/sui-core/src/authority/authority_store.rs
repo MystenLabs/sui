@@ -15,6 +15,7 @@ use sui_storage::{
     write_ahead_log::DBWriteAheadLog,
     LockService,
 };
+use tokio::sync::Notify;
 
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
@@ -94,6 +95,8 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     pending_execution: DBMap<InternalSequenceNumber, TransactionDigest>,
     // The next sequence number.
     next_pending_seq: AtomicU64,
+    // A notifier for new pending certificates
+    pending_notifier: Arc<Notify>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -225,6 +228,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             certificates,
             pending_execution,
             next_pending_seq,
+            pending_notifier: Arc::new(Notify::new()),
             parent_sync,
             effects,
             sequenced,
@@ -234,6 +238,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             last_consensus_index,
             epochs,
         }
+    }
+
+    /// Await a new pending certificate to be added
+    pub async fn wait_for_new_pending(&self) {
+        self.pending_notifier.notified().await
     }
 
     /// Returns the TransactionEffects if we have an effects structure for this transaction digest
@@ -311,6 +320,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             certs.iter().map(|(digest, cert)| (digest, cert)),
         )?;
         batch.write()?;
+
+        // now notify there is a pending certificate
+        // we notify all processes waiting, not just one.
+        self.pending_notifier.notify_waiters();
 
         Ok(())
     }
