@@ -322,10 +322,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         batch.write()?;
 
         // now notify there is a pending certificate
-        // we notify all processes waiting, not just one.
-        self.pending_notifier.notify_waiters();
+        self.pending_notifier.notify_one();
 
         Ok(())
+    }
+
+    /// Get all stored certificate digests
+    pub fn get_pending_certificates(&self) -> SuiResult<Vec<(InternalSequenceNumber, TransactionDigest)>> {
+        Ok(self.pending_execution.iter().collect())
     }
 
     /// Remove entries from pending certificates
