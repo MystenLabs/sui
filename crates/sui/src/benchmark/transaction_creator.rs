@@ -56,8 +56,8 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
 /// This builds, signs a cert
 fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTransaction {
     // Make certificate
-    let mut certificate = CertifiedTransaction::new(tx.clone());
     let committee = network_config.committee();
+    let mut certificate = CertifiedTransaction::new(committee.epoch(), tx.clone());
     certificate.auth_sign_info.epoch = committee.epoch();
     // TODO: Why iterating from 0 to quorum_threshold??
     for i in 0..committee.quorum_threshold() {
