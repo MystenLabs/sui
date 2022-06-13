@@ -1,3 +1,7 @@
+.txresults {
+    @apply font-mono ml-[5vw] w-[90%];
+}
+
 .txheader {
     @apply hidden bg-offblack text-offwhite py-2;
 }
@@ -10,6 +14,10 @@
 .txheader > div,
 .txrow > div {
     @apply md:ml-[2vw];
+}
+
+.txrow {
+    @apply mb-[2vh];
 }
 
 .txid {

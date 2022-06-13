@@ -45,7 +45,10 @@ function AddressResult() {
                         {<OwnedObjects id={addressID} byAddress={true} />}
                     </div>
                 </div>
-                <TxForID id={addressID} category="address" />
+                <div>
+                    <div>Transactions</div>
+                    <TxForID id={addressID} category="address" />
+                </div>
             </div>
         );
     } else {

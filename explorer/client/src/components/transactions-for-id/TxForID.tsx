@@ -52,62 +52,57 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData || showData.length === 0) return <></>;
 
     return (
-        <>
-            <div>
-                <div>Transactions</div>
-                <div id="tx">
-                    <div className={styles.txheader}>
-                        <div className={styles.txid}>TxId</div>
-                        <div className={styles.txtype}>TxType</div>
-                        <div className={styles.txstatus}>Status</div>
-                        <div className={styles.txadd}>Addresses</div>
-                    </div>
-
-                    {showData.map((x, index) => (
-                        <div key={`txid-${index}`} className={styles.txrow}>
-                            <div className={styles.txid}>
-                                <Longtext
-                                    text={x.txId}
-                                    category="transactions"
-                                    isLink={true}
-                                />
-                            </div>
-                            <div className={styles.txtype}>{x.kind}</div>
-                            <div
-                                className={cl(
-                                    styles.txstatus,
-                                    styles[x.status.toLowerCase()]
-                                )}
-                            >
-                                {x.status === 'success' ? '\u2714' : '\u2716'}
-                            </div>
-                            <div className={styles.txadd}>
-                                <div>
-                                    From:
-                                    <Link
-                                        className={styles.txlink}
-                                        to={'addresses/' + x.From}
-                                    >
-                                        {truncate(x.From, 14, '...')}
-                                    </Link>
-                                </div>
-                                {x.To && (
-                                    <div>
-                                        To :
-                                        <Link
-                                            className={styles.txlink}
-                                            to={'addresses/' + x.To}
-                                        >
-                                            {truncate(x.To, 14, '...')}
-                                        </Link>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+        <div id="tx" className={styles.txresults}>
+            <div className={styles.txheader}>
+                <div className={styles.txid}>TxId</div>
+                <div className={styles.txtype}>TxType</div>
+                <div className={styles.txstatus}>Status</div>
+                <div className={styles.txadd}>Addresses</div>
             </div>
-        </>
+
+            {showData.map((x, index) => (
+                <div key={`txid-${index}`} className={styles.txrow}>
+                    <div className={styles.txid}>
+                        <Longtext
+                            text={x.txId}
+                            category="transactions"
+                            isLink={true}
+                        />
+                    </div>
+                    <div className={styles.txtype}>{x.kind}</div>
+                    <div
+                        className={cl(
+                            styles.txstatus,
+                            styles[x.status.toLowerCase()]
+                        )}
+                    >
+                        {x.status === 'success' ? '\u2714' : '\u2716'}
+                    </div>
+                    <div className={styles.txadd}>
+                        <div>
+                            From:
+                            <Link
+                                className={styles.txlink}
+                                to={'addresses/' + x.From}
+                            >
+                                {truncate(x.From, 14, '...')}
+                            </Link>
+                        </div>
+                        {x.To && (
+                            <div>
+                                To :
+                                <Link
+                                    className={styles.txlink}
+                                    to={'addresses/' + x.To}
+                                >
+                                    {truncate(x.To, 14, '...')}
+                                </Link>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
     );
 }
 
