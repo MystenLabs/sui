@@ -18,7 +18,7 @@ use sui_types::messages::{
     ExecuteTransactionResponse, Transaction, TransactionEffects,
 };
 
-enum QuorumTask<A> {
+pub enum QuorumTask<A> {
     ProcessTransaction(Transaction),
     ProcessCertificate(CertifiedTransaction),
     UpdateCommittee(AuthorityAggregator<A>),
@@ -31,7 +31,7 @@ pub struct QuorumDriverHandler<A> {
     effects_subscriber: Mutex<Receiver<(CertifiedTransaction, TransactionEffects)>>,
 }
 
-struct QuorumDriver<A> {
+pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumTask<A>>,
     effects_subscribe_sender: Sender<(CertifiedTransaction, TransactionEffects)>,
@@ -48,6 +48,86 @@ impl<A> QuorumDriver<A> {
             task_sender,
             effects_subscribe_sender,
         }
+    }
+}
+
+impl<A> QuorumDriver<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    pub async fn execute_transaction(
+        &self,
+        request: ExecuteTransactionRequest,
+    ) -> SuiResult<ExecuteTransactionResponse> {
+        let ExecuteTransactionRequest {
+            transaction,
+            request_type,
+        } = request;
+        match request_type {
+            ExecuteTransactionRequestType::ImmediateReturn => {
+                self.task_sender
+                    .send(QuorumTask::ProcessTransaction(transaction))
+                    .await
+                    .map_err(|err| SuiError::QuorumDriverCommunicationError {
+                        error: err.to_string(),
+                    })?;
+                Ok(ExecuteTransactionResponse::ImmediateReturn)
+            }
+            ExecuteTransactionRequestType::WaitForTxCert => {
+                let certificate = self
+                    .process_transaction(transaction)
+                    .instrument(tracing::debug_span!("process_tx"))
+                    .await?;
+                self.task_sender
+                    .send(QuorumTask::ProcessCertificate(certificate.clone()))
+                    .await
+                    .map_err(|err| SuiError::QuorumDriverCommunicationError {
+                        error: err.to_string(),
+                    })?;
+                Ok(ExecuteTransactionResponse::TxCert(Box::new(certificate)))
+            }
+            ExecuteTransactionRequestType::WaitForEffectsCert => {
+                let certificate = self
+                    .process_transaction(transaction)
+                    .instrument(tracing::debug_span!("process_tx"))
+                    .await?;
+                let response = self
+                    .process_certificate(certificate)
+                    .instrument(tracing::debug_span!("process_cert"))
+                    .await?;
+                Ok(ExecuteTransactionResponse::EffectsCert(Box::new(response)))
+            }
+        }
+    }
+
+    pub async fn process_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> SuiResult<CertifiedTransaction> {
+        self.validators
+            .load()
+            .process_transaction(transaction)
+            .instrument(tracing::debug_span!("process_tx"))
+            .await
+    }
+
+    pub async fn process_certificate(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> SuiResult<(CertifiedTransaction, TransactionEffects)> {
+        let effects = self
+            .validators
+            .load()
+            .process_certificate(certificate.clone())
+            .instrument(tracing::debug_span!("process_cert"))
+            .await?;
+        let response = (certificate, effects);
+        // An error to send the result to subscribers should not block returning the result.
+        if let Err(err) = self.effects_subscribe_sender.send(response.clone()).await {
+            // TODO: We could potentially retry sending if we want.
+            error!("{}", err);
+        }
+        Ok(response)
     }
 }
 
@@ -70,6 +150,10 @@ where
             _processor_handle: handle,
             effects_subscriber: Mutex::new(subscriber_rx),
         }
+    }
+
+    pub fn clone_quorum_driver(&self) -> Arc<QuorumDriver<A>> {
+        self.quorum_driver.clone()
     }
 
     pub async fn next_effects(&self) -> Option<(CertifiedTransaction, TransactionEffects)> {
@@ -99,7 +183,7 @@ where
                         // way to notify the caller. In the future, we may want to maintain
                         // some data structure for callers to come back and query the status
                         // of a transaction latter.
-                        match Self::process_transaction(&quorum_driver, transaction).await {
+                        match quorum_driver.process_transaction(transaction).await {
                             Ok(cert) => {
                                 if let Err(err) = quorum_driver
                                     .task_sender
@@ -120,9 +204,7 @@ where
                     QuorumTask::ProcessCertificate(certificate) => {
                         // TODO: Similar to ProcessTransaction, we may want to allow callers to
                         // query the status.
-                        if let Err(err) =
-                            Self::process_certificate(&quorum_driver, certificate).await
-                        {
+                        if let Err(err) = quorum_driver.process_certificate(certificate).await {
                             warn!("Certificate processing failed: {:?}", err);
                         }
                     }
@@ -130,93 +212,6 @@ where
                         quorum_driver.validators.store(Arc::new(new_validators));
                     }
                 }
-            }
-        }
-    }
-
-    async fn process_transaction(
-        quorum_driver: &Arc<QuorumDriver<A>>,
-        transaction: Transaction,
-    ) -> SuiResult<CertifiedTransaction> {
-        quorum_driver
-            .validators
-            .load()
-            .process_transaction(transaction)
-            .instrument(tracing::debug_span!("process_tx"))
-            .await
-    }
-
-    async fn process_certificate(
-        quorum_driver: &Arc<QuorumDriver<A>>,
-        certificate: CertifiedTransaction,
-    ) -> SuiResult<(CertifiedTransaction, TransactionEffects)> {
-        let effects = quorum_driver
-            .validators
-            .load()
-            .process_certificate(certificate.clone())
-            .instrument(tracing::debug_span!("process_cert"))
-            .await?;
-        let response = (certificate, effects);
-        // An error to send the result to subscribers should not block returning the result.
-        if let Err(err) = quorum_driver
-            .effects_subscribe_sender
-            .send(response.clone())
-            .await
-        {
-            // TODO: We could potentially retry sending if we want.
-            error!("{}", err);
-        }
-        Ok(response)
-    }
-}
-
-impl<A> QuorumDriverHandler<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    pub async fn execute_transaction(
-        &self,
-        request: ExecuteTransactionRequest,
-    ) -> SuiResult<ExecuteTransactionResponse> {
-        let ExecuteTransactionRequest {
-            transaction,
-            request_type,
-        } = request;
-        match request_type {
-            ExecuteTransactionRequestType::ImmediateReturn => {
-                self.quorum_driver
-                    .task_sender
-                    .send(QuorumTask::ProcessTransaction(transaction))
-                    .await
-                    .map_err(|err| SuiError::QuorumDriverCommunicationError {
-                        error: err.to_string(),
-                    })?;
-                Ok(ExecuteTransactionResponse::ImmediateReturn)
-            }
-            ExecuteTransactionRequestType::WaitForTxCert => {
-                let certificate =
-                    QuorumDriverHandler::process_transaction(&self.quorum_driver, transaction)
-                        .instrument(tracing::debug_span!("process_tx"))
-                        .await?;
-                self.quorum_driver
-                    .task_sender
-                    .send(QuorumTask::ProcessCertificate(certificate.clone()))
-                    .await
-                    .map_err(|err| SuiError::QuorumDriverCommunicationError {
-                        error: err.to_string(),
-                    })?;
-                Ok(ExecuteTransactionResponse::TxCert(Box::new(certificate)))
-            }
-            ExecuteTransactionRequestType::WaitForEffectsCert => {
-                let certificate =
-                    QuorumDriverHandler::process_transaction(&self.quorum_driver, transaction)
-                        .instrument(tracing::debug_span!("process_tx"))
-                        .await?;
-                let response =
-                    QuorumDriverHandler::process_certificate(&self.quorum_driver, certificate)
-                        .instrument(tracing::debug_span!("process_cert"))
-                        .await?;
-                Ok(ExecuteTransactionResponse::EffectsCert(Box::new(response)))
             }
         }
     }
