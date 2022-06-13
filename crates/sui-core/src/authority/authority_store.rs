@@ -148,6 +148,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 ("transactions", &point_lookup),
                 ("owner_index", &options),
                 ("certificates", &point_lookup),
+                ("pending_execution", &options),
                 ("parent_sync", &options),
                 ("effects", &point_lookup),
                 ("sequenced", &options),
