@@ -3,8 +3,6 @@
 
 use arc_swap::ArcSwap;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::time::Instant;
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::Mutex;
@@ -19,8 +17,6 @@ use sui_types::messages::{
     CertifiedTransaction, ExecuteTransactionRequest, ExecuteTransactionRequestType,
     ExecuteTransactionResponse, Transaction, TransactionEffects,
 };
-
-const DEFAULT_PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 
 enum QuorumTask<A> {
     ProcessTransaction(Transaction),
@@ -102,13 +98,7 @@ where
             if let Some(task) = task_receiver.recv().await {
                 match task {
                     QuorumTask::ProcessTransaction(transaction) => {
-                        match Self::process_transaction(
-                            &quorum_driver,
-                            transaction,
-                            DEFAULT_PROCESS_TIMEOUT,
-                        )
-                        .await
-                        {
+                        match Self::process_transaction(&quorum_driver, transaction).await {
                             Ok(cert) => {
                                 if let Err(err) =
                                     task_sender.send(QuorumTask::ProcessCertificate(cert)).await
@@ -127,13 +117,7 @@ where
                         }
                     }
                     QuorumTask::ProcessCertificate(certificate) => {
-                        match Self::process_certificate(
-                            &quorum_driver,
-                            certificate,
-                            DEFAULT_PROCESS_TIMEOUT,
-                        )
-                        .await
-                        {
+                        match Self::process_certificate(&quorum_driver, certificate).await {
                             Ok(result) => {
                                 if let Err(err) = subscriber_tx.send(result).await {
                                     // TODO: Is this sufficient? Should we retry sending?
@@ -160,7 +144,6 @@ where
     async fn process_transaction(
         quorum_driver: &Arc<QuorumDriver<A>>,
         transaction: Transaction,
-        timeout: Duration,
     ) -> SuiResult<CertifiedTransaction> {
         quorum_driver
             .validators
@@ -173,7 +156,6 @@ where
     async fn process_certificate(
         quorum_driver: &Arc<QuorumDriver<A>>,
         certificate: CertifiedTransaction,
-        timeout: Duration,
     ) -> SuiResult<(CertifiedTransaction, TransactionEffects)> {
         let effects = quorum_driver
             .validators
@@ -209,14 +191,11 @@ where
                     })?;
                 Ok(ExecuteTransactionResponse::ImmediateReturn)
             }
-            ExecuteTransactionRequestType::WaitForTxCert(timeout) => {
-                let certificate = QuorumDriverHandler::process_transaction(
-                    &self.quorum_driver,
-                    transaction,
-                    timeout,
-                )
-                .instrument(tracing::debug_span!("process_tx"))
-                .await?;
+            ExecuteTransactionRequestType::WaitForTxCert => {
+                let certificate =
+                    QuorumDriverHandler::process_transaction(&self.quorum_driver, transaction)
+                        .instrument(tracing::debug_span!("process_tx"))
+                        .await?;
                 self.task_sender
                     .lock()
                     .await
@@ -227,22 +206,15 @@ where
                     })?;
                 Ok(ExecuteTransactionResponse::TxCert(Box::new(certificate)))
             }
-            ExecuteTransactionRequestType::WaitForEffectsCert(timeout) => {
-                let instant = Instant::now();
-                let certificate = QuorumDriverHandler::process_transaction(
-                    &self.quorum_driver,
-                    transaction,
-                    timeout,
-                )
-                .instrument(tracing::debug_span!("process_tx"))
-                .await?;
-                let response = QuorumDriverHandler::process_certificate(
-                    &self.quorum_driver,
-                    certificate,
-                    timeout - instant.elapsed(),
-                )
-                .instrument(tracing::debug_span!("process_cert"))
-                .await?;
+            ExecuteTransactionRequestType::WaitForEffectsCert => {
+                let certificate =
+                    QuorumDriverHandler::process_transaction(&self.quorum_driver, transaction)
+                        .instrument(tracing::debug_span!("process_tx"))
+                        .await?;
+                let response =
+                    QuorumDriverHandler::process_certificate(&self.quorum_driver, certificate)
+                        .instrument(tracing::debug_span!("process_cert"))
+                        .await?;
                 Ok(ExecuteTransactionResponse::EffectsCert(Box::new(response)))
             }
         }

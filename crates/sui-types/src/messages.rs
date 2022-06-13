@@ -28,7 +28,6 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
-use std::time::Duration;
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -1360,8 +1359,8 @@ impl ConsensusTransaction {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExecuteTransactionRequestType {
     ImmediateReturn,
-    WaitForTxCert(Duration),
-    WaitForEffectsCert(Duration),
+    WaitForTxCert,
+    WaitForEffectsCert,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

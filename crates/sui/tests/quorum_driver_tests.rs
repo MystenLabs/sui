@@ -72,7 +72,7 @@ async fn test_execute_transaction_wait_for_cert() {
     if let ExecuteTransactionResponse::TxCert(cert) = quorum_driver
         .execute_transaction(ExecuteTransactionRequest {
             transaction: tx,
-            request_type: ExecuteTransactionRequestType::WaitForTxCert(Duration::from_secs(10)),
+            request_type: ExecuteTransactionRequestType::WaitForTxCert,
         })
         .await
         .unwrap()
@@ -100,9 +100,7 @@ async fn test_execute_transaction_wait_for_effects() {
     if let ExecuteTransactionResponse::EffectsCert(result) = quorum_driver
         .execute_transaction(ExecuteTransactionRequest {
             transaction: tx,
-            request_type: ExecuteTransactionRequestType::WaitForEffectsCert(Duration::from_secs(
-                10,
-            )),
+            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
         })
         .await
         .unwrap()
@@ -129,9 +127,7 @@ async fn test_update_validators() {
         let result = node
             .execute_transaction(ExecuteTransactionRequest {
                 transaction: tx,
-                request_type: ExecuteTransactionRequestType::WaitForEffectsCert(
-                    Duration::from_secs(10),
-                ),
+                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
             })
             .await;
         // This now will fail due to epoch mismatch.
