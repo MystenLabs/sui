@@ -12,6 +12,7 @@ import {
     changeRPCNetwork,
     setNetworkSelector,
 } from '_redux/slices/app';
+import { getTransactionsByAddress } from '_redux/slices/txresults';
 import store from '_store';
 
 import st from './Network.module.scss';
@@ -36,8 +37,9 @@ const NetworkSelector = () => {
             dispatch(setNetworkSelector(true));
             store.dispatch(setApiEnv(apiEnv));
             dispatch(changeRPCNetwork()).unwrap();
+            dispatch(getTransactionsByAddress()).unwrap();
         },
-        []
+        [dispatch]
     );
 
     return (

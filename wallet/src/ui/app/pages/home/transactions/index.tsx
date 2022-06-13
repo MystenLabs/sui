@@ -1,33 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { memo, useEffect } from 'react';
 
-import { useMemo } from 'react';
-
-import CoinBalance from '_components/coin-balance';
-import ObjectsLayout from '_components/objects-layout';
-import { useAppSelector } from '_hooks';
-import { accountAggregateBalancesSelector } from '_redux/slices/account';
+import TransactionResult from '_components/transactions-card';
+import { useAppSelector, useAppDispatch } from '_hooks';
+import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 function TransactionPage() {
-    const balances = useAppSelector(accountAggregateBalancesSelector);
-    const coinTypes = useMemo(() => Object.keys(balances), [balances]);
-    return (
-        <ObjectsLayout
-            totalItems={coinTypes?.length}
-            emptyMsg="No tokens found"
-        >
-            {coinTypes.map((aCoinType) => {
-                const aCoinBalance = balances[aCoinType];
-                return (
-                    <CoinBalance
-                        type={aCoinType}
-                        balance={aCoinBalance}
-                        key={aCoinType}
-                    />
-                );
-            })}
-        </ObjectsLayout>
-    );
+    const dispatch = useAppDispatch();
+    const txByAddress = useAppSelector(({ txresults }) => txresults.latestTx);
+
+    useEffect(() => {
+        dispatch(getTransactionsByAddress()).unwrap();
+    }, [dispatch]);
+
+    return txByAddress && txByAddress.length ? (
+        <TransactionResult
+            txresults={txByAddress.filter((_, index: number) => index <= 4)}
+        />
+    ) : null;
 }
 
-export default TransactionPage;
+export default memo(TransactionPage);
