@@ -330,13 +330,55 @@ impl EventStore for SqlEventStore {
 mod tests {
     use super::*;
     use flexstr::shared_str;
+    use move_core_types::{
+        account_address::AccountAddress,
+        ident_str,
+        identifier::Identifier,
+        language_storage::{StructTag, TypeTag},
+        value::MoveStruct,
+    };
+    use serde::{Deserialize, Serialize};
     use serde_json::json;
     use std::collections::BTreeMap;
 
     use sui_types::{
         base_types::SuiAddress,
         event::{Event, EventEnvelope, TransferType},
+        SUI_FRAMEWORK_ADDRESS,
     };
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct TestEvent {
+        creator: AccountAddress,
+        name: String,
+    }
+
+    impl TestEvent {
+        fn struct_tag() -> StructTag {
+            StructTag {
+                address: SUI_FRAMEWORK_ADDRESS,
+                module: ident_str!("SUI").to_owned(),
+                name: ident_str!("new_foobar").to_owned(),
+                type_params: vec![TypeTag::Address, TypeTag::Vector(Box::new(TypeTag::U8))],
+            }
+        }
+
+        fn move_struct(&self) -> MoveStruct {
+            let move_bytes: Vec<_> = self
+                .name
+                .as_bytes()
+                .iter()
+                .map(|b| MoveValue::U8(*b))
+                .collect();
+            MoveStruct::WithFields(vec![
+                (
+                    ident_str!("creator").to_owned(),
+                    MoveValue::Address(self.creator),
+                ),
+                (ident_str!("name").to_owned(), MoveValue::Vector(move_bytes)),
+            ])
+        }
+    }
 
     fn new_test_publish_event() -> Event {
         Event::Publish {
@@ -361,7 +403,25 @@ mod tests {
         }
     }
 
+    fn new_test_move_event() -> (Event, MoveStruct) {
+        let move_event = TestEvent {
+            creator: AccountAddress::random(),
+            name: "foobar_buz".to_string(),
+        };
+        let event_bytes = bcs::to_bytes(&move_event).unwrap();
+        (
+            Event::MoveEvent {
+                type_: TestEvent::struct_tag(),
+                contents: event_bytes,
+            },
+            move_event.move_struct(),
+        )
+    }
+
     fn test_events() -> Vec<EventEnvelope> {
+        let (move_event, move_struct) = new_test_move_event();
+        let json =
+            serde_json::to_value(&move_struct).expect("Cannot serialize move struct to JSON");
         vec![
             EventEnvelope::new(
                 1_000_000,
@@ -388,6 +448,12 @@ mod tests {
                 new_test_transfer_event(TransferType::ToAddress),
                 None,
             ),
+            EventEnvelope::new(
+                1_005_000,
+                Some(TransactionDigest::random()),
+                move_event,
+                Some(json),
+            ),
         ]
     }
 
@@ -396,7 +462,11 @@ mod tests {
         assert_eq!(queried.checkpoint_num, 1);
         assert_eq!(queried.tx_digest, orig.tx_digest);
         assert_eq!(queried.event_type, shared_str!(orig.event_type()));
-        assert_eq!(queried.module_name, None);
+        assert_eq!(queried.package_id, orig.event.package_id());
+        assert_eq!(
+            queried.module_name,
+            orig.event.module_name().map(SharedStr::from)
+        );
         assert_eq!(queried.object_id, orig.event.object_id());
     }
 
@@ -414,7 +484,7 @@ mod tests {
         db.add_events(&to_insert, 1).await?;
         info!("Done inserting");
 
-        assert_eq!(db.total_event_count().await?, 5);
+        assert_eq!(db.total_event_count().await?, 6);
 
         // Query for records in time range, end should be exclusive - should get 2
         let event_it = db.event_iterator(1_000_000, 1_002_000, 10).await?;
@@ -506,7 +576,55 @@ mod tests {
         Ok(())
     }
 
-    // TODO: test MoveEvents
+    // Test for reads by move event
+    #[tokio::test]
+    async fn test_eventstore_move_events() -> Result<(), EventStoreError> {
+        telemetry_subscribers::init_for_testing();
+
+        // Initialize store
+        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        db.initialize().await?;
+
+        // Insert some records
+        info!("Inserting records!");
+        let to_insert = test_events();
+        db.add_events(&to_insert, 1).await?;
+        info!("Done inserting");
+
+        // Query for the Move event and validate basic fields
+        let mut event_it = db
+            .events_for_transaction(to_insert[5].tx_digest.unwrap())
+            .await?;
+        let move_event = event_it.next().expect("No move events in result!!");
+        assert_eq!(event_it.next(), None); // Should be no more events, just that one
+
+        test_queried_event_vs_test_envelope(&move_event, &to_insert[5]);
+        assert_eq!(
+            move_event.function_name,
+            to_insert[5].event.function_name().map(SharedStr::from)
+        );
+        assert_eq!(move_event.fields.len(), 2);
+
+        // Query by module ID
+        let mod_id = ModuleId::new(
+            *to_insert[5].event.package_id().unwrap(),
+            Identifier::new(to_insert[5].event.module_name().unwrap()).unwrap(),
+        );
+        let event_it = db
+            .events_by_module_id(1_000_000, 1_005_001, mod_id, 2)
+            .await?;
+        let queried_events: Vec<_> = event_it.collect();
+        assert_eq!(queried_events.len(), 1);
+
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
+        assert_eq!(
+            queried_events[0].function_name,
+            to_insert[5].event.function_name().map(SharedStr::from)
+        );
+        assert_eq!(queried_events[0].fields.len(), 2);
+
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_eventstore_max_limit() -> Result<(), EventStoreError> {
