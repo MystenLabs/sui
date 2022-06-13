@@ -5,7 +5,6 @@ use arc_swap::ArcSwap;
 use std::sync::Arc;
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::log::{error, warn};
 use tracing::Instrument;
@@ -24,13 +23,20 @@ pub enum QuorumTask<A> {
     UpdateCommittee(AuthorityAggregator<A>),
 }
 
+/// A handler to wrap around QuorumDriver. This handler should be owned by the node with exclusive
+/// mutability.
 pub struct QuorumDriverHandler<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
     _processor_handle: JoinHandle<()>,
     // TODO: Change to CertifiedTransactionEffects eventually.
-    effects_subscriber: Mutex<Receiver<(CertifiedTransaction, TransactionEffects)>>,
+    effects_subscriber: Receiver<(CertifiedTransaction, TransactionEffects)>,
 }
 
+/// The core data structure of the QuorumDriver.
+/// It's expected that the QuorumDriver will be wrapped in an `Arc` and shared around.
+/// One copy will be used in a json-RPC server to serve transaction execution requests;
+/// Another copy will be held by a QuorumDriverHandler to either send signal to update the
+/// committee, or to subscribe effects generated from the QuorumDriver.
 pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumTask<A>>,
@@ -148,7 +154,7 @@ where
         Self {
             quorum_driver,
             _processor_handle: handle,
-            effects_subscriber: Mutex::new(subscriber_rx),
+            effects_subscriber: subscriber_rx,
         }
     }
 
@@ -156,8 +162,8 @@ where
         self.quorum_driver.clone()
     }
 
-    pub async fn next_effects(&self) -> Option<(CertifiedTransaction, TransactionEffects)> {
-        self.effects_subscriber.lock().await.recv().await
+    pub fn subscribe(&mut self) -> &mut Receiver<(CertifiedTransaction, TransactionEffects)> {
+        &mut self.effects_subscriber
     }
 
     pub async fn update_validators(&self, new_validators: AuthorityAggregator<A>) -> SuiResult {

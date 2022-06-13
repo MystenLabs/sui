@@ -35,10 +35,10 @@ async fn test_execute_transaction_immediate() {
     let (_handles, clients, tx) = setup().await;
     let digest = *tx.digest();
 
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
+    let mut quorum_driver_handler = QuorumDriverHandler::new(clients);
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let handle = tokio::task::spawn(async move {
-        let (cert, effects) = quorum_driver_handler.next_effects().await.unwrap();
+        let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
         assert_eq!(effects.transaction_digest, digest);
     });
@@ -61,10 +61,10 @@ async fn test_execute_transaction_wait_for_cert() {
     let (_handles, clients, tx) = setup().await;
     let digest = *tx.digest();
 
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
+    let mut quorum_driver_handler = QuorumDriverHandler::new(clients);
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let handle = tokio::task::spawn(async move {
-        let (cert, effects) = quorum_driver_handler.next_effects().await.unwrap();
+        let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
         assert_eq!(effects.transaction_digest, digest);
     });
@@ -89,10 +89,10 @@ async fn test_execute_transaction_wait_for_effects() {
     let (_handles, clients, tx) = setup().await;
     let digest = *tx.digest();
 
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
+    let mut quorum_driver_handler = QuorumDriverHandler::new(clients);
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let handle = tokio::task::spawn(async move {
-        let (cert, effects) = quorum_driver_handler.next_effects().await.unwrap();
+        let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
         assert_eq!(effects.transaction_digest, digest);
     });
