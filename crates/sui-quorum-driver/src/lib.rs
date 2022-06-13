@@ -34,12 +34,17 @@ pub struct QuorumDriverHandler<A> {
 
 struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
+    effects_subscribe_sender: Sender<(CertifiedTransaction, TransactionEffects)>,
 }
 
 impl<A> QuorumDriver<A> {
-    pub fn new(validators: AuthorityAggregator<A>) -> Self {
+    pub fn new(
+        validators: AuthorityAggregator<A>,
+        effects_subscribe_sender: Sender<(CertifiedTransaction, TransactionEffects)>,
+    ) -> Self {
         Self {
             validators: ArcSwap::from(Arc::new(validators)),
+            effects_subscribe_sender,
         }
     }
 }
@@ -49,20 +54,14 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub fn new(validators: AuthorityAggregator<A>) -> Self {
-        let quorum_driver = Arc::new(QuorumDriver::new(validators));
         let (task_tx, task_rx) = mpsc::channel::<QuorumTask<A>>(5000);
         let (subscriber_tx, subscriber_rx) = mpsc::channel::<_>(5000);
+        let quorum_driver = Arc::new(QuorumDriver::new(validators, subscriber_tx));
         let handle = {
             let task_tx_copy = task_tx.clone();
             let quorum_driver_copy = quorum_driver.clone();
             tokio::task::spawn(async move {
-                Self::task_queue_processor(
-                    quorum_driver_copy,
-                    task_rx,
-                    task_tx_copy,
-                    subscriber_tx,
-                )
-                .await;
+                Self::task_queue_processor(quorum_driver_copy, task_rx, task_tx_copy).await;
             })
         };
         Self {
@@ -92,18 +91,21 @@ where
         quorum_driver: Arc<QuorumDriver<A>>,
         mut task_receiver: Receiver<QuorumTask<A>>,
         task_sender: Sender<QuorumTask<A>>,
-        subscriber_tx: Sender<(CertifiedTransaction, TransactionEffects)>,
     ) {
         loop {
             if let Some(task) = task_receiver.recv().await {
                 match task {
                     QuorumTask::ProcessTransaction(transaction) => {
+                        // TODO: We entered here because callers do not want to wait for a
+                        // transaction to finish execution. When this failed, we do not have a
+                        // way to notify the caller. In the future, we may want to maintain
+                        // some data structure for callers to come back and query the status
+                        // of a transaction latter.
                         match Self::process_transaction(&quorum_driver, transaction).await {
                             Ok(cert) => {
                                 if let Err(err) =
                                     task_sender.send(QuorumTask::ProcessCertificate(cert)).await
                                 {
-                                    // TODO: Is this sufficient? Should we retry sending?
                                     error!(
                                         "Sending task to quorum driver queue failed: {}",
                                         err.to_string()
@@ -111,26 +113,17 @@ where
                                 }
                             }
                             Err(err) => {
-                                // TODO: Is there a way to notify the sender?
                                 warn!("Transaction processing failed: {:?}", err);
                             }
                         }
                     }
                     QuorumTask::ProcessCertificate(certificate) => {
-                        match Self::process_certificate(&quorum_driver, certificate).await {
-                            Ok(result) => {
-                                if let Err(err) = subscriber_tx.send(result).await {
-                                    // TODO: Is this sufficient? Should we retry sending?
-                                    error!(
-                                        "Sending effects to the subscriber channel failed: {:?}",
-                                        err
-                                    );
-                                }
-                            }
-                            Err(err) => {
-                                // TODO: Is there a way to notify the sender?
-                                warn!("Certificate processing failed: {:?}", err);
-                            }
+                        // TODO: Similar to ProcessTransaction, we may want to allow callers to
+                        // query the status.
+                        if let Err(err) =
+                            Self::process_certificate(&quorum_driver, certificate).await
+                        {
+                            warn!("Certificate processing failed: {:?}", err);
                         }
                     }
                     QuorumTask::UpdateValidators(new_validators) => {
@@ -163,7 +156,17 @@ where
             .process_certificate(certificate.clone())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
-        Ok((certificate, effects))
+        let response = (certificate, effects);
+        // An error to send the result to subscribers should not block returning the result.
+        if let Err(err) = quorum_driver
+            .effects_subscribe_sender
+            .send(response.clone())
+            .await
+        {
+            // TODO: We could potentially retry sending if we want.
+            error!("{}", err);
+        }
+        Ok(response)
     }
 }
 
