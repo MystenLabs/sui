@@ -336,13 +336,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
-                    <h2
-                        className={styles.clickableheader}
-                        onClick={clickSetShowTx}
-                    >
-                        Transactions {showTx ? '' : '+'}
-                    </h2>
-                    {showTx && <TxForID id={data.id} category="object" />}
                     {properties.length > 0 && data.objType !== 'Move Package' && (
                         <>
                             <h2
