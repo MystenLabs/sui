@@ -39,7 +39,6 @@ function AddressResult() {
                         />
                     </div>
                 </div>
-                <TxForID id={addressID} category="address" />
                 <div>
                     <div>Owned Objects</div>
                     <div>
