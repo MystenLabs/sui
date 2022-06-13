@@ -7,8 +7,14 @@
 
 //# view-object 100
 
-//# run Sui::Coin::transfer_ --type-args Sui::SUI::SUI --args object(100) 10 @B
+//# run Sui::Coin::split_and_transfer --type-args Sui::SUI::SUI --args object(100) 10 @B
 
 //# view-object 100
 
 //# view-object 105
+
+//# run Sui::Coin::transfer --type-args Sui::SUI::SUI --args object(100) @B
+
+//# view-object 100
+
+//# view-object 106

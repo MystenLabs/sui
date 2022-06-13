@@ -64,8 +64,7 @@ module Sui::Coin {
 
     // === Functionality for Coin<T> holders ===
 
-    /// Send `amount` units of `c` to `recipient
-    /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
+    /// Send `c` to `recipient`
     public entry fun transfer<T>(c: Coin<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
@@ -170,6 +169,12 @@ module Sui::Coin {
     }
 
     // === Entrypoints ===
+
+    /// Send `amount` units of `c` to `recipient
+    /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
+    public entry fun split_and_transfer<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
+        Transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
+    }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
