@@ -88,6 +88,12 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
 
+    /// This is a map between the transaction digest and its timestamp (UTC timestamp in
+    /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
+    /// on a node according to the local machine time, so it varies across nodes.
+    /// The timestamping happens when the node sees a txn certificate for the first time.
+    timestamps: DBMap<TransactionDigest, u64>,
+
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
     /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
@@ -130,6 +136,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 ("certificates", &point_lookup),
                 ("parent_sync", &options),
                 ("effects", &point_lookup),
+                ("timestamps", &point_lookup),
                 ("sequenced", &options),
                 ("schedule", &options),
                 ("executed_sequence", &options),
@@ -152,6 +159,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             certificates,
             parent_sync,
             effects,
+            timestamps,
             sequenced,
             schedule,
             batches,
@@ -166,6 +174,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             "certificates";<TransactionDigest, CertifiedTransaction>,
             "parent_sync";<ObjectRef, TransactionDigest>,
             "effects";<TransactionDigest, TransactionEffectsEnvelope<S>>,
+            "timestamps";<TransactionDigest, u64>,
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
@@ -189,6 +198,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             certificates,
             parent_sync,
             effects,
+            timestamps,
             sequenced,
             schedule,
             executed_sequence,
@@ -223,6 +233,15 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         self.transactions
             .contains_key(transaction_digest)
             .map_err(|e| e.into())
+    }
+
+    /// Returns unix timestamp for a transaction if it exists
+    pub fn get_timestamp_ms(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<u64>> {
+        let ts = self.timestamps.get(transaction_digest)?;
+        Ok(ts)
     }
 
     /// Returns true if there are no objects in the database
@@ -452,6 +471,14 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             .initialize_locks(&[object_ref], false /* is_force_reset */)
             .await?;
 
+        Ok(())
+    }
+
+    /// Insert a timestamp for a transaction digest.
+    /// Note this function is not thread/async safe when processing the same digest concurrently.
+    /// You need to lock explicitly if that's how it's supposed to be used.
+    pub fn insert_timestamp(&self, digest: &TransactionDigest, ts: &u64) -> SuiResult {
+        self.timestamps.insert(digest, ts)?;
         Ok(())
     }
 
@@ -1077,6 +1104,7 @@ impl<const A: bool> SuiDataStore<A, AuthoritySignInfo> {
             signed_transaction: self.transactions.get(transaction_digest)?,
             certified_transaction: self.certificates.get(transaction_digest)?,
             signed_effects: self.effects.get(transaction_digest)?,
+            timestamp: self.timestamps.get(transaction_digest)?,
         })
     }
 }

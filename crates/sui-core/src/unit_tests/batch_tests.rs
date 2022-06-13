@@ -501,6 +501,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 
@@ -512,6 +513,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 
@@ -523,6 +525,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 
@@ -556,6 +559,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 
@@ -627,6 +631,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 
@@ -638,6 +643,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 
@@ -649,6 +655,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 
@@ -682,6 +689,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
+            timestamp: None,
         })
     }
 

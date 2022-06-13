@@ -15,6 +15,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use chrono::prelude::*;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{
@@ -526,6 +527,7 @@ impl AuthorityState {
             signed_transaction: self.database.get_transaction(&transaction_digest)?,
             certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
+            timestamp: None,
         })
     }
 
@@ -562,6 +564,17 @@ impl AuthorityState {
             }
         };
 
+        // Time stamp the transaction digest
+        let timestamp_ms = Self::get_unixtime_ms();
+        if info.timestamp.is_some() {
+            warn!(
+                ?digest,
+                "Transaction Digest was time-stamped already, which shouldn't happen."
+            );
+        } else if let Err(e) = self.database.insert_timestamp(digest, &timestamp_ms) {
+            warn!(?digest, "Failed to time stamp txn: {}", e);
+        }
+
         // Index tx
         if let Some(indexes) = &self.indexes {
             if let Err(e) = self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects) {
@@ -571,7 +584,9 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
-            event_handler.process_events(&effects.effects).await;
+            event_handler
+                .process_events(&effects.effects, timestamp_ms)
+                .await;
         }
 
         Ok(())
@@ -618,6 +633,11 @@ impl AuthorityState {
         }
 
         Ok(())
+    }
+
+    pub fn get_unixtime_ms() -> u64 {
+        let ts_ms = Utc::now().timestamp_millis();
+        u64::try_from(ts_ms).expect("Travelling in time machine")
     }
 
     /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
@@ -1229,6 +1249,10 @@ impl AuthorityState {
         digest: &TransactionDigest,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
         self.database.read_certificate(digest)
+    }
+
+    pub fn get_timestamp_ms(&self, digest: &TransactionDigest) -> SuiResult<Option<u64>> {
+        self.database.get_timestamp_ms(digest)
     }
 
     pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {
