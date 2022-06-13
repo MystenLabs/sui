@@ -37,11 +37,16 @@ type TxnData = {
     To?: string;
 };
 
+type categoryType = 'address' | 'object';
+
 const getTx = async (
     id: string,
     network: string,
-    category: 'address'
-): Promise<GetTxnDigestsResponse> => rpc(network).getTransactionsForAddress(id);
+    category: categoryType
+): Promise<GetTxnDigestsResponse> =>
+    category === 'address'
+        ? rpc(network).getTransactionsForAddress(id)
+        : rpc(network).getTransactionsForObject(id);
 
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData || showData.length === 0) return <></>;
@@ -106,7 +111,13 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     );
 }
 
-function TxForIDStatic({ id, category }: { id: string; category: 'address' }) {
+function TxForIDStatic({
+    id,
+    category,
+}: {
+    id: string;
+    category: categoryType;
+}) {
     const data = deduplicate(
         findTxfromID(id)?.data as [number, string][] | undefined
     )
@@ -116,7 +127,7 @@ function TxForIDStatic({ id, category }: { id: string; category: 'address' }) {
     return <TxForIDView showData={data} />;
 }
 
-function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
+function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     const [showData, setData] =
         useState<{ data?: TxnData[]; loadState: string }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
