@@ -165,7 +165,7 @@ where
         quorum_driver
             .validators
             .load()
-            .process_transaction(transaction, timeout)
+            .process_transaction(transaction)
             .instrument(tracing::debug_span!("process_tx"))
             .await
     }
@@ -178,7 +178,7 @@ where
         let effects = quorum_driver
             .validators
             .load()
-            .process_certificate(certificate.clone(), timeout)
+            .process_certificate(certificate.clone())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
         Ok((certificate, effects))
