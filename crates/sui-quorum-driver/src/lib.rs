@@ -21,29 +21,31 @@ use sui_types::messages::{
 enum QuorumTask<A> {
     ProcessTransaction(Transaction),
     ProcessCertificate(CertifiedTransaction),
-    UpdateValidators(AuthorityAggregator<A>),
+    UpdateCommittee(AuthorityAggregator<A>),
 }
 
 pub struct QuorumDriverHandler<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
     _processor_handle: JoinHandle<()>,
-    task_sender: Mutex<Sender<QuorumTask<A>>>,
     // TODO: Change to CertifiedTransactionEffects eventually.
     effects_subscriber: Mutex<Receiver<(CertifiedTransaction, TransactionEffects)>>,
 }
 
 struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
+    task_sender: Sender<QuorumTask<A>>,
     effects_subscribe_sender: Sender<(CertifiedTransaction, TransactionEffects)>,
 }
 
 impl<A> QuorumDriver<A> {
     pub fn new(
         validators: AuthorityAggregator<A>,
+        task_sender: Sender<QuorumTask<A>>,
         effects_subscribe_sender: Sender<(CertifiedTransaction, TransactionEffects)>,
     ) -> Self {
         Self {
             validators: ArcSwap::from(Arc::new(validators)),
+            task_sender,
             effects_subscribe_sender,
         }
     }
@@ -56,18 +58,16 @@ where
     pub fn new(validators: AuthorityAggregator<A>) -> Self {
         let (task_tx, task_rx) = mpsc::channel::<QuorumTask<A>>(5000);
         let (subscriber_tx, subscriber_rx) = mpsc::channel::<_>(5000);
-        let quorum_driver = Arc::new(QuorumDriver::new(validators, subscriber_tx));
+        let quorum_driver = Arc::new(QuorumDriver::new(validators, task_tx, subscriber_tx));
         let handle = {
-            let task_tx_copy = task_tx.clone();
             let quorum_driver_copy = quorum_driver.clone();
             tokio::task::spawn(async move {
-                Self::task_queue_processor(quorum_driver_copy, task_rx, task_tx_copy).await;
+                Self::task_queue_processor(quorum_driver_copy, task_rx).await;
             })
         };
         Self {
             quorum_driver,
             _processor_handle: handle,
-            task_sender: Mutex::new(task_tx),
             effects_subscriber: Mutex::new(subscriber_rx),
         }
     }
@@ -77,10 +77,9 @@ where
     }
 
     pub async fn update_validators(&self, new_validators: AuthorityAggregator<A>) -> SuiResult {
-        self.task_sender
-            .lock()
-            .await
-            .send(QuorumTask::UpdateValidators(new_validators))
+        self.quorum_driver
+            .task_sender
+            .send(QuorumTask::UpdateCommittee(new_validators))
             .await
             .map_err(|err| SuiError::QuorumDriverCommunicationError {
                 error: err.to_string(),
@@ -90,7 +89,6 @@ where
     async fn task_queue_processor(
         quorum_driver: Arc<QuorumDriver<A>>,
         mut task_receiver: Receiver<QuorumTask<A>>,
-        task_sender: Sender<QuorumTask<A>>,
     ) {
         loop {
             if let Some(task) = task_receiver.recv().await {
@@ -103,8 +101,10 @@ where
                         // of a transaction latter.
                         match Self::process_transaction(&quorum_driver, transaction).await {
                             Ok(cert) => {
-                                if let Err(err) =
-                                    task_sender.send(QuorumTask::ProcessCertificate(cert)).await
+                                if let Err(err) = quorum_driver
+                                    .task_sender
+                                    .send(QuorumTask::ProcessCertificate(cert))
+                                    .await
                                 {
                                     error!(
                                         "Sending task to quorum driver queue failed: {}",
@@ -126,7 +126,7 @@ where
                             warn!("Certificate processing failed: {:?}", err);
                         }
                     }
-                    QuorumTask::UpdateValidators(new_validators) => {
+                    QuorumTask::UpdateCommittee(new_validators) => {
                         quorum_driver.validators.store(Arc::new(new_validators));
                     }
                 }
@@ -184,9 +184,8 @@ where
         } = request;
         match request_type {
             ExecuteTransactionRequestType::ImmediateReturn => {
-                self.task_sender
-                    .lock()
-                    .await
+                self.quorum_driver
+                    .task_sender
                     .send(QuorumTask::ProcessTransaction(transaction))
                     .await
                     .map_err(|err| SuiError::QuorumDriverCommunicationError {
@@ -199,9 +198,8 @@ where
                     QuorumDriverHandler::process_transaction(&self.quorum_driver, transaction)
                         .instrument(tracing::debug_span!("process_tx"))
                         .await?;
-                self.task_sender
-                    .lock()
-                    .await
+                self.quorum_driver
+                    .task_sender
                     .send(QuorumTask::ProcessCertificate(certificate.clone()))
                     .await
                     .map_err(|err| SuiError::QuorumDriverCommunicationError {
