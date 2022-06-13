@@ -213,3 +213,5 @@ load of disseminating new transactions can be shared with the whole network and
 not have the burden be solely on the validators. We also expect future
 features, such as checkpoints, to enable improved performance of synchronizing the
 state of the chain from genesis.
+
+Please see our privacy policy to learn how we handle information about our nodes.
