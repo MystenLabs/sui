@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 use sqlx::{sqlite::SqliteRow, Executor, Row, SqlitePool};
 use sui_types::event::Event;
-use tracing::{debug, info};
+use tracing::{info, warn};
 
 /// Maximum number of events one can ask for right now
 const MAX_LIMIT: usize = 5000;
@@ -34,6 +34,7 @@ const SQL_TABLE_CREATE: &str = "\
         event_type INTEGER,
         package_id BLOB,
         module_name TEXT,
+        function TEXT,
         object_id BLOB,
         fields TEXT
     );
@@ -61,11 +62,12 @@ impl SqlEventStore {
     pub async fn initialize(&self) -> Result<(), EventStoreError> {
         // First create the table if needed
         self.pool.execute(SQL_TABLE_CREATE).await?;
-        info!("SQLite events table created");
+        info!("SQLite events table is initialized");
 
         // Then, create indexes
         for column in INDEXED_COLUMNS {
-            // NOTE: Cannot prepare CREATE INDEX statements
+            // NOTE: Cannot prepare CREATE INDEX statements.
+            // Also, this may take a long time if we add fields to index, at startup.  TODO
             self.pool
                 .execute(
                     format!(
@@ -75,18 +77,25 @@ impl SqlEventStore {
                     .as_str(),
                 )
                 .await?;
+            info!(column, "Index is ready");
         }
-        info!("Indexes created");
 
         Ok(())
     }
+
+    /// Returns total size of table.  Should really only be used for testing.
+    #[allow(unused)]
+    async fn total_event_count(&self) -> Result<usize, EventStoreError> {
+        let result = sqlx::query("SELECT COUNT(*) FROM events")
+            .fetch_one(&self.pool)
+            .await?;
+        let num_rows: i64 = result.get(0);
+        Ok(num_rows as usize)
+    }
 }
 
-fn try_extract_object_id(
-    row: &SqliteRow,
-    index: usize,
-) -> Result<Option<ObjectID>, EventStoreError> {
-    let raw_bytes: Option<Vec<u8>> = row.get(index);
+fn try_extract_object_id(row: &SqliteRow, col: &str) -> Result<Option<ObjectID>, EventStoreError> {
+    let raw_bytes: Option<Vec<u8>> = row.get(col);
     match raw_bytes {
         Some(bytes) => Ok(Some(
             ObjectID::try_from(bytes).map_err(|e| EventStoreError::GenericError(e.into()))?,
@@ -108,11 +117,15 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
                 .expect("Cannot convert digest bytes to TxDigest"),
         )
     });
-    let event_type: u16 = row.get(3);
-    let package_id = try_extract_object_id(&row, 4).expect("Error converting package ID bytes");
-    let object_id = try_extract_object_id(&row, 6).expect("Error converting object ID bytes");
-    let module_name: Option<String> = row.get(5);
-    let fields_text: &str = row.get(7);
+    // TODO: switch from string gets to INTs but safe way - maybe using enums?
+    let event_type: u16 = row.get("event_type");
+    let package_id =
+        try_extract_object_id(&row, "package_id").expect("Error converting package ID bytes");
+    let object_id =
+        try_extract_object_id(&row, "object_id").expect("Error converting object ID bytes");
+    let module_name: Option<String> = row.get("module_name");
+    let function: Option<String> = row.get("function");
+    let fields_text: &str = row.get("fields");
     let fields: Vec<_> = if fields_text.is_empty() {
         Vec::new()
     } else {
@@ -123,7 +136,10 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
                 .map(|(k, v)| (flexstr::SharedStr::from(k), EventValue::Json(v)))
                 .collect()
         } else {
-            debug!(?fields_json, "Could not parse JSON as object");
+            warn!(
+                ?fields_json,
+                "Could not parse JSON as object, should not happen"
+            );
             Vec::new()
         }
     };
@@ -133,8 +149,10 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
         checkpoint_num: checkpoint as u64,
         tx_digest,
         event_type: SharedStr::from(Event::name_from_ordinal(event_type as usize)),
+        package_id,
         module_name: module_name.map(|s| s.into()),
-        object_id: object_id.or(package_id),
+        function_name: function.map(SharedStr::from),
+        object_id,
         fields,
     }
 }
@@ -153,6 +171,7 @@ fn event_to_json(event: &EventEnvelope) -> String {
             } => Some(json!({"destination": destination_addr.to_string(),
                        "version": version.value(),
                        "type": type_.to_string() })),
+            // TODO: for other event types eg EpochChange
             _ => None,
         };
         maybe_json.map(|j| j.to_string()).unwrap_or_default()
@@ -160,7 +179,7 @@ fn event_to_json(event: &EventEnvelope) -> String {
 }
 
 const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, checkpoint, tx_digest, event_type, \
-    package_id, module_name, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    package_id, module_name, function, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 const TS_QUERY: &str = "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? LIMIT ?";
 
@@ -199,7 +218,6 @@ impl EventStore for SqlEventStore {
         for event in events {
             // If batching, turn off persistent to avoid caching as we may fill up the prepared statement cache
             let insert_tx_q = sqlx::query(SQL_INSERT_TX).persistent(true);
-            let module_id = event.event.module_id();
             let event_type = EventType::from(&event.event);
             // TODO: use batched API?
             insert_tx_q
@@ -207,8 +225,9 @@ impl EventStore for SqlEventStore {
                 .bind(checkpoint_num as i64)
                 .bind(event.tx_digest.map(|txd| txd.to_bytes()))
                 .bind(event_type as u16)
-                .bind(module_id.clone().map(|mid| mid.address().to_vec()))
-                .bind(module_id.map(|mid| mid.name().to_string()))
+                .bind(event.event.package_id().map(|pid| pid.to_vec()))
+                .bind(event.event.module_name())
+                .bind(event.event.function_name())
                 .bind(event.event.object_id().map(|id| id.to_vec()))
                 .bind(event_to_json(event))
                 .execute(&self.pool)
@@ -304,14 +323,6 @@ impl EventStore for SqlEventStore {
             .fetch_all(&self.pool)
             .await?;
         Ok(rows.into_iter())
-    }
-
-    async fn total_event_count(&self) -> Result<usize, EventStoreError> {
-        let result = sqlx::query("SELECT COUNT(*) FROM events")
-            .fetch_one(&self.pool)
-            .await?;
-        let num_rows: i64 = result.get(0);
-        Ok(num_rows as usize)
     }
 }
 

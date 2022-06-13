@@ -33,8 +33,12 @@ pub struct StoredEvent {
     tx_digest: Option<TransactionDigest>,
     /// The variant name from SuiEvent, eg MoveEvent, Publish, etc.
     event_type: SharedStr,
+    /// Package ID if available
+    package_id: Option<ObjectID>,
     /// Module name of the Move package generating the event
     module_name: Option<SharedStr>,
+    /// Function name that produced the event, for Move Events
+    function_name: Option<SharedStr>,
     /// Object ID of NewObject, DeleteObject, package being published, or object being transferred
     object_id: Option<ObjectID>,
     /// Individual event fields.  As much as possible these should be deconstructed and flattened,
@@ -123,9 +127,6 @@ trait EventStore {
         module: ModuleId,
         limit: usize,
     ) -> Result<Self::EventIt, EventStoreError>;
-
-    /// Number of records in Event Store.  Not meant to be fast, but good for monitoring and testing.
-    async fn total_event_count(&self) -> Result<usize, EventStoreError>;
 }
 
 #[derive(Debug)]

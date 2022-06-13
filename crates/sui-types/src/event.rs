@@ -3,12 +3,12 @@
 
 use move_bytecode_utils::{layout::TypeLayoutBuilder, module_cache::GetModule};
 use move_core_types::{
-    language_storage::{ModuleId, StructTag, TypeTag},
+    language_storage::{StructTag, TypeTag},
     value::{MoveStruct, MoveTypeLayout},
 };
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value};
 use serde_with::{serde_as, Bytes};
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
@@ -61,7 +61,6 @@ pub enum TransferType {
 }
 
 /// Specific type of event
-// Developer note: PLEASE only append new entries, do not modify existing entries (binary compat)
 #[serde_as]
 #[derive(
     Eq,
@@ -76,6 +75,7 @@ pub enum TransferType {
     EnumVariantNames,
 )]
 #[strum_discriminants(name(EventType))]
+// Developer note: PLEASE only append new entries, do not modify existing entries (binary compat)
 pub enum Event {
     /// Move-specific event
     MoveEvent {
@@ -118,11 +118,9 @@ impl Event {
 
     /// Returns the object or package ID associated with the event, if available.  Specifically:
     /// - For TransferObject: the object ID being transferred (eg moving child from parent, its the child)
-    /// - for Publish, the package ID (which is the object ID of the module)
     /// - for DeleteObject and NewObject, the Object ID
     pub fn object_id(&self) -> Option<ObjectID> {
         match self {
-            Event::Publish { package_id } => Some(*package_id),
             Event::TransferObject { object_id, .. } => Some(*object_id),
             Event::DeleteObject(obj_id) => Some(*obj_id),
             Event::NewObject(obj_id) => Some(*obj_id),
@@ -130,12 +128,32 @@ impl Event {
         }
     }
 
-    /// Extract a module ID, if available, from a SuiEvent
-    pub fn module_id(&self) -> Option<ModuleId> {
+    /// Extracts the Move package ID associated with the event, or the package published.
+    pub fn package_id(&self) -> Option<ObjectID> {
+        match self {
+            Event::MoveEvent { type_, .. } => Some(type_.address.into()),
+            Event::Publish { package_id } => Some(*package_id),
+            _ => None,
+        }
+    }
+
+    /// Extract a module name, if available, from a SuiEvent
+    // TODO: should we switch to IdentStr or &str?  These are more complicated to make work due to lifetimes
+    pub fn module_name(&self) -> Option<&str> {
         match self {
             Event::MoveEvent {
                 type_: struct_tag, ..
-            } => Some(struct_tag.module_id()),
+            } => Some(struct_tag.module.as_ident_str().as_str()),
+            _ => None,
+        }
+    }
+
+    /// Extracts the function name from a SuiEvent, if available
+    pub fn function_name(&self) -> Option<String> {
+        match self {
+            Event::MoveEvent {
+                type_: struct_tag, ..
+            } => Some(struct_tag.name.to_string()),
             _ => None,
         }
     }
