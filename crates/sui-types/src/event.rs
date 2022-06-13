@@ -8,7 +8,7 @@ use move_core_types::{
 };
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value};
+use serde_json::Value;
 use serde_with::{serde_as, Bytes};
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
