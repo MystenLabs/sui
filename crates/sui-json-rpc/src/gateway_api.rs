@@ -177,7 +177,7 @@ impl SuiRpcModule for GatewayReadApiImpl {
 
 #[async_trait]
 impl RpcTransactionBuilderServer for TransactionBuilderImpl {
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -187,7 +187,7 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .client
-            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
+            .public_transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

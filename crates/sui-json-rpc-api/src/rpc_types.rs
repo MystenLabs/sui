@@ -828,8 +828,8 @@ impl TryFrom<TransactionData> for SuiTransactionData {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionKind")]
 pub enum SuiTransactionKind {
-    /// Initiate a coin transfer between addresses
-    TransferCoin(SuiTransferCoin),
+    /// Initiate an object transfer between addresses
+    PublicTransferObject(SuiPublicTransferObject),
     /// Publish a new Move module
     Publish(SuiMovePackage),
     /// Call a function in a published Move module
@@ -845,8 +845,8 @@ impl Display for SuiTransactionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match &self {
-            Self::TransferCoin(t) => {
-                writeln!(writer, "Transaction Kind : Transfer Coin")?;
+            Self::PublicTransferObject(t) => {
+                writeln!(writer, "Transaction Kind : Public Transfer Object")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 writeln!(writer, "Object ID : {}", t.object_ref.object_id)?;
                 writeln!(writer, "Version : {:?}", t.object_ref.version)?;
@@ -896,10 +896,12 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
 
     fn try_from(tx: SingleTransactionKind) -> Result<Self, Self::Error> {
         Ok(match tx {
-            SingleTransactionKind::TransferCoin(t) => Self::TransferCoin(SuiTransferCoin {
-                recipient: t.recipient,
-                object_ref: t.object_ref.into(),
-            }),
+            SingleTransactionKind::PublicTransferObject(t) => {
+                Self::PublicTransferObject(SuiPublicTransferObject {
+                    recipient: t.recipient,
+                    object_ref: t.object_ref.into(),
+                })
+            }
             SingleTransactionKind::TransferSui(t) => Self::TransferSui(SuiTransferSui {
                 recipient: t.recipient,
                 amount: t.amount,
@@ -1329,8 +1331,8 @@ impl SuiEvent {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransferCoin", rename_all = "camelCase")]
-pub struct SuiTransferCoin {
+#[serde(rename = "PublicTransferObject", rename_all = "camelCase")]
+pub struct SuiPublicTransferObject {
     pub recipient: SuiAddress,
     pub object_ref: SuiObjectRef,
 }
@@ -1423,13 +1425,13 @@ impl From<TypeTag> for SuiTypeTag {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum RPCTransactionRequestParams {
-    TransferCoinRequestParams(TransferCoinParams),
+    PublicTransferObjectRequestParams(PublicTransferObjectParams),
     MoveCallRequestParams(MoveCallParams),
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct TransferCoinParams {
+pub struct PublicTransferObjectParams {
     pub recipient: SuiAddress,
     pub object_id: ObjectID,
 }

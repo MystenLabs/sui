@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::{IdentStr, Identifier};
-use move_core_types::language_storage::StructTag;
 use name_variant::NamedVariant;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

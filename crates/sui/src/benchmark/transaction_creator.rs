@@ -41,7 +41,7 @@ fn make_transfer_transaction(
             ],
         })
     } else {
-        SingleTransactionKind::TransferCoin(TransferCoin {
+        SingleTransactionKind::PublicTransferObject(PublicTransferObject {
             recipient,
             object_ref,
         })

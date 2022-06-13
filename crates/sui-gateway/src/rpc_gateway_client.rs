@@ -47,7 +47,7 @@ impl GatewayAPI for RpcGatewayClient {
             .await?)
     }
 
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -58,7 +58,7 @@ impl GatewayAPI for RpcGatewayClient {
         let bytes: TransactionBytes = self
             .client
             .transaction_builder()
-            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
+            .public_transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
         bytes.to_data()
     }
