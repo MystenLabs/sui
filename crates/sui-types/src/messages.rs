@@ -1083,7 +1083,6 @@ pub struct TransactionEffectsEnvelope<S> {
 
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
-pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityQuorumSignInfo>;
 
 impl SignedTransactionEffects {
     pub fn digest(&self) -> [u8; 32] {
@@ -1373,5 +1372,6 @@ pub struct ExecuteTransactionRequest {
 pub enum ExecuteTransactionResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(Box<(CertifiedTransaction, TransactionEffects)>),
 }
