@@ -1,5 +1,5 @@
 .txresults {
-    @apply font-mono ml-[1vw] w-[100%];
+    @apply font-mono mt-2 w-[100%];
 }
 
 .txheader {
