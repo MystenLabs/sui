@@ -42,8 +42,12 @@ use crate::{
     query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+use sui_json_rpc_api::rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, PublishResponse,
+    SplitCoinResponse, SuiMoveObject, SuiObject, SuiObjectInfo, TransactionEffectsResponse,
+    TransactionResponse,
+};
 
-use crate::gateway_types::*;
 use crate::transaction_input_checker::InputObjects;
 
 #[cfg(test)]
@@ -1214,6 +1218,12 @@ where
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        QueryHelpers::get_transaction(&self.store, digest)
+        let (cert, effect) = QueryHelpers::get_transaction(&self.store, digest)?;
+
+        Ok(TransactionEffectsResponse {
+            certificate: cert.try_into()?,
+            effects: effect.into(),
+            timestamp_ms: None,
+        })
     }
 }

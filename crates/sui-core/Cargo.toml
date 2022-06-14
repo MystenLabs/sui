@@ -49,6 +49,7 @@ sui-types = { path = "../sui-types" }
 sui-storage = { path = "../sui-storage" }
 sui-config = { path = "../sui-config" }
 sui-json = { path = "../sui-json" }
+sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "4e15a34ecf155b7e2d9729d3b07f83c146149f02" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "4e15a34ecf155b7e2d9729d3b07f83c146149f02" }

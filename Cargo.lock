@@ -2038,6 +2038,8 @@ dependencies = [
  "sui-core",
  "sui-gateway",
  "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-types",
  "tempfile",
  "test-utils",
@@ -5841,6 +5843,8 @@ dependencies = [
  "sui-framework",
  "sui-gateway",
  "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-network",
  "sui-node",
  "sui-open-rpc",
@@ -5908,6 +5912,7 @@ dependencies = [
  "sui-core",
  "sui-faucet",
  "sui-json",
+ "sui-json-rpc-api",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -5990,6 +5995,7 @@ dependencies = [
  "sui-config",
  "sui-framework",
  "sui-json",
+ "sui-json-rpc-api",
  "sui-network",
  "sui-storage",
  "sui-types",
@@ -6022,6 +6028,7 @@ dependencies = [
  "sui",
  "sui-config",
  "sui-core",
+ "sui-json-rpc-api",
  "sui-types",
  "tempfile",
  "test-utils",
@@ -6093,8 +6100,8 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json",
+ "sui-json-rpc-api",
  "sui-open-rpc",
- "sui-open-rpc-macros",
  "sui-types",
  "tokio",
  "tracing",
@@ -6122,6 +6129,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-json-rpc"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ed25519-dalek",
+ "jsonrpsee",
+ "jsonrpsee-core",
+ "once_cell",
+ "prometheus_exporter",
+ "sui-core",
+ "sui-json",
+ "sui-json-rpc-api",
+ "sui-open-rpc",
+ "sui-types",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-json-rpc-api"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "colored",
+ "either",
+ "itertools",
+ "jsonrpsee",
+ "jsonrpsee-core",
+ "jsonrpsee-proc-macros",
+ "move-core-types",
+ "once_cell",
+ "schemars",
+ "serde 1.0.137",
+ "serde_json",
+ "serde_with",
+ "sui-json",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
+ "sui-types",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -6144,19 +6197,22 @@ name = "sui-node"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "clap 3.1.18",
  "futures",
  "jsonrpsee",
+ "jsonrpsee-core",
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "parking_lot 0.12.1",
  "prometheus_exporter",
  "sui-config",
  "sui-core",
- "sui-gateway",
+ "sui-json-rpc",
  "sui-network",
- "sui-quorum-driver",
+ "sui-open-rpc",
  "sui-storage",
+ "sui-types",
  "telemetry-subscribers",
  "tokio",
  "tracing",
@@ -6555,6 +6611,8 @@ dependencies = [
  "sui-core",
  "sui-framework",
  "sui-gateway",
+ "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-network",
  "sui-node",
  "sui-swarm",

@@ -13,12 +13,14 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
     checkpoints::CheckpointStore,
 };
-use sui_gateway::bcs_api::BcsApiImpl;
-use sui_gateway::json_rpc::JsonRpcServerBuilder;
-use sui_gateway::read_api::{FullNodeApi, ReadApi};
+use sui_json_rpc::bcs_api::BcsApiImpl;
+use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
 use sui_storage::{follower_store::FollowerStore, IndexStore};
 use tracing::info;
+
+use sui_json_rpc::read_api::FullNodeApi;
+use sui_json_rpc::read_api::ReadApi;
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,

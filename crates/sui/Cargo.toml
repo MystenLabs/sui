@@ -52,8 +52,9 @@ sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json = { path = "../sui-json" }
 sui-gateway = { path = "../sui-gateway" }
 sui-node = { path = "../sui-node" }
-sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-swarm = { path = "../sui-swarm" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
@@ -83,6 +84,7 @@ pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.2", features = ["codec"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223"}
 test-utils = { path = "../test-utils" }
+sui-quorum-driver = { path = "../sui-quorum-driver" }
 
 [features]
 benchmark = ["narwhal-node/benchmark"]

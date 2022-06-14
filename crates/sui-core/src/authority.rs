@@ -9,7 +9,6 @@ use crate::{
     epoch::EpochInfoLocals,
     event_handler::EventHandler,
     execution_engine,
-    gateway_types::TransactionEffectsResponse,
     query_helpers::QueryHelpers,
     transaction_input_checker,
 };
@@ -1101,7 +1100,7 @@ impl AuthorityState {
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         QueryHelpers::get_transaction(&self.database, digest)
     }
 

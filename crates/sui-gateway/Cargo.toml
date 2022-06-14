@@ -27,8 +27,8 @@ sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
+sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-open-rpc = { path = "../sui-open-rpc" }
-sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "4e15a34ecf155b7e2d9729d3b07f83c146149f02", features = ["address20"] }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }

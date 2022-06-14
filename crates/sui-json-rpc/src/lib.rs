@@ -1,20 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::SuiRpcModule;
-use anyhow::Result;
-use jsonrpsee::{
-    http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
-    RpcModule,
-};
+use jsonrpsee::http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle};
 use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::server::rpc_module::RpcModule;
+
 use once_cell::sync::Lazy;
 use prometheus_exporter::prometheus::{
     register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
 };
-use std::{env, net::SocketAddr, time::Instant};
-use sui_open_rpc::Project;
+use std::env;
+use std::net::SocketAddr;
+use std::time::Instant;
+use sui_open_rpc::{Module, Project};
 use tracing::info;
+
+pub mod bcs_api;
+pub mod gateway_api;
+pub mod read_api;
 
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
@@ -35,7 +38,7 @@ pub fn sui_rpc_doc() -> Project {
 }
 
 impl JsonRpcServerBuilder {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
         let mut ac_builder = AccessControlBuilder::default();
 
         if let Ok(value) = env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
@@ -60,12 +63,15 @@ impl JsonRpcServerBuilder {
         })
     }
 
-    pub fn register_module<T: SuiRpcModule>(&mut self, module: T) -> Result<()> {
+    pub fn register_module<T: SuiRpcModule>(&mut self, module: T) -> Result<(), anyhow::Error> {
         self.rpc_doc.add_module(T::rpc_doc_module());
         self.module.merge(module.rpc()).map_err(Into::into)
     }
 
-    pub async fn start(mut self, listen_address: SocketAddr) -> Result<HttpServerHandle> {
+    pub async fn start(
+        mut self,
+        listen_address: SocketAddr,
+    ) -> Result<HttpServerHandle, anyhow::Error> {
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
 
@@ -136,4 +142,12 @@ impl Middleware for JsonRpcMetrics {
             self.errors_by_route.with_label_values(&[name]).inc();
         }
     }
+}
+
+pub trait SuiRpcModule
+where
+    Self: Sized,
+{
+    fn rpc(self) -> RpcModule<Self>;
+    fn rpc_doc_module() -> Module;
 }

@@ -1,0 +1,25 @@
+[package]
+name = "sui-json-rpc"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+sui-json-rpc-api = { path = "../sui-json-rpc-api" }
+jsonrpsee = { version = "0.13.1", features = ["full"] }
+jsonrpsee-core = "0.13.1"
+once_cell = "1.12.0"
+prometheus_exporter = "0.8.4"
+anyhow = "1.0.57"
+sui-open-rpc = { path = "../sui-open-rpc" }
+tracing = "0.1.34"
+async-trait = "0.1.53"
+ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
+
+sui-core = { path = "../sui-core" }
+sui-types = { path = "../sui-types" }
+sui-json = { path = "../sui-json" }
+
+workspace-hack = { path = "../workspace-hack"}

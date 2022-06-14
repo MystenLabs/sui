@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use ed25519_dalek::ed25519::signature::Signature;
@@ -11,20 +8,16 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use tracing::debug;
 
-use crate::rpc_gateway::responses::SuiTypeTag;
-use crate::{
-    api::{
-        RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, SuiRpcModule,
-        TransactionBytes,
-    },
-    config::GatewayConfig,
-};
-use sui_config::PersistedConfig;
-use sui_core::gateway_state::{GatewayClient, GatewayState, GatewayTxSeqNumber};
-use sui_core::gateway_types::{
+use crate::SuiRpcModule;
+use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
+use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::SuiTypeTag;
+use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_json::SuiJsonValue;
+use sui_json_rpc_api::{
+    QuorumDriverApiServer, RpcReadApiServer, RpcTransactionBuilderServer, TransactionBytes,
+};
 use sui_open_rpc::Module;
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -33,8 +26,6 @@ use sui_types::{
     crypto::SignableBytes,
     messages::{Transaction, TransactionData},
 };
-
-pub mod responses;
 
 pub struct RpcGatewayImpl {
     client: GatewayClient,
@@ -64,25 +55,8 @@ impl TransactionBuilderImpl {
     }
 }
 
-pub fn create_client(config_path: &Path) -> Result<GatewayClient, anyhow::Error> {
-    let config: GatewayConfig = PersistedConfig::read(config_path).map_err(|e| {
-        anyhow!(
-            "Failed to read config file at {:?}: {}. Have you run `sui genesis` first?",
-            config_path,
-            e
-        )
-    })?;
-    let committee = config.make_committee();
-    let authority_clients = config.make_authority_clients();
-    Ok(Arc::new(GatewayState::new(
-        config.db_folder_path,
-        committee,
-        authority_clients,
-    )?))
-}
-
 #[async_trait]
-impl RpcGatewayApiServer for RpcGatewayImpl {
+impl QuorumDriverApiServer for RpcGatewayImpl {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
@@ -113,7 +87,7 @@ impl SuiRpcModule for RpcGatewayImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcGatewayApiOpenRpc::module_doc()
+        sui_json_rpc_api::QuorumDriverApiOpenRpc::module_doc()
     }
 }
 
@@ -172,7 +146,7 @@ impl SuiRpcModule for GatewayReadApiImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::RpcReadApiOpenRpc::module_doc()
     }
 }
 
@@ -296,6 +270,6 @@ impl SuiRpcModule for TransactionBuilderImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcTransactionBuilderOpenRpc::module_doc()
+        sui_json_rpc_api::RpcTransactionBuilderOpenRpc::module_doc()
     }
 }

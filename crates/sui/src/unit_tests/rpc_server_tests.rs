@@ -4,14 +4,14 @@
 use std::{path::Path, str::FromStr};
 use sui::keystore::{Keystore, SuiKeystore};
 use sui_core::gateway_state::GatewayTxSeqNumber;
-use sui_core::gateway_types::{
+use sui_framework::build_move_package_to_bytes;
+use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_framework::build_move_package_to_bytes;
-use sui_gateway::api::{
-    RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
+use sui_json_rpc_api::{
+    QuorumDriverApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
 };
-use sui_json::SuiJsonValue;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
