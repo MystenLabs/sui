@@ -401,7 +401,8 @@ impl AuthorityState {
         transaction_digest: &TransactionDigest,
         // inputs: &[(InputObjectKind, Object)],
         shared_object_refs: &[ObjectRef],
-    ) -> Result<(), SuiError> {
+        tombstones: &HashSet<ObjectID>,
+    ) -> SuiResult {
         debug!("Validating shared object sequence numbers from consensus...");
 
         // Internal consistency check
@@ -420,12 +421,14 @@ impl AuthorityState {
         // the consensus. Bail if the transaction contains even one shared object that either:
         // (i) was not assigned a sequence number, or
         // (ii) has a different sequence number than the current one.
-
         let lock_errors: Vec<_> = shared_object_refs
             .iter()
             .filter_map(|(object_id, version, _)| {
                 if !shared_locks.contains_key(object_id) {
-                    Some(SuiError::SharedObjectLockNotSetObject)
+                    match tombstones.contains(object_id) {
+                        true => None,
+                        false => Some(SuiError::SharedObjectLockNotSetObject),
+                    }
                 } else if shared_locks[object_id] != *version {
                     Some(SuiError::UnexpectedSequenceNumber {
                         object_id: *object_id,
@@ -470,15 +473,22 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
+        let shared_objects_ids = shared_object_refs.iter().map(|(id, _, _)| id);
+        let tombstones = self.database.tombstones_exist(shared_objects_ids)?;
+
         if !shared_object_refs.is_empty() && !certificate.data.kind.is_system_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
             // only be executed at a time when consensus is turned off.
             // TODO: Add some assert here to make sure consensus is indeed off with is_system_tx.
-            self.check_shared_locks(&transaction_digest, &shared_object_refs)
+            self.check_shared_locks(&transaction_digest, &shared_object_refs, &tombstones)
                 .await?;
         }
+
+        // If there is a tombstone for even a single shared object, we need unlock all
+        // owned-objects and increment the sequence number of all existing shared-objects.
+        // TODO
 
         self.metrics
             .num_input_objs
@@ -653,10 +663,23 @@ impl AuthorityState {
             return self.make_transaction_info(digest).await.map(Some);
         }
 
+        // If the transaction contains only deleted shared-objects, we can execute it immediately.
+        // (Since there are no shared-objects that need a lock.)
+        let shared_inputs = certificate.shared_input_objects();
+        let tombstones = self.database.tombstones_exist(shared_inputs)?;
+        let all_dead = tombstones
+            == certificate
+                .shared_input_objects()
+                .cloned()
+                .collect::<HashSet<_>>();
+
         // If we already assigned locks to this transaction, we can try to execute it immediately.
         // This can happen to transaction previously submitted to consensus that failed execution
         // due to missing dependencies.
-        if self.shared_locks_exist(&certificate).await? {
+        let transaction_already_locked = self.transaction_locks_exist(&certificate).await?;
+
+        // Check whether we can skip consensus and execute immediately.
+        if transaction_already_locked || all_dead {
             // Attempt to execute the transaction. This will only succeed if the authority
             // already executed all its dependencies and if the locks are correctly attributed to
             // the transaction (ie. this transaction is the next to be executed).
@@ -1226,7 +1249,7 @@ impl AuthorityState {
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.
-    async fn shared_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+    async fn transaction_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
         let shared_locks = self.database.sequenced(digest, shared_inputs)?;
@@ -1303,6 +1326,9 @@ impl ExecutionState for AuthorityState {
                     SuiError::NotASharedObjectTransaction
                 );
 
+                // Check if we already assigned locks to the shared objects.
+                let shared_locks = self.transaction_locks_exist(&certificate).await?;
+
                 // If we already executed this transaction, return the signed effects.
                 let digest = certificate.digest();
                 if self.database.effects_exists(digest)? {
@@ -1312,7 +1338,7 @@ impl ExecutionState for AuthorityState {
                 }
 
                 // If we didn't already assigned shared-locks to this transaction, we do it now.
-                if !self.shared_locks_exist(&certificate).await? {
+                if !shared_locks {
                     // Check the certificate. Remember that Byzantine authorities may input anything into
                     // consensus.
                     certificate.verify(&self.committee.load())?;
