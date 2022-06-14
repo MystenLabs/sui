@@ -15,7 +15,7 @@ use futures::{
 use std::future::Future;
 use std::ops::Deref;
 use std::{collections::HashSet, sync::Arc, time::Duration};
-use sui_storage::follower_store::FollowerStore;
+use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -33,6 +33,9 @@ mod configurable_batch_action_client;
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+mod node_sync;
+use node_sync::NodeSyncDigestHandler;
 
 struct Follower<A> {
     peer_name: AuthorityName,
@@ -56,15 +59,25 @@ where
     follower_process(active_authority, degree, GossipDigestHandler::new()).await;
 }
 
-pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
-where
+pub async fn node_sync_process<A>(
+    active_authority: &ActiveAuthority<A>,
+    degree: usize,
+    node_sync_store: Arc<NodeSyncStore>,
+) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // TODO: special case follower for node sync.
-    follower_process(active_authority, degree, GossipDigestHandler::new()).await;
+    let state = active_authority.state.clone();
+    let aggregator = active_authority.net.load().clone();
+    follower_process(
+        active_authority,
+        degree,
+        NodeSyncDigestHandler::new(state, aggregator, node_sync_store),
+    )
+    .await;
 }
 
-async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
+async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
     active_authority: &ActiveAuthority<A>,
     degree: usize,
     handler: Handler,
@@ -128,6 +141,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
 
             peer_names.insert(name);
             let local_active_ref_copy = local_active.clone();
+            let handler_clone = handler.clone();
             gossip_tasks.push(async move {
                 let follower = Follower::new(name, &local_active_ref_copy);
                 // Add more duration if we make more than 1 to ensure overlap
@@ -135,7 +149,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
                 follower
                     .start(
                         Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15),
-                        handler,
+                        handler_clone,
                     )
                     .await
             });

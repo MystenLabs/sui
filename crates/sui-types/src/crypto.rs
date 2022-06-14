@@ -139,6 +139,9 @@ pub struct PublicKeyBytes(
 );
 
 impl PublicKeyBytes {
+    pub const MIN: Self = PublicKeyBytes([u8::MIN; dalek::PUBLIC_KEY_LENGTH]);
+    pub const MAX: Self = PublicKeyBytes([u8::MAX; dalek::PUBLIC_KEY_LENGTH]);
+
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
