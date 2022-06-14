@@ -90,19 +90,17 @@ in how a fullnode is run.
 
 ### Building from source
 
-0. *Prerequisite* Before beginning ensure that the following tools are
-   installed in your environment:
-    - Rust toolchain managed by [rustup](https://rustup.rs/)
-    - `git`
-    - `cmake`
+0. Before beginning ensure that the required tools are installed
+   in your environment as outlined in the
+   [Prerequisites](../build/install#prerequisites) section.
 
 1. Set up your fork of the Sui repository:
-    - Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
+    * Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
       and click the *Fork* button in the top right-hand corner of the screen.
-    - Clone your personal fork of the Sui repository to your local machine
+    * Clone your personal fork of the Sui repository to your local machine
       (ensure that you insert your GitHub username into the URL):
     ```
-    $ git clone https://github.com/<YOUR GITHUB USERNAME>/sui.git
+    $ git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
     ```
 2. `cd` into your `sui` repository:
     ```
@@ -113,7 +111,7 @@ in how a fullnode is run.
     $ git remote add upstream https://github.com/MystenLabs/sui
     $ git fetch upstream
     ```
-4. Check out the 'devnet' branch:
+4. Check out the `devnet` branch:
     ```
     $ git checkout --track upstream/devnet
     ```
@@ -129,13 +127,13 @@ in how a fullnode is run.
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
 7. Edit your `fullnode.yaml` file:
-    - Update the `db-path` field with a path to where the fullnode's database
+    * Update the `db-path` field with a path to where the fullnode's database
       will be located. By default this will create the database in a directory
       `./suidb` relative to your current directory:
     ```yaml
     db-path: "/path/to/db"
     ```
-    - Update the `genesis-file-location` to the path where the `genesis` file
+    * Update the `genesis-file-location` to the path where the `genesis` file
       is located. By default the config looks for a file `genesis.blob` in your
       current directory:
     ```yaml
