@@ -163,7 +163,10 @@ async fn end_to_end() {
             .unwrap();
 
         // If this check fails the transactions will not be included in the checkpoint.
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        assert!(matches!(
+            effects.effects.status,
+            ExecutionStatus::Success { .. }
+        ));
 
         // Add some delay between transactions
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -253,8 +256,11 @@ async fn checkpoint_with_shared_objects() {
         .execute_transaction(&create_counter_transaction)
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, _, _), _) = effects.created[0];
+    assert!(matches!(
+        effects.effects.status,
+        ExecutionStatus::Success { .. }
+    ));
+    let ((counter_id, _, _), _) = effects.effects.created[0];
 
     // We can finally make a valid shared-object transaction (incrementing the counter).
     tokio::task::yield_now().await;
@@ -289,7 +295,10 @@ async fn checkpoint_with_shared_objects() {
             .unwrap();
 
         // If this check fails the transactions will not be included in the checkpoint.
-        assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        assert!(matches!(
+            effects.effects.status,
+            ExecutionStatus::Success { .. }
+        ));
 
         // Add some delay between transactions
         tokio::time::sleep(Duration::from_millis(5)).await;

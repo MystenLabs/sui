@@ -977,34 +977,6 @@ impl TransactionEffects {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
     }
 
-    pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
-        // The mutated or created case
-        if self.mutated_and_created().any(|(oref, _)| *oref == obj_ref) {
-            return true;
-        }
-
-        // The deleted case
-        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_DELETED
-            && self
-                .deleted
-                .iter()
-                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-        {
-            return true;
-        }
-
-        // The wrapped case
-        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED
-            && self
-                .wrapped
-                .iter()
-                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-        {
-            return true;
-        }
-        false
-    }
-
     pub fn to_sign_effects(
         self,
         epoch: EpochId,
@@ -1020,13 +992,6 @@ impl TransactionEffects {
                 authority: *authority_name,
                 signature,
             },
-        }
-    }
-
-    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
-        UnsignedTransactionEffects {
-            effects: self,
-            auth_signature: EmptySignInfo {},
         }
     }
 
@@ -1093,6 +1058,62 @@ impl SignedTransactionEffects {
 impl PartialEq for SignedTransactionEffects {
     fn eq(&self, other: &Self) -> bool {
         self.effects == other.effects && self.auth_signature == other.auth_signature
+    }
+}
+
+pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityQuorumSignInfo>;
+
+impl CertifiedTransactionEffects {
+    pub fn new(
+        epoch: EpochId,
+        effects: TransactionEffects,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> Self {
+        Self {
+            effects,
+            auth_signature: AuthorityQuorumSignInfo { epoch, signatures },
+        }
+    }
+
+    pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
+        // The mutated or created case
+        if self
+            .effects
+            .mutated_and_created()
+            .any(|(oref, _)| *oref == obj_ref)
+        {
+            return true;
+        }
+
+        // The deleted case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_DELETED
+            && self
+                .effects
+                .deleted
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+
+        // The wrapped case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED
+            && self
+                .effects
+                .wrapped
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+        false
+    }
+
+    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
+        UnsignedTransactionEffects {
+            effects: self.effects,
+            auth_signature: EmptySignInfo {},
+        }
     }
 }
 
@@ -1364,5 +1385,5 @@ pub enum ExecuteTransactionResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.
-    EffectsCert(Box<(CertifiedTransaction, TransactionEffects)>),
+    EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }

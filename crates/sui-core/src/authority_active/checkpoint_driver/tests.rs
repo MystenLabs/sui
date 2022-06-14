@@ -49,7 +49,10 @@ async fn checkpoint_active_flow_happy_path() {
                 .expect("All ok.");
 
             // Check whether this is a success?
-            assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+            assert!(matches!(
+                effects.effects.status,
+                ExecutionStatus::Success { .. }
+            ));
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             // Add some delay between transactions

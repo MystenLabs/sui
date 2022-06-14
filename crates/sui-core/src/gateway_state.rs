@@ -448,7 +448,7 @@ where
         &self,
         input_objects: InputObjects,
         transaction: Transaction,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
         // If execute_transaction ever fails due to panic, we should fix the panic and make sure it doesn't.
         // If execute_transaction fails, we should retry the same transaction, and it will
         // properly unlock the objects used in this transaction. In the short term, we will ask the wallet to retry failed transactions.
@@ -485,6 +485,7 @@ where
 
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
+            .effects
             .mutated_and_created()
             .map(|(obj_ref, _)| *obj_ref)
             .collect();
@@ -494,7 +495,7 @@ where
         let update_type = UpdateType::Transaction(
             self.next_tx_seq_number
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-            effects.digest(),
+            effects.effects.digest(),
         );
         self.store
             .update_gateway_state(
@@ -515,7 +516,7 @@ where
         &self,
         transaction: Transaction,
         is_last_retry: bool,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
         transaction.verify_signature()?;
 
         self.sync_input_objects_with_authorities(&transaction)
@@ -898,6 +899,7 @@ where
 
         // Okay to unwrap() since we checked that this is Ok
         let (certificate, effects) = res.unwrap();
+        let effects = effects.effects;
 
         debug!(?tx, ?certificate, ?effects, "Transaction succeeded");
         // Create custom response base on the request type
