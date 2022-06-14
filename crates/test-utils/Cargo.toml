@@ -36,4 +36,6 @@ sui-network = { path = "../sui-network" }
 sui-node = { path = "../sui-node" }
 sui-swarm = { path = "../sui-swarm" }
 sui = { path = "../sui" }
+sui-rpc = { path = "../sui-rpc" }
+sui-rpc-api = { path = "../sui-rpc-api" }
 workspace-hack = { path = "../workspace-hack"}

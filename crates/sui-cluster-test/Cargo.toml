@@ -20,6 +20,7 @@ telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", re
 
 sui-faucet = { path = "../sui-faucet" }
 sui = { path = "../sui" }
+sui-rpc-api = { path = "../sui-rpc-api" }
 sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }

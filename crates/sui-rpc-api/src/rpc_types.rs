@@ -13,7 +13,7 @@ use colored::Colorize;
 use either::Either;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::ser::Error;
@@ -21,6 +21,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use move_core_types::parser::parse_type_tag;
 use serde_with::serde_as;
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
@@ -1257,5 +1258,37 @@ impl From<ObjectInfo> for SuiObjectInfo {
             owner: info.owner,
             previous_transaction: info.previous_transaction,
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectExistsResponse {
+    object_ref: SuiObjectRef,
+    owner: Owner,
+    previous_transaction: TransactionDigest,
+    data: SuiData<SuiParsedMoveObject>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectNotExistsResponse {
+    object_id: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "TypeTag")]
+pub struct SuiTypeTag(String);
+
+impl TryInto<TypeTag> for SuiTypeTag {
+    type Error = anyhow::Error;
+    fn try_into(self) -> Result<TypeTag, Self::Error> {
+        parse_type_tag(&self.0)
+    }
+}
+
+impl From<TypeTag> for SuiTypeTag {
+    fn from(tag: TypeTag) -> Self {
+        Self(format!("{}", tag))
     }
 }
