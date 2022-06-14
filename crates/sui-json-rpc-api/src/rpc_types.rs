@@ -695,7 +695,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 }
             }
         }
-        "0x2::Url::Url" => return Some(fields["url"].clone()),
+        "0x2::url::Url" => return Some(fields["url"].clone()),
         "0x2::ID::ID" => {
             if let SuiMoveValue::Address(id) = fields["bytes"] {
                 return Some(SuiMoveValue::Address(id));

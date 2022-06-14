@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::UrlTests {
-    use sui::Url;
+module sui::url_tests {
+    use sui::url;
     use std::ascii::Self;
 
     const EHASH_LENGTH_MISMATCH: u64 = 0;
@@ -14,8 +14,8 @@ module sui::UrlTests {
         // url strings are not currently validated
         let url_str = ascii::string(x"414243454647");
 
-        let url = Url::new_unsafe(url_str);
-        assert!(Url::inner_url(&url) == url_str, URL_STRING_MISMATCH);
+        let url = url::new_unsafe(url_str);
+        assert!(url::inner_url(&url) == url_str, URL_STRING_MISMATCH);
     }
 
     #[test]
@@ -26,8 +26,8 @@ module sui::UrlTests {
         // length too short
         let hash = x"badf012345";
 
-        let url = Url::new_unsafe(url_str);
-        let _ = Url::new_unsafe_url_commitment(url, hash);
+        let url = url::new_unsafe(url_str);
+        let _ = url::new_unsafe_url_commitment(url, hash);
     }
 
     #[test]
@@ -37,15 +37,15 @@ module sui::UrlTests {
         // 32 bytes
         let hash = x"1234567890123456789012345678901234567890abcdefabcdefabcdefabcdef";
 
-        let url = Url::new_unsafe(url_str);
-        let url_commit = Url::new_unsafe_url_commitment(url, hash);
+        let url = url::new_unsafe(url_str);
+        let url_commit = url::new_unsafe_url_commitment(url, hash);
 
-        assert!(Url::url_commitment_resource_hash(&url_commit) == hash, EHASH_LENGTH_MISMATCH);
-        assert!(Url::url_commitment_inner_url(&url_commit) == url_str, URL_STRING_MISMATCH);
+        assert!(url::url_commitment_resource_hash(&url_commit) == hash, EHASH_LENGTH_MISMATCH);
+        assert!(url::url_commitment_inner_url(&url_commit) == url_str, URL_STRING_MISMATCH);
 
         let url_str = ascii::string(x"37414243454647");
 
-        Url::url_commitment_update(&mut url_commit, url_str);
-        assert!(Url::url_commitment_inner_url(&url_commit) == url_str, URL_STRING_MISMATCH);
+        url::url_commitment_update(&mut url_commit, url_str);
+        assert!(url::url_commitment_inner_url(&url_commit) == url_str, URL_STRING_MISMATCH);
     }
 }

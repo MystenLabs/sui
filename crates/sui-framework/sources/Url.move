@@ -5,7 +5,7 @@
 /// Url: Sui type which wraps a URL
 /// UrlCommitment: Sui type which wraps a Url but also includes an immutable commitment
 /// to the hash of the resource at the given URL
-module sui::Url {
+module sui::url {
     use std::ascii::{Self, String};
     use std::vector;
 

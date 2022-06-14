@@ -3,7 +3,7 @@
 
 module sui::ERC721Metadata {
     use std::ascii;
-    use sui::Url::{Self, Url};
+    use sui::url::{Self, Url};
     use sui::utf8;
 
     // TODO: add symbol()?
@@ -36,7 +36,7 @@ module sui::ERC721Metadata {
         ERC721Metadata {
             token_id,
             name: utf8::string_unsafe(name),
-            token_uri: Url::new_unsafe(uri_str),
+            token_uri: url::new_unsafe(uri_str),
         }
     }
 

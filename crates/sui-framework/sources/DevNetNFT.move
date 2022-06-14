@@ -6,7 +6,7 @@
 /// (https://docs.sui.io/build/wallet) to mint an NFT. For example,
 /// `wallet example-nft --name <Name> --description <Description> --url <URL>`
 module sui::DevNetNFT {
-    use sui::Url::{Self, Url};
+    use sui::url::{Self, Url};
     use sui::utf8;
     use sui::ID::{Self, ID, VersionedID};
     use sui::Event;
@@ -45,7 +45,7 @@ module sui::DevNetNFT {
             id: TxContext::new_id(ctx),
             name: utf8::string_unsafe(name),
             description: utf8::string_unsafe(description),
-            url: Url::new_unsafe_from_bytes(url)
+            url: url::new_unsafe_from_bytes(url)
         };
         let sender = TxContext::sender(ctx);
         Event::emit(MintNFTEvent {

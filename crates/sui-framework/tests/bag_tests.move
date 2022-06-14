@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::bagTests {
+module sui::bag_tests {
     use sui::bag::{Self, Bag};
     use sui::ID::{Self, VersionedID};
     use sui::TestScenario;
