@@ -37,22 +37,19 @@ const Network = () => {
 
     return (
         <div
-            className={st['network-container']}
+            className={st.networkContainer}
             ref={ref}
             onClick={openNetworkSelector}
         >
             {selectedApiEnv ? (
                 <div className={st.network} style={netColor}>
-                    <BsIcon icon="circle-fill" className={st['network-icon']} />
-                    <span className={st['network-name']}>
+                    <BsIcon icon="circle-fill" className={st.networkIcon} />
+                    <span className={st.networkName}>
                         {API_ENV_TO_INFO[selectedApiEnv].name}
                     </span>
                     <BsIcon
                         icon={showNetworkSelect ? 'chevron-up' : 'chevron-down'}
-                        className={cl(
-                            st['network-icon'],
-                            st['network-dropdown']
-                        )}
+                        className={cl(st.networkIcon, st.networkDropdown)}
                     />
                 </div>
             ) : null}

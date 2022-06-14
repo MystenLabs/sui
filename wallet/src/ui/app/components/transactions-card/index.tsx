@@ -42,7 +42,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                     type={ExplorerLinkType.address}
                     address={txn.From}
                     title="View on Sui Explorer"
-                    className={st['explorer-link']}
+                    className={st.explorerLink}
                 >
                     {useMiddleEllipsis(txn.From || '', 20)}
                 </ExplorerLink>
