@@ -12,7 +12,7 @@
 module RC::RegulatedCoin {
     use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
 
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
     /// with all the other Coins and methods, as well as the `creator` field, which
@@ -60,7 +60,7 @@ module RC::RegulatedCoin {
     /// Destroy `RegulatedCoin` and return its `Balance`;
     public fun into_balance<T: drop>(_: T, coin: RegulatedCoin<T>): Balance<T> {
         let RegulatedCoin { balance, creator: _, id } = coin;
-        Sui::ID::delete(id);
+        Sui::id::delete(id);
         balance
     }
 
@@ -94,7 +94,7 @@ module ABC::ABC {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin, TreasuryCap};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::Transfer;
     use std::vector;
 
@@ -209,7 +209,7 @@ module ABC::ABC {
         assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
 
         balance::join(borrow_mut(coin), balance);
-        ID::delete(id)
+        id::delete(id)
     }
 
     // === Public: Swap RegulatedCoin <-> Coin ===

@@ -3,7 +3,7 @@
 
 module sui::Transfer {
     use std::option::{Self, Option};
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
     friend sui::bag;
@@ -29,7 +29,7 @@ module sui::Transfer {
     /// Check whether the `child` object is actually the child object
     /// owned by the parent through the given `child_ref`.
     public fun is_child<T: key>(child_ref: &ChildRef<T>, child: &T): bool {
-        &child_ref.child_id == ID::id(child)
+        &child_ref.child_id == id::id(child)
     }
 
     /// Check whether the `child_ref`'s child_id is `id`.
@@ -63,8 +63,8 @@ module sui::Transfer {
     /// Transfer ownership of `obj` to another object `owner`.
     /// Returns a non-droppable struct ChildRef that represents the ownership.
     public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R): ChildRef<T> {
-        let obj_id = *ID::id(&obj);
-        let owner_id = ID::id_address(ID::id(owner));
+        let obj_id = *id::id(&obj);
+        let owner_id = id::id_address(id::id(owner));
         transfer_internal(obj, owner_id, true);
         ChildRef { child_id: obj_id }
     }
@@ -78,9 +78,9 @@ module sui::Transfer {
     /// The `owner_id` will be returned (so that it can be used to continue creating the parent object),
     /// along returned is the ChildRef as a reference to the ownership.
     public fun transfer_to_object_id<T: key>(obj: T, owner_id: VersionedID): (VersionedID, ChildRef<T>) {
-        let obj_id = *ID::id(&obj);
-        let inner_owner_id = *ID::inner(&owner_id);
-        transfer_internal(obj, ID::id_address(&inner_owner_id), true);
+        let obj_id = *id::id(&obj);
+        let inner_owner_id = *id::inner(&owner_id);
+        transfer_internal(obj, id::id_address(&inner_owner_id), true);
         let child_ref = ChildRef { child_id: obj_id };
         (owner_id, child_ref)
     }
@@ -108,7 +108,7 @@ module sui::Transfer {
     /// consume a ChildRef. It will return a ChildRef that represents the new ownership.
     public fun transfer_child_to_object<T: key, R: key>(child: T, child_ref: ChildRef<T>, owner: &mut R): ChildRef<T> {
         let ChildRef { child_id } = child_ref;
-        assert!(&child_id == ID::id(&child), EChildIDMismatch);
+        assert!(&child_id == id::id(&child), EChildIDMismatch);
         transfer_to_object(child, owner)
     }
 
@@ -117,7 +117,7 @@ module sui::Transfer {
     /// owned by an object.
     public fun transfer_child_to_address<T: key>(child: T, child_ref: ChildRef<T>, recipient: address) {
         let ChildRef { child_id } = child_ref;
-        assert!(&child_id == ID::id(&child), EChildIDMismatch);
+        assert!(&child_id == id::id(&child), EChildIDMismatch);
         transfer(child, recipient)
     }
 
@@ -127,8 +127,8 @@ module sui::Transfer {
     /// has been unpacked, so it is now safe to delete `child_ref`.
     public fun delete_child_object<T: key>(child_id: VersionedID, child_ref: ChildRef<T>) {
         let ChildRef { child_id: child_ref_id } = child_ref;
-        assert!(&child_ref_id == ID::inner(&child_id), EChildIDMismatch);
-        delete_child_object_internal(ID::id_address(&child_ref_id), child_id)
+        assert!(&child_ref_id == id::inner(&child_id), EChildIDMismatch);
+        delete_child_object_internal(id::id_address(&child_ref_id), child_id)
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no

@@ -4,7 +4,7 @@
 module NFTs::Chat {
     use std::ascii::{Self, String};
     use std::option::{Self, Option, some};
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector::length;
@@ -60,7 +60,7 @@ module NFTs::Chat {
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        post_internal(ID::new(app_identifier), text, option::none(), metadata, ctx);
+        post_internal(id::new(app_identifier), text, option::none(), metadata, ctx);
     }
 
     /// Mint (post) a Chat object and reference another object (i.e., to simulate retweet, reply, like, attach).
@@ -73,12 +73,12 @@ module NFTs::Chat {
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        post_internal(ID::new(app_identifier), text, some(ID::new(ref_identifier)), metadata, ctx);
+        post_internal(id::new(app_identifier), text, some(id::new(ref_identifier)), metadata, ctx);
     }
 
     /// Burn a Chat object.
     public entry fun burn(chat: Chat) {
         let Chat { id, app_id: _, text: _, ref_id: _, metadata: _ } = chat;
-        ID::delete(id);
+        id::delete(id);
     }
 }

@@ -5,7 +5,7 @@ module ObjectWrapping::ObjectWrapping {
     use std::option::{Self, Option};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
 
     struct Child has key, store {
         id: VersionedID,
@@ -49,11 +49,11 @@ module ObjectWrapping::ObjectWrapping {
 
     public entry fun delete_parent(parent: Parent) {
         let Parent { id: parent_id, child: child_opt } = parent;
-        ID::delete(parent_id);
+        id::delete(parent_id);
         if (option::is_some(&child_opt)) {
             let child = option::extract(&mut child_opt);
             let Child { id: child_id } = child;
-            ID::delete(child_id);
+            id::delete(child_id);
         };
         option::destroy_none(child_opt)
     }

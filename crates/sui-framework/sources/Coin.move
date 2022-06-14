@@ -3,7 +3,7 @@
 
 module sui::Coin {
     use sui::balance::{Self, Balance};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector;
@@ -41,7 +41,7 @@ module sui::Coin {
     /// Destruct a Coin wrapper and keep the balance.
     public fun into_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
-        ID::delete(id);
+        id::delete(id);
         balance
     }
 
@@ -78,7 +78,7 @@ module sui::Coin {
     /// Aborts if `c.value + self.value > U64_MAX`
     public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
-        ID::delete(id);
+        id::delete(id);
         balance::join(&mut self.balance, balance);
     }
 
@@ -103,7 +103,7 @@ module sui::Coin {
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
         let Coin { id, balance } = c;
-        ID::delete(id);
+        id::delete(id);
         balance::destroy_zero(balance);
     }
 
@@ -154,7 +154,7 @@ module sui::Coin {
     public fun burn<T>(c: Coin<T>, cap: &mut TreasuryCap<T>) {
         let Coin { id, balance } = c;
         let value = balance::destroy<T>(balance);
-        ID::delete(id);
+        id::delete(id);
         cap.total_supply = cap.total_supply - value
     }
 
@@ -206,7 +206,7 @@ module sui::Coin {
     /// Destroy a `Coin` with any value in it for testing purposes.
     public fun destroy_for_testing<T>(self: Coin<T>): u64 {
         let Coin { id, balance } = self;
-        ID::delete(id);
+        id::delete(id);
         balance::destroy_for_testing(balance)
     }
 }

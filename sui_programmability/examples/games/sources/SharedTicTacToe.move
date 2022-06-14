@@ -17,8 +17,8 @@
 module Games::SharedTicTacToe {
     use std::vector;
 
-    use sui::ID::{Self, ID, VersionedID};
-    use sui::Event;
+    use sui::id::{Self, ID, VersionedID};
+    use sui::event;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -98,7 +98,7 @@ module Games::SharedTicTacToe {
 
         if (game.game_status != IN_PROGRESS) {
             // Notify the server that the game ended so that it can delete the game.
-            Event::emit(GameEndEvent { game_id: *ID::inner(&game.id) });
+            event::emit(GameEndEvent { game_id: *id::inner(&game.id) });
             if (game.game_status == X_WIN) {
                 Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
@@ -109,12 +109,12 @@ module Games::SharedTicTacToe {
 
     public entry fun delete_game(game: TicTacToe) {
         let TicTacToe { id, gameboard: _, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
-        ID::delete(id);
+        id::delete(id);
     }
 
     public entry fun delete_trophy(trophy: Trophy) {
         let Trophy { id } = trophy;
-        ID::delete(id);
+        id::delete(id);
     }
 
     public fun get_status(game: &TicTacToe): u8 {

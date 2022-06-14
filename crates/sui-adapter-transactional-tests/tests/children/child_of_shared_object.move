@@ -6,7 +6,7 @@
 //# publish
 
 module T3::O3 {
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -23,7 +23,7 @@ module T3::O3 {
 //# publish
 
 module T2::O2 {
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::Transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
     use T3::O3::O3;
@@ -54,7 +54,7 @@ module T2::O2 {
 //# publish
 
 module T1::O1 {
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::Transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
     use T2::O2::O2;

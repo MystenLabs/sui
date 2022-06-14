@@ -4,7 +4,7 @@
 #[test_only]
 module sui::bag_tests {
     use sui::bag::{Self, Bag};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::TestScenario;
     use sui::tx_context;
 
@@ -37,9 +37,9 @@ module sui::bag_tests {
             assert!(bag::size(&bag) == 0, EBAG_SIZE_MISMATCH);
 
             let obj1 = Object1 { id: tx_context::new_id(TestScenario::ctx(scenario)) };
-            let id1 = *ID::id(&obj1);
+            let id1 = *id::id(&obj1);
             let obj2 = Object2 { id: tx_context::new_id(TestScenario::ctx(scenario)) };
-            let id2 = *ID::id(&obj2);
+            let id2 = *id::id(&obj2);
 
             bag::add(&mut bag, obj1);
             bag::add(&mut bag, obj2);

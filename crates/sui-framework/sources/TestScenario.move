@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::TestScenario {
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
     use std::vector;
@@ -186,7 +186,7 @@ module sui::TestScenario {
         let signer_address = sender(scenario);
         let objects = get_object_owned_inventory<T2>(
             signer_address,
-            ID::id_address(ID::id(parent_obj)),
+            id::id_address(id::id(parent_obj)),
             last_tx_start_index(scenario),
         );
         remove_unique_object_from_inventory(scenario, objects)
@@ -240,7 +240,7 @@ module sui::TestScenario {
         let signer_address = sender(scenario);
         let objects = get_object_owned_inventory<T2>(
             signer_address,
-            ID::id_address(ID::id(parent_obj)),
+            id::id_address(id::id(parent_obj)),
             last_tx_start_index(scenario),
         );
         let child_object_opt = find_object_by_id_in_inventory(objects, &child_id);
@@ -259,7 +259,7 @@ module sui::TestScenario {
     /// transaction sender.
     /// Aborts if `t` was not previously taken from the inventory via a call to `take_owned` or similar.
     public fun return_owned<T: key>(scenario: &mut Scenario, t: T) {
-        let id = ID::id(&t);
+        let id = id::id(&t);
         let removed = &mut scenario.removed;
         // TODO: add Vector::remove_element to Std that does this 3-liner
         let (is_mem, idx) = vector::index_of(removed, id);
@@ -296,7 +296,7 @@ module sui::TestScenario {
         // yet been removed from the inventory.
         let res = vector::length(&objects) == 1;
         if (res) {
-            let id = ID::id(vector::borrow(&objects, 0));
+            let id = id::id(vector::borrow(&objects, 0));
             res = !vector::contains(&scenario.removed, id);
         };
         drop_object_for_testing(objects);
@@ -345,7 +345,7 @@ module sui::TestScenario {
         if (objects_len == 1) {
             // found a unique object. ensure that it hasn't already been removed, then return it
             let t = vector::pop_back(&mut inventory);
-            let id = ID::id(&t);
+            let id = id::id(&t);
             vector::destroy_empty(inventory);
 
             assert!(!vector::contains(&scenario.removed, id), EAlreadyRemovedObject);
@@ -362,7 +362,7 @@ module sui::TestScenario {
         let object_opt = option::none();
         while (!vector::is_empty(&inventory)) {
             let element = vector::pop_back(&mut inventory);
-            if (ID::id(&element) == id) {
+            if (id::id(&element) == id) {
                 // Within the same test scenario, there is no way to
                 // create two objects with the same ID. So this should
                 // be unique.

@@ -8,7 +8,7 @@
 module NFTs::CrossChainAirdrop {
     use std::vector;
     use sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
-    use sui::ID::{VersionedID};
+    use sui::id::{VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 

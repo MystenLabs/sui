@@ -6,8 +6,8 @@ module sui::sui_system {
     use sui::Coin::{Self, Coin, TreasuryCap};
     use sui::delegation::{Self, Delegation};
     use sui::epoch_reward_record::{Self, EpochRewardRecord};
-    use sui::ID::{Self, VersionedID};
-    use sui::LockedCoin::{Self, LockedCoin};
+    use sui::id::{Self, VersionedID};
+    use sui::locked_coin::{Self, LockedCoin};
     use sui::SUI::SUI;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -61,7 +61,7 @@ module sui::sui_system {
     ) {
         let state = SuiSystemState {
             // Use a hardcoded ID.
-            id: ID::get_sui_system_state_object_id(),
+            id: id::get_sui_system_state_object_id(),
             epoch: 0,
             validators: validator_set::new(validators),
             treasury_cap,
@@ -176,7 +176,7 @@ module sui::sui_system {
         validator_address: address,
         ctx: &mut TxContext,
     ) {
-        let amount = LockedCoin::value(&delegate_stake);
+        let amount = locked_coin::value(&delegate_stake);
         validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
 
         // Delegation starts from the next epoch.

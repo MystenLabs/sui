@@ -36,7 +36,7 @@ module NFTs::Auction {
     use sui::Coin::{Self, Coin};
     use sui::balance::Balance;
     use sui::SUI::SUI;
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self,TxContext};
 
@@ -97,7 +97,7 @@ module NFTs::Auction {
         assert!(AuctionLib::auction_id(auction) == &auction_id, EWrongAuction);
         AuctionLib::update_auction(auction, bidder, balance, ctx);
 
-        ID::delete(id);
+        id::delete(id);
     }
 
     /// Ends the auction - transfers item to the currently highest

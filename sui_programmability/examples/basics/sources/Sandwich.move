@@ -6,7 +6,7 @@
 module Basics::Sandwich {
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::SUI::SUI;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -86,8 +86,8 @@ module Basics::Sandwich {
     ) {
         let Ham { id: ham_id } = ham;
         let Bread { id: bread_id } = bread;
-        ID::delete(ham_id);
-        ID::delete(bread_id);
+        id::delete(ham_id);
+        id::delete(bread_id);
         Transfer::transfer(Sandwich { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
     }
 

@@ -3,7 +3,7 @@
 
 #[test_only]
 module DeFi::SharedEscrowTests {
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::TestScenario::{Self, Scenario};
     use sui::tx_context::{Self};
 
@@ -45,7 +45,7 @@ module DeFi::SharedEscrowTests {
     fun test_cancel() {
         // Alice creates the escrow
         let (scenario, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
-        ID::delete(id);
+        id::delete(id);
         let scenario = &mut scenario;
         // Alice does not own item A
         assert!(!owns_object<ItemA>(scenario, &ALICE_ADDRESS), EReturnTransferFailed);
@@ -62,7 +62,7 @@ module DeFi::SharedEscrowTests {
     fun test_cancel_with_wrong_owner() {
         // Alice creates the escrow
         let (scenario, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
-        ID::delete(id);
+        id::delete(id);
         let scenario = &mut scenario;
 
         // Bob tries to cancel the escrow that Alice owns and expects failure
@@ -74,7 +74,7 @@ module DeFi::SharedEscrowTests {
     fun test_swap_wrong_objects() {
         // Alice creates the escrow in exchange for item b
         let (scenario, item_b_versioned_id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
-        ID::delete(item_b_versioned_id);
+        id::delete(item_b_versioned_id);
         let scenario = &mut scenario;
 
         // Bob tries to exchange item C for the escrowed item A and expects failure
@@ -100,7 +100,7 @@ module DeFi::SharedEscrowTests {
     fun test_cancel_twice() {
         // Alice creates the escrow
         let (scenario, id) = create_escrow(ALICE_ADDRESS, BOB_ADDRESS);
-        ID::delete(id);
+        id::delete(id);
         let scenario = &mut scenario;
         // Alice does not own item A
         assert!(!owns_object<ItemA>(scenario, &ALICE_ADDRESS), EReturnTransferFailed);
@@ -152,7 +152,7 @@ module DeFi::SharedEscrowTests {
         TestScenario::next_tx(scenario, &bob);
         let ctx = TestScenario::ctx(scenario);
         let item_b_versioned_id = tx_context::new_id(ctx);
-        let item_b_id = *ID::inner(&item_b_versioned_id);
+        let item_b_id = *id::inner(&item_b_versioned_id);
 
         // Alice creates the escrow
         TestScenario::next_tx(scenario, &alice);

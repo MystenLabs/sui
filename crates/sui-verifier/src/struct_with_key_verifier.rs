@@ -72,7 +72,7 @@ fn verify_key_structs(module: &CompiledModule) -> SuiResult {
         fp_ensure!(
             id_type_struct_name == "VersionedID"
                 && id_type_module_address == &SUI_FRAMEWORK_ADDRESS
-                && id_type_module_name == "ID",
+                && id_type_module_name == "id",
             verification_failure(format!(
                 "First field of struct {} must be of type {}::ID::VersionedID, {}::{}::{} type found",
                 name,

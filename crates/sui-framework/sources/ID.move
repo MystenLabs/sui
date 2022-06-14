@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Sui object identifiers
-module sui::ID {
+module sui::id {
     use std::bcs;
     use std::vector;
 
@@ -48,7 +48,7 @@ module sui::ID {
     /// A globally unique ID paired with a version. Similar to `UniqueID`,
     /// this is a privileged type that can only be derived from a `TxContext`
     /// VersionedID doesn't have the `drop` ability, so deleting a `VersionedID`
-    /// requires a call to `ID::delete`
+    /// requires a call to `id::delete`
     struct VersionedID has store {
         id: UniqueID,
         /// Version number for the object. The version number is incremented each

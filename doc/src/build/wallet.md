@@ -545,14 +545,14 @@ Here is example `json` output:
                 "fields": {
                   "bytes": "124bbde643189b573c98d05c092f4927225421d7"
                 },
-                "type": "0x2::ID::ID"
+                "type": "0x2::id::ID"
               }
             },
-            "type": "0x2::ID::UniqueID"
+            "type": "0x2::id::UniqueID"
           },
           "version": 1
         },
-        "type": "0x2::ID::VersionedID"
+        "type": "0x2::id::VersionedID"
       }
     },
     "type": "0x2::Coin::Coin<0x2::SUI::SUI>"

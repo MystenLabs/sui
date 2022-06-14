@@ -10,7 +10,7 @@ module FungibleTokens::BASKET {
     use FungibleTokens::MANAGED::MANAGED;
     use sui::Coin::{Self, Coin, TreasuryCap};
     use sui::balance::{Self, Balance};
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::SUI::SUI;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};

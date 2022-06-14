@@ -3,8 +3,8 @@
 
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module sui::ObjectBasics {
-    use sui::Event;
-    use sui::ID::{Self, VersionedID};
+    use sui::event;
+    use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
     use sui::Transfer;
 
@@ -45,12 +45,12 @@ module sui::ObjectBasics {
     public entry fun update(o1: &mut Object, o2: &Object) {
         o1.value = o2.value;
         // emit an event so the world can see the new value
-        Event::emit(NewValueEvent { new_value: o2.value })
+        event::emit(NewValueEvent { new_value: o2.value })
     }
 
     public entry fun delete(o: Object) {
         let Object { id, value: _ } = o;
-        ID::delete(id);
+        id::delete(id);
     }
 
     public entry fun wrap(o: Object, ctx: &mut TxContext) {
@@ -59,7 +59,7 @@ module sui::ObjectBasics {
 
     public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
-        ID::delete(id);
+        id::delete(id);
         Transfer::transfer(o, tx_context::sender(ctx))
     }
 }

@@ -7,7 +7,7 @@ module NFTs::SharedAuctionTests {
 
     use sui::Coin::{Self, Coin};
     use sui::SUI::SUI;
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::TestScenario::Self;
     use sui::tx_context::{Self, TxContext};
 

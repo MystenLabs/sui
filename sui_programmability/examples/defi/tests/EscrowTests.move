@@ -3,7 +3,7 @@
 
 #[test_only]
 module DeFi::EscrowTests {
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::TestScenario::{Self, Scenario};
     use sui::tx_context::{Self};
 
@@ -108,10 +108,10 @@ module DeFi::EscrowTests {
         let ctx = TestScenario::ctx(scenario);
         let item_b_versioned_id = tx_context::new_id(ctx);
 
-        let item_a_id = *ID::inner(&item_a_versioned_id);
-        let item_b_id = *ID::inner(&item_b_versioned_id);
+        let item_a_id = *id::inner(&item_a_versioned_id);
+        let item_b_id = *id::inner(&item_b_versioned_id);
         if (override_exchange_for) {
-            item_b_id = ID::new(RANDOM_ADDRESS);
+            item_b_id = id::new(RANDOM_ADDRESS);
         };
 
         // Alice sends item A to the third party

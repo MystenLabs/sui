@@ -13,7 +13,7 @@ module sui::bag {
     use std::errors;
     use std::option::{Self, Option};
     use std::vector::Self;
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
 
@@ -79,7 +79,7 @@ module sui::bag {
             size(c) + 1 <= c.max_capacity,
             errors::limit_exceeded(EMaxCapacityExceeded)
         );
-        let id = ID::id(&object);
+        let id = id::id(&object);
         if (contains(c, id)) {
             abort EObjectDoubleAdd
         };
@@ -109,7 +109,7 @@ module sui::bag {
     /// Remove and return the object from the Bag.
     /// Abort if the object is not found.
     public fun remove<T: key + store>(c: &mut Bag, object: T): T {
-        let idx = find(c, ID::id(&object));
+        let idx = find(c, id::id(&object));
         if (option::is_none(&idx)) {
             abort EObjectNotFound
         };

@@ -5,8 +5,8 @@ module sui::delegation {
     use std::option::{Self, Option};
     use sui::balance::Balance;
     use sui::Coin::{Self, Coin};
-    use sui::ID::{Self, VersionedID};
-    use sui::LockedCoin::{Self, LockedCoin};
+    use sui::id::{Self, VersionedID};
+    use sui::locked_coin::{Self, LockedCoin};
     use sui::SUI::SUI;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -71,8 +71,8 @@ module sui::delegation {
         stake: LockedCoin<SUI>,
         ctx: &mut TxContext,
     ) {
-        let delegate_amount = LockedCoin::value(&stake);
-        let (balance, epoch_lock) = LockedCoin::into_balance(stake);
+        let delegate_amount = locked_coin::value(&stake);
+        let (balance, epoch_lock) = locked_coin::into_balance(stake);
         let delegation = Delegation {
             id: tx_context::new_id(ctx),
             active_delegation: option::some(balance),
@@ -101,7 +101,7 @@ module sui::delegation {
             Transfer::transfer(Coin::from_balance(stake, ctx), sender);
         } else {
             let locked_until_epoch = option::extract(&mut self.coin_locked_until_epoch);
-            LockedCoin::new_from_balance(stake, locked_until_epoch, sender, ctx);
+            locked_coin::new_from_balance(stake, locked_until_epoch, sender, ctx);
         };
 
         self.ending_epoch = option::some(ending_epoch);
@@ -133,7 +133,7 @@ module sui::delegation {
             coin_locked_until_epoch,
             validator_address: _,
         } = self;
-        ID::delete(id);
+        id::delete(id);
         option::destroy_none(active_delegation);
         option::destroy_none(coin_locked_until_epoch);
         let ending_epoch = *option::borrow(&ending_epoch);

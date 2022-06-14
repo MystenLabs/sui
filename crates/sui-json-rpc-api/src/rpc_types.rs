@@ -696,17 +696,17 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
             }
         }
         "0x2::url::Url" => return Some(fields["url"].clone()),
-        "0x2::ID::ID" => {
+        "0x2::id::ID" => {
             if let SuiMoveValue::Address(id) = fields["bytes"] {
                 return Some(SuiMoveValue::Address(id));
             }
         }
-        "0x2::ID::UniqueID" => {
+        "0x2::id::UniqueID" => {
             if let SuiMoveValue::Address(id) = fields["id"].clone() {
                 return Some(SuiMoveValue::Address(id));
             }
         }
-        "0x2::ID::VersionedID" => {
+        "0x2::id::VersionedID" => {
             if let SuiMoveValue::Address(address) = fields["id"].clone() {
                 if let SuiMoveValue::Number(version) = fields["version"].clone() {
                     return Some(SuiMoveValue::VersionedID {

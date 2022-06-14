@@ -5,8 +5,8 @@
 /// associated logic.
 module Games::Hero {
     use sui::Coin::{Self, Coin};
-    use sui::Event;
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::event;
+    use sui::id::{Self, ID, VersionedID};
     use sui::Math;
     use sui::SUI::SUI;
     use sui::Transfer;
@@ -128,7 +128,7 @@ module Games::Hero {
     fun create(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         let id = tx_context::new_id(ctx);
-        let game_id = *ID::inner(&id);
+        let game_id = *id::inner(&id);
 
         Transfer::freeze_object(GameInfo {
             id,
@@ -178,13 +178,13 @@ module Games::Hero {
             level_up_sword(option::borrow_mut(&mut hero.sword), 1)
         };
         // let the world know about the hero's triumph by emitting an event!
-        Event::emit(BoarSlainEvent {
+        event::emit(BoarSlainEvent {
             slayer_address: tx_context::sender(ctx),
-            hero: *ID::inner(&hero.id),
-            boar: *ID::inner(&boar_id),
+            hero: *id::inner(&hero.id),
+            boar: *id::inner(&boar_id),
             game_id: id(game)
         });
-        ID::delete(boar_id);
+        id::delete(boar_id);
     }
 
     /// Strength of the hero when attacking
@@ -219,7 +219,7 @@ module Games::Hero {
     public fun heal(hero: &mut Hero, potion: Potion) {
         assert!(hero.game_id == potion.game_id, 403);
         let Potion { id, potency, game_id: _ } = potion;
-        ID::delete(id);
+        id::delete(id);
         let new_hp = hero.hp + potency;
         // cap hero's HP at MAX_HP to avoid int overflows
         hero.hp = Math::min(new_hp, MAX_HP)
@@ -330,7 +330,7 @@ module Games::Hero {
     }
 
     public fun id(game_info: &GameInfo): ID {
-        *ID::inner(&game_info.id)
+        *id::inner(&game_info.id)
     }
 
     // --- Testing functions ---
@@ -341,16 +341,16 @@ module Games::Hero {
     #[test_only]
     public fun delete_hero_for_testing(hero: Hero) {
         let Hero { id, hp: _, experience: _, sword, game_id: _ } = hero;
-        ID::delete(id);
+        id::delete(id);
         let sword = option::destroy_some(sword);
         let Sword { id, magic: _, strength: _, game_id: _ } = sword;
-        ID::delete(id)
+        id::delete(id)
     }
 
     #[test_only]
     public fun delete_game_admin_for_testing(admin: GameAdmin) {
         let GameAdmin { id, boars_created: _, potions_created: _, game_id: _ } = admin;
-        ID::delete(id);
+        id::delete(id);
     }
 
     #[test]

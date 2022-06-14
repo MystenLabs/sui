@@ -7,9 +7,9 @@ module sui::test_coin {
     use sui::Coin;
     use sui::balance;
     use sui::SUI::SUI;
-    use sui::LockedCoin::LockedCoin;
+    use sui::locked_coin::LockedCoin;
     use sui::tx_context;
-    use sui::LockedCoin;
+    use sui::locked_coin;
     use sui::Coin::Coin;
 
     #[test]
@@ -49,7 +49,7 @@ module sui::test_coin {
 
         TestScenario::next_tx(scenario, &TEST_SENDER_ADDR);
         // Lock up the coin until epoch 2.
-        LockedCoin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
+        locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
 
         // Advance the epoch by 2.
         TestScenario::next_epoch(scenario);
@@ -59,7 +59,7 @@ module sui::test_coin {
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
         // The unlock should go through since epoch requirement is met.
-        LockedCoin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
+        locked_coin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
 
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let unlocked_coin = TestScenario::take_owned<Coin<SUI>>(scenario);
@@ -76,7 +76,7 @@ module sui::test_coin {
 
         TestScenario::next_tx(scenario, &TEST_SENDER_ADDR);
         // Lock up the coin until epoch 2.
-        LockedCoin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
+        locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
 
         // Advance the epoch by 1.
         TestScenario::next_epoch(scenario);
@@ -85,6 +85,6 @@ module sui::test_coin {
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
         // The unlock should fail.
-        LockedCoin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
+        locked_coin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
     }
 }

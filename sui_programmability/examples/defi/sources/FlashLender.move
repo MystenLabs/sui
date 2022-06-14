@@ -5,7 +5,7 @@
 module DeFi::FlashLender {
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -69,7 +69,7 @@ module DeFi::FlashLender {
     /// current transaction.
     public fun new<T>(to_lend: Balance<T>, fee: u64, ctx: &mut TxContext): AdminCap {
         let id = tx_context::new_id(ctx);
-        let flash_lender_id = *ID::inner(&id);
+        let flash_lender_id = *id::inner(&id);
         let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
         Transfer::share_object(flash_lender);
@@ -96,7 +96,7 @@ module DeFi::FlashLender {
         assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
         let loan = Coin::withdraw(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
-        let receipt = Receipt { flash_lender_id: *ID::id(self), repay_amount };
+        let receipt = Receipt { flash_lender_id: *id::id(self), repay_amount };
         (loan, receipt)
     }
 
@@ -105,7 +105,7 @@ module DeFi::FlashLender {
     /// that issued the original loan.
     public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receipt<T>) {
         let Receipt { flash_lender_id, repay_amount } = receipt;
-        assert!(ID::id(self) == &flash_lender_id, ERepayToWrongLender);
+        assert!(id::id(self) == &flash_lender_id, ERepayToWrongLender);
         assert!(Coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
 
         Coin::deposit(&mut self.to_lend, payment)
@@ -148,7 +148,7 @@ module DeFi::FlashLender {
     }
 
     fun check_admin<T>(self: &FlashLender<T>, admin_cap: &AdminCap) {
-        assert!(ID::id(self) == &admin_cap.flash_lender_id, EAdminOnly);
+        assert!(id::id(self) == &admin_cap.flash_lender_id, EAdminOnly);
     }
 
     // === Reads ===

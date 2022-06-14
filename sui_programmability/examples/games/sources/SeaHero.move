@@ -12,7 +12,7 @@ module Games::SeaHero {
     use Games::Hero::{Self, Hero};
 
     use sui::balance::{Self, Balance};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::Coin::{Self, TreasuryCap};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -77,7 +77,7 @@ module Games::SeaHero {
     /// Aborts if the hero is not strong enough to slay the monster
     public fun slay(hero: &Hero, monster: SeaMonster): Balance<RUM> {
         let SeaMonster { id, reward } = monster;
-        ID::delete(id);
+        id::delete(id);
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(

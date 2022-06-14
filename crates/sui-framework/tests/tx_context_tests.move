@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::tx_context_tests {
-    use sui::ID;
+    use sui::id;
     use sui::tx_context;
 
     #[test]
@@ -17,8 +17,8 @@ module sui::tx_context_tests {
         // new_id should always produce fresh ID's
         assert!(&id1 != &id2, 1);
         assert!(tx_context::get_ids_created(&ctx) == 2, 2);
-        ID::delete(id1);
-        ID::delete(id2);
+        id::delete(id1);
+        id::delete(id2);
     }
 
 }

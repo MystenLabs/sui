@@ -3,7 +3,7 @@
 
 module ObjectOwner::ObjectOwner {
     use std::option::{Self, Option};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::Transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
 
@@ -73,14 +73,14 @@ module ObjectOwner::ObjectOwner {
     // Call to delete_child can fail if it's still owned by a parent.
     public entry fun delete_child(child: Child, _parent: &mut Parent) {
         let Child { id } = child;
-        ID::delete(id);
+        id::delete(id);
     }
 
     public entry fun delete_parent_and_child(parent: Parent, child: Child) {
         let Parent { id: parent_id, child: child_ref_opt } = parent;
         let child_ref = option::extract(&mut child_ref_opt);
         option::destroy_none(child_ref_opt);
-        ID::delete(parent_id);
+        id::delete(parent_id);
 
         let Child { id: child_id } = child;
         Transfer::delete_child_object(child_id, child_ref);

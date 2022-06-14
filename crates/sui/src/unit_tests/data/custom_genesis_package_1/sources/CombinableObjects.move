@@ -6,7 +6,7 @@
 module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
     use sui::Coin::{Self, Coin};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -52,8 +52,8 @@ module Examples::CombinableObjects {
     ): Sandwich {
         let Ham { id: ham_id } = ham;
         let Bread { id: bread_id } = bread;
-        ID::delete(ham_id);
-        ID::delete(bread_id);
+        id::delete(ham_id);
+        id::delete(bread_id);
         Sandwich { id: tx_context::new_id(ctx) }
     }
 

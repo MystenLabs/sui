@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Test::M1 {
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
     use sui::Transfer;
 

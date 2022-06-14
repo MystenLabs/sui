@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::epoch_reward_record {
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 

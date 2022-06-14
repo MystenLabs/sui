@@ -4,7 +4,7 @@
 module NFTs::Geniteam {
     use sui::bag::{Self, Bag};
     use sui::collection::{Self, Collection};
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
     use sui::Transfer::{Self, ChildRef};

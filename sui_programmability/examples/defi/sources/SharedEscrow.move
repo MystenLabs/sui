@@ -5,7 +5,7 @@
 module DeFi::SharedEscrow {
     use std::option::{Self, Option};
 
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -58,7 +58,7 @@ module DeFi::SharedEscrow {
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         let escrowed_item = option::extract<T>(&mut escrow.escrowed);
         assert!(&tx_context::sender(ctx) == &escrow.recipient, EWrongRecipient);
-        assert!(ID::id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
+        assert!(id::id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
         // everything matches. do the swap!
         Transfer::transfer(escrowed_item, tx_context::sender(ctx));
         Transfer::transfer(obj, escrow.creator);

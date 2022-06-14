@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Tutorial::ColorObject {
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -44,7 +44,7 @@ module Tutorial::ColorObject {
 
     public entry fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
-        ID::delete(id);
+        id::delete(id);
     }
 
     public entry fun transfer(object: ColorObject, recipient: address) {

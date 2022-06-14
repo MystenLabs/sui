@@ -26,7 +26,7 @@
 // - If game owner never took or revealed the results (incentives?)
 
 module Games::RockPaperScissors {
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
     use sui::Transfer::{Self};
     use std::vector;
@@ -159,7 +159,7 @@ module Games::RockPaperScissors {
             abort 0 // unreachable!()
         };
 
-        ID::delete(id);
+        id::delete(id);
     }
 
     /// Submit a [`Secret`] to the game owner who then matches the hash and saves the
@@ -186,7 +186,7 @@ module Games::RockPaperScissors {
             game.gesture_two = find_gesture(salt, &game.hash_two);
         };
 
-        ID::delete(id);
+        id::delete(id);
     }
 
     /// The final accord to the game logic. After both secrets have been revealed,
@@ -208,7 +208,7 @@ module Games::RockPaperScissors {
         let p1_wins = play(gesture_one, gesture_two);
         let p2_wins = play(gesture_two, gesture_one);
 
-        ID::delete(id);
+        id::delete(id);
 
         // If one of the players wins, he takes the prize.
         // If there's a tie, the game owner gets the prize.

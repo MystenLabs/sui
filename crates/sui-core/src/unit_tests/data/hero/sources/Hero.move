@@ -6,8 +6,8 @@
 module Examples::Hero {
     use Examples::TrustedCoin::EXAMPLE;
     use sui::Coin::{Self, Coin};
-    use sui::Event;
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::event;
+    use sui::id::{Self, ID, VersionedID};
     use sui::Math;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -138,12 +138,12 @@ module Examples::Hero {
             level_up_sword(option::borrow_mut(&mut hero.sword), 1)
         };
         // let the world know about the hero's triumph by emitting an event!
-        Event::emit(BoarSlainEvent {
+        event::emit(BoarSlainEvent {
             slayer_address: tx_context::sender(ctx),
-            hero: *ID::inner(&hero.id),
-            boar: *ID::inner(&boar_id),
+            hero: *id::inner(&hero.id),
+            boar: *id::inner(&boar_id),
         });
-        ID::delete(boar_id);
+        id::delete(boar_id);
 
     }
 
@@ -178,7 +178,7 @@ module Examples::Hero {
     /// Heal the weary hero with a potion
     public fun heal(hero: &mut Hero, potion: Potion) {
         let Potion { id, potency } = potion;
-        ID::delete(id);
+        id::delete(id);
         let new_hp = hero.hp + potency;
         // cap hero's HP at MAX_HP to avoid int overflows
         hero.hp = Math::min(new_hp, MAX_HP)
@@ -282,16 +282,16 @@ module Examples::Hero {
     #[test_only]
     public fun delete_hero_for_testing(hero: Hero) {
         let Hero { id, hp: _, experience: _, sword } = hero;
-        ID::delete(id);
+        id::delete(id);
         let sword = option::destroy_some(sword);
         let Sword { id, magic: _, strength: _ } = sword;
-        ID::delete(id)
+        id::delete(id)
     }
 
     #[test_only]
     public fun delete_game_admin_for_testing(admin: GameAdmin) {
         let GameAdmin { id, boars_created: _, potions_created: _ } = admin;
-        ID::delete(id);
+        id::delete(id);
     }
 
     #[test]

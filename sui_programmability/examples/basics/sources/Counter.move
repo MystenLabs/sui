@@ -8,7 +8,7 @@
 /// - the owner of the counter can reset it to any value
 module Basics::Counter {
     use sui::Transfer;
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
 
     /// A shared counter.

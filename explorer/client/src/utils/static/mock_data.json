@@ -649,14 +649,14 @@
                                                 "fields": {
                                                     "bytes": "37196de8502e6d80e6a31fba1a5d6986cc018805"
                                                 },
-                                                "type": "0x2::ID::ID"
+                                                "type": "0x2::id::ID"
                                             }
                                         },
-                                        "type": "0x2::ID::UniqueID"
+                                        "type": "0x2::id::UniqueID"
                                     },
                                     "version": 0
                                 },
-                                "type": "0x2::ID::VersionedID"
+                                "type": "0x2::id::VersionedID"
                             },
                             "value": 100000
                         },

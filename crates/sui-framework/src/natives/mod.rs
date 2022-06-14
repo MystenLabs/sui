@@ -17,10 +17,10 @@ pub fn all_natives(
     sui_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
-        ("Event", "emit", event::emit),
-        ("ID", "bytes_to_address", id::bytes_to_address),
-        ("ID", "delete_id", id::delete_id),
-        ("ID", "get_versioned_id", id::get_versioned_id),
+        ("event", "emit", event::emit),
+        ("id", "bytes_to_address", id::bytes_to_address),
+        ("id", "delete_id", id::delete_id),
+        ("id", "get_versioned_id", id::get_versioned_id),
         (
             "TestScenario",
             "drop_object_for_testing",

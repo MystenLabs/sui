@@ -5,7 +5,7 @@
 module sui::collection_tests {
     use sui::bag::{Self, Bag};
     use sui::collection::{Self, Collection};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::TestScenario;
     use sui::tx_context;
 
@@ -31,9 +31,9 @@ module sui::collection_tests {
             assert!(collection::size(&collection) == 0, 0);
 
             let obj1 = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
-            let id1 = *ID::id(&obj1);
+            let id1 = *id::id(&obj1);
             let obj2 = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
-            let id2 = *ID::id(&obj2);
+            let id2 = *id::id(&obj2);
 
             collection::add(&mut collection, obj1);
             collection::add(&mut collection, obj2);
@@ -73,7 +73,7 @@ module sui::collection_tests {
             let collection = TestScenario::take_owned<Collection<Object>>(scenario);
             let bag = TestScenario::take_owned<Bag>(scenario);
             let obj = TestScenario::take_child_object<Collection<Object>, Object>(scenario, &collection);
-            let id = *ID::id(&obj);
+            let id = *id::id(&obj);
 
             let (obj, child_ref) = collection::remove(&mut collection, obj);
             bag::add_child_object(&mut bag, obj, child_ref);
@@ -92,7 +92,7 @@ module sui::collection_tests {
             let collection = TestScenario::take_owned<Collection<Object>>(scenario);
             let bag = TestScenario::take_owned<Bag>(scenario);
             let obj = TestScenario::take_child_object<Bag, Object>(scenario, &bag);
-            let id = *ID::id(&obj);
+            let id = *id::id(&obj);
 
             let obj = bag::remove(&mut bag, obj);
             collection::add(&mut collection, obj);

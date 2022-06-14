@@ -8,8 +8,8 @@
 module sui::DevNetNFT {
     use sui::url::{Self, Url};
     use sui::utf8;
-    use sui::ID::{Self, ID, VersionedID};
-    use sui::Event;
+    use sui::id::{Self, ID, VersionedID};
+    use sui::event;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -48,8 +48,8 @@ module sui::DevNetNFT {
             url: url::new_unsafe_from_bytes(url)
         };
         let sender = tx_context::sender(ctx);
-        Event::emit(MintNFTEvent {
-            object_id: *ID::inner(&nft.id),
+        event::emit(MintNFTEvent {
+            object_id: *id::inner(&nft.id),
             creator: sender,
             name: nft.name,
         });
@@ -75,7 +75,7 @@ module sui::DevNetNFT {
     /// Permanently delete `nft`
     public entry fun burn(nft: DevNetNFT, _: &mut TxContext) {
         let DevNetNFT { id, name: _, description: _, url: _ } = nft;
-        ID::delete(id)
+        id::delete(id)
     }
 
     /// Get the NFT's `name`

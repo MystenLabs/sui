@@ -7,7 +7,7 @@ module NFTs::AuctionTests {
 
     use sui::Coin::{Self, Coin};
     use sui::SUI::SUI;
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::TestScenario::Self;
     use sui::tx_context::{Self, TxContext};
 
@@ -65,7 +65,7 @@ module NFTs::AuctionTests {
         // auction_id is used - otherwise id would still be considered
         // borrowed and could not be passed argument to a function
         // consuming it
-        let auction_id = *ID::inner(&id);
+        let auction_id = *id::inner(&id);
         Auction::create_auction(to_sell, id, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid

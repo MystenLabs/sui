@@ -3,7 +3,7 @@
 
 module NFTs::DiscountCoupon {
     use sui::Coin;
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::SUI::{Self, SUI};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -52,7 +52,7 @@ module NFTs::DiscountCoupon {
     /// Burn DiscountCoupon.
     public entry fun burn(nft: DiscountCoupon) {
         let DiscountCoupon { id, issuer: _, discount: _, expiration: _ } = nft;
-        ID::delete(id);
+        id::delete(id);
     }
 
     /// Transfer DiscountCoupon to issuer only.

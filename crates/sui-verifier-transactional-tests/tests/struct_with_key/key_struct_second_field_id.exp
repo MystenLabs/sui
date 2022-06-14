@@ -1,4 +1,4 @@
 processed 1 task
 
 task 0 'publish'. lines 4-11:
-Error: Failed to verify the Move module, reason: "First field of struct S must be 'id', flag found".
+Error: Dependency not provided for 0000000000000000000000000000000000000002.ID

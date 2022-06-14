@@ -4,7 +4,7 @@
 module NFTs::Marketplace {
     use sui::bag::{Self, Bag};
     use sui::tx_context::{Self, TxContext};
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer::{Self, ChildRef};
     use sui::Coin::{Self, Coin};
 
@@ -68,7 +68,7 @@ module NFTs::Marketplace {
 
         assert!(tx_context::sender(ctx) == owner, ENotOwner);
 
-        ID::delete(id);
+        id::delete(id);
         item
     }
 
@@ -96,7 +96,7 @@ module NFTs::Marketplace {
         assert!(ask == Coin::value(&paid), EAmountIncorrect);
 
         Transfer::transfer(paid, owner);
-        ID::delete(id);
+        id::delete(id);
         item
     }
 
@@ -124,7 +124,7 @@ module NFTs::Marketplace {
 
 #[test_only]
 module NFTs::MarketplaceTests {
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::bag::Bag;
     use sui::Transfer;
     use sui::Coin::{Self, Coin};
@@ -294,7 +294,7 @@ module NFTs::MarketplaceTests {
 
     fun burn_kitty(kitty: Kitty): u8 {
         let Kitty{ id, kitty_id } = kitty;
-        ID::delete(id);
+        id::delete(id);
         kitty_id
     }
 }

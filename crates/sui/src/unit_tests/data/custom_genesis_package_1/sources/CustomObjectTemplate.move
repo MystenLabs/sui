@@ -3,7 +3,7 @@
 
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 

@@ -3,14 +3,14 @@
 
 module sui::tx_context {
     use std::signer;
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
 
     #[test_only]
     use std::errors;
     #[test_only]
     use std::vector;
     #[test_only]
-    use sui::ID::ID;
+    use sui::id::ID;
 
     /// Number of bytes in an tx hash (which will be the transaction digest)
     const TX_HASH_LENGTH: u64 = 32;
@@ -55,7 +55,7 @@ module sui::tx_context {
     /// Generate a new, globally unique object ID with version 0
     public fun new_id(ctx: &mut TxContext): VersionedID {
         let ids_created = ctx.ids_created;
-        let id = ID::new_versioned_id(derive_id(*&ctx.tx_hash, ids_created));
+        let id = id::new_versioned_id(derive_id(*&ctx.tx_hash, ids_created));
         ctx.ids_created = ids_created + 1;
         id
     }
@@ -117,7 +117,7 @@ module sui::tx_context {
     public fun last_created_object_id(self: &TxContext): ID {
         let ids_created = self.ids_created;
         assert!(ids_created > 0, ENoIDsCreated);
-        ID::new(derive_id(*&self.tx_hash, ids_created - 1))
+        id::new(derive_id(*&self.tx_hash, ids_created - 1))
     }
 
     #[test_only]

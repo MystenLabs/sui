@@ -7,7 +7,7 @@
 module Test::M {
     use sui::tx_context::{Self, TxContext};
     struct Obj has key {
-        id: sui::ID::VersionedID,
+        id: sui::id::VersionedID,
         value: u64
     }
 

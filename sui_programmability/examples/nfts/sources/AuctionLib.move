@@ -11,7 +11,7 @@ module NFTs::AuctionLib {
     use sui::Coin;
     use sui::balance::{Self, Balance};
     use sui::SUI::SUI;
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self,TxContext};
 
@@ -41,7 +41,7 @@ module NFTs::AuctionLib {
     }
 
     public(friend) fun auction_id<T: key + store>(auction: &Auction<T>): &ID {
-        ID::inner(&auction.id)
+        id::inner(&auction.id)
     }
 
     public(friend) fun auction_owner<T: key + store>(auction: &Auction<T>): address {
@@ -137,7 +137,7 @@ module NFTs::AuctionLib {
         auction: Auction<T>, ctx: &mut TxContext
     ) {
         let Auction { id, to_sell, owner, bid_data } = auction;
-        ID::delete(id);
+        id::delete(id);
 
         end_auction(&mut to_sell, owner, &mut bid_data, ctx);
 

@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::TestScenarioTests {
-    use sui::ID;
+    use sui::id;
     use sui::TestScenario::{Self, Scenario};
     use sui::Transfer::{Self, ChildRef};
     use sui::tx_context;
@@ -13,22 +13,22 @@ module sui::TestScenarioTests {
     const OBJECT_ID_NOT_FOUND: u64 = 2;
 
     struct Object has key, store {
-        id: ID::VersionedID,
+        id: id::VersionedID,
         value: u64,
     }
 
     struct Wrapper has key {
-        id: ID::VersionedID,
+        id: id::VersionedID,
         child: Object,
     }
 
     struct Parent has key {
-        id: ID::VersionedID,
+        id: id::VersionedID,
         child: ChildRef<Object>,
     }
 
     struct MultiChildParent has key {
-        id: ID::VersionedID,
+        id: id::VersionedID,
         child1: ChildRef<Object>,
         child2: ChildRef<Object>,
     }
@@ -193,7 +193,7 @@ module sui::TestScenarioTests {
         let id_bytes;
         {
             let id = TestScenario::new_id(&mut scenario);
-            id_bytes = *ID::inner(&id);
+            id_bytes = *id::inner(&id);
             let obj = Object { id, value: 100 };
             Transfer::transfer(obj, copy tx2_sender);
             // sender cannot access the object
@@ -205,9 +205,9 @@ module sui::TestScenarioTests {
             assert!(TestScenario::can_take_owned<Object>(&scenario), 1);
             let received_obj = TestScenario::take_owned<Object>(&mut scenario);
             let Object { id: received_id, value } = received_obj;
-            assert!(ID::inner(&received_id) == &id_bytes, ID_BYTES_MISMATCH);
+            assert!(id::inner(&received_id) == &id_bytes, ID_BYTES_MISMATCH);
             assert!(value == 100, VALUE_MISMATCH);
-            ID::delete(received_id);
+            id::delete(received_id);
         };
         // check that the object is no longer accessible after deletion
         TestScenario::next_tx(&mut scenario, &tx2_sender);
@@ -223,9 +223,9 @@ module sui::TestScenarioTests {
         let versioned_id1 = TestScenario::new_id(&mut scenario);
         let versioned_id2 = TestScenario::new_id(&mut scenario);
         let versioned_id3 = TestScenario::new_id(&mut scenario);
-        let id1 = *ID::inner(&versioned_id1);
-        let id2 = *ID::inner(&versioned_id2);
-        let id3 = *ID::inner(&versioned_id3);
+        let id1 = *id::inner(&versioned_id1);
+        let id2 = *id::inner(&versioned_id2);
+        let id3 = *id::inner(&versioned_id3);
         {
             let obj1 = Object { id: versioned_id1, value: 10 };
             let obj2 = Object { id: versioned_id2, value: 20 };
@@ -266,7 +266,7 @@ module sui::TestScenarioTests {
         let scenario = TestScenario::begin(&sender);
         {
             let versioned_id = TestScenario::new_id(&mut scenario);
-            let id = *ID::inner(&versioned_id);
+            let id = *id::inner(&versioned_id);
             let obj = Object { id: versioned_id, value: 10 };
             Transfer::transfer(obj, copy sender);
             let ctx = TestScenario::ctx(&mut scenario);
@@ -324,12 +324,12 @@ module sui::TestScenarioTests {
             id: TestScenario::new_id(&mut scenario),
             value: 10,
         };
-        let child1_id = *ID::id(&child1);
+        let child1_id = *id::id(&child1);
         let child2 = Object {
             id: TestScenario::new_id(&mut scenario),
             value: 20,
         };
-        let child2_id = *ID::id(&child2);
+        let child2_id = *id::id(&child2);
         let parent_id = TestScenario::new_id(&mut scenario);
         let (parent_id, child1_ref) = Transfer::transfer_to_object_id(child1, parent_id);
         let (parent_id, child2_ref) = Transfer::transfer_to_object_id(child2, parent_id);

@@ -4,7 +4,7 @@
 module Tutorial::TrustedSwap {
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::SUI::SUI;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -82,7 +82,7 @@ module Tutorial::TrustedSwap {
         Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
 
         // Effectively delete the wrapper objects.
-        ID::delete(id1);
-        ID::delete(id2);
+        id::delete(id1);
+        id::delete(id2);
     }
 }

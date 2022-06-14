@@ -15,7 +15,7 @@ module sui::collection {
     use std::errors;
     use std::option::{Self, Option};
     use std::vector::Self;
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
 
@@ -91,7 +91,7 @@ module sui::collection {
             size(c) + 1 <= c.max_capacity,
             errors::limit_exceeded(EMaxCapacityExceeded)
         );
-        let id = ID::id(&object);
+        let id = id::id(&object);
         assert!(!contains(c, id), EObjectDoubleAdd);
         let child_ref = if (option::is_none(&old_child_ref)) {
             Transfer::transfer_to_object(object, c)
@@ -129,7 +129,7 @@ module sui::collection {
     /// Remove and return the object from the collection.
     /// Abort if the object is not found.
     public fun remove<T: key + store>(c: &mut Collection<T>, object: T): (T, ChildRef<T>) {
-        let idx = find(c, ID::id(&object));
+        let idx = find(c, id::id(&object));
         assert!(option::is_some(&idx), EObjectNotFound);
         let child_ref = vector::remove(&mut c.objects, *option::borrow(&idx));
         (object, child_ref)

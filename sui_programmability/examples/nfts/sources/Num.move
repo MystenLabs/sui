@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::Num {
-    use sui::ID::{Self, VersionedID};
+    use sui::id::{Self, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -55,6 +55,6 @@ module NFTs::Num {
     public fun burn(cap: &mut NumIssuerCap, nft: Num) {
         let Num { id, n: _ } = nft;
         cap.supply = cap.supply - 1;
-        ID::delete(id);
+        id::delete(id);
     }
 }

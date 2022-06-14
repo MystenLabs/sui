@@ -7,7 +7,7 @@
 /// be accessed by putting a 'key' into the 'lock'. Lock is shared and is visible
 /// and discoverable by the key owner.
 module Basics::Lock {
-    use sui::ID::{Self, ID, VersionedID};
+    use sui::id::{Self, ID, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
@@ -43,7 +43,7 @@ module Basics::Lock {
     /// sent to the transaction sender.
     public entry fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
         let id = tx_context::new_id(ctx);
-        let for = *ID::inner(&id);
+        let for = *id::inner(&id);
 
         Transfer::share_object(Lock<T> {
             id,
@@ -64,7 +64,7 @@ module Basics::Lock {
         key: &Key<T>,
     ) {
         assert!(option::is_none(&lock.locked), ELockIsFull);
-        assert!(&key.for == ID::id(lock), EKeyMismatch);
+        assert!(&key.for == id::id(lock), EKeyMismatch);
 
         option::fill(&mut lock.locked, obj);
     }
@@ -78,7 +78,7 @@ module Basics::Lock {
         key: &Key<T>,
     ): T {
         assert!(option::is_some(&lock.locked), ELockIsEmpty);
-        assert!(&key.for == ID::id(lock), EKeyMismatch);
+        assert!(&key.for == id::id(lock), EKeyMismatch);
 
         option::extract(&mut lock.locked)
     }
@@ -95,7 +95,7 @@ module Basics::Lock {
 
 #[test_only]
 module Basics::LockTest {
-    use sui::ID::VersionedID;
+    use sui::id::VersionedID;
     use sui::TestScenario;
     use sui::tx_context;
     use sui::Transfer;
