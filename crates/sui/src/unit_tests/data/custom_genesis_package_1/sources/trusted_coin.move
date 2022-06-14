@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Example coin with a trusted owner responsible for minting/burning (e.g., a stablecoin)
-module Examples::TrustedCoin {
-    use sui::Coin::{Self, TreasuryCap};
+module examples::trusted_coin {
+    use sui::coin::{Self, TreasuryCap};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -16,17 +16,17 @@ module Examples::TrustedCoin {
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
-        let treasury_cap = Coin::create_currency<EXAMPLE>(EXAMPLE{}, ctx);
+        let treasury_cap = coin::create_currency<EXAMPLE>(EXAMPLE{}, ctx);
         transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     public entry fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {
-        let coin = Coin::mint<EXAMPLE>(amount, treasury_cap, ctx);
-        Coin::transfer(coin, tx_context::sender(ctx));
+        let coin = coin::mint<EXAMPLE>(amount, treasury_cap, ctx);
+        coin::transfer(coin, tx_context::sender(ctx));
     }
 
     public entry fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: address) {
-        Coin::transfer_cap<EXAMPLE>(treasury_cap, recipient);
+        coin::transfer_cap<EXAMPLE>(treasury_cap, recipient);
     }
 
     #[test_only]

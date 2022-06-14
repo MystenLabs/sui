@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::DiscountCoupon {
-    use sui::Coin;
+    use sui::coin;
     use sui::id::{Self, VersionedID};
     use sui::SUI::{Self, SUI};
     use sui::transfer;
@@ -32,7 +32,7 @@ module NFTs::DiscountCoupon {
 
     /// Mint then transfer a new `DiscountCoupon` NFT, and top up recipient with some SUI.
     public entry fun mint_and_topup(
-        coin: Coin::Coin<SUI>,
+        coin: coin::Coin<SUI>,
         discount: u8,
         expiration: u64,
         recipient: address,

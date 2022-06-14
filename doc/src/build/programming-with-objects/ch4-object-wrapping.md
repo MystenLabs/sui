@@ -83,12 +83,12 @@ struct ObjectWrapper has key {
 `ObjectWrapper` defines a Sui object type, wraps the object that we want to swap as `to_swap`, and tracks the original owner of the object in `original_owner`. To make this more interesting and realistic, we can also expect that we may need to pay the third party some fee for this swap. Below we define an interface to request a swap by someone who owns an `Object`:
 ```rust
 public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
-    assert!(Coin::value(&fee) >= MIN_FEE, 0);
+    assert!(coin::value(&fee) >= MIN_FEE, 0);
     let wrapper = ObjectWrapper {
         id: tx_context::new_id(ctx),
         original_owner: tx_context::sender(ctx),
         to_swap: object,
-        fee: Coin::into_balance(fee),
+        fee: coin::into_balance(fee),
     };
     transfer::transfer(wrapper, service_address);
 }
@@ -133,7 +133,7 @@ The above code does the swap: it sends `object1` to the original owner of `objec
 ```rust
 let service_address = tx_context::sender(ctx);
 Balance::join(&mut fee1, fee2);
-transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
+transfer::transfer(coin::from_balance(fee1, ctx), service_address);
 ```
 `fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, we signal Sui that we have deleted both wrapper objects:
 ```rust

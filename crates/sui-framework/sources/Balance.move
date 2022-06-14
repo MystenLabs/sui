@@ -6,7 +6,7 @@
 /// `Balance` eliminating the need to create new IDs for each application
 /// that needs to hold coins.
 module sui::balance {
-    friend sui::Coin;
+    friend sui::coin;
     friend sui::sui_system;
 
     /// For when trying to destroy a non-zero balance.
@@ -51,13 +51,13 @@ module sui::balance {
         let Balance { value: _ } = balance;
     }
 
-    /// Can only be called by Sui::Coin.
+    /// Can only be called by sui::coin.
     /// Create a `Balance` with a predefined value; required for minting new `Coin`s.
     public(friend) fun create_with_value<T>(value: u64): Balance<T> {
         Balance { value }
     }
 
-    /// Can only be called by Sui::Coin.
+    /// Can only be called by sui::coin.
     /// Destroy a `Balance` returning its value. Required for burning `Coin`s
     public(friend) fun destroy<T>(self: Balance<T>): u64 {
         let Balance { value } = self;

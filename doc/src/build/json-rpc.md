@@ -202,7 +202,7 @@ curl --location --request POST $SUI_RPC_HOST \
               "params": [
                   "{{owner_address}}",
                   "0x2",
-                  "Coin",
+                  "coin",
                   "transfer",
                   ["0x2::SUI::SUI"],
                   ["{{coin_object_id}}", "{{recipient_address}}"],

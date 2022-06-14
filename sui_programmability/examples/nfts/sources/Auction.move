@@ -33,7 +33,7 @@
 ///   original owner and the item goes to the bidder that won the
 ///   auction
 module NFTs::Auction {
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::balance::Balance;
     use sui::SUI::SUI;
     use sui::id::{Self, ID, VersionedID};
@@ -81,7 +81,7 @@ module NFTs::Auction {
             id: tx_context::new_id(ctx),
             bidder: tx_context::sender(ctx),
             auction_id,
-            bid: Coin::into_balance(coin),
+            bid: coin::into_balance(coin),
         };
 
         transfer::transfer(bid, auctioneer);

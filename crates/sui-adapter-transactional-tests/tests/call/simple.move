@@ -8,7 +8,7 @@ module Test::M1 {
     use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
-    use sui::Coin::Coin;
+    use sui::coin::Coin;
 
     struct Object has key, store {
         id: VersionedID,

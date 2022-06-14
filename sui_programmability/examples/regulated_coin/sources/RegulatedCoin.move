@@ -74,7 +74,7 @@ module RC::RegulatedCoin {
     /// Subtract `RegulatedCoin` with `value` from `RegulatedCoin`.
     ///
     /// This method does not provide any checks by default and can possibly lead to mocking
-    /// behavior of `RegulatedCoin::zero()` when a value is 0. So in case empty balances
+    /// behavior of `Regulatedcoin::zero()` when a value is 0. So in case empty balances
     /// should not be allowed, this method should be additionally protected against zero value.
     public fun split<T: drop>(
         witness: T, c1: &mut RegulatedCoin<T>, creator: address, value: u64, ctx: &mut TxContext
@@ -90,10 +90,10 @@ module RC::RegulatedCoin {
 /// - has a denylist for addresses managed by the coin admins
 /// - has restricted transfers which can not be taken by anyone except the recipient
 module ABC::ABC {
-    use RC::RegulatedCoin::{Self as RCoin, RegulatedCoin as RCoin};
+    use RC::Regulatedcoin::{Self as RCoin, RegulatedCoin as RCoin};
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
-    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::coin::{Self, Coin, TreasuryCap};
     use sui::id::{Self, VersionedID};
     use sui::transfer;
     use std::vector;
@@ -126,7 +126,7 @@ module ABC::ABC {
     ///
     /// Also creates a shared Registry which holds banned addresses.
     fun init(ctx: &mut TxContext) {
-        let treasury_cap = Coin::create_currency(ABC {}, ctx);
+        let treasury_cap = coin::create_currency(ABC {}, ctx);
         let sender = tx_context::sender(ctx);
 
         transfer::transfer(zero(sender, ctx), sender);
@@ -161,14 +161,14 @@ module ABC::ABC {
 
     /// Mint more ABC. Requires TreasuryCap for authorization, so can only be done by admins.
     public entry fun mint(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, _: &mut TxContext) {
-        balance::join(borrow_mut(owned), Coin::mint_balance(value, treasury))
+        balance::join(borrow_mut(owned), coin::mint_balance(value, treasury))
     }
 
     /// Burn `value` amount of `RCoin<ABC>`. Requires TreasuryCap for authorization, so can only be done by admins.
     ///
     /// TODO: Make TreasuryCap a part of Balance module instead of Coin.
     public entry fun burn(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
-        Coin::burn(Coin::withdraw(borrow_mut(owned), value, ctx), treasury);
+        coin::burn(coin::withdraw(borrow_mut(owned), value, ctx), treasury);
     }
 
     /// Ban some address and forbid making any transactions from or to this address.
@@ -186,7 +186,7 @@ module ABC::ABC {
     public entry fun transfer(r: &Registry, coin: &mut RCoin<ABC>, value: u64, to: address, ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
 
-        assert!(RCoin::creator(coin) == sender, ENotOwner);
+        assert!(Rcoin::creator(coin) == sender, ENotOwner);
         assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
         assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
@@ -205,7 +205,7 @@ module ABC::ABC {
     public entry fun accept_transfer(r: &Registry, coin: &mut RCoin<ABC>, transfer: Transfer, _: &mut TxContext) {
         let Transfer { id, balance, to } = transfer;
 
-        assert!(RCoin::creator(coin) == to, ENotOwner);
+        assert!(Rcoin::creator(coin) == to, ENotOwner);
         assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
 
         balance::join(borrow_mut(coin), balance);
@@ -223,13 +223,13 @@ module ABC::ABC {
     public entry fun take(r: &mut Registry, coin: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
 
-        assert!(RCoin::creator(coin) == sender, ENotOwner);
+        assert!(Rcoin::creator(coin) == sender, ENotOwner);
         assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
 
-        transfer::transfer(Coin::withdraw(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
+        transfer::transfer(coin::withdraw(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
     }
 
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
@@ -238,10 +238,10 @@ module ABC::ABC {
     /// 1. `RegulatedCoin<ABC>.creator` was banned;
     /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
     public entry fun put_back(r: &mut Registry, rc_coin: &mut RCoin<ABC>, coin: Coin<ABC>, ctx: &mut TxContext) {
-        let balance = Coin::into_balance(coin);
+        let balance = coin::into_balance(coin);
         let sender = tx_context::sender(ctx);
 
-        assert!(RCoin::creator(rc_coin) == sender, ENotOwner);
+        assert!(Rcoin::creator(rc_coin) == sender, ENotOwner);
         assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         // Update swapped amount as in `swap_regulated`.
@@ -252,13 +252,13 @@ module ABC::ABC {
 
     // === Private implementations accessors and type morphing ===
 
-    fun borrow(coin: &RCoin<ABC>): &Balance<ABC> { RCoin::borrow(ABC {}, coin) }
-    fun borrow_mut(coin: &mut RCoin<ABC>): &mut Balance<ABC> { RCoin::borrow_mut(ABC {}, coin) }
-    fun zero(creator: address, ctx: &mut TxContext): RCoin<ABC> { RCoin::zero(ABC {}, creator, ctx) }
+    fun borrow(coin: &RCoin<ABC>): &Balance<ABC> { Rcoin::borrow(ABC {}, coin) }
+    fun borrow_mut(coin: &mut RCoin<ABC>): &mut Balance<ABC> { Rcoin::borrow_mut(ABC {}, coin) }
+    fun zero(creator: address, ctx: &mut TxContext): RCoin<ABC> { Rcoin::zero(ABC {}, creator, ctx) }
 
-    fun into_balance(coin: RCoin<ABC>): Balance<ABC> { RCoin::into_balance(ABC {}, coin) }
+    fun into_balance(coin: RCoin<ABC>): Balance<ABC> { Rcoin::into_balance(ABC {}, coin) }
     fun from_balance(balance: Balance<ABC>, creator: address, ctx: &mut TxContext): RCoin<ABC> {
-        RCoin::from_balance(ABC {}, balance, creator, ctx)
+        Rcoin::from_balance(ABC {}, balance, creator, ctx)
     }
 
     // === Testing utilities ===
@@ -284,9 +284,9 @@ module ABC::ABC {
 /// ```
 module ABC::Tests {
     use ABC::ABC::{Self, ABC, Registry};
-    use RC::RegulatedCoin::{Self as RCoin, RegulatedCoin as RCoin};
+    use RC::Regulatedcoin::{Self as RCoin, RegulatedCoin as RCoin};
 
-    use sui::Coin::{Coin, TreasuryCap};
+    use sui::coin::{Coin, TreasuryCap};
     use sui::TestScenario::{Self, Scenario, next_tx, ctx};
 
     // === Test handlers; this trick helps reusing scenarios ==
@@ -336,7 +336,7 @@ module ABC::Tests {
 
             ABC::mint(&mut cap, &mut coin, 1000000, ctx(test));
 
-            assert!(RCoin::value(&coin) == 1000000, 0);
+            assert!(Rcoin::value(&coin) == 1000000, 0);
 
             TestScenario::return_owned(test, cap);
             TestScenario::return_owned(test, coin);
@@ -360,8 +360,8 @@ module ABC::Tests {
         next_tx(test, &user1); {
             let coin = TestScenario::take_owned<RCoin<ABC>>(test);
 
-            assert!(RCoin::creator(&coin) == user1, 1);
-            assert!(RCoin::value(&coin) == 0, 2);
+            assert!(Rcoin::creator(&coin) == user1, 1);
+            assert!(Rcoin::value(&coin) == 0, 2);
 
             TestScenario::return_owned(test, coin);
         };
@@ -393,7 +393,7 @@ module ABC::Tests {
 
             ABC::accept_transfer(reg_ref, &mut coin, transfer, ctx(test));
 
-            assert!(RCoin::value(&coin) == 500000, 3);
+            assert!(Rcoin::value(&coin) == 500000, 3);
 
             TestScenario::return_shared(test, reg);
             TestScenario::return_owned(test, coin);
@@ -412,7 +412,7 @@ module ABC::Tests {
 
             ABC::burn(&mut treasury_cap, &mut coin, 100000, ctx(test));
 
-            assert!(RCoin::value(&coin) == 400000, 4);
+            assert!(Rcoin::value(&coin) == 400000, 4);
 
             TestScenario::return_owned(test, treasury_cap);
             TestScenario::return_owned(test, coin);
@@ -434,7 +434,7 @@ module ABC::Tests {
             ABC::take(reg_ref, &mut coin, 100000, ctx(test));
 
             assert!(ABC::swapped_amount(reg_ref) == 100000, 5);
-            assert!(RCoin::value(&coin) == 400000, 5);
+            assert!(Rcoin::value(&coin) == 400000, 5);
 
             TestScenario::return_shared(test, reg);
             TestScenario::return_owned(test, coin);

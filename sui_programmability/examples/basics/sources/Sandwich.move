@@ -5,7 +5,7 @@
 /// new objects
 module basics::sandwich {
     use sui::balance::{Self, Balance};
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::SUI::SUI;
     use sui::transfer;
@@ -62,7 +62,7 @@ module basics::sandwich {
         c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        let b = Coin::into_balance(c);
+        let b = coin::into_balance(c);
         assert!(balance::value(&b) == HAM_PRICE, EInsufficientFunds);
         balance::join(&mut grocery.profits, b);
         transfer::transfer(Ham { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
@@ -74,7 +74,7 @@ module basics::sandwich {
         c: Coin<SUI>,
         ctx: &mut TxContext
     ) {
-        let b = Coin::into_balance(c);
+        let b = coin::into_balance(c);
         assert!(balance::value(&b) == BREAD_PRICE, EInsufficientFunds);
         balance::join(&mut grocery.profits, b);
         transfer::transfer(Bread { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
@@ -103,7 +103,7 @@ module basics::sandwich {
         assert!(amount > 0, ENoProfits);
 
         // Take a transferable `Coin` from a `Balance`
-        let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
+        let coin = coin::withdraw(&mut grocery.profits, amount, ctx);
 
         transfer::transfer(coin, tx_context::sender(ctx));
     }
@@ -118,7 +118,7 @@ module basics::sandwich {
 module basics::test_sandwich {
     use basics::sandwich::{Self, Grocery, GroceryOwnerCapability, Bread, Ham};
     use sui::TestScenario;
-    use sui::Coin::{Self};
+    use sui::coin::{Self};
     use sui::SUI::SUI;
 
     #[test]
@@ -140,13 +140,13 @@ module basics::test_sandwich {
 
             sandwich::buy_ham(
                 grocery,
-                Coin::mint_for_testing<SUI>(10, ctx),
+                coin::mint_for_testing<SUI>(10, ctx),
                 ctx
             );
 
             sandwich::buy_bread(
                 grocery,
-                Coin::mint_for_testing<SUI>(2, ctx),
+                coin::mint_for_testing<SUI>(2, ctx),
                 ctx
             );
 

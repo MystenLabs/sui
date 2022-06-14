@@ -422,7 +422,7 @@
             "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
-            "objType": "0x2::Coin::Coin<0x2::USD::USD>",
+            "objType": "0x2::coin::Coin<0x2::USD::USD>",
             "data": {
                 "tx_digest": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=",
                 "contents": {
@@ -437,7 +437,7 @@
             "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
-            "objType": "0x2::Coin::Coin<0x2::USD::USD>",
+            "objType": "0x2::coin::Coin<0x2::USD::USD>",
             "data": {
                 "contents": {
                     "id": {},
@@ -451,7 +451,7 @@
             "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
-            "objType": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "objType": "0x2::coin::Coin<0x2::SUI::SUI>",
             "data": {
                 "contents": {
                     "id": {},
@@ -465,7 +465,7 @@
             "owner": "SingleOwner(k#player2)",
             "version": "87",
             "readonly": "true",
-            "objType": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "objType": "0x2::coin::Coin<0x2::SUI::SUI>",
             "data": {
                 "contents": {
                     "id": {},
@@ -660,7 +660,7 @@
                             },
                             "value": 100000
                         },
-                        "type": "0x2::Coin::Coin<0x2::SUI::SUI>"
+                        "type": "0x2::coin::Coin<0x2::SUI::SUI>"
                     },
                     "owner": {
                         "AddressOwner": "3997c1099d2961e09c2a302d8e3644d6ce1237ce"

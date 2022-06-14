@@ -7,7 +7,7 @@ module sui::validator {
     use std::vector;
 
     use sui::balance::{Self, Balance};
-    use sui::Coin;
+    use sui::coin;
     use sui::SUI::SUI;
     use sui::transfer;
     use sui::tx_context::TxContext;
@@ -118,7 +118,7 @@ module sui::validator {
             balance::join(&mut stake, pending_stake_balance);
         };
         option::destroy_none(pending_stake);
-        transfer::transfer(Coin::from_balance(stake, ctx), metadata.sui_address);
+        transfer::transfer(coin::from_balance(stake, ctx), metadata.sui_address);
     }
 
     /// Add stake to an active validator. The new stake is added to the pending_stake field,
@@ -160,8 +160,8 @@ module sui::validator {
             balance::join(&mut self.stake, pending_stake);
         };
         if (self.pending_withdraw > 0) {
-            let coin = Coin::withdraw(&mut self.stake, self.pending_withdraw, ctx);
-            Coin::transfer(coin, self.metadata.sui_address);
+            let coin = coin::withdraw(&mut self.stake, self.pending_withdraw, ctx);
+            coin::transfer(coin, self.metadata.sui_address);
             self.pending_withdraw = 0;
         };
         assert!(balance::value(&self.stake) == self.metadata.next_epoch_stake, 0);

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::mathTests {
+module sui::math_tests {
     use sui::math;
 
     #[test]

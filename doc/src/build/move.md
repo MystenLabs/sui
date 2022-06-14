@@ -92,7 +92,7 @@ file.
 Let's see how module definition appears in the `Coin` module file:
 
 ```rust
-module sui::Coin {
+module sui::coin {
 ...
 }
 ```
@@ -241,7 +241,7 @@ simplest entry functions is defined in the
 to implement gas object transfer:
 
 ```rust
-public entry fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
+public entry fun transfer(c: coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
     ...
 }
 ```

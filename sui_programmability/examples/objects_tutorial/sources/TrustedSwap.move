@@ -3,7 +3,7 @@
 
 module Tutorial::TrustedSwap {
     use sui::balance::{Self, Balance};
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::SUI::SUI;
     use sui::transfer;
@@ -40,12 +40,12 @@ module Tutorial::TrustedSwap {
     /// Anyone owns an `Object` can request swapping their object. This object
     /// will be wrapped into `ObjectWrapper` and sent to `service_address`.
     public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
-        assert!(Coin::value(&fee) >= MIN_FEE, 0);
+        assert!(coin::value(&fee) >= MIN_FEE, 0);
         let wrapper = ObjectWrapper {
             id: tx_context::new_id(ctx),
             original_owner: tx_context::sender(ctx),
             to_swap: object,
-            fee: Coin::into_balance(fee),
+            fee: coin::into_balance(fee),
         };
         transfer::transfer(wrapper, service_address);
     }
@@ -79,7 +79,7 @@ module Tutorial::TrustedSwap {
         // Service provider takes the fee.
         let service_address = tx_context::sender(ctx);
         balance::join(&mut fee1, fee2);
-        transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
+        transfer::transfer(coin::from_balance(fee1, ctx), service_address);
 
         // Effectively delete the wrapper objects.
         id::delete(id1);

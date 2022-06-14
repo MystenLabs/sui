@@ -3,9 +3,9 @@
 
 /// Example of objects that can be combined to create
 /// new objects
-module Examples::CombinableObjects {
-    use Examples::TrustedCoin::EXAMPLE;
-    use sui::Coin::{Self, Coin};
+module examples::combinable_objects {
+    use examples::trusted_coin::EXAMPLE;
+    use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -34,14 +34,14 @@ module Examples::CombinableObjects {
 
     /// Exchange `c` for some ham
     public fun buy_ham(c: Coin<EXAMPLE>, ctx: &mut TxContext): Ham {
-        assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
+        assert!(coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
         transfer::transfer(c, admin());
         Ham { id: tx_context::new_id(ctx) }
     }
 
     /// Exchange `c` for some bread
     public fun buy_bread(c: Coin<EXAMPLE>, ctx: &mut TxContext): Bread {
-        assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
+        assert!(coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
         transfer::transfer(c, admin());
         Bread { id: tx_context::new_id(ctx) }
     }

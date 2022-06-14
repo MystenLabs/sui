@@ -6,7 +6,7 @@ module NFTs::Marketplace {
     use sui::tx_context::{Self, TxContext};
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer::{Self, ChildRef};
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
 
     // For when amount paid does not match the expected.
     const EAmountIncorrect: u64 = 0;
@@ -93,7 +93,7 @@ module NFTs::Marketplace {
         let listing = bag::remove(objects, listing);
         let Listing { id, item, ask, owner } = listing;
 
-        assert!(ask == Coin::value(&paid), EAmountIncorrect);
+        assert!(ask == coin::value(&paid), EAmountIncorrect);
 
         transfer::transfer(paid, owner);
         id::delete(id);
@@ -127,7 +127,7 @@ module NFTs::MarketplaceTests {
     use sui::id::{Self, VersionedID};
     use sui::bag::Bag;
     use sui::transfer;
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::SUI::SUI;
     use sui::tx_context;
     use sui::TestScenario::{Self, Scenario};
@@ -152,7 +152,7 @@ module NFTs::MarketplaceTests {
     /// Mint SUI and send it to BUYER.
     fun mint_some_coin(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &ADMIN);
-        let coin = Coin::mint_for_testing<SUI>(1000, TestScenario::ctx(scenario));
+        let coin = coin::mint_for_testing<SUI>(1000, TestScenario::ctx(scenario));
         transfer::transfer(coin, BUYER);
     }
 
@@ -246,7 +246,7 @@ module NFTs::MarketplaceTests {
             let mkp = TestScenario::borrow_mut(&mut mkp_wrapper);
             let bag = TestScenario::take_child_object<Marketplace, Bag>(scenario, mkp);
             let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
-            let payment = Coin::withdraw(Coin::balance_mut(&mut coin), 100, TestScenario::ctx(scenario));
+            let payment = coin::withdraw(coin::balance_mut(&mut coin), 100, TestScenario::ctx(scenario));
 
             // Do the buy call and expect successful purchase.
             let nft = Marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);
@@ -280,7 +280,7 @@ module NFTs::MarketplaceTests {
             let listing = TestScenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
 
             // AMOUNT here is 10 while expected is 100.
-            let payment = Coin::withdraw(Coin::balance_mut(&mut coin), 10, TestScenario::ctx(scenario));
+            let payment = coin::withdraw(coin::balance_mut(&mut coin), 10, TestScenario::ctx(scenario));
 
             // Attempt to buy and expect failure purchase.
             let nft = Marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);

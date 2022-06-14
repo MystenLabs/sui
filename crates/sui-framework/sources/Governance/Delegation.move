@@ -4,7 +4,7 @@
 module sui::delegation {
     use std::option::{Self, Option};
     use sui::balance::Balance;
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::SUI::SUI;
@@ -52,10 +52,10 @@ module sui::delegation {
         stake: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
-        let delegate_amount = Coin::value(&stake);
+        let delegate_amount = coin::value(&stake);
         let delegation = Delegation {
             id: tx_context::new_id(ctx),
-            active_delegation: option::some(Coin::into_balance(stake)),
+            active_delegation: option::some(coin::into_balance(stake)),
             ending_epoch: option::none(),
             delegate_amount,
             next_reward_unclaimed_epoch: starting_epoch,
@@ -98,7 +98,7 @@ module sui::delegation {
         let sender = tx_context::sender(ctx);
 
         if (option::is_none(&self.coin_locked_until_epoch)) {
-            transfer::transfer(Coin::from_balance(stake, ctx), sender);
+            transfer::transfer(coin::from_balance(stake, ctx), sender);
         } else {
             let locked_until_epoch = option::extract(&mut self.coin_locked_until_epoch);
             locked_coin::new_from_balance(stake, locked_until_epoch, sender, ctx);
@@ -114,7 +114,7 @@ module sui::delegation {
         ctx: &mut TxContext,
     ) {
         let sender = tx_context::sender(ctx);
-        Coin::transfer(Coin::from_balance(reward, ctx), sender);
+        coin::transfer(coin::from_balance(reward, ctx), sender);
         self.next_reward_unclaimed_epoch = self.next_reward_unclaimed_epoch + 1;
     }
 

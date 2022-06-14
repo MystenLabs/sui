@@ -39,7 +39,7 @@ impl GAS {
     }
 }
 
-/// Rust version of the Move sui::Coin::Coin<Sui::SUI::SUI> type
+/// Rust version of the Move sui::coin::Coin<Sui::SUI::SUI> type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GasCoin(pub Coin);
 

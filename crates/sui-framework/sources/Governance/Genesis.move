@@ -4,7 +4,7 @@
 module sui::genesis {
     use std::vector;
 
-    use sui::Coin;
+    use sui::coin;
     use sui::SUI;
     use sui::sui_system;
     use sui::tx_context::TxContext;
@@ -32,7 +32,7 @@ module sui::genesis {
         ctx: &mut TxContext,
     ) {
         let treasury_cap = SUI::new(ctx);
-        let storage_fund = Coin::mint_balance(INIT_STORAGE_FUND, &mut treasury_cap);
+        let storage_fund = coin::mint_balance(INIT_STORAGE_FUND, &mut treasury_cap);
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
         assert!(
@@ -54,7 +54,7 @@ module sui::genesis {
                 pubkey,
                 name,
                 net_address,
-                Coin::mint_balance(stake, &mut treasury_cap),
+                coin::mint_balance(stake, &mut treasury_cap),
             ));
             i = i + 1;
         };

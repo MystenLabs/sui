@@ -3,7 +3,7 @@
 
 module sui::sui_system {
     use sui::balance::{Self, Balance};
-    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::coin::{Self, Coin, TreasuryCap};
     use sui::delegation::{Self, Delegation};
     use sui::epoch_reward_record::{Self, EpochRewardRecord};
     use sui::id::{Self, VersionedID};
@@ -94,7 +94,7 @@ module sui::sui_system {
             validator_set::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
             0
         );
-        let stake_amount = Coin::value(&stake);
+        let stake_amount = coin::value(&stake);
         assert!(
             stake_amount >= self.parameters.min_validator_stake,
             0
@@ -104,7 +104,7 @@ module sui::sui_system {
             pubkey_bytes,
             name,
             net_address,
-            Coin::into_balance(stake)
+            coin::into_balance(stake)
         );
 
         validator_set::request_add_validator(&mut self.validators, validator);
@@ -133,7 +133,7 @@ module sui::sui_system {
     ) {
         validator_set::request_add_stake(
             &mut self.validators,
-            Coin::into_balance(new_stake),
+            coin::into_balance(new_stake),
             ctx,
         )
     }
@@ -162,7 +162,7 @@ module sui::sui_system {
         validator_address: address,
         ctx: &mut TxContext,
     ) {
-        let amount = Coin::value(&delegate_stake);
+        let amount = coin::value(&delegate_stake);
         validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
 
         // Delegation starts from the next epoch.

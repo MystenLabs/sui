@@ -13,7 +13,7 @@ module games::sea_hero {
 
     use sui::balance::{Self, Balance};
     use sui::id::{Self, VersionedID};
-    use sui::Coin::{Self, TreasuryCap};
+    use sui::coin::{Self, TreasuryCap};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -61,7 +61,7 @@ module games::sea_hero {
         transfer::transfer(
             SeaHeroAdmin {
                 id: tx_context::new_id(ctx),
-                treasury_cap: Coin::create_currency<RUM>(RUM{}, ctx),
+                treasury_cap: coin::create_currency<RUM>(RUM{}, ctx),
                 monsters_created: 0,
                 token_supply_max: 1000000,
                 monster_max: 10,
@@ -98,7 +98,7 @@ module games::sea_hero {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let current_coin_supply = Coin::total_supply(&admin.treasury_cap);
+        let current_coin_supply = coin::total_supply(&admin.treasury_cap);
         let token_supply_max = admin.token_supply_max;
         // TODO: create error codes
         // ensure token supply cap is respected
@@ -109,7 +109,7 @@ module games::sea_hero {
 
         let monster = SeaMonster {
             id: tx_context::new_id(ctx),
-            reward: Coin::mint_balance(reward_amount, &mut admin.treasury_cap)
+            reward: coin::mint_balance(reward_amount, &mut admin.treasury_cap)
         };
         admin.monsters_created = admin.monsters_created + 1;
         transfer::transfer(monster, recipient);

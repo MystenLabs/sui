@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::Coin {
+module sui::coin {
     use sui::balance::{Self, Balance};
     use sui::id::{Self, VersionedID};
     use sui::transfer;

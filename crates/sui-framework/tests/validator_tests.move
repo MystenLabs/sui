@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::validator_tests {
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::SUI::SUI;
     use sui::TestScenario;
     use sui::validator;
@@ -15,7 +15,7 @@ module sui::validator_tests {
         {
             let ctx = TestScenario::ctx(scenario);
 
-            let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
+            let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
             let validator = validator::new(
                 sender,
                 x"FF",
@@ -33,7 +33,7 @@ module sui::validator_tests {
         TestScenario::next_tx(scenario, &sender);
         {
             let stake_coin = TestScenario::take_owned<Coin<SUI>>(scenario);
-            assert!(Coin::value(&stake_coin) == 10, 0);
+            assert!(coin::value(&stake_coin) == 10, 0);
             TestScenario::return_owned(scenario, stake_coin);
         };
     }
@@ -43,7 +43,7 @@ module sui::validator_tests {
         let sender = @0x1;
         let scenario = &mut TestScenario::begin(&sender);
         let ctx = TestScenario::ctx(scenario);
-        let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
+        let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
         let validator = validator::new(
             sender,
             x"FF",
@@ -52,7 +52,7 @@ module sui::validator_tests {
             init_stake,
         );
 
-        let new_stake = Coin::into_balance(Coin::mint_for_testing(30, ctx));
+        let new_stake = coin::into_balance(coin::mint_for_testing(30, ctx));
         validator::request_add_stake(&mut validator, new_stake);
 
         assert!(validator::stake_amount(&validator) == 10, 0);
@@ -73,7 +73,7 @@ module sui::validator_tests {
         TestScenario::next_tx(scenario, &sender);
         {
             let withdraw = TestScenario::take_owned<Coin<SUI>>(scenario);
-            assert!(Coin::value(&withdraw) == 5, 0);
+            assert!(coin::value(&withdraw) == 5, 0);
             TestScenario::return_owned(scenario, withdraw);
         };
 

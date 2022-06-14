@@ -3,7 +3,7 @@
 
 module sui::locked_coin {
     use sui::balance::{Self, Balance};
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -46,7 +46,7 @@ module sui::locked_coin {
     public entry fun lock_coin<T>(
         coin: Coin<T>, recipient: address, locked_until_epoch: u64, ctx: &mut TxContext
     ) {
-        let balance = Coin::into_balance(coin);
+        let balance = coin::into_balance(coin);
         new_from_balance(balance, epoch_time_lock::new(locked_until_epoch, ctx), recipient, ctx);
     }
 
@@ -57,7 +57,7 @@ module sui::locked_coin {
         let LockedCoin { id, balance, locked_until_epoch } = locked_coin;
         id::delete(id);
         epoch_time_lock::destroy(locked_until_epoch, ctx);
-        let coin = Coin::from_balance(balance, ctx);
+        let coin = coin::from_balance(balance, ctx);
         transfer::transfer(coin, tx_context::sender(ctx));
     }
 }

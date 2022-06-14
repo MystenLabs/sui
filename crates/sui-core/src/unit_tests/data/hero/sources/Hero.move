@@ -3,9 +3,9 @@
 
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
-module Examples::Hero {
-    use Examples::TrustedCoin::EXAMPLE;
-    use sui::Coin::{Self, Coin};
+module examples::Hero {
+    use examples::Trustedcoin::EXAMPLE;
+    use sui::coin::{Self, Coin};
     use sui::event;
     use sui::id::{Self, ID, VersionedID};
     use sui::math;
@@ -206,7 +206,7 @@ module Examples::Hero {
         payment: Coin<EXAMPLE>,
         ctx: &mut TxContext
     ): Sword {
-        let value = Coin::value(&payment);
+        let value = coin::value(&payment);
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
@@ -296,8 +296,8 @@ module Examples::Hero {
 
     #[test]
     public fun slay_boar_test() {
-        use Examples::TrustedCoin::{Self, EXAMPLE};
-        use sui::Coin::{Self, TreasuryCap};
+        use examples::Trustedcoin::{Self, EXAMPLE};
+        use sui::coin::{Self, TreasuryCap};
         use sui::TestScenario;
 
         let admin = ADMIN;
@@ -307,7 +307,7 @@ module Examples::Hero {
         // Run the module initializers
         {
             let ctx = TestScenario::ctx(scenario);
-            TrustedCoin::test_init(ctx);
+            Trustedcoin::test_init(ctx);
             init(ctx);
         };
         // Admin mints 500 coins and sends them to the Player so they can buy game items
@@ -315,8 +315,8 @@ module Examples::Hero {
         {
             let treasury_cap = TestScenario::take_owned<TreasuryCap<EXAMPLE>>(scenario);
             let ctx = TestScenario::ctx(scenario);
-            let coins = Coin::mint(500, &mut treasury_cap, ctx);
-            Coin::transfer(coins, copy player);
+            let coins = coin::mint(500, &mut treasury_cap, ctx);
+            coin::transfer(coins, copy player);
             TestScenario::return_owned(scenario, treasury_cap);
         };
         // Player purchases a hero with the coins

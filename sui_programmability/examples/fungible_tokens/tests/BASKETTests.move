@@ -5,7 +5,7 @@
 module FungibleTokens::BASKETTests {
     use FungibleTokens::BASKET::{Self, Reserve};
     use FungibleTokens::MANAGED::MANAGED;
-    use sui::Coin;
+    use sui::coin;
     use sui::SUI::SUI;
     use sui::TestScenario;
 
@@ -26,18 +26,18 @@ module FungibleTokens::BASKETTests {
             assert!(BASKET::total_supply(reserve) == 0, 0);
 
             let num_coins = 10;
-            let sui = Coin::mint_for_testing<SUI>(num_coins, ctx);
-            let managed = Coin::mint_for_testing<MANAGED>(num_coins, ctx);
+            let sui = coin::mint_for_testing<SUI>(num_coins, ctx);
+            let managed = coin::mint_for_testing<MANAGED>(num_coins, ctx);
             let basket = BASKET::mint(reserve, sui, managed, ctx);
-            assert!(Coin::value(&basket) == num_coins, 1);
+            assert!(coin::value(&basket) == num_coins, 1);
             assert!(BASKET::total_supply(reserve) == num_coins, 2);
 
             let (sui, managed) = BASKET::burn(reserve, basket, ctx);
-            assert!(Coin::value(&sui) == num_coins, 3);
-            assert!(Coin::value(&managed) == num_coins, 4);
+            assert!(coin::value(&sui) == num_coins, 3);
+            assert!(coin::value(&managed) == num_coins, 4);
 
-            Coin::keep(sui, ctx);
-            Coin::keep(managed, ctx);
+            coin::keep(sui, ctx);
+            coin::keep(managed, ctx);
             TestScenario::return_shared(scenario, reserve_wrapper);
         }
     }

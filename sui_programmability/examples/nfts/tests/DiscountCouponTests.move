@@ -4,7 +4,7 @@
 #[test_only]
 module NFTs::DiscountCouponTests {
     use NFTs::DiscountCoupon::{Self, DiscountCoupon};
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::SUI::SUI;
     use sui::TestScenario::Self;
     use sui::tx_context::TxContext;
@@ -20,8 +20,8 @@ module NFTs::DiscountCouponTests {
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
     fun init(ctx: &mut TxContext) {
-        let coin = Coin::mint_for_testing(100, ctx);
-        Coin::transfer<SUI>(coin, ISSUER_ADDRESS);
+        let coin = coin::mint_for_testing(100, ctx);
+        coin::transfer<SUI>(coin, ISSUER_ADDRESS);
     }
 
     #[test]

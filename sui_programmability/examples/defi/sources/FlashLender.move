@@ -4,7 +4,7 @@
 /// A flash loan that works for any Coin type
 module DeFi::FlashLender {
     use sui::balance::{Self, Balance};
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -79,7 +79,7 @@ module DeFi::FlashLender {
 
     /// Same as `new`, but transfer `WithdrawCap` to the transaction sender
     public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
-        let balance = Coin::into_balance(to_lend);
+        let balance = coin::into_balance(to_lend);
         let withdraw_cap = new(balance, fee, ctx);
         transfer::transfer(withdraw_cap, tx_context::sender(ctx))
     }
@@ -94,7 +94,7 @@ module DeFi::FlashLender {
     ): (Coin<T>, Receipt<T>) {
         let to_lend = &mut self.to_lend;
         assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
-        let loan = Coin::withdraw(to_lend, amount, ctx);
+        let loan = coin::withdraw(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
         let receipt = Receipt { flash_lender_id: *id::id(self), repay_amount };
         (loan, receipt)
@@ -106,9 +106,9 @@ module DeFi::FlashLender {
     public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receipt<T>) {
         let Receipt { flash_lender_id, repay_amount } = receipt;
         assert!(id::id(self) == &flash_lender_id, ERepayToWrongLender);
-        assert!(Coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
+        assert!(coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
 
-        Coin::deposit(&mut self.to_lend, payment)
+        coin::deposit(&mut self.to_lend, payment)
     }
 
     // === Admin-only functionality ===
@@ -125,7 +125,7 @@ module DeFi::FlashLender {
 
         let to_lend = &mut self.to_lend;
         assert!(balance::value(to_lend) >= amount, EWithdrawTooLarge);
-        Coin::withdraw(to_lend, amount, ctx)
+        coin::withdraw(to_lend, amount, ctx)
     }
 
     /// Allow admin to add more funds to `self`
@@ -134,7 +134,7 @@ module DeFi::FlashLender {
     ) {
         // only the holder of the `AdminCap` for `self` can deposit funds
         check_admin(self, admin_cap);
-        Coin::deposit(&mut self.to_lend, coin);
+        coin::deposit(&mut self.to_lend, coin);
     }
 
     /// Allow admin to update the fee for `self`

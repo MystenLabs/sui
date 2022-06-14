@@ -5,7 +5,7 @@
 /// By convention, modules defining custom coin types use upper case names, in contrast to
 /// ordinary modules, which use camel case.
 module FungibleTokens::MANAGED {
-    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::coin::{Self, Coin, TreasuryCap};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -18,23 +18,23 @@ module FungibleTokens::MANAGED {
     /// registered once.
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction sender
-        let treasury_cap = Coin::create_currency<MANAGED>(MANAGED{}, ctx);
+        let treasury_cap = coin::create_currency<MANAGED>(MANAGED{}, ctx);
         transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     /// Manager can mint new coins
     public fun mint(treasury_cap: &mut TreasuryCap<MANAGED>, amount: u64, ctx: &mut TxContext): Coin<MANAGED> {
-        Coin::mint<MANAGED>(amount, treasury_cap, ctx)
+        coin::mint<MANAGED>(amount, treasury_cap, ctx)
     }
 
     /// Manager can burn coins
     public entry fun burn(treasury_cap: &mut TreasuryCap<MANAGED>, coin: Coin<MANAGED>) {
-        Coin::burn(coin, treasury_cap)
+        coin::burn(coin, treasury_cap)
     }
 
     /// Manager can transfer the treasury capability to a new manager
     public entry fun transfer_cap(treasury_cap: TreasuryCap<MANAGED>, recipient: address) {
-        Coin::transfer_cap<MANAGED>(treasury_cap, recipient);
+        coin::transfer_cap<MANAGED>(treasury_cap, recipient);
     }
 
     #[test_only]

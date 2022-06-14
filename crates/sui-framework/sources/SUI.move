@@ -3,8 +3,8 @@
 
 /// Coin<SUI> is the token used to pay for gas in Sui
 module sui::SUI {
-    use sui::Coin;
-    use sui::Coin::TreasuryCap;
+    use sui::coin;
+    use sui::coin::TreasuryCap;
     use sui::tx_context::TxContext;
 
     friend sui::genesis;
@@ -15,12 +15,12 @@ module sui::SUI {
     /// Register the token to acquire its `TreasuryCap`.
     /// This should be called only once during genesis creation.
     public(friend) fun new(ctx: &mut TxContext): TreasuryCap<SUI> {
-        Coin::create_currency(SUI{}, ctx)
+        coin::create_currency(SUI{}, ctx)
     }
 
     /// Transfer to a recipient
-    public entry fun transfer(c: Coin::Coin<SUI>, recipient: address) {
-        Coin::transfer(c, recipient)
+    public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
+        coin::transfer(c, recipient)
     }
 
 }

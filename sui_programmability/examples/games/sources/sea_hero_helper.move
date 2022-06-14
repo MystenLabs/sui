@@ -10,7 +10,7 @@
 module games::sea_hero_helper {
     use games::sea_hero::{Self, SeaMonster, RUM};
     use games::hero::Hero;
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -72,8 +72,8 @@ module games::sea_hero_helper {
         } = wrapper;
         id::delete(id);
         let owner_reward = sea_hero::slay(hero, monster);
-        let helper_reward = Coin::withdraw(&mut owner_reward, helper_reward, ctx);
-        transfer::transfer(Coin::from_balance(owner_reward, ctx), monster_owner);
+        let helper_reward = coin::withdraw(&mut owner_reward, helper_reward, ctx);
+        transfer::transfer(coin::from_balance(owner_reward, ctx), monster_owner);
         helper_reward
     }
 

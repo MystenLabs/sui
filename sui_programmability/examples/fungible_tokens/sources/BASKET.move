@@ -8,7 +8,7 @@
 /// could be implemented this way.
 module FungibleTokens::BASKET {
     use FungibleTokens::MANAGED::MANAGED;
-    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::coin::{Self, Coin, TreasuryCap};
     use sui::balance::{Self, Balance};
     use sui::id::VersionedID;
     use sui::SUI::SUI;
@@ -35,7 +35,7 @@ module FungibleTokens::BASKET {
 
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin put it in the reserve
-        let treasury_cap = Coin::create_currency<BASKET>(BASKET{}, ctx);
+        let treasury_cap = coin::create_currency<BASKET>(BASKET{}, ctx);
         transfer::share_object(Reserve {
             id: tx_context::new_id(ctx),
             treasury_cap,
@@ -50,22 +50,22 @@ module FungibleTokens::BASKET {
     public fun mint(
         reserve: &mut Reserve, sui: Coin<SUI>, managed: Coin<MANAGED>, ctx: &mut TxContext
     ): Coin<BASKET> {
-        let num_sui = Coin::value(&sui);
-        assert!(num_sui == Coin::value(&managed), EBadDepositRatio);
+        let num_sui = coin::value(&sui);
+        assert!(num_sui == coin::value(&managed), EBadDepositRatio);
 
-        Coin::deposit(&mut reserve.sui, sui);
-        Coin::deposit(&mut reserve.managed, managed);
-        Coin::mint(num_sui, &mut reserve.treasury_cap, ctx)
+        coin::deposit(&mut reserve.sui, sui);
+        coin::deposit(&mut reserve.managed, managed);
+        coin::mint(num_sui, &mut reserve.treasury_cap, ctx)
     }
 
     /// Burn BASKET coins and return the underlying reserve assets
     public fun burn(
         reserve: &mut Reserve, basket: Coin<BASKET>, ctx: &mut TxContext
     ): (Coin<SUI>, Coin<MANAGED>) {
-        let num_basket = Coin::value(&basket);
-        Coin::burn(basket, &mut reserve.treasury_cap);
-        let sui = Coin::withdraw(&mut reserve.sui, num_basket, ctx);
-        let managed = Coin::withdraw(&mut reserve.managed, num_basket, ctx);
+        let num_basket = coin::value(&basket);
+        coin::burn(basket, &mut reserve.treasury_cap);
+        let sui = coin::withdraw(&mut reserve.sui, num_basket, ctx);
+        let managed = coin::withdraw(&mut reserve.managed, num_basket, ctx);
         (sui, managed)
     }
 
@@ -73,7 +73,7 @@ module FungibleTokens::BASKET {
 
     /// Return the number of `MANAGED` coins in circulation
     public fun total_supply(reserve: &Reserve): u64 {
-        Coin::total_supply(&reserve.treasury_cap)
+        coin::total_supply(&reserve.treasury_cap)
     }
 
     /// Return the number of SUI in the reserve

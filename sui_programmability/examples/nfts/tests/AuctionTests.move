@@ -5,7 +5,7 @@
 module NFTs::AuctionTests {
     use std::vector;
 
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::SUI::SUI;
     use sui::id::{Self, VersionedID};
     use sui::TestScenario::Self;
@@ -29,8 +29,8 @@ module NFTs::AuctionTests {
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
-            let coin = Coin::mint_for_testing(100, ctx);
-            Coin::transfer<SUI>(coin, bidder);
+            let coin = coin::mint_for_testing(100, ctx);
+            coin::transfer<SUI>(coin, bidder);
         };
     }
 

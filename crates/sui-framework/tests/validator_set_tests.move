@@ -4,7 +4,7 @@
 #[test_only]
 module sui::validator_set_tests {
     use sui::balance;
-    use sui::Coin;
+    use sui::coin;
     use sui::SUI::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
@@ -38,7 +38,7 @@ module sui::validator_set_tests {
         );
         validator_set::request_add_stake(
             &mut validator_set,
-            Coin::into_balance(Coin::mint_for_testing(500, &mut ctx1)),
+            coin::into_balance(coin::mint_for_testing(500, &mut ctx1)),
             &ctx1,
         );
         // Adding stake to existing active validator during the epoch
@@ -82,8 +82,8 @@ module sui::validator_set_tests {
     fun create_validator(addr: address, hint: u8): (TxContext, Validator) {
         let stake_value = (hint as u64) * 100;
         let ctx = tx_context::new_from_hint(addr, hint, 0, 0);
-        let init_stake = Coin::mint_for_testing(stake_value, &mut ctx);
-        let init_stake = Coin::into_balance(init_stake);
+        let init_stake = coin::mint_for_testing(stake_value, &mut ctx);
+        let init_stake = coin::into_balance(init_stake);
         let validator = validator::new(
             addr,
             vector[hint],

@@ -8,7 +8,7 @@
 module NFTs::AuctionLib {
     use std::option::{Self, Option};
 
-    use sui::Coin;
+    use sui::coin;
     use sui::balance::{Self, Balance};
     use sui::SUI::SUI;
     use sui::id::{Self, ID, VersionedID};
@@ -156,7 +156,7 @@ module NFTs::AuctionLib {
 
     /// Helper for the most common operation - wrapping a balance and sending it
     fun send_balance(balance: Balance<SUI>, to: address, ctx: &mut TxContext) {
-        transfer::transfer(Coin::from_balance(balance, ctx), to)
+        transfer::transfer(coin::from_balance(balance, ctx), to)
     }
 
     /// exposes transfer::transfer

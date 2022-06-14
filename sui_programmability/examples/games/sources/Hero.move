@@ -4,7 +4,7 @@
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
 module games::hero {
-    use sui::Coin::{Self, Coin};
+    use sui::coin::{Self, Coin};
     use sui::event;
     use sui::id::{Self, ID, VersionedID};
     use sui::math;
@@ -248,7 +248,7 @@ module games::hero {
         payment: Coin<SUI>,
         ctx: &mut TxContext
     ): Sword {
-        let value = Coin::value(&payment);
+        let value = coin::value(&payment);
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
@@ -355,7 +355,7 @@ module games::hero {
 
     #[test]
     fun slay_boar_test() {
-        use sui::Coin;
+        use sui::coin;
         use sui::TestScenario;
 
         let admin = @0xAD014;
@@ -372,7 +372,7 @@ module games::hero {
         {
             let game = TestScenario::take_immutable<GameInfo>(scenario);
             let game_ref = TestScenario::borrow(&game);
-            let coin = Coin::mint_for_testing(500, TestScenario::ctx(scenario));
+            let coin = coin::mint_for_testing(500, TestScenario::ctx(scenario));
             acquire_hero(game_ref, coin, TestScenario::ctx(scenario));
             TestScenario::return_immutable(scenario, game);
         };

@@ -515,7 +515,7 @@ This should give you output similar to the following:
 ID: 0x124bbde643189b573c98d05c092f4927225421d7
 Version: 1
 Owner: Account Address ( 0x62cd5bc220b28a34265bcb24995fb45a51d39832 )
-Type: 0x2::Coin::Coin<0x2::SUI::SUI>
+Type: 0x2::coin::Coin<0x2::SUI::SUI>
 ```
 
 The result shows some basic information about the object, the owner,
@@ -555,7 +555,7 @@ Here is example `json` output:
         "type": "0x2::id::VersionedID"
       }
     },
-    "type": "0x2::Coin::Coin<0x2::SUI::SUI>"
+    "type": "0x2::coin::Coin<0x2::SUI::SUI>"
   },
   "owner": {
     "AddressOwner": "0x62cd5bc220b28a34265bcb24995fb45a51d39832"
@@ -852,8 +852,8 @@ for the first look at Move source code and a description of the
 following function we will be calling in this tutorial:
 
 ```rust
-public entry fun transfer(c: Coin::Coin<SUI>, recipient: address) {
-    Coin::transfer(c, Address::new(recipient))
+public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
+    coin::transfer(c, Address::new(recipient))
 }
 ```
 
@@ -972,7 +972,7 @@ Owner: AddressOwner(k#f456ebef195e4a231488df56b762ac90695be2dd)
 Version: 1
 ID: 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac
 Readonly: false
-Type: 0x2::Coin::Coin<0x2::SUI::SUI>
+Type: 0x2::coin::Coin<0x2::SUI::SUI>
 ```
 
 ## Publish packages
