@@ -2038,7 +2038,6 @@ dependencies = [
  "sui-core",
  "sui-gateway",
  "sui-json",
- "sui-node",
  "sui-rpc",
  "sui-rpc-api",
  "sui-types",
