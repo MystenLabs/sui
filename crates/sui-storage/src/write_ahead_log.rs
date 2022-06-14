@@ -150,7 +150,7 @@ where
     C: Serialize + DeserializeOwned,
 {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        let (options, _) = default_db_options(None);
+        let (options, _) = default_db_options(None, None);
         let db = {
             let path = &path;
             let db_options = Some(options.clone());

@@ -846,9 +846,6 @@ pub struct TransactionInfoResponse {
     // The effects resulting from a successful execution should
     // contain ObjectRef created, mutated, deleted and events.
     pub signed_effects: Option<SignedTransactionEffects>,
-    // The timestamp of a transaction digest, which is UTC timestamp
-    // in milliseconds since epoch (1/1/1970)
-    pub timestamp: Option<u64>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]

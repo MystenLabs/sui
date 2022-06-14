@@ -234,7 +234,7 @@ impl CheckpointStore {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
     ) -> Result<CheckpointStore, SuiError> {
-        let (options, point_lookup) = default_db_options(db_options);
+        let (options, point_lookup) = default_db_options(db_options, None);
 
         let db = open_cf_opts(
             &path,

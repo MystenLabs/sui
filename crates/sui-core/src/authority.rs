@@ -527,7 +527,6 @@ impl AuthorityState {
             signed_transaction: self.database.get_transaction(&transaction_digest)?,
             certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
-            timestamp: None,
         })
     }
 
@@ -538,6 +537,7 @@ impl AuthorityState {
         digest: &TransactionDigest,
         cert: &CertifiedTransaction,
         effects: &SignedTransactionEffects,
+        timestamp_ms: u64,
     ) -> SuiResult {
         indexes.index_tx(
             cert.sender_address(),
@@ -545,6 +545,7 @@ impl AuthorityState {
             effects.effects.mutated_and_created(),
             seq,
             digest,
+            timestamp_ms,
         )
     }
 
@@ -564,20 +565,13 @@ impl AuthorityState {
             }
         };
 
-        // Time stamp the transaction digest
-        let timestamp_ms = Self::get_unixtime_ms();
-        if info.timestamp.is_some() {
-            warn!(
-                ?digest,
-                "Transaction Digest was time-stamped already, which shouldn't happen."
-            );
-        } else if let Err(e) = self.database.insert_timestamp(digest, &timestamp_ms) {
-            warn!(?digest, "Failed to time stamp txn: {}", e);
-        }
+        let timestamp_ms = Self::unixtime_now_ms();
 
         // Index tx
         if let Some(indexes) = &self.indexes {
-            if let Err(e) = self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects) {
+            if let Err(e) =
+                self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
+            {
                 warn!(?digest, "Couldn't index tx: {}", e);
             }
         }
@@ -635,7 +629,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    pub fn get_unixtime_ms() -> u64 {
+    pub fn unixtime_now_ms() -> u64 {
         let ts_ms = Utc::now().timestamp_millis();
         u64::try_from(ts_ms).expect("Travelling in time machine")
     }
@@ -1120,6 +1114,13 @@ impl AuthorityState {
         }
     }
 
+    pub async fn get_timestamp_ms(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<u64>, anyhow::Error> {
+        Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
+    }
+
     pub async fn get_transactions_by_input_object(
         &self,
         object: ObjectID,
@@ -1249,10 +1250,6 @@ impl AuthorityState {
         digest: &TransactionDigest,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
         self.database.read_certificate(digest)
-    }
-
-    pub fn get_timestamp_ms(&self, digest: &TransactionDigest) -> SuiResult<Option<u64>> {
-        self.database.get_timestamp_ms(digest)
     }
 
     pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {

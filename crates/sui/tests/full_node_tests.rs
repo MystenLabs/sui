@@ -123,7 +123,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
 
     // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).unwrap();
+    let ts = node.state().get_timestamp_ms(&digest).await?;
     assert!(ts.is_some());
 
     Ok(())
@@ -174,7 +174,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     assert_eq!(txes.len(), 0);
 
     // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).unwrap();
+    let ts = node.state().get_timestamp_ms(&digest).await?;
     assert!(ts.is_some());
 
     Ok(())

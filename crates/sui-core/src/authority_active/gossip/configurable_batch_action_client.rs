@@ -119,7 +119,6 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
             signed_transaction: None,
             certified_transaction: None,
             signed_effects: None,
-            timestamp: None,
         })
     }
 
