@@ -3,9 +3,7 @@
 
 use crate::authority::{AuthorityStore, AuthorityStoreWrapper};
 use crate::streamer::Streamer;
-use chrono::prelude::*;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use std::convert::TryFrom;
 use std::sync::Arc;
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -16,11 +14,6 @@ use tokio::sync::mpsc::{self, Sender};
 use tracing::{debug, error};
 
 const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
-
-pub fn get_unixtime_ms() -> u64 {
-    let ts_ms = Utc::now().timestamp_millis();
-    u64::try_from(ts_ms).expect("Travelling in time machine")
-}
 
 pub struct EventHandler {
     module_cache: SyncModuleCache<AuthorityStoreWrapper>,
@@ -37,16 +30,16 @@ impl EventHandler {
         }
     }
 
-    pub async fn process_events(&self, effects: &TransactionEffects) {
+    pub async fn process_events(&self, effects: &TransactionEffects, timestamp_ms: u64) {
         // serializely dispatch event processing to honor events' orders.
         for event in &effects.events {
-            if let Err(e) = self.process_event(event).await {
+            if let Err(e) = self.process_event(event, timestamp_ms).await {
                 error!(error =? e, "Failed to send EventEnvolope to dispatch");
             }
         }
     }
 
-    pub async fn process_event(&self, event: &Event) -> SuiResult {
+    pub async fn process_event(&self, event: &Event, timestamp_ms: u64) -> SuiResult {
         let envolope = match event {
             Event::MoveEvent { .. } => {
                 debug!(event =? event, "Process MoveEvent.");
@@ -57,13 +50,13 @@ impl EventHandler {
                                 error: e.to_string(),
                             }
                         })?;
-                        EventEnvelope::new(get_unixtime_ms(), None, event.clone(), Some(json_value))
+                        EventEnvelope::new(timestamp_ms, None, event.clone(), Some(json_value))
                     }
                     Ok(None) => unreachable!("Expect a MoveStruct from a MoveEvent."),
                     Err(e) => return Err(e),
                 }
             }
-            _ => EventEnvelope::new(get_unixtime_ms(), None, event.clone(), None),
+            _ => EventEnvelope::new(timestamp_ms, None, event.clone(), None),
         };
 
         // TODO store events here

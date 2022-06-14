@@ -117,7 +117,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
-        let (options, point_lookup) = default_db_options(db_options);
+        let (options, point_lookup) = default_db_options(db_options, None);
 
         let db = {
             let path = &path;

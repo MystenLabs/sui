@@ -85,6 +85,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             Some(certificate) => Ok(TransactionEffectsResponse {
                 certificate: certificate.try_into()?,
                 effects: database.get_effects(&digest)?.into(),
+                timestamp_ms: None,
             }),
             None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
         }

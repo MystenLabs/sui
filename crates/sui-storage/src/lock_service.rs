@@ -97,7 +97,7 @@ struct LockServiceImpl {
 impl LockServiceImpl {
     /// Open or create a new LockService database
     fn try_open_db<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
-        let (options, point_lookup) = default_db_options(db_options);
+        let (options, point_lookup) = default_db_options(db_options, None);
 
         let db = {
             let path = &path;

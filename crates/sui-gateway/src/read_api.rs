@@ -100,7 +100,10 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<TransactionEffectsResponse> {
-        Ok(self.state.get_transaction(digest).await?)
+        Ok(TransactionEffectsResponse {
+            timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
+            ..self.state.get_transaction(digest).await?
+        })
     }
 }
 

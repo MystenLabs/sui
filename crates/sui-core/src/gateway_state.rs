@@ -929,6 +929,7 @@ where
             TransactionEffectsResponse {
                 certificate: certificate.try_into()?,
                 effects: effects.into(),
+                timestamp_ms: None,
             },
         ));
     }
