@@ -1294,7 +1294,7 @@ where
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
                 if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {
-                    if effects.is_object_mutated_here(obj_ref) {
+                    if effects.effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
                         // TODO: Report a byzantine fault here

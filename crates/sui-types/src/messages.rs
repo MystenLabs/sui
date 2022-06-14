@@ -977,6 +977,34 @@ impl TransactionEffects {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
     }
 
+    pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
+        // The mutated or created case
+        if self.mutated_and_created().any(|(oref, _)| *oref == obj_ref) {
+            return true;
+        }
+
+        // The deleted case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_DELETED
+            && self
+                .deleted
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+
+        // The wrapped case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED
+            && self
+                .wrapped
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+        false
+    }
+
     pub fn to_sign_effects(
         self,
         epoch: EpochId,
@@ -1073,40 +1101,6 @@ impl CertifiedTransactionEffects {
             effects,
             auth_signature: AuthorityQuorumSignInfo { epoch, signatures },
         }
-    }
-
-    pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
-        // The mutated or created case
-        if self
-            .effects
-            .mutated_and_created()
-            .any(|(oref, _)| *oref == obj_ref)
-        {
-            return true;
-        }
-
-        // The deleted case
-        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_DELETED
-            && self
-                .effects
-                .deleted
-                .iter()
-                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-        {
-            return true;
-        }
-
-        // The wrapped case
-        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED
-            && self
-                .effects
-                .wrapped
-                .iter()
-                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-        {
-            return true;
-        }
-        false
     }
 
     pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
