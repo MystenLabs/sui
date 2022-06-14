@@ -2,7 +2,11 @@
   "move_call": {
     "EffectResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "VNE0bCrZREx+3kg+E5Zx1FvnyuT/Mzw6wZi8blKRSF4=",
+=======
+        "transactionDigest": "OyNfgV90+tdAPN6mq+6GJ3jmAxVfMkj/4rJlt3G0zlc=",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "data": {
           "transactions": [
             {
@@ -10,7 +14,11 @@
                 "package": {
                   "objectId": "0x0000000000000000000000000000000000000002",
                   "version": 1,
+<<<<<<< HEAD
                   "digest": "aWgI94W3rJkcG74fwSfZmmd+XKuueGL9ulSCeVW0kD0="
+=======
+                  "digest": "fdgP9Ek3P8O1cpiH5d6jHhd497l++9Hl3AQKJ9BB2TM="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 },
                 "module": "devnet_nft",
                 "function": "mint",
@@ -22,6 +30,7 @@
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122",
           "gasPayment": {
             "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
@@ -31,10 +40,22 @@
           "gasBudget": 10000
         },
         "txSignature": "YMJ9l0EIr/FdFtzXlnpweNA2teqykK3QViYfxrZdRcM2IDCBzYf8x9OXIZE7/SNF84RSwZHV/DvI8nNJlmc3C6coTQ1kFd9TMHuCxZoc0by6mt7auP/4TvyWQK/s+/5G",
+=======
+          "sender": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff",
+          "gasPayment": {
+            "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+            "version": 0,
+            "digest": "TeiilkH1oma9EWP0Jk0HmK1/uTwC1g6pLOh5vVw6iXY="
+          },
+          "gasBudget": 10000
+        },
+        "txSignature": "mQPlRdabNPtDEr24audnVj6cp/CoXz1ZK3dDEW3sbxXfe98i1pOLFuWQNSq1HKQLKIiuwwt7dVSYerqDuU2wC9yhC2wwpQ/m7apW2lazFgvZewdQvpD9DBlnv4o9sx9D",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "xfJxFu2URkl1Obf8nYeQZno/EdW8LAumUB5G9JhBpLs=",
               "fqlfHoy03qoREf9V9ECbJMo2c0cngJKMkfXJkK5Jl2Rnx24kXDy1crdsgOUZ0k+VTdEIWId9LZNErHLz3SLZBA=="
             ],
@@ -45,6 +66,18 @@
             [
               "+jmJNwZmuqW6aAnLDK+oO5RjEPwEfKNgjyFXN/2XJJI=",
               "WXEtNWoBzup5rYbHACpTnpejbgPbDQcDUXoXXznt7BQjipUK4jrWA/z0oks8vtFuSkyfUBVlJTIvHbMnePWjBQ=="
+=======
+              "kS8Jnid+NXsvCwxM7GWsSTjypi0Sj6ZOllS6t33aUQE=",
+              "Z/3/8gNm6sHqCMfoN5JUXVIAkMcnQdP9OeabTp8lqneUeqIwRHvfOZ/tcHRNzL4oUjRDuHW61vJYySaAq2oNAQ=="
+            ],
+            [
+              "dDcu9I42Jj2wSNUJV39SDKWXRnPG2p68aQqtnJXOVoY=",
+              "dzps0bRWmafcsrhpT8ZFMrFTyzh6wnDbOoB0aJsfsVLA+7Ch3E81yBXsxOsOJC0CBaFG2FBykWROAKXuorWPCQ=="
+            ],
+            [
+              "Ct8UELvN05l7Y8MTSKJG8QwoIGBIvHeqXcX7BObE1uU=",
+              "CZP1xo/1xWtX2ijns7BWucVuX99v48GA3X4of0KBpzknIN23u+hakXOoYHgEJhEL3RK16FBjp0SC5sSBZ0l1CA=="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             ]
           ]
         }
@@ -53,11 +86,16 @@
         "status": {
           "status": "success",
           "gas_cost": {
+<<<<<<< HEAD
             "computationCost": 747,
+=======
+            "computationCost": 746,
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             "storageCost": 40,
             "storageRebate": 0
           }
         },
+<<<<<<< HEAD
         "transactionDigest": "VNE0bCrZREx+3kg+E5Zx1FvnyuT/Mzw6wZi8blKRSF4=",
         "created": [
           {
@@ -68,33 +106,64 @@
               "objectId": "0xe33ff25bdffba609a83a5327ee565af645eb019d",
               "version": 1,
               "digest": "/CXzljbZPnlaZVRO39h89t7gBsOT9/k/zmgbIFpgZG0="
+=======
+        "transactionDigest": "OyNfgV90+tdAPN6mq+6GJ3jmAxVfMkj/4rJlt3G0zlc=",
+        "created": [
+          {
+            "owner": {
+              "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+            },
+            "reference": {
+              "objectId": "0x8f243f9fa46ec7772f78030375bf0bdba4bc3465",
+              "version": 1,
+              "digest": "x7Cez7SiFPIJDnJHdzcflMk/VvvexUAVAmDBOoc/5cc="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             }
           }
         ],
         "mutated": [
           {
             "owner": {
+<<<<<<< HEAD
               "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
             },
             "reference": {
               "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
               "version": 1,
               "digest": "HpZw3djcMnRRXwCk9RGbxoRDDv/UBmpOV4KIpZtEHaM="
+=======
+              "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+            },
+            "reference": {
+              "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+              "version": 1,
+              "digest": "aNRXLHX5kvHh1qzkCvG7Bgt/thm0NJMGA3iT6u3RZek="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             }
           }
         ],
         "gasObject": {
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "reference": {
             "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
             "version": 1,
             "digest": "HpZw3djcMnRRXwCk9RGbxoRDDv/UBmpOV4KIpZtEHaM="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "reference": {
+            "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+            "version": 1,
+            "digest": "aNRXLHX5kvHh1qzkCvG7Bgt/thm0NJMGA3iT6u3RZek="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         },
         "events": [
           {
+<<<<<<< HEAD
             "moveEvent": {
               "type": "0x2::devnet_nft::MintNFTEvent",
               "fields": {
@@ -107,6 +176,63 @@
           },
           {
             "newObject": "0xe33ff25bdffba609a83a5327ee565af645eb019d"
+=======
+            "type_": "0x2::DevNetNFT::MintNFTEvent",
+            "contents": [
+              143,
+              36,
+              63,
+              159,
+              164,
+              110,
+              199,
+              119,
+              47,
+              120,
+              3,
+              3,
+              117,
+              191,
+              11,
+              219,
+              164,
+              188,
+              52,
+              101,
+              45,
+              83,
+              20,
+              155,
+              248,
+              83,
+              187,
+              228,
+              92,
+              179,
+              141,
+              237,
+              50,
+              52,
+              203,
+              97,
+              163,
+              133,
+              198,
+              255,
+              11,
+              69,
+              120,
+              97,
+              109,
+              112,
+              108,
+              101,
+              32,
+              78,
+              70,
+              84
+            ]
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         ]
       },
@@ -116,20 +242,33 @@
   "transfer": {
     "EffectResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "6AOAUiTfugLDmRlCwFmVbx3u0GbFrGzjZc9wZpUdYm4=",
+=======
+        "transactionDigest": "o5rdWVv/Z6tPDpJc7mIWNdlZjS4PX88QDu2dlsXK9C8=",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "data": {
           "transactions": [
             {
               "TransferCoin": {
+<<<<<<< HEAD
                 "recipient": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122",
                 "objectRef": {
                   "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
                   "version": 4,
                   "digest": "2h7WshBIY9TUgmJaiT8vwNZBiC26+EXV6SPO7MrEm6I="
+=======
+                "recipient": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff",
+                "objectRef": {
+                  "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+                  "version": 4,
+                  "digest": "EV9IFoHlOcrRKXRJMdurKc2+Fdhe/GHmu/Zn7C8ndNs="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 }
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122",
           "gasPayment": {
             "objectId": "0x15a8506c8549848bad388e0597b0c147860e23db",
@@ -139,10 +278,22 @@
           "gasBudget": 1000
         },
         "txSignature": "EOu6vgqAHvHWtm+dawgGVR3wM82EqXbkEVcLS11GqodDEkkjNlsMVsMbl6wFzoQyIrnF0WKAtiG/blwCd91KBKcoTQ1kFd9TMHuCxZoc0by6mt7auP/4TvyWQK/s+/5G",
+=======
+          "sender": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff",
+          "gasPayment": {
+            "objectId": "0x10be63b9674645192bfddb78d0482d622d3d0bf3",
+            "version": 1,
+            "digest": "HSPyC5xYIiWifDkxW7c14xCDKRN34xa5ey67qVmA8E4="
+          },
+          "gasBudget": 1000
+        },
+        "txSignature": "KvPwQL4fjJptBXbdNs6SOTP9Q0P1TFkbAh9iun3ENASfvzm5cTpj5yhUz/MI6jOyHZa06GfnJHUXEY22m6z6AtyhC2wwpQ/m7apW2lazFgvZewdQvpD9DBlnv4o9sx9D",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "Xoj1X01QzmblC749N8p18hNfVV/acDTngUQ1ZU5HkPc=",
               "ZckBUPmPjTQfoerrTcYWUH/8mTgaBOxRuDOn/51+Hx1Lkn9ZquW9E+emgav13nP5/qeKFVOtuklZGTIwLzhbAQ=="
             ],
@@ -153,6 +304,18 @@
             [
               "+jmJNwZmuqW6aAnLDK+oO5RjEPwEfKNgjyFXN/2XJJI=",
               "Y/KC+nQ6tv4zsNnZJ80NFKsn8GlstdKBAGHOvKjczB72BLqSfzgcNeLK8VJ2w54XtEXfeilv6FnWYKjRBzJoDg=="
+=======
+              "dDcu9I42Jj2wSNUJV39SDKWXRnPG2p68aQqtnJXOVoY=",
+              "vdF8B4F+O8n7cpMhxmkuyGpcOXS/5hb99Yihn366U2RNYdInbVdnDaezOfCNN5xhUw7CGwBuwpbErVVq2j1MCg=="
+            ],
+            [
+              "gdjCo7Rv1v++EjHe0SVSqp0jp9SVmSzOO5Ou0r+m+1Q=",
+              "GGCUyjzy00j3CCps9M+O01MD4k+A2KUADSDB14s85+AqhtBKnvhX3C3cvI+Um0yjfmSekyT6HHRh4y/e1AVtDQ=="
+            ],
+            [
+              "kS8Jnid+NXsvCwxM7GWsSTjypi0Sj6ZOllS6t33aUQE=",
+              "V7ILj1puYtZNaS5VirTgbo2ZpTWF2Dh3Y3ZPt9YVmTXXa+oVU/JZinu7pFf68rt2vkRGjCqHEe3haQpiJuybBw=="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             ]
           ]
         }
@@ -166,6 +329,7 @@
             "storageRebate": 30
           }
         },
+<<<<<<< HEAD
         "transactionDigest": "6AOAUiTfugLDmRlCwFmVbx3u0GbFrGzjZc9wZpUdYm4=",
         "mutated": [
           {
@@ -176,27 +340,57 @@
               "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
               "version": 5,
               "digest": "c8G0kpFcVRLJOtB1+572iQkE46sYY9bgjtGaQw8cnzg="
+=======
+        "transactionDigest": "o5rdWVv/Z6tPDpJc7mIWNdlZjS4PX88QDu2dlsXK9C8=",
+        "mutated": [
+          {
+            "owner": {
+              "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+            },
+            "reference": {
+              "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+              "version": 5,
+              "digest": "ZOCCDBzmBR8AwEyZCtQDmvT6LTaAm+TQ0DRs4y6DaeQ="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             }
           },
           {
             "owner": {
+<<<<<<< HEAD
               "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
             },
             "reference": {
               "objectId": "0x15a8506c8549848bad388e0597b0c147860e23db",
               "version": 2,
               "digest": "ilv8cOMWt35c3df+YAEMT7TYURvW+O8T65ZfD0IhKcs="
+=======
+              "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+            },
+            "reference": {
+              "objectId": "0x10be63b9674645192bfddb78d0482d622d3d0bf3",
+              "version": 2,
+              "digest": "DzdTVwzD187SBsxgojhVFWc8M59KzraGEG1jpiqwIrE="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             }
           }
         ],
         "gasObject": {
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "reference": {
             "objectId": "0x15a8506c8549848bad388e0597b0c147860e23db",
             "version": 2,
             "digest": "ilv8cOMWt35c3df+YAEMT7TYURvW+O8T65ZfD0IhKcs="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "reference": {
+            "objectId": "0x10be63b9674645192bfddb78d0482d622d3d0bf3",
+            "version": 2,
+            "digest": "DzdTVwzD187SBsxgojhVFWc8M59KzraGEG1jpiqwIrE="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         },
         "events": [
@@ -210,7 +404,11 @@
           }
         ],
         "dependencies": [
+<<<<<<< HEAD
           "Dcat1m/0l9+jPFXtgjqa2ZQgimExDXsRPk7DYSzFFRc="
+=======
+          "u2lASED4/WucUxqHuQbe92z7BarSU+/a/r6eUEsYKB8="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         ]
       },
       "timestamp_ms": null
@@ -219,7 +417,11 @@
   "coin_split": {
     "SplitCoinResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
+=======
+        "transactionDigest": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "data": {
           "transactions": [
             {
@@ -227,7 +429,11 @@
                 "package": {
                   "objectId": "0x0000000000000000000000000000000000000002",
                   "version": 1,
+<<<<<<< HEAD
                   "digest": "aWgI94W3rJkcG74fwSfZmmd+XKuueGL9ulSCeVW0kD0="
+=======
+                  "digest": "fdgP9Ek3P8O1cpiH5d6jHhd497l++9Hl3AQKJ9BB2TM="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 },
                 "module": "coin",
                 "function": "split_vec",
@@ -235,7 +441,11 @@
                   "0x2::sui::SUI"
                 ],
                 "arguments": [
+<<<<<<< HEAD
                   "0xbb7abe79e65f28206759931b2cc00e0bab373f4",
+=======
+                  "0x1bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                   [
                     20,
                     20,
@@ -247,6 +457,7 @@
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122",
           "gasPayment": {
             "objectId": "0x15a8506c8549848bad388e0597b0c147860e23db",
@@ -256,10 +467,22 @@
           "gasBudget": 1000
         },
         "txSignature": "02tt4eklotsyAilT5ZukOs57Ps+nsB0kw+Ix7Ftf3bKRBq8X9YkDuA349a97K0GIdRKX9YtPtZ1mfXCllBQxBKcoTQ1kFd9TMHuCxZoc0by6mt7auP/4TvyWQK/s+/5G",
+=======
+          "sender": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff",
+          "gasPayment": {
+            "objectId": "0x10be63b9674645192bfddb78d0482d622d3d0bf3",
+            "version": 2,
+            "digest": "DzdTVwzD187SBsxgojhVFWc8M59KzraGEG1jpiqwIrE="
+          },
+          "gasBudget": 1000
+        },
+        "txSignature": "H1OCyUQTIospWVk62y3au/OGUmySCMIpIsj/8+aLVnmIcjoq9zpuPpsR0HlBjF8uVmhdZn7hEtvVJFpwzSQcBdyhC2wwpQ/m7apW2lazFgvZewdQvpD9DBlnv4o9sx9D",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "K9Bkv5Bz8tlT7XGVjksJ3CgF50x7JF7ADfywrv/u66M=",
               "5dzv0wBllVtT30u+kDRmJ2pJ6Lny5SyFvgcRXmWnWzoYIXwcKgTHaIGKrkwbWTpuEiCKOK9zO6MMyZE246PuAQ=="
             ],
@@ -270,6 +493,18 @@
             [
               "Xoj1X01QzmblC749N8p18hNfVV/acDTngUQ1ZU5HkPc=",
               "LoaTYISJW1e0AlKuis41DsQaKxmJrmcI2Y9dotkfy5wgYrHu04eZOdXwcnzGXQPrResG01uUnOeOfEzaV4D3Ag=="
+=======
+              "Ct8UELvN05l7Y8MTSKJG8QwoIGBIvHeqXcX7BObE1uU=",
+              "3GwIgjwCwSLRQLHjMyjepdIqZbOfeECcojnietVQNqThd5UVMf8lC1HggxJ0GlneSGjTCx5+qm7RfPdXyoZqCg=="
+            ],
+            [
+              "dDcu9I42Jj2wSNUJV39SDKWXRnPG2p68aQqtnJXOVoY=",
+              "2Qtl3jSByIoAiCOeQxGOf4oPAY74dyLTbCY93baAOuE0BY5mPFgJwckDXwGCoTyuqWexVkYF653ccrj7BOdKAQ=="
+            ],
+            [
+              "gdjCo7Rv1v++EjHe0SVSqp0jp9SVmSzOO5Ou0r+m+1Q=",
+              "EFdfe99xNwcr+gtdQ4RfitngUKwbZEHFi0FzsMqOtiEaE/2vNe6hotn1L3mywANIE4G0dac1VaJafzP77h7/CQ=="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             ]
           ]
         }
@@ -279,14 +514,21 @@
           "dataType": "moveObject",
           "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
+<<<<<<< HEAD
             "balance": 95582,
             "id": {
               "id": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
+=======
+            "balance": 95586,
+            "id": {
+              "id": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
               "version": 6
             }
           }
         },
         "owner": {
+<<<<<<< HEAD
           "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
         },
         "previousTransaction": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
@@ -295,6 +537,16 @@
           "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
           "version": 6,
           "digest": "kZYNo5Gu/5Im38dM/FyopaeaWTSA/LHnCD1FPpEuyok="
+=======
+          "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+        },
+        "previousTransaction": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+        "storageRebate": 15,
+        "reference": {
+          "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+          "version": 6,
+          "digest": "2MNGr4cGzy5+gUTV1QwvgnV9NnlaG1CN6uTBwQCz9ik="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         }
       },
       "newCoins": [
@@ -305,12 +557,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0x0833b8050695a7c5f8f982edb027c7b4a9784144",
+=======
+                "id": "0x101e9593c2dba9e58887a7330b8f1e0fa89cf40f",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "previousTransaction": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
@@ -319,6 +576,16 @@
             "objectId": "0x0833b8050695a7c5f8f982edb027c7b4a9784144",
             "version": 1,
             "digest": "/seGVnecNFUeI2ECAUf6oqb46r2uBNz/g+/Y23Fnhrk="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "previousTransaction": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0x101e9593c2dba9e58887a7330b8f1e0fa89cf40f",
+            "version": 1,
+            "digest": "RETEfijCvds7oB9AJhw9RPcw3U4FenscEKYQEyM0+cU="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         },
         {
@@ -328,12 +595,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0x09b7e66811356a95c1c11f659ac2e706d57d48a3",
+=======
+                "id": "0x482909eeb501a3844276bd05863d861ec05d8f2d",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "previousTransaction": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
@@ -342,6 +614,16 @@
             "objectId": "0x09b7e66811356a95c1c11f659ac2e706d57d48a3",
             "version": 1,
             "digest": "EuZXXws+M+y1L/BdbUHiGgGtt4sQud0A5bYjbynLFV0="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "previousTransaction": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0x482909eeb501a3844276bd05863d861ec05d8f2d",
+            "version": 1,
+            "digest": "NQ9uQFbYkd84d2xj2ERndi6Rg5fNOfzYI0QNUd3Cm0k="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         },
         {
@@ -351,12 +633,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0x42c70d8990458b92479c5221becbb5f9ebfaea18",
+=======
+                "id": "0xa0dfb52bf0691d6cd38541dfb4ee8908fc5877f2",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "previousTransaction": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
@@ -365,6 +652,16 @@
             "objectId": "0x42c70d8990458b92479c5221becbb5f9ebfaea18",
             "version": 1,
             "digest": "KTND2UTTFkWvRG4YWY9KksFov0unu2UxnIa0Ydt9SA0="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "previousTransaction": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0xa0dfb52bf0691d6cd38541dfb4ee8908fc5877f2",
+            "version": 1,
+            "digest": "bV0GM/kXyna9itPHSPIyw3UalIyM3l/X72tr96+RPfg="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         },
         {
@@ -374,12 +671,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0x6df180c5838511ccbe1cb68e7a58e6f67f0f3548",
+=======
+                "id": "0xdfc45845550898a8f38100bff958edc1ec28a4bc",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "previousTransaction": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
@@ -388,6 +690,16 @@
             "objectId": "0x6df180c5838511ccbe1cb68e7a58e6f67f0f3548",
             "version": 1,
             "digest": "NCG+2E/zdVm4JMEmusIX83YhonBTOr2eyFFbWZZmBOg="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "previousTransaction": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0xdfc45845550898a8f38100bff958edc1ec28a4bc",
+            "version": 1,
+            "digest": "X3UwxHNBxw9HjnP3zvuYA76NmpK1fJeVPfXgbVI9VPk="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         },
         {
@@ -397,12 +709,17 @@
             "fields": {
               "balance": 20,
               "id": {
+<<<<<<< HEAD
                 "id": "0xc2fe61d367a9fd89d4ff78a53577cf8dcb44eec3",
+=======
+                "id": "0xe761d4824211dfd26a509d4c7eb90b5f3fe3dcc0",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 "version": 1
               }
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "previousTransaction": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
@@ -411,6 +728,16 @@
             "objectId": "0xc2fe61d367a9fd89d4ff78a53577cf8dcb44eec3",
             "version": 1,
             "digest": "FZALvDlOYAuumIT6H7guyXL7lfA8yH70uUZVKCVDcPM="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "previousTransaction": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+          "storageRebate": 15,
+          "reference": {
+            "objectId": "0xe761d4824211dfd26a509d4c7eb90b5f3fe3dcc0",
+            "version": 1,
+            "digest": "r0MSl9ivPDYnsWUrfLMFzRsoIppx2mVpT8Pv19frCOM="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         }
       ],
@@ -419,14 +746,21 @@
           "dataType": "moveObject",
           "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
+<<<<<<< HEAD
             "balance": 98935,
             "id": {
               "id": "0x15a8506c8549848bad388e0597b0c147860e23db",
+=======
+            "balance": 98937,
+            "id": {
+              "id": "0x10be63b9674645192bfddb78d0482d622d3d0bf3",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
               "version": 3
             }
           }
         },
         "owner": {
+<<<<<<< HEAD
           "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
         },
         "previousTransaction": "T3bPBfOtXqJCB4JvqdXcqP7l+v3NApVimV+k+cHlIks=",
@@ -435,6 +769,16 @@
           "objectId": "0x15a8506c8549848bad388e0597b0c147860e23db",
           "version": 3,
           "digest": "ooX070rATxGaOVSdFedfkQWoVGKjjcbrnGyCZq2XFAA="
+=======
+          "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+        },
+        "previousTransaction": "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+        "storageRebate": 15,
+        "reference": {
+          "objectId": "0x10be63b9674645192bfddb78d0482d622d3d0bf3",
+          "version": 3,
+          "digest": "XWrx5MRxU7Zz9045+TDjp1ejN7ySjpujedf99XtSA+k="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         }
       }
     }
@@ -442,7 +786,11 @@
   "publish": {
     "PublishResponse": {
       "certificate": {
+<<<<<<< HEAD
         "transactionDigest": "DI8tKzu9Vom+ackLk99U15sSCm9hKSxlvyaHv5j+oU0=",
+=======
+        "transactionDigest": "RALcY9EMFPzZVuOi9sgR+w1QVsz//YStVZNT4TipicQ=",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "data": {
           "transactions": [
             {
@@ -453,6 +801,7 @@
               }
             }
           ],
+<<<<<<< HEAD
           "sender": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122",
           "gasPayment": {
             "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
@@ -462,10 +811,22 @@
           "gasBudget": 10000
         },
         "txSignature": "YosSe5sSV+AaeuFcRp7adafEr8EaWtCsdQsfbPXqS2K8g4uw1aJmQdWpRnUG9lQVWsushdNrTBDe6qDqUY2UD6coTQ1kFd9TMHuCxZoc0by6mt7auP/4TvyWQK/s+/5G",
+=======
+          "sender": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff",
+          "gasPayment": {
+            "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+            "version": 1,
+            "digest": "aNRXLHX5kvHh1qzkCvG7Bgt/thm0NJMGA3iT6u3RZek="
+          },
+          "gasBudget": 10000
+        },
+        "txSignature": "siSRynvV8QwF/lXLYkzuETPlzWKkdv676i17XWsP4S1cMAwrjrSu94lTI0VcPrQ4B/hTxn4FfnKLemBptFSHDdyhC2wwpQ/m7apW2lazFgvZewdQvpD9DBlnv4o9sx9D",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         "authSignInfo": {
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "xfJxFu2URkl1Obf8nYeQZno/EdW8LAumUB5G9JhBpLs=",
               "X6lh+6AVXChf+2qZsFZCppnK00h39em82bG/jXXSeFPOaAQAoqGGz6Cf/xuGpqDcnELoaB7m56CSamtCHEGLAA=="
             ],
@@ -476,29 +837,55 @@
             [
               "K9Bkv5Bz8tlT7XGVjksJ3CgF50x7JF7ADfywrv/u66M=",
               "K6IhOrVQsiVWB0WxM0CZayeykivUdealYNux6nwevpd0I8p2u20H9SDk4NH9pqNkiJqhzRNpYcI7a3/QgK9IDA=="
+=======
+              "dDcu9I42Jj2wSNUJV39SDKWXRnPG2p68aQqtnJXOVoY=",
+              "dojmCr/uQTxgbeI0AzqlfTFhOWsC+QVZkHxXmaD/sD+PQYZzhKLRduwjvkPhKN6ndFvtw/N2WPFXCXztb4p2Dg=="
+            ],
+            [
+              "gdjCo7Rv1v++EjHe0SVSqp0jp9SVmSzOO5Ou0r+m+1Q=",
+              "DKNSWaxiDMQ3wjHKB9QuIDOI47U35chLZuI8d0cjj/uVNL4RS0BA4ILohZzGLVYkpHAUccuKmb1UApK7M8llAg=="
+            ],
+            [
+              "Ct8UELvN05l7Y8MTSKJG8QwoIGBIvHeqXcX7BObE1uU=",
+              "v9oqq6Z039vyBlM2kwpBLYC5gmJqAiDsmZukU+J7RLyn8cq6CNlOQ4yEdL3ZkVFe0cIplvhkI2SxAKR7EqUzDg=="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             ]
           ]
         }
       },
       "package": {
+<<<<<<< HEAD
         "objectId": "0xbe4470f630b5b2caa8d0b3bdf5bef23841a7a01f",
         "version": 1,
         "digest": "fi57NTbSK696APX/aNu4kgP5hRat/vHtN9/tCXqZvVk="
+=======
+        "objectId": "0x406159767c77d5f7d98670aa50ab4f31c98f7848",
+        "version": 1,
+        "digest": "k9piY/Y43b/z1ZRKK99UFAjcGbvI50SEKs1ZoZE8V5A="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
       },
       "createdObjects": [
         {
           "data": {
             "dataType": "moveObject",
+<<<<<<< HEAD
             "type": "0xbe4470f630b5b2caa8d0b3bdf5bef23841a7a01f::M1::Forge",
             "fields": {
               "id": {
                 "id": "0x44ac222eb482bf85b412efb08eeda674d3348b98",
+=======
+            "type": "0x406159767c77d5f7d98670aa50ab4f31c98f7848::M1::Forge",
+            "fields": {
+              "id": {
+                "id": "0xb8a2379e3b8299fdbf5ed6f65849e2d5a9fabea3",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                 "version": 1
               },
               "swords_created": 0
             }
           },
           "owner": {
+<<<<<<< HEAD
             "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
           },
           "previousTransaction": "DI8tKzu9Vom+ackLk99U15sSCm9hKSxlvyaHv5j+oU0=",
@@ -507,6 +894,16 @@
             "objectId": "0x44ac222eb482bf85b412efb08eeda674d3348b98",
             "version": 1,
             "digest": "YSa2UTXhCRxoI3QEpDalaSOkpfDzNblyUyKKjrd16T4="
+=======
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "previousTransaction": "RALcY9EMFPzZVuOi9sgR+w1QVsz//YStVZNT4TipicQ=",
+          "storageRebate": 12,
+          "reference": {
+            "objectId": "0xb8a2379e3b8299fdbf5ed6f65849e2d5a9fabea3",
+            "version": 1,
+            "digest": "SQy8JcUwIq9cGlExgUJc0Hpi2PgCAOBocyDxa9LZDf4="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           }
         }
       ],
@@ -515,14 +912,21 @@
           "dataType": "moveObject",
           "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
+<<<<<<< HEAD
             "balance": 98686,
             "id": {
               "id": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
+=======
+            "balance": 98688,
+            "id": {
+              "id": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
               "version": 2
             }
           }
         },
         "owner": {
+<<<<<<< HEAD
           "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
         },
         "previousTransaction": "DI8tKzu9Vom+ackLk99U15sSCm9hKSxlvyaHv5j+oU0=",
@@ -531,6 +935,16 @@
           "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
           "version": 2,
           "digest": "yIG9WqWnWCyfjTU3e35mdp4AoRkv4F4NoUvJvII1XsE="
+=======
+          "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+        },
+        "previousTransaction": "RALcY9EMFPzZVuOi9sgR+w1QVsz//YStVZNT4TipicQ=",
+        "storageRebate": 15,
+        "reference": {
+          "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+          "version": 2,
+          "digest": "Xkdi3pG65WOCodSoXcY09V0T+2zKgXfvKvnl5/m0Sic="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
         }
       }
     }
@@ -542,6 +956,7 @@
           "epoch": 0,
           "signatures": [
             [
+<<<<<<< HEAD
               "Xoj1X01QzmblC749N8p18hNfVV/acDTngUQ1ZU5HkPc=",
               "Gp6rNOxcsUnjgN3+eI8gf4i6VgvtanR9AAN11kEIm2IfA0Q8QDPYSfVu/RJH357tu+RtGpzCykqK8rzyuHvgAg=="
             ],
@@ -552,31 +967,57 @@
             [
               "xfJxFu2URkl1Obf8nYeQZno/EdW8LAumUB5G9JhBpLs=",
               "aRPieYwco/EPRQZ6DN65W3a2fv8kUSe6VAP18G3Dr0os1kEzErVD3ItEWrLUeIGxZX4sjt+F3oI2TsCmbPshDw=="
+=======
+              "gdjCo7Rv1v++EjHe0SVSqp0jp9SVmSzOO5Ou0r+m+1Q=",
+              "O+H2M8bK+n3GJYTNImANUh/OejDy5CwZQ0viVxedUUWazEiLA2vs7CBrI84R93ZoWst/sej/WPsJpMAhc1/FAg=="
+            ],
+            [
+              "dDcu9I42Jj2wSNUJV39SDKWXRnPG2p68aQqtnJXOVoY=",
+              "oRR6/hlQnL1boOWC2U4LjrJQxRGopLY2PzrIa6L+SqD30QPEesWWshivG4z0ez8taOSPHZLQW80p3yGws2RHDA=="
+            ],
+            [
+              "Ct8UELvN05l7Y8MTSKJG8QwoIGBIvHeqXcX7BObE1uU=",
+              "cie0jHr0xN7kJpsmSeotPAHcesna97g8o1f5EeBdywD+89+82tzGTTIJ5MKeyJQq0TJn/4Zlavw6/mS+sxTNCA=="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             ]
           ]
         },
         "data": {
           "gasBudget": 100,
           "gasPayment": {
+<<<<<<< HEAD
             "digest": "kZYNo5Gu/5Im38dM/FyopaeaWTSA/LHnCD1FPpEuyok=",
             "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
             "version": 6
           },
           "sender": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122",
+=======
+            "digest": "2MNGr4cGzy5+gUTV1QwvgnV9NnlaG1CN6uTBwQCz9ik=",
+            "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+            "version": 6
+          },
+          "sender": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
           "transactions": [
             {
               "Call": {
                 "function": "new_game",
                 "module": "Hero",
                 "package": {
+<<<<<<< HEAD
                   "digest": "izTxK6JmQFS8GwkOrsyZoveGZSfE852yD3hz0yY0IJw=",
                   "objectId": "0x92f1de78e9bbdfb7992ecc4c241a9b69a07aa33d",
+=======
+                  "digest": "38tZVYQ1Bk0HIN4/Q2zsv54kkwyB5uWod4edQ7P6jkQ=",
+                  "objectId": "0x77b717870d98fee0f28a36147c81f21c4a95905f",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
                   "version": 1
                 }
               }
             }
           ]
         },
+<<<<<<< HEAD
         "transactionDigest": "4D7c+uvJf7GeQ+o/Zh+blB38FXLh0QMmChjWve9y2Wg=",
         "txSignature": "VhYcfqHzt6DKAX4VmCgzw+vOuZYzwfDbYkrBm0CC6HxO2ZfroYfNsrzO1R4nExNQLKQxXztn6h7zwEHFBX81BacoTQ1kFd9TMHuCxZoc0by6mt7auP/4TvyWQK/s+/5G"
       },
@@ -592,17 +1033,42 @@
           "reference": {
             "digest": "Eyo4CLf/fH8EoGDazdaDbCXHFgVe/fckt9GJcP0pOjk=",
             "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
+=======
+        "transactionDigest": "ZPhm3COyLNQ/SEczOHoVMzevDdMSH6S5OTC+dsBIEIU=",
+        "txSignature": "UreiGTqsaU63VvuyDaFm0fgmLcGtYTvREIHK64C0UZmD+gZPn43iWKtfLon7Lg5pBtV8v3aIRY2GSqP4IN9kBdyhC2wwpQ/m7apW2lazFgvZewdQvpD9DBlnv4o9sx9D"
+      },
+      "effects": {
+        "dependencies": [
+          "MdXPOyeFe/bQuKXVJDj6OKeTPfgUEphooYSFmPCDrdA=",
+          "mB34kAWB39C+4zNY3M2zGed7cr0iuN/YmAG4jzGx8Cg="
+        ],
+        "gasObject": {
+          "owner": {
+            "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+          },
+          "reference": {
+            "digest": "KnZ8bFBc1C0Jz57cW3efuXKovM+VPPa9zw9DAya5NJA=",
+            "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
             "version": 7
           }
         },
         "mutated": [
           {
             "owner": {
+<<<<<<< HEAD
               "AddressOwner": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122"
             },
             "reference": {
               "digest": "Eyo4CLf/fH8EoGDazdaDbCXHFgVe/fckt9GJcP0pOjk=",
               "objectId": "0x0bb7abe79e65f28206759931b2cc00e0bab373f4",
+=======
+              "AddressOwner": "0x2d53149bf853bbe45cb38ded3234cb61a385c6ff"
+            },
+            "reference": {
+              "digest": "KnZ8bFBc1C0Jz57cW3efuXKovM+VPPa9zw9DAya5NJA=",
+              "objectId": "0x01bc5b29967ef4b2ca4caa9fe263e2de49a90d5d",
+>>>>>>> be9584954 (Add batch_transaction to gateway)
               "version": 7
             }
           }
@@ -616,7 +1082,11 @@
           },
           "status": "failure"
         },
+<<<<<<< HEAD
         "transactionDigest": "4D7c+uvJf7GeQ+o/Zh+blB38FXLh0QMmChjWve9y2Wg="
+=======
+        "transactionDigest": "ZPhm3COyLNQ/SEczOHoVMzevDdMSH6S5OTC+dsBIEIU="
+>>>>>>> be9584954 (Add batch_transaction to gateway)
       },
       "timestamp_ms": null
     }

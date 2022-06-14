@@ -1352,3 +1352,24 @@ impl From<TypeTag> for SuiTypeTag {
         Self(format!("{}", tag))
     }
 }
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub enum RPCTransactionRequestParams {
+    TransferCoinRequestParams(RPCTransferCoinRequestParams),
+    MoveCallRequestParams(RPCMoveCallRequestParams),
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct RPCTransferCoinRequestParams {
+    pub recipient: SuiAddress,
+    pub object_id: ObjectID,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct RPCMoveCallRequestParams {
+    pub package_object_id: ObjectID,
+    pub module: String,
+    pub function: String,
+    pub type_arguments: Vec<SuiTypeTag>,
+    pub arguments: Vec<SuiJsonValue>,
+}

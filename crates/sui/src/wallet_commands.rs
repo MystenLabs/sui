@@ -753,7 +753,10 @@ pub async fn call_move(
             package,
             module.to_string(),
             function.to_string(),
-            type_args,
+            type_args
+                .into_iter()
+                .map(|arg| arg.try_into())
+                .collect::<Result<Vec<_>, _>>()?,
             args,
             gas,
             gas_budget,

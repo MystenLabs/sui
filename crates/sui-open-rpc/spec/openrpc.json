@@ -16,6 +16,55 @@
   },
   "methods": [
     {
+      "name": "sui_batchTransaction",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "params": [
+        {
+          "name": "signer",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "single_transaction_params",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RPCTransactionRequestParams"
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
       "name": "sui_executeTransaction",
       "tags": [
         {
@@ -1852,6 +1901,82 @@
                 "$ref": "#/components/schemas/Object"
               }
             ]
+          }
+        }
+      },
+      "RPCMoveCallRequestParams": {
+        "type": "object",
+        "required": [
+          "arguments",
+          "function",
+          "module",
+          "package_object_id",
+          "type_arguments"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiJsonValue"
+            }
+          },
+          "function": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "package_object_id": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "type_arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TypeTag"
+            }
+          }
+        }
+      },
+      "RPCTransactionRequestParams": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "TransferCoinRequestParams"
+            ],
+            "properties": {
+              "TransferCoinRequestParams": {
+                "$ref": "#/components/schemas/RPCTransferCoinRequestParams"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "MoveCallRequestParams"
+            ],
+            "properties": {
+              "MoveCallRequestParams": {
+                "$ref": "#/components/schemas/RPCMoveCallRequestParams"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "RPCTransferCoinRequestParams": {
+        "type": "object",
+        "required": [
+          "object_id",
+          "recipient"
+        ],
+        "properties": {
+          "object_id": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
           }
         }
       },
