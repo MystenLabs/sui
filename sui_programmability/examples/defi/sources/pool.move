@@ -6,6 +6,7 @@
 /// - Only module publisher can create new Pools.
 /// - For simplicity's sake all swaps are done with SUI coin.
 /// - Fees are customizable per Pool.
+/// - Max stored value for both tokens is: U64_MAX / 10_000
 ///
 /// This solution is rather simple and is based on the example from the Move repo:
 /// https://github.com/move-language/move/blob/main/language/documentation/examples/experimental/coin-swap/sources/CoinSwap.move
@@ -33,9 +34,8 @@ module defi::pool {
     /// For when someone attemps to add more liquidity than u128 Math allows.
     const EPoolFull: u64 = 4;
 
-
-    /// The integer scaling setting for fees calculation
-    const FEE_SCALING: u64 = 10000;
+    /// The integer scaling setting for fees calculation.
+    const FEE_SCALING: u128 = 10000;
 
     /// The max value that can be held in one of the Balances of
     /// a Pool. U64 MAX / FEE_SCALING
@@ -303,9 +303,9 @@ module defi::pool {
             (fee_percent as u128)
         );
 
-        let input_amount_with_fee = input_amount * (10000 - fee_percent); // 0.3% fee
+        let input_amount_with_fee = input_amount * (FEE_SCALING - fee_percent); // 0.3% fee
         let numerator = input_amount_with_fee * output_reserve;
-        let denominator = (input_reserve * 10000) + input_amount_with_fee;
+        let denominator = (input_reserve * FEE_SCALING) + input_amount_with_fee;
 
         (numerator / denominator as u64)
     }
