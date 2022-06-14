@@ -59,14 +59,17 @@ async fn test_tx_gas_balance_less_than_budget() {
     // during handle transaction phase.
     let gas_balance = *MIN_GAS_BUDGET - 1;
     let budget = *MIN_GAS_BUDGET;
-    let result = execute_transfer(gas_balance, budget, false).await;
+    let gas_price = 1;
+    let result = execute_transfer_with_price(gas_balance, budget, gas_price, false).await;
     let err = result.response.unwrap_err();
     assert_eq!(
         err,
         SuiError::InsufficientGas {
             error: format!(
-                "Gas balance is {}, not enough to pay {}",
-                gas_balance, budget
+                "Gas balance is {}, not enough to pay {} with gas price of {}",
+                gas_balance,
+                gas_price * budget,
+                gas_price
             )
         }
     );
@@ -112,6 +115,44 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     gas_status.charge_storage_mutation(gas_size, gas_size, 0)?;
     assert_eq!(gas_cost, &gas_status.summary(true));
     Ok(())
+}
+
+#[tokio::test]
+async fn test_native_transfer_gas_price_is_used() {
+    let gas_price_1 = 1;
+    let gas_price_2 = gas_price_1 * 2;
+    let result =
+        execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, gas_price_1, true).await;
+    let effects = result.response.unwrap().signed_effects.unwrap().effects;
+    let gas_summary_1 = effects.status.gas_cost_summary();
+
+    let result =
+        execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET / 2, gas_price_2, true).await;
+    let effects = result.response.unwrap().signed_effects.unwrap().effects;
+    let gas_summary_2 = effects.status.gas_cost_summary();
+
+    assert_eq!(
+        gas_summary_1.computation_cost * 2,
+        gas_summary_2.computation_cost
+    );
+
+    // test overflow with insufficient gas
+    let gas_balance = *MAX_GAS_BUDGET;
+    let gas_budget = *MAX_GAS_BUDGET;
+    let gas_price = u64::MAX;
+    let result = execute_transfer_with_price(gas_balance, gas_budget, gas_price, true).await;
+    let err = result.response.unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::InsufficientGas {
+            error: format!(
+                "Gas balance is {}, not enough to pay {} with gas price of {}",
+                gas_balance,
+                (gas_budget as u128) * (gas_price as u128),
+                gas_price
+            )
+        }
+    );
 }
 
 #[tokio::test]
@@ -459,6 +500,15 @@ struct TransferResult {
 }
 
 async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) -> TransferResult {
+    execute_transfer_with_price(gas_balance, gas_budget, 1, run_confirm).await
+}
+
+async fn execute_transfer_with_price(
+    gas_balance: u64,
+    gas_budget: u64,
+    gas_price: u64,
+    run_confirm: bool,
+) -> TransferResult {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
@@ -473,13 +523,12 @@ async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) 
         .unwrap()
         .unwrap();
 
-    let data = TransactionData::new_transfer(
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
         recipient,
-        object.compute_object_reference(),
-        sender,
-        gas_object_ref,
-        gas_budget,
-    );
+        object_ref: object.compute_object_reference(),
+    }));
+    let data =
+        TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, gas_price);
     let signature = Signature::new(&data, &sender_key);
     let tx = Transaction::new(data, signature);
 
