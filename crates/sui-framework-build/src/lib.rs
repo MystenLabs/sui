@@ -60,7 +60,7 @@ pub fn build_move_package(
     build_config: BuildConfig,
     is_framework: bool,
 ) -> SuiResult<Vec<CompiledModule>> {
-    match build_config.compile_package(path, &mut Vec::new()) {
+    match build_config.compile_package_no_exit(path, &mut Vec::new()) {
         Err(error) => Err(SuiError::ModuleBuildFailure {
             error: error.to_string(),
         }),
