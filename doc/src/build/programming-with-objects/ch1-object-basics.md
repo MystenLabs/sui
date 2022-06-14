@@ -66,7 +66,7 @@ Below is the code that creates a new `ColorObject` and makes it owned by the sen
 use Sui::Transfer;
 
 // This is an entry function that can be called directly by a Transaction.
-public(script) fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+public entry fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
     let color_object = new(red, green, blue, ctx);
     Transfer::transfer(color_object, TxContext::sender(ctx))
 }

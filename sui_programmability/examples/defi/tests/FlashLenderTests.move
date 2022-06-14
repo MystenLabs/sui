@@ -9,7 +9,7 @@ module DeFi::FlashLenderTests {
     use Sui::TestScenario;
 
     #[test]
-    public entry fun flash_loan_example() {
+    fun flash_loan_example() {
         let admin = @0x1;
         let borrower = @0x2;
 

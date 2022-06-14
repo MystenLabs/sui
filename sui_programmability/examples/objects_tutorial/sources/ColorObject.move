@@ -81,7 +81,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 1 ==
 
     #[test]
-    public entry fun test_create() {
+    fun test_create() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -109,7 +109,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 2 ==
 
     #[test]
-    public entry fun test_copy_into() {
+    fun test_copy_into() {
         let owner = @0x1;
         let scenario = &mut TestScenario::begin(&owner);
         // Create two ColorObjects owned by `owner`, and obtain their IDs.
@@ -142,7 +142,7 @@ module Tutorial::ColorObjectTests {
     }
 
     #[test]
-    public entry fun test_delete() {
+    fun test_delete() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -164,7 +164,7 @@ module Tutorial::ColorObjectTests {
     }
 
     #[test]
-    public entry fun test_transfer() {
+    fun test_transfer() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -194,7 +194,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 3 ==
 
     #[test]
-    public entry fun test_immutable() {
+    fun test_immutable() {
         let sender1 = @0x1;
         let scenario = &mut TestScenario::begin(&sender1);
         {

@@ -29,7 +29,7 @@ module DeFi::EscrowTests {
     }
 
     #[test]
-    public entry fun test_escrow_flow() {
+    fun test_escrow_flow() {
         // Both Alice and Bob send items to the third party
         let scenario = &mut send_to_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         swap(scenario, &THIRD_PARTY_ADDRESS);
@@ -40,7 +40,7 @@ module DeFi::EscrowTests {
     }
 
     #[test]
-    public entry fun test_return_to_sender() {
+    fun test_return_to_sender() {
         // Both Alice and Bob send items to the third party
         let scenario = &mut send_to_escrow(ALICE_ADDRESS, BOB_ADDRESS);
 
@@ -61,7 +61,7 @@ module DeFi::EscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 1)]
-    public entry fun test_swap_wrong_objects() {
+    fun test_swap_wrong_objects() {
         // Both Alice and Bob send items to the third party except that Alice wants to exchange
         // for a different object than Bob's
         let scenario = &mut send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, true, false);
@@ -70,14 +70,14 @@ module DeFi::EscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 0)]
-    public entry fun test_swap_wrong_recipient() {
+    fun test_swap_wrong_recipient() {
         // Both Alice and Bob send items to the third party except that Alice put a different
         // recipient than Bob
         let scenario = &mut send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, false, true);
         swap(scenario, &THIRD_PARTY_ADDRESS);
     }
 
-    public entry fun swap(scenario: &mut Scenario, third_party: &address) {
+    fun swap(scenario: &mut Scenario, third_party: &address) {
         TestScenario::next_tx(scenario, third_party);
         {
             let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);

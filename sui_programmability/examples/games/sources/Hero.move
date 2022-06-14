@@ -354,7 +354,7 @@ module Games::Hero {
     }
 
     #[test]
-    public entry fun slay_boar_test() {
+    fun slay_boar_test() {
         use Sui::Coin;
         use Sui::TestScenario;
 

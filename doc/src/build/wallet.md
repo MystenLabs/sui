@@ -746,7 +746,7 @@ Transaction Kind : Call
 Gas Budget : 1000
 Package ID : 0x2
 Module : Coin
-Function : join_
+Function : join
 Object Arguments : [(0x149a3493c97fafc696526052fe08e77043d4be0b, SequenceNumber(0), o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5), (1B19F74AD77A95D7562432F6991AC9EC1EA2C57C, SequenceNumber(0), o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352)]
 Pure Arguments : []
 Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("SUI"), name: Identifier("SUI"), type_params: [] })]
@@ -852,7 +852,7 @@ for the first look at Move source code and a description of the
 following function we will be calling in this tutorial:
 
 ```rust
-public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address) {
+public entry fun transfer(c: Coin::Coin<SUI>, recipient: address) {
     Coin::transfer(c, Address::new(recipient))
 }
 ```

@@ -408,7 +408,7 @@ module Sui::ValidatorSet {
     }
 
     #[test_only]
-    public entry fun destroy_for_testing(
+    public fun destroy_for_testing(
         self: ValidatorSet,
         ctx: &mut TxContext
     ) {

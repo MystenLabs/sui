@@ -21,13 +21,13 @@ struct ColorObject has key {
 Now let's add this function:
 ```rust
 /// Copies the values of `from_object` into `into_object`.
-public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject) {
+public entry fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject) {
     into_object.red = from_object.red;
     into_object.green = from_object.green;
     into_object.blue = from_object.blue;
 }
 ```
-> :bulb: We declared this function as `public(script)` to be callable as an entry function from transactions.
+> :bulb: We declared this function with the `entry` modifier to be callable as an entry function from transactions.
 
 In the above function signature, `from_object` can be a read-only reference because we only need to read its fields; conversely, `into_object` must be a mutable reference since we need to mutate it. In order for a transaction to make a call to the `copy_into` function, **the sender of the transaction must be the owner of both of `from_object` and `into_object`**.
 
@@ -91,7 +91,7 @@ public fun delete(versioned_id: VersionedID);
 ```
 Let's define a function in the `ColorObject` module that allows us to delete the object:
 ```rust
-    public(script) fun delete(object: ColorObject) {
+    public entry fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         ID::delete(id);
     }
@@ -124,11 +124,11 @@ The first part is the same as what we have seen in [Chapter 1](./ch1-object-basi
 #### Option 2. Transfer the object
 The owner of the object may want to transfer it to another account. To support this, the `ColorObject` module will need to define a `transfer` API:
 ```rust
-public(script) fun transfer(object: ColorObject, recipient: address) {
+public entry fun transfer(object: ColorObject, recipient: address) {
     Transfer::transfer(object, recipient)
 }
 ```
->:bulb: One cannot call `Transfer::transfer` directly as it is not a `public(script)` function.
+>:bulb: One cannot call `Transfer::transfer` directly as it is not an `entry` function.
 
 Let's add a test for transferring too. First of all, we create an object in `owner`'s account and then transfer it to a different account `recipient`:
 ```rust

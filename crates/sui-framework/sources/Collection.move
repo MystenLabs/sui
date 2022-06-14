@@ -146,12 +146,7 @@ module Sui::Collection {
     }
 
     /// Transfer the entire collection to `recipient`.
-    public entry fun transfer_<T: key + store>(c: Collection<T>, recipient: address) {
-        Transfer::transfer(c, recipient)
-    }
-
-    /// Transfer the entire collection to `recipient`.
-    public fun transfer<T: key + store>(c: Collection<T>, recipient: address) {
+    public entry fun transfer<T: key + store>(c: Collection<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
