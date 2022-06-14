@@ -22,6 +22,7 @@ sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
 sui-gateway = { path = "../sui-gateway" }
 sui-network = { path = "../sui-network" }
+sui-quorum-driver = { path = "../sui-quorum-driver" }
 
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }

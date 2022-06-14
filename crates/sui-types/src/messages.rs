@@ -32,6 +32,7 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
@@ -1343,4 +1344,25 @@ impl ConsensusTransaction {
             Self::Checkpoint(fragment) => fragment.verify(committee),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionRequestType {
+    ImmediateReturn,
+    WaitForTxCert,
+    WaitForEffectsCert,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecuteTransactionRequest {
+    pub transaction: Transaction,
+    pub request_type: ExecuteTransactionRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
+    EffectsCert(Box<(CertifiedTransaction, TransactionEffects)>),
 }
