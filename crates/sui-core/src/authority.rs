@@ -60,7 +60,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -506,7 +506,7 @@ impl AuthorityState {
             .await
         {
             Err(e) => {
-                debug!("Error preparing transaction: {}", e);
+                debug!(name = ?self.name, digest = ?transaction_digest, "Error preparing transaction: {}", e);
                 tx_guard.commit_tx();
                 return Err(e);
             }
@@ -705,6 +705,7 @@ impl AuthorityState {
     /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
     /// processed the transaction and we can immediately return the effects, or (ii) we already locked
     /// all shared-objects of the transaction and can (re-)attempt execution.
+    #[instrument(level = "debug", name = "prepare_certificate", skip_all)]
     pub async fn try_skip_consensus(
         &self,
         certificate: CertifiedTransaction,
@@ -1408,6 +1409,7 @@ impl ExecutionState for AuthorityState {
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
 
+    #[instrument(name = "handle_consensus_transaction", level = "debug", skip_all)]
     async fn handle_consensus_transaction(
         &self,
         consensus_index: ExecutionIndices,
@@ -1428,7 +1430,7 @@ impl ExecutionState for AuthorityState {
                 // If we already executed this transaction, return the signed effects.
                 let digest = certificate.digest();
                 if self.database.effects_exists(digest)? {
-                    debug!(tx_digest =? digest, "Shared-object transaction already executed");
+                    debug!(?digest, "Shared-object transaction already executed");
                     let info = self.make_transaction_info(digest).await?;
                     return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
                 }

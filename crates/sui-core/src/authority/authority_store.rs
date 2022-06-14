@@ -910,6 +910,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             })
             .unzip();
 
+        trace!(digest = ?transaction_digest,
+               ?sequenced_to_write, ?schedule_to_write,
+               "locking shared objects");
+
         // Make an iterator to update the last consensus index.
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
