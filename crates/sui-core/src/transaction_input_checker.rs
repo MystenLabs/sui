@@ -102,7 +102,6 @@ impl InputObjects {
     }
 }
 
-
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input<const A: bool, S, T>(
     store: &SuiDataStore<A, S>,
