@@ -298,47 +298,47 @@ module examples::Hero {
     public fun slay_boar_test() {
         use examples::Trustedcoin::{Self, EXAMPLE};
         use sui::coin::{Self, TreasuryCap};
-        use sui::TestScenario;
+        use sui::test_scenario;
 
         let admin = ADMIN;
         let player = @0x0;
 
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         // Run the module initializers
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             Trustedcoin::test_init(ctx);
             init(ctx);
         };
         // Admin mints 500 coins and sends them to the Player so they can buy game items
-        TestScenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, &admin);
         {
-            let treasury_cap = TestScenario::take_owned<TreasuryCap<EXAMPLE>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
+            let treasury_cap = test_scenario::take_owned<TreasuryCap<EXAMPLE>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
             let coins = coin::mint(500, &mut treasury_cap, ctx);
             coin::transfer(coins, copy player);
-            TestScenario::return_owned(scenario, treasury_cap);
+            test_scenario::return_owned(scenario, treasury_cap);
         };
         // Player purchases a hero with the coins
-        TestScenario::next_tx(scenario, &player);
+        test_scenario::next_tx(scenario, &player);
         {
-            let coin = TestScenario::take_owned<Coin<EXAMPLE>>(scenario);
-            acquire_hero(coin, TestScenario::ctx(scenario));
+            let coin = test_scenario::take_owned<Coin<EXAMPLE>>(scenario);
+            acquire_hero(coin, test_scenario::ctx(scenario));
         };
         // Admin sends a boar to the Player
-        TestScenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, &admin);
         {
-            let admin_cap = TestScenario::take_owned<GameAdmin>(scenario);
-            send_boar(&mut admin_cap, 10, 10, player, TestScenario::ctx(scenario));
-            TestScenario::return_owned(scenario, admin_cap)
+            let admin_cap = test_scenario::take_owned<GameAdmin>(scenario);
+            send_boar(&mut admin_cap, 10, 10, player, test_scenario::ctx(scenario));
+            test_scenario::return_owned(scenario, admin_cap)
         };
         // Player slays the boar!
-        TestScenario::next_tx(scenario, &player);
+        test_scenario::next_tx(scenario, &player);
         {
-            let hero = TestScenario::take_owned<Hero>(scenario);
-            let boar = TestScenario::take_owned<Boar>(scenario);
-            slay(&mut hero, boar, TestScenario::ctx(scenario));
-            TestScenario::return_owned(scenario, hero)
+            let hero = test_scenario::take_owned<Hero>(scenario);
+            let boar = test_scenario::take_owned<Boar>(scenario);
+            slay(&mut hero, boar, test_scenario::ctx(scenario));
+            test_scenario::return_owned(scenario, hero)
         };
     }
 }

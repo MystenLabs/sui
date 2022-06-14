@@ -5,7 +5,7 @@
 module NFTs::ChatTests {
     use NFTs::Chat::{Self, Chat};
     use std::ascii::Self;
-    use sui::TestScenario::Self;
+    use sui::test_scenario::Self;
 
     const USER1_ADDRESS: address = @0xA001;
     const METADATA: vector<u8> = vector[0u8];
@@ -13,22 +13,22 @@ module NFTs::ChatTests {
 
     #[test]
     fun test_chat() {
-        let scenario = &mut TestScenario::begin(&USER1_ADDRESS);
+        let scenario = &mut test_scenario::begin(&USER1_ADDRESS);
         {
             Chat::post(
                 @0xC001, // This should be an application object ID.
                 HELLO,
                 METADATA, // Some metadata (it could be empty).
-                TestScenario::ctx(scenario)
+                test_scenario::ctx(scenario)
             );
         };
 
-        TestScenario::next_tx(scenario, &USER1_ADDRESS);
+        test_scenario::next_tx(scenario, &USER1_ADDRESS);
         {
-            assert!(TestScenario::can_take_owned<Chat>(scenario), 0);
-            let chat = TestScenario::take_owned<Chat>(scenario); // if can remove, object exists
+            assert!(test_scenario::can_take_owned<Chat>(scenario), 0);
+            let chat = test_scenario::take_owned<Chat>(scenario); // if can remove, object exists
             assert!(Chat::text(&chat) == ascii::string(HELLO), 0);
-            TestScenario::return_owned(scenario, chat);
+            test_scenario::return_owned(scenario, chat);
         }
     }
 }

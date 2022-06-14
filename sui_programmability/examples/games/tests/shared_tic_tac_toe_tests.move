@@ -3,7 +3,7 @@
 
 #[test_only]
 module games::shared_tic_tac_toe_tests {
-    use sui::TestScenario::{Self, Scenario};
+    use sui::test_scenario::{Self, Scenario};
     use games::shared_tic_tac_toe::{Self, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;
@@ -19,8 +19,8 @@ module games::shared_tic_tac_toe_tests {
         let player_o = @0x1;
 
         // Anyone can create a game, because the game object will be eventually shared.
-        let scenario = &mut TestScenario::begin(&player_x);
-        shared_tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        let scenario = &mut test_scenario::begin(&player_x);
+        shared_tic_tac_toe::create_game(copy player_x, copy player_o, test_scenario::ctx(scenario));
         // Player1 places an X in (1, 1).
         place_mark(1, 1, &player_x, scenario);
         /*
@@ -71,12 +71,12 @@ module games::shared_tic_tac_toe_tests {
         assert!(status == X_WIN, 2);
 
         // X has the Trophy
-        TestScenario::next_tx(scenario, &player_x);
-        assert!(TestScenario::can_take_owned<Trophy>(scenario), 1);
+        test_scenario::next_tx(scenario, &player_x);
+        assert!(test_scenario::can_take_owned<Trophy>(scenario), 1);
 
-        TestScenario::next_tx(scenario, &player_o);
+        test_scenario::next_tx(scenario, &player_o);
         // O has no Trophy
-        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 2);
+        assert!(!test_scenario::can_take_owned<Trophy>(scenario), 2);
     }
 
 
@@ -86,8 +86,8 @@ module games::shared_tic_tac_toe_tests {
         let player_o = @0x1;
 
         // Anyone can create a game, because the game object will be eventually shared.
-        let scenario = &mut TestScenario::begin(&player_x);
-        shared_tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        let scenario = &mut test_scenario::begin(&player_x);
+        shared_tic_tac_toe::create_game(copy player_x, copy player_o, test_scenario::ctx(scenario));
         // Player1 places an X in (0, 1).
         let status = place_mark(0, 1, &player_x, scenario);
         assert!(status == IN_PROGRESS, 1);
@@ -181,10 +181,10 @@ module games::shared_tic_tac_toe_tests {
         assert!(status == DRAW, 2);
 
         // No one has the trophy
-        TestScenario::next_tx(scenario, &player_x);
-        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
-        TestScenario::next_tx(scenario, &player_o);
-        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
+        test_scenario::next_tx(scenario, &player_x);
+        assert!(!test_scenario::can_take_owned<Trophy>(scenario), 1);
+        test_scenario::next_tx(scenario, &player_o);
+        assert!(!test_scenario::can_take_owned<Trophy>(scenario), 1);
     }
 
 
@@ -196,14 +196,14 @@ module games::shared_tic_tac_toe_tests {
     ): u8  {
         // The gameboard is now a shared object.
         // Any player can place a mark on it directly.
-        TestScenario::next_tx(scenario, player);
+        test_scenario::next_tx(scenario, player);
         let status;
         {
-            let game_wrapper = TestScenario::take_shared<TicTacToe>(scenario);
-            let game = TestScenario::borrow_mut(&mut game_wrapper);
-            shared_tic_tac_toe::place_mark(game, row, col, TestScenario::ctx(scenario));
+            let game_wrapper = test_scenario::take_shared<TicTacToe>(scenario);
+            let game = test_scenario::borrow_mut(&mut game_wrapper);
+            shared_tic_tac_toe::place_mark(game, row, col, test_scenario::ctx(scenario));
             status = shared_tic_tac_toe::get_status(game);
-            TestScenario::return_shared(scenario, game_wrapper);
+            test_scenario::return_shared(scenario, game_wrapper);
         };
         status
     }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::TestScenario {
+module sui::test_scenario {
     use sui::id::{Self, ID, VersionedID};
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
@@ -13,7 +13,7 @@ module sui::TestScenario {
 
     /// Attempted to return an object to the inventory that was not previously removed from the
     /// inventory during the current transaction. Can happen if the user attempts to call
-    /// `return_owned` on a locally constructed object rather than one returned from a `TestScenario`
+    /// `return_owned` on a locally constructed object rather than one returned from a `test_scenario`
     /// function such as `take_owned`.
     const ECantReturnObject: u64 = 2;
 
@@ -23,7 +23,7 @@ module sui::TestScenario {
     const EEmptyInventory: u64 = 3;
 
     /// Expected 1 object of this type in the tx sender's inventory, but found >1.
-    /// Consider using TestScenario::take_owned_by_id to select a specific object
+    /// Consider using test_scenario::take_owned_by_id to select a specific object
     const EInventoryAmbiguity: u64 = 4;
 
     /// The inventory previously contained an object of this type, but it was removed during the current
@@ -42,17 +42,17 @@ module sui::TestScenario {
     /// let addr1: address = 0;
     /// let addr2: address = 1;
     /// // begin a test scenario in a context where addr1 is the sender
-    /// let scenario = &mut TestScenario::begin(&addr1);
+    /// let scenario = &mut test_scenario::begin(&addr1);
     /// // addr1 sends an object to addr2
     /// {
     ///     let some_object: SomeObject = ... // construct an object
     ///     transfer::transfer(some_object, copy addr2)
     /// };
     /// // end the first transaction and begin a new one where addr2 is the sender
-    /// TestScenario::next_tx(scenario, &addr2)
+    /// test_scenario::next_tx(scenario, &addr2)
     /// {
     ///     // remove the SomeObject value from addr2's inventory
-    ///     let obj = TestScenario::take_owned<SomeObject>(scenario);
+    ///     let obj = test_scenario::take_owned<SomeObject>(scenario);
     ///     // use it to test some function that needs this value
     ///     SomeObject::some_function(obj)
     /// }
@@ -68,12 +68,12 @@ module sui::TestScenario {
         event_start_indexes: vector<u64>,
     }
 
-    /// A wrapper for TestScenario to return an immutable object from the inventory
+    /// A wrapper for test_scenario to return an immutable object from the inventory
     struct ImmutableWrapper<T: key> {
         object: T,
     }
 
-    /// A wrapper for TestScenario to return a shared object from the inventory
+    /// A wrapper for test_scenario to return a shared object from the inventory
     struct SharedWrapper<T: key> {
         object: T,
     }

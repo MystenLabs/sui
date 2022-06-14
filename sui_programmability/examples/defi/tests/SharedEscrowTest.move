@@ -4,7 +4,7 @@
 #[test_only]
 module DeFi::SharedEscrowTests {
     use sui::id::{Self, VersionedID};
-    use sui::TestScenario::{Self, Scenario};
+    use sui::test_scenario::{Self, Scenario};
     use sui::tx_context::{Self};
 
     use DeFi::SharedEscrow::{Self, EscrowedObj};
@@ -78,8 +78,8 @@ module DeFi::SharedEscrowTests {
         let scenario = &mut scenario;
 
         // Bob tries to exchange item C for the escrowed item A and expects failure
-        TestScenario::next_tx(scenario, &BOB_ADDRESS);
-        let ctx = TestScenario::ctx(scenario);
+        test_scenario::next_tx(scenario, &BOB_ADDRESS);
+        let ctx = test_scenario::ctx(scenario);
         let item_c_versioned_id = tx_context::new_id(ctx);
         exchange(scenario, &BOB_ADDRESS, item_c_versioned_id);
     }
@@ -116,27 +116,27 @@ module DeFi::SharedEscrowTests {
     }
 
     fun cancel(scenario: &mut Scenario, initiator: &address) {
-        TestScenario::next_tx(scenario, initiator);
+        test_scenario::next_tx(scenario, initiator);
         {
-            let escrow_wrapper = TestScenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
-            let escrow = TestScenario::borrow_mut(&mut escrow_wrapper);
-            let ctx = TestScenario::ctx(scenario);
+            let escrow_wrapper = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow = test_scenario::borrow_mut(&mut escrow_wrapper);
+            let ctx = test_scenario::ctx(scenario);
             SharedEscrow::cancel(escrow, ctx);
-            TestScenario::return_shared(scenario, escrow_wrapper);
+            test_scenario::return_shared(scenario, escrow_wrapper);
         };
     }
 
     fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: VersionedID) {
-        TestScenario::next_tx(scenario, bob);
+        test_scenario::next_tx(scenario, bob);
         {
-            let escrow_wrapper = TestScenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
-            let escrow = TestScenario::borrow_mut(&mut escrow_wrapper);
+            let escrow_wrapper = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
+            let escrow = test_scenario::borrow_mut(&mut escrow_wrapper);
             let item_b = ItemB {
                 id: item_b_verioned_id
             };
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             SharedEscrow::exchange(item_b, escrow, ctx);
-            TestScenario::return_shared(scenario, escrow_wrapper);
+            test_scenario::return_shared(scenario, escrow_wrapper);
         };
     }
 
@@ -144,20 +144,20 @@ module DeFi::SharedEscrowTests {
         alice: address,
         bob: address,
     ): (Scenario, VersionedID) {
-        let new_scenario = TestScenario::begin(&alice);
+        let new_scenario = test_scenario::begin(&alice);
         let scenario = &mut new_scenario;
-        let ctx = TestScenario::ctx(scenario);
+        let ctx = test_scenario::ctx(scenario);
         let item_a_versioned_id = tx_context::new_id(ctx);
 
-        TestScenario::next_tx(scenario, &bob);
-        let ctx = TestScenario::ctx(scenario);
+        test_scenario::next_tx(scenario, &bob);
+        let ctx = test_scenario::ctx(scenario);
         let item_b_versioned_id = tx_context::new_id(ctx);
         let item_b_id = *id::inner(&item_b_versioned_id);
 
         // Alice creates the escrow
-        TestScenario::next_tx(scenario, &alice);
+        test_scenario::next_tx(scenario, &alice);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             let escrowed = ItemA {
                 id: item_a_versioned_id
             };
@@ -172,7 +172,7 @@ module DeFi::SharedEscrowTests {
     }
 
     fun owns_object<T: key + store>(scenario: &mut Scenario, owner: &address): bool{
-        TestScenario::next_tx(scenario, owner);
-        TestScenario::can_take_owned<T>(scenario)
+        test_scenario::next_tx(scenario, owner);
+        test_scenario::can_take_owned<T>(scenario)
     }
 }

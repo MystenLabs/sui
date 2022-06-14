@@ -74,7 +74,7 @@ module Tutorial::ColorObject {
 
 #[test_only]
 module Tutorial::ColorObjectTests {
-    use sui::TestScenario;
+    use sui::test_scenario;
     use Tutorial::ColorObject::{Self, ColorObject};
     use sui::tx_context;
 
@@ -84,25 +84,25 @@ module Tutorial::ColorObjectTests {
     fun test_create() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
-        let scenario = &mut TestScenario::begin(&owner);
+        let scenario = &mut test_scenario::begin(&owner);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             ColorObject::create(255, 0, 255, ctx);
         };
         // Check that @not_owner does not own the just-created ColorObject.
         let not_owner = @0x2;
-        TestScenario::next_tx(scenario, &not_owner);
+        test_scenario::next_tx(scenario, &not_owner);
         {
-            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
+            assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
         };
         // Check that @owner indeed owns the just-created ColorObject.
         // Also checks the value fields of the object.
-        TestScenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::take_owned<ColorObject>(scenario);
+            let object = test_scenario::take_owned<ColorObject>(scenario);
             let (red, green, blue) = ColorObject::get_color(&object);
             assert!(red == 255 && green == 0 && blue == 255, 0);
-            TestScenario::return_owned(scenario, object);
+            test_scenario::return_owned(scenario, object);
         };
     }
 
@@ -111,33 +111,33 @@ module Tutorial::ColorObjectTests {
     #[test]
     fun test_copy_into() {
         let owner = @0x1;
-        let scenario = &mut TestScenario::begin(&owner);
+        let scenario = &mut test_scenario::begin(&owner);
         // Create two ColorObjects owned by `owner`, and obtain their IDs.
         let (id1, id2) = {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             ColorObject::create(255, 255, 255, ctx);
             let id1 = tx_context::last_created_object_id(ctx);
             ColorObject::create(0, 0, 0, ctx);
             let id2 = tx_context::last_created_object_id(ctx);
             (id1, id2)
         };
-        TestScenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, &owner);
         {
-            let obj1 = TestScenario::take_owned_by_id<ColorObject>(scenario, id1);
-            let obj2 = TestScenario::take_owned_by_id<ColorObject>(scenario, id2);
+            let obj1 = test_scenario::take_owned_by_id<ColorObject>(scenario, id1);
+            let obj2 = test_scenario::take_owned_by_id<ColorObject>(scenario, id2);
             let (red, green, blue) = ColorObject::get_color(&obj1);
             assert!(red == 255 && green == 255 && blue == 255, 0);
 
             ColorObject::copy_into(&obj2, &mut obj1);
-            TestScenario::return_owned(scenario, obj1);
-            TestScenario::return_owned(scenario, obj2);
+            test_scenario::return_owned(scenario, obj1);
+            test_scenario::return_owned(scenario, obj2);
         };
-        TestScenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, &owner);
         {
-            let obj1 = TestScenario::take_owned_by_id<ColorObject>(scenario, id1);
+            let obj1 = test_scenario::take_owned_by_id<ColorObject>(scenario, id1);
             let (red, green, blue) = ColorObject::get_color(&obj1);
             assert!(red == 0 && green == 0 && blue == 0, 0);
-            TestScenario::return_owned(scenario, obj1);
+            test_scenario::return_owned(scenario, obj1);
         }
     }
 
@@ -145,21 +145,21 @@ module Tutorial::ColorObjectTests {
     fun test_delete() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
-        let scenario = &mut TestScenario::begin(&owner);
+        let scenario = &mut test_scenario::begin(&owner);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             ColorObject::create(255, 0, 255, ctx);
         };
         // Delete the ColorObject we just created.
-        TestScenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::take_owned<ColorObject>(scenario);
+            let object = test_scenario::take_owned<ColorObject>(scenario);
             ColorObject::delete(object);
         };
         // Verify that the object was indeed deleted.
-        TestScenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, &owner);
         {
-            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
+            assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
         }
     }
 
@@ -167,27 +167,27 @@ module Tutorial::ColorObjectTests {
     fun test_transfer() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
-        let scenario = &mut TestScenario::begin(&owner);
+        let scenario = &mut test_scenario::begin(&owner);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             ColorObject::create(255, 0, 255, ctx);
         };
         // Transfer the object to recipient.
         let recipient = @0x2;
-        TestScenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, &owner);
         {
-            let object = TestScenario::take_owned<ColorObject>(scenario);
+            let object = test_scenario::take_owned<ColorObject>(scenario);
             ColorObject::transfer(object, recipient);
         };
         // Check that owner no longer owns the object.
-        TestScenario::next_tx(scenario, &owner);
+        test_scenario::next_tx(scenario, &owner);
         {
-            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
+            assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
         };
         // Check that recipient now owns the object.
-        TestScenario::next_tx(scenario, &recipient);
+        test_scenario::next_tx(scenario, &recipient);
         {
-            assert!(TestScenario::can_take_owned<ColorObject>(scenario), 0);
+            assert!(test_scenario::can_take_owned<ColorObject>(scenario), 0);
         };
     }
 
@@ -196,25 +196,25 @@ module Tutorial::ColorObjectTests {
     #[test]
     fun test_immutable() {
         let sender1 = @0x1;
-        let scenario = &mut TestScenario::begin(&sender1);
+        let scenario = &mut test_scenario::begin(&sender1);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             ColorObject::create_immutable(255, 0, 255, ctx);
         };
-        TestScenario::next_tx(scenario, &sender1);
+        test_scenario::next_tx(scenario, &sender1);
         {
             // take_owned does not work for immutable objects.
-            assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
+            assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
         };
         // Any sender can work.
         let sender2 = @0x2;
-        TestScenario::next_tx(scenario, &sender2);
+        test_scenario::next_tx(scenario, &sender2);
         {
-            let object_wrapper = TestScenario::take_immutable<ColorObject>(scenario);
-            let object = TestScenario::borrow(&object_wrapper);
+            let object_wrapper = test_scenario::take_immutable<ColorObject>(scenario);
+            let object = test_scenario::borrow(&object_wrapper);
             let (red, green, blue) = ColorObject::get_color(object);
             assert!(red == 255 && green == 0 && blue == 255, 0);
-            TestScenario::return_immutable(scenario, object_wrapper);
+            test_scenario::return_immutable(scenario, object_wrapper);
         };
     }
 }

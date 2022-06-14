@@ -6,7 +6,7 @@ module DeFi::FlashLenderTests {
     use DeFi::FlashLender::{Self, AdminCap, FlashLender};
     use sui::coin;
     use sui::SUI::SUI;
-    use sui::TestScenario;
+    use sui::test_scenario;
 
     #[test]
     fun flash_loan_example() {
@@ -14,18 +14,18 @@ module DeFi::FlashLenderTests {
         let borrower = @0x2;
 
         // admin creates a flash lender with 100 coins and a fee of 1 coin
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             let coin = coin::mint_for_testing<SUI>(100, ctx);
             FlashLender::create(coin, 1, ctx);
         };
         // borrower requests and repays a loan of 10 coins + the fee
-        TestScenario::next_tx(scenario, &borrower);
+        test_scenario::next_tx(scenario, &borrower);
         {
-            let lender_wrapper = TestScenario::take_shared<FlashLender<SUI>>(scenario);
-            let lender = TestScenario::borrow_mut(&mut lender_wrapper);
-            let ctx = TestScenario::ctx(scenario);
+            let lender_wrapper = test_scenario::take_shared<FlashLender<SUI>>(scenario);
+            let lender = test_scenario::borrow_mut(&mut lender_wrapper);
+            let ctx = test_scenario::ctx(scenario);
 
             let (loan, receipt) = FlashLender::loan(lender, 10, ctx);
             // in practice, borrower does something (e.g., arbitrage) to make a profit from the loan.
@@ -36,15 +36,15 @@ module DeFi::FlashLenderTests {
             coin::keep(to_keep, ctx);
             FlashLender::repay(lender, profit, receipt);
 
-            TestScenario::return_shared(scenario, lender_wrapper);
+            test_scenario::return_shared(scenario, lender_wrapper);
         };
         // admin withdraws the 1 coin profit from lending
-        TestScenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, &admin);
         {
-            let lender_wrapper = TestScenario::take_shared<FlashLender<SUI>>(scenario);
-            let lender = TestScenario::borrow_mut(&mut lender_wrapper);
-            let admin_cap = TestScenario::take_owned<AdminCap>(scenario);
-            let ctx = TestScenario::ctx(scenario);
+            let lender_wrapper = test_scenario::take_shared<FlashLender<SUI>>(scenario);
+            let lender = test_scenario::borrow_mut(&mut lender_wrapper);
+            let admin_cap = test_scenario::take_owned<AdminCap>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
             // max loan size should have increased because of the fee payment
             assert!(FlashLender::max_loan(lender) == 101, 0);
@@ -54,8 +54,8 @@ module DeFi::FlashLenderTests {
             assert!(FlashLender::max_loan(lender) == 100, 0);
             coin::keep(coin, ctx);
 
-            TestScenario::return_shared(scenario, lender_wrapper);
-            TestScenario::return_owned(scenario, admin_cap);
+            test_scenario::return_shared(scenario, lender_wrapper);
+            test_scenario::return_owned(scenario, admin_cap);
         }
     }
 }

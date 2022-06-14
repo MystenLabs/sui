@@ -11,7 +11,7 @@ module sui::id {
     friend sui::tx_context;
 
     #[test_only]
-    friend sui::TestScenario;
+    friend sui::test_scenario;
 
     /// Version of an object ID created by the current transaction.
     const INITIAL_VERSION: u64 = 0;

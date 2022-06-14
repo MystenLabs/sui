@@ -96,7 +96,7 @@ module basics::lock {
 #[test_only]
 module basics::lockTest {
     use sui::id::VersionedID;
-    use sui::TestScenario;
+    use sui::test_scenario;
     use sui::tx_context;
     use sui::transfer;
     use basics::lock::{Self, Lock, Key};
@@ -111,12 +111,12 @@ module basics::lockTest {
         let user1 = @0x1;
         let user2 = @0x2;
 
-        let scenario = &mut TestScenario::begin(&user1);
+        let scenario = &mut test_scenario::begin(&user1);
 
         // User1 creates a lock and places his treasure inside.
-        TestScenario::next_tx(scenario, &user1);
+        test_scenario::next_tx(scenario, &user1);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             let id = tx_context::new_id(ctx);
 
             lock::create(Treasure { id }, ctx);
@@ -124,25 +124,25 @@ module basics::lockTest {
 
         // Now User1 owns a key from the lock. He decides to send this
         // key to User2, so that he can have access to the stored treasure.
-        TestScenario::next_tx(scenario, &user1);
+        test_scenario::next_tx(scenario, &user1);
         {
-            let key = TestScenario::take_owned<Key<Treasure>>(scenario);
+            let key = test_scenario::take_owned<Key<Treasure>>(scenario);
 
             transfer::transfer(key, user2);
         };
 
         // User2 is impatient and he decides to take the treasure.
-        TestScenario::next_tx(scenario, &user2);
+        test_scenario::next_tx(scenario, &user2);
         {
-            let lock_wrapper = TestScenario::take_shared<Lock<Treasure>>(scenario);
-            let lock = TestScenario::borrow_mut(&mut lock_wrapper);
-            let key = TestScenario::take_owned<Key<Treasure>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
+            let lock_wrapper = test_scenario::take_shared<Lock<Treasure>>(scenario);
+            let lock = test_scenario::borrow_mut(&mut lock_wrapper);
+            let key = test_scenario::take_owned<Key<Treasure>>(scenario);
+            let ctx = test_scenario::ctx(scenario);
 
             lock::take<Treasure>(lock, &key, ctx);
 
-            TestScenario::return_shared(scenario, lock_wrapper);
-            TestScenario::return_owned(scenario, key);
+            test_scenario::return_shared(scenario, lock_wrapper);
+            test_scenario::return_owned(scenario, key);
         };
     }
 }

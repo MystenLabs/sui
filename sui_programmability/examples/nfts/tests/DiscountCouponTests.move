@@ -6,7 +6,7 @@ module NFTs::DiscountCouponTests {
     use NFTs::DiscountCoupon::{Self, DiscountCoupon};
     use sui::coin::{Self, Coin};
     use sui::SUI::SUI;
-    use sui::TestScenario::Self;
+    use sui::test_scenario::Self;
     use sui::tx_context::TxContext;
 
     const ISSUER_ADDRESS: address = @0xA001;
@@ -26,24 +26,24 @@ module NFTs::DiscountCouponTests {
 
     #[test]
     fun test_mint_then_transfer() {
-        let scenario = &mut TestScenario::begin(&ISSUER_ADDRESS);
+        let scenario = &mut test_scenario::begin(&ISSUER_ADDRESS);
         {
-            init(TestScenario::ctx(scenario));
+            init(test_scenario::ctx(scenario));
         };
 
         // Mint and transfer NFT + top up recipient's address.
-        TestScenario::next_tx(scenario, &ISSUER_ADDRESS);
+        test_scenario::next_tx(scenario, &ISSUER_ADDRESS);
         {
-            let coin = TestScenario::take_owned<Coin<SUI>>(scenario);
-            DiscountCoupon::mint_and_topup(coin, 10, 1648820870, USER1_ADDRESS, TestScenario::ctx(scenario));
+            let coin = test_scenario::take_owned<Coin<SUI>>(scenario);
+            DiscountCoupon::mint_and_topup(coin, 10, 1648820870, USER1_ADDRESS, test_scenario::ctx(scenario));
         };
 
-        TestScenario::next_tx(scenario, &USER1_ADDRESS);
+        test_scenario::next_tx(scenario, &USER1_ADDRESS);
         {
-            assert!(TestScenario::can_take_owned<DiscountCoupon>(scenario), 0);
-            let nft_coupon = TestScenario::take_owned<DiscountCoupon>(scenario); // if can remove, object exists
+            assert!(test_scenario::can_take_owned<DiscountCoupon>(scenario), 0);
+            let nft_coupon = test_scenario::take_owned<DiscountCoupon>(scenario); // if can remove, object exists
             assert!(DiscountCoupon::issuer(&nft_coupon) == ISSUER_ADDRESS, 0);
-            TestScenario::return_owned(scenario, nft_coupon);
+            test_scenario::return_owned(scenario, nft_coupon);
         }
     }
 }

@@ -287,7 +287,7 @@ module ABC::Tests {
     use RC::Regulatedcoin::{Self as RCoin, RegulatedCoin as RCoin};
 
     use sui::coin::{Coin, TreasuryCap};
-    use sui::TestScenario::{Self, Scenario, next_tx, ctx};
+    use sui::test_scenario::{Self, Scenario, next_tx, ctx};
 
     // === Test handlers; this trick helps reusing scenarios ==
 
@@ -319,7 +319,7 @@ module ABC::Tests {
 
     // === Helpers and basic test organization ===
 
-    fun scenario(): Scenario { TestScenario::begin(&@ABC) }
+    fun scenario(): Scenario { test_scenario::begin(&@ABC) }
     fun people(): (address, address, address) { (@0xABC, @0xE05, @0xFACE) }
 
     // Admin creates a regulated coin ABC and mints 1,000,000 of it.
@@ -331,15 +331,15 @@ module ABC::Tests {
         };
 
         next_tx(test, &admin); {
-            let cap = TestScenario::take_owned<TreasuryCap<ABC>>(test);
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
+            let cap = test_scenario::take_owned<TreasuryCap<ABC>>(test);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
 
             ABC::mint(&mut cap, &mut coin, 1000000, ctx(test));
 
             assert!(Rcoin::value(&coin) == 1000000, 0);
 
-            TestScenario::return_owned(test, cap);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_owned(test, cap);
+            test_scenario::return_owned(test, coin);
         }
     }
 
@@ -350,20 +350,20 @@ module ABC::Tests {
         test_minting_(test);
 
         next_tx(test, &admin); {
-            let cap = TestScenario::take_owned<TreasuryCap<ABC>>(test);
+            let cap = test_scenario::take_owned<TreasuryCap<ABC>>(test);
 
             ABC::create(&cap, user1, ctx(test));
 
-            TestScenario::return_owned(test, cap);
+            test_scenario::return_owned(test, cap);
         };
 
         next_tx(test, &user1); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
 
             assert!(Rcoin::creator(&coin) == user1, 1);
             assert!(Rcoin::value(&coin) == 0, 2);
 
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_owned(test, coin);
         };
     }
 
@@ -375,28 +375,28 @@ module ABC::Tests {
         test_creation_(test);
 
         next_tx(test, &admin); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::transfer(reg_ref, &mut coin, 500000, user1, ctx(test));
 
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_shared(test, reg);
+            test_scenario::return_owned(test, coin);
         };
 
         next_tx(test, &user1); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let transfer = TestScenario::take_owned<ABC::Transfer>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let transfer = test_scenario::take_owned<ABC::Transfer>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::accept_transfer(reg_ref, &mut coin, transfer, ctx(test));
 
             assert!(Rcoin::value(&coin) == 500000, 3);
 
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_shared(test, reg);
+            test_scenario::return_owned(test, coin);
         };
     }
 
@@ -407,15 +407,15 @@ module ABC::Tests {
         test_transfer_(test);
 
         next_tx(test, &admin); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let treasury_cap = TestScenario::take_owned<TreasuryCap<ABC>>(test);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let treasury_cap = test_scenario::take_owned<TreasuryCap<ABC>>(test);
 
             ABC::burn(&mut treasury_cap, &mut coin, 100000, ctx(test));
 
             assert!(Rcoin::value(&coin) == 400000, 4);
 
-            TestScenario::return_owned(test, treasury_cap);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_owned(test, treasury_cap);
+            test_scenario::return_owned(test, coin);
         };
     }
 
@@ -427,21 +427,21 @@ module ABC::Tests {
         test_transfer_(test);
 
         next_tx(test, &user1); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::take(reg_ref, &mut coin, 100000, ctx(test));
 
             assert!(ABC::swapped_amount(reg_ref) == 100000, 5);
             assert!(Rcoin::value(&coin) == 400000, 5);
 
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_shared(test, reg);
+            test_scenario::return_owned(test, coin);
         };
 
         next_tx(test, &user1); {
-            let coin = TestScenario::take_owned<Coin<ABC>>(test);
+            let coin = test_scenario::take_owned<Coin<ABC>>(test);
             Sui::transfer::transfer(coin, user2);
         };
     }
@@ -454,20 +454,20 @@ module ABC::Tests {
         test_take_(test);
 
         next_tx(test, &user2); {
-            let coin = TestScenario::take_owned<Coin<ABC>>(test);
+            let coin = test_scenario::take_owned<Coin<ABC>>(test);
             Sui::transfer::transfer(coin, admin);
         };
 
         next_tx(test, &admin); {
-            let coin = TestScenario::take_owned<Coin<ABC>>(test);
-            let reg_coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let coin = test_scenario::take_owned<Coin<ABC>>(test);
+            let reg_coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::put_back(reg_ref, &mut reg_coin, coin, ctx(test));
 
-            TestScenario::return_owned(test, reg_coin);
-            TestScenario::return_shared(test, reg);
+            test_scenario::return_owned(test, reg_coin);
+            test_scenario::return_shared(test, reg);
         }
     }
 
@@ -478,14 +478,14 @@ module ABC::Tests {
         test_transfer_(test);
 
         next_tx(test, &admin); {
-            let cap = TestScenario::take_owned<TreasuryCap<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let cap = test_scenario::take_owned<TreasuryCap<ABC>>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::ban(&cap, reg_ref, user1, ctx(test));
 
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, cap);
+            test_scenario::return_shared(test, reg);
+            test_scenario::return_owned(test, cap);
         };
     }
 
@@ -496,14 +496,14 @@ module ABC::Tests {
         test_ban_(test);
 
         next_tx(test, &user1); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::transfer(reg_ref, &mut coin, 250000, user2, ctx(test));
 
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_shared(test, reg);
+            test_scenario::return_owned(test, coin);
         };
     }
 
@@ -514,14 +514,14 @@ module ABC::Tests {
         test_ban_(test);
 
         next_tx(test, &admin); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::transfer(reg_ref, &mut coin, 250000, user1, ctx(test));
 
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_shared(test, reg);
+            test_scenario::return_owned(test, coin);
         };
     }
 
@@ -533,19 +533,19 @@ module ABC::Tests {
         test_ban_(test);
 
         next_tx(test, &user1); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
             Sui::transfer::transfer(coin, user2);
         };
 
         next_tx(test, &user2); {
-            let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            let reg = TestScenario::take_shared<Registry>(test);
-            let reg_ref = TestScenario::borrow_mut(&mut reg);
+            let coin = test_scenario::take_owned<RCoin<ABC>>(test);
+            let reg = test_scenario::take_shared<Registry>(test);
+            let reg_ref = test_scenario::borrow_mut(&mut reg);
 
             ABC::transfer(reg_ref, &mut coin, 500000, user1, ctx(test));
 
-            TestScenario::return_shared(test, reg);
-            TestScenario::return_owned(test, coin);
+            test_scenario::return_shared(test, reg);
+            test_scenario::return_owned(test, coin);
         }
     }
 }

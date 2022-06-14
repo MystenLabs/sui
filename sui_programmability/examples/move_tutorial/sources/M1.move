@@ -63,32 +63,32 @@ module MyFirstPackage::M1 {
 
     #[test]
     public fun test_module_init() {
-        use sui::TestScenario;
+        use sui::test_scenario;
 
         // create test address representing game admin
         let admin = @0xBABE;
 
         // first transaction to emulate module initialization
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         {
-            init(TestScenario::ctx(scenario));
+            init(test_scenario::ctx(scenario));
         };
         // second transaction to check if the forge has been created
         // and has initial value of zero swords created
-        TestScenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, &admin);
         {
             // extract the Forge object
-            let forge = TestScenario::take_owned<Forge>(scenario);
+            let forge = test_scenario::take_owned<Forge>(scenario);
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
             // return the Forge object to the object pool
-            TestScenario::return_owned(scenario, forge)
+            test_scenario::return_owned(scenario, forge)
         }
     }
 
     #[test]
     fun test_sword_transactions() {
-        use sui::TestScenario;
+        use sui::test_scenario;
 
         // create test addresses representing users
         let admin = @0xBABE;
@@ -96,36 +96,36 @@ module MyFirstPackage::M1 {
         let final_owner = @0xFACE;
 
         // first transaction to emulate module initialization
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         {
-            init(TestScenario::ctx(scenario));
+            init(test_scenario::ctx(scenario));
         };
         // second transaction executed by admin to create the sword
-        TestScenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, &admin);
         {
-            let forge = TestScenario::take_owned<Forge>(scenario);
+            let forge = test_scenario::take_owned<Forge>(scenario);
             // create the sword and transfer it to the initial owner
-            sword_create(&mut forge, 42, 7, initial_owner, TestScenario::ctx(scenario));
-            TestScenario::return_owned(scenario, forge)
+            sword_create(&mut forge, 42, 7, initial_owner, test_scenario::ctx(scenario));
+            test_scenario::return_owned(scenario, forge)
         };
         // third transaction executed by the initial sword owner
-        TestScenario::next_tx(scenario, &initial_owner);
+        test_scenario::next_tx(scenario, &initial_owner);
         {
             // extract the sword owned by the initial owner
-            let sword = TestScenario::take_owned<Sword>(scenario);
+            let sword = test_scenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
             sword_transfer(sword, final_owner);
         };
         // fourth transaction executed by the final sword owner
-        TestScenario::next_tx(scenario, &final_owner);
+        test_scenario::next_tx(scenario, &final_owner);
         {
 
             // extract the sword owned by the final owner
-            let sword = TestScenario::take_owned<Sword>(scenario);
+            let sword = test_scenario::take_owned<Sword>(scenario);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
             // return the sword to the object pool (it cannot be simply "dropped")
-            TestScenario::return_owned(scenario, sword)
+            test_scenario::return_owned(scenario, sword)
         }
     }
 

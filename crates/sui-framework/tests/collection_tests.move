@@ -6,7 +6,7 @@ module sui::collection_tests {
     use sui::bag::{Self, Bag};
     use sui::collection::{Self, Collection};
     use sui::id::{Self, VersionedID};
-    use sui::TestScenario;
+    use sui::test_scenario;
     use sui::tx_context;
 
     struct Object has key, store {
@@ -16,23 +16,23 @@ module sui::collection_tests {
     #[test]
     fun test_collection() {
         let sender = @0x0;
-        let scenario = &mut TestScenario::begin(&sender);
+        let scenario = &mut test_scenario::begin(&sender);
 
         // Create a new Collection and transfer it to the sender.
-        TestScenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, &sender);
         {
-            collection::create<Object>(TestScenario::ctx(scenario));
+            collection::create<Object>(test_scenario::ctx(scenario));
         };
 
         // Add two objects of different types into the collection.
-        TestScenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::take_owned<Collection<Object>>(scenario);
+            let collection = test_scenario::take_owned<Collection<Object>>(scenario);
             assert!(collection::size(&collection) == 0, 0);
 
-            let obj1 = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
+            let obj1 = Object { id: tx_context::new_id(test_scenario::ctx(scenario)) };
             let id1 = *id::id(&obj1);
-            let obj2 = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
+            let obj2 = Object { id: tx_context::new_id(test_scenario::ctx(scenario)) };
             let id2 = *id::id(&obj2);
 
             collection::add(&mut collection, obj1);
@@ -42,37 +42,37 @@ module sui::collection_tests {
             assert!(collection::contains(&collection, &id1), 0);
             assert!(collection::contains(&collection, &id2), 0);
 
-            TestScenario::return_owned(scenario, collection);
+            test_scenario::return_owned(scenario, collection);
         };
     }
 
     #[test]
     fun test_collection_bag_interaction() {
         let sender = @0x0;
-        let scenario = &mut TestScenario::begin(&sender);
+        let scenario = &mut test_scenario::begin(&sender);
 
         // Create a new Collection and a new Bag and transfer them to the sender.
-        TestScenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, &sender);
         {
-            collection::create<Object>(TestScenario::ctx(scenario));
-            bag::create(TestScenario::ctx(scenario));
+            collection::create<Object>(test_scenario::ctx(scenario));
+            bag::create(test_scenario::ctx(scenario));
         };
 
         // Add a new object to the Collection.
-        TestScenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::take_owned<Collection<Object>>(scenario);
-            let obj = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
+            let collection = test_scenario::take_owned<Collection<Object>>(scenario);
+            let obj = Object { id: tx_context::new_id(test_scenario::ctx(scenario)) };
             collection::add(&mut collection, obj);
-            TestScenario::return_owned(scenario, collection);
+            test_scenario::return_owned(scenario, collection);
         };
 
         // Remove the object from the collection and add it to the bag.
-        TestScenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::take_owned<Collection<Object>>(scenario);
-            let bag = TestScenario::take_owned<Bag>(scenario);
-            let obj = TestScenario::take_child_object<Collection<Object>, Object>(scenario, &collection);
+            let collection = test_scenario::take_owned<Collection<Object>>(scenario);
+            let bag = test_scenario::take_owned<Bag>(scenario);
+            let obj = test_scenario::take_child_object<Collection<Object>, Object>(scenario, &collection);
             let id = *id::id(&obj);
 
             let (obj, child_ref) = collection::remove(&mut collection, obj);
@@ -82,16 +82,16 @@ module sui::collection_tests {
             assert!(bag::size(&bag) == 1, 0);
             assert!(bag::contains(&bag, &id), 0);
 
-            TestScenario::return_owned(scenario, collection);
-            TestScenario::return_owned(scenario, bag);
+            test_scenario::return_owned(scenario, collection);
+            test_scenario::return_owned(scenario, bag);
         };
 
         // Remove the object from the bag and add it back to the collection.
-        TestScenario::next_tx(scenario, &sender);
+        test_scenario::next_tx(scenario, &sender);
         {
-            let collection = TestScenario::take_owned<Collection<Object>>(scenario);
-            let bag = TestScenario::take_owned<Bag>(scenario);
-            let obj = TestScenario::take_child_object<Bag, Object>(scenario, &bag);
+            let collection = test_scenario::take_owned<Collection<Object>>(scenario);
+            let bag = test_scenario::take_owned<Bag>(scenario);
+            let obj = test_scenario::take_child_object<Bag, Object>(scenario, &bag);
             let id = *id::id(&obj);
 
             let obj = bag::remove(&mut bag, obj);
@@ -101,8 +101,8 @@ module sui::collection_tests {
             assert!(bag::size(&bag) == 0, 0);
             assert!(collection::contains(&collection, &id), 0);
 
-            TestScenario::return_owned(scenario, collection);
-            TestScenario::return_owned(scenario, bag);
+            test_scenario::return_owned(scenario, collection);
+            test_scenario::return_owned(scenario, bag);
         };
 
     }

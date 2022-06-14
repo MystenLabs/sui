@@ -48,22 +48,22 @@ Since immutable objects can never be mutated, there will never be a data race ev
 ### Test immutable object
 Let's take a look at how we interact with immutable objects in unit tests.
 
-Previously, we used the `TestScenario::take_owned<T>` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. And `take_owned` returns an object by value, which allows you to mutate, delete or transfer it.
+Previously, we used the `test_scenario::take_owned<T>` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. And `take_owned` returns an object by value, which allows you to mutate, delete or transfer it.
 
-To take an immutable object, we will need to use a new API: `TestScenario::take_immutable<T>`. This is required because immutable objects can be accessed only through read-only references. To ensure this, instead of returning the object directly, `take_immutable<T>` returns a wrapper, which we will need to make another call to get a read-only reference: `TestScenario::borrow`.
+To take an immutable object, we will need to use a new API: `test_scenario::take_immutable<T>`. This is required because immutable objects can be accessed only through read-only references. To ensure this, instead of returning the object directly, `take_immutable<T>` returns a wrapper, which we will need to make another call to get a read-only reference: `test_scenario::borrow`.
 
 Let's see it work in action (`ColorObjectTests::test_immutable`):
 ```rust
 let sender1 = @0x1;
-let scenario = &mut TestScenario::begin(&sender1);
+let scenario = &mut test_scenario::begin(&sender1);
 {
-    let ctx = TestScenario::ctx(scenario);
+    let ctx = test_scenario::ctx(scenario);
     ColorObject::create_immutable(255, 0, 255, ctx);
 };
-TestScenario::next_tx(scenario, &sender1);
+test_scenario::next_tx(scenario, &sender1);
 {
     // take_owned does not work for immutable objects.
-    assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
+    assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
 };
 ```
 In this test, we submit a transaction as `sender1`, which would create an immutable object.
@@ -71,13 +71,13 @@ As we can see above, `can_take_owned<ColorObject>` will no longer return `true`,
 ```rust
 // Any sender can work.
 let sender2 = @0x2;
-TestScenario::next_tx(scenario, &sender2);
+test_scenario::next_tx(scenario, &sender2);
 {
-    let object_wrapper = TestScenario::take_immutable<ColorObject>(scenario);
-    let object = TestScenario::borrow(&object_wrapper);
+    let object_wrapper = test_scenario::take_immutable<ColorObject>(scenario);
+    let object = test_scenario::borrow(&object_wrapper);
     let (red, green, blue) = ColorObject::get_color(object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
-    TestScenario::return_immutable(scenario, object_wrapper);
+    test_scenario::return_immutable(scenario, object_wrapper);
 };
 ```
  To show that this object is indeed not owned by anyone, we start the next transaction with `sender2`. As explained earlier, we used `take_immutable` and subsequently `borrow` to obtain a read-only reference to the object. It succeeded! This means that any sender will be able to take an immutable object. In the end, to return the object, we also need to call a new API: `return_immutable`.
@@ -94,9 +94,9 @@ public entry fun update(
 }
 ```
 To summarize, we introduced three new API functions to interact with immutable objects in unit tests:
-- `TestScenario::take_immutable<T>` to take an immutable object wrapper from global storage.
-- `TestScenario::borrow` to obtain a read-only reference from the wrapper above.
-- `TestScenario::return_mmutable` to return the wrapper back to the global storage.
+- `test_scenario::take_immutable<T>` to take an immutable object wrapper from global storage.
+- `test_scenario::borrow` to obtain a read-only reference from the wrapper above.
+- `test_scenario::return_mmutable` to return the wrapper back to the global storage.
 
 
 ### On-chain interactions

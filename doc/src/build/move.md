@@ -590,15 +590,15 @@ transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).
 
 Sui-specific testing is supported via the
-[TestScenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TestScenario.move)
+[test_scenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test_scenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
 [testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md).
 
-The main concept in the `TestScenario` is a scenario that emulates a
+The main concept in the `test_scenario` is a scenario that emulates a
 series of Sui transactions, each executed by a (potentially) different
 user. At a high level, a developer writing a test starts the first
-transaction using the `TestScenario::begin` function that takes an
+transaction using the `test_scenario::begin` function that takes an
 address of the user executing this transaction as the first and only
 argument and returns an instance of the `Scenario` struct representing
 a scenario.
@@ -607,12 +607,12 @@ An instance of the `Scenario` struct contains a
 per-address object pool emulating Sui's object storage, with helper
 functions provided to manipulate objects in the pool. Once the first
 transaction is finished, subsequent transactions can be started using
-the `TestScenario::next_tx` function that takes an instance of the
+the `test_scenario::next_tx` function that takes an instance of the
 `Scenario` struct representing the current scenario and an address of
 a (new) user as arguments.
 
 Let us extend our running example with a multi-transaction test that
-uses the `TestScenario` to test sword creation and transfer from the
+uses the `test_scenario` to test sword creation and transfer from the
 point of view of a Sui developer. First, let us create
 [entry functions](#entry-functions) callable from Sui that implement
 sword creation and transfer and put them into the `M1.move` file:
@@ -659,35 +659,35 @@ function.
 ``` rust
     #[test]
     fun test_sword_transactions() {
-        use sui::TestScenario;
+        use sui::test_scenario;
 
         let admin = @0xABBA;
         let initial_owner = @0xCAFE;
         let final_owner = @0xFACE;
 
         // first transaction executed by admin
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         {
             // create the sword and transfer it to the initial owner
-            sword_create(42, 7, initial_owner, TestScenario::ctx(scenario));
+            sword_create(42, 7, initial_owner, test_scenario::ctx(scenario));
         };
         // second transaction executed by the initial sword owner
-        TestScenario::next_tx(scenario, &initial_owner);
+        test_scenario::next_tx(scenario, &initial_owner);
         {
             // extract the sword owned by the initial owner
-            let sword = TestScenario::take_owned<Sword>(scenario);
+            let sword = test_scenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
-            sword_transfer(sword, final_owner, TestScenario::ctx(scenario));
+            sword_transfer(sword, final_owner, test_scenario::ctx(scenario));
         };
         // third transaction executed by the final sword owner
-        TestScenario::next_tx(scenario, &final_owner);
+        test_scenario::next_tx(scenario, &final_owner);
         {
             // extract the sword owned by the final owner
-            let sword = TestScenario::take_owned<Sword>(scenario);
+            let sword = test_scenario::take_owned<Sword>(scenario);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
             // return the sword to the object pool (it cannot be simply "dropped")
-            TestScenario::return_owned(scenario, sword)
+            test_scenario::return_owned(scenario, sword)
         }
     }
 ```
@@ -701,11 +701,11 @@ address that creates a sword and transfers its ownership to the
 initial owner.
 
 The second transaction is executed by the initial owner (passed as an
-argument to the `TestScenario::next_tx` function) who then transfers
+argument to the `test_scenario::next_tx` function) who then transfers
 the sword it now owns to its final owner. Please note that in *pure
 Move* we do not have the notion of Sui storage and, consequently, no
 easy way for the emulated Sui transaction to retrieve it from
-storage. This is where the `TestScenario` module comes to help - its
+storage. This is where the `test_scenario` module comes to help - its
 `take_owned` function makes an object of a given type (in this case
 of type `Sword`) owned by an address executing the current transaction
 available for manipulation by the Move code. (For now, we assume that
@@ -722,10 +722,10 @@ disappear.
 
 In the *pure Move* testing function, we handled this problem
 by transferring the sword object to the fake address. But the
-`TestScenario` package gives us a more elegant solution, which is
+`test_scenario` package gives us a more elegant solution, which is
 closer to what happens when Move code is actually executed in the
 context of Sui - we can simply return the sword to the object pool
-using the `TestScenario::return_owned` function.
+using the `test_scenario::return_owned` function.
 
 We can now run the test command again and see that we now have two
 successful tests for our module:
@@ -856,20 +856,20 @@ We can now create a function to test the module initialization:
         let admin = @0xABBA;
 
         // first transaction to emulate module initialization
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         {
-            init(TestScenario::ctx(scenario));
+            init(test_scenario::ctx(scenario));
         };
         // second transaction to check if the forge has been created
         // and has initial value of zero swords created
-        TestScenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, &admin);
         {
             // extract the Forge object
-            let forge = TestScenario::take_owned<Forge>(scenario);
+            let forge = test_scenario::take_owned<Forge>(scenario);
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
             // return the Forge object to the object pool
-            TestScenario::return_owned(scenario, forge)
+            test_scenario::return_owned(scenario, forge)
         }
     }
 

@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::test_coin {
-    use sui::TestScenario::{Self, ctx};
+    use sui::test_scenario::{Self, ctx};
     use sui::coin;
     use sui::balance;
     use sui::SUI::SUI;
@@ -14,7 +14,7 @@ module sui::test_coin {
 
     #[test]
     fun type_morphing() {
-        let test = &mut TestScenario::begin(&@0x1);
+        let test = &mut test_scenario::begin(&@0x1);
 
         let balance = balance::zero<SUI>();
         let coin = coin::from_balance(balance, ctx(test));
@@ -43,26 +43,26 @@ module sui::test_coin {
 
     #[test]
     public entry fun test_locked_coin_valid() {
-        let scenario = &mut TestScenario::begin(&TEST_SENDER_ADDR);
-        let ctx = TestScenario::ctx(scenario);
+        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let ctx = test_scenario::ctx(scenario);
         let coin = coin::mint_for_testing<SUI>(42, ctx);
 
-        TestScenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
         // Lock up the coin until epoch 2.
-        locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
+        locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, test_scenario::ctx(scenario));
 
         // Advance the epoch by 2.
-        TestScenario::next_epoch(scenario);
-        TestScenario::next_epoch(scenario);
-        assert!(tx_context::epoch(TestScenario::ctx(scenario)) == 2, 1);
+        test_scenario::next_epoch(scenario);
+        test_scenario::next_epoch(scenario);
+        assert!(tx_context::epoch(test_scenario::ctx(scenario)) == 2, 1);
 
-        TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
-        let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
+        let locked_coin = test_scenario::take_owned<LockedCoin<SUI>>(scenario);
         // The unlock should go through since epoch requirement is met.
-        locked_coin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
+        locked_coin::unlock_coin(locked_coin, test_scenario::ctx(scenario));
 
-        TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
-        let unlocked_coin = TestScenario::take_owned<Coin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
+        let unlocked_coin = test_scenario::take_owned<Coin<SUI>>(scenario);
         assert!(coin::value(&unlocked_coin) == 42, 2);
         coin::destroy_for_testing(unlocked_coin);
     }
@@ -70,21 +70,21 @@ module sui::test_coin {
     #[test]
     #[expected_failure(abort_code = 1)]
     public entry fun test_locked_coin_invalid() {
-        let scenario = &mut TestScenario::begin(&TEST_SENDER_ADDR);
-        let ctx = TestScenario::ctx(scenario);
+        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let ctx = test_scenario::ctx(scenario);
         let coin = coin::mint_for_testing<SUI>(42, ctx);
 
-        TestScenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
         // Lock up the coin until epoch 2.
-        locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, TestScenario::ctx(scenario));
+        locked_coin::lock_coin(coin, TEST_RECIPIENT_ADDR, 2, test_scenario::ctx(scenario));
 
         // Advance the epoch by 1.
-        TestScenario::next_epoch(scenario);
-        assert!(tx_context::epoch(TestScenario::ctx(scenario)) == 1, 1);
+        test_scenario::next_epoch(scenario);
+        assert!(tx_context::epoch(test_scenario::ctx(scenario)) == 1, 1);
 
-        TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
-        let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
+        test_scenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
+        let locked_coin = test_scenario::take_owned<LockedCoin<SUI>>(scenario);
         // The unlock should fail.
-        locked_coin::unlock_coin(locked_coin, TestScenario::ctx(scenario));
+        locked_coin::unlock_coin(locked_coin, test_scenario::ctx(scenario));
     }
 }

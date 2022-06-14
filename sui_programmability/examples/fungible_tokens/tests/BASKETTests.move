@@ -7,22 +7,22 @@ module FungibleTokens::BASKETTests {
     use FungibleTokens::MANAGED::MANAGED;
     use sui::coin;
     use sui::SUI::SUI;
-    use sui::TestScenario;
+    use sui::test_scenario;
 
     #[test]
     public fun test_mint_burn() {
         let user = @0xA;
 
-        let scenario = &mut TestScenario::begin(&user);
+        let scenario = &mut test_scenario::begin(&user);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             BASKET::init_for_testing(ctx);
         };
-        TestScenario::next_tx(scenario, &user);
+        test_scenario::next_tx(scenario, &user);
         {
-            let reserve_wrapper = TestScenario::take_shared<Reserve>(scenario);
-            let reserve = TestScenario::borrow_mut(&mut reserve_wrapper);
-            let ctx = TestScenario::ctx(scenario);
+            let reserve_wrapper = test_scenario::take_shared<Reserve>(scenario);
+            let reserve = test_scenario::borrow_mut(&mut reserve_wrapper);
+            let ctx = test_scenario::ctx(scenario);
             assert!(BASKET::total_supply(reserve) == 0, 0);
 
             let num_coins = 10;
@@ -38,7 +38,7 @@ module FungibleTokens::BASKETTests {
 
             coin::keep(sui, ctx);
             coin::keep(managed, ctx);
-            TestScenario::return_shared(scenario, reserve_wrapper);
+            test_scenario::return_shared(scenario, reserve_wrapper);
         }
     }
 

@@ -3,7 +3,7 @@
 
 #[test_only]
 module games::tic_tac_toe_tests {
-    use sui::TestScenario::{Self, Scenario};
+    use sui::test_scenario::{Self, Scenario};
     use games::tic_tac_toe::{Self, Mark, MarkMintCap, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;
@@ -19,9 +19,9 @@ module games::tic_tac_toe_tests {
         let player_x = @0x1;
         let player_o = @0x2;
 
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         // Admin creates a game
-        tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        tic_tac_toe::create_game(copy player_x, copy player_o, test_scenario::ctx(scenario));
         // Player1 places an X in (1, 1).
         place_mark(1, 1, &admin, &player_x, scenario);
         /*
@@ -73,12 +73,12 @@ module games::tic_tac_toe_tests {
         assert!(status == X_WIN, 2);
 
         // X has the trophy
-        TestScenario::next_tx(scenario, &player_x);
-        assert!(TestScenario::can_take_owned<Trophy>(scenario), 1);
+        test_scenario::next_tx(scenario, &player_x);
+        assert!(test_scenario::can_take_owned<Trophy>(scenario), 1);
 
-        TestScenario::next_tx(scenario, &player_o);
+        test_scenario::next_tx(scenario, &player_o);
         // O has no Trophy
-        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
+        assert!(!test_scenario::can_take_owned<Trophy>(scenario), 1);
     }
 
 
@@ -88,9 +88,9 @@ module games::tic_tac_toe_tests {
         let player_x = @0x1;
         let player_o = @0x2;
 
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
 
-        tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        tic_tac_toe::create_game(copy player_x, copy player_o, test_scenario::ctx(scenario));
         // Player1 places an X in (0, 1).
         let status = place_mark(0, 1, &admin, &player_x, scenario);
         assert!(status == IN_PROGRESS, 1);
@@ -184,10 +184,10 @@ module games::tic_tac_toe_tests {
         assert!(status == DRAW, 2);
 
         // No one has the trophy
-        TestScenario::next_tx(scenario, &player_x);
-        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
-        TestScenario::next_tx(scenario, &player_o);
-        assert!(!TestScenario::can_take_owned<Trophy>(scenario), 1);
+        test_scenario::next_tx(scenario, &player_x);
+        assert!(!test_scenario::can_take_owned<Trophy>(scenario), 1);
+        test_scenario::next_tx(scenario, &player_o);
+        assert!(!test_scenario::can_take_owned<Trophy>(scenario), 1);
     }
 
     fun place_mark(
@@ -198,24 +198,24 @@ module games::tic_tac_toe_tests {
         scenario: &mut Scenario,
     ): u8  {
         // Step 1: player creates a mark and sends it to the game.
-        TestScenario::next_tx(scenario, player);
+        test_scenario::next_tx(scenario, player);
         {
-            let cap = TestScenario::take_owned<MarkMintCap>(scenario);
-            tic_tac_toe::send_mark_to_game(&mut cap, *admin, row, col, TestScenario::ctx(scenario));
-            TestScenario::return_owned(scenario, cap);
+            let cap = test_scenario::take_owned<MarkMintCap>(scenario);
+            tic_tac_toe::send_mark_to_game(&mut cap, *admin, row, col, test_scenario::ctx(scenario));
+            test_scenario::return_owned(scenario, cap);
         };
         // Step 2: Admin places the received mark on the game board.
-        TestScenario::next_tx(scenario, admin);
+        test_scenario::next_tx(scenario, admin);
         let status;
         {
-            let game = TestScenario::take_owned<TicTacToe>(scenario);
-            let mark = TestScenario::take_owned<Mark>(scenario);
+            let game = test_scenario::take_owned<TicTacToe>(scenario);
+            let mark = test_scenario::take_owned<Mark>(scenario);
             assert!(tic_tac_toe::mark_player(&mark) == player, 0);
             assert!(tic_tac_toe::mark_row(&mark) == row, 1);
             assert!(tic_tac_toe::mark_col(&mark) == col, 2);
-            tic_tac_toe::place_mark(&mut game, mark, TestScenario::ctx(scenario));
+            tic_tac_toe::place_mark(&mut game, mark, test_scenario::ctx(scenario));
             status = tic_tac_toe::get_status(&game);
-            TestScenario::return_owned(scenario, game);
+            test_scenario::return_owned(scenario, game);
         };
         // return the game status
         status
