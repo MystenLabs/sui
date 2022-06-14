@@ -846,7 +846,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }))
     }
 
-    /// Remove the shared objects locks. This function is not safety-critical and is only need to cleanup the store.
+    /// Remove the shared objects locks.
     pub fn remove_shared_objects_locks(
         &self,
         mut write_batch: DBBatch,
