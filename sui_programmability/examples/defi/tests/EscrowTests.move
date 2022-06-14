@@ -3,9 +3,9 @@
 
 #[test_only]
 module DeFi::EscrowTests {
-    use Sui::ID::{Self, VersionedID};
-    use Sui::TestScenario::{Self, Scenario};
-    use Sui::TxContext::{Self};
+    use sui::ID::{Self, VersionedID};
+    use sui::TestScenario::{Self, Scenario};
+    use sui::TxContext::{Self};
 
     use DeFi::Escrow::{Self, EscrowedObj};
 

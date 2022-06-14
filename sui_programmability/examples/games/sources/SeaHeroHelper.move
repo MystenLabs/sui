@@ -10,10 +10,10 @@
 module Games::SeaHeroHelper {
     use Games::SeaHero::{Self, SeaMonster, RUM};
     use Games::Hero::Hero;
-    use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin::{Self, Coin};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.

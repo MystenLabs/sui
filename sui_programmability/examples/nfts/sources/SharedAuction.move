@@ -26,9 +26,9 @@
 ///   and the item goes to the bidder that won the auction
 
 module NFTs::SharedAuction {
-    use Sui::Coin::{Self, Coin};
-    use Sui::SUI::SUI;
-    use Sui::TxContext::{Self,TxContext};
+    use sui::Coin::{Self, Coin};
+    use sui::SUI::SUI;
+    use sui::TxContext::{Self,TxContext};
 
     use NFTs::AuctionLib::{Self, Auction};
 

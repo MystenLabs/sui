@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::IDTests {
-    use Sui::ID;
-    use Sui::TxContext;
+module sui::IDTests {
+    use sui::ID;
+    use sui::TxContext;
 
     const ID_BYTES_MISMATCH: u64 = 0;
 

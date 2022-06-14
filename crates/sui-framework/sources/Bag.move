@@ -9,13 +9,13 @@
 /// could mutate the objects in the Bag.
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
-module Sui::Bag {
+module sui::Bag {
     use std::errors;
     use std::option::{Self, Option};
     use std::vector::Self;
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer::{Self, ChildRef};
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer::{Self, ChildRef};
+    use sui::TxContext::{Self, TxContext};
 
     // Error codes
     /// When removing an object from the collection, EObjectNotFound

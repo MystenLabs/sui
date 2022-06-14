@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::Marketplace {
-    use Sui::Bag::{Self, Bag};
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer::{Self, ChildRef};
-    use Sui::Coin::{Self, Coin};
+    use sui::Bag::{Self, Bag};
+    use sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer::{Self, ChildRef};
+    use sui::Coin::{Self, Coin};
 
     // For when amount paid does not match the expected.
     const EAmountIncorrect: u64 = 0;
@@ -124,13 +124,13 @@ module NFTs::Marketplace {
 
 #[test_only]
 module NFTs::MarketplaceTests {
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Bag::Bag;
-    use Sui::Transfer;
-    use Sui::Coin::{Self, Coin};
-    use Sui::SUI::SUI;
-    use Sui::TxContext;
-    use Sui::TestScenario::{Self, Scenario};
+    use sui::ID::{Self, VersionedID};
+    use sui::Bag::Bag;
+    use sui::Transfer;
+    use sui::Coin::{Self, Coin};
+    use sui::SUI::SUI;
+    use sui::TxContext;
+    use sui::TestScenario::{Self, Scenario};
     use NFTs::Marketplace::{Self, Marketplace, Listing};
 
     // Simple Kitty-NFT data structure.

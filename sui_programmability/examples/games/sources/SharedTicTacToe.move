@@ -17,10 +17,10 @@
 module Games::SharedTicTacToe {
     use std::vector;
 
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Event;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Event;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     // Game status
     const IN_PROGRESS: u8 = 0;

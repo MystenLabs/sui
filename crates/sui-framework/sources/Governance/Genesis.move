@@ -1,14 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::Genesis {
+module sui::Genesis {
     use std::vector;
 
-    use Sui::Coin;
-    use Sui::SUI;
-    use Sui::SuiSystem;
-    use Sui::TxContext::TxContext;
-    use Sui::Validator;
+    use sui::Coin;
+    use sui::SUI;
+    use sui::SuiSystem;
+    use sui::TxContext::TxContext;
+    use sui::Validator;
 
     /// The initial amount of SUI locked in the storage fund.
     /// 10^14, an arbitrary number.

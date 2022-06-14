@@ -26,9 +26,9 @@
 // - If game owner never took or revealed the results (incentives?)
 
 module Games::RockPaperScissors {
-    use Sui::ID::{Self, VersionedID};
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Transfer::{Self};
+    use sui::ID::{Self, VersionedID};
+    use sui::TxContext::{Self, TxContext};
+    use sui::Transfer::{Self};
     use std::vector;
     use std::hash;
 

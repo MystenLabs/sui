@@ -4,9 +4,9 @@
 module NFTs::Chat {
     use std::ascii::{Self, String};
     use std::option::{Self, Option, some};
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
     use std::vector::length;
 
     /// Max text length.

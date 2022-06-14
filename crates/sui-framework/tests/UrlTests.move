@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::UrlTests {
-    use Sui::Url;
+module sui::UrlTests {
+    use sui::Url;
     use std::ascii::Self;
 
     const EHASH_LENGTH_MISMATCH: u64 = 0;

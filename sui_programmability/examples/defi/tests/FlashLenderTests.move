@@ -4,9 +4,9 @@
 #[test_only]
 module DeFi::FlashLenderTests {
     use DeFi::FlashLender::{Self, AdminCap, FlashLender};
-    use Sui::Coin;
-    use Sui::SUI::SUI;
-    use Sui::TestScenario;
+    use sui::Coin;
+    use sui::SUI::SUI;
+    use sui::TestScenario;
 
     #[test]
     fun flash_loan_example() {

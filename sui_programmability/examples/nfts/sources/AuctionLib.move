@@ -8,12 +8,12 @@
 module NFTs::AuctionLib {
     use std::option::{Self, Option};
 
-    use Sui::Coin;
-    use Sui::Balance::{Self, Balance};
-    use Sui::SUI::SUI;
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self,TxContext};
+    use sui::Coin;
+    use sui::Balance::{Self, Balance};
+    use sui::SUI::SUI;
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self,TxContext};
 
     friend NFTs::Auction;
     friend NFTs::SharedAuction;

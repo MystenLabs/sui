@@ -5,7 +5,7 @@
 module NFTs::ChatTests {
     use NFTs::Chat::{Self, Chat};
     use std::ascii::Self;
-    use Sui::TestScenario::Self;
+    use sui::TestScenario::Self;
 
     const USER1_ADDRESS: address = @0xA001;
     const METADATA: vector<u8> = vector[0u8];

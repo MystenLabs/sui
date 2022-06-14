@@ -3,11 +3,11 @@
 
 /// A flash loan that works for any Coin type
 module DeFi::FlashLender {
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Balance::{Self, Balance};
+    use sui::Coin::{Self, Coin};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// A shared object offering flash loans to any buyer willing to pay `fee`.
     struct FlashLender<phantom T> has key {

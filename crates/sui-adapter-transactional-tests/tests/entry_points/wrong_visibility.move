@@ -7,7 +7,7 @@
 
 //# publish
 module Test::M {
-    use Sui::TxContext::TxContext;
+    use sui::TxContext::TxContext;
 
     public fun t1(_: &mut TxContext) {
         abort 0

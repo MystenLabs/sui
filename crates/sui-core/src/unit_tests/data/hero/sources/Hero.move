@@ -5,12 +5,12 @@
 /// associated logic.
 module Examples::Hero {
     use Examples::TrustedCoin::EXAMPLE;
-    use Sui::Coin::{Self, Coin};
-    use Sui::Event;
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Math;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin::{Self, Coin};
+    use sui::Event;
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Math;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
     use std::option::{Self, Option};
 
     /// Our hero!
@@ -297,8 +297,8 @@ module Examples::Hero {
     #[test]
     public fun slay_boar_test() {
         use Examples::TrustedCoin::{Self, EXAMPLE};
-        use Sui::Coin::{Self, TreasuryCap};
-        use Sui::TestScenario;
+        use sui::Coin::{Self, TreasuryCap};
+        use sui::TestScenario;
 
         let admin = ADMIN;
         let player = @0x0;

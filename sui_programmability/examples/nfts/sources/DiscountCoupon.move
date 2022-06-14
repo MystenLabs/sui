@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::DiscountCoupon {
-    use Sui::Coin;
-    use Sui::ID::{Self, VersionedID};
-    use Sui::SUI::{Self, SUI};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin;
+    use sui::ID::{Self, VersionedID};
+    use sui::SUI::{Self, SUI};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// Sending to wrong recipient.
     const EWrongRecipient: u64 = 0;

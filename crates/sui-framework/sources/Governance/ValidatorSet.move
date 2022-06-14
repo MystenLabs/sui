@@ -1,20 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::ValidatorSet {
+module sui::ValidatorSet {
     use std::option::{Self, Option};
     use std::vector;
 
-    use Sui::Balance::{Self, Balance};
-    use Sui::EpochRewardRecord;
-    use Sui::SUI::SUI;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Validator::{Self, Validator, ValidatorMetadata};
+    use sui::Balance::{Self, Balance};
+    use sui::EpochRewardRecord;
+    use sui::SUI::SUI;
+    use sui::TxContext::{Self, TxContext};
+    use sui::Validator::{Self, Validator, ValidatorMetadata};
 
-    friend Sui::SuiSystem;
+    friend sui::SuiSystem;
 
     #[test_only]
-    friend Sui::ValidatorSetTests;
+    friend sui::ValidatorSetTests;
 
     struct ValidatorSet has store {
         /// Total amount of stake from all active validators (not including delegation),

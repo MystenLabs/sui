@@ -5,7 +5,7 @@
 
 //# publish
 module Test::M {
-    use Sui::TxContext::{Self, TxContext};
+    use sui::TxContext::{Self, TxContext};
     struct Obj has key {
         id: Sui::ID::VersionedID,
         value: u64

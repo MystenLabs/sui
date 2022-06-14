@@ -11,11 +11,11 @@
 module Games::SeaHero {
     use Games::Hero::{Self, Hero};
 
-    use Sui::Balance::{Self, Balance};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Coin::{Self, TreasuryCap};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Balance::{Self, Balance};
+    use sui::ID::{Self, VersionedID};
+    use sui::Coin::{Self, TreasuryCap};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters

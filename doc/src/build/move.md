@@ -92,7 +92,7 @@ file.
 Let's see how module definition appears in the `Coin` module file:
 
 ```rust
-module Sui::Coin {
+module sui::Coin {
 ...
 }
 ```
@@ -124,7 +124,7 @@ file:
 
 ```
 [addresses]
-Sui = "0x2"
+sui = "0x2"
 ```
 
 ### Move structs

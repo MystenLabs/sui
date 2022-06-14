@@ -33,12 +33,12 @@
 ///   original owner and the item goes to the bidder that won the
 ///   auction
 module NFTs::Auction {
-    use Sui::Coin::{Self, Coin};
-    use Sui::Balance::Balance;
-    use Sui::SUI::SUI;
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self,TxContext};
+    use sui::Coin::{Self, Coin};
+    use sui::Balance::Balance;
+    use sui::SUI::SUI;
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self,TxContext};
 
     use NFTs::AuctionLib::{Self, Auction};
 

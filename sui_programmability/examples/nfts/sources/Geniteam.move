@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::Geniteam {
-    use Sui::Bag::{Self, Bag};
-    use Sui::Collection::{Self, Collection};
-    use Sui::ID::VersionedID;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Bag::{Self, Bag};
+    use sui::Collection::{Self, Collection};
+    use sui::ID::VersionedID;
+    use sui::TxContext::{Self, TxContext};
     use std::option::{Self, Option};
-    use Sui::Transfer::{Self, ChildRef};
+    use sui::Transfer::{Self, ChildRef};
     use std::ascii::{Self, String};
     use std::vector;
 

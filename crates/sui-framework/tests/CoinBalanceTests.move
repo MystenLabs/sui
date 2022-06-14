@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::TestCoin {
-    use Sui::TestScenario::{Self, ctx};
-    use Sui::Coin;
-    use Sui::Balance;
-    use Sui::SUI::SUI;
-    use Sui::LockedCoin::LockedCoin;
-    use Sui::TxContext;
-    use Sui::LockedCoin;
-    use Sui::Coin::Coin;
+module sui::TestCoin {
+    use sui::TestScenario::{Self, ctx};
+    use sui::Coin;
+    use sui::Balance;
+    use sui::SUI::SUI;
+    use sui::LockedCoin::LockedCoin;
+    use sui::TxContext;
+    use sui::LockedCoin;
+    use sui::Coin::Coin;
 
     #[test]
     fun type_morphing() {

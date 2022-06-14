@@ -7,9 +7,9 @@
 // initializer not valid due extra non-ctx param
 
 module Test::M1 {
-    use Sui::ID::VersionedID;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Transfer;
+    use sui::ID::VersionedID;
+    use sui::TxContext::{Self, TxContext};
+    use sui::Transfer;
 
     struct Object has key, store {
         id: VersionedID,

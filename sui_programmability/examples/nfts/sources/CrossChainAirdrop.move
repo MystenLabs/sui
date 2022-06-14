@@ -7,10 +7,10 @@
 /// chains by adding a chain_id field.
 module NFTs::CrossChainAirdrop {
     use std::vector;
-    use Sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
-    use Sui::ID::{VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
+    use sui::ID::{VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// The oracle manages one `PerContractAirdropInfo` for each Ethereum contract
     struct CrossChainAirdropOracle has key {

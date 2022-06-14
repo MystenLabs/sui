@@ -1,15 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::LockedCoin {
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::EpochTimeLock::{Self, EpochTimeLock};
+module sui::LockedCoin {
+    use sui::Balance::{Self, Balance};
+    use sui::Coin::{Self, Coin};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
+    use sui::EpochTimeLock::{Self, EpochTimeLock};
 
-    friend Sui::Delegation;
+    friend sui::Delegation;
 
     /// A coin of type `T` locked until `locked_until_epoch`.
     struct LockedCoin<phantom T> has key, store {

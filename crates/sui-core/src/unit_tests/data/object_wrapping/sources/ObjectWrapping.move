@@ -3,9 +3,9 @@
 
 module ObjectWrapping::ObjectWrapping {
     use std::option::{Self, Option};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::ID::{Self, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, VersionedID};
 
     struct Child has key, store {
         id: VersionedID,

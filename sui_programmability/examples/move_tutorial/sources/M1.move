@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module MyFirstPackage::M1 {
-    use Sui::ID::VersionedID;
-    use Sui::TxContext::TxContext;
+    use sui::ID::VersionedID;
+    use sui::TxContext::TxContext;
 
     struct Sword has key, store {
         id: VersionedID,
@@ -18,8 +18,8 @@ module MyFirstPackage::M1 {
 
     // module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
-        use Sui::Transfer;
-        use Sui::TxContext;
+        use sui::Transfer;
+        use sui::TxContext;
         let admin = Forge {
             id: TxContext::new_id(ctx),
             swords_created: 0,
@@ -42,8 +42,8 @@ module MyFirstPackage::M1 {
     }
 
     public entry fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
-        use Sui::Transfer;
-        use Sui::TxContext;
+        use sui::Transfer;
+        use sui::TxContext;
         // create a sword
         let sword = Sword {
             id: TxContext::new_id(ctx),
@@ -56,14 +56,14 @@ module MyFirstPackage::M1 {
     }
 
     public entry fun sword_transfer(sword: Sword, recipient: address) {
-        use Sui::Transfer;
+        use sui::Transfer;
         // transfer the sword
         Transfer::transfer(sword, recipient);
     }
 
     #[test]
     public fun test_module_init() {
-        use Sui::TestScenario;
+        use sui::TestScenario;
 
         // create test address representing game admin
         let admin = @0xBABE;
@@ -88,7 +88,7 @@ module MyFirstPackage::M1 {
 
     #[test]
     fun test_sword_transactions() {
-        use Sui::TestScenario;
+        use sui::TestScenario;
 
         // create test addresses representing users
         let admin = @0xBABE;
@@ -132,8 +132,8 @@ module MyFirstPackage::M1 {
 
     #[test]
     public fun test_sword_create() {
-        use Sui::Transfer;
-        use Sui::TxContext;
+        use sui::Transfer;
+        use sui::TxContext;
 
         // create a dummy TxContext for testing
         let ctx = TxContext::dummy();

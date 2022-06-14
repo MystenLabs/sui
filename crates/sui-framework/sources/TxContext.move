@@ -1,16 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::TxContext {
+module sui::TxContext {
     use std::signer;
-    use Sui::ID::{Self, VersionedID};
+    use sui::ID::{Self, VersionedID};
 
     #[test_only]
     use std::errors;
     #[test_only]
     use std::vector;
     #[test_only]
-    use Sui::ID::ID;
+    use sui::ID::ID;
 
     /// Number of bytes in an tx hash (which will be the transaction digest)
     const TX_HASH_LENGTH: u64 = 32;

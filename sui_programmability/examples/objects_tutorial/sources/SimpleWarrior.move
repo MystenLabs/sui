@@ -4,9 +4,9 @@
 module Tutorial::SimpleWarrior {
     use std::option::{Self, Option};
 
-    use Sui::ID::VersionedID;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::VersionedID;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     struct Sword has key, store {
         id: VersionedID,

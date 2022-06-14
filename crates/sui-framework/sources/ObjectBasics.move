@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Test CTURD object basics (create, transfer, update, read, delete)
-module Sui::ObjectBasics {
-    use Sui::Event;
-    use Sui::ID::{Self, VersionedID};
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Transfer;
+module sui::ObjectBasics {
+    use sui::Event;
+    use sui::ID::{Self, VersionedID};
+    use sui::TxContext::{Self, TxContext};
+    use sui::Transfer;
 
     struct Object has key, store {
         id: VersionedID,

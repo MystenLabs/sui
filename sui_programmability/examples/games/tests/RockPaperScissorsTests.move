@@ -4,7 +4,7 @@
 #[test_only]
 module Games::RockPaperScissorsTests {
     use Games::RockPaperScissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
-    use Sui::TestScenario::{Self};
+    use sui::TestScenario::{Self};
     use std::vector;
     use std::hash;
 

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Coin<SUI> is the token used to pay for gas in Sui
-module Sui::SUI {
-    use Sui::Coin;
-    use Sui::Coin::TreasuryCap;
-    use Sui::TxContext::TxContext;
+module sui::SUI {
+    use sui::Coin;
+    use sui::Coin::TreasuryCap;
+    use sui::TxContext::TxContext;
 
-    friend Sui::Genesis;
+    friend sui::Genesis;
 
     /// Name of the coin
     struct SUI has drop {}

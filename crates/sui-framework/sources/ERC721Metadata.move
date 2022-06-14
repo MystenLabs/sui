@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::ERC721Metadata {
+module sui::ERC721Metadata {
     use std::ascii;
-    use Sui::Url::{Self, Url};
-    use Sui::UTF8;
+    use sui::Url::{Self, Url};
+    use sui::UTF8;
 
     // TODO: add symbol()?
     /// A wrapper type for the ERC721 metadata standard https://eips.ethereum.org/EIPS/eip-721

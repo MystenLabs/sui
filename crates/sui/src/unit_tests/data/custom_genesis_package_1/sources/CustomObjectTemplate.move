@@ -3,9 +3,9 @@
 
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
-    use Sui::ID::VersionedID;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::VersionedID;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// A custom sui object. Every object must have the `key` attribute
     /// (indicating that it is allowed to be a key in the sui global object

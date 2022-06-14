@@ -11,13 +11,13 @@
 /// Collection allows us to own a list of same-typed objects, but still able to
 /// access and operate on each individual object.
 /// In contrast to `Bag`, `Collection` requires all objects have the same type.
-module Sui::Collection {
+module sui::Collection {
     use std::errors;
     use std::option::{Self, Option};
     use std::vector::Self;
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer::{Self, ChildRef};
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer::{Self, ChildRef};
+    use sui::TxContext::{Self, TxContext};
 
     // Error codes
     /// When removing an object from the collection, EObjectNotFound

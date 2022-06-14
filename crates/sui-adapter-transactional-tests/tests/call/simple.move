@@ -5,10 +5,10 @@
 
 //# publish
 module Test::M1 {
-    use Sui::ID::VersionedID;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Transfer;
-    use Sui::Coin::Coin;
+    use sui::ID::VersionedID;
+    use sui::TxContext::{Self, TxContext};
+    use sui::Transfer;
+    use sui::Coin::Coin;
 
     struct Object has key, store {
         id: VersionedID,

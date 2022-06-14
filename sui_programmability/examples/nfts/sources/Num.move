@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::Num {
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// Very silly NFT: a natural number!
     struct Num has key, store {

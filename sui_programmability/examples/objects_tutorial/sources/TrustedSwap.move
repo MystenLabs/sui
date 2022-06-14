@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Tutorial::TrustedSwap {
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::SUI::SUI;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Balance::{Self, Balance};
+    use sui::Coin::{Self, Coin};
+    use sui::ID::{Self, VersionedID};
+    use sui::SUI::SUI;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     const MIN_FEE: u64 = 1000;
 

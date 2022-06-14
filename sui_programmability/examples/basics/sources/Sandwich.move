@@ -4,12 +4,12 @@
 /// Example of objects that can be combined to create
 /// new objects
 module Basics::Sandwich {
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::SUI::SUI;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Balance::{Self, Balance};
+    use sui::Coin::{Self, Coin};
+    use sui::ID::{Self, VersionedID};
+    use sui::SUI::SUI;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     struct Ham has key {
         id: VersionedID
@@ -117,9 +117,9 @@ module Basics::Sandwich {
 #[test_only]
 module Basics::TestSandwich {
     use Basics::Sandwich::{Self, Grocery, GroceryOwnerCapability, Bread, Ham};
-    use Sui::TestScenario;
-    use Sui::Coin::{Self};
-    use Sui::SUI::SUI;
+    use sui::TestScenario;
+    use sui::Coin::{Self};
+    use sui::SUI::SUI;
 
     #[test]
     fun test_make_sandwich() {

@@ -4,13 +4,13 @@
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
 module Games::Hero {
-    use Sui::Coin::{Self, Coin};
-    use Sui::Event;
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Math;
-    use Sui::SUI::SUI;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin::{Self, Coin};
+    use sui::Event;
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Math;
+    use sui::SUI::SUI;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
     use std::option::{Self, Option};
 
     /// Our hero!
@@ -355,8 +355,8 @@ module Games::Hero {
 
     #[test]
     fun slay_boar_test() {
-        use Sui::Coin;
-        use Sui::TestScenario;
+        use sui::Coin;
+        use sui::TestScenario;
 
         let admin = @0xAD014;
         let player = @0x0;

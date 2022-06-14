@@ -5,13 +5,13 @@
 /// on Sui. The user should be able to use the wallet command line tool
 /// (https://docs.sui.io/build/wallet) to mint an NFT. For example,
 /// `wallet example-nft --name <Name> --description <Description> --url <URL>`
-module Sui::DevNetNFT {
-    use Sui::Url::{Self, Url};
-    use Sui::UTF8;
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Event;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+module sui::DevNetNFT {
+    use sui::Url::{Self, Url};
+    use sui::UTF8;
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Event;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
     struct DevNetNFT has key, store {
@@ -95,10 +95,10 @@ module Sui::DevNetNFT {
 }
 
 #[test_only]
-module Sui::DevNetNFTTests {
-    use Sui::DevNetNFT::{Self, DevNetNFT};
-    use Sui::TestScenario;
-    use Sui::UTF8;
+module sui::DevNetNFTTests {
+    use sui::DevNetNFT::{Self, DevNetNFT};
+    use sui::TestScenario;
+    use sui::UTF8;
 
     #[test]
     fun mint_transfer_update() {

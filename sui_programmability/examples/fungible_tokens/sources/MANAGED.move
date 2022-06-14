@@ -5,9 +5,9 @@
 /// By convention, modules defining custom coin types use upper case names, in contrast to
 /// ordinary modules, which use camel case.
 module FungibleTokens::MANAGED {
-    use Sui::Coin::{Self, Coin, TreasuryCap};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<MANAGED>`.

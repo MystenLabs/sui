@@ -3,7 +3,7 @@
 
 #[test_only]
 module Games::SharedTicTacToeTests {
-    use Sui::TestScenario::{Self, Scenario};
+    use sui::TestScenario::{Self, Scenario};
     use Games::SharedTicTacToe::{Self, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;

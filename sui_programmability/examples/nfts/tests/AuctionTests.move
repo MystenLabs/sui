@@ -5,11 +5,11 @@
 module NFTs::AuctionTests {
     use std::vector;
 
-    use Sui::Coin::{Self, Coin};
-    use Sui::SUI::SUI;
-    use Sui::ID::{Self, VersionedID};
-    use Sui::TestScenario::Self;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin::{Self, Coin};
+    use sui::SUI::SUI;
+    use sui::ID::{Self, VersionedID};
+    use sui::TestScenario::Self;
+    use sui::TxContext::{Self, TxContext};
 
     use NFTs::Auction::{Self, Bid};
     use NFTs::AuctionLib::Auction;

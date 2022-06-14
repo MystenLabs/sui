@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::TestScenarioTests {
-    use Sui::ID;
-    use Sui::TestScenario::{Self, Scenario};
-    use Sui::Transfer::{Self, ChildRef};
-    use Sui::TxContext;
+module sui::TestScenarioTests {
+    use sui::ID;
+    use sui::TestScenario::{Self, Scenario};
+    use sui::Transfer::{Self, ChildRef};
+    use sui::TxContext;
 
     const ID_BYTES_MISMATCH: u64 = 0;
     const VALUE_MISMATCH: u64 = 1;

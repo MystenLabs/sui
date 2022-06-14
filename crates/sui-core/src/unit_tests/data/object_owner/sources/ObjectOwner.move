@@ -3,9 +3,9 @@
 
 module ObjectOwner::ObjectOwner {
     use std::option::{Self, Option};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer::{Self, ChildRef};
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer::{Self, ChildRef};
+    use sui::TxContext::{Self, TxContext};
 
     struct Parent has key {
         id: VersionedID,

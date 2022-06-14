@@ -1,14 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::Transfer {
+module sui::Transfer {
     use std::option::{Self, Option};
-    use Sui::ID::{Self, ID, VersionedID};
+    use sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
-    friend Sui::Bag;
+    friend sui::Bag;
     // To allow access to is_child_unsafe.
-    friend Sui::Collection;
+    friend sui::Collection;
 
     // When transferring a child object, this error is thrown if the child object
     // doesn't match the ChildRef that represents the ownership.

@@ -6,9 +6,9 @@
 //# publish
 
 module T3::O3 {
-    use Sui::ID::VersionedID;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::VersionedID;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     struct O3 has key, store {
         id: VersionedID,
@@ -23,9 +23,9 @@ module T3::O3 {
 //# publish
 
 module T2::O2 {
-    use Sui::ID::VersionedID;
-    use Sui::Transfer::{Self, ChildRef};
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::VersionedID;
+    use sui::Transfer::{Self, ChildRef};
+    use sui::TxContext::{Self, TxContext};
     use T3::O3::O3;
 
     struct O2 has key, store {
@@ -54,9 +54,9 @@ module T2::O2 {
 //# publish
 
 module T1::O1 {
-    use Sui::ID::VersionedID;
-    use Sui::Transfer::{Self, ChildRef};
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::VersionedID;
+    use sui::Transfer::{Self, ChildRef};
+    use sui::TxContext::{Self, TxContext};
     use T2::O2::O2;
     use T3::O3::O3;
 

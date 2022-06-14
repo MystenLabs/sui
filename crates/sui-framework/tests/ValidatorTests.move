@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::ValidatorTests {
-    use Sui::Coin::{Self, Coin};
-    use Sui::SUI::SUI;
-    use Sui::TestScenario;
-    use Sui::Validator;
+module sui::ValidatorTests {
+    use sui::Coin::{Self, Coin};
+    use sui::SUI::SUI;
+    use sui::TestScenario;
+    use sui::Validator;
 
     #[test]
     fun test_validator_owner_flow() {

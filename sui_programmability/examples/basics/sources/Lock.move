@@ -7,9 +7,9 @@
 /// be accessed by putting a 'key' into the 'lock'. Lock is shared and is visible
 /// and discoverable by the key owner.
 module Basics::Lock {
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
     use std::option::{Self, Option};
 
     /// Lock is empty, nothing to take.
@@ -95,10 +95,10 @@ module Basics::Lock {
 
 #[test_only]
 module Basics::LockTest {
-    use Sui::ID::VersionedID;
-    use Sui::TestScenario;
-    use Sui::TxContext;
-    use Sui::Transfer;
+    use sui::ID::VersionedID;
+    use sui::TestScenario;
+    use sui::TxContext;
+    use sui::Transfer;
     use Basics::Lock::{Self, Lock, Key};
 
     /// Custom structure which we will store inside a Lock.

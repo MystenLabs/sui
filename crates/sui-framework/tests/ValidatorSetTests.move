@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::ValidatorSetTests {
-    use Sui::Balance;
-    use Sui::Coin;
-    use Sui::SUI::SUI;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Validator::{Self, Validator};
-    use Sui::ValidatorSet;
+module sui::ValidatorSetTests {
+    use sui::Balance;
+    use sui::Coin;
+    use sui::SUI::SUI;
+    use sui::TxContext::{Self, TxContext};
+    use sui::Validator::{Self, Validator};
+    use sui::ValidatorSet;
 
     #[test]
     fun test_validator_set_flow() {

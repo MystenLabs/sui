@@ -5,9 +5,9 @@
 /// Allows separation of the transferable `Coin` type and the storable
 /// `Balance` eliminating the need to create new IDs for each application
 /// that needs to hold coins.
-module Sui::Balance {
-    friend Sui::Coin;
-    friend Sui::SuiSystem;
+module sui::Balance {
+    friend sui::Coin;
+    friend sui::SuiSystem;
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
@@ -78,9 +78,9 @@ module Sui::Balance {
 }
 
 #[test_only]
-module Sui::BalanceTests {
-    use Sui::Balance;
-    use Sui::SUI::SUI;
+module sui::BalanceTests {
+    use sui::Balance;
+    use sui::SUI::SUI;
 
     #[test]
     fun test_balance() {

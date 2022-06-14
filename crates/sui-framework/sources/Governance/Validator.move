@@ -1,25 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::Validator {
+module sui::Validator {
     use std::ascii;
     use std::option::{Self, Option};
     use std::vector;
 
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin;
-    use Sui::SUI::SUI;
-    use Sui::Transfer;
-    use Sui::TxContext::TxContext;
+    use sui::Balance::{Self, Balance};
+    use sui::Coin;
+    use sui::SUI::SUI;
+    use sui::Transfer;
+    use sui::TxContext::TxContext;
 
-    friend Sui::Genesis;
-    friend Sui::SuiSystem;
-    friend Sui::ValidatorSet;
+    friend sui::Genesis;
+    friend sui::SuiSystem;
+    friend sui::ValidatorSet;
 
     #[test_only]
-    friend Sui::ValidatorTests;
+    friend sui::ValidatorTests;
     #[test_only]
-    friend Sui::ValidatorSetTests;
+    friend sui::ValidatorSetTests;
 
     struct ValidatorMetadata has store, drop, copy {
         /// The Sui Address of the validator. This is the sender that created the Validator object,

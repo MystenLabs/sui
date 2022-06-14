@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::CollectionTests {
-    use Sui::Bag::{Self, Bag};
-    use Sui::Collection::{Self, Collection};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::TestScenario;
-    use Sui::TxContext;
+module sui::CollectionTests {
+    use sui::Bag::{Self, Bag};
+    use sui::Collection::{Self, Collection};
+    use sui::ID::{Self, VersionedID};
+    use sui::TestScenario;
+    use sui::TxContext;
 
     struct Object has key, store {
         id: VersionedID,

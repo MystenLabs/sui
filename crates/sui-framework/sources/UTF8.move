@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::UTF8 {
+module sui::UTF8 {
     use std::ascii;
     use std::option::Option;
 

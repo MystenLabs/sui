@@ -5,10 +5,10 @@
 /// new objects
 module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
-    use Sui::Coin::{Self, Coin};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin::{Self, Coin};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     struct Ham has key {
         id: VersionedID

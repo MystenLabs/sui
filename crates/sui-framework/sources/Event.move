@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::Event {
+module sui::Event {
 
     /// Add `t` to the event log of this transaction
     // TODO(https://github.com/MystenLabs/sui/issues/19):

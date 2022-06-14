@@ -8,12 +8,12 @@
 /// could be implemented this way.
 module FungibleTokens::BASKET {
     use FungibleTokens::MANAGED::MANAGED;
-    use Sui::Coin::{Self, Coin, TreasuryCap};
-    use Sui::Balance::{Self, Balance};
-    use Sui::ID::VersionedID;
-    use Sui::SUI::SUI;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::Balance::{Self, Balance};
+    use sui::ID::VersionedID;
+    use sui::SUI::SUI;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<BASKET>`.

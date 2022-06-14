@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::BagTests {
-    use Sui::Bag::{Self, Bag};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::TestScenario;
-    use Sui::TxContext;
+module sui::BagTests {
+    use sui::Bag::{Self, Bag};
+    use sui::ID::{Self, VersionedID};
+    use sui::TestScenario;
+    use sui::TxContext;
 
     const EBAG_SIZE_MISMATCH: u64 = 0;
     const EOBJECT_NOT_FOUND: u64 = 1;

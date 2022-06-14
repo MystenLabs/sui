@@ -4,10 +4,10 @@
 #[test_only]
 module NFTs::DiscountCouponTests {
     use NFTs::DiscountCoupon::{Self, DiscountCoupon};
-    use Sui::Coin::{Self, Coin};
-    use Sui::SUI::SUI;
-    use Sui::TestScenario::Self;
-    use Sui::TxContext::TxContext;
+    use sui::Coin::{Self, Coin};
+    use sui::SUI::SUI;
+    use sui::TestScenario::Self;
+    use sui::TxContext::TxContext;
 
     const ISSUER_ADDRESS: address = @0xA001;
     const USER1_ADDRESS: address = @0xB001;

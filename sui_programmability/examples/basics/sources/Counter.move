@@ -7,9 +7,9 @@
 /// - everyone can increment a counter by 1
 /// - the owner of the counter can reset it to any value
 module Basics::Counter {
-    use Sui::Transfer;
-    use Sui::ID::VersionedID;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::Transfer;
+    use sui::ID::VersionedID;
+    use sui::TxContext::{Self, TxContext};
 
     /// A shared counter.
     struct Counter has key {
@@ -54,7 +54,7 @@ module Basics::Counter {
 
 #[test_only]
 module Basics::CounterTest {
-    use Sui::TestScenario;
+    use sui::TestScenario;
     use Basics::Counter;
 
     #[test]

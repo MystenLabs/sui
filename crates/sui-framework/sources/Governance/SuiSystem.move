@@ -1,20 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::SuiSystem {
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, Coin, TreasuryCap};
-    use Sui::Delegation::{Self, Delegation};
-    use Sui::EpochRewardRecord::{Self, EpochRewardRecord};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::LockedCoin::{Self, LockedCoin};
-    use Sui::SUI::SUI;
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Validator::{Self, Validator};
-    use Sui::ValidatorSet::{Self, ValidatorSet};
+module sui::SuiSystem {
+    use sui::Balance::{Self, Balance};
+    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::Delegation::{Self, Delegation};
+    use sui::EpochRewardRecord::{Self, EpochRewardRecord};
+    use sui::ID::{Self, VersionedID};
+    use sui::LockedCoin::{Self, LockedCoin};
+    use sui::SUI::SUI;
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
+    use sui::Validator::{Self, Validator};
+    use sui::ValidatorSet::{Self, ValidatorSet};
 
-    friend Sui::Genesis;
+    friend sui::Genesis;
 
     /// A list of system config parameters.
     // TDOO: We will likely add more, a few potential ones:

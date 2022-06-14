@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Sui object identifiers
-module Sui::ID {
+module sui::ID {
     use std::bcs;
     use std::vector;
 
-    friend Sui::SuiSystem;
-    friend Sui::Transfer;
-    friend Sui::TxContext;
+    friend sui::SuiSystem;
+    friend sui::Transfer;
+    friend sui::TxContext;
 
     #[test_only]
-    friend Sui::TestScenario;
+    friend sui::TestScenario;
 
     /// Version of an object ID created by the current transaction.
     const INITIAL_VERSION: u64 = 0;

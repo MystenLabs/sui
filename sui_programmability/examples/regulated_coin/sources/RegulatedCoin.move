@@ -10,9 +10,9 @@
 ///
 /// Each of the methods of this module requires a Witness struct to be sent.
 module RC::RegulatedCoin {
-    use Sui::Balance::{Self, Balance};
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::ID::VersionedID;
+    use sui::Balance::{Self, Balance};
+    use sui::TxContext::{Self, TxContext};
+    use sui::ID::VersionedID;
 
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
     /// with all the other Coins and methods, as well as the `creator` field, which
@@ -91,11 +91,11 @@ module RC::RegulatedCoin {
 /// - has restricted transfers which can not be taken by anyone except the recipient
 module ABC::ABC {
     use RC::RegulatedCoin::{Self as RCoin, RegulatedCoin as RCoin};
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Balance::{Self, Balance};
-    use Sui::Coin::{Self, Coin, TreasuryCap};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
+    use sui::Balance::{Self, Balance};
+    use sui::Coin::{Self, Coin, TreasuryCap};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer;
     use std::vector;
 
     /// The ticker of ABC regulated token
@@ -286,8 +286,8 @@ module ABC::Tests {
     use ABC::ABC::{Self, ABC, Registry};
     use RC::RegulatedCoin::{Self as RCoin, RegulatedCoin as RCoin};
 
-    use Sui::Coin::{Coin, TreasuryCap};
-    use Sui::TestScenario::{Self, Scenario, next_tx, ctx};
+    use sui::Coin::{Coin, TreasuryCap};
+    use sui::TestScenario::{Self, Scenario, next_tx, ctx};
 
     // === Test handlers; this trick helps reusing scenarios ==
 

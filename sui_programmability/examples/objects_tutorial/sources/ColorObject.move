@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Tutorial::ColorObject {
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
 
     struct ColorObject has key {
         id: VersionedID,
@@ -74,9 +74,9 @@ module Tutorial::ColorObject {
 
 #[test_only]
 module Tutorial::ColorObjectTests {
-    use Sui::TestScenario;
+    use sui::TestScenario;
     use Tutorial::ColorObject::{Self, ColorObject};
-    use Sui::TxContext;
+    use sui::TxContext;
 
     // == Tests covered in Chapter 1 ==
 

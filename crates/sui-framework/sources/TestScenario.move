@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::TestScenario {
-    use Sui::ID::{Self, ID, VersionedID};
-    use Sui::TxContext::{Self, TxContext};
+module sui::TestScenario {
+    use sui::ID::{Self, ID, VersionedID};
+    use sui::TxContext::{Self, TxContext};
     use std::option::{Self, Option};
     use std::vector;
 

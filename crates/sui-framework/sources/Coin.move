@@ -1,11 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module Sui::Coin {
-    use Sui::Balance::{Self, Balance};
-    use Sui::ID::{Self, VersionedID};
-    use Sui::Transfer;
-    use Sui::TxContext::{Self, TxContext};
+module sui::Coin {
+    use sui::Balance::{Self, Balance};
+    use sui::ID::{Self, VersionedID};
+    use sui::Transfer;
+    use sui::TxContext::{Self, TxContext};
     use std::vector;
 
     /// A coin of type `T` worth `value`. Transferable and storable

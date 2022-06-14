@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Sui::MathTests {
-    use Sui::Math;
+module sui::MathTests {
+    use sui::Math;
 
     #[test]
     fun test_max() {
@@ -30,16 +30,16 @@ module Sui::MathTests {
 
     #[test]
     // This function tests whether the (square root)^2 equals the
-    // initial value OR whether it is equal to the nearest lower 
+    // initial value OR whether it is equal to the nearest lower
     // number that does.
     fun test_imperfect_sqrt() {
         let i = 1;
         let prev = 1;
         while (i <= 1000) {
-            let root = Math::sqrt(i);            
-            
+            let root = Math::sqrt(i);
+
             assert!(i == root * root || root == prev, 0);
-            
+
             prev = root;
             i = i + 1;
         }
