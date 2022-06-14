@@ -9,7 +9,7 @@
 /// could mutate the objects in the Bag.
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
-module sui::Bag {
+module sui::bag {
     use std::errors;
     use std::option::{Self, Option};
     use std::vector::Self;

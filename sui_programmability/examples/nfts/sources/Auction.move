@@ -34,7 +34,7 @@
 ///   auction
 module NFTs::Auction {
     use sui::Coin::{Self, Coin};
-    use sui::Balance::Balance;
+    use sui::balance::Balance;
     use sui::SUI::SUI;
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;

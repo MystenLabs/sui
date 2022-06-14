@@ -9,7 +9,7 @@
 module FungibleTokens::BASKET {
     use FungibleTokens::MANAGED::MANAGED;
     use sui::Coin::{Self, Coin, TreasuryCap};
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::ID::VersionedID;
     use sui::SUI::SUI;
     use sui::Transfer;
@@ -39,8 +39,8 @@ module FungibleTokens::BASKET {
         Transfer::share_object(Reserve {
             id: TxContext::new_id(ctx),
             treasury_cap,
-            sui: Balance::zero<SUI>(),
-            managed: Balance::zero<MANAGED>(),
+            sui: balance::zero<SUI>(),
+            managed: balance::zero<MANAGED>(),
         })
     }
 
@@ -78,12 +78,12 @@ module FungibleTokens::BASKET {
 
     /// Return the number of SUI in the reserve
     public fun sui_supply(reserve: &Reserve): u64 {
-        Balance::value(&reserve.sui)
+        balance::value(&reserve.sui)
     }
 
     /// Return the number of MANAGED in the reserve
     public fun managed_supply(reserve: &Reserve): u64 {
-        Balance::value(&reserve.managed)
+        balance::value(&reserve.managed)
     }
 
     #[test_only]

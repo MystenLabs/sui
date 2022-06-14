@@ -6,7 +6,7 @@ module sui::Validator {
     use std::option::{Self, Option};
     use std::vector;
 
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::Coin;
     use sui::SUI::SUI;
     use sui::Transfer;
@@ -83,7 +83,7 @@ module sui::Validator {
                 pubkey_bytes,
                 name,
                 net_address,
-                next_epoch_stake: Balance::value(&stake),
+                next_epoch_stake: balance::value(&stake),
             },
             stake,
             delegation: 0,
@@ -115,7 +115,7 @@ module sui::Validator {
         if (option::is_some(&pending_stake)) {
             // pending_stake can be non-empty as it can contain the gas reward from the last epoch.
             let pending_stake_balance = option::extract(&mut pending_stake);
-            Balance::join(&mut stake, pending_stake_balance);
+            balance::join(&mut stake, pending_stake_balance);
         };
         option::destroy_none(pending_stake);
         Transfer::transfer(Coin::from_balance(stake, ctx), metadata.sui_address);
@@ -127,10 +127,10 @@ module sui::Validator {
         self: &mut Validator,
         new_stake: Balance<SUI>,
     ) {
-        let new_stake_value = Balance::value(&new_stake);
+        let new_stake_value = balance::value(&new_stake);
         let pending_stake = if (option::is_some(&self.pending_stake)) {
             let pending_stake = option::extract(&mut self.pending_stake);
-            Balance::join(&mut pending_stake, new_stake);
+            balance::join(&mut pending_stake, new_stake);
             pending_stake
         } else {
             new_stake
@@ -157,14 +157,14 @@ module sui::Validator {
     public(friend) fun adjust_stake(self: &mut Validator, ctx: &mut TxContext) {
         if (option::is_some(&self.pending_stake)) {
             let pending_stake = option::extract(&mut self.pending_stake);
-            Balance::join(&mut self.stake, pending_stake);
+            balance::join(&mut self.stake, pending_stake);
         };
         if (self.pending_withdraw > 0) {
             let coin = Coin::withdraw(&mut self.stake, self.pending_withdraw, ctx);
             Coin::transfer(coin, self.metadata.sui_address);
             self.pending_withdraw = 0;
         };
-        assert!(Balance::value(&self.stake) == self.metadata.next_epoch_stake, 0);
+        assert!(balance::value(&self.stake) == self.metadata.next_epoch_stake, 0);
 
         self.delegation = self.delegation + self.pending_delegation - self.pending_delegation_withdraw;
         self.pending_delegation = 0;
@@ -195,7 +195,7 @@ module sui::Validator {
     }
 
     public fun stake_amount(self: &Validator): u64 {
-        Balance::value(&self.stake)
+        balance::value(&self.stake)
     }
 
     public fun delegate_amount(self: &Validator): u64 {
@@ -208,7 +208,7 @@ module sui::Validator {
 
     public fun pending_stake_amount(self: &Validator): u64 {
         if (option::is_some(&self.pending_stake)) {
-            Balance::value(option::borrow(&self.pending_stake))
+            balance::value(option::borrow(&self.pending_stake))
         } else {
             0
         }

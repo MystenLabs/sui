@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::CollectionTests {
-    use sui::Bag::{Self, Bag};
+    use sui::bag::{Self, Bag};
     use sui::Collection::{Self, Collection};
     use sui::ID::{Self, VersionedID};
     use sui::TestScenario;

@@ -9,7 +9,7 @@ module NFTs::AuctionLib {
     use std::option::{Self, Option};
 
     use sui::Coin;
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::SUI::SUI;
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
@@ -82,7 +82,7 @@ module NFTs::AuctionLib {
             option::fill(&mut auction.bid_data, bid_data);
         } else {
             let prev_bid_data = option::borrow(&auction.bid_data);
-            if (Balance::value(&funds) > Balance::value(&prev_bid_data.funds)) {
+            if (balance::value(&funds) > balance::value(&prev_bid_data.funds)) {
                 // a bid higher than currently highest bid received
                 let new_bid_data = BidData {
                     funds,

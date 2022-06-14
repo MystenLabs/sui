@@ -11,7 +11,7 @@
 module Games::SeaHero {
     use Games::Hero::{Self, Hero};
 
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::ID::{Self, VersionedID};
     use sui::Coin::{Self, TreasuryCap};
     use sui::Transfer;
@@ -81,7 +81,7 @@ module Games::SeaHero {
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
-            Hero::hero_strength(hero) >= Balance::value(&reward),
+            Hero::hero_strength(hero) >= balance::value(&reward),
             EHERO_NOT_STRONG_ENOUGH
         );
 
@@ -124,6 +124,6 @@ module Games::SeaHero {
 
     /// Reward a hero will reap from slaying this monster
     public fun monster_reward(monster: &SeaMonster): u64 {
-        Balance::value(&monster.reward)
+        balance::value(&monster.reward)
     }
 }

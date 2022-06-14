@@ -3,7 +3,7 @@
 
 module sui::Delegation {
     use std::option::{Self, Option};
-    use sui::Balance::Balance;
+    use sui::balance::Balance;
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, VersionedID};
     use sui::LockedCoin::{Self, LockedCoin};

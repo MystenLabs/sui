@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Tutorial::TrustedSwap {
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, VersionedID};
     use sui::SUI::SUI;
@@ -78,7 +78,7 @@ module Tutorial::TrustedSwap {
 
         // Service provider takes the fee.
         let service_address = TxContext::sender(ctx);
-        Balance::join(&mut fee1, fee2);
+        balance::join(&mut fee1, fee2);
         Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
 
         // Effectively delete the wrapper objects.

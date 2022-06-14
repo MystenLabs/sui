@@ -10,7 +10,7 @@
 ///
 /// Each of the methods of this module requires a Witness struct to be sent.
 module RC::RegulatedCoin {
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::TxContext::{Self, TxContext};
     use sui::ID::VersionedID;
 
@@ -25,7 +25,7 @@ module RC::RegulatedCoin {
 
     /// Get the `RegulatedCoin.balance.value` field;
     public fun value<T>(c: &RegulatedCoin<T>): u64 {
-        Balance::value(&c.balance)
+        balance::value(&c.balance)
     }
 
     /// Get the `RegulatedCoin.creator` field;
@@ -47,7 +47,7 @@ module RC::RegulatedCoin {
 
     /// Author of the currency can restrict who is allowed to create new balances;
     public fun zero<T: drop>(_: T, creator: address, ctx: &mut TxContext): RegulatedCoin<T> {
-        RegulatedCoin { id: TxContext::new_id(ctx), balance: Balance::zero(), creator }
+        RegulatedCoin { id: TxContext::new_id(ctx), balance: balance::zero(), creator }
     }
 
     /// Build a transferable `RegulatedCoin` from a `Balance`;
@@ -68,7 +68,7 @@ module RC::RegulatedCoin {
 
     /// Join Balances of a `RegulatedCoin` c1 and `RegulatedCoin` c2.
     public fun join<T: drop>(witness: T, c1: &mut RegulatedCoin<T>, c2: RegulatedCoin<T>) {
-        Balance::join(&mut c1.balance, into_balance(witness, c2))
+        balance::join(&mut c1.balance, into_balance(witness, c2))
     }
 
     /// Subtract `RegulatedCoin` with `value` from `RegulatedCoin`.
@@ -79,7 +79,7 @@ module RC::RegulatedCoin {
     public fun split<T: drop>(
         witness: T, c1: &mut RegulatedCoin<T>, creator: address, value: u64, ctx: &mut TxContext
     ): RegulatedCoin<T> {
-        let balance = Balance::split(&mut c1.balance, value);
+        let balance = balance::split(&mut c1.balance, value);
         from_balance(witness, balance, creator, ctx)
     }
 }
@@ -92,7 +92,7 @@ module RC::RegulatedCoin {
 module ABC::ABC {
     use RC::RegulatedCoin::{Self as RCoin, RegulatedCoin as RCoin};
     use sui::TxContext::{Self, TxContext};
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin, TreasuryCap};
     use sui::ID::{Self, VersionedID};
     use sui::Transfer;
@@ -161,7 +161,7 @@ module ABC::ABC {
 
     /// Mint more ABC. Requires TreasuryCap for authorization, so can only be done by admins.
     public entry fun mint(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, _: &mut TxContext) {
-        Balance::join(borrow_mut(owned), Coin::mint_balance(value, treasury))
+        balance::join(borrow_mut(owned), Coin::mint_balance(value, treasury))
     }
 
     /// Burn `value` amount of `RCoin<ABC>`. Requires TreasuryCap for authorization, so can only be done by admins.
@@ -193,7 +193,7 @@ module ABC::ABC {
         Transfer::transfer(Transfer {
             to,
             id: TxContext::new_id(ctx),
-            balance: Balance::split(borrow_mut(coin), value),
+            balance: balance::split(borrow_mut(coin), value),
         }, to)
     }
 
@@ -208,7 +208,7 @@ module ABC::ABC {
         assert!(RCoin::creator(coin) == to, ENotOwner);
         assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
 
-        Balance::join(borrow_mut(coin), balance);
+        balance::join(borrow_mut(coin), balance);
         ID::delete(id)
     }
 
@@ -245,9 +245,9 @@ module ABC::ABC {
         assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
         // Update swapped amount as in `swap_regulated`.
-        r.swapped_amount = r.swapped_amount - Balance::value(&balance);
+        r.swapped_amount = r.swapped_amount - balance::value(&balance);
 
-        Balance::join(borrow_mut(rc_coin), balance);
+        balance::join(borrow_mut(rc_coin), balance);
     }
 
     // === Private implementations accessors and type morphing ===

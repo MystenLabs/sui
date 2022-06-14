@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::ValidatorSetTests {
-    use sui::Balance;
+    use sui::balance;
     use sui::Coin;
     use sui::SUI::SUI;
     use sui::TxContext::{Self, TxContext};
@@ -58,7 +58,7 @@ module sui::ValidatorSetTests {
             validator4,
         );
 
-        let reward = Balance::zero<SUI>();
+        let reward = balance::zero<SUI>();
         ValidatorSet::advance_epoch(&mut validator_set, &mut reward, &mut ctx1);
         // The total stake and quorum should reflect 4 validators.
         assert!(ValidatorSet::total_validator_candidate_count(&validator_set) == 4, 0);
@@ -76,7 +76,7 @@ module sui::ValidatorSetTests {
         assert!(ValidatorSet::validator_stake(&validator_set) == 900, 0);
 
         ValidatorSet::destroy_for_testing(validator_set, &mut ctx1);
-        Balance::destroy_zero(reward);
+        balance::destroy_zero(reward);
     }
 
     fun create_validator(addr: address, hint: u8): (TxContext, Validator) {

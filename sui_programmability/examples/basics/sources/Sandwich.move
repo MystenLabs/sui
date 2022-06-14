@@ -4,7 +4,7 @@
 /// Example of objects that can be combined to create
 /// new objects
 module Basics::Sandwich {
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, VersionedID};
     use sui::SUI::SUI;
@@ -48,7 +48,7 @@ module Basics::Sandwich {
     fun init(ctx: &mut TxContext) {
         Transfer::share_object(Grocery {
             id: TxContext::new_id(ctx),
-            profits: Balance::zero<SUI>()
+            profits: balance::zero<SUI>()
         });
 
         Transfer::transfer(GroceryOwnerCapability {
@@ -63,8 +63,8 @@ module Basics::Sandwich {
         ctx: &mut TxContext
     ) {
         let b = Coin::into_balance(c);
-        assert!(Balance::value(&b) == HAM_PRICE, EInsufficientFunds);
-        Balance::join(&mut grocery.profits, b);
+        assert!(balance::value(&b) == HAM_PRICE, EInsufficientFunds);
+        balance::join(&mut grocery.profits, b);
         Transfer::transfer(Ham { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
@@ -75,8 +75,8 @@ module Basics::Sandwich {
         ctx: &mut TxContext
     ) {
         let b = Coin::into_balance(c);
-        assert!(Balance::value(&b) == BREAD_PRICE, EInsufficientFunds);
-        Balance::join(&mut grocery.profits, b);
+        assert!(balance::value(&b) == BREAD_PRICE, EInsufficientFunds);
+        balance::join(&mut grocery.profits, b);
         Transfer::transfer(Bread { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
@@ -93,12 +93,12 @@ module Basics::Sandwich {
 
     /// See the profits of a grocery
     public fun profits(grocery: &Grocery): u64 {
-        Balance::value(&grocery.profits)
+        balance::value(&grocery.profits)
     }
 
     /// Owner of the grocery can collect profits by passing his capability
     public entry fun collect_profits(_cap: &GroceryOwnerCapability, grocery: &mut Grocery, ctx: &mut TxContext) {
-        let amount = Balance::value(&grocery.profits);
+        let amount = balance::value(&grocery.profits);
 
         assert!(amount > 0, ENoProfits);
 

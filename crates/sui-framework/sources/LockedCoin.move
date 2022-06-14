@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::LockedCoin {
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, VersionedID};
     use sui::Transfer;
@@ -37,7 +37,7 @@ module sui::LockedCoin {
 
     /// Public getter for the locked coin's value
     public fun value<T>(self: &LockedCoin<T>): u64 {
-        Balance::value(&self.balance)
+        balance::value(&self.balance)
     }
 
     /// Lock a coin up until `locked_until_epoch`. The input Coin<T> is deleted and a LockedCoin<T>

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::SuiSystem {
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin, TreasuryCap};
     use sui::Delegation::{Self, Delegation};
     use sui::EpochRewardRecord::{Self, EpochRewardRecord};
@@ -70,7 +70,7 @@ module sui::SuiSystem {
                 min_validator_stake,
                 max_validator_candidate_count,
             },
-            delegation_reward: Balance::zero(),
+            delegation_reward: balance::zero(),
         };
         Transfer::share_object(state);
     }
@@ -213,7 +213,7 @@ module sui::SuiSystem {
             epoch_reward_record,
             Delegation::delegate_amount(delegation),
         );
-        let reward = Balance::split(&mut self.delegation_reward, reward_amount);
+        let reward = balance::split(&mut self.delegation_reward, reward_amount);
         Delegation::claim_reward(delegation, reward, ctx);
     }
 
@@ -233,18 +233,18 @@ module sui::SuiSystem {
         // Validator will make a special system call with sender set as 0x0.
         assert!(TxContext::sender(ctx) == @0x0, 0);
 
-        let storage_reward = Balance::create_with_value(storage_charge);
-        let computation_reward = Balance::create_with_value(computation_charge);
+        let storage_reward = balance::create_with_value(storage_charge);
+        let computation_reward = balance::create_with_value(computation_charge);
 
         let delegation_stake = ValidatorSet::delegation_stake(&self.validators);
         let validator_stake = ValidatorSet::validator_stake(&self.validators);
-        let storage_fund = Balance::value(&self.storage_fund);
+        let storage_fund = balance::value(&self.storage_fund);
         let total_stake = delegation_stake + validator_stake + storage_fund;
 
         let delegator_reward_amount = delegation_stake * computation_charge / total_stake;
-        let delegator_reward = Balance::split(&mut computation_reward, delegator_reward_amount);
-        Balance::join(&mut self.storage_fund, storage_reward);
-        Balance::join(&mut self.delegation_reward, delegator_reward);
+        let delegator_reward = balance::split(&mut computation_reward, delegator_reward_amount);
+        balance::join(&mut self.storage_fund, storage_reward);
+        balance::join(&mut self.delegation_reward, delegator_reward);
 
         ValidatorSet::create_epoch_records(
             &self.validators,
@@ -264,7 +264,7 @@ module sui::SuiSystem {
         );
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `computation_reward`. All of these go to the storage fund.
-        Balance::join(&mut self.storage_fund, computation_reward)
+        balance::join(&mut self.storage_fund, computation_reward)
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,

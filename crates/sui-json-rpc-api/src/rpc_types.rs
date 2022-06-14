@@ -716,7 +716,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 }
             }
         }
-        "0x2::Balance::Balance" => {
+        "0x2::balance::Balance" => {
             if let SuiMoveValue::Number(value) = fields["value"].clone() {
                 return Some(SuiMoveValue::Number(value));
             }

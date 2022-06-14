@@ -5,7 +5,7 @@ module sui::ValidatorSet {
     use std::option::{Self, Option};
     use std::vector;
 
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::EpochRewardRecord;
     use sui::SUI::SUI;
     use sui::TxContext::{Self, TxContext};
@@ -195,7 +195,7 @@ module sui::ValidatorSet {
         let rewards = compute_reward_distribution(
             &self.active_validators,
             self.validator_stake,
-            Balance::value(computation_reward),
+            balance::value(computation_reward),
         );
 
         // `adjust_stake` must be called before `distribute_reward`, because reward distribution goes to
@@ -375,7 +375,7 @@ module sui::ValidatorSet {
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
             let reward_amount = *vector::borrow(rewards, i);
-            let reward = Balance::split(reward, reward_amount);
+            let reward = balance::split(reward, reward_amount);
             // Because reward goes to pending stake, it's the same as calling `request_add_stake`.
             Validator::request_add_stake(validator, reward);
             i = i + 1;

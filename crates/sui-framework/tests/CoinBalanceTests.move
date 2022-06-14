@@ -5,7 +5,7 @@
 module sui::TestCoin {
     use sui::TestScenario::{Self, ctx};
     use sui::Coin;
-    use sui::Balance;
+    use sui::balance;
     use sui::SUI::SUI;
     use sui::LockedCoin::LockedCoin;
     use sui::TxContext;
@@ -16,23 +16,23 @@ module sui::TestCoin {
     fun type_morphing() {
         let test = &mut TestScenario::begin(&@0x1);
 
-        let balance = Balance::zero<SUI>();
+        let balance = balance::zero<SUI>();
         let coin = Coin::from_balance(balance, ctx(test));
         let balance = Coin::into_balance(coin);
 
-        Balance::destroy_zero(balance);
+        balance::destroy_zero(balance);
 
         let coin = Coin::mint_for_testing<SUI>(100, ctx(test));
         let balance_mut = Coin::balance_mut(&mut coin);
-        let sub_balance = Balance::split(balance_mut, 50);
+        let sub_balance = balance::split(balance_mut, 50);
 
-        assert!(Balance::value(&sub_balance) == 50, 0);
+        assert!(balance::value(&sub_balance) == 50, 0);
         assert!(Coin::value(&coin) == 50, 0);
 
         let balance = Coin::into_balance(coin);
-        Balance::join(&mut balance, sub_balance);
+        balance::join(&mut balance, sub_balance);
 
-        assert!(Balance::value(&balance) == 100, 0);
+        assert!(balance::value(&balance) == 100, 0);
 
         let coin = Coin::from_balance(balance, ctx(test));
         Coin::keep(coin, ctx(test));

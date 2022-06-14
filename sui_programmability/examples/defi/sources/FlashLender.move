@@ -3,7 +3,7 @@
 
 /// A flash loan that works for any Coin type
 module DeFi::FlashLender {
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
@@ -93,7 +93,7 @@ module DeFi::FlashLender {
         self: &mut FlashLender<T>, amount: u64, ctx: &mut TxContext
     ): (Coin<T>, Receipt<T>) {
         let to_lend = &mut self.to_lend;
-        assert!(Balance::value(to_lend) >= amount, ELoanTooLarge);
+        assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
         let loan = Coin::withdraw(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
         let receipt = Receipt { flash_lender_id: *ID::id(self), repay_amount };
@@ -124,7 +124,7 @@ module DeFi::FlashLender {
         check_admin(self, admin_cap);
 
         let to_lend = &mut self.to_lend;
-        assert!(Balance::value(to_lend) >= amount, EWithdrawTooLarge);
+        assert!(balance::value(to_lend) >= amount, EWithdrawTooLarge);
         Coin::withdraw(to_lend, amount, ctx)
     }
 
@@ -160,7 +160,7 @@ module DeFi::FlashLender {
 
     /// Return the maximum amount available for borrowing
     public fun max_loan<T>(self: &FlashLender<T>): u64 {
-        Balance::value(&self.to_lend)
+        balance::value(&self.to_lend)
     }
 
     /// Return the amount that the holder of `self` must repay

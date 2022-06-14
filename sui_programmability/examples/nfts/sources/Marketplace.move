@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module NFTs::Marketplace {
-    use sui::Bag::{Self, Bag};
+    use sui::bag::{Self, Bag};
     use sui::TxContext::{Self, TxContext};
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer::{Self, ChildRef};
@@ -125,7 +125,7 @@ module NFTs::Marketplace {
 #[test_only]
 module NFTs::MarketplaceTests {
     use sui::ID::{Self, VersionedID};
-    use sui::Bag::Bag;
+    use sui::bag::Bag;
     use sui::Transfer;
     use sui::Coin::{Self, Coin};
     use sui::SUI::SUI;

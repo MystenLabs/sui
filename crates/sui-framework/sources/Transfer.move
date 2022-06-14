@@ -6,7 +6,7 @@ module sui::Transfer {
     use sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
-    friend sui::Bag;
+    friend sui::bag;
     // To allow access to is_child_unsafe.
     friend sui::Collection;
 

@@ -5,7 +5,7 @@
 /// Allows separation of the transferable `Coin` type and the storable
 /// `Balance` eliminating the need to create new IDs for each application
 /// that needs to hold coins.
-module sui::Balance {
+module sui::balance {
     friend sui::Coin;
     friend sui::SuiSystem;
 
@@ -78,31 +78,31 @@ module sui::Balance {
 }
 
 #[test_only]
-module sui::BalanceTests {
-    use sui::Balance;
+module sui::balanceTests {
+    use sui::balance;
     use sui::SUI::SUI;
 
     #[test]
     fun test_balance() {
-        let balance = Balance::zero<SUI>();
-        let another = Balance::create_for_testing(1000);
+        let balance = balance::zero<SUI>();
+        let another = balance::create_for_testing(1000);
 
-        Balance::join(&mut balance, another);
+        balance::join(&mut balance, another);
 
-        assert!(Balance::value(&balance) == 1000, 0);
+        assert!(balance::value(&balance) == 1000, 0);
 
-        let balance1 = Balance::split(&mut balance, 333);
-        let balance2 = Balance::split(&mut balance, 333);
-        let balance3 = Balance::split(&mut balance, 334);
+        let balance1 = balance::split(&mut balance, 333);
+        let balance2 = balance::split(&mut balance, 333);
+        let balance3 = balance::split(&mut balance, 334);
 
-        Balance::destroy_zero(balance);
+        balance::destroy_zero(balance);
 
-        assert!(Balance::value(&balance1) == 333, 1);
-        assert!(Balance::value(&balance2) == 333, 2);
-        assert!(Balance::value(&balance3) == 334, 3);
+        assert!(balance::value(&balance1) == 333, 1);
+        assert!(balance::value(&balance2) == 333, 2);
+        assert!(balance::value(&balance3) == 334, 3);
 
-        Balance::destroy_for_testing(balance1);
-        Balance::destroy_for_testing(balance2);
-        Balance::destroy_for_testing(balance3);
+        balance::destroy_for_testing(balance1);
+        balance::destroy_for_testing(balance2);
+        balance::destroy_for_testing(balance3);
     }
 }

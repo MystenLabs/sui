@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::Coin {
-    use sui::Balance::{Self, Balance};
+    use sui::balance::{Self, Balance};
     use sui::ID::{Self, VersionedID};
     use sui::Transfer;
     use sui::TxContext::{Self, TxContext};
@@ -53,13 +53,13 @@ module sui::Coin {
     ): Coin<T> {
         Coin {
             id: TxContext::new_id(ctx),
-            balance: Balance::split(balance, value)
+            balance: balance::split(balance, value)
         }
     }
 
     /// Deposit a `Coin` to the `Balance`
     public fun deposit<T>(balance: &mut Balance<T>, coin: Coin<T>) {
-        Balance::join(balance, into_balance(coin));
+        balance::join(balance, into_balance(coin));
     }
 
     // === Functionality for Coin<T> holders ===
@@ -79,7 +79,7 @@ module sui::Coin {
     public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
         ID::delete(id);
-        Balance::join(&mut self.balance, balance);
+        balance::join(&mut self.balance, balance);
     }
 
     /// Join everything in `coins` with `self`
@@ -97,14 +97,14 @@ module sui::Coin {
 
     /// Public getter for the coin's value
     public fun value<T>(self: &Coin<T>): u64 {
-        Balance::value(&self.balance)
+        balance::value(&self.balance)
     }
 
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
         let Coin { id, balance } = c;
         ID::delete(id);
-        Balance::destroy_zero(balance);
+        balance::destroy_zero(balance);
     }
 
     // === Registering new coin types and managing the coin supply ===
@@ -112,7 +112,7 @@ module sui::Coin {
     /// Make any Coin with a zero value. Useful for placeholding
     /// bids/payments or preemptively making empty balances.
     public fun zero<T>(ctx: &mut TxContext): Coin<T> {
-        Coin { id: TxContext::new_id(ctx), balance: Balance::zero() }
+        Coin { id: TxContext::new_id(ctx), balance: balance::zero() }
     }
 
     /// Create a new currency type `T` as and return the `TreasuryCap`
@@ -146,14 +146,14 @@ module sui::Coin {
         value: u64, cap: &mut TreasuryCap<T>
     ): Balance<T> {
         cap.total_supply = cap.total_supply + value;
-        Balance::create_with_value(value)
+        balance::create_with_value(value)
     }
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
     public fun burn<T>(c: Coin<T>, cap: &mut TreasuryCap<T>) {
         let Coin { id, balance } = c;
-        let value = Balance::destroy<T>(balance);
+        let value = balance::destroy<T>(balance);
         ID::delete(id);
         cap.total_supply = cap.total_supply - value
     }
@@ -199,7 +199,7 @@ module sui::Coin {
     #[test_only]
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
-        Coin { id: TxContext::new_id(ctx), balance: Balance::create_with_value(value) }
+        Coin { id: TxContext::new_id(ctx), balance: balance::create_with_value(value) }
     }
 
     #[test_only]
@@ -207,6 +207,6 @@ module sui::Coin {
     public fun destroy_for_testing<T>(self: Coin<T>): u64 {
         let Coin { id, balance } = self;
         ID::delete(id);
-        Balance::destroy_for_testing(balance)
+        balance::destroy_for_testing(balance)
     }
 }
