@@ -149,6 +149,10 @@
       {
         "label": "Employ SuiJSON Format",
         "fileName": "build/sui-json"
+      },
+      {
+        "label": "Run Full Node",
+        "fileName": "build/fullnode"
       }
     ],
     "explore": [
