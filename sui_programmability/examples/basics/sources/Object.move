@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// An example of a custom object with comments explaining the relevant bits
-module Basics::Object {
+module basics::object {
     use sui::id::VersionedID;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};

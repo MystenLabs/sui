@@ -6,7 +6,7 @@
 /// This module allows any content to be locked inside a 'virtual chest' and later
 /// be accessed by putting a 'key' into the 'lock'. Lock is shared and is visible
 /// and discoverable by the key owner.
-module Basics::Lock {
+module basics::lock {
     use sui::id::{Self, ID, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
@@ -94,12 +94,12 @@ module Basics::Lock {
 }
 
 #[test_only]
-module Basics::LockTest {
+module basics::lockTest {
     use sui::id::VersionedID;
     use sui::TestScenario;
     use sui::tx_context;
     use sui::Transfer;
-    use Basics::Lock::{Self, Lock, Key};
+    use basics::lock::{Self, Lock, Key};
 
     /// Custom structure which we will store inside a Lock.
     struct Treasure has store, key {
@@ -119,7 +119,7 @@ module Basics::LockTest {
             let ctx = TestScenario::ctx(scenario);
             let id = tx_context::new_id(ctx);
 
-            Lock::create(Treasure { id }, ctx);
+            lock::create(Treasure { id }, ctx);
         };
 
         // Now User1 owns a key from the lock. He decides to send this
@@ -139,7 +139,7 @@ module Basics::LockTest {
             let key = TestScenario::take_owned<Key<Treasure>>(scenario);
             let ctx = TestScenario::ctx(scenario);
 
-            Lock::take<Treasure>(lock, &key, ctx);
+            lock::take<Treasure>(lock, &key, ctx);
 
             TestScenario::return_shared(scenario, lock_wrapper);
             TestScenario::return_owned(scenario, key);

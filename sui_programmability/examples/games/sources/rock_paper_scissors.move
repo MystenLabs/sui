@@ -25,7 +25,7 @@
 // - If player never revealed the secret
 // - If game owner never took or revealed the results (incentives?)
 
-module Games::RockPaperScissors {
+module games::rock_paper_scissors {
     use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
     use sui::Transfer::{Self};
@@ -58,7 +58,7 @@ module Games::RockPaperScissors {
         id: VersionedID
     }
 
-    /// The main resource of the RockPaperScissors module. Contains all the
+    /// The main resource of the rock_paper_scissors module. Contains all the
     /// information about the game state submitted by both players. By default
     /// contains empty values and fills as the game progresses.
     /// Being destroyed in the end, once [`select_winner`] is called and the game

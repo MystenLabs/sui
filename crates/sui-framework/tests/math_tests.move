@@ -2,28 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::MathTests {
-    use sui::Math;
+module sui::mathTests {
+    use sui::math;
 
     #[test]
     fun test_max() {
-        assert!(Math::max(10, 100) == 100, 1);
-        assert!(Math::max(100, 10) == 100, 2);
-        assert!(Math::max(0, 0) == 0, 3);
+        assert!(math::max(10, 100) == 100, 1);
+        assert!(math::max(100, 10) == 100, 2);
+        assert!(math::max(0, 0) == 0, 3);
     }
 
     #[test]
     fun test_min() {
-        assert!(Math::min(10, 100) == 10, 1);
-        assert!(Math::min(100, 10) == 10, 2);
-        assert!(Math::min(0, 0) == 0, 3);
+        assert!(math::min(10, 100) == 10, 1);
+        assert!(math::min(100, 10) == 10, 2);
+        assert!(math::min(0, 0) == 0, 3);
     }
 
     #[test]
     fun test_perfect_sqrt() {
         let i = 0;
         while (i < 1000) {
-            assert!(Math::sqrt(i * i) == i, 1);
+            assert!(math::sqrt(i * i) == i, 1);
             i = i + 1;
         }
     }
@@ -36,7 +36,7 @@ module sui::MathTests {
         let i = 1;
         let prev = 1;
         while (i <= 1000) {
-            let root = Math::sqrt(i);
+            let root = math::sqrt(i);
 
             assert!(i == root * root || root == prev, 0);
 
@@ -48,6 +48,6 @@ module sui::MathTests {
     #[test]
     fun test_sqrt_big_numbers() {
         let u64_max = 18446744073709551615;
-        assert!(4294967295 == Math::sqrt(u64_max), 0)
+        assert!(4294967295 == math::sqrt(u64_max), 0)
     }
 }

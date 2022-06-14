@@ -7,7 +7,7 @@ module sui::locked_coin {
     use sui::id::{Self, VersionedID};
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::EpochTimeLock::{Self, EpochTimeLock};
+    use sui::epoch_time_lock::{Self, EpochTimeLock};
 
     friend sui::delegation;
 
@@ -47,7 +47,7 @@ module sui::locked_coin {
         coin: Coin<T>, recipient: address, locked_until_epoch: u64, ctx: &mut TxContext
     ) {
         let balance = Coin::into_balance(coin);
-        new_from_balance(balance, EpochTimeLock::new(locked_until_epoch, ctx), recipient, ctx);
+        new_from_balance(balance, epoch_time_lock::new(locked_until_epoch, ctx), recipient, ctx);
     }
 
     /// Unlock a locked coin. The function aborts if the current epoch is less than the `locked_until_epoch`
@@ -56,7 +56,7 @@ module sui::locked_coin {
     public entry fun unlock_coin<T>(locked_coin: LockedCoin<T>, ctx: &mut TxContext) {
         let LockedCoin { id, balance, locked_until_epoch } = locked_coin;
         id::delete(id);
-        EpochTimeLock::destroy(locked_until_epoch, ctx);
+        epoch_time_lock::destroy(locked_until_epoch, ctx);
         let coin = Coin::from_balance(balance, ctx);
         Transfer::transfer(coin, tx_context::sender(ctx));
     }

@@ -535,7 +535,7 @@ Here is example `json` output:
         "fields": {
           "value": 99126
         },
-        "type": "0x2::Balance::Balance<0x2::SUI::SUI>"
+        "type": "0x2::balance::Balance<0x2::SUI::SUI>"
       },
       "id": {
         "fields": {
@@ -643,7 +643,7 @@ $ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
 
 ## Creating example NFTs
 
-You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/DevNetNFT.move#L16) on Sui using the following command:
+You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/devnet_nft.move#L16) on Sui using the following command:
 
 ```shell
 $ wallet create-example-nft
@@ -658,10 +658,10 @@ Owner: AddressOwner(k#66af3898e7558b79e115ab61184a958497d1905a)
 Version: 1
 ID: 0x70874f1abd0a9a0126726a626ff48374f7b2d9c6
 Readonly: false
-Type: 0x2::DevNetNFT::DevNetNFT
+Type: 0x2::devnet_nft::DevNetNFT
 ```
 
-The command will invoke the `mint` function in the `DevNetNFT` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
+The command will invoke the `mint` function in the `devnet_nft` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
 
 
 `create-example-nft` command usage:

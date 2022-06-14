@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::EpochTimeLock {
+module sui::epoch_time_lock {
     use sui::tx_context::{Self, TxContext};
 
     /// The epoch passed into the creation of a lock has already passed.

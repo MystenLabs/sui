@@ -6,7 +6,7 @@
 /// - anyone can create and share a counter
 /// - everyone can increment a counter by 1
 /// - the owner of the counter can reset it to any value
-module Basics::Counter {
+module basics::counter {
     use sui::Transfer;
     use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
@@ -53,9 +53,9 @@ module Basics::Counter {
 }
 
 #[test_only]
-module Basics::CounterTest {
+module basics::counter_test {
     use sui::TestScenario;
-    use Basics::Counter;
+    use basics::counter;
 
     #[test]
     fun test_counter() {
@@ -66,47 +66,47 @@ module Basics::CounterTest {
 
         TestScenario::next_tx(scenario, &owner);
         {
-            Counter::create(TestScenario::ctx(scenario));
+            counter::create(TestScenario::ctx(scenario));
         };
 
         TestScenario::next_tx(scenario, &user1);
         {
-            let counter_wrapper = TestScenario::take_shared<Counter::Counter>(scenario);
+            let counter_wrapper = TestScenario::take_shared<counter::Counter>(scenario);
             let counter = TestScenario::borrow_mut(&mut counter_wrapper);
 
-            assert!(Counter::owner(counter) == owner, 0);
-            assert!(Counter::value(counter) == 0, 1);
+            assert!(counter::owner(counter) == owner, 0);
+            assert!(counter::value(counter) == 0, 1);
 
-            Counter::increment(counter);
-            Counter::increment(counter);
-            Counter::increment(counter);
+            counter::increment(counter);
+            counter::increment(counter);
+            counter::increment(counter);
             TestScenario::return_shared(scenario, counter_wrapper);
         };
 
         TestScenario::next_tx(scenario, &owner);
         {
-            let counter_wrapper = TestScenario::take_shared<Counter::Counter>(scenario);
+            let counter_wrapper = TestScenario::take_shared<counter::Counter>(scenario);
             let counter = TestScenario::borrow_mut(&mut counter_wrapper);
 
-            assert!(Counter::owner(counter) == owner, 0);
-            assert!(Counter::value(counter) == 3, 1);
+            assert!(counter::owner(counter) == owner, 0);
+            assert!(counter::value(counter) == 3, 1);
 
-            Counter::set_value(counter, 100, TestScenario::ctx(scenario));
+            counter::set_value(counter, 100, TestScenario::ctx(scenario));
 
             TestScenario::return_shared(scenario, counter_wrapper);
         };
 
         TestScenario::next_tx(scenario, &user1);
         {
-            let counter_wrapper = TestScenario::take_shared<Counter::Counter>(scenario);
+            let counter_wrapper = TestScenario::take_shared<counter::Counter>(scenario);
             let counter = TestScenario::borrow_mut(&mut counter_wrapper);
 
-            assert!(Counter::owner(counter) == owner, 0);
-            assert!(Counter::value(counter) == 100, 1);
+            assert!(counter::owner(counter) == owner, 0);
+            assert!(counter::value(counter) == 100, 1);
 
-            Counter::increment(counter);
+            counter::increment(counter);
 
-            assert!(Counter::value(counter) == 101, 2);
+            assert!(counter::value(counter) == 101, 2);
 
             TestScenario::return_shared(scenario, counter_wrapper);
         };

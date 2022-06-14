@@ -404,7 +404,7 @@ fn test_basic_args_linter_top_level() {
         .try_as_package()
         .unwrap();
 
-    let module = Identifier::new("ObjectBasics").unwrap();
+    let module = Identifier::new("object_basics").unwrap();
     let function = Identifier::new("create").unwrap();
 
     /*
@@ -440,7 +440,7 @@ fn test_basic_args_linter_top_level() {
 
     // Test with object args
 
-    let module = Identifier::new("ObjectBasics").unwrap();
+    let module = Identifier::new("object_basics").unwrap();
     let function = Identifier::new("transfer").unwrap();
 
     /*

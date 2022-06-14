@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Games::RockPaperScissorsTests {
-    use Games::RockPaperScissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
+module games::rock_paper_scissors_tests {
+    use games::rock_paper_scissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
     use sui::TestScenario::{Self};
     use std::vector;
     use std::hash;

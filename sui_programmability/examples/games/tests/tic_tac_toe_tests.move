@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Games::TicTacToeTests {
+module games::tic_tac_toe_tests {
     use sui::TestScenario::{Self, Scenario};
-    use Games::TicTacToe::{Self, Mark, MarkMintCap, TicTacToe, Trophy};
+    use games::tic_tac_toe::{Self, Mark, MarkMintCap, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;
     const UNEXPECTED_WINNER: u64 = 1;
@@ -12,7 +12,6 @@ module Games::TicTacToeTests {
     const IN_PROGRESS: u8 = 0;
     const X_WIN: u8 = 1;
     const DRAW: u8 = 3;
-
 
     #[test]
     fun play_tictactoe() {
@@ -22,7 +21,7 @@ module Games::TicTacToeTests {
 
         let scenario = &mut TestScenario::begin(&admin);
         // Admin creates a game
-        TicTacToe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
         // Player1 places an X in (1, 1).
         place_mark(1, 1, &admin, &player_x, scenario);
         /*
@@ -91,7 +90,7 @@ module Games::TicTacToeTests {
 
         let scenario = &mut TestScenario::begin(&admin);
 
-        TicTacToe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
         // Player1 places an X in (0, 1).
         let status = place_mark(0, 1, &admin, &player_x, scenario);
         assert!(status == IN_PROGRESS, 1);
@@ -202,7 +201,7 @@ module Games::TicTacToeTests {
         TestScenario::next_tx(scenario, player);
         {
             let cap = TestScenario::take_owned<MarkMintCap>(scenario);
-            TicTacToe::send_mark_to_game(&mut cap, *admin, row, col, TestScenario::ctx(scenario));
+            tic_tac_toe::send_mark_to_game(&mut cap, *admin, row, col, TestScenario::ctx(scenario));
             TestScenario::return_owned(scenario, cap);
         };
         // Step 2: Admin places the received mark on the game board.
@@ -211,11 +210,11 @@ module Games::TicTacToeTests {
         {
             let game = TestScenario::take_owned<TicTacToe>(scenario);
             let mark = TestScenario::take_owned<Mark>(scenario);
-            assert!(TicTacToe::mark_player(&mark) == player, 0);
-            assert!(TicTacToe::mark_row(&mark) == row, 1);
-            assert!(TicTacToe::mark_col(&mark) == col, 2);
-            TicTacToe::place_mark(&mut game, mark, TestScenario::ctx(scenario));
-            status = TicTacToe::get_status(&game);
+            assert!(tic_tac_toe::mark_player(&mark) == player, 0);
+            assert!(tic_tac_toe::mark_row(&mark) == row, 1);
+            assert!(tic_tac_toe::mark_col(&mark) == col, 2);
+            tic_tac_toe::place_mark(&mut game, mark, TestScenario::ctx(scenario));
+            status = tic_tac_toe::get_status(&game);
             TestScenario::return_owned(scenario, game);
         };
         // return the game status

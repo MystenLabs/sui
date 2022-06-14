@@ -4,7 +4,7 @@
     "details": {
       "data": {
         "dataType": "moveObject",
-        "type": "0x2::DevNetNFT::DevNetNFT",
+        "type": "0x2::devnet_nft::devnet_nft",
         "fields": {
           "description": "An NFT created by the wallet Command Line Tool",
           "id": {
@@ -82,7 +82,7 @@
     "details": {
       "data": {
         "dataType": "moveObject",
-        "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::Hero::Hero",
+        "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::hero::Hero",
         "fields": {
           "experience": 0,
           "game_id": "0x0f7423f9669a7f9aee253a8c5aa3319045c271b0",
@@ -92,11 +92,11 @@
             "version": 1
           },
           "sword": {
-            "type": "0x1::option::Option<0x237966f94764a944512afde1acbad0511f5e4fa4::Hero::Sword>",
+            "type": "0x1::option::Option<0x237966f94764a944512afde1acbad0511f5e4fa4::hero::Sword>",
             "fields": {
               "vec": [
                 {
-                  "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::Hero::Sword",
+                  "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::hero::Sword",
                   "fields": {
                     "game_id": "0x0f7423f9669a7f9aee253a8c5aa3319045c271b0",
                     "id": {

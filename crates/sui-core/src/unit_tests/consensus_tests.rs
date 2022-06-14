@@ -47,7 +47,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
     let shared_object_id = test_shared_object().id();
     for gas_object in test_gas_objects() {
         // Make a sample transaction.
-        let module = "ObjectBasics";
+        let module = "object_basics";
         let function = "create";
         let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 

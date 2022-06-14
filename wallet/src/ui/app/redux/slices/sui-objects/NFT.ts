@@ -18,7 +18,7 @@ export class ExampleNFT {
     ): Promise<TransactionResponse> {
         return await signer.executeMoveCall({
             packageObjectId: '0x2',
-            module: 'DevNetNFT',
+            module: 'devnet_nft',
             function: 'mint',
             typeArguments: [],
             arguments: [

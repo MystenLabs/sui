@@ -466,7 +466,7 @@
       "objectId": "0x84752f5a3dc5c08181cb457b7fc7bc307d6ccfe9",
       "version": 1,
       "digest": "cqgIERMs2AajwjCVJjsJDEZfXO/3cWOxZUFO/2huPuA=",
-      "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::Hero::Hero",
+      "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::hero::Hero",
       "owner": {
         "AddressOwner": "0x51372a6dcf5799e4c39f7cd6bc68e27bdc92728c"
       },
@@ -576,7 +576,7 @@
       "objectId": "0xbd9b07f8cf1b9bdc21fa7f6610eb8462e7696b95",
       "version": 1,
       "digest": "fhttcnj+FYjDchLgNzcZzb2dT6O10rjQjSZxCtYww0w=",
-      "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::Hero::GameAdmin",
+      "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::hero::GameAdmin",
       "owner": {
         "AddressOwner": "0x51372a6dcf5799e4c39f7cd6bc68e27bdc92728c"
       },
@@ -616,7 +616,7 @@
       "objectId": "0xd77a71ae5148faecb61b22b65432fd84a97e2972",
       "version": 1,
       "digest": "CWR+Q2LYPSXfQIbn7oTaCG0z9guVfqUTlK5Ohpmvbjc=",
-      "type": "0x2::DevNetNFT::DevNetNFT",
+      "type": "0x2::devnet_nft::devnet_nft",
       "owner": {
         "AddressOwner": "0x51372a6dcf5799e4c39f7cd6bc68e27bdc92728c"
       },
@@ -636,7 +636,7 @@
       "objectId": "0xe984763c06bcf0df2528dcf4cb5f45b4e8ef06bd",
       "version": 1,
       "digest": "CdML4uytzUj5uVoHZWY6/HVKIGHrogUE1vDKQZQpmWs=",
-      "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::SeaHero::SeaHeroAdmin",
+      "type": "0x237966f94764a944512afde1acbad0511f5e4fa4::sea_hero::SeaHeroAdmin",
       "owner": {
         "AddressOwner": "0x51372a6dcf5799e4c39f7cd6bc68e27bdc92728c"
       },

@@ -5,7 +5,7 @@
 /// on Sui. The user should be able to use the wallet command line tool
 /// (https://docs.sui.io/build/wallet) to mint an NFT. For example,
 /// `wallet example-nft --name <Name> --description <Description> --url <URL>`
-module sui::DevNetNFT {
+module sui::devnet_nft {
     use sui::url::{Self, Url};
     use sui::utf8;
     use sui::id::{Self, ID, VersionedID};
@@ -34,7 +34,7 @@ module sui::DevNetNFT {
         name: utf8::String,
     }
 
-    /// Create a new DevNetNFT
+    /// Create a new devnet_nft
     public entry fun mint(
         name: vector<u8>,
         description: vector<u8>,
@@ -95,8 +95,8 @@ module sui::DevNetNFT {
 }
 
 #[test_only]
-module sui::DevNetNFTTests {
-    use sui::DevNetNFT::{Self, DevNetNFT};
+module sui::devnet_nftTests {
+    use sui::devnet_nft::{Self, DevNetNFT};
     use sui::TestScenario;
     use sui::utf8;
 
@@ -107,27 +107,27 @@ module sui::DevNetNFTTests {
         // create the NFT
         let scenario = TestScenario::begin(&addr1);
         {
-            DevNetNFT::mint(b"test", b"a test", b"https://www.sui.io", TestScenario::ctx(&mut scenario))
+            devnet_nft::mint(b"test", b"a test", b"https://www.sui.io", TestScenario::ctx(&mut scenario))
         };
         // send it from A to B
         TestScenario::next_tx(&mut scenario, &addr1);
         {
             let nft = TestScenario::take_owned<DevNetNFT>(&mut scenario);
-            DevNetNFT::transfer(nft, addr2, TestScenario::ctx(&mut scenario));
+            devnet_nft::transfer(nft, addr2, TestScenario::ctx(&mut scenario));
         };
         // update its description
         TestScenario::next_tx(&mut scenario, &addr2);
         {
             let nft = TestScenario::take_owned<DevNetNFT>(&mut scenario);
-            DevNetNFT::update_description(&mut nft, b"a new description", TestScenario::ctx(&mut scenario)) ;
-            assert!(*utf8::bytes(DevNetNFT::description(&nft)) == b"a new description", 0);
+            devnet_nft::update_description(&mut nft, b"a new description", TestScenario::ctx(&mut scenario)) ;
+            assert!(*utf8::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
             TestScenario::return_owned(&mut scenario, nft);
         };
         // burn it
         TestScenario::next_tx(&mut scenario, &addr2);
         {
             let nft = TestScenario::take_owned<DevNetNFT>(&mut scenario);
-            DevNetNFT::burn(nft, TestScenario::ctx(&mut scenario))
+            devnet_nft::burn(nft, TestScenario::ctx(&mut scenario))
         }
     }
 }

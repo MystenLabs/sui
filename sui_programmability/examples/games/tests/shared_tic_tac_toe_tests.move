@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module Games::SharedTicTacToeTests {
+module games::shared_tic_tac_toe_tests {
     use sui::TestScenario::{Self, Scenario};
-    use Games::SharedTicTacToe::{Self, TicTacToe, Trophy};
+    use games::shared_tic_tac_toe::{Self, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;
     const UNEXPECTED_WINNER: u64 = 1;
@@ -20,7 +20,7 @@ module Games::SharedTicTacToeTests {
 
         // Anyone can create a game, because the game object will be eventually shared.
         let scenario = &mut TestScenario::begin(&player_x);
-        SharedTicTacToe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        shared_tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
         // Player1 places an X in (1, 1).
         place_mark(1, 1, &player_x, scenario);
         /*
@@ -87,7 +87,7 @@ module Games::SharedTicTacToeTests {
 
         // Anyone can create a game, because the game object will be eventually shared.
         let scenario = &mut TestScenario::begin(&player_x);
-        SharedTicTacToe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        shared_tic_tac_toe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
         // Player1 places an X in (0, 1).
         let status = place_mark(0, 1, &player_x, scenario);
         assert!(status == IN_PROGRESS, 1);
@@ -201,8 +201,8 @@ module Games::SharedTicTacToeTests {
         {
             let game_wrapper = TestScenario::take_shared<TicTacToe>(scenario);
             let game = TestScenario::borrow_mut(&mut game_wrapper);
-            SharedTicTacToe::place_mark(game, row, col, TestScenario::ctx(scenario));
-            status = SharedTicTacToe::get_status(game);
+            shared_tic_tac_toe::place_mark(game, row, col, TestScenario::ctx(scenario));
+            status = shared_tic_tac_toe::get_status(game);
             TestScenario::return_shared(scenario, game_wrapper);
         };
         status

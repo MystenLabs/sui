@@ -6,12 +6,12 @@
 
 //# init --accounts A
 
-//# run sui::ObjectBasics::create --args 10 @A
+//# run sui::object_basics::create --args 10 @A
 
 //# view-object 104
 
-//# run sui::ObjectBasics::wrap --args object(104) --sender A
+//# run sui::object_basics::wrap --args object(104) --sender A
 
-//# run sui::ObjectBasics::unwrap --args object(106) --sender A
+//# run sui::object_basics::unwrap --args object(106) --sender A
 
 //# view-object 104

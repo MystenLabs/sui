@@ -3,7 +3,7 @@
 
 /// Example of objects that can be combined to create
 /// new objects
-module Basics::Sandwich {
+module basics::sandwich {
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
@@ -115,8 +115,8 @@ module Basics::Sandwich {
 }
 
 #[test_only]
-module Basics::TestSandwich {
-    use Basics::Sandwich::{Self, Grocery, GroceryOwnerCapability, Bread, Ham};
+module basics::test_sandwich {
+    use basics::sandwich::{Self, Grocery, GroceryOwnerCapability, Bread, Ham};
     use sui::TestScenario;
     use sui::Coin::{Self};
     use sui::SUI::SUI;
@@ -129,7 +129,7 @@ module Basics::TestSandwich {
         let scenario = &mut TestScenario::begin(&owner);
         TestScenario::next_tx(scenario, &owner);
         {
-            Sandwich::init_for_testing(TestScenario::ctx(scenario));
+            sandwich::init_for_testing(TestScenario::ctx(scenario));
         };
 
         TestScenario::next_tx(scenario, &the_guy);
@@ -138,13 +138,13 @@ module Basics::TestSandwich {
             let grocery = TestScenario::borrow_mut(&mut grocery_wrapper);
             let ctx = TestScenario::ctx(scenario);
 
-            Sandwich::buy_ham(
+            sandwich::buy_ham(
                 grocery,
                 Coin::mint_for_testing<SUI>(10, ctx),
                 ctx
             );
 
-            Sandwich::buy_bread(
+            sandwich::buy_bread(
                 grocery,
                 Coin::mint_for_testing<SUI>(2, ctx),
                 ctx
@@ -158,7 +158,7 @@ module Basics::TestSandwich {
             let ham = TestScenario::take_owned<Ham>(scenario);
             let bread = TestScenario::take_owned<Bread>(scenario);
 
-            Sandwich::make_sandwich(ham, bread, TestScenario::ctx(scenario));
+            sandwich::make_sandwich(ham, bread, TestScenario::ctx(scenario));
         };
 
         TestScenario::next_tx(scenario, &owner);
@@ -167,9 +167,9 @@ module Basics::TestSandwich {
             let grocery = TestScenario::borrow_mut(&mut grocery_wrapper);
             let capability = TestScenario::take_owned<GroceryOwnerCapability>(scenario);
 
-            assert!(Sandwich::profits(grocery) == 12, 0);
-            Sandwich::collect_profits(&capability, grocery, TestScenario::ctx(scenario));
-            assert!(Sandwich::profits(grocery) == 0, 0);
+            assert!(sandwich::profits(grocery) == 12, 0);
+            sandwich::collect_profits(&capability, grocery, TestScenario::ctx(scenario));
+            assert!(sandwich::profits(grocery) == 0, 0);
 
             TestScenario::return_owned(scenario, capability);
             TestScenario::return_shared(scenario, grocery_wrapper);

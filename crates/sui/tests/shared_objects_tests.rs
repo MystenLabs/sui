@@ -81,7 +81,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -94,7 +94,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -111,7 +111,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
@@ -125,7 +125,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -159,7 +159,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -172,7 +172,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -189,7 +189,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
@@ -203,7 +203,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -235,7 +235,7 @@ async fn shared_object_sync() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -274,7 +274,7 @@ async fn shared_object_sync() {
     tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
@@ -336,7 +336,7 @@ async fn replay_shared_object_transaction() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -377,7 +377,7 @@ async fn shared_object_on_gateway() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -405,7 +405,7 @@ async fn shared_object_on_gateway() {
                 let g = gateway.clone();
                 let increment_counter_transaction = move_transaction(
                     gas_object,
-                    "Counter",
+                    "counter",
                     "increment",
                     package_ref,
                     /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
@@ -426,7 +426,7 @@ async fn shared_object_on_gateway() {
 
     let assert_value_transaction = move_transaction(
         last_gas_object,
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![

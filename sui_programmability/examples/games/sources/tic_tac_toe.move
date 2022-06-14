@@ -17,7 +17,7 @@
 // TicTacToeV2 shows a simpler way to implement this using shared objects,
 // providing different trade-offs: using shared object is more expensive,
 // however it eliminates the need of a centralized service.
-module Games::TicTacToe {
+module games::tic_tac_toe {
     use std::option::{Self, Option};
     use std::vector;
 

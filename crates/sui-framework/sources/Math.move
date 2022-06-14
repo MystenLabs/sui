@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Basic math for nicer programmability
-module sui::Math {
+module sui::math {
 
     /// Return the larger of `x` and `y`
     public fun max(x: u64, y: u64): u64 {
@@ -28,8 +28,8 @@ module sui::Math {
     ///
     /// Example:
     /// ```
-    /// Math::sqrt(9) => 3
-    /// Math::sqrt(8) => 2 // the nearest lower square root is 4;
+    /// math::sqrt(9) => 3
+    /// math::sqrt(8) => 2 // the nearest lower square root is 4;
     /// ```
     ///
     /// In integer math, one of the possible ways to get results with more
@@ -38,14 +38,14 @@ module sui::Math {
     ///
     /// Example:
     /// ```
-    /// Math::sqrt(8) => 2;
-    /// Math::sqrt(8 * 10000) => 282;
+    /// math::sqrt(8) => 2;
+    /// math::sqrt(8 * 10000) => 282;
     /// // now we can use this value as if it was 2.82;
     /// // but to get the actual result, this value needs
     /// // to be divided by 100 (because sqrt(10000)).
     ///
     ///
-    /// Math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
+    /// math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
     /// ```
     public fun sqrt(x: u64): u64 {
         let bit = 1u128 << 64;

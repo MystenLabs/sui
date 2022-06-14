@@ -10,7 +10,7 @@ module sui::delegation {
     use sui::SUI::SUI;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::EpochTimeLock::EpochTimeLock;
+    use sui::epoch_time_lock::EpochTimeLock;
 
     friend sui::sui_system;
 

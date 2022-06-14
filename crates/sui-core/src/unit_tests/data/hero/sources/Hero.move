@@ -8,7 +8,7 @@ module Examples::Hero {
     use sui::Coin::{Self, Coin};
     use sui::event;
     use sui::id::{Self, ID, VersionedID};
-    use sui::Math;
+    use sui::math;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
@@ -181,7 +181,7 @@ module Examples::Hero {
         id::delete(id);
         let new_hp = hero.hp + potency;
         // cap hero's HP at MAX_HP to avoid int overflows
-        hero.hp = Math::min(new_hp, MAX_HP)
+        hero.hp = math::min(new_hp, MAX_HP)
     }
 
     /// Add `new_sword` to the hero's inventory and return the old sword
@@ -217,7 +217,7 @@ module Examples::Hero {
         let magic = (value - MIN_SWORD_COST) / MIN_SWORD_COST;
         Sword {
             id: tx_context::new_id(ctx),
-            magic: Math::min(magic, MAX_MAGIC),
+            magic: math::min(magic, MAX_MAGIC),
             strength: 1
         }
     }

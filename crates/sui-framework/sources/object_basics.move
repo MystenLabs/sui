@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Test CTURD object basics (create, transfer, update, read, delete)
-module sui::ObjectBasics {
+module sui::object_basics {
     use sui::event;
     use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};

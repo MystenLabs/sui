@@ -8,8 +8,8 @@
 /// earns RUM tokens for hero's owner.
 /// Note that this mod does not require special permissions from `Hero` module;
 /// anyone is free to create a mod like this.
-module Games::SeaHero {
-    use Games::Hero::{Self, Hero};
+module games::sea_hero {
+    use games::hero::{Self, Hero};
 
     use sui::balance::{Self, Balance};
     use sui::id::{Self, VersionedID};
@@ -81,7 +81,7 @@ module Games::SeaHero {
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
-            Hero::hero_strength(hero) >= balance::value(&reward),
+            hero::hero_strength(hero) >= balance::value(&reward),
             EHERO_NOT_STRONG_ENOUGH
         );
 

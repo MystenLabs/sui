@@ -12,7 +12,7 @@
                   "version": 1,
                   "digest": "PQTM8NlRN13/nvi81Z2g0SMh5FoXwzOqdXxxxtXMkwI="
                 },
-                "module": "DevNetNFT",
+                "module": "devnet_nft",
                 "function": "mint",
                 "arguments": [
                   "Example NFT",
@@ -95,7 +95,7 @@
         },
         "events": [
           {
-            "type_": "0x2::DevNetNFT::MintNFTEvent",
+            "type_": "0x2::devnet_nft::MintNFTEvent",
             "contents": [
               215,
               122,

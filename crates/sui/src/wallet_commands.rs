@@ -502,7 +502,7 @@ impl WalletCommands {
                 }
                 let (_, effects) = call_move(
                     ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                    "DevNetNFT",
+                    "devnet_nft",
                     "mint",
                     vec![],
                     gas,
