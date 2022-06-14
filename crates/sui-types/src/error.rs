@@ -358,6 +358,9 @@ pub enum SuiError {
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
+
+    #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
+    QuorumDriverCommunicationError { error: String },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

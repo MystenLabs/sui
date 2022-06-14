@@ -1066,7 +1066,7 @@ where
     /// At that point (and after) enough authorities are up to date with all objects
     /// needed to process the certificate that a submission should succeed. However,
     /// in case an authority returns an error, we do try to bring it up to speed.
-    async fn process_certificate(
+    pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<TransactionEffects, SuiError> {

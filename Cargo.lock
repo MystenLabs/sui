@@ -5845,6 +5845,7 @@ dependencies = [
  "sui-node",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-quorum-driver",
  "sui-storage",
  "sui-swarm",
  "sui-types",
@@ -6154,6 +6155,7 @@ dependencies = [
  "sui-core",
  "sui-gateway",
  "sui-network",
+ "sui-quorum-driver",
  "sui-storage",
  "telemetry-subscribers",
  "tokio",
@@ -6179,6 +6181,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-quorum-driver"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "sui-core",
+ "sui-types",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 

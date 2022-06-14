@@ -52,6 +52,7 @@ sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json = { path = "../sui-json" }
 sui-gateway = { path = "../sui-gateway" }
 sui-node = { path = "../sui-node" }
+sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-swarm = { path = "../sui-swarm" }
 
 rustyline = "9.1.2"
