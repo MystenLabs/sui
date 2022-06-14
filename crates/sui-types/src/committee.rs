@@ -31,7 +31,8 @@ impl Committee {
         let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
         let expanded_keys: HashMap<_, _> = voting_rights
             .iter()
-            // TODO: How do we guarantee the unwrap is safe?
+            // TODO: Verify all code path to make sure we always have valid public keys.
+            // e.g. when a new validator is registering themself on-chain.
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
         Committee {
@@ -47,8 +48,6 @@ impl Committee {
     }
 
     pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<PublicKey> {
-        // do we know, or can we build a valid public key?
-        // TODO: We could also update expanded_keys here if we like.
         match self.expanded_keys.get(authority) {
             Some(v) => Ok(*v),
             None => (*authority).try_into(),
