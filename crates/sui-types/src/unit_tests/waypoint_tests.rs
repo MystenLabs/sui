@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use ed25519_dalek::Sha512;
 use rand::Rng;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -17,6 +18,18 @@ fn make_item() -> Item {
     let mut rng = rand::thread_rng();
     let item: [u8; 8] = rng.gen();
     Item(item)
+}
+
+impl From<&Item> for RistrettoPoint {
+    fn from(other: &Item) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&other.0)
+    }
+}
+
+impl IntoPoint for Item {
+    fn into_point(&self) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
+    }
 }
 
 #[test]

@@ -1,56 +1,63 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{num::NonZeroUsize, path::Path};
+use jsonrpsee_http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee_http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use std::net::SocketAddr;
+use std::num::NonZeroUsize;
+use std::path::Path;
 use sui::{
     config::{GatewayConfig, GatewayType, WalletConfig},
     keystore::{KeystoreType, SuiKeystore},
-    sui_commands::SuiNetwork,
     wallet_commands::{WalletCommands, WalletContext},
 };
-use sui_config::{builder::ConfigBuilder, genesis_config::GenesisConfig};
+use sui_config::genesis_config::GenesisConfig;
+use sui_config::PersistedConfig;
 use sui_config::{Config, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui_gateway::create_client;
+use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_json_rpc_api::QuorumDriverApiServer;
+use sui_json_rpc_api::RpcReadApiServer;
+use sui_json_rpc_api::RpcTransactionBuilderServer;
+use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
-use tempfile::TempDir;
-
 const NUM_VALIDAOTR: usize = 4;
 
 pub async fn start_test_network(
-    working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
-) -> Result<SuiNetwork, anyhow::Error> {
-    std::fs::create_dir_all(working_dir)?;
-    let working_dir = working_dir.to_path_buf();
-    let network_path = working_dir.join(SUI_NETWORK_CONFIG);
-    let wallet_path = working_dir.join(SUI_WALLET_CONFIG);
-    let keystore_path = working_dir.join("wallet.key");
-    let db_folder_path = working_dir.join("client_db");
-
-    let mut builder =
-        ConfigBuilder::new(&working_dir).committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
-
+) -> Result<Swarm, anyhow::Error> {
+    let mut builder = Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
     if let Some(genesis_config) = genesis_config {
         builder = builder.initial_accounts_config(genesis_config);
     }
 
-    let network_config = builder.build();
-    let accounts = network_config
+    let mut swarm = builder.build();
+    swarm.launch().await?;
+
+    let accounts = swarm
+        .config()
         .account_keys
         .iter()
         .map(|key| SuiAddress::from(key.public_key_bytes()))
         .collect::<Vec<_>>();
-    let network = SuiNetwork::start(&network_config).await?;
 
-    let network_config = network_config.persisted(&network_path);
-    network_config.save()?;
+    let dir = swarm.dir();
+
+    let network_path = dir.join(SUI_NETWORK_CONFIG);
+    let wallet_path = dir.join(SUI_WALLET_CONFIG);
+    let keystore_path = dir.join("wallet.key");
+    let db_folder_path = dir.join("client_db");
+    let gateway_path = dir.join(SUI_GATEWAY_CONFIG);
+
+    swarm.config().save(&network_path)?;
     let mut keystore = SuiKeystore::default();
-    for key in &network_config.account_keys {
+    for key in &swarm.config().account_keys {
         keystore.add_key(SuiAddress::from(key.public_key_bytes()), key.copy())?;
     }
     keystore.set_path(&keystore_path);
     keystore.save()?;
 
-    let validators = network_config.validator_set().to_owned();
+    let validators = swarm.config().validator_set().to_owned();
     let active_address = accounts.get(0).copied();
 
     GatewayConfig {
@@ -58,8 +65,7 @@ pub async fn start_test_network(
         validator_set: validators.clone(),
         ..Default::default()
     }
-    .persisted(&working_dir.join(SUI_GATEWAY_CONFIG))
-    .save()?;
+    .save(gateway_path)?;
 
     // Create wallet config with stated authorities port
     WalletConfig {
@@ -72,20 +78,18 @@ pub async fn start_test_network(
         }),
         active_address,
     }
-    .persisted(&wallet_path)
-    .save()?;
+    .save(&wallet_path)?;
 
     // Return network handle
-    Ok(network)
+    Ok(swarm)
 }
 
-pub async fn setup_network_and_wallet_in_working_dir(
-    working_dir: &TempDir,
-) -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error> {
-    let network = start_test_network(working_dir.path(), None).await?;
+pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddress), anyhow::Error>
+{
+    let swarm = start_test_network(None).await?;
 
     // Create Wallet context.
-    let wallet_conf = working_dir.path().join(SUI_WALLET_CONFIG);
+    let wallet_conf = swarm.dir().join(SUI_WALLET_CONFIG);
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context.config.accounts.first().cloned().unwrap();
 
@@ -95,11 +99,54 @@ pub async fn setup_network_and_wallet_in_working_dir(
     }
     .execute(&mut context)
     .await?;
-    Ok((network, context, address))
+    Ok((swarm, context, address))
 }
 
-pub async fn setup_network_and_wallet(
-) -> Result<(SuiNetwork, WalletContext, SuiAddress), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    setup_network_and_wallet_in_working_dir(&working_dir).await
+async fn start_rpc_gateway(
+    config_path: &Path,
+) -> Result<(SocketAddr, HttpServerHandle), anyhow::Error> {
+    let server = HttpServerBuilder::default().build("127.0.0.1:0").await?;
+    let addr = server.local_addr()?;
+    let client = create_client(config_path)?;
+    let mut module = RpcModule::new(());
+    module.merge(RpcGatewayImpl::new(client.clone()).into_rpc())?;
+    module.merge(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
+    module.merge(TransactionBuilderImpl::new(client.clone()).into_rpc())?;
+
+    let handle = server.start(module)?;
+    Ok((addr, handle))
+}
+
+pub async fn start_rpc_test_network(
+    genesis_config: Option<GenesisConfig>,
+) -> Result<TestNetwork, anyhow::Error> {
+    let network = start_test_network(genesis_config).await?;
+    let working_dir = network.dir();
+    let (server_addr, rpc_server_handle) =
+        start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
+    let mut wallet_conf: WalletConfig =
+        PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
+    let rpc_url = format!("http://{}", server_addr);
+    let accounts = wallet_conf.accounts.clone();
+    wallet_conf.gateway = GatewayType::RPC(rpc_url.clone());
+    wallet_conf
+        .persisted(&working_dir.join(SUI_WALLET_CONFIG))
+        .save()?;
+
+    let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
+    Ok(TestNetwork {
+        network,
+        _rpc_server: rpc_server_handle,
+        accounts,
+        http_client,
+        rpc_url,
+    })
+}
+
+pub struct TestNetwork {
+    pub network: Swarm,
+    _rpc_server: HttpServerHandle,
+    pub accounts: Vec<SuiAddress>,
+    pub http_client: HttpClient,
+    pub rpc_url: String,
 }

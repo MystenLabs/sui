@@ -6,7 +6,7 @@
 /// one using single-owner objects only and the other using shared
 /// objects.
 module NFTs::AuctionLib {
-    use Std::Option::{Self, Option};
+    use std::option::{Self, Option};
 
     use Sui::Coin;
     use Sui::Balance::{Self, Balance};
@@ -58,9 +58,9 @@ module NFTs::AuctionLib {
         // answer is that it's checked by the runtime.
         Auction<T> {
             id,
-            to_sell: Option::some(to_sell),
+            to_sell: option::some(to_sell),
             owner: TxContext::sender(ctx),
-            bid_data: Option::none(),
+            bid_data: option::none(),
         }
     }
 
@@ -73,15 +73,15 @@ module NFTs::AuctionLib {
         funds: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
-        if (Option::is_none(&auction.bid_data)) {
+        if (option::is_none(&auction.bid_data)) {
             // first bid
             let bid_data = BidData {
                 funds,
                 highest_bidder: bidder,
             };
-            Option::fill(&mut auction.bid_data, bid_data);
+            option::fill(&mut auction.bid_data, bid_data);
         } else {
-            let prev_bid_data = Option::borrow(&auction.bid_data);
+            let prev_bid_data = option::borrow(&auction.bid_data);
             if (Balance::value(&funds) > Balance::value(&prev_bid_data.funds)) {
                 // a bid higher than currently highest bid received
                 let new_bid_data = BidData {
@@ -93,7 +93,7 @@ module NFTs::AuctionLib {
                 let BidData {
                     funds,
                     highest_bidder
-                } = Option::swap(&mut auction.bid_data, new_bid_data);
+                } = option::swap(&mut auction.bid_data, new_bid_data);
 
                 // transfer previously highest bid to its bidder
                 send_balance(funds, highest_bidder, ctx);
@@ -112,14 +112,14 @@ module NFTs::AuctionLib {
         bid_data: &mut Option<BidData>,
         ctx: &mut TxContext
     ) {
-        let item = Option::extract(to_sell);
-        if (Option::is_some<BidData>(bid_data)) {
+        let item = option::extract(to_sell);
+        if (option::is_some<BidData>(bid_data)) {
             // bids have been placed - send funds to the original item
             // owner and the item to the highest bidder
             let BidData {
                 funds,
                 highest_bidder
-            } = Option::extract(bid_data);
+            } = option::extract(bid_data);
 
             send_balance(funds, owner, ctx);
             Transfer::transfer(item, highest_bidder);
@@ -141,8 +141,8 @@ module NFTs::AuctionLib {
 
         end_auction(&mut to_sell, owner, &mut bid_data, ctx);
 
-        Option::destroy_none(bid_data);
-        Option::destroy_none(to_sell);
+        option::destroy_none(bid_data);
+        option::destroy_none(to_sell);
     }
 
     /// Ends auction (should only be used if Auction is a shared
@@ -157,5 +157,22 @@ module NFTs::AuctionLib {
     /// Helper for the most common operation - wrapping a balance and sending it
     fun send_balance(balance: Balance<SUI>, to: address, ctx: &mut TxContext) {
         Transfer::transfer(Coin::from_balance(balance, ctx), to)
+    }
+
+    /// exposes Transfer::transfer
+    public fun transfer<T: key + store>(obj: Auction<T>, recipient: address) {
+        Transfer::transfer(obj, recipient)
+    }
+
+    /// exposes Transfer::transfer_to_object_id
+    public fun transfer_to_object_id<T: key + store>(
+        obj: Auction<T>,
+        owner_id: VersionedID,
+    ): (VersionedID, Transfer::ChildRef<Auction<T>>) {
+        Transfer::transfer_to_object_id(obj, owner_id)
+    }
+
+    public fun share_object<T: key + store>(obj: Auction<T>) {
+        Transfer::share_object(obj)
     }
 }

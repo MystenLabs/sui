@@ -4,6 +4,7 @@ pub mod authority;
 pub mod messages;
 pub mod network;
 pub mod objects;
+pub mod transaction;
 
 use rand::{rngs::StdRng, SeedableRng};
 use sui_types::{

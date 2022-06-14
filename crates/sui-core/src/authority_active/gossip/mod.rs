@@ -10,7 +10,11 @@ use crate::{
 use async_trait::async_trait;
 use futures::stream::FuturesOrdered;
 use futures::{stream::FuturesUnordered, StreamExt};
+use std::future::Future;
+use std::ops::Deref;
 use std::{collections::HashSet, sync::Arc, time::Duration};
+use sui_storage::follower_store::FollowerStore;
+use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::AuthorityName,
     batch::{TxSequenceNumber, UpdateItem},
@@ -32,6 +36,7 @@ struct PeerGossip<A> {
     peer_name: AuthorityName,
     client: SafeClient<A>,
     state: Arc<AuthorityState>,
+    follower_store: Arc<FollowerStore>,
     max_seq: Option<TxSequenceNumber>,
     aggregator: Arc<AuthorityAggregator<A>>,
 }
@@ -46,24 +51,12 @@ pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: us
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    gossip_process_with_start_seq(active_authority, degree, None).await
-}
-
-pub async fn gossip_process_with_start_seq<A>(
-    active_authority: &ActiveAuthority<A>,
-    degree: usize,
-    start_seq: Option<TxSequenceNumber>,
-) where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    // A copy of the committee
-    let committee = &active_authority.net.committee;
+    // Make a clone of the active authority and committee, and keep using it until epoch changes.
+    let mut local_active = Arc::new(active_authority.clone());
+    let mut committee = local_active.state.committee.load().deref().clone();
 
     // Number of tasks at most "degree" and no more than committee - 1
-    let target_num_tasks: usize = usize::min(
-        active_authority.state.committee.voting_rights.len() - 1,
-        degree,
-    );
+    let mut target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
 
     // If we do not expect to connect to anyone
     if target_num_tasks == 0 {
@@ -77,11 +70,26 @@ pub async fn gossip_process_with_start_seq<A>(
     let mut gossip_tasks = FuturesUnordered::new();
 
     loop {
+        if active_authority.state.committee.load().epoch != committee.epoch {
+            // If epoch has changed, we need to make a new copy of the active authority,
+            // and update all local variables.
+            // We also need to remove any authority that's no longer a valid validator
+            // from the list of peer names.
+            // It's ok to keep the existing gossip tasks running even for peers that are no longer
+            // validators, and let them end naturally.
+            local_active = Arc::new(active_authority.clone());
+            committee = local_active.state.committee.load().deref().clone();
+            target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+            peer_names = peer_names
+                .into_iter()
+                .filter(|name| committee.voting_rights.contains_key(name))
+                .collect();
+        }
         let mut k = 0;
         while gossip_tasks.len() < target_num_tasks {
             // Find out what is the earliest time that we are allowed to reconnect
             // to at least 2f+1 nodes.
-            let next_connect = active_authority
+            let next_connect = local_active
                 .minimum_wait_for_majority_honest_available()
                 .await;
             debug!(
@@ -90,22 +98,20 @@ pub async fn gossip_process_with_start_seq<A>(
             );
             tokio::time::sleep_until(next_connect).await;
 
-            let name_result = select_gossip_peer(
-                active_authority.state.name,
-                peer_names.clone(),
-                active_authority,
-            )
-            .await;
+            let name_result =
+                select_gossip_peer(local_active.state.name, peer_names.clone(), &local_active)
+                    .await;
             if name_result.is_err() {
                 continue;
             }
             let name = name_result.unwrap();
 
             peer_names.insert(name);
+            let local_active_ref_copy = local_active.clone();
             gossip_tasks.push(async move {
-                let peer_gossip = PeerGossip::new(name, active_authority, start_seq);
+                let peer_gossip = PeerGossip::new(name, &local_active_ref_copy);
                 // Add more duration if we make more than 1 to ensure overlap
-                debug!("Starting gossip from peer {:?}", name);
+                debug!(peer = ?name, "Starting gossip from peer");
                 peer_gossip
                     .start(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15))
                     .await
@@ -114,11 +120,11 @@ pub async fn gossip_process_with_start_seq<A>(
 
             // If we have already used all the good stake, then stop here and
             // wait for some node to become available.
-            let total_stake_used: usize = peer_names
+            let total_stake_used = peer_names
                 .iter()
                 .map(|name| committee.weight(name))
-                .sum::<usize>()
-                + committee.weight(&active_authority.state.name);
+                .sum::<StakeUnit>()
+                + committee.weight(&local_active.state.name);
             if total_stake_used >= committee.quorum_threshold() {
                 break;
             }
@@ -129,23 +135,34 @@ pub async fn gossip_process_with_start_seq<A>(
             continue;
         }
 
-        // Let the peer gossip task finish
-        let (finished_name, _result) = gossip_tasks.select_next_some().await;
-        if let Err(err) = _result {
-            active_authority.set_failure_backoff(finished_name).await;
-            active_authority.state.metrics.gossip_task_error_count.inc();
-            error!("Peer {:?} returned error: {:?}", finished_name, err);
-        } else {
-            active_authority.set_success_backoff(finished_name).await;
-            active_authority
-                .state
-                .metrics
-                .gossip_task_success_count
-                .inc();
-            debug!("End gossip from peer {:?}", finished_name);
-        }
-        peer_names.remove(&finished_name);
+        wait_for_one_gossip_task_to_finish(&local_active, &mut peer_names, &mut gossip_tasks).await;
     }
+}
+
+async fn wait_for_one_gossip_task_to_finish<A>(
+    active_authority: &ActiveAuthority<A>,
+    peer_names: &mut HashSet<AuthorityName>,
+    gossip_tasks: &mut FuturesUnordered<
+        impl Future<Output = (AuthorityName, Result<(), SuiError>)>,
+    >,
+) where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let (finished_name, _result) = gossip_tasks.select_next_some().await;
+    if let Err(err) = _result {
+        active_authority.set_failure_backoff(finished_name).await;
+        active_authority.state.metrics.gossip_task_error_count.inc();
+        error!(peer = ?finished_name, "Peer returned error: {:?}", err);
+    } else {
+        active_authority.set_success_backoff(finished_name).await;
+        active_authority
+            .state
+            .metrics
+            .gossip_task_success_count
+            .inc();
+        debug!(peer = ?finished_name, "End gossip from peer");
+    }
+    peer_names.remove(&finished_name);
 }
 
 struct LocalConfirmationTransactionHandler {
@@ -173,18 +190,18 @@ where
 {
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
-    let mut tries_remaining = active_authority.state.committee.voting_rights.len();
+    let mut tries_remaining = active_authority.state.committee.load().voting_rights.len();
     while tries_remaining > 0 {
-        let name = active_authority.state.committee.sample();
-        if peer_names.contains(name)
-            || *name == my_name
-            || !active_authority.can_contact(*name).await
+        let name = *active_authority.state.committee.load().sample();
+        if peer_names.contains(&name)
+            || name == my_name
+            || !active_authority.can_contact(name).await
         {
             tries_remaining -= 1;
             tokio::time::sleep(Duration::from_millis(10)).await;
             continue;
         }
-        return Ok(*name);
+        return Ok(name);
     }
     Err(SuiError::GenericAuthorityError {
         error: "Could not connect to any peer".to_string(),
@@ -195,17 +212,30 @@ impl<A> PeerGossip<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(
-        peer_name: AuthorityName,
-        active_authority: &ActiveAuthority<A>,
-        start_seq: Option<TxSequenceNumber>,
-    ) -> PeerGossip<A> {
-        PeerGossip {
+    pub fn new(peer_name: AuthorityName, active_authority: &ActiveAuthority<A>) -> PeerGossip<A> {
+        // TODO: for validator gossip, we should always use None as the start_seq, but we should
+        // consult the start_seq we retrieved from the db to make sure that the peer is giving
+        // us new txes.
+        let start_seq = match active_authority
+            .follower_store
+            .get_next_sequence(&peer_name)
+        {
+            Err(_e) => {
+                // If there was no start sequence found for this peer, it is likely a new peer
+                // that has just joined the network, start at 0.
+                info!("New gossip peer has joined: {:?}", peer_name);
+                Some(0)
+            }
+            Ok(s) => s.or(Some(0)),
+        };
+
+        Self {
             peer_name,
-            client: active_authority.net.authority_clients[&peer_name].clone(),
+            client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
+            follower_store: active_authority.follower_store.clone(),
             max_seq: start_seq,
-            aggregator: active_authority.net.clone(),
+            aggregator: active_authority.net.load().clone(),
         }
     }
 
@@ -236,19 +266,28 @@ where
 
                 items = &mut streamx.next() => {
                     match items {
-                        Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch)) )) => {},
+                        Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
+                            let next_seq = signed_batch.batch.next_sequence_number;
+                            self.follower_store.record_next_sequence(&self.peer_name, next_seq)?;
+                             match self.max_seq {
+                                Some(max_seq) => {
+                                    if next_seq < max_seq {
+                                        info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
+                                    }
+                                }
+                                None => {}
+                            }
+                        },
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
-                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
-                            if !self.state.database.effects_exists(&digest)? {
+                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
+                            if !self.state.database.effects_exists(&digest.transaction)? {
                                 queue.push(async move {
                                     tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
                                     digest
                                 });
                                 self.state.metrics.gossip_queued_count.inc();
-
                             }
-                            self.max_seq = Some(seq + 1);
                         },
 
                         // Return any errors.
@@ -258,7 +297,7 @@ where
 
                         // The stream has closed, re-request:
                         None => {
-                            tokio::time::sleep(Duration::from_millis(10)).await;
+                            tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {
                                 start: self.max_seq,
                                 length: REQUEST_FOLLOW_NUM_DIGESTS,
@@ -269,17 +308,10 @@ where
                 },
                 digest = &mut queue.next() , if !queue.is_empty() => {
                     let digest = digest.unwrap();
-                    if !self.state.database.effects_exists(&digest)? {
+                    if !self.state.database.effects_exists(&digest.transaction)? {
                         // Download the certificate
-                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest)).await?;
-                        if let Err(err) = self.process_response(response).await {
-                            // Check again whether the failure is due to a concurrent execution.
-                            // TODO: a concurrent execution should not really have returned an
-                            //       error but it seems it does? Check correctness?
-                            if !self.state.database.effects_exists(&digest)?{
-                                return Err(err);
-                            }
-                        }
+                        let response = self.client.handle_transaction_info_request(TransactionInfoRequest::from(digest.transaction)).await?;
+                        self.process_response(response).await?;
                     }
                 }
             };

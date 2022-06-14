@@ -14,6 +14,7 @@ import { generateMnemonic } from '_shared/cryptography/mnemonics';
 
 import type { SuiAddress, SuiMoveObject } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
+import type { RootState } from '_redux/RootReducer';
 
 export const loadAccountFromStorage = createAsyncThunk(
     'account/loadAccount',
@@ -29,6 +30,14 @@ export const createMnemonic = createAsyncThunk(
         const mnemonic = existingMnemonic || generateMnemonic();
         await Browser.storage.local.set({ mnemonic });
         return mnemonic;
+    }
+);
+
+export const logout = createAsyncThunk(
+    'account/logout',
+    async (): Promise<void> => {
+        await Browser.storage.local.set({ mnemonic: null });
+        window.location.reload();
     }
 );
 
@@ -91,7 +100,8 @@ export const accountCoinsSelector = createSelector(
     }
 );
 
-export const accountBalancesSelector = createSelector(
+// return an aggregate balance for each coin type
+export const accountAggregateBalancesSelector = createSelector(
     accountCoinsSelector,
     (coins) => {
         return coins.reduce((acc, aCoin) => {
@@ -107,9 +117,29 @@ export const accountBalancesSelector = createSelector(
     }
 );
 
+// return a list of balances for each coin object for each coin type
+export const accountItemizedBalancesSelector = createSelector(
+    accountCoinsSelector,
+    (coins) => {
+        return coins.reduce((acc, aCoin) => {
+            const coinType = Coin.getCoinTypeArg(aCoin);
+            if (coinType) {
+                if (typeof acc[coinType] === 'undefined') {
+                    acc[coinType] = [];
+                }
+                acc[coinType].push(Coin.getBalance(aCoin));
+            }
+            return acc;
+        }, {} as Record<string, bigint[]>);
+    }
+);
+
 export const accountNftsSelector = createSelector(
     suiObjectsAdapterSelectors.selectAll,
     (allSuiObjects) => {
         return allSuiObjects.filter((anObj) => !Coin.isCoin(anObj));
     }
 );
+
+export const activeAccountSelector = ({ account }: RootState) =>
+    account.address;

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -9,13 +10,13 @@ use std::{
 
 use parking_lot::Mutex;
 use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
+    base_types::{AuthorityName, ExecutionDigests, TransactionDigest},
     error::SuiError,
     messages::{CertifiedTransaction, ConfirmationTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointFragment, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
-        SignedCheckpoint, SignedCheckpointProposal,
+        CheckpointDigest, CheckpointFragment, CheckpointRequest, CheckpointResponse,
+        CheckpointSequenceNumber, SignedCheckpoint, SignedCheckpointProposal,
     },
 };
 use tokio::time::timeout;
@@ -25,6 +26,7 @@ use crate::{
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
 };
+use sui_types::committee::StakeUnit;
 use tracing::{debug, info, warn};
 use typed_store::Map;
 
@@ -60,7 +62,7 @@ pub struct CheckpointProcessControl {
 }
 
 impl Default for CheckpointProcessControl {
-    /// Standard parameters (currenty set heuristically).
+    /// Standard parameters (currently set heuristically).
     fn default() -> CheckpointProcessControl {
         CheckpointProcessControl {
             delay_on_quorum_failure: Duration::from_secs(10),
@@ -92,9 +94,16 @@ pub async fn checkpoint_process<A>(
     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
 
     loop {
+        let net = active_authority.net.load().deref().clone();
+        let committee = &net.committee;
+        if committee != active_authority.state.committee.load().deref().deref() {
+            warn!("Inconsistent committee between authority state and authority active");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            continue;
+        }
         // (1) Get the latest summaries and proposals
         let state_of_world = get_latest_proposal_and_checkpoint_from_all(
-            active_authority.net.clone(),
+            net.clone(),
             timing.extra_time_after_quorum,
             timing.timeout_until_quorum,
         )
@@ -121,7 +130,7 @@ pub async fn checkpoint_process<A>(
                 // TODO log error
                 if let Err(err) = sync_to_checkpoint(
                     active_authority.state.name,
-                    active_authority.net.clone(),
+                    net.clone(),
                     state_checkpoints.clone(),
                     checkpoint.clone(),
                 )
@@ -139,9 +148,11 @@ pub async fn checkpoint_process<A>(
             // In either case try to upgrade the signed checkpoint to a certified one
             // if possible
             let result = {
-                state_checkpoints
-                    .lock()
-                    .handle_checkpoint_certificate(&checkpoint, &None)
+                state_checkpoints.lock().handle_checkpoint_certificate(
+                    &checkpoint,
+                    &None,
+                    committee,
+                )
             }; // unlock
 
             if let Err(err) = result {
@@ -152,17 +163,16 @@ pub async fn checkpoint_process<A>(
                 // the full contents of the checkpoint. So we try to download it.
                 // TODO: clean up the errors to get here only when the error is
                 //       "No checkpoint set at this sequence."
-                if let Ok(contents) = get_checkpoint_contents(
-                    active_authority.state.name,
-                    active_authority.net.clone(),
-                    &checkpoint,
-                )
-                .await
+                if let Ok(contents) =
+                    get_checkpoint_contents(active_authority.state.name, net.clone(), &checkpoint)
+                        .await
                 {
                     // Retry with contents
-                    let _ = state_checkpoints
-                        .lock()
-                        .handle_checkpoint_certificate(&checkpoint, &Some(contents));
+                    let _ = state_checkpoints.lock().handle_checkpoint_certificate(
+                        &checkpoint,
+                        &Some(contents),
+                        committee,
+                    );
                 }
             }
         }
@@ -185,12 +195,12 @@ pub async fn checkpoint_process<A>(
         // (4) Check if we need to advance to the next checkpoint, in case >2/3
         // have a proposal out. If so we start creating and injecting fragments
         // into the consensus protocol to make the new checkpoint.
-        let weight: usize = proposals
+        let weight: StakeUnit = proposals
             .iter()
-            .map(|(auth, _)| active_authority.state.committee.weight(auth))
+            .map(|(auth, _)| committee.weight(auth))
             .sum();
 
-        let _start_checkpoint_making = weight > active_authority.state.committee.quorum_threshold();
+        let _start_checkpoint_making = weight > committee.quorum_threshold();
 
         let proposal = state_checkpoints.lock().new_proposal().clone();
         if let Ok(my_proposal) = proposal {
@@ -231,8 +241,8 @@ where
 {
     #[derive(Default)]
     struct CheckpointSummaries {
-        good_weight: usize,
-        bad_weight: usize,
+        good_weight: StakeUnit,
+        bad_weight: StakeUnit,
         responses: Vec<(
             AuthorityName,
             Option<SignedCheckpointProposal>,
@@ -319,7 +329,7 @@ where
     // Attempt to construct a newer checkpoint from signed summaries.
     #[allow(clippy::type_complexity)]
     let mut partial_checkpoints: BTreeMap<
-        (CheckpointSequenceNumber, [u8; 32]),
+        (CheckpointSequenceNumber, CheckpointDigest),
         Vec<(AuthorityName, SignedCheckpoint)>,
     > = BTreeMap::new();
     final_state
@@ -348,11 +358,11 @@ where
         });
 
     // We use a BTreeMap here to ensure we iterate in increasing order of checkpoint
-    // sequence numbers. If we find a valid checkpoint we are sure this is the higest.
+    // sequence numbers. If we find a valid checkpoint we are sure this is the highest.
     partial_checkpoints
         .iter()
         .for_each(|((_seq, _digest), signed)| {
-            let weight: usize = signed
+            let weight: StakeUnit = signed
                 .iter()
                 .map(|(auth, _)| net.committee.weight(auth))
                 .sum();
@@ -422,9 +432,10 @@ where
         let (past, _contents) =
             get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
 
-        if let Err(err) = checkpoint_db
-            .lock()
-            .handle_checkpoint_certificate(&past, &None)
+        if let Err(err) =
+            checkpoint_db
+                .lock()
+                .handle_checkpoint_certificate(&past, &None, &net.committee)
         {
             warn!("Error handling certificate: {err:?}");
         }
@@ -443,9 +454,10 @@ where
         let (past, _contents) =
             get_one_checkpoint(net.clone(), seq, true, &available_authorities).await?;
 
-        if let Err(err) = checkpoint_db
-            .lock()
-            .handle_checkpoint_certificate(&past, &_contents)
+        if let Err(err) =
+            checkpoint_db
+                .lock()
+                .handle_checkpoint_certificate(&past, &_contents, &net.committee)
         {
             warn!("Sync Err: {err:?}");
         }
@@ -541,8 +553,8 @@ where
                 info: _info,
                 detail: Some(contents),
             }) => {
-                // TODO: check here that the digest of contents matches
-                if contents.digest() != checkpoint.checkpoint.digest {
+                // Check here that the digest of contents matches
+                if contents.digest() != checkpoint.checkpoint.content_digest {
                     // A byzantine authority!
                     // TODO: Report Byzantine authority
                     warn!("Sync Error: Incorrect contents returned");
@@ -595,10 +607,10 @@ pub async fn diff_proposals<A>(
             break;
         }
 
-        let random_authority = active_authority.net.committee.sample();
-        if available_authorities.remove(random_authority) {
+        let random_authority = *active_authority.net.load().committee.sample();
+        if available_authorities.remove(&random_authority) {
             // Get a client
-            let client = active_authority.net.authority_clients[random_authority].clone();
+            let client = active_authority.net.load().authority_clients[&random_authority].clone();
 
             if let Ok(response) = client
                 .handle_checkpoint(CheckpointRequest::latest(true))
@@ -640,10 +652,13 @@ pub async fn diff_proposals<A>(
                             let proposer = &fragment.proposer.0.authority;
                             let other = &fragment.other.0.authority;
                             debug!("Send fragment: {proposer:?} -- {other:?}");
-                            let _ = checkpoint_db.lock().handle_receive_fragment(&fragment);
+                            let _ = checkpoint_db.lock().handle_receive_fragment(
+                                &fragment,
+                                &active_authority.state.committee.load(),
+                            );
                         }
                         Err(err) => {
-                            // TODO: some error occured -- log it.
+                            // TODO: some error occurred -- log it.
                             warn!("Error augmenting the fragment: {err:?}");
                         }
                     }
@@ -674,17 +689,17 @@ pub async fn augment_fragment_with_diff_transactions<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let mut diff_certs: BTreeMap<TransactionDigest, CertifiedTransaction> = BTreeMap::new();
+    let mut diff_certs: BTreeMap<ExecutionDigests, CertifiedTransaction> = BTreeMap::new();
 
     // These are the trasnactions that we have that the other validator does not
     // have, so we can read them from our local database.
     for tx_digest in &fragment.diff.second.items {
         let cert = active_authority
             .state
-            .read_certificate(tx_digest)
+            .read_certificate(&tx_digest.transaction)
             .await?
             .ok_or(SuiError::CertificateNotfound {
-                certificate_digest: *tx_digest,
+                certificate_digest: tx_digest.transaction,
             })?;
         diff_certs.insert(*tx_digest, cert);
     }
@@ -693,15 +708,16 @@ where
     // download them from the remote node.
     let client = active_authority
         .net
+        .load()
         .clone_client(&fragment.other.0.authority);
     for tx_digest in &fragment.diff.first.items {
         let response = client
-            .handle_transaction_info_request(TransactionInfoRequest::from(*tx_digest))
+            .handle_transaction_info_request(TransactionInfoRequest::from(tx_digest.transaction))
             .await?;
         let cert = response
             .certified_transaction
             .ok_or(SuiError::CertificateNotfound {
-                certificate_digest: *tx_digest,
+                certificate_digest: tx_digest.transaction,
             })?;
         diff_certs.insert(*tx_digest, cert);
     }
@@ -749,6 +765,7 @@ where
     {
         active_authority
             .net
+            .load()
             .sync_certificate_to_authority_with_timeout(
                 ConfirmationTransaction::new(cert.clone()),
                 active_authority.state.name,
@@ -761,7 +778,11 @@ where
 
     for digest in &unprocessed_digests {
         // If we have processed this continue with the next cert, nothing to do
-        if active_authority.state.database.effects_exists(digest)? {
+        if active_authority
+            .state
+            .database
+            .effects_exists(&digest.transaction)?
+        {
             continue;
         }
 
@@ -769,8 +790,8 @@ where
         debug!("Try sync for digest: {digest:?}");
         if let Err(err) = sync_digest(
             active_authority.state.name,
-            active_authority.net.clone(),
-            *digest,
+            active_authority.net.load().clone(),
+            digest.transaction,
             per_other_authority_delay,
         )
         .await
@@ -817,7 +838,7 @@ where
                     ConfirmationTransaction::new(cert.clone()),
                     name,
                     // Ok to have a fixed, and rather long timeout, since the future is controlled,
-                    // and interupted by a global timeout as well, that can be controlled.
+                    // and interrupted by a global timeout as well, that can be controlled.
                     Duration::from_secs(60),
                     3,
                 )
@@ -839,7 +860,7 @@ where
                     ConfirmationTransaction::new(cert.clone()),
                     name,
                     // Ok to have a fixed, and rather long timeout, since the future is controlled,
-                    // and interupted by a global timeout as well, that can be controlled.
+                    // and interrupted by a global timeout as well, that can be controlled.
                     Duration::from_secs(60),
                     3,
                 )

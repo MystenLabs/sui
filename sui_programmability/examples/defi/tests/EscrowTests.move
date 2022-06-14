@@ -29,7 +29,7 @@ module DeFi::EscrowTests {
     }
 
     #[test]
-    public(script) fun test_escrow_flow() {
+    fun test_escrow_flow() {
         // Both Alice and Bob send items to the third party
         let scenario = &mut send_to_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         swap(scenario, &THIRD_PARTY_ADDRESS);
@@ -40,7 +40,7 @@ module DeFi::EscrowTests {
     }
 
     #[test]
-    public(script) fun test_return_to_sender() {
+    fun test_return_to_sender() {
         // Both Alice and Bob send items to the third party
         let scenario = &mut send_to_escrow(ALICE_ADDRESS, BOB_ADDRESS);
 
@@ -48,12 +48,10 @@ module DeFi::EscrowTests {
         TestScenario::next_tx(scenario, &THIRD_PARTY_ADDRESS);
         {
             let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            Escrow::return_to_sender<ItemA, ItemB>(item_a, ctx);
+            Escrow::return_to_sender<ItemA, ItemB>(item_a);
 
             let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            Escrow::return_to_sender<ItemB, ItemA>(item_b, ctx);
+            Escrow::return_to_sender<ItemB, ItemA>(item_b);
         };
 
         // Alice now owns item A, and Bob now owns item B
@@ -63,7 +61,7 @@ module DeFi::EscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 1)]
-    public(script) fun test_swap_wrong_objects() {
+    fun test_swap_wrong_objects() {
         // Both Alice and Bob send items to the third party except that Alice wants to exchange
         // for a different object than Bob's
         let scenario = &mut send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, true, false);
@@ -72,20 +70,19 @@ module DeFi::EscrowTests {
 
     #[test]
     #[expected_failure(abort_code = 0)]
-    public(script) fun test_swap_wrong_recipient() {
+    fun test_swap_wrong_recipient() {
         // Both Alice and Bob send items to the third party except that Alice put a different
         // recipient than Bob
         let scenario = &mut send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, false, true);
         swap(scenario, &THIRD_PARTY_ADDRESS);
     }
 
-    public(script) fun swap(scenario: &mut Scenario, third_party: &address) {
+    fun swap(scenario: &mut Scenario, third_party: &address) {
         TestScenario::next_tx(scenario, third_party);
         {
             let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
             let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            Escrow::swap(item_a, item_b, ctx);
+            Escrow::swap(item_a, item_b);
         };
     }
 

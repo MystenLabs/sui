@@ -6,10 +6,10 @@ module Sui::Coin {
     use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
-    use Std::Vector;
+    use std::vector;
 
-    /// A coin of type `T` worth `value`. Transferable but not storable
-    struct Coin<phantom T> has key {
+    /// A coin of type `T` worth `value`. Transferable and storable
+    struct Coin<phantom T> has key, store {
         id: VersionedID,
         balance: Balance<T>
     }
@@ -65,7 +65,7 @@ module Sui::Coin {
     // === Functionality for Coin<T> holders ===
 
     /// Send `c` to `recipient`
-    public fun transfer<T>(c: Coin<T>, recipient: address) {
+    public entry fun transfer<T>(c: Coin<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -76,23 +76,23 @@ module Sui::Coin {
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
+    public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
         ID::delete(id);
         Balance::join(&mut self.balance, balance);
     }
 
     /// Join everything in `coins` with `self`
-    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
+    public entry fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
         let i = 0;
-        let len = Vector::length(&coins);
+        let len = vector::length(&coins);
         while (i < len) {
-            let coin = Vector::remove(&mut coins, i);
+            let coin = vector::remove(&mut coins, i);
             join(self, coin);
             i = i + 1
         };
         // safe because we've drained the vector
-        Vector::destroy_empty(coins)
+        vector::destroy_empty(coins)
     }
 
     /// Public getter for the coin's value
@@ -172,35 +172,24 @@ module Sui::Coin {
 
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public(script) fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun split_and_transfer<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
-    }
-
-    /// Consume the coin `c` and add its value to `self`.
-    /// Aborts if `c.value + self.value > U64_MAX`
-    public(script) fun join_<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
-        join(self, c)
-    }
-
-    /// Join everything in `coins` with `self`
-    public(script) fun join_vec_<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, _ctx: &mut TxContext) {
-        join_vec(self, coins)
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
-    public(script) fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
+    public entry fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
         let new_coin = withdraw(&mut self.balance, split_amount, ctx);
         Transfer::transfer(new_coin, TxContext::sender(ctx));
     }
 
     /// Split coin `self` into multiple coins, each with balance specified
     /// in `split_amounts`. Remaining balance is left in `self`.
-    public(script) fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
+    public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
         let i = 0;
-        let len = Vector::length(&split_amounts);
+        let len = vector::length(&split_amounts);
         while (i < len) {
-            split(self, *Vector::borrow(&split_amounts, i), ctx);
+            split(self, *vector::borrow(&split_amounts, i), ctx);
             i = i + 1;
         };
     }
@@ -211,5 +200,13 @@ module Sui::Coin {
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
         Coin { id: TxContext::new_id(ctx), balance: Balance::create_with_value(value) }
+    }
+
+    #[test_only]
+    /// Destroy a `Coin` with any value in it for testing purposes.
+    public fun destroy_for_testing<T>(self: Coin<T>): u64 {
+        let Coin { id, balance } = self;
+        ID::delete(id);
+        Balance::destroy_for_testing(balance)
     }
 }

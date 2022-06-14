@@ -19,7 +19,7 @@
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "Gateway API"
+          "name": "Quorum Driver API"
         }
       ],
       "description": "Execute the transaction using the transaction data, signature and public key.",
@@ -211,6 +211,31 @@
           "items": {
             "$ref": "#/components/schemas/ObjectInfo"
           }
+        }
+      }
+    },
+    {
+      "name": "sui_getRawObject",
+      "tags": [
+        {
+          "name": "BCS API"
+        }
+      ],
+      "description": "Return the raw BCS serialised move object bytes for a specified object",
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "GetRawObjectDataResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectRead"
         }
       }
     },
@@ -882,7 +907,7 @@
       "name": "sui_syncAccountState",
       "tags": [
         {
-          "name": "Gateway API"
+          "name": "Quorum Driver API"
         }
       ],
       "description": "Synchronize client state with validators.",
@@ -946,6 +971,62 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_transferSui",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Send SUI coin object to a Sui address. The SUI object is also used as the gas object.",
+      "params": [
+        {
+          "name": "signer",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "sui_object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "recipient",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "amount",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -1039,10 +1120,16 @@
         "oneOf": [
           {
             "type": "object",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoveObject"
+              },
+              {
+                "$ref": "#/components/schemas/RawMoveObject"
+              }
+            ],
             "required": [
-              "dataType",
-              "fields",
-              "type"
+              "dataType"
             ],
             "properties": {
               "dataType": {
@@ -1050,12 +1137,6 @@
                 "enum": [
                   "moveObject"
                 ]
-              },
-              "fields": {
-                "$ref": "#/components/schemas/MoveStruct"
-              },
-              "type": {
-                "type": "string"
               }
             }
           },
@@ -1274,6 +1355,21 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "MoveObject": {
+        "type": "object",
+        "required": [
+          "fields",
+          "type"
+        ],
+        "properties": {
+          "fields": {
+            "$ref": "#/components/schemas/MoveStruct"
+          },
+          "type": {
+            "type": "string"
           }
         }
       },
@@ -1636,6 +1732,21 @@
           }
         }
       },
+      "RawMoveObject": {
+        "type": "object",
+        "required": [
+          "bcs_bytes",
+          "type"
+        ],
+        "properties": {
+          "bcs_bytes": {
+            "$ref": "#/components/schemas/Base64"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
       "SequenceNumber": {
         "type": "integer",
         "format": "uint64",
@@ -1855,6 +1966,14 @@
           },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "timestamp_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -1895,6 +2014,19 @@
             "properties": {
               "Call": {
                 "$ref": "#/components/schemas/MoveCall"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Initiate a SUI coin transfer between addresses",
+            "type": "object",
+            "required": [
+              "TransferSui"
+            ],
+            "properties": {
+              "TransferSui": {
+                "$ref": "#/components/schemas/TransferSui"
               }
             },
             "additionalProperties": false
@@ -1975,6 +2107,25 @@
         "properties": {
           "objectRef": {
             "$ref": "#/components/schemas/ObjectRef"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "TransferSui": {
+        "type": "object",
+        "required": [
+          "recipient"
+        ],
+        "properties": {
+          "amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
           },
           "recipient": {
             "$ref": "#/components/schemas/SuiAddress"

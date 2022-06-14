@@ -11,7 +11,7 @@ module 0x0.M {
     struct Obj<T> has key { id: ID.VersionedID }
     struct NoStore has copy, drop { value: u64 }
 
-    public(script) no(s: Self.Obj<Self.NoStore>, ctx: &mut TxContext.TxContext) {
+    public entry no(s: Self.Obj<Self.NoStore>, ctx: &mut TxContext.TxContext) {
         label l0:
         abort 0;
     }
@@ -27,7 +27,7 @@ module 0x0.M {
 
     struct Obj<T> has key { id: ID.VersionedID }
 
-    public(script) no<T>(s: Self.Obj<T>, ctx: &mut TxContext.TxContext) {
+    public entry no<T>(s: Self.Obj<T>, ctx: &mut TxContext.TxContext) {
         label l0:
         abort 0;
     }

@@ -92,7 +92,7 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 If you need to download and understand the Sui source code, clone the Sui repository:
 
 ```shell
-$ git clone https://github.com/MystenLabs/sui.git
+$ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 You can start exploring Sui's source code by looking into the following primary directories:
@@ -110,6 +110,7 @@ And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html)
 
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
+> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our devnet. If you want to run network locally using the latest version and don't need to interact with our devnet, you could switch to `main` branch.
 ## Next steps
 
 Continue your journey through:

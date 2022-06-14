@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiMoveObject, isSuiMovePackage } from '@mysten/sui.js';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 
 import Field from './field';
-import BsIcon from '_components/bs-icon';
 import CopyToClipboard from '_components/copy-to-clipboard';
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useMiddleEllipsis, useMediaUrl, useSuiObjectFields } from '_hooks';
-import { Explorer } from '_redux/slices/sui-objects/Explorer';
 
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
 
@@ -28,10 +28,6 @@ function SuiObject({ obj }: SuiObjectProps) {
     const suiMoveObjectFields = isSuiMoveObject(obj.data)
         ? obj.data.fields
         : null;
-    const explorerUrl = useMemo(
-        () => Explorer.getObjectUrl(objectId),
-        [objectId]
-    );
     return (
         <div className={st.container}>
             <span className={st.id} title={objectId}>
@@ -65,17 +61,12 @@ function SuiObject({ obj }: SuiObjectProps) {
                     ) : null}
                 </div>
             </div>
-            <a
-                href={explorerUrl}
-                target="_blank"
+            <ExplorerLink
+                type={ExplorerLinkType.object}
+                objectID={objectId}
+                title="View on Sui Explorer"
                 className={st['explorer-link']}
-                rel="noreferrer"
-            >
-                <BsIcon
-                    title="View on Sui Explorer"
-                    icon="box-arrow-up-right"
-                />
-            </a>
+            />
         </div>
     );
 }

@@ -5,11 +5,11 @@
 module Games::RockPaperScissorsTests {
     use Games::RockPaperScissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
     use Sui::TestScenario::{Self};
-    use Std::Vector;
-    use Std::Hash;
+    use std::vector;
+    use std::hash;
 
     #[test]
-    public(script) fun play_rock_paper_scissors() {
+    fun play_rock_paper_scissors() {
         // So these are our heroes.
         let the_main_guy = @0xA1C05;
         let mr_lizard = @0xA55555;
@@ -36,7 +36,7 @@ module Games::RockPaperScissorsTests {
 
             assert!(Game::status(&game) == 0, 0); // STATUS_READY
 
-            Game::add_hash(&mut game, cap, TestScenario::ctx(scenario));
+            Game::add_hash(&mut game, cap);
 
             assert!(Game::status(&game) == 1, 0); // STATUS_HASH_SUBMISSION
 
@@ -54,7 +54,7 @@ module Games::RockPaperScissorsTests {
         {
             let game = TestScenario::take_owned<Game>(scenario);
             let cap = TestScenario::take_owned<PlayerTurn>(scenario);
-            Game::add_hash(&mut game, cap, TestScenario::ctx(scenario));
+            Game::add_hash(&mut game, cap);
 
             assert!(Game::status(&game) == 2, 0); // STATUS_HASHES_SUBMITTED
 
@@ -71,7 +71,7 @@ module Games::RockPaperScissorsTests {
         {
             let game = TestScenario::take_owned<Game>(scenario);
             let secret = TestScenario::take_owned<Secret>(scenario);
-            Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
+            Game::match_secret(&mut game, secret);
 
             assert!(Game::status(&game) == 3, 0); // STATUS_REVEALING
 
@@ -87,7 +87,7 @@ module Games::RockPaperScissorsTests {
         {
             let game = TestScenario::take_owned<Game>(scenario);
             let secret = TestScenario::take_owned<Secret>(scenario);
-            Game::match_secret(&mut game, secret, TestScenario::ctx(scenario));
+            Game::match_secret(&mut game, secret);
 
             assert!(Game::status(&game) == 4, 0); // STATUS_REVEALED
 
@@ -103,7 +103,7 @@ module Games::RockPaperScissorsTests {
 
     // Copy of the hashing function from the main module.
     fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
-        Vector::push_back(&mut salt, gesture);
-        Hash::sha2_256(salt)
+        vector::push_back(&mut salt, gesture);
+        hash::sha2_256(salt)
     }
 }

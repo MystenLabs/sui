@@ -8,6 +8,7 @@ use move_core_types::{
 };
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use serde_with::{serde_as, Bytes};
 use strum_macros::EnumDiscriminants;
 
@@ -19,22 +20,30 @@ use crate::{
 };
 
 /// A universal Sui event type encapsulating different types of events
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventEnvelope {
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     timestamp: u64,
     /// Transaction digest of associated transaction, if any
     tx_digest: Option<TransactionDigest>,
     /// Specific event type
-    event: Event,
+    pub event: Event,
+    /// json value for MoveStruct (for MoveEvent only)
+    pub move_struct_json_value: Option<Value>,
 }
 
 impl EventEnvelope {
-    pub fn new(timestamp: u64, tx_digest: Option<TransactionDigest>, event: Event) -> Self {
+    pub fn new(
+        timestamp: u64,
+        tx_digest: Option<TransactionDigest>,
+        event: Event,
+        move_struct_json_value: Option<Value>,
+    ) -> Self {
         Self {
             timestamp,
             tx_digest,
             event,
+            move_struct_json_value,
         }
     }
 

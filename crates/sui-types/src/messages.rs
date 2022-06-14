@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
-use crate::committee::EpochId;
+use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignature, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
@@ -32,6 +32,7 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
@@ -75,6 +76,12 @@ pub struct MoveModulePublish {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct TransferSui {
+    pub recipient: SuiAddress,
+    pub amount: Option<u64>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
@@ -92,6 +99,8 @@ pub enum SingleTransactionKind {
     Publish(MoveModulePublish),
     /// Call a function in a published Move module
     Call(MoveCall),
+    /// Initiate a SUI coin transfer between addresses
+    TransferSui(TransferSui),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -161,6 +170,9 @@ impl SingleTransactionKind {
                     .collect::<Vec<_>>();
                 Transaction::input_objects_in_compiled_modules(&compiled_modules)
             }
+            Self::TransferSui(_) => {
+                vec![]
+            }
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject(
                     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -187,12 +199,21 @@ impl Display for SingleTransactionKind {
         let mut writer = String::new();
         match &self {
             Self::TransferCoin(t) => {
-                writeln!(writer, "Transaction Kind : Transfer")?;
+                writeln!(writer, "Transaction Kind : Transfer Coin")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
                 writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
+            }
+            Self::TransferSui(t) => {
+                writeln!(writer, "Transaction Kind : Transfer SUI")?;
+                writeln!(writer, "Recipient : {}", t.recipient)?;
+                if let Some(amount) = t.amount {
+                    writeln!(writer, "Amount: {}", amount)?;
+                } else {
+                    writeln!(writer, "Amount: Full Balance")?;
+                }
             }
             Self::Publish(_p) => {
                 writeln!(writer, "Transaction Kind : Publish")?;
@@ -281,6 +302,7 @@ pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
+    pub gas_price: u64,
     pub gas_budget: u64,
 }
 
@@ -297,6 +319,23 @@ where
         TransactionData {
             kind,
             sender,
+            gas_price: 1,
+            gas_payment,
+            gas_budget,
+        }
+    }
+
+    pub fn new_with_gas_price(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_price,
             gas_payment,
             gas_budget,
         }
@@ -332,6 +371,20 @@ where
         let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
             recipient,
             object_ref,
+        }));
+        Self::new(kind, sender, gas_payment, gas_budget)
+    }
+
+    pub fn new_transfer_sui(
+        recipient: SuiAddress,
+        sender: SuiAddress,
+        amount: Option<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
+            recipient,
+            amount,
         }));
         Self::new(kind, sender, gas_payment, gas_budget)
     }
@@ -608,14 +661,14 @@ impl SignedTransaction {
     }
 
     pub fn new_change_epoch(
-        cur_epoch: EpochId,
+        next_epoch: EpochId,
         storage_charge: u64,
         computation_charge: u64,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
         let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
-            epoch: cur_epoch + 1,
+            epoch: next_epoch,
             storage_charge,
             computation_charge,
         }));
@@ -633,7 +686,7 @@ impl SignedTransaction {
             data,
             tx_signature: Signature::new_empty(),
             auth_sign_info: AuthoritySignInfo {
-                epoch: cur_epoch,
+                epoch: next_epoch,
                 authority,
                 signature,
             },
@@ -641,7 +694,7 @@ impl SignedTransaction {
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn verify(&self, committee: &Committee) -> Result<usize, SuiError> {
+    pub fn verify(&self, committee: &Committee) -> Result<u64, SuiError> {
         self.verify_signature()?;
         let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
@@ -933,7 +986,7 @@ impl TransactionEffects {
     /// Return an iterator that iterates through both mutated and
     /// created objects.
     /// It doesn't include deleted objects.
-    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
+    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> + Clone {
         self.mutated.iter().chain(self.created.iter())
     }
 
@@ -985,13 +1038,6 @@ impl TransactionEffects {
                 authority: *authority_name,
                 signature,
             },
-        }
-    }
-
-    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
-        UnsignedTransactionEffects {
-            effects: self,
-            auth_signature: EmptySignInfo {},
         }
     }
 
@@ -1061,6 +1107,28 @@ impl PartialEq for SignedTransactionEffects {
     }
 }
 
+pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityQuorumSignInfo>;
+
+impl CertifiedTransactionEffects {
+    pub fn new(
+        epoch: EpochId,
+        effects: TransactionEffects,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> Self {
+        Self {
+            effects,
+            auth_signature: AuthorityQuorumSignInfo { epoch, signatures },
+        }
+    }
+
+    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
+        UnsignedTransactionEffects {
+            effects: self.effects,
+            auth_signature: EmptySignInfo {},
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
@@ -1098,7 +1166,7 @@ impl InputObjectKind {
 }
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
-    weight: usize,
+    weight: StakeUnit,
     used_authorities: HashSet<AuthorityName>,
     partial: CertifiedTransaction,
 }
@@ -1116,7 +1184,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction::new(transaction),
+            partial: CertifiedTransaction::new(committee.epoch, transaction),
         }
     }
 
@@ -1154,17 +1222,8 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedTransaction {
-    pub fn new(transaction: Transaction) -> CertifiedTransaction {
-        CertifiedTransaction {
-            transaction_digest: transaction.transaction_digest,
-            is_verified: false,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityQuorumSignInfo {
-                epoch: 0,
-                signatures: Vec::new(),
-            },
-        }
+    pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
+        Self::new_with_signatures(epoch, transaction, vec![])
     }
 
     pub fn new_with_signatures(
@@ -1318,4 +1377,25 @@ impl ConsensusTransaction {
             Self::Checkpoint(fragment) => fragment.verify(committee),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionRequestType {
+    ImmediateReturn,
+    WaitForTxCert,
+    WaitForEffectsCert,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecuteTransactionRequest {
+    pub transaction: Transaction,
+    pub request_type: ExecuteTransactionRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
+    EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }

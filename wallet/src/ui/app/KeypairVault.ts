@@ -15,4 +15,11 @@ export default class KeypairVault {
     public getAccount(): string | null {
         return this._keypair?.getPublicKey().toSuiAddress() || null;
     }
+
+    public getKeyPair() {
+        if (!this._keypair) {
+            throw new Error('Account keypair is not set');
+        }
+        return this._keypair;
+    }
 }

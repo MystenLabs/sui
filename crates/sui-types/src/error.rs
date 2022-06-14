@@ -53,6 +53,8 @@ pub enum SuiError {
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
+    #[error("The SUI coin to be transferred has balance {balance}, which is not enough to cover the transfer amount {required}")]
+    TransferInsufficientBalance { balance: u64, required: u64 },
     #[error("A move object is expected, instead a move package is passed: {object_id}")]
     MovePackageAsObject { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
@@ -101,8 +103,11 @@ pub enum SuiError {
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
     ErrorWhileProcessingConfirmationTransaction { err: String },
-    #[error("An invalid answer was returned by the authority while requesting a certificate")]
-    ErrorWhileRequestingCertificate,
+    #[error(
+    "Failed to execute certificate on a quorum of validators, cause by : {:#?}",
+    errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
+    )]
+    QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },
     #[error("Move call failed: {err}")]
@@ -213,8 +218,8 @@ pub enum SuiError {
     ModuleNotFound { module_name: String },
     #[error("Function signature is invalid: {error:?}.")]
     InvalidFunctionSignature { error: String },
-    #[error("Function visibility is invalid for an entry point to execution: {error:?}.")]
-    InvalidFunctionVisibility { error: String },
+    #[error("Non-`entry` function used for entry point to execution: {error:?}.")]
+    InvalidNonEntryFunction { error: String },
     #[error("Type error while binding function arguments: {error:?}.")]
     TypeError { error: String },
     #[error("Execution aborted: {error:?}.")]
@@ -289,6 +294,9 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
+    #[error("Failed to dispatch event: {error:?}")]
+    EventFailedToDispatch { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
@@ -337,6 +345,12 @@ pub enum SuiError {
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
 
+    // Epoch related errors.
+    #[error("Validator temporarily stopped processing transactions due to epoch change")]
+    ValidatorHaltedAtEpochEnd,
+    #[error("Inconsistent state detected during epoch change: {:?}", error)]
+    InconsistentEpochState { error: String },
+
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
     #[error("{0}")]
@@ -344,6 +358,9 @@ pub enum SuiError {
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
+
+    #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
+    QuorumDriverCommunicationError { error: String },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

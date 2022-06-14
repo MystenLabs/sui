@@ -142,7 +142,7 @@ export type SplitCoinResponse = {
 export type TransactionResponse =
   | {
       EffectResponse: TransactionEffectsResponse;
-      // TODO: Add Publish, MergeCoin Response
+      // TODO: Add Publish Response
     }
   | {
       SplitCoinResponse: SplitCoinResponse;
@@ -255,4 +255,57 @@ export function getTotalGasUsed(data: TransactionEffectsResponse): number {
     gasSummary.storageCost -
     gasSummary.storageRebate
   );
+}
+
+/* --------------------------- TransactionResponse -------------------------- */
+
+export function getTransactionEffectsResponse(
+  data: TransactionResponse
+): TransactionEffectsResponse | undefined {
+  return 'EffectResponse' in data ? data.EffectResponse : undefined;
+}
+
+export function getSplitCoinResponse(
+  data: TransactionResponse
+): SplitCoinResponse | undefined {
+  return 'SplitCoinResponse' in data ? data.SplitCoinResponse : undefined;
+}
+
+export function getMergeCoinResponse(
+  data: TransactionResponse
+): MergeCoinResponse | undefined {
+  return 'MergeCoinResponse' in data ? data.MergeCoinResponse : undefined;
+}
+
+/**
+ * Get the updated coin after a merge.
+ * @param data the response for executing a merge coin transaction
+ * @returns the updated state of the primary coin after the merge
+ */
+export function getCoinAfterMerge(
+  data: TransactionResponse
+): SuiObject | undefined {
+  return getMergeCoinResponse(data)?.updatedCoin;
+}
+
+/**
+ * Get the updated coin after a split.
+ * @param data the response for executing a Split coin transaction
+ * @returns the updated state of the original coin object used for the split
+ */
+export function getCoinAfterSplit(
+  data: TransactionResponse
+): SuiObject | undefined {
+  return getSplitCoinResponse(data)?.updatedCoin;
+}
+
+/**
+ * Get the newly created coin after a split.
+ * @param data the response for executing a Split coin transaction
+ * @returns the updated state of the original coin object used for the split
+ */
+export function getNewlyCreatedCoinsAfterSplit(
+  data: TransactionResponse
+): SuiObject[] | undefined {
+  return getSplitCoinResponse(data)?.newCoins;
 }

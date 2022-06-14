@@ -1,5 +1,16 @@
+.address-container {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+}
+
 .address {
     font-size: 15px;
     font-weight: 700;
     color: #404040;
+}
+
+.explorer-link {
+    color: inherit;
+    margin-left: 5px;
 }

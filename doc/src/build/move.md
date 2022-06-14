@@ -241,7 +241,7 @@ simplest entry functions is defined in the
 to implement gas object transfer:
 
 ```rust
-public(script) fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
+public entry fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
     ...
 }
 ```
@@ -252,9 +252,10 @@ that it will do what it is intended to do.)
 
 In general, an entry function, must satisfy the following properties:
 
-- have `public(script)` visibility modifier
+- have the `entry` modifier
+  - Note: The visibility does not matter. The function can be `public`, `public(friend)`, or internal.
 - have no return value
-- have a mutable reference to an instance of the `TxContext` struct
+- (optional) have a mutable reference to an instance of the `TxContext` struct
   defined in the [TxContext module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TxContext.move) as the last parameter
 
 More concretely, the `transfer` function is public, has no return
@@ -267,6 +268,7 @@ value, and has three parameters:
 - `_ctx` - a mutable reference to an instance of the `TxContext`
   struct (in this particular case, this parameter is not actually used
   in the function's body as indicated by its name starting with `_`)
+  - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
 You can see how the `transfer` function is called from a sample Sui
 wallet in [Calling Move code](wallet.md#calling-move-code).
@@ -280,7 +282,7 @@ this package, first [install Sui binaries](install.md#binaries) and
 you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move) file.
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move) file.
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
@@ -396,7 +398,7 @@ Sui = { local = "../../crates/sui-framework" }
 MyFirstPackage = "0x0"
 ```
 
-See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/tutorial/Move.toml)
+See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/Move.toml)
 file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
@@ -616,7 +618,7 @@ point of view of a Sui developer. First, let us create
 sword creation and transfer and put them into the `M1.move` file:
 
 ``` rust
-    public(script) fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         use Sui::Transfer;
         use Sui::TxContext;
         // create a sword
@@ -629,7 +631,7 @@ sword creation and transfer and put them into the `M1.move` file:
         Transfer::transfer(sword, recipient);
     }
 
-    public(script) fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
+    public entry fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
         use Sui::Transfer;
         // transfer the sword
         Transfer::transfer(sword, recipient);
@@ -652,13 +654,11 @@ struct available for function definitions:
 
 We can now build the module extended with the new functions but still
 have only one test defined. Let us change that by adding another test
-function. Note that this function needs to have `public(script)`
-visibility modifier to be able to call other functions with the same
-modifier, such as our entry function `sword_create`.
+function.
 
 ``` rust
     #[test]
-    public(script) fun test_sword_transactions() {
+    fun test_sword_transactions() {
         use Sui::TestScenario;
 
         let admin = @0xABBA;
@@ -839,7 +839,7 @@ function to take the forge as a parameter and to update the number of
 created swords at the end of the function:
 
 ``` rust
-    public(script) fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         ...
         forge.swords_created = forge.swords_created + 1;
     }
@@ -886,7 +886,7 @@ encounter compilation errors in the existing tests due to the
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move).
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move).
 
 ## Sui Move library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
@@ -915,7 +915,7 @@ We can also transfer an object to be owned by another object. Note that the owne
 Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: account address `Addr1` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
 ```
 // signer of ctx is Addr1.
-public(script) fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
+public entry fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
 ```
 
 A common pattern of object owning another object is to have a field in the parent object to track the ID of the child object. It is important to ensure that we keep such a field's value consistent with the actual ownership relationship. For example, we do not end up in a situation where the parent's child field contains an ID pointing to object A, while in fact the parent owns object B. To ensure the consistency, we defined a custom type called `ChildRef` to represent object ownership. Whenever an object is transferred to another object, a `ChildRef` instance is created to uniquely identify the ownership. The library implementation ensures that the `ChildRef` goes side-by-side with the child object so that we never lose track or mix up objects.

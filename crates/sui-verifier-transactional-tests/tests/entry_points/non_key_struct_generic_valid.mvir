@@ -10,7 +10,7 @@ module 0x0.M {
 
     struct Obj<T> has key { id: ID.VersionedID }
 
-    public(script) no<T: store>(s: Self.Obj<T>, ctx: &mut TxContext.TxContext) {
+    public entry no<T: store>(s: Self.Obj<T>, ctx: &mut TxContext.TxContext) {
         label l0:
         abort 0;
     }
