@@ -53,8 +53,8 @@ sui-json = { path = "../sui-json" }
 sui-gateway = { path = "../sui-gateway" }
 sui-node = { path = "../sui-node" }
 sui-swarm = { path = "../sui-swarm" }
-sui-rpc = { path = "../sui-rpc" }
-sui-rpc-api = { path = "../sui-rpc-api" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"

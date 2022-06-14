@@ -14,8 +14,8 @@ use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
 
 use crate::SuiRpcModule;
-use sui_rpc_api::rpc_types::GetRawObjectDataResponse;
-use sui_rpc_api::RpcBcsApiServer;
+use sui_json_rpc_api::rpc_types::GetRawObjectDataResponse;
+use sui_json_rpc_api::RpcBcsApiServer;
 
 pub struct BcsApiImpl {
     client: ClientStateAdaptor,
@@ -69,6 +69,6 @@ impl SuiRpcModule for BcsApiImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_rpc_api::RpcBcsApiOpenRpc::module_doc()
+        sui_json_rpc_api::RpcBcsApiOpenRpc::module_doc()
     }
 }

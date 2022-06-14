@@ -8,22 +8,22 @@ use tokio::runtime::Handle;
 
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
-use sui_rpc_api::client::SuiRpcClient;
-use sui_rpc_api::rpc_types::{
+use sui_json_rpc_api::client::SuiRpcClient;
+use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse,
     TransactionResponse,
 };
-use sui_rpc_api::QuorumDriverApiClient;
-use sui_rpc_api::RpcBcsApiClient;
-use sui_rpc_api::RpcTransactionBuilderClient;
-use sui_rpc_api::TransactionBytes;
+use sui_json_rpc_api::QuorumDriverApiClient;
+use sui_json_rpc_api::RpcBcsApiClient;
+use sui_json_rpc_api::RpcTransactionBuilderClient;
+use sui_json_rpc_api::TransactionBytes;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 pub struct RpcGatewayClient {
     client: SuiRpcClient,
 }
-use sui_rpc_api::RpcReadApiClient;
+use sui_json_rpc_api::RpcReadApiClient;
 impl RpcGatewayClient {
     pub fn new(server_url: String) -> Result<Self, anyhow::Error> {
         Ok(Self {

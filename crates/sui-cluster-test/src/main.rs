@@ -13,7 +13,7 @@ use sui::{
 };
 use sui_faucet::FaucetResponse;
 use sui_json::SuiJsonValue;
-use sui_rpc_api::rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
+use sui_json_rpc_api::rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
     crypto::get_key_pair,

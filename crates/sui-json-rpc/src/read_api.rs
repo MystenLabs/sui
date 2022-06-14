@@ -9,10 +9,12 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
+use sui_json_rpc_api::rpc_types::{
+    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse,
+};
+use sui_json_rpc_api::RpcFullNodeReadApiServer;
+use sui_json_rpc_api::RpcReadApiServer;
 use sui_open_rpc::Module;
-use sui_rpc_api::rpc_types::{GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse};
-use sui_rpc_api::RpcFullNodeReadApiServer;
-use sui_rpc_api::RpcReadApiServer;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Owner;
 
@@ -113,7 +115,7 @@ impl SuiRpcModule for ReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_rpc_api::RpcReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::RpcReadApiOpenRpc::module_doc()
     }
 }
 
@@ -157,6 +159,6 @@ impl SuiRpcModule for FullNodeApi {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_rpc_api::RpcFullNodeReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::RpcFullNodeReadApiOpenRpc::module_doc()
     }
 }

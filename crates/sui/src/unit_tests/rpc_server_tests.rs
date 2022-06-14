@@ -6,10 +6,10 @@ use sui::keystore::{Keystore, SuiKeystore};
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
-use sui_rpc_api::rpc_types::{
+use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_rpc_api::{
+use sui_json_rpc_api::{
     QuorumDriverApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
 };
 use sui_types::sui_serde::Base64;

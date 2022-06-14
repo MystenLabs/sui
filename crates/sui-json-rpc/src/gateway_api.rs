@@ -11,14 +11,14 @@ use tracing::debug;
 use crate::SuiRpcModule;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
-use sui_open_rpc::Module;
-use sui_rpc_api::rpc_types::SuiTypeTag;
-use sui_rpc_api::rpc_types::{
+use sui_json_rpc_api::rpc_types::SuiTypeTag;
+use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_rpc_api::{
+use sui_json_rpc_api::{
     QuorumDriverApiServer, RpcReadApiServer, RpcTransactionBuilderServer, TransactionBytes,
 };
+use sui_open_rpc::Module;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -87,7 +87,7 @@ impl SuiRpcModule for RpcGatewayImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_rpc_api::QuorumDriverApiOpenRpc::module_doc()
+        sui_json_rpc_api::QuorumDriverApiOpenRpc::module_doc()
     }
 }
 
@@ -146,7 +146,7 @@ impl SuiRpcModule for GatewayReadApiImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_rpc_api::RpcReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::RpcReadApiOpenRpc::module_doc()
     }
 }
 
@@ -270,6 +270,6 @@ impl SuiRpcModule for TransactionBuilderImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_rpc_api::RpcTransactionBuilderOpenRpc::module_doc()
+        sui_json_rpc_api::RpcTransactionBuilderOpenRpc::module_doc()
     }
 }
