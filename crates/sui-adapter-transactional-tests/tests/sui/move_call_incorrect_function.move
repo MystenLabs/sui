@@ -7,4 +7,4 @@
 //# run 0x242::ObjectBasics::create
 
 // Calling a non-existant function.
-//# run Sui::ObjectBasics::foo
+//# run sui::ObjectBasics::foo
