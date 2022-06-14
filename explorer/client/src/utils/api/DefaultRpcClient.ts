@@ -9,13 +9,16 @@ import {
     getTransactionKindName,
     getTransferCoinTransaction,
     JsonRpcProvider,
-    GetTxnDigestsResponse,
-    TransactionEffectsResponse,
-    CertifiedTransaction,
 } from '@mysten/sui.js';
 
 import { deduplicate } from '../searchUtil';
 import { getEndpoint, Network } from './rpcSetting';
+
+import type {
+    GetTxnDigestsResponse,
+    TransactionEffectsResponse,
+    CertifiedTransaction,
+} from '@mysten/sui.js';
 
 export { Network, getEndpoint };
 
@@ -31,7 +34,7 @@ export const getDataOnTxDigests = (
         .then((txEffs: TransactionEffectsResponse[]) => {
             return (
                 txEffs
-                    .map((txEff, i) => {
+                    .map((txEff) => {
                         const [seq, digest] = transactions.filter(
                             (transactionId) =>
                                 transactionId[1] ===
