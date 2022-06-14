@@ -302,6 +302,7 @@ pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
+    pub gas_price: u64,
     pub gas_budget: u64,
 }
 
@@ -318,6 +319,23 @@ where
         TransactionData {
             kind,
             sender,
+            gas_price: 1,
+            gas_payment,
+            gas_budget,
+        }
+    }
+
+    pub fn new_with_gas_price(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_price,
             gas_payment,
             gas_budget,
         }
