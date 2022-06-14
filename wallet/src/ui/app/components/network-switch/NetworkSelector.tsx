@@ -7,12 +7,7 @@ import { useMemo, useCallback } from 'react';
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
 import BsIcon from '_components/bs-icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
-import {
-    setApiEnv,
-    changeRPCNetwork,
-    setNetworkSelector,
-} from '_redux/slices/app';
-import { getTransactionsByAddress } from '_redux/slices/txresults';
+import { changeRPCNetwork } from '_redux/slices/app';
 
 import st from './Network.module.scss';
 
@@ -31,15 +26,11 @@ const NetworkSelector = () => {
         []
     );
 
-    // TODO move the dispatch to combinereducer
     const changeNetwork = useCallback(
-        (e: React.MouseEvent<HTMLLIElement>) => {
+        (e: React.MouseEvent<HTMLElement>) => {
             const networkName = e.currentTarget.dataset.network;
             const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
-            dispatch(setNetworkSelector(true));
-            dispatch(setApiEnv(apiEnv));
-            dispatch(changeRPCNetwork());
-            dispatch(getTransactionsByAddress());
+            dispatch(changeRPCNetwork(apiEnv));
         },
         [dispatch]
     );

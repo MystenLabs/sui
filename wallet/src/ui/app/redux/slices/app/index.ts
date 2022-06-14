@@ -5,7 +5,8 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 import { AppType } from './AppType';
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
-// import { getTransactionsByAddress } from '_redux/slices/txresults';
+import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
+import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { API_ENV } from '_app/ApiProvider';
@@ -23,11 +24,15 @@ const initialState: AppState = {
     showHideNetwork: false,
 };
 
-export const changeRPCNetwork = createAsyncThunk<void, void, AppThunkConfig>(
+// On network change, set setNewJsonRpcProvider, fetch all owned objects, and fetch all transactions
+export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
     'changeRPCNetwork',
-    async (_, { extra: { api }, getState }) => {
-        const newApiEnv = getState().app.apiEnv;
-        api.setNewJsonRpcProvider(newApiEnv || 'devNet');
+    async (networkName, { extra: { api }, dispatch }) => {
+        dispatch(setApiEnv(networkName));
+        api.setNewJsonRpcProvider(networkName || 'devNet');
+        dispatch(setNetworkSelector(true));
+        dispatch(getTransactionsByAddress());
+        dispatch(fetchAllOwnedObjects());
     }
 );
 
