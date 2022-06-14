@@ -375,8 +375,9 @@ impl AuthorityState {
         }
 
         // Check the certificate and retrieve the transfer data.
+        let committee = &self.committee.load();
         tracing::trace_span!("cert_check_signature")
-            .in_scope(|| certificate.verify(&self.committee.load()))
+            .in_scope(|| certificate.verify(committee))
             .map_err(|e| {
                 self.metrics.signature_errors.inc();
                 e
@@ -528,6 +529,15 @@ impl AuthorityState {
         })
     }
 
+    /// prepare_certificate validates the transaction input, and executes the certificate,
+    /// returning effects, output objects, events, etc.
+    ///
+    /// It reads state from the db (both owned and shared locks), but it has no side effects.
+    ///
+    /// It can be generally understood that a failure of prepare_certificate indicates a
+    /// non-transient error, e.g. the transaction input is somehow invalid, the correct
+    /// locks are not held, etc. However, this is not entirely true, as a transient db read error
+    /// may also cause this function to fail.
     #[instrument(level = "debug", name = "prepare_certificate", skip_all)]
     async fn prepare_certificate(
         &self,
@@ -1016,6 +1026,13 @@ impl AuthorityState {
             metrics: &METRICS,
         };
 
+        // Process tx recovery log first, so that the batch and checkpoint recovery (below)
+        // don't observe partially-committed txes.
+        state
+            .process_tx_recovery_log(None)
+            .await
+            .expect("Could not fully process recovery log at startup!");
+
         state
             .init_batches_from_database()
             .expect("Init batches failed!");
@@ -1053,15 +1070,10 @@ impl AuthorityState {
         }
 
         state
-            .process_recovery_log(None)
-            .await
-            .expect("Could not fully process recovery log at startup!");
-
-        state
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
-    async fn process_recovery_log(&self, limit: Option<usize>) -> SuiResult {
+    async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
