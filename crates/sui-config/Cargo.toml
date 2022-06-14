@@ -21,8 +21,8 @@ tracing = "0.1.34"
 
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "config" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "crypto" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-package = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-package = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
 
 sui-framework = { path = "../sui-framework" }
 

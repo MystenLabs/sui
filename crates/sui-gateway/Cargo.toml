@@ -30,6 +30,6 @@ sui-json = { path = "../sui-json" }
 sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2", features = ["address20"] }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
 workspace-hack = { path = "../workspace-hack"}
