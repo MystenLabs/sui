@@ -13,8 +13,8 @@ use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::AuthorityAPI;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
-    CertifiedTransaction, ExecuteTransactionRequest, ExecuteTransactionRequestType,
-    ExecuteTransactionResponse, Transaction, TransactionEffects,
+    CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionRequest,
+    ExecuteTransactionRequestType, ExecuteTransactionResponse, Transaction,
 };
 
 pub enum QuorumTask<A> {
@@ -29,7 +29,7 @@ pub struct QuorumDriverHandler<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
     _processor_handle: JoinHandle<()>,
     // TODO: Change to CertifiedTransactionEffects eventually.
-    effects_subscriber: Receiver<(CertifiedTransaction, TransactionEffects)>,
+    effects_subscriber: Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
 }
 
 /// The core data structure of the QuorumDriver.
@@ -40,14 +40,14 @@ pub struct QuorumDriverHandler<A> {
 pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumTask<A>>,
-    effects_subscribe_sender: Sender<(CertifiedTransaction, TransactionEffects)>,
+    effects_subscribe_sender: Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
 }
 
 impl<A> QuorumDriver<A> {
     pub fn new(
         validators: AuthorityAggregator<A>,
         task_sender: Sender<QuorumTask<A>>,
-        effects_subscribe_sender: Sender<(CertifiedTransaction, TransactionEffects)>,
+        effects_subscribe_sender: Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
     ) -> Self {
         Self {
             validators: ArcSwap::from(Arc::new(validators)),
@@ -120,7 +120,7 @@ where
     pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
-    ) -> SuiResult<(CertifiedTransaction, TransactionEffects)> {
+    ) -> SuiResult<(CertifiedTransaction, CertifiedTransactionEffects)> {
         let effects = self
             .validators
             .load()
@@ -162,7 +162,9 @@ where
         self.quorum_driver.clone()
     }
 
-    pub fn subscribe(&mut self) -> &mut Receiver<(CertifiedTransaction, TransactionEffects)> {
+    pub fn subscribe(
+        &mut self,
+    ) -> &mut Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
         &mut self.effects_subscriber
     }
 

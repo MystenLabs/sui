@@ -1485,7 +1485,10 @@ async fn checkpoint_messaging_flow() {
         .expect("All ok.");
 
     // Check whether this is a success?
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(matches!(
+        effects.effects.status,
+        ExecutionStatus::Success { .. }
+    ));
 
     // Wait for a batch to go through
     // (We do not really wait, we jump there since real-time is not running).

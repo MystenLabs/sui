@@ -1023,13 +1023,6 @@ impl TransactionEffects {
         }
     }
 
-    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
-        UnsignedTransactionEffects {
-            effects: self,
-            auth_signature: EmptySignInfo {},
-        }
-    }
-
     pub fn digest(&self) -> TransactionEffectsDigest {
         TransactionEffectsDigest(sha3_hash(self))
     }
@@ -1093,6 +1086,28 @@ impl SignedTransactionEffects {
 impl PartialEq for SignedTransactionEffects {
     fn eq(&self, other: &Self) -> bool {
         self.effects == other.effects && self.auth_signature == other.auth_signature
+    }
+}
+
+pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityQuorumSignInfo>;
+
+impl CertifiedTransactionEffects {
+    pub fn new(
+        epoch: EpochId,
+        effects: TransactionEffects,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> Self {
+        Self {
+            effects,
+            auth_signature: AuthorityQuorumSignInfo { epoch, signatures },
+        }
+    }
+
+    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
+        UnsignedTransactionEffects {
+            effects: self.effects,
+            auth_signature: EmptySignInfo {},
+        }
     }
 }
 
@@ -1364,5 +1379,5 @@ pub enum ExecuteTransactionResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.
-    EffectsCert(Box<(CertifiedTransaction, TransactionEffects)>),
+    EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }
