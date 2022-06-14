@@ -5,7 +5,7 @@
 module Basics::Object {
     use sui::ID::VersionedID;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// A custom sui object. Every object must have the `key` attribute
     /// (indicating that it is allowed to be a key in the sui global object
@@ -61,10 +61,10 @@ module Basics::Object {
     /// from this module to read/write it, package it into another object, ...)
     public fun create(tx: &mut TxContext): Object {
         Object {
-            id: TxContext::new_id(tx),
+            id: tx_context::new_id(tx),
             custom_field: 0,
             child_obj: ChildObject { a_field: false },
-            nested_obj: AnotherObject { id: TxContext::new_id(tx) }
+            nested_obj: AnotherObject { id: tx_context::new_id(tx) }
         }
     }
 
@@ -99,7 +99,7 @@ module Basics::Object {
         write_field(to_write, v + int_input);
         transfer(to_consume, recipient);
         // demonstrate creating a new object for the sender
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
         Transfer::transfer(create(ctx), sender)
     }
 

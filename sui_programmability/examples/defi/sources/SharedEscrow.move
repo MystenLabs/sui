@@ -7,7 +7,7 @@ module DeFi::SharedEscrow {
 
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
@@ -39,8 +39,8 @@ module DeFi::SharedEscrow {
         escrowed_item: T,
         ctx: &mut TxContext
     ) {
-        let creator = TxContext::sender(ctx);
-        let id = TxContext::new_id(ctx);
+        let creator = tx_context::sender(ctx);
+        let id = tx_context::new_id(ctx);
         let escrowed = option::some(escrowed_item);
         Transfer::share_object(
             EscrowedObj<T,ExchangeForT> {
@@ -57,10 +57,10 @@ module DeFi::SharedEscrow {
     ) {
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         let escrowed_item = option::extract<T>(&mut escrow.escrowed);
-        assert!(&TxContext::sender(ctx) == &escrow.recipient, EWrongRecipient);
+        assert!(&tx_context::sender(ctx) == &escrow.recipient, EWrongRecipient);
         assert!(ID::id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
         // everything matches. do the swap!
-        Transfer::transfer(escrowed_item, TxContext::sender(ctx));
+        Transfer::transfer(escrowed_item, tx_context::sender(ctx));
         Transfer::transfer(obj, escrow.creator);
     }
 
@@ -69,7 +69,7 @@ module DeFi::SharedEscrow {
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &mut TxContext
     ) {
-        assert!(&TxContext::sender(ctx) == &escrow.creator, EWrongOwner);
+        assert!(&tx_context::sender(ctx) == &escrow.creator, EWrongOwner);
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         Transfer::transfer(option::extract<T>(&mut escrow.escrowed), escrow.creator);
     }

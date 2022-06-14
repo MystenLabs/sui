@@ -8,15 +8,15 @@
 module T3::O3 {
     use sui::ID::VersionedID;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     struct O3 has key, store {
         id: VersionedID,
     }
 
     public entry fun create(ctx: &mut TxContext) {
-        let o = O3 { id: TxContext::new_id(ctx) };
-        Transfer::transfer(o, TxContext::sender(ctx))
+        let o = O3 { id: tx_context::new_id(ctx) };
+        Transfer::transfer(o, tx_context::sender(ctx))
     }
 }
 
@@ -25,7 +25,7 @@ module T3::O3 {
 module T2::O2 {
     use sui::ID::VersionedID;
     use sui::Transfer::{Self, ChildRef};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use T3::O3::O3;
 
     struct O2 has key, store {
@@ -38,13 +38,13 @@ module T2::O2 {
     }
 
     public entry fun create_owned(child: O3, ctx: &mut TxContext) {
-        Transfer::transfer(new(child, ctx), TxContext::sender(ctx))
+        Transfer::transfer(new(child, ctx), tx_context::sender(ctx))
     }
 
     public entry fun use_o2_o3(_o2: &mut O2, _o3: &mut O3) {}
 
     fun new(child: O3, ctx: &mut TxContext): O2 {
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let (id, child) = Transfer::transfer_to_object_id(child, id);
         O2 { id, child }
     }
@@ -56,7 +56,7 @@ module T2::O2 {
 module T1::O1 {
     use sui::ID::VersionedID;
     use sui::Transfer::{Self, ChildRef};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use T2::O2::O2;
     use T3::O3::O3;
 
@@ -73,7 +73,7 @@ module T1::O1 {
     public entry fun use_o2_o3(_o2: &mut O2, _o3: &mut O3) {}
 
     fun new(child: O2, ctx: &mut TxContext): O1 {
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let (id, child) = Transfer::transfer_to_object_id(child, id);
         O1 { id, child }
     }

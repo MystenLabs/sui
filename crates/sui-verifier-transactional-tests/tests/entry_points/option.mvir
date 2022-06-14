@@ -5,7 +5,7 @@
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
+    import 0x2.tx_context;
     import 0x1.option;
 
     public entry yes<T>(
@@ -14,7 +14,7 @@ module 0x0.M {
         l2: option.Option<vector<u64>>,
         l3: vector<option.Option<u64>>,
         l4: option.Option<option.Option<T>>,
-        ctx: &mut TxContext.TxContext
+        ctx: &mut tx_context.TxContext
     ) {
         label l0:
         abort 0;

@@ -13,7 +13,7 @@ module NFTs::AuctionLib {
     use sui::SUI::SUI;
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self,TxContext};
+    use sui::tx_context::{Self,TxContext};
 
     friend NFTs::Auction;
     friend NFTs::SharedAuction;
@@ -59,7 +59,7 @@ module NFTs::AuctionLib {
         Auction<T> {
             id,
             to_sell: option::some(to_sell),
-            owner: TxContext::sender(ctx),
+            owner: tx_context::sender(ctx),
             bid_data: option::none(),
         }
     }

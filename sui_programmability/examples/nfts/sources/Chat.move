@@ -6,7 +6,7 @@ module NFTs::Chat {
     use std::option::{Self, Option, some};
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use std::vector::length;
 
     /// Max text length.
@@ -44,13 +44,13 @@ module NFTs::Chat {
     ) {
         assert!(length(&text) <= MAX_TEXT_LENGTH, ETextOverflow);
         let chat = Chat {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             app_id,
             text: ascii::string(text),
             ref_id,
             metadata,
         };
-        Transfer::transfer(chat, TxContext::sender(ctx));
+        Transfer::transfer(chat, tx_context::sender(ctx));
     }
 
     /// Mint (post) a Chat object without referencing another object.

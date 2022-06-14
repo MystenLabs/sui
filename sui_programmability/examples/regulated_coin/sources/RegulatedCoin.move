@@ -11,7 +11,7 @@
 /// Each of the methods of this module requires a Witness struct to be sent.
 module RC::RegulatedCoin {
     use sui::balance::{Self, Balance};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::ID::VersionedID;
 
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
@@ -47,14 +47,14 @@ module RC::RegulatedCoin {
 
     /// Author of the currency can restrict who is allowed to create new balances;
     public fun zero<T: drop>(_: T, creator: address, ctx: &mut TxContext): RegulatedCoin<T> {
-        RegulatedCoin { id: TxContext::new_id(ctx), balance: balance::zero(), creator }
+        RegulatedCoin { id: tx_context::new_id(ctx), balance: balance::zero(), creator }
     }
 
     /// Build a transferable `RegulatedCoin` from a `Balance`;
     public fun from_balance<T: drop>(
         _: T, balance: Balance<T>, creator: address, ctx: &mut TxContext
     ): RegulatedCoin<T> {
-        RegulatedCoin { id: TxContext::new_id(ctx), balance, creator }
+        RegulatedCoin { id: tx_context::new_id(ctx), balance, creator }
     }
 
     /// Destroy `RegulatedCoin` and return its `Balance`;
@@ -91,7 +91,7 @@ module RC::RegulatedCoin {
 /// - has restricted transfers which can not be taken by anyone except the recipient
 module ABC::ABC {
     use RC::RegulatedCoin::{Self as RCoin, RegulatedCoin as RCoin};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin, TreasuryCap};
     use sui::ID::{Self, VersionedID};
@@ -127,13 +127,13 @@ module ABC::ABC {
     /// Also creates a shared Registry which holds banned addresses.
     fun init(ctx: &mut TxContext) {
         let treasury_cap = Coin::create_currency(ABC {}, ctx);
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
 
         Transfer::transfer(zero(sender, ctx), sender);
         Transfer::transfer(treasury_cap, sender);
 
         Transfer::share_object(Registry {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             banned: vector::empty(),
             swapped_amount: 0,
         });
@@ -184,7 +184,7 @@ module ABC::ABC {
     /// Fails if sender is not an creator of the `RegulatedCoin` or if any of the parties is in
     /// the ban list in Registry.
     public entry fun transfer(r: &Registry, coin: &mut RCoin<ABC>, value: u64, to: address, ctx: &mut TxContext) {
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
 
         assert!(RCoin::creator(coin) == sender, ENotOwner);
         assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
@@ -192,7 +192,7 @@ module ABC::ABC {
 
         Transfer::transfer(Transfer {
             to,
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             balance: balance::split(borrow_mut(coin), value),
         }, to)
     }
@@ -221,7 +221,7 @@ module ABC::ABC {
     /// 1. `RegulatedCoin<ABC>.creator` was banned;
     /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
     public entry fun take(r: &mut Registry, coin: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
 
         assert!(RCoin::creator(coin) == sender, ENotOwner);
         assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
@@ -229,7 +229,7 @@ module ABC::ABC {
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
 
-        Transfer::transfer(Coin::withdraw(borrow_mut(coin), value, ctx), TxContext::sender(ctx));
+        Transfer::transfer(Coin::withdraw(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
     }
 
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
@@ -239,7 +239,7 @@ module ABC::ABC {
     /// 2. `RegulatedCoin<ABC>` is not owned by the tx sender;
     public entry fun put_back(r: &mut Registry, rc_coin: &mut RCoin<ABC>, coin: Coin<ABC>, ctx: &mut TxContext) {
         let balance = Coin::into_balance(coin);
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
 
         assert!(RCoin::creator(rc_coin) == sender, ENotOwner);
         assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);

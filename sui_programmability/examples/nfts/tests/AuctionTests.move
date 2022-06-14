@@ -9,7 +9,7 @@ module NFTs::AuctionTests {
     use sui::SUI::SUI;
     use sui::ID::{Self, VersionedID};
     use sui::TestScenario::Self;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     use NFTs::Auction::{Self, Bid};
     use NFTs::AuctionLib::Auction;
@@ -54,13 +54,13 @@ module NFTs::AuctionTests {
         TestScenario::next_tx(scenario, &owner);
         let ctx = TestScenario::ctx(scenario);
         let to_sell = SomeItemToSell {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             value: 42,
         };
         // generate unique auction ID (it would be more natural to
         // generate one in crate_auction and return it, but we cannot
         // do this at the moment)
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         // we need to dereference (copy) right here rather wherever
         // auction_id is used - otherwise id would still be considered
         // borrowed and could not be passed argument to a function

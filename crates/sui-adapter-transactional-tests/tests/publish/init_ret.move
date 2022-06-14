@@ -8,7 +8,7 @@
 
 module Test::M1 {
     use sui::ID::VersionedID;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::Transfer;
 
     struct Object has key, store {
@@ -19,8 +19,8 @@ module Test::M1 {
     // initializer that should be executed upon publishing this module
     fun init(ctx: &mut TxContext): u64 {
         let value = 42;
-        let singleton = Object { id: TxContext::new_id(ctx), value };
-        Transfer::transfer(singleton, TxContext::sender(ctx));
+        let singleton = Object { id: tx_context::new_id(ctx), value };
+        Transfer::transfer(singleton, tx_context::sender(ctx));
         value
     }
 }

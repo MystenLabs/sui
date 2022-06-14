@@ -20,7 +20,7 @@ module Games::SharedTicTacToe {
     use sui::ID::{Self, ID, VersionedID};
     use sui::Event;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     // Game status
     const IN_PROGRESS: u8 = 0;
@@ -65,7 +65,7 @@ module Games::SharedTicTacToe {
     public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let gameboard = vector[
             vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
             vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
@@ -87,7 +87,7 @@ module Games::SharedTicTacToe {
         assert!(row < 3 && col < 3, EInvalidLocation);
         assert!(game.game_status == IN_PROGRESS, EGameEnded);
         let addr = get_cur_turn_address(game);
-        assert!(addr == TxContext::sender(ctx), EInvalidTurn);
+        assert!(addr == tx_context::sender(ctx), EInvalidTurn);
 
         let cell = vector::borrow_mut(vector::borrow_mut(&mut game.gameboard, (row as u64)), (col as u64));
         assert!(*cell == MARK_EMPTY, ECellOccupied);
@@ -100,9 +100,9 @@ module Games::SharedTicTacToe {
             // Notify the server that the game ended so that it can delete the game.
             Event::emit(GameEndEvent { game_id: *ID::inner(&game.id) });
             if (game.game_status == X_WIN) {
-                Transfer::transfer( Trophy { id: TxContext::new_id(ctx) }, *&game.x_address);
+                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                Transfer::transfer( Trophy { id: TxContext::new_id(ctx) }, *&game.o_address);
+                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
             }
         }
     }

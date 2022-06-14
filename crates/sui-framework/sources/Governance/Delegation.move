@@ -9,7 +9,7 @@ module sui::Delegation {
     use sui::LockedCoin::{Self, LockedCoin};
     use sui::SUI::SUI;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::EpochTimeLock::EpochTimeLock;
 
     friend sui::SuiSystem;
@@ -54,7 +54,7 @@ module sui::Delegation {
     ) {
         let delegate_amount = Coin::value(&stake);
         let delegation = Delegation {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             active_delegation: option::some(Coin::into_balance(stake)),
             ending_epoch: option::none(),
             delegate_amount,
@@ -62,7 +62,7 @@ module sui::Delegation {
             coin_locked_until_epoch: option::none(),
             validator_address,
         };
-        Transfer::transfer(delegation, TxContext::sender(ctx))
+        Transfer::transfer(delegation, tx_context::sender(ctx))
     }
 
     public(friend) fun create_from_locked_coin(
@@ -74,7 +74,7 @@ module sui::Delegation {
         let delegate_amount = LockedCoin::value(&stake);
         let (balance, epoch_lock) = LockedCoin::into_balance(stake);
         let delegation = Delegation {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             active_delegation: option::some(balance),
             ending_epoch: option::none(),
             delegate_amount,
@@ -82,7 +82,7 @@ module sui::Delegation {
             coin_locked_until_epoch: option::some(epoch_lock),
             validator_address,
         };
-        Transfer::transfer(delegation, TxContext::sender(ctx))
+        Transfer::transfer(delegation, tx_context::sender(ctx))
     }
 
     /// Deactivate the delegation. Send back the stake and set the ending epoch.
@@ -95,7 +95,7 @@ module sui::Delegation {
         assert!(ending_epoch >= self.next_reward_unclaimed_epoch, 0);
 
         let stake = option::extract(&mut self.active_delegation);
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
 
         if (option::is_none(&self.coin_locked_until_epoch)) {
             Transfer::transfer(Coin::from_balance(stake, ctx), sender);
@@ -113,7 +113,7 @@ module sui::Delegation {
         reward: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
         Coin::transfer(Coin::from_balance(reward, ctx), sender);
         self.next_reward_unclaimed_epoch = self.next_reward_unclaimed_epoch + 1;
     }

@@ -5,7 +5,7 @@
 module DeFi::Escrow {
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
@@ -39,8 +39,8 @@ module DeFi::Escrow {
         escrowed: T,
         ctx: &mut TxContext
     ) {
-        let sender = TxContext::sender(ctx);
-        let id = TxContext::new_id(ctx);
+        let sender = tx_context::sender(ctx);
+        let id = tx_context::new_id(ctx);
         // escrow the object with the trusted third party
         Transfer::transfer(
             EscrowedObj<T,ExchangeForT> {

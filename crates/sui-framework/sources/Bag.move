@@ -15,7 +15,7 @@ module sui::bag {
     use std::vector::Self;
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer::{Self, ChildRef};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     // Error codes
     /// When removing an object from the collection, EObjectNotFound
@@ -54,7 +54,7 @@ module sui::bag {
             errors::limit_exceeded(EInvalidMaxCapacity)
         );
         Bag {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             objects: vector::empty(),
             max_capacity,
         }
@@ -62,7 +62,7 @@ module sui::bag {
 
     /// Create a new Bag and transfer it to the signer.
     public entry fun create(ctx: &mut TxContext) {
-        Transfer::transfer(new(ctx), TxContext::sender(ctx))
+        Transfer::transfer(new(ctx), tx_context::sender(ctx))
     }
 
     /// Returns the size of the Bag.
@@ -120,7 +120,7 @@ module sui::bag {
     /// Remove the object from the Bag, and then transfer it to the signer.
     public entry fun remove_and_take<T: key + store>(c: &mut Bag, object: T, ctx: &mut TxContext) {
         let object = remove(c, object);
-        Transfer::transfer(object, TxContext::sender(ctx));
+        Transfer::transfer(object, tx_context::sender(ctx));
     }
 
     /// Transfer the entire Bag to `recipient`.

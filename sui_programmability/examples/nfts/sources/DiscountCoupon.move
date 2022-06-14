@@ -6,7 +6,7 @@ module NFTs::DiscountCoupon {
     use sui::ID::{Self, VersionedID};
     use sui::SUI::{Self, SUI};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// Sending to wrong recipient.
     const EWrongRecipient: u64 = 0;
@@ -40,8 +40,8 @@ module NFTs::DiscountCoupon {
     ) {
         assert!(discount > 0 && discount <= 100, EOutOfRangeDiscount);
         let coupon = DiscountCoupon {
-            id: TxContext::new_id(ctx),
-            issuer: TxContext::sender(ctx),
+            id: tx_context::new_id(ctx),
+            issuer: tx_context::sender(ctx),
             discount,
             expiration,
         };

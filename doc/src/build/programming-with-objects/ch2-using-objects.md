@@ -34,7 +34,7 @@ In the above function signature, `from_object` can be a read-only reference beca
 > :bulb: Although `from_object` is a read-only reference in this transaction, it is still a mutable object in Sui storage--another transaction could be sent to mutate the object at the same time! To prevent this, Sui must lock any mutable object used as a transaction input, even when it's passed as a read-only reference. In addition, only an object's owner can send a transaction that locks the object.
 
 Let's write a unit test to see how we could interact with multiple objects of the same type in tests.
-In the previous chapter, we introduced the `take_owned<T>` API, which takes an object of type `T` from the global storage created by previous transactions. However, what if there are multiple objects of the same type? `take_owned<T>` will no longer be able to tell which one to return. To solve this problem, we need to use two new APIs. The first is `TxContext::last_created_object_id(ctx)`, which returns the ID of the most recent created object. The second is `TestScenario::take_owned_by_id<T>`, which returns an object of type `T` with a specific object ID.
+In the previous chapter, we introduced the `take_owned<T>` API, which takes an object of type `T` from the global storage created by previous transactions. However, what if there are multiple objects of the same type? `take_owned<T>` will no longer be able to tell which one to return. To solve this problem, we need to use two new APIs. The first is `tx_context::last_created_object_id(ctx)`, which returns the ID of the most recent created object. The second is `TestScenario::take_owned_by_id<T>`, which returns an object of type `T` with a specific object ID.
 Now let's take a look at the test (`test_copy_into`):
 ```rust
 let owner = @0x1;
@@ -43,13 +43,13 @@ let scenario = &mut TestScenario::begin(&owner);
 let (id1, id2) = {
     let ctx = TestScenario::ctx(scenario);
     ColorObject::create(255, 255, 255, ctx);
-    let id1 = TxContext::last_created_object_id(ctx);
+    let id1 = tx_context::last_created_object_id(ctx);
     ColorObject::create(0, 0, 0, ctx);
-    let id2 = TxContext::last_created_object_id(ctx);
+    let id2 = tx_context::last_created_object_id(ctx);
     (id1, id2)
 };
 ```
-The above code created two objects. Note that right after each call, we make a call to `TxContext::last_created_object_id` to get the ID of the object just created. At the end we have `id1` and `id2` capturing the IDs of the two objects. Next we retrieve both of them and test the `copy_into` method:
+The above code created two objects. Note that right after each call, we make a call to `tx_context::last_created_object_id` to get the ID of the object just created. At the end we have `id1` and `id2` capturing the IDs of the two objects. Next we retrieve both of them and test the `copy_into` method:
 ```rust
 TestScenario::next_tx(scenario, &owner);
 {

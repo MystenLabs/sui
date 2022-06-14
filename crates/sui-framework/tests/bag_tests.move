@@ -6,7 +6,7 @@ module sui::bag_tests {
     use sui::bag::{Self, Bag};
     use sui::ID::{Self, VersionedID};
     use sui::TestScenario;
-    use sui::TxContext;
+    use sui::tx_context;
 
     const EBAG_SIZE_MISMATCH: u64 = 0;
     const EOBJECT_NOT_FOUND: u64 = 1;
@@ -36,9 +36,9 @@ module sui::bag_tests {
             let bag = TestScenario::take_owned<Bag>(scenario);
             assert!(bag::size(&bag) == 0, EBAG_SIZE_MISMATCH);
 
-            let obj1 = Object1 { id: TxContext::new_id(TestScenario::ctx(scenario)) };
+            let obj1 = Object1 { id: tx_context::new_id(TestScenario::ctx(scenario)) };
             let id1 = *ID::id(&obj1);
-            let obj2 = Object2 { id: TxContext::new_id(TestScenario::ctx(scenario)) };
+            let obj2 = Object2 { id: tx_context::new_id(TestScenario::ctx(scenario)) };
             let id2 = *ID::id(&obj2);
 
             bag::add(&mut bag, obj1);
@@ -56,31 +56,31 @@ module sui::bag_tests {
     #[test]
     #[expected_failure(abort_code = 520)]
     fun test_init_with_invalid_max_capacity() {
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
         // Sui::bag::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
         let bag = bag::new_with_max_capacity(&mut ctx, max_capacity + 1);
-        bag::transfer(bag, TxContext::sender(&ctx));
+        bag::transfer(bag, tx_context::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 520)]
     fun test_init_with_zero() {
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
         let bag = bag::new_with_max_capacity(&mut ctx, 0);
-        bag::transfer(bag, TxContext::sender(&ctx));
+        bag::transfer(bag, tx_context::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 776)]
     fun test_exceed_max_capacity() {
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
         let bag = bag::new_with_max_capacity(&mut ctx, 1);
 
-        let obj1 = Object1 { id: TxContext::new_id(&mut ctx) };
+        let obj1 = Object1 { id: tx_context::new_id(&mut ctx) };
         bag::add(&mut bag, obj1);
-        let obj2 = Object2 { id: TxContext::new_id(&mut ctx) };
+        let obj2 = Object2 { id: tx_context::new_id(&mut ctx) };
         bag::add(&mut bag, obj2);
-        bag::transfer(bag, TxContext::sender(&ctx));
+        bag::transfer(bag, tx_context::sender(&ctx));
     }
 }

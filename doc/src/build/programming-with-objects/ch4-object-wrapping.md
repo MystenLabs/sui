@@ -51,17 +51,17 @@ In a real application, we probably would make sure that there is a limited suppl
 ```rust
 public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
     let object = Object {
-        id: TxContext::new_id(ctx),
+        id: tx_context::new_id(ctx),
         scarcity,
         style,
     };
-    Transfer::transfer(object, TxContext::sender(ctx))
+    Transfer::transfer(object, tx_context::sender(ctx))
 }
 ```
 Anyone can call `create_object` to create a new object with specified `scarcity` and `style`. The created object will be sent to the signer of the transaction. We will likely also want to be able to transfer the object to others:
 ```rust
 public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
-    Transfer::transfer(object, TxContext::sender(ctx))
+    Transfer::transfer(object, tx_context::sender(ctx))
 }
 ```
 
@@ -85,8 +85,8 @@ struct ObjectWrapper has key {
 public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
     assert!(Coin::value(&fee) >= MIN_FEE, 0);
     let wrapper = ObjectWrapper {
-        id: TxContext::new_id(ctx),
-        original_owner: TxContext::sender(ctx),
+        id: tx_context::new_id(ctx),
+        original_owner: tx_context::sender(ctx),
         to_swap: object,
         fee: Coin::into_balance(fee),
     };
@@ -131,7 +131,7 @@ Transfer::transfer(object2, original_owner1);
 ```
 The above code does the swap: it sends `object1` to the original owner of `object2`, and sends `object1` to the original owner of `object2`. The service provider is also happy to take the fee:
 ```rust
-let service_address = TxContext::sender(ctx);
+let service_address = tx_context::sender(ctx);
 Balance::join(&mut fee1, fee2);
 Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
 ```
@@ -175,11 +175,11 @@ When we are creating a new warrior, we can set the `sword` and `shield` to `none
 ```rust
 public entry fun create_warrior(ctx: &mut TxContext) {
     let warrior = SimpleWarrior {
-        id: TxContext::new_id(ctx),
+        id: tx_context::new_id(ctx),
         sword: Option::none(),
         shield: Option::none(),
     };
-    Transfer::transfer(warrior, TxContext::sender(ctx))
+    Transfer::transfer(warrior, tx_context::sender(ctx))
 }
 ```
 With this, we can then define functions to equip new swords or new shields:
@@ -187,7 +187,7 @@ With this, we can then define functions to equip new swords or new shields:
 public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
     if (Option::is_some(&warrior.sword)) {
         let old_sword = Option::extract(&mut warrior.sword);
-        Transfer::transfer(old_sword, TxContext::sender(ctx));
+        Transfer::transfer(old_sword, tx_context::sender(ctx));
     };
     Option::fill(&mut warrior.sword, sword);
 }

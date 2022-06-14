@@ -10,7 +10,7 @@ module sui::SuiSystem {
     use sui::LockedCoin::{Self, LockedCoin};
     use sui::SUI::SUI;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::Validator::{Self, Validator};
     use sui::ValidatorSet::{Self, ValidatorSet};
 
@@ -100,7 +100,7 @@ module sui::SuiSystem {
             0
         );
         let validator = Validator::new(
-            TxContext::sender(ctx),
+            tx_context::sender(ctx),
             pubkey_bytes,
             name,
             net_address,
@@ -231,7 +231,7 @@ module sui::SuiSystem {
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
-        assert!(TxContext::sender(ctx) == @0x0, 0);
+        assert!(tx_context::sender(ctx) == @0x0, 0);
 
         let storage_reward = balance::create_with_value(storage_charge);
         let computation_reward = balance::create_with_value(computation_charge);

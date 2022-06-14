@@ -4,7 +4,7 @@
 module Tutorial::ColorObject {
     use sui::ID::{Self, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     struct ColorObject has key {
         id: VersionedID,
@@ -17,7 +17,7 @@ module Tutorial::ColorObject {
 
     fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
         ColorObject {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             red,
             green,
             blue,
@@ -26,7 +26,7 @@ module Tutorial::ColorObject {
 
     public entry fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
         let color_object = new(red, green, blue, ctx);
-        Transfer::transfer(color_object, TxContext::sender(ctx))
+        Transfer::transfer(color_object, tx_context::sender(ctx))
     }
 
     public fun get_color(self: &ColorObject): (u8, u8, u8) {
@@ -76,7 +76,7 @@ module Tutorial::ColorObject {
 module Tutorial::ColorObjectTests {
     use sui::TestScenario;
     use Tutorial::ColorObject::{Self, ColorObject};
-    use sui::TxContext;
+    use sui::tx_context;
 
     // == Tests covered in Chapter 1 ==
 
@@ -116,9 +116,9 @@ module Tutorial::ColorObjectTests {
         let (id1, id2) = {
             let ctx = TestScenario::ctx(scenario);
             ColorObject::create(255, 255, 255, ctx);
-            let id1 = TxContext::last_created_object_id(ctx);
+            let id1 = tx_context::last_created_object_id(ctx);
             ColorObject::create(0, 0, 0, ctx);
-            let id2 = TxContext::last_created_object_id(ctx);
+            let id2 = tx_context::last_created_object_id(ctx);
             (id1, id2)
         };
         TestScenario::next_tx(scenario, &owner);

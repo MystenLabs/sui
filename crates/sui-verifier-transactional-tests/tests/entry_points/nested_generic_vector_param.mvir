@@ -3,9 +3,9 @@
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
+    import 0x2.tx_context;
 
-    public entry foo<T>(l: vector<vector<T>>, ctx: &mut TxContext.TxContext) {
+    public entry foo<T>(l: vector<vector<T>>, ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }

@@ -7,7 +7,7 @@ module DeFi::FlashLender {
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// A shared object offering flash loans to any buyer willing to pay `fee`.
     struct FlashLender<phantom T> has key {
@@ -68,20 +68,20 @@ module DeFi::FlashLender {
     /// Any borrower will need to repay the borrowed amount and `fee` by the end of the
     /// current transaction.
     public fun new<T>(to_lend: Balance<T>, fee: u64, ctx: &mut TxContext): AdminCap {
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let flash_lender_id = *ID::inner(&id);
         let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
         Transfer::share_object(flash_lender);
         // give the creator admin permissions
-        AdminCap { id: TxContext::new_id(ctx), flash_lender_id }
+        AdminCap { id: tx_context::new_id(ctx), flash_lender_id }
     }
 
     /// Same as `new`, but transfer `WithdrawCap` to the transaction sender
     public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
         let balance = Coin::into_balance(to_lend);
         let withdraw_cap = new(balance, fee, ctx);
-        Transfer::transfer(withdraw_cap, TxContext::sender(ctx))
+        Transfer::transfer(withdraw_cap, tx_context::sender(ctx))
     }
 
     // === Core functionality: requesting a loan and repaying it ===

@@ -15,7 +15,7 @@ module Games::SeaHero {
     use sui::ID::{Self, VersionedID};
     use sui::Coin::{Self, TreasuryCap};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
@@ -60,13 +60,13 @@ module Games::SeaHero {
     fun init(ctx: &mut TxContext) {
         Transfer::transfer(
             SeaHeroAdmin {
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
                 treasury_cap: Coin::create_currency<RUM>(RUM{}, ctx),
                 monsters_created: 0,
                 token_supply_max: 1000000,
                 monster_max: 10,
             },
-            TxContext::sender(ctx)
+            tx_context::sender(ctx)
         )
     }
 
@@ -108,7 +108,7 @@ module Games::SeaHero {
         assert!(admin.monster_max - 1 >= admin.monsters_created, 2);
 
         let monster = SeaMonster {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             reward: Coin::mint_balance(reward_amount, &mut admin.treasury_cap)
         };
         admin.monsters_created = admin.monsters_created + 1;

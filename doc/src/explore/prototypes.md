@@ -150,7 +150,7 @@ GET /object_info?objectId={{monster_id}}
     ): Monster {
 
         Monster {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             monster_name: ASCII::string(monster_name),
             monster_img_index,
             breed,

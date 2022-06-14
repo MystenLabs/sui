@@ -8,7 +8,7 @@ module Examples::CombinableObjects {
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     struct Ham has key {
         id: VersionedID
@@ -36,14 +36,14 @@ module Examples::CombinableObjects {
     public fun buy_ham(c: Coin<EXAMPLE>, ctx: &mut TxContext): Ham {
         assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
         Transfer::transfer(c, admin());
-        Ham { id: TxContext::new_id(ctx) }
+        Ham { id: tx_context::new_id(ctx) }
     }
 
     /// Exchange `c` for some bread
     public fun buy_bread(c: Coin<EXAMPLE>, ctx: &mut TxContext): Bread {
         assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
         Transfer::transfer(c, admin());
-        Bread { id: TxContext::new_id(ctx) }
+        Bread { id: tx_context::new_id(ctx) }
     }
 
     /// Combine the `ham` and `bread` into a delicious sandwich
@@ -54,7 +54,7 @@ module Examples::CombinableObjects {
         let Bread { id: bread_id } = bread;
         ID::delete(ham_id);
         ID::delete(bread_id);
-        Sandwich { id: TxContext::new_id(ctx) }
+        Sandwich { id: tx_context::new_id(ctx) }
     }
 
     fun admin(): address {

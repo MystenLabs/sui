@@ -10,7 +10,7 @@ module sui::Validator {
     use sui::Coin;
     use sui::SUI::SUI;
     use sui::Transfer;
-    use sui::TxContext::TxContext;
+    use sui::tx_context::TxContext;
 
     friend sui::Genesis;
     friend sui::SuiSystem;

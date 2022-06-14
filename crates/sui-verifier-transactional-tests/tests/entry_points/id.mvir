@@ -5,14 +5,14 @@
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
+    import 0x2.tx_context;
     import 0x2.ID;
 
     public entry yes<T>(
         l0: ID.ID,
         l1: vector<ID.ID>,
         l2: vector<vector<ID.ID>>,
-        ctx: &mut TxContext.TxContext,
+        ctx: &mut tx_context.TxContext,
     ) {
         label l0:
         abort 0;

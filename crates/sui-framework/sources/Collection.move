@@ -17,7 +17,7 @@ module sui::Collection {
     use std::vector::Self;
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer::{Self, ChildRef};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     // Error codes
     /// When removing an object from the collection, EObjectNotFound
@@ -62,7 +62,7 @@ module sui::Collection {
             errors::limit_exceeded(EInvalidMaxCapacity)
         );
         Collection {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             objects: vector::empty(),
             max_capacity,
         }
@@ -70,7 +70,7 @@ module sui::Collection {
 
     /// Create a new Collection and transfer it to the signer.
     public entry fun create<T: key + store>(ctx: &mut TxContext) {
-        Transfer::transfer(new<T>(ctx), TxContext::sender(ctx))
+        Transfer::transfer(new<T>(ctx), tx_context::sender(ctx))
     }
 
     /// Returns the size of the collection.
@@ -142,7 +142,7 @@ module sui::Collection {
         ctx: &mut TxContext,
     ) {
         let (object, child_ref) = remove(c, object);
-        Transfer::transfer_child_to_address(object, child_ref, TxContext::sender(ctx));
+        Transfer::transfer_child_to_address(object, child_ref, tx_context::sender(ctx));
     }
 
     /// Transfer the entire collection to `recipient`.

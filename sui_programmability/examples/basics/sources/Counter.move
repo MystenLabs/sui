@@ -9,7 +9,7 @@
 module Basics::Counter {
     use sui::Transfer;
     use sui::ID::VersionedID;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// A shared counter.
     struct Counter has key {
@@ -29,8 +29,8 @@ module Basics::Counter {
     /// Create and share a Counter object.
     public entry fun create(ctx: &mut TxContext) {
         Transfer::share_object(Counter {
-            id: TxContext::new_id(ctx),
-            owner: TxContext::sender(ctx),
+            id: tx_context::new_id(ctx),
+            owner: tx_context::sender(ctx),
             value: 0
         })
     }
@@ -42,7 +42,7 @@ module Basics::Counter {
 
     /// Set value (only runnable by the Counter owner)
     public entry fun set_value(counter: &mut Counter, value: u64, ctx: &mut TxContext) {
-        assert!(counter.owner == TxContext::sender(ctx), 0);
+        assert!(counter.owner == tx_context::sender(ctx), 0);
         counter.value = value;
     }
 

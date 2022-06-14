@@ -4,11 +4,11 @@
 //# publish
 module 0x0.M {
     import 0x2.ID;
-    import 0x2.TxContext;
+    import 0x2.tx_context;
     struct Obj has key {
         id: ID.VersionedID,
     }
-    public entry foo<T>(l0: Self.Obj, l1: u64, l2: T, ctx: &mut TxContext.TxContext) {
+    public entry foo<T>(l0: Self.Obj, l1: u64, l2: T, ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }

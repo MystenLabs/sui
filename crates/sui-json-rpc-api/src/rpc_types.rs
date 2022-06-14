@@ -721,7 +721,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 return Some(SuiMoveValue::Number(value));
             }
         }
-        "0x1::Option::Option" => {
+        "0x1::option::Option" => {
             if let SuiMoveValue::Vector(values) = fields["vec"].clone() {
                 return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
             }

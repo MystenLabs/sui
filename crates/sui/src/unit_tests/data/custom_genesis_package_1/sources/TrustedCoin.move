@@ -5,7 +5,7 @@
 module Examples::TrustedCoin {
     use sui::Coin::{Self, TreasuryCap};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// Name of the coin
     struct EXAMPLE has drop {}
@@ -17,12 +17,12 @@ module Examples::TrustedCoin {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
         let treasury_cap = Coin::create_currency<EXAMPLE>(EXAMPLE{}, ctx);
-        Transfer::transfer(treasury_cap, TxContext::sender(ctx))
+        Transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     public entry fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {
         let coin = Coin::mint<EXAMPLE>(amount, treasury_cap, ctx);
-        Coin::transfer(coin, TxContext::sender(ctx));
+        Coin::transfer(coin, tx_context::sender(ctx));
     }
 
     public entry fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: address) {

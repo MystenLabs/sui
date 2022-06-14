@@ -6,7 +6,7 @@ module sui::TestScenarioTests {
     use sui::ID;
     use sui::TestScenario::{Self, Scenario};
     use sui::Transfer::{Self, ChildRef};
-    use sui::TxContext;
+    use sui::tx_context;
 
     const ID_BYTES_MISMATCH: u64 = 0;
     const VALUE_MISMATCH: u64 = 1;
@@ -270,7 +270,7 @@ module sui::TestScenarioTests {
             let obj = Object { id: versioned_id, value: 10 };
             Transfer::transfer(obj, copy sender);
             let ctx = TestScenario::ctx(&mut scenario);
-            assert!(id == TxContext::last_created_object_id(ctx), 0);
+            assert!(id == tx_context::last_created_object_id(ctx), 0);
         };
     }
 

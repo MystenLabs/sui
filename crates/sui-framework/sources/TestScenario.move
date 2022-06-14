@@ -4,7 +4,7 @@
 #[test_only]
 module sui::TestScenario {
     use sui::ID::{Self, ID, VersionedID};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
     use std::vector;
 
@@ -81,7 +81,7 @@ module sui::TestScenario {
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
     public fun begin(sender: &address): Scenario {
         Scenario {
-            ctx: TxContext::new_from_hint(*sender, 0, 0, 0),
+            ctx: tx_context::new_from_hint(*sender, 0, 0, 0),
             removed: vector::empty(),
             event_start_indexes: vector[0],
         }
@@ -110,13 +110,13 @@ module sui::TestScenario {
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
         let new_tx_digest_seed = (vector::length(&scenario.event_start_indexes) as u8);
-        let epoch = TxContext::epoch(&scenario.ctx);
-        scenario.ctx = TxContext::new_from_hint(*sender, new_tx_digest_seed, epoch, 0);
+        let epoch = tx_context::epoch(&scenario.ctx);
+        scenario.ctx = tx_context::new_from_hint(*sender, new_tx_digest_seed, epoch, 0);
     }
 
     /// Advance the scenario to a new epoch.
     public fun next_epoch(scenario: &mut Scenario) {
-        TxContext::increment_epoch_number(&mut scenario.ctx);
+        tx_context::increment_epoch_number(&mut scenario.ctx);
     }
 
     /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`.
@@ -310,12 +310,12 @@ module sui::TestScenario {
 
     /// Generate a fresh ID for the current tx associated with this `scenario`
     public fun new_id(scenario: &mut Scenario): VersionedID {
-        TxContext::new_id(&mut scenario.ctx)
+        tx_context::new_id(&mut scenario.ctx)
     }
 
     /// Return the sender of the current tx in this `scenario`
     public fun sender(scenario: &Scenario): address {
-        TxContext::sender(&scenario.ctx)
+        tx_context::sender(&scenario.ctx)
     }
 
     /// Return the number of concluded transactions in this scenario.

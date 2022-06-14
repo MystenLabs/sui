@@ -10,7 +10,7 @@ module Games::Hero {
     use sui::Math;
     use sui::SUI::SUI;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
 
     /// Our hero!
@@ -126,8 +126,8 @@ module Games::Hero {
 
     /// Create a new game. Separated to bypass public entry vs init requirements.
     fun create(ctx: &mut TxContext) {
-        let sender = TxContext::sender(ctx);
-        let id = TxContext::new_id(ctx);
+        let sender = tx_context::sender(ctx);
+        let id = tx_context::new_id(ctx);
         let game_id = *ID::inner(&id);
 
         Transfer::freeze_object(GameInfo {
@@ -138,7 +138,7 @@ module Games::Hero {
         Transfer::transfer(
             GameAdmin {
                 game_id,
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
                 boars_created: 0,
                 potions_created: 0,
             },
@@ -179,7 +179,7 @@ module Games::Hero {
         };
         // let the world know about the hero's triumph by emitting an event!
         Event::emit(BoarSlainEvent {
-            slayer_address: TxContext::sender(ctx),
+            slayer_address: tx_context::sender(ctx),
             hero: *ID::inner(&hero.id),
             boar: *ID::inner(&boar_id),
             game_id: id(game)
@@ -258,7 +258,7 @@ module Games::Hero {
         // a max. one can only imbue a sword with so much magic
         let magic = (value - MIN_SWORD_COST) / MIN_SWORD_COST;
         Sword {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             magic: Math::min(magic, MAX_MAGIC),
             strength: 1,
             game_id: id(game)
@@ -270,7 +270,7 @@ module Games::Hero {
     ) {
         let sword = create_sword(game, payment, ctx);
         let hero = create_hero(game, sword, ctx);
-        Transfer::transfer(hero, TxContext::sender(ctx))
+        Transfer::transfer(hero, tx_context::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
@@ -280,7 +280,7 @@ module Games::Hero {
     ): Hero {
         check_id(game, sword.game_id);
         Hero {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             hp: 100,
             experience: 0,
             sword: option::some(sword),
@@ -300,7 +300,7 @@ module Games::Hero {
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
         Transfer::transfer(
-            Potion { id: TxContext::new_id(ctx), potency, game_id: id(game) },
+            Potion { id: tx_context::new_id(ctx), potency, game_id: id(game) },
             player
         )
     }
@@ -318,7 +318,7 @@ module Games::Hero {
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
         Transfer::transfer(
-            Boar { id: TxContext::new_id(ctx), hp, strength, game_id: id(game) },
+            Boar { id: tx_context::new_id(ctx), hp, strength, game_id: id(game) },
             player
         )
     }

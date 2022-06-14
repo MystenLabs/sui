@@ -5,7 +5,7 @@ module NFTs::Geniteam {
     use sui::bag::{Self, Bag};
     use sui::Collection::{Self, Collection};
     use sui::ID::VersionedID;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
     use sui::Transfer::{Self, ChildRef};
     use std::ascii::{Self, String};
@@ -99,7 +99,7 @@ module NFTs::Geniteam {
     ) {
         // Create player simply and transfer to caller
         let player = new_player(player_name, ctx);
-        Transfer::transfer(player, TxContext::sender(ctx))
+        Transfer::transfer(player, tx_context::sender(ctx))
     }
 
     /// Create a Farm and add it to the Player
@@ -166,7 +166,7 @@ module NFTs::Geniteam {
 
         // Create the farm cosmetic object
         let farm_cosmetic = FarmCosmetic {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             cosmetic_type,
             display: ascii::string(display)
             };
@@ -188,7 +188,7 @@ module NFTs::Geniteam {
 
         // Create the farm cosmetic object
         let monster_cosmetic = MonsterCosmetic {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             cosmetic_type,
             display: ascii::string(display)
             };
@@ -293,7 +293,7 @@ module NFTs::Geniteam {
         player_name: vector<u8>, ctx: &mut TxContext
     ): Player {
         // Create a new id for player.
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
 
         // Create inventory collection.
         let inventory = bag::new(ctx);
@@ -321,7 +321,7 @@ module NFTs::Geniteam {
         ctx: &mut TxContext
     ): Farm {
         // Create a new id for farm.
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
 
         // Create pet monsters collection.
         let pet_monsters = Collection::new<Monster>(ctx);
@@ -358,7 +358,7 @@ module NFTs::Geniteam {
     ): Monster {
 
         Monster {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             monster_name: ascii::string(monster_name),
             monster_img_index,
             breed,

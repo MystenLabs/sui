@@ -8,7 +8,7 @@ module Examples::TicTacToe {
     use sui::ID::{Self, ID, VersionedID};
     use sui::Event;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     // Game status
     const IN_PROGRESS: u8 = 0;
@@ -62,7 +62,7 @@ module Examples::TicTacToe {
     public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let game_id = *ID::inner(&id);
         let gameboard = vector[
             vector[option::none(), option::none(), option::none()],
@@ -77,15 +77,15 @@ module Examples::TicTacToe {
             x_address: x_address,
             o_address: o_address,
         };
-        Transfer::transfer(game, TxContext::sender(ctx));
+        Transfer::transfer(game, tx_context::sender(ctx));
         let cap = MarkMintCap {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             game_id: copy game_id,
             remaining_supply: 5,
         };
         Transfer::transfer(cap, x_address);
         let cap = MarkMintCap {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             game_id,
             remaining_supply: 5,
         };
@@ -131,9 +131,9 @@ module Examples::TicTacToe {
             // Notify the server that the game ended so that it can delete the game.
             Event::emit(GameEndEvent { game_id: *ID::inner(&game.id) });
             if (game.game_status == X_WIN) {
-                Transfer::transfer( Trophy { id: TxContext::new_id(ctx) }, *&game.x_address);
+                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                Transfer::transfer( Trophy { id: TxContext::new_id(ctx) }, *&game.o_address);
+                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
             }
         }
     }
@@ -176,8 +176,8 @@ module Examples::TicTacToe {
         };
         cap.remaining_supply = cap.remaining_supply - 1;
         Mark {
-            id: TxContext::new_id(ctx),
-            player: TxContext::sender(ctx),
+            id: tx_context::new_id(ctx),
+            player: tx_context::sender(ctx),
             row,
             col,
         }

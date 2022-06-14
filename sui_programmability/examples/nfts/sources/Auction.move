@@ -38,7 +38,7 @@ module NFTs::Auction {
     use sui::SUI::SUI;
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self,TxContext};
+    use sui::tx_context::{Self,TxContext};
 
     use NFTs::AuctionLib::{Self, Auction};
 
@@ -78,8 +78,8 @@ module NFTs::Auction {
         coin: Coin<SUI>, auction_id: ID, auctioneer: address, ctx: &mut TxContext
     ) {
         let bid = Bid {
-            id: TxContext::new_id(ctx),
-            bidder: TxContext::sender(ctx),
+            id: tx_context::new_id(ctx),
+            bidder: tx_context::sender(ctx),
             auction_id,
             bid: Coin::into_balance(coin),
         };

@@ -4,7 +4,7 @@
 module NFTs::Num {
     use sui::ID::{Self, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// Very silly NFT: a natural number!
     struct Num has key, store {
@@ -31,11 +31,11 @@ module NFTs::Num {
     /// Create a unique issuer cap and give it to the transaction sender
     fun init(ctx: &mut TxContext) {
         let issuer_cap = NumIssuerCap {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             supply: 0,
             issued_counter: 0,
         };
-        Transfer::transfer(issuer_cap, TxContext::sender(ctx))
+        Transfer::transfer(issuer_cap, tx_context::sender(ctx))
     }
 
     /// Create a new `Num` NFT. Aborts if `MAX_SUPPLY` NFT's have already been issued
@@ -44,7 +44,7 @@ module NFTs::Num {
         cap.issued_counter = n + 1;
         cap.supply = cap.supply + 1;
         assert!(n <= MAX_SUPPLY, ETooManyNums);
-        Num { id: TxContext::new_id(ctx), n }
+        Num { id: tx_context::new_id(ctx), n }
     }
 
     /// Burn `nft`. This reduces the supply.

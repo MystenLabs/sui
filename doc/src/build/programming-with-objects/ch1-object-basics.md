@@ -29,16 +29,16 @@ Now `ColorObject` represents a Sui object type and can be used to create Sui obj
 > :bulb: The `VersionedID` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the unique `ID` of the object and the version of the object. Each time a mutable object is used in a transaction, its version will increase by 1.
 
 ### Create Sui object
-Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `id`. The only way to create a new unique `VersionedID` for a Sui object is to call `TxContext::new_id`. The `new_id` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
+Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `id`. The only way to create a new unique `VersionedID` for a Sui object is to call `tx_context::new_id`. The `new_id` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
 ```rust
-/// TxContext::Self represents the TxContext module, which allows us call
+/// tx_context::Self represents the TxContext module, which allows us call
 /// functions in the module, such as the `new_id` function.
-/// TxContext::TxContext represents the TxContext struct in TxContext module.
-use Sui::TxContext::{Self, TxContext};
+/// tx_context::TxContext represents the TxContext struct in TxContext module.
+use Sui::tx_context::{Self, TxContext};
 
 fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
     ColorObject {
-        id: TxContext::new_id(ctx),
+        id: tx_context::new_id(ctx),
         red,
         green,
         blue,
@@ -59,7 +59,7 @@ This places `obj` in global storage along with metadata that records `recipient`
 > :bulb: In core Move, we would call `move_to<T>(a: address, t: T)` to add the entry `(a, T) -> t` to the global storage. But because (as explained above) the schema of Sui Move's global storage is different, we use the `Transfer` APIs instead of `move_to` or the other [global storage operators](https://github.com/move-language/move/blob/main/language/documentation/book/src/global-storage-operators.md) in core Move. These operators cannot be used in Sui Move.
 
 A common use of this API is to transfer the object to the sender/signer of the current transaction (e.g., mint an NFT owned by you). The only way to obtain the sender of the current transaction is to rely on the transaction context passed in from an entry function. The last argument to an entry function must be the current transaction context, defined as `ctx: &mut TxContext`.
-To obtain the current signer's address, one can call `TxContext::sender(ctx)`.
+To obtain the current signer's address, one can call `tx_context::sender(ctx)`.
 
 Below is the code that creates a new `ColorObject` and makes it owned by the sender of the transaction:
 ```rust
@@ -68,7 +68,7 @@ use Sui::Transfer;
 // This is an entry function that can be called directly by a Transaction.
 public entry fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
     let color_object = new(red, green, blue, ctx);
-    Transfer::transfer(color_object, TxContext::sender(ctx))
+    Transfer::transfer(color_object, tx_context::sender(ctx))
 }
 ```
 > :bulb: Naming convention: Constructors are typically named **`new`**, which returns an instance of the struct type. The **`create`** function is typically defined as an entry function that constructs the struct and transfers it to the desired owner (most commonly the sender).

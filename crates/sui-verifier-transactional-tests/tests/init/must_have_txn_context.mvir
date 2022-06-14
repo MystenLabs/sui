@@ -3,7 +3,7 @@
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
+    import 0x2.tx_context;
     init() {
         label l0:
         abort 0;
@@ -13,8 +13,8 @@ module 0x0.M {
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
-    init(ctx: &mut TxContext.TxContext, ctx2: &mut TxContext.TxContext) {
+    import 0x2.tx_context;
+    init(ctx: &mut tx_context.TxContext, ctx2: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }

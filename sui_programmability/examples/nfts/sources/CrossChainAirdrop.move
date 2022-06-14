@@ -10,7 +10,7 @@ module NFTs::CrossChainAirdrop {
     use sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
     use sui::ID::{VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// The oracle manages one `PerContractAirdropInfo` for each Ethereum contract
     struct CrossChainAirdropOracle has key {
@@ -57,10 +57,10 @@ module NFTs::CrossChainAirdrop {
     fun init(ctx: &mut TxContext) {
         Transfer::transfer(
             CrossChainAirdropOracle {
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
                 managed_contracts: vector::empty(),
             },
-            TxContext::sender(ctx)
+            tx_context::sender(ctx)
         )
     }
 
@@ -79,7 +79,7 @@ module NFTs::CrossChainAirdrop {
         // NOTE: this is where the globally uniqueness check happens
         assert!(!is_token_claimed(contract, &token_id), ETokenIDClaimed);
         let nft = ERC721 {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             source_contract_address: SourceContractAddress { address: source_contract_address },
             metadata: ERC721Metadata::new(token_id, name, token_uri),
         };

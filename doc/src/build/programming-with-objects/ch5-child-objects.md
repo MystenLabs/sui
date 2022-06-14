@@ -45,8 +45,8 @@ First we define an API to create an object of `Child` type:
 ```rust
 public entry fun create_child(ctx: &mut TxContext) {
     Transfer::transfer(
-        Child { id: TxContext::new_id(ctx) },
-        TxContext::sender(ctx),
+        Child { id: tx_context::new_id(ctx) },
+        tx_context::sender(ctx),
     );
 }
 ```
@@ -55,10 +55,10 @@ Similarly, we can define an API to create an object of `Parent` type:
 ```rust
 public entry fun create_parent(ctx: &mut TxContext) {
     let parent = Parent {
-        id: TxContext::new_id(ctx),
+        id: tx_context::new_id(ctx),
         child: Option::none(),
     };
-    Transfer::transfer(parent, TxContext::sender(ctx));
+    Transfer::transfer(parent, tx_context::sender(ctx));
 }
 ```
 Since the `child` field is `Option` type, we can start with `Option::none()`.
@@ -84,7 +84,7 @@ public fun transfer_to_object_id<T: key>(
     owner_id: VersionedID,
 ): (VersionedID, ChildRef<T>);
 ```
-To use this API, we don't need to create a parent object yet; we need only the object ID of the parent object, which can be created in advance through `TxContext::new_id(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by value only to return it. This is to ensure that the caller of the function does indeed own a `VersionedID` that hasn't been used in any object yet. Without this, it can be easy to make mistakes.
+To use this API, we don't need to create a parent object yet; we need only the object ID of the parent object, which can be created in advance through `tx_context::new_id(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by value only to return it. This is to ensure that the caller of the function does indeed own a `VersionedID` that hasn't been used in any object yet. Without this, it can be easy to make mistakes.
 Let's see how this is used in action. First we define another object type that has a non-optional child field:
 ```rust
 struct AnotherParent has key {
@@ -95,13 +95,13 @@ struct AnotherParent has key {
 And let's see how we define the API to create `AnotherParent` instance:
 ```rust
 public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
-    let id = TxContext::new_id(ctx);
+    let id = tx_context::new_id(ctx);
     let (id, child_ref) = Transfer::transfer_to_object_id(child, id);
     let parent = AnotherParent {
         id,
         child: child_ref,
     };
-    Transfer::transfer(parent, TxContext::sender(ctx));
+    Transfer::transfer(parent, tx_context::sender(ctx));
 }
 ```
 In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, thereby obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer to the sender's account.
@@ -208,7 +208,7 @@ To demonstrate how to use this API, let's implement a function that removes a ch
 ```rust
 public entry fun remove_child(parent: &mut Parent, child: Child, ctx: &mut TxContext) {
     let child_ref = Option::extract(&mut parent.child);
-    Transfer::transfer_child_to_address(child, child_ref, TxContext::sender(ctx));
+    Transfer::transfer_child_to_address(child, child_ref, tx_context::sender(ctx));
 }
 ```
 In the above function, the reference to the child is extracted from the `parent` object, which is then passed together with the `child` object to the `transfer_child_to_address`, with recipient as the sender of the transaction. It is important to note that this function must also take the `child` object as an argument. Move is not able to obtain the child object only from the reference. An object must always be explicitly provided in the transaction to make the transfer work. As we explained earlier, the fact that `transfer_child_to_address` requires the child reference as an argument guarantees that the `parent` object no longer holds a reference to the child object.

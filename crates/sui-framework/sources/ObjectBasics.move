@@ -5,7 +5,7 @@
 module sui::ObjectBasics {
     use sui::Event;
     use sui::ID::{Self, VersionedID};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::Transfer;
 
     struct Object has key, store {
@@ -24,7 +24,7 @@ module sui::ObjectBasics {
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(
-            Object { id: TxContext::new_id(ctx), value },
+            Object { id: tx_context::new_id(ctx), value },
             recipient
         )
     }
@@ -54,12 +54,12 @@ module sui::ObjectBasics {
     }
 
     public entry fun wrap(o: Object, ctx: &mut TxContext) {
-        Transfer::transfer(Wrapper { id: TxContext::new_id(ctx), o }, TxContext::sender(ctx))
+        Transfer::transfer(Wrapper { id: tx_context::new_id(ctx), o }, tx_context::sender(ctx))
     }
 
     public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
         ID::delete(id);
-        Transfer::transfer(o, TxContext::sender(ctx))
+        Transfer::transfer(o, tx_context::sender(ctx))
     }
 }

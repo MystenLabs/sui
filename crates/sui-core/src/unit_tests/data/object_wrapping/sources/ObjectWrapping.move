@@ -4,7 +4,7 @@
 module ObjectWrapping::ObjectWrapping {
     use std::option::{Self, Option};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::ID::{Self, VersionedID};
 
     struct Child has key, store {
@@ -19,19 +19,19 @@ module ObjectWrapping::ObjectWrapping {
     public entry fun create_child(ctx: &mut TxContext) {
         Transfer::transfer(
             Child {
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
             },
-            TxContext::sender(ctx),
+            tx_context::sender(ctx),
         )
     }
 
     public entry fun create_parent(child: Child, ctx: &mut TxContext) {
         Transfer::transfer(
             Parent {
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
                 child: option::some(child),
             },
-            TxContext::sender(ctx),
+            tx_context::sender(ctx),
         )
     }
 
@@ -43,7 +43,7 @@ module ObjectWrapping::ObjectWrapping {
         let child = option::extract(&mut parent.child);
         Transfer::transfer(
             child,
-            TxContext::sender(ctx),
+            tx_context::sender(ctx),
         )
     }
 

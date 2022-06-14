@@ -27,7 +27,7 @@
 
 module Games::RockPaperScissors {
     use sui::ID::{Self, VersionedID};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::Transfer::{Self};
     use std::vector;
     use std::hash;
@@ -119,15 +119,15 @@ module Games::RockPaperScissors {
     /// todo: extend with generics + T as prize
     public entry fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
         Transfer::transfer(Game {
-            id: TxContext::new_id(ctx),
-            prize: ThePrize { id: TxContext::new_id(ctx) },
+            id: tx_context::new_id(ctx),
+            prize: ThePrize { id: tx_context::new_id(ctx) },
             player_one,
             player_two,
             hash_one: vector[],
             hash_two: vector[],
             gesture_one: NONE,
             gesture_two: NONE,
-        }, TxContext::sender(ctx));
+        }, tx_context::sender(ctx));
     }
 
     /// Transfer [`PlayerTurn`] to the game owner. Nobody at this point knows what move
@@ -137,8 +137,8 @@ module Games::RockPaperScissors {
     public entry fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(PlayerTurn {
             hash,
-            id: TxContext::new_id(ctx),
-            player: TxContext::sender(ctx),
+            id: tx_context::new_id(ctx),
+            player: tx_context::sender(ctx),
         }, at);
     }
 
@@ -166,9 +166,9 @@ module Games::RockPaperScissors {
     /// gesture in the [`Game`] object.
     public entry fun reveal(at: address, salt: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(Secret {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             salt,
-            player: TxContext::sender(ctx),
+            player: tx_context::sender(ctx),
         }, at);
     }
 
@@ -217,7 +217,7 @@ module Games::RockPaperScissors {
         } else if (p2_wins) {
             Transfer::transfer(prize, player_two)
         } else {
-            Transfer::transfer(prize, TxContext::sender(ctx))
+            Transfer::transfer(prize, tx_context::sender(ctx))
         };
     }
 

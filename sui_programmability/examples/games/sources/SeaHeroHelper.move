@@ -13,7 +13,7 @@ module Games::SeaHeroHelper {
     use sui::Coin::{Self, Coin};
     use sui::ID::{Self, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.
@@ -50,9 +50,9 @@ module Games::SeaHeroHelper {
         );
         Transfer::transfer(
             HelpMeSlayThisMonster {
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
                 monster,
-                monster_owner: TxContext::sender(ctx),
+                monster_owner: tx_context::sender(ctx),
                 helper_reward
             },
             helper

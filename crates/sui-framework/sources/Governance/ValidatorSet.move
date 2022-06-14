@@ -8,7 +8,7 @@ module sui::ValidatorSet {
     use sui::balance::{Self, Balance};
     use sui::EpochRewardRecord;
     use sui::SUI::SUI;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::Validator::{Self, Validator, ValidatorMetadata};
 
     friend sui::SuiSystem;
@@ -86,7 +86,7 @@ module sui::ValidatorSet {
         self: &mut ValidatorSet,
         ctx: &TxContext,
     ) {
-        let validator_address = TxContext::sender(ctx);
+        let validator_address = tx_context::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
         assert!(option::is_some(&validator_index_opt), 0);
         let validator_index = option::extract(&mut validator_index_opt);
@@ -106,7 +106,7 @@ module sui::ValidatorSet {
         new_stake: Balance<SUI>,
         ctx: &TxContext,
     ) {
-        let validator_address = TxContext::sender(ctx);
+        let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         Validator::request_add_stake(validator, new_stake);
     }
@@ -120,7 +120,7 @@ module sui::ValidatorSet {
         min_validator_stake: u64,
         ctx: &TxContext,
     ) {
-        let validator_address = TxContext::sender(ctx);
+        let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         Validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
     }

@@ -7,7 +7,7 @@ module sui::Genesis {
     use sui::Coin;
     use sui::SUI;
     use sui::SuiSystem;
-    use sui::TxContext::TxContext;
+    use sui::tx_context::TxContext;
     use sui::Validator;
 
     /// The initial amount of SUI locked in the storage fund.

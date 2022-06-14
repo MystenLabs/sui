@@ -11,7 +11,7 @@ module sui::DevNetNFT {
     use sui::ID::{Self, ID, VersionedID};
     use sui::Event;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
     struct DevNetNFT has key, store {
@@ -42,12 +42,12 @@ module sui::DevNetNFT {
         ctx: &mut TxContext
     ) {
         let nft = DevNetNFT {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             name: utf8::string_unsafe(name),
             description: utf8::string_unsafe(description),
             url: url::new_unsafe_from_bytes(url)
         };
-        let sender = TxContext::sender(ctx);
+        let sender = tx_context::sender(ctx);
         Event::emit(MintNFTEvent {
             object_id: *ID::inner(&nft.id),
             creator: sender,

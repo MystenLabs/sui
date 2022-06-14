@@ -5,7 +5,7 @@
 module sui::SUI {
     use sui::Coin;
     use sui::Coin::TreasuryCap;
-    use sui::TxContext::TxContext;
+    use sui::tx_context::TxContext;
 
     friend sui::Genesis;
 

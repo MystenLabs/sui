@@ -5,7 +5,7 @@
 module DeFi::EscrowTests {
     use sui::ID::{Self, VersionedID};
     use sui::TestScenario::{Self, Scenario};
-    use sui::TxContext::{Self};
+    use sui::tx_context::{Self};
 
     use DeFi::Escrow::{Self, EscrowedObj};
 
@@ -102,11 +102,11 @@ module DeFi::EscrowTests {
         let new_scenario = TestScenario::begin(&alice);
         let scenario = &mut new_scenario;
         let ctx = TestScenario::ctx(scenario);
-        let item_a_versioned_id = TxContext::new_id(ctx);
+        let item_a_versioned_id = tx_context::new_id(ctx);
 
         TestScenario::next_tx(scenario, &bob);
         let ctx = TestScenario::ctx(scenario);
-        let item_b_versioned_id = TxContext::new_id(ctx);
+        let item_b_versioned_id = tx_context::new_id(ctx);
 
         let item_a_id = *ID::inner(&item_a_versioned_id);
         let item_b_id = *ID::inner(&item_b_versioned_id);

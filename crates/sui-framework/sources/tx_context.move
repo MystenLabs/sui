@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::TxContext {
+module sui::tx_context {
     use std::signer;
     use sui::ID::{Self, VersionedID};
 

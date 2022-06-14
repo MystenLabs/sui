@@ -8,7 +8,7 @@ module sui::test_coin {
     use sui::balance;
     use sui::SUI::SUI;
     use sui::LockedCoin::LockedCoin;
-    use sui::TxContext;
+    use sui::tx_context;
     use sui::LockedCoin;
     use sui::Coin::Coin;
 
@@ -54,7 +54,7 @@ module sui::test_coin {
         // Advance the epoch by 2.
         TestScenario::next_epoch(scenario);
         TestScenario::next_epoch(scenario);
-        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 2, 1);
+        assert!(tx_context::epoch(TestScenario::ctx(scenario)) == 2, 1);
 
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);
@@ -80,7 +80,7 @@ module sui::test_coin {
 
         // Advance the epoch by 1.
         TestScenario::next_epoch(scenario);
-        assert!(TxContext::epoch(TestScenario::ctx(scenario)) == 1, 1);
+        assert!(tx_context::epoch(TestScenario::ctx(scenario)) == 1, 1);
 
         TestScenario::next_tx(scenario, &TEST_RECIPIENT_ADDR);
         let locked_coin = TestScenario::take_owned<LockedCoin<SUI>>(scenario);

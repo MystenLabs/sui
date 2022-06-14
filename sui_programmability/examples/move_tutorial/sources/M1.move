@@ -3,7 +3,7 @@
 
 module MyFirstPackage::M1 {
     use sui::ID::VersionedID;
-    use sui::TxContext::TxContext;
+    use sui::tx_context::TxContext;
 
     struct Sword has key, store {
         id: VersionedID,
@@ -19,14 +19,14 @@ module MyFirstPackage::M1 {
     // module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
         use sui::Transfer;
-        use sui::TxContext;
+        use sui::tx_context;
         let admin = Forge {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
         // (presumably the game admin)
-        Transfer::transfer(admin, TxContext::sender(ctx));
+        Transfer::transfer(admin, tx_context::sender(ctx));
     }
 
     public fun swords_created(self: &Forge): u64 {
@@ -43,10 +43,10 @@ module MyFirstPackage::M1 {
 
     public entry fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         use sui::Transfer;
-        use sui::TxContext;
+        use sui::tx_context;
         // create a sword
         let sword = Sword {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             magic: magic,
             strength: strength,
         };
@@ -133,14 +133,14 @@ module MyFirstPackage::M1 {
     #[test]
     public fun test_sword_create() {
         use sui::Transfer;
-        use sui::TxContext;
+        use sui::tx_context;
 
         // create a dummy TxContext for testing
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
 
         // create a sword
         let sword = Sword {
-            id: TxContext::new_id(&mut ctx),
+            id: tx_context::new_id(&mut ctx),
             magic: 42,
             strength: 7,
         };

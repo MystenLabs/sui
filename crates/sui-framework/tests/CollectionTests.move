@@ -7,7 +7,7 @@ module sui::CollectionTests {
     use sui::Collection::{Self, Collection};
     use sui::ID::{Self, VersionedID};
     use sui::TestScenario;
-    use sui::TxContext;
+    use sui::tx_context;
 
     struct Object has key, store {
         id: VersionedID,
@@ -30,9 +30,9 @@ module sui::CollectionTests {
             let collection = TestScenario::take_owned<Collection<Object>>(scenario);
             assert!(Collection::size(&collection) == 0, 0);
 
-            let obj1 = Object { id: TxContext::new_id(TestScenario::ctx(scenario)) };
+            let obj1 = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
             let id1 = *ID::id(&obj1);
-            let obj2 = Object { id: TxContext::new_id(TestScenario::ctx(scenario)) };
+            let obj2 = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
             let id2 = *ID::id(&obj2);
 
             Collection::add(&mut collection, obj1);
@@ -62,7 +62,7 @@ module sui::CollectionTests {
         TestScenario::next_tx(scenario, &sender);
         {
             let collection = TestScenario::take_owned<Collection<Object>>(scenario);
-            let obj = Object { id: TxContext::new_id(TestScenario::ctx(scenario)) };
+            let obj = Object { id: tx_context::new_id(TestScenario::ctx(scenario)) };
             Collection::add(&mut collection, obj);
             TestScenario::return_owned(scenario, collection);
         };
@@ -110,31 +110,31 @@ module sui::CollectionTests {
     #[test]
     #[expected_failure(abort_code = 520)]
     fun test_init_with_invalid_max_capacity() {
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
         // Sui::Collection::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, max_capacity + 1);
-        Collection::transfer(collection, TxContext::sender(&ctx));
+        Collection::transfer(collection, tx_context::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 520)]
     fun test_init_with_zero() {
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, 0);
-        Collection::transfer(collection, TxContext::sender(&ctx));
+        Collection::transfer(collection, tx_context::sender(&ctx));
     }
 
     #[test]
     #[expected_failure(abort_code = 776)]
     fun test_exceed_max_capacity() {
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
         let collection = Collection::new_with_max_capacity<Object>(&mut ctx, 1);
 
-        let obj1 = Object { id: TxContext::new_id(&mut ctx) };
+        let obj1 = Object { id: tx_context::new_id(&mut ctx) };
         Collection::add(&mut collection, obj1);
-        let obj2 = Object { id: TxContext::new_id(&mut ctx) };
+        let obj2 = Object { id: tx_context::new_id(&mut ctx) };
         Collection::add(&mut collection, obj2);
-        Collection::transfer(collection, TxContext::sender(&ctx));
+        Collection::transfer(collection, tx_context::sender(&ctx));
     }
 }

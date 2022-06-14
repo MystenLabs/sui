@@ -8,7 +8,7 @@ module sui::ID {
 
     friend sui::SuiSystem;
     friend sui::Transfer;
-    friend sui::TxContext;
+    friend sui::tx_context;
 
     #[test_only]
     friend sui::TestScenario;

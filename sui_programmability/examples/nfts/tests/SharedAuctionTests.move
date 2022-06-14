@@ -9,7 +9,7 @@ module NFTs::SharedAuctionTests {
     use sui::SUI::SUI;
     use sui::ID::VersionedID;
     use sui::TestScenario::Self;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     use NFTs::SharedAuction;
     use NFTs::AuctionLib::Auction;
@@ -59,7 +59,7 @@ module NFTs::SharedAuctionTests {
         let ctx = TestScenario::ctx(scenario);
         {
             let to_sell = SomeItemToSell {
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
                 value: 42,
             };
             SharedAuction::create_auction(to_sell, ctx);

@@ -7,7 +7,7 @@ module Tutorial::TrustedSwap {
     use sui::ID::{Self, VersionedID};
     use sui::SUI::SUI;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     const MIN_FEE: u64 = 1000;
 
@@ -26,15 +26,15 @@ module Tutorial::TrustedSwap {
 
     public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
         let object = Object {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             scarcity,
             style,
         };
-        Transfer::transfer(object, TxContext::sender(ctx))
+        Transfer::transfer(object, tx_context::sender(ctx))
     }
 
     public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
-        Transfer::transfer(object, TxContext::sender(ctx))
+        Transfer::transfer(object, tx_context::sender(ctx))
     }
 
     /// Anyone owns an `Object` can request swapping their object. This object
@@ -42,8 +42,8 @@ module Tutorial::TrustedSwap {
     public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
         assert!(Coin::value(&fee) >= MIN_FEE, 0);
         let wrapper = ObjectWrapper {
-            id: TxContext::new_id(ctx),
-            original_owner: TxContext::sender(ctx),
+            id: tx_context::new_id(ctx),
+            original_owner: tx_context::sender(ctx),
             to_swap: object,
             fee: Coin::into_balance(fee),
         };
@@ -77,7 +77,7 @@ module Tutorial::TrustedSwap {
         Transfer::transfer(object2, original_owner1);
 
         // Service provider takes the fee.
-        let service_address = TxContext::sender(ctx);
+        let service_address = tx_context::sender(ctx);
         balance::join(&mut fee1, fee2);
         Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
 

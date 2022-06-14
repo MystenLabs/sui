@@ -9,7 +9,7 @@
 module Basics::Lock {
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
 
     /// Lock is empty, nothing to take.
@@ -42,7 +42,7 @@ module Basics::Lock {
     /// Lock some content inside a shared object. A Key is created and is
     /// sent to the transaction sender.
     public entry fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let for = *ID::inner(&id);
 
         Transfer::share_object(Lock<T> {
@@ -52,8 +52,8 @@ module Basics::Lock {
 
         Transfer::transfer(Key<T> {
             for,
-            id: TxContext::new_id(ctx)
-        }, TxContext::sender(ctx));
+            id: tx_context::new_id(ctx)
+        }, tx_context::sender(ctx));
     }
 
     /// Lock something inside a shared object using a Key. Aborts if
@@ -89,7 +89,7 @@ module Basics::Lock {
         key: &Key<T>,
         ctx: &mut TxContext,
     ) {
-        Transfer::transfer(unlock(lock, key), TxContext::sender(ctx))
+        Transfer::transfer(unlock(lock, key), tx_context::sender(ctx))
     }
 }
 
@@ -97,7 +97,7 @@ module Basics::Lock {
 module Basics::LockTest {
     use sui::ID::VersionedID;
     use sui::TestScenario;
-    use sui::TxContext;
+    use sui::tx_context;
     use sui::Transfer;
     use Basics::Lock::{Self, Lock, Key};
 
@@ -117,7 +117,7 @@ module Basics::LockTest {
         TestScenario::next_tx(scenario, &user1);
         {
             let ctx = TestScenario::ctx(scenario);
-            let id = TxContext::new_id(ctx);
+            let id = tx_context::new_id(ctx);
 
             Lock::create(Treasure { id }, ctx);
         };

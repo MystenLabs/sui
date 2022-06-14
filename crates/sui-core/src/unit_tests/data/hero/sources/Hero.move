@@ -10,7 +10,7 @@ module Examples::Hero {
     use sui::ID::{Self, ID, VersionedID};
     use sui::Math;
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
 
     /// Our hero!
@@ -99,10 +99,10 @@ module Examples::Hero {
     fun init(ctx: &mut TxContext) {
         let admin = admin();
         // ensure this is being initialized by the expected admin authenticator
-        assert!(&TxContext::sender(ctx) == &admin, ENOT_ADMIN);
+        assert!(&tx_context::sender(ctx) == &admin, ENOT_ADMIN);
         Transfer::transfer(
             GameAdmin {
-                id: TxContext::new_id(ctx),
+                id: tx_context::new_id(ctx),
                 boars_created: 0,
                 potions_created: 0
             },
@@ -139,7 +139,7 @@ module Examples::Hero {
         };
         // let the world know about the hero's triumph by emitting an event!
         Event::emit(BoarSlainEvent {
-            slayer_address: TxContext::sender(ctx),
+            slayer_address: tx_context::sender(ctx),
             hero: *ID::inner(&hero.id),
             boar: *ID::inner(&boar_id),
         });
@@ -216,7 +216,7 @@ module Examples::Hero {
         // a max. one can only imbue a sword with so much magic
         let magic = (value - MIN_SWORD_COST) / MIN_SWORD_COST;
         Sword {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             magic: Math::min(magic, MAX_MAGIC),
             strength: 1
         }
@@ -225,14 +225,14 @@ module Examples::Hero {
     public entry fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
-        Transfer::transfer(hero, TxContext::sender(ctx))
+        Transfer::transfer(hero, tx_context::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
     /// same attributes.
     public fun create_hero(sword: Sword, ctx: &mut TxContext): Hero {
         Hero {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             hp: 100,
             experience: 0,
             sword: option::some(sword),
@@ -249,7 +249,7 @@ module Examples::Hero {
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
         Transfer::transfer(
-            Potion { id: TxContext::new_id(ctx), potency },
+            Potion { id: tx_context::new_id(ctx), potency },
             player
         )
     }
@@ -265,7 +265,7 @@ module Examples::Hero {
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
         Transfer::transfer(
-            Boar { id: TxContext::new_id(ctx), hp, strength },
+            Boar { id: tx_context::new_id(ctx), hp, strength },
             player
         )
     }

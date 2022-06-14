@@ -60,9 +60,9 @@ pub fn all_natives(
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         ("Transfer", "freeze_object", transfer::freeze_object),
         ("Transfer", "share_object", transfer::share_object),
-        ("TxContext", "derive_id", tx_context::derive_id),
+        ("tx_context", "derive_id", tx_context::derive_id),
         (
-            "TxContext",
+            "tx_context",
             "new_signer_from_address",
             tx_context::new_signer_from_address,
         ),

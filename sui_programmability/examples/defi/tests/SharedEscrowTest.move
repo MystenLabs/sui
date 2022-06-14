@@ -5,7 +5,7 @@
 module DeFi::SharedEscrowTests {
     use sui::ID::{Self, VersionedID};
     use sui::TestScenario::{Self, Scenario};
-    use sui::TxContext::{Self};
+    use sui::tx_context::{Self};
 
     use DeFi::SharedEscrow::{Self, EscrowedObj};
 
@@ -80,7 +80,7 @@ module DeFi::SharedEscrowTests {
         // Bob tries to exchange item C for the escrowed item A and expects failure
         TestScenario::next_tx(scenario, &BOB_ADDRESS);
         let ctx = TestScenario::ctx(scenario);
-        let item_c_versioned_id = TxContext::new_id(ctx);
+        let item_c_versioned_id = tx_context::new_id(ctx);
         exchange(scenario, &BOB_ADDRESS, item_c_versioned_id);
     }
 
@@ -147,11 +147,11 @@ module DeFi::SharedEscrowTests {
         let new_scenario = TestScenario::begin(&alice);
         let scenario = &mut new_scenario;
         let ctx = TestScenario::ctx(scenario);
-        let item_a_versioned_id = TxContext::new_id(ctx);
+        let item_a_versioned_id = tx_context::new_id(ctx);
 
         TestScenario::next_tx(scenario, &bob);
         let ctx = TestScenario::ctx(scenario);
-        let item_b_versioned_id = TxContext::new_id(ctx);
+        let item_b_versioned_id = tx_context::new_id(ctx);
         let item_b_id = *ID::inner(&item_b_versioned_id);
 
         // Alice creates the escrow

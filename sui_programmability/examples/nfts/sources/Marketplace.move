@@ -3,7 +3,7 @@
 
 module NFTs::Marketplace {
     use sui::bag::{Self, Bag};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer::{Self, ChildRef};
     use sui::Coin::{Self, Coin};
@@ -29,7 +29,7 @@ module NFTs::Marketplace {
 
     /// Create a new shared Marketplace.
     public entry fun create(ctx: &mut TxContext) {
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let objects = bag::new(ctx);
         let (id, objects) = bag::transfer_to_object_id(objects, id);
         let market_place = Marketplace {
@@ -50,8 +50,8 @@ module NFTs::Marketplace {
         let listing = Listing<T, C> {
             item,
             ask,
-            id: TxContext::new_id(ctx),
-            owner: TxContext::sender(ctx),
+            id: tx_context::new_id(ctx),
+            owner: tx_context::sender(ctx),
         };
         bag::add(objects, listing)
     }
@@ -66,7 +66,7 @@ module NFTs::Marketplace {
         let listing = bag::remove(objects, listing);
         let Listing { id, item, ask: _, owner } = listing;
 
-        assert!(TxContext::sender(ctx) == owner, ENotOwner);
+        assert!(tx_context::sender(ctx) == owner, ENotOwner);
 
         ID::delete(id);
         item
@@ -108,7 +108,7 @@ module NFTs::Marketplace {
         paid: Coin<C>,
         ctx: &mut TxContext
     ) {
-        Transfer::transfer(buy(objects, listing, paid), TxContext::sender(ctx))
+        Transfer::transfer(buy(objects, listing, paid), tx_context::sender(ctx))
     }
 
     /// Check whether an object was listed on a Marketplace.
@@ -129,7 +129,7 @@ module NFTs::MarketplaceTests {
     use sui::Transfer;
     use sui::Coin::{Self, Coin};
     use sui::SUI::SUI;
-    use sui::TxContext;
+    use sui::tx_context;
     use sui::TestScenario::{Self, Scenario};
     use NFTs::Marketplace::{Self, Marketplace, Listing};
 
@@ -159,7 +159,7 @@ module NFTs::MarketplaceTests {
     /// Mint Kitty NFT and send it to SELLER.
     fun mint_kitty(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &ADMIN);
-        let nft = Kitty { id: TxContext::new_id(TestScenario::ctx(scenario)), kitty_id: 1 };
+        let nft = Kitty { id: tx_context::new_id(TestScenario::ctx(scenario)), kitty_id: 1 };
         Transfer::transfer(nft, SELLER);
     }
 

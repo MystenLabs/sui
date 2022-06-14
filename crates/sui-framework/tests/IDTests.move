@@ -4,7 +4,7 @@
 #[test_only]
 module sui::IDTests {
     use sui::ID;
-    use sui::TxContext;
+    use sui::tx_context;
 
     const ID_BYTES_MISMATCH: u64 = 0;
 
@@ -14,8 +14,8 @@ module sui::IDTests {
 
     #[test]
     fun test_get_id() {
-        let ctx = TxContext::dummy();
-        let versioned_id = TxContext::new_id(&mut ctx);
+        let ctx = tx_context::dummy();
+        let versioned_id = tx_context::new_id(&mut ctx);
         let obj_id = *ID::inner(&versioned_id);
         let obj = Object { id: versioned_id };
         assert!(*ID::id(&obj) == obj_id, ID_BYTES_MISMATCH);

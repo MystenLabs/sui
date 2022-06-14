@@ -5,7 +5,7 @@ module ObjectOwner::ObjectOwner {
     use std::option::{Self, Option};
     use sui::ID::{Self, VersionedID};
     use sui::Transfer::{Self, ChildRef};
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     struct Parent has key {
         id: VersionedID,
@@ -23,28 +23,28 @@ module ObjectOwner::ObjectOwner {
 
     public entry fun create_child(ctx: &mut TxContext) {
         Transfer::transfer(
-            Child { id: TxContext::new_id(ctx) },
-            TxContext::sender(ctx),
+            Child { id: tx_context::new_id(ctx) },
+            tx_context::sender(ctx),
         );
     }
 
     public entry fun create_parent(ctx: &mut TxContext) {
         let parent = Parent {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             child: option::none(),
         };
-        Transfer::transfer(parent, TxContext::sender(ctx));
+        Transfer::transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun create_parent_and_child(ctx: &mut TxContext) {
-        let parent_id = TxContext::new_id(ctx);
-        let child = Child { id: TxContext::new_id(ctx) };
+        let parent_id = tx_context::new_id(ctx);
+        let child = Child { id: tx_context::new_id(ctx) };
         let (parent_id, child_ref) = Transfer::transfer_to_object_id(child, parent_id);
         let parent = Parent {
             id: parent_id,
             child: option::some(child_ref),
         };
-        Transfer::transfer(parent, TxContext::sender(ctx));
+        Transfer::transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun add_child(parent: &mut Parent, child: Child) {
@@ -67,7 +67,7 @@ module ObjectOwner::ObjectOwner {
 
     public entry fun remove_child(parent: &mut Parent, child: Child, ctx: &mut TxContext) {
         let child_ref = option::extract(&mut parent.child);
-        Transfer::transfer_child_to_address(child, child_ref, TxContext::sender(ctx));
+        Transfer::transfer_child_to_address(child, child_ref, tx_context::sender(ctx));
     }
 
     // Call to delete_child can fail if it's still owned by a parent.
@@ -87,12 +87,12 @@ module ObjectOwner::ObjectOwner {
     }
 
     public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
-        let id = TxContext::new_id(ctx);
+        let id = tx_context::new_id(ctx);
         let (id, child_ref) = Transfer::transfer_to_object_id(child, id);
         let parent = AnotherParent {
             id,
             child: child_ref,
         };
-        Transfer::transfer(parent, TxContext::sender(ctx));
+        Transfer::transfer(parent, tx_context::sender(ctx));
     }
 }

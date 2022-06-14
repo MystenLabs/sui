@@ -458,11 +458,11 @@ file:
         use Sui::TxContext;
 
         // create a dummy TxContext for testing
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
 
         // create a sword
         let sword = Sword {
-            id: TxContext::new_id(&mut ctx),
+            id: tx_context::new_id(&mut ctx),
             magic: 42,
             strength: 7,
         };
@@ -477,7 +477,7 @@ create a dummy instance of the `TxContext` struct needed to create
 a unique identifier of our sword object, then create the sword itself,
 and finally call its accessor functions to verify that they return
 correct values. Note the dummy context is passed to the
-`TxContext::new_id` function as a mutable reference argument (`&mut`),
+`tx_context::new_id` function as a mutable reference argument (`&mut`),
 and the sword itself is passed to its accessor functions as a
 read-only reference argument.
 
@@ -500,7 +500,7 @@ error[E06001]: unused value without 'drop'
 27 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             id: TxContext::new_id(&mut ctx),
+28 │ │             id: tx_context::new_id(&mut ctx),
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
@@ -623,7 +623,7 @@ sword creation and transfer and put them into the `M1.move` file:
         use Sui::TxContext;
         // create a sword
         let sword = Sword {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             magic: magic,
             strength: strength,
         };
@@ -649,7 +649,7 @@ existing module-wide `ID` module import) to make the `TxContext`
 struct available for function definitions:
 
 ``` rust
-    use Sui::TxContext::TxContext;
+    use Sui::tx_context::TxContext;
 ```
 
 We can now build the module extended with the new functions but still
@@ -825,12 +825,12 @@ And module initializer is the perfect place to do it:
         use Sui::Transfer;
         use Sui::TxContext;
         let admin = Forge {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
         // (presumably the game admin)
-        Transfer::transfer(admin, TxContext::sender(ctx));
+        Transfer::transfer(admin, tx_context::sender(ctx));
     }
 ```
 
@@ -926,14 +926,14 @@ Transfer::transfer_to_object(obj, &mut owner);
 This function returns a `ChildRef` instance that cannot be dropped arbitrarily. It can be stored in the parent as a field.
 Sometimes we need to set the child field of a parent while constructing it. In this case, we don't yet have a parent object to transfer into. In this case, we can call the `transfer_to_object_id` API. Example:
 ```
-let parent_id = TxContext::new_id(ctx);
-let child = Child { id: TxContext::new_id(ctx) };
+let parent_id = tx_context::new_id(ctx);
+let child = Child { id: tx_context::new_id(ctx) };
 let (parent_id, child_ref) = Transfer::transfer_to_object_id(child, parent_id);
 let parent = Parent {
     id: parent_id,
     child: child_ref,
 };
-Transfer::transfer(parent, TxContext::sender(ctx));
+Transfer::transfer(parent, tx_context::sender(ctx));
 ```
 To transfer an object `child` from one parent object to a new parent object `new_parent`, we can use the following API:
 ```
@@ -976,12 +976,12 @@ To create a new ID for a new object:
 use Sui::TxContext;
 
 // assmue `ctx` has type `&mut TxContext`.
-let id = TxContext::new_id(ctx);
+let id = tx_context::new_id(ctx);
 ```
 
 To obtain the current transaction sender's account address:
 ```
-TxContext::sender(ctx)
+tx_context::sender(ctx)
 ```
 
 ## Next steps

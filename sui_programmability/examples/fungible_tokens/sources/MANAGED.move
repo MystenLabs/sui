@@ -7,7 +7,7 @@
 module FungibleTokens::MANAGED {
     use sui::Coin::{Self, Coin, TreasuryCap};
     use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<MANAGED>`.
@@ -19,7 +19,7 @@ module FungibleTokens::MANAGED {
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction sender
         let treasury_cap = Coin::create_currency<MANAGED>(MANAGED{}, ctx);
-        Transfer::transfer(treasury_cap, TxContext::sender(ctx))
+        Transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     /// Manager can mint new coins

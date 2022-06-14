@@ -6,7 +6,7 @@
 //# publish
 module Test::M1 {
     use sui::ID::VersionedID;
-    use sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     use sui::Transfer;
     use sui::Coin::Coin;
 
@@ -21,7 +21,7 @@ module Test::M1 {
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(
-            Object { id: TxContext::new_id(ctx), value },
+            Object { id: tx_context::new_id(ctx), value },
             recipient
         )
     }
