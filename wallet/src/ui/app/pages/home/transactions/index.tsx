@@ -22,7 +22,7 @@ function TransactionPage() {
     }, [dispatch]);
 
     return txByAddress && txByAddress.length ? (
-        <div className={st['tx-container']}>
+        <div className={st.txContainer}>
             <h4>
                 Last 5 transaction for <AccountAddress />
             </h4>

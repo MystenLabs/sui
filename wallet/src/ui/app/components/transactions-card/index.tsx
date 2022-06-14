@@ -13,11 +13,10 @@ import type { TxResultState } from '_redux/slices/txresults';
 import st from './TransactionsCard.module.scss';
 
 function TransactionCard({ txn }: { txn: TxResultState }) {
-    // can't use react hooks conditionaly so rendering the txn.To as with ellipsis or an empty string or if it is null
     const toAddrStr = useMiddleEllipsis(txn.To || '', 20);
 
     return (
-        <div className={st['card']} key={txn.txId}>
+        <div className={st.card} key={txn.txId}>
             <div>
                 Tx:{' '}
                 <ExplorerLink
@@ -55,7 +54,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                         type={ExplorerLinkType.address}
                         address={txn.To}
                         title="View on Sui Explorer"
-                        className={st['explorer-link']}
+                        className={st.explorerLink}
                     >
                         {toAddrStr}
                     </ExplorerLink>

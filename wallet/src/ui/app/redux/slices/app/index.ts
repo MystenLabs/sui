@@ -25,11 +25,12 @@ const initialState: AppState = {
 };
 
 // On network change, set setNewJsonRpcProvider, fetch all owned objects, and fetch all transactions
+// TODO: add clear Object state because edge cases where use state stays in cache
 export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
     'changeRPCNetwork',
-    async (networkName, { extra: { api }, dispatch }) => {
+    (networkName, { extra: { api }, dispatch }) => {
         dispatch(setApiEnv(networkName));
-        api.setNewJsonRpcProvider(networkName || 'devNet');
+        api.setNewJsonRpcProvider(networkName);
         dispatch(setNetworkSelector(true));
         dispatch(getTransactionsByAddress());
         dispatch(fetchAllOwnedObjects());

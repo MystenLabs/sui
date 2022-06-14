@@ -36,12 +36,12 @@ const NetworkSelector = () => {
     );
 
     return (
-        <div className={st['network-options']}>
-            <div className={st['network-header']}>RPC NETWORK</div>
-            <ul className={st['network-lists']}>
+        <div className={st.networkOptions}>
+            <div className={st.networkHeader}>RPC NETWORK</div>
+            <ul className={st.networkLists}>
                 {netWorks.map((apiEnv) => (
                     <li
-                        className={st['network-item']}
+                        className={st.networkItem}
                         key={apiEnv.networkName}
                         data-network={apiEnv.networkName}
                         onClick={changeNetwork}
@@ -49,15 +49,15 @@ const NetworkSelector = () => {
                         <BsIcon
                             icon="check2"
                             className={cl(
-                                st['selected-network'],
+                                st.selectedNetwork,
                                 selectedApiEnv === apiEnv.networkName &&
-                                    st['network-active']
+                                    st.networkActive
                             )}
                         />
                         <div style={apiEnv.style}>
                             <BsIcon
                                 icon="circle-fill"
-                                className={st['network-icon']}
+                                className={st.networkIcon}
                             />
                         </div>
                         {apiEnv.name}

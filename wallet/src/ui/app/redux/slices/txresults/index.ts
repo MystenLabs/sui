@@ -9,11 +9,7 @@ import {
     getExecutionStatusType,
     getTotalGasUsed,
 } from '@mysten/sui.js';
-import {
-    createSlice,
-    createAsyncThunk,
-    createEntityAdapter,
-} from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 import type {
     TransactionEffectsResponse,
@@ -34,21 +30,17 @@ export type TxResultState = {
     From: string;
 };
 
-const Txdapter = createEntityAdapter<TxResultState>({
-    selectId: ({ txId }) => txId,
-});
-
 interface TransactionManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };
     latestTx: TxResultState[];
 }
 
-const initialState = Txdapter.getInitialState<TransactionManualState>({
+const initialState: TransactionManualState = {
     loading: true,
     latestTx: [],
     error: false,
-});
+};
 type TxResultByAddress = TxResultState[];
 
 // Remove duplicate transactionsId, reduces the number of RPC calls
@@ -132,7 +124,6 @@ const txSlice = createSlice({
     extraReducers: (builder) => {
         builder
             .addCase(getTransactionsByAddress.fulfilled, (state, action) => {
-                Txdapter.setAll(state, action.payload);
                 state.loading = false;
                 state.error = false;
                 state.latestTx = action.payload;
