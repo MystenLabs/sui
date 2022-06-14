@@ -286,7 +286,7 @@ describe('End-to-end Tests', () => {
             );
         });
     });
-    describe('Owned Objects have buttons', () => {
+    describe('PaginationWrapper has buttons', () => {
         it('to go to the next page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
