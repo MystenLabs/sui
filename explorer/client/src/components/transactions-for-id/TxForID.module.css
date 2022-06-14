@@ -7,7 +7,7 @@
 }
 
 .txrow {
-    @apply my-10 md:grid md:grid-cols-12 md:my-2;
+    @apply mb-10 md:grid md:grid-cols-12 md:mb-2;
 }
 
 .txheader > div,
