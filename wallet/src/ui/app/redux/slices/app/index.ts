@@ -5,6 +5,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 import { AppType } from './AppType';
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
+// import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { API_ENV } from '_app/ApiProvider';
@@ -12,7 +13,7 @@ import type { AppThunkConfig } from '_store/thunk-extras';
 
 type AppState = {
     appType: AppType;
-    apiEnv: API_ENV | null;
+    apiEnv: API_ENV;
     showHideNetwork: boolean;
 };
 
@@ -44,6 +45,7 @@ const slice = createSlice({
             state.showHideNetwork = !payload;
         },
     },
+
     initialState,
 });
 

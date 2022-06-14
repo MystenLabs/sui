@@ -24,7 +24,7 @@ import type {
 } from '@mysten/sui.js';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
-type TxResultState = {
+export type TxResultState = {
     To?: string;
     seq: number;
     txId: string;
@@ -51,6 +51,7 @@ const initialState = Txdapter.getInitialState<TransactionManualState>({
 });
 type TxResultByAddress = TxResultState[];
 
+// Remove duplicate transactionsId, reduces the number of RPC calls
 const deduplicate = (results: [number, string][] | undefined) =>
     results
         ? results

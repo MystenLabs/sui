@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import { JsonRpcProvider, RawSigner } from '@mysten/sui.js';
 import { RawSigner, JsonRpcProvider } from '@mysten/sui.js';
 
 import type { Ed25519Keypair } from '@mysten/sui.js';
@@ -55,12 +54,8 @@ export default class ApiProvider {
         this._apiProvider = new JsonRpcProvider(DEFAULT_API_ENDPOINT);
     }
 
-    public setNewJsonRpcProvider(apiEnv: string) {
-        if (apiEnv) {
-            this._apiProvider = new JsonRpcProvider(
-                getDefaultAPI(API_ENV[apiEnv as keyof typeof API_ENV])
-            );
-        }
+    public setNewJsonRpcProvider(apiEnv: API_ENV) {
+        this._apiProvider = new JsonRpcProvider(getDefaultAPI(apiEnv));
     }
 
     public get instance() {

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useMemo, useCallback, useEffect, useRef } from 'react';
+import { useMemo, useCallback, useRef } from 'react';
 
 import NetworkSelector from './NetworkSelector';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import BsIcon from '_components/bs-icon';
-import { useAppSelector, useAppDispatch } from '_hooks';
+import { useAppSelector, useAppDispatch, useOnClickOutside } from '_hooks';
 import { setNetworkSelector } from '_redux/slices/app';
 
 import st from './Network.module.scss';
@@ -17,12 +17,9 @@ const Network = () => {
     const showNetworkSelect = useAppSelector(({ app }) => app.showHideNetwork);
     const dispatch = useAppDispatch();
 
-    const openNetworkSelector = useCallback(
-        () => () => {
-            dispatch(setNetworkSelector(showNetworkSelect));
-        },
-        [dispatch, showNetworkSelect]
-    );
+    const openNetworkSelector = useCallback(() => {
+        dispatch(setNetworkSelector(showNetworkSelect));
+    }, [dispatch, showNetworkSelect]);
 
     const netColor = useMemo(
         () =>
@@ -33,19 +30,10 @@ const Network = () => {
     );
     const ref = useRef<HTMLHeadingElement>(null);
 
-    useEffect(() => {
-        const handleClickOutside = (
-            event: React.ChangeEvent<HTMLInputElement> | any
-        ) => {
-            if (ref.current && !ref.current.contains(event.target)) {
-                showNetworkSelect && dispatch(setNetworkSelector(true));
-            }
-        };
-        document.addEventListener('click', handleClickOutside, true);
-        return () => {
-            document.removeEventListener('click', handleClickOutside, true);
-        };
-    }, [dispatch, showNetworkSelect]);
+    const clickOutsidehandler = () => {
+        return showNetworkSelect && dispatch(setNetworkSelector(true));
+    };
+    useOnClickOutside(ref, clickOutsidehandler);
 
     return (
         <div className={st['network-container']} ref={ref}>
@@ -53,7 +41,7 @@ const Network = () => {
                 <div
                     className={st.network}
                     style={netColor}
-                    onClick={openNetworkSelector()}
+                    onClick={openNetworkSelector}
                 >
                     <BsIcon icon="circle-fill" className={st['network-icon']} />
                     <span className={st['network-name']}>

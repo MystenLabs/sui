@@ -7,7 +7,6 @@ import account from './slices/account';
 import app from './slices/app';
 import suiObjects from './slices/sui-objects';
 import transactions from './slices/transactions';
-// TODO add to transactions slice
 import txresults from './slices/txresults';
 
 const rootReducer = combineReducers({

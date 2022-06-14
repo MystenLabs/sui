@@ -13,30 +13,30 @@ import {
     setNetworkSelector,
 } from '_redux/slices/app';
 import { getTransactionsByAddress } from '_redux/slices/txresults';
-import store from '_store';
 
 import st from './Network.module.scss';
 
 const NetworkSelector = () => {
     const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
     const dispatch = useAppDispatch();
-    const networkList: any = API_ENV_TO_INFO;
     const netWorks = useMemo(
         () =>
-            Object.keys(networkList).map((itm: string) => ({
-                style: { color: networkList[itm].color },
-                ...networkList[itm],
+            Object.keys(API_ENV).map((itm) => ({
+                style: {
+                    color: API_ENV_TO_INFO[itm as keyof typeof API_ENV].color,
+                },
+                ...API_ENV_TO_INFO[itm as keyof typeof API_ENV],
                 networkName: itm,
             })),
-        [networkList]
+        []
     );
 
     const changeNetwork = useCallback(
         (networkName: string) => () => {
             const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
             dispatch(setNetworkSelector(true));
-            store.dispatch(setApiEnv(apiEnv));
-            dispatch(changeRPCNetwork()).unwrap();
+            dispatch(setApiEnv(apiEnv));
+            dispatch(changeRPCNetwork());
             dispatch(getTransactionsByAddress()).unwrap();
         },
         [dispatch]
@@ -56,9 +56,8 @@ const NetworkSelector = () => {
                             icon="check2"
                             className={cl(
                                 st['selected-network'],
-                                selectedApiEnv === apiEnv.networkName
-                                    ? st['network-active']
-                                    : ''
+                                selectedApiEnv === apiEnv.networkName &&
+                                    st['network-active']
                             )}
                         />
                         <div style={apiEnv.style}>
