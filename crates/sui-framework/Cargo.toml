@@ -18,22 +18,22 @@ once_cell = "1.11.0"
 sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-cli = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40", features = ["address20"] }
-move-package = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-cli = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2", features = ["address20"] }
+move-package = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
 workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]
 anyhow = { version = "1.0.57", features = ["backtrace"] }
 bcs = "0.1.3"
 sui-framework-build = { path = "../sui-framework-build" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["move-cli", "move-unit-test"]

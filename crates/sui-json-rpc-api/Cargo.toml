@@ -20,7 +20,7 @@ serde_json = "1.0.80"
 serde_with = { version = "1.14.0", features = ["hex"] }
 colored = "2.0.0"
 either = "1.6.1"
-move-core-types = { git = "https://github.com/move-language/move", rev = "a86f31415b9a18867b5edaed6f915a39b8c2ef40", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2", features = ["address20"] }
 itertools = "0.10.3"
 
 sui-types = { path = "../sui-types" }
