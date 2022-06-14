@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Write;
 
 use clap::ArgEnum;
 use clap::Parser;
@@ -10,16 +12,15 @@ use hyper::{Body, Client, Method, Request};
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use std::fs::File;
-use std::io::Write;
+
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_WALLET_CONFIG;
 use sui_json::SuiJsonValue;
 use sui_rpc::bcs_api::BcsApiImpl;
-use sui_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_rpc::sui_rpc_doc;
 use sui_rpc::SuiRpcModule;
 use sui_rpc_api::rpc_types::{
