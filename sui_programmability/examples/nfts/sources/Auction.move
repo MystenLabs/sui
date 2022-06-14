@@ -37,7 +37,7 @@ module NFTs::Auction {
     use sui::balance::Balance;
     use sui::SUI::SUI;
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
     use NFTs::AuctionLib::{Self, Auction};
@@ -84,7 +84,7 @@ module NFTs::Auction {
             bid: Coin::into_balance(coin),
         };
 
-        Transfer::transfer(bid, auctioneer);
+        transfer::transfer(bid, auctioneer);
     }
 
     /// Updates the auction based on the information in the bid

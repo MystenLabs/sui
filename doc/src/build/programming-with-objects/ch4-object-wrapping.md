@@ -55,13 +55,13 @@ public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
         scarcity,
         style,
     };
-    Transfer::transfer(object, tx_context::sender(ctx))
+    transfer::transfer(object, tx_context::sender(ctx))
 }
 ```
 Anyone can call `create_object` to create a new object with specified `scarcity` and `style`. The created object will be sent to the signer of the transaction. We will likely also want to be able to transfer the object to others:
 ```rust
 public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
-    Transfer::transfer(object, tx_context::sender(ctx))
+    transfer::transfer(object, tx_context::sender(ctx))
 }
 ```
 
@@ -90,7 +90,7 @@ public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: a
         to_swap: object,
         fee: Coin::into_balance(fee),
     };
-    Transfer::transfer(wrapper, service_address);
+    transfer::transfer(wrapper, service_address);
 }
 ```
 In the above entry function, to request swapping an `object`, one must pass the object by value so that it's fully consumed and wrapped into `ObjectWrapper`. A fee (in the type of `Coin<SUI>`) is also provided. The function also checks that the fee is sufficient. Note that we turn `Coin` into `Balance` when putting it into the `wrapper` object. This is because `Coin` is a Sui object type and used only to pass around as Sui objects (e.g. as entry function arguments or objects sent to addresses). For coin balances that need to be embedded in another Sui object struct, we use `Balance` instead because it's not a Sui object type and hence is much cheaper to use.
@@ -126,14 +126,14 @@ let ObjectWrapper {
 ```
 We now have all the things we need for the actual swap:
 ```rust
-Transfer::transfer(object1, original_owner2);
-Transfer::transfer(object2, original_owner1);
+transfer::transfer(object1, original_owner2);
+transfer::transfer(object2, original_owner1);
 ```
 The above code does the swap: it sends `object1` to the original owner of `object2`, and sends `object1` to the original owner of `object2`. The service provider is also happy to take the fee:
 ```rust
 let service_address = tx_context::sender(ctx);
 Balance::join(&mut fee1, fee2);
-Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
+transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
 ```
 `fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, we signal Sui that we have deleted both wrapper objects:
 ```rust
@@ -179,7 +179,7 @@ public entry fun create_warrior(ctx: &mut TxContext) {
         sword: Option::none(),
         shield: Option::none(),
     };
-    Transfer::transfer(warrior, tx_context::sender(ctx))
+    transfer::transfer(warrior, tx_context::sender(ctx))
 }
 ```
 With this, we can then define functions to equip new swords or new shields:
@@ -187,7 +187,7 @@ With this, we can then define functions to equip new swords or new shields:
 public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
     if (Option::is_some(&warrior.sword)) {
         let old_sword = Option::extract(&mut warrior.sword);
-        Transfer::transfer(old_sword, tx_context::sender(ctx));
+        transfer::transfer(old_sword, tx_context::sender(ctx));
     };
     Option::fill(&mut warrior.sword, sword);
 }

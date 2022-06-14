@@ -3,7 +3,7 @@
 
 module Tutorial::ColorObject {
     use sui::id::{Self, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct ColorObject has key {
@@ -26,7 +26,7 @@ module Tutorial::ColorObject {
 
     public entry fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
         let color_object = new(red, green, blue, ctx);
-        Transfer::transfer(color_object, tx_context::sender(ctx))
+        transfer::transfer(color_object, tx_context::sender(ctx))
     }
 
     public fun get_color(self: &ColorObject): (u8, u8, u8) {
@@ -48,18 +48,18 @@ module Tutorial::ColorObject {
     }
 
     public entry fun transfer(object: ColorObject, recipient: address) {
-        Transfer::transfer(object, recipient)
+        transfer::transfer(object, recipient)
     }
 
     // == Functions covered in Chapter 3 ==
 
     public entry fun freeze_object(object: ColorObject) {
-        Transfer::freeze_object(object)
+        transfer::freeze_object(object)
     }
 
     public entry fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
         let color_object = new(red, green, blue, ctx);
-        Transfer::freeze_object(color_object)
+        transfer::freeze_object(color_object)
     }
 
     public entry fun update(

@@ -5,7 +5,7 @@ module NFTs::Marketplace {
     use sui::bag::{Self, Bag};
     use sui::tx_context::{Self, TxContext};
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer::{Self, ChildRef};
+    use sui::transfer::{Self, ChildRef};
     use sui::Coin::{Self, Coin};
 
     // For when amount paid does not match the expected.
@@ -36,7 +36,7 @@ module NFTs::Marketplace {
             id,
             objects,
         };
-        Transfer::share_object(market_place);
+        transfer::share_object(market_place);
     }
 
     /// List an item at the Marketplace.
@@ -95,7 +95,7 @@ module NFTs::Marketplace {
 
         assert!(ask == Coin::value(&paid), EAmountIncorrect);
 
-        Transfer::transfer(paid, owner);
+        transfer::transfer(paid, owner);
         id::delete(id);
         item
     }
@@ -108,7 +108,7 @@ module NFTs::Marketplace {
         paid: Coin<C>,
         ctx: &mut TxContext
     ) {
-        Transfer::transfer(buy(objects, listing, paid), tx_context::sender(ctx))
+        transfer::transfer(buy(objects, listing, paid), tx_context::sender(ctx))
     }
 
     /// Check whether an object was listed on a Marketplace.
@@ -126,7 +126,7 @@ module NFTs::Marketplace {
 module NFTs::MarketplaceTests {
     use sui::id::{Self, VersionedID};
     use sui::bag::Bag;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::Coin::{Self, Coin};
     use sui::SUI::SUI;
     use sui::tx_context;
@@ -153,14 +153,14 @@ module NFTs::MarketplaceTests {
     fun mint_some_coin(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &ADMIN);
         let coin = Coin::mint_for_testing<SUI>(1000, TestScenario::ctx(scenario));
-        Transfer::transfer(coin, BUYER);
+        transfer::transfer(coin, BUYER);
     }
 
     /// Mint Kitty NFT and send it to SELLER.
     fun mint_kitty(scenario: &mut Scenario) {
         TestScenario::next_tx(scenario, &ADMIN);
         let nft = Kitty { id: tx_context::new_id(TestScenario::ctx(scenario)), kitty_id: 1 };
-        Transfer::transfer(nft, SELLER);
+        transfer::transfer(nft, SELLER);
     }
 
     // SELLER lists Kitty at the Marketplace for 100 SUI.

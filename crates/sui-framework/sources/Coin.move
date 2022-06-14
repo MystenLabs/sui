@@ -4,7 +4,7 @@
 module sui::Coin {
     use sui::balance::{Self, Balance};
     use sui::id::{Self, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
@@ -66,7 +66,7 @@ module sui::Coin {
 
     /// Send `c` to `recipient`
     public entry fun transfer<T>(c: Coin<T>, recipient: address) {
-        Transfer::transfer(c, recipient)
+        transfer::transfer(c, recipient)
     }
 
     /// Transfer `c` to the sender of the current transaction
@@ -165,7 +165,7 @@ module sui::Coin {
 
     /// Give away the treasury cap to `recipient`
     public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: address) {
-        Transfer::transfer(c, recipient)
+        transfer::transfer(c, recipient)
     }
 
     // === Entrypoints ===
@@ -173,14 +173,14 @@ module sui::Coin {
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
     public entry fun split_and_transfer<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
-        Transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
+        transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
     public entry fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
         let new_coin = withdraw(&mut self.balance, split_amount, ctx);
-        Transfer::transfer(new_coin, tx_context::sender(ctx));
+        transfer::transfer(new_coin, tx_context::sender(ctx));
     }
 
     /// Split coin `self` into multiple coins, each with balance specified

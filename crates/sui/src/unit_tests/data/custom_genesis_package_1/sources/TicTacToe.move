@@ -7,7 +7,7 @@ module Examples::tic_tac_toe {
 
     use sui::id::{Self, ID, VersionedID};
     use sui::event;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     // Game status
@@ -77,19 +77,19 @@ module Examples::tic_tac_toe {
             x_address: x_address,
             o_address: o_address,
         };
-        Transfer::transfer(game, tx_context::sender(ctx));
+        transfer::transfer(game, tx_context::sender(ctx));
         let cap = MarkMintCap {
             id: tx_context::new_id(ctx),
             game_id: copy game_id,
             remaining_supply: 5,
         };
-        Transfer::transfer(cap, x_address);
+        transfer::transfer(cap, x_address);
         let cap = MarkMintCap {
             id: tx_context::new_id(ctx),
             game_id,
             remaining_supply: 5,
         };
-        Transfer::transfer(cap, o_address);
+        transfer::transfer(cap, o_address);
     }
 
     /// Generate a new mark intended for location (row, col).
@@ -105,7 +105,7 @@ module Examples::tic_tac_toe {
             game_id: *&cap.game_id,
             mark_id: *id::inner(&mark.id),
         });
-        Transfer::transfer(mark, game_address);
+        transfer::transfer(mark, game_address);
     }
 
     public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
@@ -131,9 +131,9 @@ module Examples::tic_tac_toe {
             // Notify the server that the game ended so that it can delete the game.
             event::emit(GameEndEvent { game_id: *id::inner(&game.id) });
             if (game.game_status == X_WIN) {
-                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
+                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
+                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
             }
         }
     }

@@ -343,7 +343,7 @@ definitions in the `M1.move` file:
 
 ``` rust
 module MyFirstPackage::M1 {
-    use Sui::ID::VersionedID;
+    use sui::id::VersionedID;
 
     struct Sword has key, store {
         id: VersionedID,
@@ -455,7 +455,7 @@ file:
 ``` rust
     #[test]
     public fun test_sword_create() {
-        use Sui::TxContext;
+        use sui::tx_context;
 
         // create a dummy TxContext for testing
         let ctx = tx_context::dummy();
@@ -536,7 +536,7 @@ the beginning of our testing function to import the
 [Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move):
 
 ``` rust
-        use Sui::Transfer;
+        use sui::transfer;
 
 ```
 
@@ -547,7 +547,7 @@ the end of our test function:
 ``` rust
         // create a dummy address and transfer the sword
         let dummy_address = @0xCAFE;
-        Transfer::transfer(sword, dummy_address);
+        transfer::transfer(sword, dummy_address);
 ```
 
 We can now run the test command again and see that indeed a single
@@ -580,7 +580,7 @@ $ sui-move test -h
 
 The testing example we have seen so far is largely *pure Move* and has
 little to do with Sui beyond using some Sui packages, such as
-`Sui::TxContext` and `Sui::Transfer`. While this style of testing is
+`sui::tx_context` and `sui::transfer`. While this style of testing is
 already very useful for developers writing Move code for Sui, they may
 also want to test additional Sui-specific features. In particular, a
 Move call in Sui is encapsulated in a Sui
@@ -619,8 +619,8 @@ sword creation and transfer and put them into the `M1.move` file:
 
 ``` rust
     public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
-        use Sui::Transfer;
-        use Sui::TxContext;
+        use sui::transfer;
+        use sui::tx_context;
         // create a sword
         let sword = Sword {
             id: tx_context::new_id(ctx),
@@ -628,13 +628,13 @@ sword creation and transfer and put them into the `M1.move` file:
             strength: strength,
         };
         // transfer the sword
-        Transfer::transfer(sword, recipient);
+        transfer::transfer(sword, recipient);
     }
 
     public entry fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
-        use Sui::Transfer;
+        use sui::transfer;
         // transfer the sword
-        Transfer::transfer(sword, recipient);
+        transfer::transfer(sword, recipient);
     }
 ```
 
@@ -649,7 +649,7 @@ existing module-wide `ID` module import) to make the `TxContext`
 struct available for function definitions:
 
 ``` rust
-    use Sui::tx_context::TxContext;
+    use sui::tx_context::TxContext;
 ```
 
 We can now build the module extended with the new functions but still
@@ -659,7 +659,7 @@ function.
 ``` rust
     #[test]
     fun test_sword_transactions() {
-        use Sui::TestScenario;
+        use sui::TestScenario;
 
         let admin = @0xABBA;
         let initial_owner = @0xCAFE;
@@ -822,15 +822,15 @@ And module initializer is the perfect place to do it:
 ``` rust
     // module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
-        use Sui::Transfer;
-        use Sui::TxContext;
+        use sui::transfer;
+        use sui::tx_context;
         let admin = Forge {
             id: tx_context::new_id(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
         // (presumably the game admin)
-        Transfer::transfer(admin, tx_context::sender(ctx));
+        transfer::transfer(admin, tx_context::sender(ctx));
     }
 ```
 
@@ -850,7 +850,7 @@ We can now create a function to test the module initialization:
 ``` rust
     #[test]
     public fun test_module_init() {
-        use Sui::TestScenario;
+        use sui::test_scenario;
 
         // create test address representing game admin
         let admin = @0xABBA;
@@ -903,9 +903,9 @@ The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framewor
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
-use Sui::Transfer;
+use sui::transfer;
 
-Transfer::transfer(obj, recipient);
+transfer::transfer(obj, recipient);
 ```
 This call will fully consume the object, making it no longer accessible in the current transaction.
 Once an account address owns an object, for any future use (either read or write) of this object, the signer of the transaction must be the owner of the object.
@@ -921,28 +921,28 @@ public entry fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
 A common pattern of object owning another object is to have a field in the parent object to track the ID of the child object. It is important to ensure that we keep such a field's value consistent with the actual ownership relationship. For example, we do not end up in a situation where the parent's child field contains an ID pointing to object A, while in fact the parent owns object B. To ensure the consistency, we defined a custom type called `ChildRef` to represent object ownership. Whenever an object is transferred to another object, a `ChildRef` instance is created to uniquely identify the ownership. The library implementation ensures that the `ChildRef` goes side-by-side with the child object so that we never lose track or mix up objects.
 To transfer an object `obj` (whose owner is an account address) to another object `owner`:
 ```
-Transfer::transfer_to_object(obj, &mut owner);
+transfer::transfer_to_object(obj, &mut owner);
 ```
 This function returns a `ChildRef` instance that cannot be dropped arbitrarily. It can be stored in the parent as a field.
 Sometimes we need to set the child field of a parent while constructing it. In this case, we don't yet have a parent object to transfer into. In this case, we can call the `transfer_to_object_id` API. Example:
 ```
 let parent_id = tx_context::new_id(ctx);
 let child = Child { id: tx_context::new_id(ctx) };
-let (parent_id, child_ref) = Transfer::transfer_to_object_id(child, parent_id);
+let (parent_id, child_ref) = transfer::transfer_to_object_id(child, parent_id);
 let parent = Parent {
     id: parent_id,
     child: child_ref,
 };
-Transfer::transfer(parent, tx_context::sender(ctx));
+transfer::transfer(parent, tx_context::sender(ctx));
 ```
 To transfer an object `child` from one parent object to a new parent object `new_parent`, we can use the following API:
 ```
-Transfer::transfer_child_to_object(child, child_ref, &mut new_parent);
+transfer::transfer_child_to_object(child, child_ref, &mut new_parent);
 ```
 Note that in this call, we must also have the `child_ref` to prove the original ownership. The call will return a new instance of `ChildRef` that the new parent can maintain.
 To transfer an object `child` from an object to an account address `recipient`, we can use the following API:
 ```
-Transfer::transfer_child_to_address(child, child_ref, recipient);
+transfer::transfer_child_to_address(child, child_ref, recipient);
 ```
 This call also requires to have the `child_ref` as proof of original ownership.
 After this transfer, the object will be owned by `recipient`.
@@ -953,7 +953,7 @@ More examples of how objects can be transferred and owned can be found in
 #### Freeze an object
 To make an object `obj` shared and immutable, one can call:
 ```
-Transfer::freeze_object(obj);
+transfer::freeze_object(obj);
 ```
 After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An immutable object can be used as reference by anyone in their Move call.
 
@@ -962,7 +962,7 @@ This feature is still in development. It only works in Move for demo purpose, an
 
 To make an object `obj` shared and mutable, one can call:
 ```
-Transfer::share_object(obj);
+transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
 
@@ -973,7 +973,7 @@ Shared mutable object can be powerful in that it will make programming a lot sim
 
 To create a new ID for a new object:
 ```
-use Sui::TxContext;
+use sui::tx_context;
 
 // assmue `ctx` has type `&mut TxContext`.
 let id = tx_context::new_id(ctx);

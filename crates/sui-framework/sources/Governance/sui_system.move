@@ -9,7 +9,7 @@ module sui::sui_system {
     use sui::id::{Self, VersionedID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::SUI::SUI;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::validator_set::{Self, ValidatorSet};
@@ -72,7 +72,7 @@ module sui::sui_system {
             },
             delegation_reward: balance::zero(),
         };
-        Transfer::share_object(state);
+        transfer::share_object(state);
     }
 
     // ==== entry functions ====

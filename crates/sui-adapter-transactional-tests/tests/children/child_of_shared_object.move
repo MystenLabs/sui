@@ -7,7 +7,7 @@
 
 module T3::O3 {
     use sui::id::VersionedID;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct O3 has key, store {
@@ -16,7 +16,7 @@ module T3::O3 {
 
     public entry fun create(ctx: &mut TxContext) {
         let o = O3 { id: tx_context::new_id(ctx) };
-        Transfer::transfer(o, tx_context::sender(ctx))
+        transfer::transfer(o, tx_context::sender(ctx))
     }
 }
 
@@ -24,7 +24,7 @@ module T3::O3 {
 
 module T2::O2 {
     use sui::id::VersionedID;
-    use sui::Transfer::{Self, ChildRef};
+    use sui::transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
     use T3::O3::O3;
 
@@ -34,18 +34,18 @@ module T2::O2 {
     }
 
     public entry fun create_shared(child: O3, ctx: &mut TxContext) {
-        Transfer::share_object(new(child, ctx))
+        transfer::share_object(new(child, ctx))
     }
 
     public entry fun create_owned(child: O3, ctx: &mut TxContext) {
-        Transfer::transfer(new(child, ctx), tx_context::sender(ctx))
+        transfer::transfer(new(child, ctx), tx_context::sender(ctx))
     }
 
     public entry fun use_o2_o3(_o2: &mut O2, _o3: &mut O3) {}
 
     fun new(child: O3, ctx: &mut TxContext): O2 {
         let id = tx_context::new_id(ctx);
-        let (id, child) = Transfer::transfer_to_object_id(child, id);
+        let (id, child) = transfer::transfer_to_object_id(child, id);
         O2 { id, child }
     }
 }
@@ -55,7 +55,7 @@ module T2::O2 {
 
 module T1::O1 {
     use sui::id::VersionedID;
-    use sui::Transfer::{Self, ChildRef};
+    use sui::transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
     use T2::O2::O2;
     use T3::O3::O3;
@@ -66,7 +66,7 @@ module T1::O1 {
     }
 
     public entry fun create_shared(child: O2, ctx: &mut TxContext) {
-        Transfer::share_object(new(child, ctx))
+        transfer::share_object(new(child, ctx))
     }
 
     // This function will be invalid if _o2 is a shared object and owns _o3.
@@ -74,7 +74,7 @@ module T1::O1 {
 
     fun new(child: O2, ctx: &mut TxContext): O1 {
         let id = tx_context::new_id(ctx);
-        let (id, child) = Transfer::transfer_to_object_id(child, id);
+        let (id, child) = transfer::transfer_to_object_id(child, id);
         O1 { id, child }
     }
 }

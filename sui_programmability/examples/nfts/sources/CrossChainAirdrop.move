@@ -9,7 +9,7 @@ module NFTs::CrossChainAirdrop {
     use std::vector;
     use sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
     use sui::id::{VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// The oracle manages one `PerContractAirdropInfo` for each Ethereum contract
@@ -55,7 +55,7 @@ module NFTs::CrossChainAirdrop {
     /// TODO: To make this usable, the oracle should be sent to a
     /// hardcoded address that the contract creator has private key.
     fun init(ctx: &mut TxContext) {
-        Transfer::transfer(
+        transfer::transfer(
             CrossChainAirdropOracle {
                 id: tx_context::new_id(ctx),
                 managed_contracts: vector::empty(),
@@ -84,7 +84,7 @@ module NFTs::CrossChainAirdrop {
             metadata: ERC721Metadata::new(token_id, name, token_uri),
         };
         vector::push_back(&mut contract.claimed_source_token_ids, token_id);
-        Transfer::transfer(nft, recipient)
+        transfer::transfer(nft, recipient)
     }
 
     fun get_or_create_contract(oracle: &mut CrossChainAirdropOracle, source_contract_address: &vector<u8>): &mut PerContractAirdropInfo {

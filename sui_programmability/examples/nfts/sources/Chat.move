@@ -5,7 +5,7 @@ module NFTs::Chat {
     use std::ascii::{Self, String};
     use std::option::{Self, Option, some};
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector::length;
 
@@ -50,7 +50,7 @@ module NFTs::Chat {
             ref_id,
             metadata,
         };
-        Transfer::transfer(chat, tx_context::sender(ctx));
+        transfer::transfer(chat, tx_context::sender(ctx));
     }
 
     /// Mint (post) a Chat object without referencing another object.

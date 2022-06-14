@@ -9,7 +9,7 @@ module Examples::Hero {
     use sui::event;
     use sui::id::{Self, ID, VersionedID};
     use sui::math;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
 
@@ -100,7 +100,7 @@ module Examples::Hero {
         let admin = admin();
         // ensure this is being initialized by the expected admin authenticator
         assert!(&tx_context::sender(ctx) == &admin, ENOT_ADMIN);
-        Transfer::transfer(
+        transfer::transfer(
             GameAdmin {
                 id: tx_context::new_id(ctx),
                 boars_created: 0,
@@ -210,7 +210,7 @@ module Examples::Hero {
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
-        Transfer::transfer(payment, admin());
+        transfer::transfer(payment, admin());
 
         // magic of the sword is proportional to the amount you paid, up to
         // a max. one can only imbue a sword with so much magic
@@ -225,7 +225,7 @@ module Examples::Hero {
     public entry fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
-        Transfer::transfer(hero, tx_context::sender(ctx))
+        transfer::transfer(hero, tx_context::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
@@ -248,7 +248,7 @@ module Examples::Hero {
     ) {
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
-        Transfer::transfer(
+        transfer::transfer(
             Potion { id: tx_context::new_id(ctx), potency },
             player
         )
@@ -264,7 +264,7 @@ module Examples::Hero {
     ) {
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
-        Transfer::transfer(
+        transfer::transfer(
             Boar { id: tx_context::new_id(ctx), hp, strength },
             player
         )

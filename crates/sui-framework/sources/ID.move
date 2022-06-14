@@ -7,7 +7,7 @@ module sui::id {
     use std::vector;
 
     friend sui::sui_system;
-    friend sui::Transfer;
+    friend sui::transfer;
     friend sui::tx_context;
 
     #[test_only]

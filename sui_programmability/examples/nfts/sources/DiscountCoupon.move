@@ -5,7 +5,7 @@ module NFTs::DiscountCoupon {
     use sui::Coin;
     use sui::id::{Self, VersionedID};
     use sui::SUI::{Self, SUI};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Sending to wrong recipient.
@@ -45,7 +45,7 @@ module NFTs::DiscountCoupon {
             discount,
             expiration,
         };
-        Transfer::transfer(coupon, recipient);
+        transfer::transfer(coupon, recipient);
         SUI::transfer(coin, recipient);
     }
 
@@ -60,6 +60,6 @@ module NFTs::DiscountCoupon {
     //      If we stick with issuer-as-receiver only, then `recipient` input won't be required).
     public entry fun transfer(coupon: DiscountCoupon, recipient: address) {
         assert!(&coupon.issuer == &recipient, EWrongRecipient);
-        Transfer::transfer(coupon, recipient);
+        transfer::transfer(coupon, recipient);
     }
 }

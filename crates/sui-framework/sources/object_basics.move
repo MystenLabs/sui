@@ -6,7 +6,7 @@ module sui::object_basics {
     use sui::event;
     use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
-    use sui::Transfer;
+    use sui::transfer;
 
     struct Object has key, store {
         id: VersionedID,
@@ -23,18 +23,18 @@ module sui::object_basics {
     }
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        Transfer::transfer(
+        transfer::transfer(
             Object { id: tx_context::new_id(ctx), value },
             recipient
         )
     }
 
     public entry fun transfer(o: Object, recipient: address) {
-        Transfer::transfer(o, recipient)
+        transfer::transfer(o, recipient)
     }
 
     public entry fun freeze_object(o: Object) {
-        Transfer::freeze_object(o)
+        transfer::freeze_object(o)
     }
 
     public entry fun set_value(o: &mut Object, value: u64) {
@@ -54,12 +54,12 @@ module sui::object_basics {
     }
 
     public entry fun wrap(o: Object, ctx: &mut TxContext) {
-        Transfer::transfer(Wrapper { id: tx_context::new_id(ctx), o }, tx_context::sender(ctx))
+        transfer::transfer(Wrapper { id: tx_context::new_id(ctx), o }, tx_context::sender(ctx))
     }
 
     public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
         id::delete(id);
-        Transfer::transfer(o, tx_context::sender(ctx))
+        transfer::transfer(o, tx_context::sender(ctx))
     }
 }

@@ -10,7 +10,7 @@ module sui::devnet_nft {
     use sui::utf8;
     use sui::id::{Self, ID, VersionedID};
     use sui::event;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
@@ -53,14 +53,14 @@ module sui::devnet_nft {
             creator: sender,
             name: nft.name,
         });
-        Transfer::transfer(nft, sender);
+        transfer::transfer(nft, sender);
     }
 
     /// Transfer `nft` to `recipient`
     public entry fun transfer(
         nft: DevNetNFT, recipient: address, _: &mut TxContext
     ) {
-        Transfer::transfer(nft, recipient)
+        transfer::transfer(nft, recipient)
     }
 
     /// Update the `description` of `nft` to `new_description`

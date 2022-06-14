@@ -125,10 +125,10 @@ The first part is the same as what we have seen in [Chapter 1](./ch1-object-basi
 The owner of the object may want to transfer it to another account. To support this, the `ColorObject` module will need to define a `transfer` API:
 ```rust
 public entry fun transfer(object: ColorObject, recipient: address) {
-    Transfer::transfer(object, recipient)
+    transfer::transfer(object, recipient)
 }
 ```
->:bulb: One cannot call `Transfer::transfer` directly as it is not an `entry` function.
+>:bulb: One cannot call `transfer::transfer` directly as it is not an `entry` function.
 
 Let's add a test for transferring too. First of all, we create an object in `owner`'s account and then transfer it to a different account `recipient`:
 ```rust

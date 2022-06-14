@@ -4,7 +4,7 @@
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
     use sui::id::VersionedID;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// A custom sui object. Every object must have the `key` attribute
@@ -48,7 +48,7 @@ module Examples::CustomObjectTemplate {
     /// be transferred by the module that declares it.
     public fun transfer(o: Object, recipient: address) {
         assert!(some_conditional_logic(), 0);
-        Transfer::transfer(o, recipient)
+        transfer::transfer(o, recipient)
     }
 
     /// Simple getter
@@ -100,7 +100,7 @@ module Examples::CustomObjectTemplate {
         transfer(to_consume, recipient);
         // demonstrate creating a new object for the sender
         let sender = tx_context::sender(ctx);
-        Transfer::transfer(create(ctx), sender)
+        transfer::transfer(create(ctx), sender)
     }
 
     fun some_conditional_logic(): bool {

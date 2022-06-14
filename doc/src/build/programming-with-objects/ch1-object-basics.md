@@ -14,7 +14,7 @@ struct Color {
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
 To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `VersionedID` from the [ID library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move):
 ```rust
-use Sui::ID::VersionedID;
+use sui::id::VersionedID;
 
 struct ColorObject has key {
     id: VersionedID,
@@ -34,7 +34,7 @@ Now that we have learned how to define a Sui object type, how do we create/insta
 /// tx_context::Self represents the TxContext module, which allows us call
 /// functions in the module, such as the `new_id` function.
 /// tx_context::TxContext represents the TxContext struct in TxContext module.
-use Sui::tx_context::{Self, TxContext};
+use sui::tx_context::{Self, TxContext};
 
 fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
     ColorObject {
@@ -63,12 +63,12 @@ To obtain the current signer's address, one can call `tx_context::sender(ctx)`.
 
 Below is the code that creates a new `ColorObject` and makes it owned by the sender of the transaction:
 ```rust
-use Sui::Transfer;
+use sui::transfer;
 
 // This is an entry function that can be called directly by a Transaction.
 public entry fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
     let color_object = new(red, green, blue, ctx);
-    Transfer::transfer(color_object, tx_context::sender(ctx))
+    transfer::transfer(color_object, tx_context::sender(ctx))
 }
 ```
 > :bulb: Naming convention: Constructors are typically named **`new`**, which returns an instance of the struct type. The **`create`** function is typically defined as an entry function that constructs the struct and transfers it to the desired owner (most commonly the sender).

@@ -16,7 +16,7 @@ module sui::collection {
     use std::option::{Self, Option};
     use std::vector::Self;
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer::{Self, ChildRef};
+    use sui::transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
 
     // Error codes
@@ -70,7 +70,7 @@ module sui::collection {
 
     /// Create a new Collection and transfer it to the signer.
     public entry fun create<T: key + store>(ctx: &mut TxContext) {
-        Transfer::transfer(new<T>(ctx), tx_context::sender(ctx))
+        transfer::transfer(new<T>(ctx), tx_context::sender(ctx))
     }
 
     /// Returns the size of the collection.
@@ -94,10 +94,10 @@ module sui::collection {
         let id = id::id(&object);
         assert!(!contains(c, id), EObjectDoubleAdd);
         let child_ref = if (option::is_none(&old_child_ref)) {
-            Transfer::transfer_to_object(object, c)
+            transfer::transfer_to_object(object, c)
         } else {
             let old_child_ref = option::extract(&mut old_child_ref);
-            Transfer::transfer_child_to_object(object, old_child_ref, c)
+            transfer::transfer_child_to_object(object, old_child_ref, c)
         };
         vector::push_back(&mut c.objects, child_ref);
         option::destroy_none(old_child_ref);
@@ -142,19 +142,19 @@ module sui::collection {
         ctx: &mut TxContext,
     ) {
         let (object, child_ref) = remove(c, object);
-        Transfer::transfer_child_to_address(object, child_ref, tx_context::sender(ctx));
+        transfer::transfer_child_to_address(object, child_ref, tx_context::sender(ctx));
     }
 
     /// Transfer the entire collection to `recipient`.
     public entry fun transfer<T: key + store>(c: Collection<T>, recipient: address) {
-        Transfer::transfer(c, recipient)
+        transfer::transfer(c, recipient)
     }
 
     public fun transfer_to_object_id<T: key + store>(
         obj: Collection<T>,
         owner_id: VersionedID,
     ): (VersionedID, ChildRef<Collection<T>>) {
-        Transfer::transfer_to_object_id(obj, owner_id)
+        transfer::transfer_to_object_id(obj, owner_id)
     }
 
     /// Look for the object identified by `id_bytes` in the collection.
@@ -164,7 +164,7 @@ module sui::collection {
         let len = size(c);
         while (i < len) {
             let child_ref = vector::borrow(&c.objects, i);
-            if (Transfer::is_child_unsafe(child_ref,  id)) {
+            if (transfer::is_child_unsafe(child_ref,  id)) {
                 return option::some(i)
             };
             i = i + 1;

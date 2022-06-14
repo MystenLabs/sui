@@ -12,7 +12,7 @@ module FungibleTokens::BASKET {
     use sui::balance::{Self, Balance};
     use sui::id::VersionedID;
     use sui::SUI::SUI;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Name of the coin. By convention, this type has the same name as its parent module
@@ -36,7 +36,7 @@ module FungibleTokens::BASKET {
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin put it in the reserve
         let treasury_cap = Coin::create_currency<BASKET>(BASKET{}, ctx);
-        Transfer::share_object(Reserve {
+        transfer::share_object(Reserve {
             id: tx_context::new_id(ctx),
             treasury_cap,
             sui: balance::zero<SUI>(),

@@ -4,7 +4,7 @@
 /// An escrow for atomic swap of objects that trusts a third party for liveness, but not safety.
 module DeFi::Escrow {
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// An object held in escrow
@@ -42,7 +42,7 @@ module DeFi::Escrow {
         let sender = tx_context::sender(ctx);
         let id = tx_context::new_id(ctx);
         // escrow the object with the trusted third party
-        Transfer::transfer(
+        transfer::transfer(
             EscrowedObj<T,ExchangeForT> {
                 id, sender, recipient, exchange_for, escrowed
             },
@@ -78,8 +78,8 @@ module DeFi::Escrow {
         assert!(id::id(&escrowed1) == &exchange_for2, EMismatchedExchangeObject);
         assert!(id::id(&escrowed2) == &exchange_for1, EMismatchedExchangeObject);
         // everything matches. do the swap!
-        Transfer::transfer(escrowed1, sender2);
-        Transfer::transfer(escrowed2, sender1)
+        transfer::transfer(escrowed1, sender2);
+        transfer::transfer(escrowed2, sender1)
     }
 
     /// Trusted third party can always return an escrowed object to its original owner
@@ -90,6 +90,6 @@ module DeFi::Escrow {
             id, sender, recipient: _, exchange_for: _, escrowed
         } = obj;
         id::delete(id);
-        Transfer::transfer(escrowed, sender)
+        transfer::transfer(escrowed, sender)
     }
 }

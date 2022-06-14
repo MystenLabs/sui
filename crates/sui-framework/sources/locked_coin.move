@@ -5,7 +5,7 @@ module sui::locked_coin {
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::{Self, EpochTimeLock};
 
@@ -25,7 +25,7 @@ module sui::locked_coin {
             balance,
             locked_until_epoch
         };
-        Transfer::transfer(locked_coin, owner);
+        transfer::transfer(locked_coin, owner);
     }
 
     /// Destruct a LockedCoin wrapper and keep the balance.
@@ -58,6 +58,6 @@ module sui::locked_coin {
         id::delete(id);
         epoch_time_lock::destroy(locked_until_epoch, ctx);
         let coin = Coin::from_balance(balance, ctx);
-        Transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::transfer(coin, tx_context::sender(ctx));
     }
 }

@@ -18,7 +18,7 @@ module MyFirstPackage::M1 {
 
     // module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
-        use sui::Transfer;
+        use sui::transfer;
         use sui::tx_context;
         let admin = Forge {
             id: tx_context::new_id(ctx),
@@ -26,7 +26,7 @@ module MyFirstPackage::M1 {
         };
         // transfer the forge object to the module/package publisher
         // (presumably the game admin)
-        Transfer::transfer(admin, tx_context::sender(ctx));
+        transfer::transfer(admin, tx_context::sender(ctx));
     }
 
     public fun swords_created(self: &Forge): u64 {
@@ -42,7 +42,7 @@ module MyFirstPackage::M1 {
     }
 
     public entry fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
-        use sui::Transfer;
+        use sui::transfer;
         use sui::tx_context;
         // create a sword
         let sword = Sword {
@@ -51,14 +51,14 @@ module MyFirstPackage::M1 {
             strength: strength,
         };
         // transfer the sword
-        Transfer::transfer(sword, recipient);
+        transfer::transfer(sword, recipient);
         forge.swords_created = forge.swords_created + 1;
     }
 
     public entry fun sword_transfer(sword: Sword, recipient: address) {
-        use sui::Transfer;
+        use sui::transfer;
         // transfer the sword
-        Transfer::transfer(sword, recipient);
+        transfer::transfer(sword, recipient);
     }
 
     #[test]
@@ -132,7 +132,7 @@ module MyFirstPackage::M1 {
 
     #[test]
     public fun test_sword_create() {
-        use sui::Transfer;
+        use sui::transfer;
         use sui::tx_context;
 
         // create a dummy TxContext for testing
@@ -150,7 +150,7 @@ module MyFirstPackage::M1 {
 
         // create a dummy address and transfer the sword
         let dummy_address = @0xCAFE;
-        Transfer::transfer(sword, dummy_address);
+        transfer::transfer(sword, dummy_address);
     }
 
 }

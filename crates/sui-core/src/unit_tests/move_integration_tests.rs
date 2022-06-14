@@ -454,7 +454,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(event1.object_id(), Some(child.0));
 
     // Create a parent and a child together. This tests the
-    // Transfer::transfer_to_object_id() API.
+    // transfer::transfer_to_object_id() API.
     let effects = call_move(
         &authority,
         &gas,

@@ -16,14 +16,14 @@ use sui_types::{
 
 use crate::format_signature_token;
 
-/// All transfer functions (the functions in `Sui::Transfer`) are "private" in that they are
+/// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
 /// restricted to the module.
-/// For example, with `Transfer::transfer<T>(...)`, either:
+/// For example, with `transfer::transfer<T>(...)`, either:
 /// - `T` must be a type declared in the current module or
 /// - `T` must have `store`
 pub fn verify_module(module: &CompiledModule) -> SuiResult {
     let view = &BinaryIndexedView::Module(module);
-    // do not need to check the Sui::Transfer module itself
+    // do not need to check the sui::transfer module itself
     if is_transfer_module(view, module.self_handle()) {
         return Ok(());
     }
@@ -115,7 +115,7 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
                 };
                 if !has_store && !is_defined_in_current_module {
                     return Err(format!(
-                        "Invalid call to '{}::Transfer::{}'. \
+                        "Invalid call to '{}::transfer::{}'. \
                         Invalid transfer of object of type '{}'. \
                         The transferred object's type must be defined in the current module, \
                         or must have the 'store' type ability",

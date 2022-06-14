@@ -7,7 +7,7 @@ module NFTs::Geniteam {
     use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
-    use sui::Transfer::{Self, ChildRef};
+    use sui::transfer::{Self, ChildRef};
     use std::ascii::{Self, String};
     use std::vector;
 
@@ -99,7 +99,7 @@ module NFTs::Geniteam {
     ) {
         // Create player simply and transfer to caller
         let player = new_player(player_name, ctx);
-        Transfer::transfer(player, tx_context::sender(ctx))
+        transfer::transfer(player, tx_context::sender(ctx))
     }
 
     /// Create a Farm and add it to the Player
@@ -113,7 +113,7 @@ module NFTs::Geniteam {
         let farm = new_farm(farm_name, farm_img_index, total_monster_slots, ctx);
 
         // Transfer ownership of farm to player
-        let child_ref = Transfer::transfer_to_object(farm, player);
+        let child_ref = transfer::transfer_to_object(farm, player);
 
         // Store the farm
         option::fill(&mut player.owned_farm, child_ref)
@@ -144,7 +144,7 @@ module NFTs::Geniteam {
 
         // Check if this is the right collection
         assert!(
-            Transfer::is_child(&farm.pet_monsters, pet_monsters),
+            transfer::is_child(&farm.pet_monsters, pet_monsters),
             EMonsterCollectionNotOwnedByFarm,
         );
 
@@ -160,7 +160,7 @@ module NFTs::Geniteam {
     ) {
         // Check if this is the right collection
         assert!(
-            Transfer::is_child(&player.inventory, inventory),
+            transfer::is_child(&player.inventory, inventory),
             EInventoryNotOwnedByPlayer,
         );
 
@@ -182,7 +182,7 @@ module NFTs::Geniteam {
     ) {
         // Check if this is the right collection
         assert!(
-            Transfer::is_child(&player.inventory, inventory),
+            transfer::is_child(&player.inventory, inventory),
             EInventoryNotOwnedByPlayer,
         );
 
@@ -252,7 +252,7 @@ module NFTs::Geniteam {
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
 
         // Transfer ownership of cosmetic to this farm
-        let child_ref = Transfer::transfer_to_object(farm_cosmetic, farm);
+        let child_ref = transfer::transfer_to_object(farm_cosmetic, farm);
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {
@@ -274,7 +274,7 @@ module NFTs::Geniteam {
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
 
         // Transfer ownership of cosmetic to this monster
-        let child_ref = Transfer::transfer_to_object(monster_cosmetic, monster);
+        let child_ref = transfer::transfer_to_object(monster_cosmetic, monster);
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {

@@ -19,7 +19,7 @@ module games::shared_tic_tac_toe {
 
     use sui::id::{Self, ID, VersionedID};
     use sui::event;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     // Game status
@@ -80,7 +80,7 @@ module games::shared_tic_tac_toe {
             o_address: o_address,
         };
         // Make the game a shared object so that both players can mutate it.
-        Transfer::share_object(game);
+        transfer::share_object(game);
     }
 
     public entry fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
@@ -100,9 +100,9 @@ module games::shared_tic_tac_toe {
             // Notify the server that the game ended so that it can delete the game.
             event::emit(GameEndEvent { game_id: *id::inner(&game.id) });
             if (game.game_status == X_WIN) {
-                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
+                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                Transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
+                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
             }
         }
     }

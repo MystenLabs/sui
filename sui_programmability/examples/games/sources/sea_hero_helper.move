@@ -12,7 +12,7 @@ module games::sea_hero_helper {
     use games::hero::Hero;
     use sui::Coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
@@ -48,7 +48,7 @@ module games::sea_hero_helper {
             sea_hero::monster_reward(&monster) > helper_reward,
             EINVALID_HELPER_REWARD
         );
-        Transfer::transfer(
+        transfer::transfer(
             HelpMeSlayThisMonster {
                 id: tx_context::new_id(ctx),
                 monster,
@@ -73,7 +73,7 @@ module games::sea_hero_helper {
         id::delete(id);
         let owner_reward = sea_hero::slay(hero, monster);
         let helper_reward = Coin::withdraw(&mut owner_reward, helper_reward, ctx);
-        Transfer::transfer(Coin::from_balance(owner_reward, ctx), monster_owner);
+        transfer::transfer(Coin::from_balance(owner_reward, ctx), monster_owner);
         helper_reward
     }
 

@@ -4,7 +4,7 @@
 /// Example coin with a trusted owner responsible for minting/burning (e.g., a stablecoin)
 module Examples::TrustedCoin {
     use sui::Coin::{Self, TreasuryCap};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Name of the coin
@@ -17,7 +17,7 @@ module Examples::TrustedCoin {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
         let treasury_cap = Coin::create_currency<EXAMPLE>(EXAMPLE{}, ctx);
-        Transfer::transfer(treasury_cap, tx_context::sender(ctx))
+        transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     public entry fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {

@@ -6,7 +6,7 @@ module Tutorial::TrustedSwap {
     use sui::Coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::SUI::SUI;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     const MIN_FEE: u64 = 1000;
@@ -30,11 +30,11 @@ module Tutorial::TrustedSwap {
             scarcity,
             style,
         };
-        Transfer::transfer(object, tx_context::sender(ctx))
+        transfer::transfer(object, tx_context::sender(ctx))
     }
 
     public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
-        Transfer::transfer(object, tx_context::sender(ctx))
+        transfer::transfer(object, tx_context::sender(ctx))
     }
 
     /// Anyone owns an `Object` can request swapping their object. This object
@@ -47,7 +47,7 @@ module Tutorial::TrustedSwap {
             to_swap: object,
             fee: Coin::into_balance(fee),
         };
-        Transfer::transfer(wrapper, service_address);
+        transfer::transfer(wrapper, service_address);
     }
 
     /// When the admin has two swap requests with objects that are trade-able,
@@ -73,13 +73,13 @@ module Tutorial::TrustedSwap {
         } = wrapper2;
 
         // Perform the swap.
-        Transfer::transfer(object1, original_owner2);
-        Transfer::transfer(object2, original_owner1);
+        transfer::transfer(object1, original_owner2);
+        transfer::transfer(object2, original_owner1);
 
         // Service provider takes the fee.
         let service_address = tx_context::sender(ctx);
         balance::join(&mut fee1, fee2);
-        Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
+        transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
 
         // Effectively delete the wrapper objects.
         id::delete(id1);

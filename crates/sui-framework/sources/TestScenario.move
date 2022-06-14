@@ -46,7 +46,7 @@ module sui::TestScenario {
     /// // addr1 sends an object to addr2
     /// {
     ///     let some_object: SomeObject = ... // construct an object
-    ///     Transfer::transfer(some_object, copy addr2)
+    ///     transfer::transfer(some_object, copy addr2)
     /// };
     /// // end the first transaction and begin a new one where addr2 is the sender
     /// TestScenario::next_tx(scenario, &addr2)

@@ -5,7 +5,7 @@ module Tutorial::SimpleWarrior {
     use std::option::{Self, Option};
 
     use sui::id::VersionedID;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct Sword has key, store {
@@ -29,7 +29,7 @@ module Tutorial::SimpleWarrior {
             id: tx_context::new_id(ctx),
             strength,
         };
-        Transfer::transfer(sword, tx_context::sender(ctx))
+        transfer::transfer(sword, tx_context::sender(ctx))
     }
 
     public entry fun create_shield(armor: u8, ctx: &mut TxContext) {
@@ -37,7 +37,7 @@ module Tutorial::SimpleWarrior {
             id: tx_context::new_id(ctx),
             armor,
         };
-        Transfer::transfer(shield, tx_context::sender(ctx))
+        transfer::transfer(shield, tx_context::sender(ctx))
     }
 
     public entry fun create_warrior(ctx: &mut TxContext) {
@@ -46,13 +46,13 @@ module Tutorial::SimpleWarrior {
             sword: option::none(),
             shield: option::none(),
         };
-        Transfer::transfer(warrior, tx_context::sender(ctx))
+        transfer::transfer(warrior, tx_context::sender(ctx))
     }
 
     public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
         if (option::is_some(&warrior.sword)) {
             let old_sword = option::extract(&mut warrior.sword);
-            Transfer::transfer(old_sword, tx_context::sender(ctx));
+            transfer::transfer(old_sword, tx_context::sender(ctx));
         };
         option::fill(&mut warrior.sword, sword);
     }
@@ -60,7 +60,7 @@ module Tutorial::SimpleWarrior {
     public entry fun equip_shield(warrior: &mut SimpleWarrior, shield: Shield, ctx: &mut TxContext) {
         if (option::is_some(&warrior.shield)) {
             let old_shield = option::extract(&mut warrior.shield);
-            Transfer::transfer(old_shield, tx_context::sender(ctx));
+            transfer::transfer(old_shield, tx_context::sender(ctx));
         };
         option::fill(&mut warrior.shield, shield);
     }

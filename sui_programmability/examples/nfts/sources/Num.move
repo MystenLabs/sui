@@ -3,7 +3,7 @@
 
 module NFTs::Num {
     use sui::id::{Self, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Very silly NFT: a natural number!
@@ -35,7 +35,7 @@ module NFTs::Num {
             supply: 0,
             issued_counter: 0,
         };
-        Transfer::transfer(issuer_cap, tx_context::sender(ctx))
+        transfer::transfer(issuer_cap, tx_context::sender(ctx))
     }
 
     /// Create a new `Num` NFT. Aborts if `MAX_SUPPLY` NFT's have already been issued

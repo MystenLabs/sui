@@ -95,7 +95,7 @@ module ABC::ABC {
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin, TreasuryCap};
     use sui::id::{Self, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use std::vector;
 
     /// The ticker of ABC regulated token
@@ -129,10 +129,10 @@ module ABC::ABC {
         let treasury_cap = Coin::create_currency(ABC {}, ctx);
         let sender = tx_context::sender(ctx);
 
-        Transfer::transfer(zero(sender, ctx), sender);
-        Transfer::transfer(treasury_cap, sender);
+        transfer::transfer(zero(sender, ctx), sender);
+        transfer::transfer(treasury_cap, sender);
 
-        Transfer::share_object(Registry {
+        transfer::share_object(Registry {
             id: tx_context::new_id(ctx),
             banned: vector::empty(),
             swapped_amount: 0,
@@ -156,7 +156,7 @@ module ABC::ABC {
     /// Create an empty `RCoin<ABC>` instance for account `for`. TreasuryCap is passed for
     /// authentification purposes - only admin can create new accounts.
     public entry fun create(_: &TreasuryCap<ABC>, for: address, ctx: &mut TxContext) {
-        Transfer::transfer(zero(for, ctx), for)
+        transfer::transfer(zero(for, ctx), for)
     }
 
     /// Mint more ABC. Requires TreasuryCap for authorization, so can only be done by admins.
@@ -190,7 +190,7 @@ module ABC::ABC {
         assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
         assert!(vector::contains(&r.banned, &sender) == false, EAddressBanned);
 
-        Transfer::transfer(Transfer {
+        transfer::transfer(Transfer {
             to,
             id: tx_context::new_id(ctx),
             balance: balance::split(borrow_mut(coin), value),
@@ -229,7 +229,7 @@ module ABC::ABC {
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
 
-        Transfer::transfer(Coin::withdraw(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
+        transfer::transfer(Coin::withdraw(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
     }
 
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
@@ -442,7 +442,7 @@ module ABC::Tests {
 
         next_tx(test, &user1); {
             let coin = TestScenario::take_owned<Coin<ABC>>(test);
-            Sui::Transfer::transfer(coin, user2);
+            Sui::transfer::transfer(coin, user2);
         };
     }
 
@@ -455,7 +455,7 @@ module ABC::Tests {
 
         next_tx(test, &user2); {
             let coin = TestScenario::take_owned<Coin<ABC>>(test);
-            Sui::Transfer::transfer(coin, admin);
+            Sui::transfer::transfer(coin, admin);
         };
 
         next_tx(test, &admin); {
@@ -534,7 +534,7 @@ module ABC::Tests {
 
         next_tx(test, &user1); {
             let coin = TestScenario::take_owned<RCoin<ABC>>(test);
-            Sui::Transfer::transfer(coin, user2);
+            Sui::transfer::transfer(coin, user2);
         };
 
         next_tx(test, &user2); {

@@ -9,7 +9,7 @@ module games::hero {
     use sui::id::{Self, ID, VersionedID};
     use sui::math;
     use sui::SUI::SUI;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
 
@@ -130,12 +130,12 @@ module games::hero {
         let id = tx_context::new_id(ctx);
         let game_id = *id::inner(&id);
 
-        Transfer::freeze_object(GameInfo {
+        transfer::freeze_object(GameInfo {
             id,
             admin: sender,
         });
 
-        Transfer::transfer(
+        transfer::transfer(
             GameAdmin {
                 game_id,
                 id: tx_context::new_id(ctx),
@@ -252,7 +252,7 @@ module games::hero {
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
-        Transfer::transfer(payment, game.admin);
+        transfer::transfer(payment, game.admin);
 
         // magic of the sword is proportional to the amount you paid, up to
         // a max. one can only imbue a sword with so much magic
@@ -270,7 +270,7 @@ module games::hero {
     ) {
         let sword = create_sword(game, payment, ctx);
         let hero = create_hero(game, sword, ctx);
-        Transfer::transfer(hero, tx_context::sender(ctx))
+        transfer::transfer(hero, tx_context::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
@@ -299,7 +299,7 @@ module games::hero {
         check_id(game, admin.game_id);
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
-        Transfer::transfer(
+        transfer::transfer(
             Potion { id: tx_context::new_id(ctx), potency, game_id: id(game) },
             player
         )
@@ -317,7 +317,7 @@ module games::hero {
         check_id(game, admin.game_id);
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
-        Transfer::transfer(
+        transfer::transfer(
             Boar { id: tx_context::new_id(ctx), hp, strength, game_id: id(game) },
             player
         )

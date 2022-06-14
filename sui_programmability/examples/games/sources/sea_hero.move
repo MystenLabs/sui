@@ -14,7 +14,7 @@ module games::sea_hero {
     use sui::balance::{Self, Balance};
     use sui::id::{Self, VersionedID};
     use sui::Coin::{Self, TreasuryCap};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Admin capability granting permission to mint RUM tokens and
@@ -58,7 +58,7 @@ module games::sea_hero {
     /// Get a treasury cap for the coin and give it to the admin
     // TODO: this leverages Move module initializers
     fun init(ctx: &mut TxContext) {
-        Transfer::transfer(
+        transfer::transfer(
             SeaHeroAdmin {
                 id: tx_context::new_id(ctx),
                 treasury_cap: Coin::create_currency<RUM>(RUM{}, ctx),
@@ -112,14 +112,14 @@ module games::sea_hero {
             reward: Coin::mint_balance(reward_amount, &mut admin.treasury_cap)
         };
         admin.monsters_created = admin.monsters_created + 1;
-        Transfer::transfer(monster, recipient);
+        transfer::transfer(monster, recipient);
     }
 
     /// Send `monster` to `recipient`
     public fun transfer_monster(
         monster: SeaMonster, recipient: address
     ) {
-        Transfer::transfer(monster, recipient)
+        transfer::transfer(monster, recipient)
     }
 
     /// Reward a hero will reap from slaying this monster

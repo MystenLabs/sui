@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::Transfer {
+module sui::transfer {
     use std::option::{Self, Option};
     use sui::id::{Self, ID, VersionedID};
 

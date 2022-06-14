@@ -28,7 +28,7 @@
 module games::rock_paper_scissors {
     use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
-    use sui::Transfer::{Self};
+    use sui::transfer::{Self};
     use std::vector;
     use std::hash;
 
@@ -118,7 +118,7 @@ module games::rock_paper_scissors {
     ///
     /// todo: extend with generics + T as prize
     public entry fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
-        Transfer::transfer(Game {
+        transfer::transfer(Game {
             id: tx_context::new_id(ctx),
             prize: ThePrize { id: tx_context::new_id(ctx) },
             player_one,
@@ -135,7 +135,7 @@ module games::rock_paper_scissors {
     ///
     /// Currently there's no check on whether the game exists.
     public entry fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
-        Transfer::transfer(PlayerTurn {
+        transfer::transfer(PlayerTurn {
             hash,
             id: tx_context::new_id(ctx),
             player: tx_context::sender(ctx),
@@ -165,7 +165,7 @@ module games::rock_paper_scissors {
     /// Submit a [`Secret`] to the game owner who then matches the hash and saves the
     /// gesture in the [`Game`] object.
     public entry fun reveal(at: address, salt: vector<u8>, ctx: &mut TxContext) {
-        Transfer::transfer(Secret {
+        transfer::transfer(Secret {
             id: tx_context::new_id(ctx),
             salt,
             player: tx_context::sender(ctx),
@@ -213,11 +213,11 @@ module games::rock_paper_scissors {
         // If one of the players wins, he takes the prize.
         // If there's a tie, the game owner gets the prize.
         if (p1_wins) {
-            Transfer::transfer(prize, player_one)
+            transfer::transfer(prize, player_one)
         } else if (p2_wins) {
-            Transfer::transfer(prize, player_two)
+            transfer::transfer(prize, player_two)
         } else {
-            Transfer::transfer(prize, tx_context::sender(ctx))
+            transfer::transfer(prize, tx_context::sender(ctx))
         };
     }
 

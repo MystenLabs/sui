@@ -7,7 +7,7 @@
 /// - everyone can increment a counter by 1
 /// - the owner of the counter can reset it to any value
 module basics::counter {
-    use sui::Transfer;
+    use sui::transfer;
     use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
 
@@ -28,7 +28,7 @@ module basics::counter {
 
     /// Create and share a Counter object.
     public entry fun create(ctx: &mut TxContext) {
-        Transfer::share_object(Counter {
+        transfer::share_object(Counter {
             id: tx_context::new_id(ctx),
             owner: tx_context::sender(ctx),
             value: 0

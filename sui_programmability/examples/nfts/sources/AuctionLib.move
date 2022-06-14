@@ -12,7 +12,7 @@ module NFTs::AuctionLib {
     use sui::balance::{Self, Balance};
     use sui::SUI::SUI;
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
     friend NFTs::Auction;
@@ -122,10 +122,10 @@ module NFTs::AuctionLib {
             } = option::extract(bid_data);
 
             send_balance(funds, owner, ctx);
-            Transfer::transfer(item, highest_bidder);
+            transfer::transfer(item, highest_bidder);
         } else {
             // no bids placed - send the item back to the original owner
-            Transfer::transfer(item, owner);
+            transfer::transfer(item, owner);
         };
     }
 
@@ -156,23 +156,23 @@ module NFTs::AuctionLib {
 
     /// Helper for the most common operation - wrapping a balance and sending it
     fun send_balance(balance: Balance<SUI>, to: address, ctx: &mut TxContext) {
-        Transfer::transfer(Coin::from_balance(balance, ctx), to)
+        transfer::transfer(Coin::from_balance(balance, ctx), to)
     }
 
-    /// exposes Transfer::transfer
+    /// exposes transfer::transfer
     public fun transfer<T: key + store>(obj: Auction<T>, recipient: address) {
-        Transfer::transfer(obj, recipient)
+        transfer::transfer(obj, recipient)
     }
 
-    /// exposes Transfer::transfer_to_object_id
+    /// exposes transfer::transfer_to_object_id
     public fun transfer_to_object_id<T: key + store>(
         obj: Auction<T>,
         owner_id: VersionedID,
-    ): (VersionedID, Transfer::ChildRef<Auction<T>>) {
-        Transfer::transfer_to_object_id(obj, owner_id)
+    ): (VersionedID, transfer::ChildRef<Auction<T>>) {
+        transfer::transfer_to_object_id(obj, owner_id)
     }
 
     public fun share_object<T: key + store>(obj: Auction<T>) {
-        Transfer::share_object(obj)
+        transfer::share_object(obj)
     }
 }

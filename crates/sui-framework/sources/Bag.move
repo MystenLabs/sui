@@ -14,7 +14,7 @@ module sui::bag {
     use std::option::{Self, Option};
     use std::vector::Self;
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer::{Self, ChildRef};
+    use sui::transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
 
     // Error codes
@@ -62,7 +62,7 @@ module sui::bag {
 
     /// Create a new Bag and transfer it to the signer.
     public entry fun create(ctx: &mut TxContext) {
-        Transfer::transfer(new(ctx), tx_context::sender(ctx))
+        transfer::transfer(new(ctx), tx_context::sender(ctx))
     }
 
     /// Returns the size of the Bag.
@@ -84,7 +84,7 @@ module sui::bag {
             abort EObjectDoubleAdd
         };
         vector::push_back(&mut c.objects, *id);
-        Transfer::transfer_to_object_unsafe(object, old_child_ref, c);
+        transfer::transfer_to_object_unsafe(object, old_child_ref, c);
     }
 
     /// Add a new object to the Bag.
@@ -120,19 +120,19 @@ module sui::bag {
     /// Remove the object from the Bag, and then transfer it to the signer.
     public entry fun remove_and_take<T: key + store>(c: &mut Bag, object: T, ctx: &mut TxContext) {
         let object = remove(c, object);
-        Transfer::transfer(object, tx_context::sender(ctx));
+        transfer::transfer(object, tx_context::sender(ctx));
     }
 
     /// Transfer the entire Bag to `recipient`.
     public entry fun transfer(c: Bag, recipient: address) {
-        Transfer::transfer(c, recipient)
+        transfer::transfer(c, recipient)
     }
 
     public fun transfer_to_object_id(
         obj: Bag,
         owner_id: VersionedID,
     ): (VersionedID, ChildRef<Bag>) {
-        Transfer::transfer_to_object_id(obj, owner_id)
+        transfer::transfer_to_object_id(obj, owner_id)
     }
 
     /// Look for the object identified by `id_bytes` in the Bag.

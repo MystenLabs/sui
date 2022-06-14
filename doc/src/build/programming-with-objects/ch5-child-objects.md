@@ -44,7 +44,7 @@ struct Child has key {
 First we define an API to create an object of `Child` type:
 ```rust
 public entry fun create_child(ctx: &mut TxContext) {
-    Transfer::transfer(
+    transfer::transfer(
         Child { id: tx_context::new_id(ctx) },
         tx_context::sender(ctx),
     );
@@ -58,14 +58,14 @@ public entry fun create_parent(ctx: &mut TxContext) {
         id: tx_context::new_id(ctx),
         child: Option::none(),
     };
-    Transfer::transfer(parent, tx_context::sender(ctx));
+    transfer::transfer(parent, tx_context::sender(ctx));
 }
 ```
 Since the `child` field is `Option` type, we can start with `Option::none()`.
 Now we can define an API that makes an object of `Child` a child of an object of `Parent`:
 ```rust
 public entry fun add_child(parent: &mut Parent, child: Child) {
-    let child_ref = Transfer::transfer_to_object(child, parent);
+    let child_ref = transfer::transfer_to_object(child, parent);
     Option::fill(&mut parent.child, child_ref);
 }
 ```
@@ -96,12 +96,12 @@ And let's see how we define the API to create `AnotherParent` instance:
 ```rust
 public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
     let id = tx_context::new_id(ctx);
-    let (id, child_ref) = Transfer::transfer_to_object_id(child, id);
+    let (id, child_ref) = transfer::transfer_to_object_id(child, id);
     let parent = AnotherParent {
         id,
         child: child_ref,
     };
-    Transfer::transfer(parent, tx_context::sender(ctx));
+    transfer::transfer(parent, tx_context::sender(ctx));
 }
 ```
 In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, thereby obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer to the sender's account.
@@ -208,7 +208,7 @@ To demonstrate how to use this API, let's implement a function that removes a ch
 ```rust
 public entry fun remove_child(parent: &mut Parent, child: Child, ctx: &mut TxContext) {
     let child_ref = Option::extract(&mut parent.child);
-    Transfer::transfer_child_to_address(child, child_ref, tx_context::sender(ctx));
+    transfer::transfer_child_to_address(child, child_ref, tx_context::sender(ctx));
 }
 ```
 In the above function, the reference to the child is extracted from the `parent` object, which is then passed together with the `child` object to the `transfer_child_to_address`, with recipient as the sender of the transaction. It is important to note that this function must also take the `child` object as an argument. Move is not able to obtain the child object only from the reference. An object must always be explicitly provided in the transaction to make the transfer work. As we explained earlier, the fact that `transfer_child_to_address` requires the child reference as an argument guarantees that the `parent` object no longer holds a reference to the child object.
@@ -231,7 +231,7 @@ To see how to use this API, let's define a function that could transfer a child 
 ```rust
 public entry fun transfer_child(parent: &mut Parent, child: Child, new_parent: &mut Parent) {
     let child_ref = Option::extract(&mut parent.child);
-    let new_child_ref = Transfer::transfer_child_to_object(child, child_ref, new_parent);
+    let new_child_ref = transfer::transfer_child_to_object(child, child_ref, new_parent);
     Option::fill(&mut new_parent.child, new_child_ref);
 }
 ```
@@ -268,7 +268,7 @@ public fun delete_child_object<T: key>(
 );
 ```
 The function takes both the ID of the child object and the child reference as arguments. As explained in chapter 1, to delete an object we must first unpack the object, and upon doing so a non-droppable `id` will need to be deleted explicitly.
-Instead of calling `ID::delete` on the `id`, for child object, here we require calling `Transfer::delete_child_object` with the `id` and the child reference.
+Instead of calling `ID::delete` on the `id`, for child object, here we require calling `transfer::delete_child_object` with the `id` and the child reference.
 To demonstrate how to use this API, we define a function that can delete a parent object and a child object altogether:
 ```rust
 public entry fun delete_parent_and_child(parent: Parent, child: Child) {
@@ -278,7 +278,7 @@ public entry fun delete_parent_and_child(parent: Parent, child: Child) {
     ID::delete(parent_id);
 
     let Child { id: child_id } = child;
-    Transfer::delete_child_object(child_id, child_ref);
+    transfer::delete_child_object(child_id, child_ref);
 }
 ```
 In the above example, after we unpacked the `parent` object we are able to extract the `child_ref`. We then also unpack the `child` object to obtain the `child_id`.

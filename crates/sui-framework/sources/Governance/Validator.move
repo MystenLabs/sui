@@ -9,7 +9,7 @@ module sui::validator {
     use sui::balance::{Self, Balance};
     use sui::Coin;
     use sui::SUI::SUI;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::TxContext;
 
     friend sui::genesis;
@@ -118,7 +118,7 @@ module sui::validator {
             balance::join(&mut stake, pending_stake_balance);
         };
         option::destroy_none(pending_stake);
-        Transfer::transfer(Coin::from_balance(stake, ctx), metadata.sui_address);
+        transfer::transfer(Coin::from_balance(stake, ctx), metadata.sui_address);
     }
 
     /// Add stake to an active validator. The new stake is added to the pending_stake field,

@@ -7,7 +7,7 @@
 module Test::M1 {
     use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::Coin::Coin;
 
     struct Object has key, store {
@@ -20,7 +20,7 @@ module Test::M1 {
     }
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        Transfer::transfer(
+        transfer::transfer(
             Object { id: tx_context::new_id(ctx), value },
             recipient
         )

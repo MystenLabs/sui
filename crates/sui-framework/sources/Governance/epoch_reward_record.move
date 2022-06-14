@@ -3,7 +3,7 @@
 
 module sui::epoch_reward_record {
     use sui::id::VersionedID;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     friend sui::sui_system;
@@ -32,7 +32,7 @@ module sui::epoch_reward_record {
         validator: address,
         ctx: &mut TxContext,
     ) {
-        Transfer::share_object(EpochRewardRecord {
+        transfer::share_object(EpochRewardRecord {
             id: tx_context::new_id(ctx),
             epoch,
             computation_charge,

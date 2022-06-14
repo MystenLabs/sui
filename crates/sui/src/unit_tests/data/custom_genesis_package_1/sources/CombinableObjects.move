@@ -7,7 +7,7 @@ module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
     use sui::Coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct Ham has key {
@@ -35,14 +35,14 @@ module Examples::CombinableObjects {
     /// Exchange `c` for some ham
     public fun buy_ham(c: Coin<EXAMPLE>, ctx: &mut TxContext): Ham {
         assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
-        Transfer::transfer(c, admin());
+        transfer::transfer(c, admin());
         Ham { id: tx_context::new_id(ctx) }
     }
 
     /// Exchange `c` for some bread
     public fun buy_bread(c: Coin<EXAMPLE>, ctx: &mut TxContext): Bread {
         assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
-        Transfer::transfer(c, admin());
+        transfer::transfer(c, admin());
         Bread { id: tx_context::new_id(ctx) }
     }
 

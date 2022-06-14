@@ -17,17 +17,17 @@ After this call, the specified object will become permanently immutable. This is
 Let's add an entry function to the [ColorObject](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move) module to turn an existing (owned) `ColorObject` into an immutable object:
 ```rust
 public entry fun freeze_object(object: ColorObject) {
-    Transfer::freeze_object(object)
+    transfer::freeze_object(object)
 }
 ```
 In the above function, one must already own a `ColorObject` to be able to pass it in. At the end of this call, this object is *frozen* and can never be mutated. It is also no longer owned by anyone.
-> :bulb: Note the `Transfer::freeze_object` API requires passing the object by value. Had we allowed passing the object by a mutable reference, we would then still be able to mutate the object after the `freeze_object` call; this contradicts the fact that it should have become immutable.
+> :bulb: Note the `transfer::freeze_object` API requires passing the object by value. Had we allowed passing the object by a mutable reference, we would then still be able to mutate the object after the `freeze_object` call; this contradicts the fact that it should have become immutable.
 
 Alternatively, you can also provide an API that creates an immutable object at birth:
 ```rust
 public entry fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
     let color_object = new(red, green, blue, ctx);
-    Transfer::freeze_object(color_object)
+    transfer::freeze_object(color_object)
 }
 ```
 In this function, a fresh new `ColorObject` is created and immediately turned into an immutable object before being owned by anyone.

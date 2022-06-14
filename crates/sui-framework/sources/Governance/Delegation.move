@@ -8,7 +8,7 @@ module sui::delegation {
     use sui::id::{Self, VersionedID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::SUI::SUI;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::EpochTimeLock;
 
@@ -62,7 +62,7 @@ module sui::delegation {
             coin_locked_until_epoch: option::none(),
             validator_address,
         };
-        Transfer::transfer(delegation, tx_context::sender(ctx))
+        transfer::transfer(delegation, tx_context::sender(ctx))
     }
 
     public(friend) fun create_from_locked_coin(
@@ -82,7 +82,7 @@ module sui::delegation {
             coin_locked_until_epoch: option::some(epoch_lock),
             validator_address,
         };
-        Transfer::transfer(delegation, tx_context::sender(ctx))
+        transfer::transfer(delegation, tx_context::sender(ctx))
     }
 
     /// Deactivate the delegation. Send back the stake and set the ending epoch.
@@ -98,7 +98,7 @@ module sui::delegation {
         let sender = tx_context::sender(ctx);
 
         if (option::is_none(&self.coin_locked_until_epoch)) {
-            Transfer::transfer(Coin::from_balance(stake, ctx), sender);
+            transfer::transfer(Coin::from_balance(stake, ctx), sender);
         } else {
             let locked_until_epoch = option::extract(&mut self.coin_locked_until_epoch);
             locked_coin::new_from_balance(stake, locked_until_epoch, sender, ctx);
@@ -141,7 +141,7 @@ module sui::delegation {
     }
 
     public entry fun transfer(self: Delegation, recipient: address) {
-        Transfer::transfer(self, recipient)
+        transfer::transfer(self, recipient)
     }
 
     /// Checks whether the delegation object is eligible to claim the reward

@@ -8,7 +8,7 @@
 /// and discoverable by the key owner.
 module basics::lock {
     use sui::id::{Self, ID, VersionedID};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
 
@@ -45,12 +45,12 @@ module basics::lock {
         let id = tx_context::new_id(ctx);
         let for = *id::inner(&id);
 
-        Transfer::share_object(Lock<T> {
+        transfer::share_object(Lock<T> {
             id,
             locked: option::some(obj),
         });
 
-        Transfer::transfer(Key<T> {
+        transfer::transfer(Key<T> {
             for,
             id: tx_context::new_id(ctx)
         }, tx_context::sender(ctx));
@@ -89,7 +89,7 @@ module basics::lock {
         key: &Key<T>,
         ctx: &mut TxContext,
     ) {
-        Transfer::transfer(unlock(lock, key), tx_context::sender(ctx))
+        transfer::transfer(unlock(lock, key), tx_context::sender(ctx))
     }
 }
 
@@ -98,7 +98,7 @@ module basics::lockTest {
     use sui::id::VersionedID;
     use sui::TestScenario;
     use sui::tx_context;
-    use sui::Transfer;
+    use sui::transfer;
     use basics::lock::{Self, Lock, Key};
 
     /// Custom structure which we will store inside a Lock.
@@ -128,7 +128,7 @@ module basics::lockTest {
         {
             let key = TestScenario::take_owned<Key<Treasure>>(scenario);
 
-            Transfer::transfer(key, user2);
+            transfer::transfer(key, user2);
         };
 
         // User2 is impatient and he decides to take the treasure.

@@ -8,7 +8,7 @@ module basics::sandwich {
     use sui::Coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::SUI::SUI;
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct Ham has key {
@@ -46,12 +46,12 @@ module basics::sandwich {
 
     /// On module init, create a grocery
     fun init(ctx: &mut TxContext) {
-        Transfer::share_object(Grocery {
+        transfer::share_object(Grocery {
             id: tx_context::new_id(ctx),
             profits: balance::zero<SUI>()
         });
 
-        Transfer::transfer(GroceryOwnerCapability {
+        transfer::transfer(GroceryOwnerCapability {
             id: tx_context::new_id(ctx)
         }, tx_context::sender(ctx));
     }
@@ -65,7 +65,7 @@ module basics::sandwich {
         let b = Coin::into_balance(c);
         assert!(balance::value(&b) == HAM_PRICE, EInsufficientFunds);
         balance::join(&mut grocery.profits, b);
-        Transfer::transfer(Ham { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
+        transfer::transfer(Ham { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
     }
 
     /// Exchange `c` for some bread
@@ -77,7 +77,7 @@ module basics::sandwich {
         let b = Coin::into_balance(c);
         assert!(balance::value(&b) == BREAD_PRICE, EInsufficientFunds);
         balance::join(&mut grocery.profits, b);
-        Transfer::transfer(Bread { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
+        transfer::transfer(Bread { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
     }
 
     /// Combine the `ham` and `bread` into a delicious sandwich
@@ -88,7 +88,7 @@ module basics::sandwich {
         let Bread { id: bread_id } = bread;
         id::delete(ham_id);
         id::delete(bread_id);
-        Transfer::transfer(Sandwich { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
+        transfer::transfer(Sandwich { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
     }
 
     /// See the profits of a grocery
@@ -105,7 +105,7 @@ module basics::sandwich {
         // Take a transferable `Coin` from a `Balance`
         let coin = Coin::withdraw(&mut grocery.profits, amount, ctx);
 
-        Transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::transfer(coin, tx_context::sender(ctx));
     }
 
     #[test_only]

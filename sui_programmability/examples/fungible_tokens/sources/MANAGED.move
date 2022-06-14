@@ -6,7 +6,7 @@
 /// ordinary modules, which use camel case.
 module FungibleTokens::MANAGED {
     use sui::Coin::{Self, Coin, TreasuryCap};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Name of the coin. By convention, this type has the same name as its parent module
@@ -19,7 +19,7 @@ module FungibleTokens::MANAGED {
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction sender
         let treasury_cap = Coin::create_currency<MANAGED>(MANAGED{}, ctx);
-        Transfer::transfer(treasury_cap, tx_context::sender(ctx))
+        transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     /// Manager can mint new coins

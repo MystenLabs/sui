@@ -3,7 +3,7 @@
 
 module ObjectWrapping::ObjectWrapping {
     use std::option::{Self, Option};
-    use sui::Transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::id::{Self, VersionedID};
 
@@ -17,7 +17,7 @@ module ObjectWrapping::ObjectWrapping {
     }
 
     public entry fun create_child(ctx: &mut TxContext) {
-        Transfer::transfer(
+        transfer::transfer(
             Child {
                 id: tx_context::new_id(ctx),
             },
@@ -26,7 +26,7 @@ module ObjectWrapping::ObjectWrapping {
     }
 
     public entry fun create_parent(child: Child, ctx: &mut TxContext) {
-        Transfer::transfer(
+        transfer::transfer(
             Parent {
                 id: tx_context::new_id(ctx),
                 child: option::some(child),
@@ -41,7 +41,7 @@ module ObjectWrapping::ObjectWrapping {
 
     public entry fun extract_child(parent: &mut Parent, ctx: &mut TxContext) {
         let child = option::extract(&mut parent.child);
-        Transfer::transfer(
+        transfer::transfer(
             child,
             tx_context::sender(ctx),
         )

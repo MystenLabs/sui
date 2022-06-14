@@ -12,7 +12,7 @@ module Test::M {
     }
 
     public entry fun mint(ctx: &mut TxContext) {
-        sui::Transfer::transfer(
+        sui::transfer::transfer(
             Obj { id: tx_context::new_id(ctx), value: 0 },
             tx_context::sender(ctx),
         )
