@@ -31,9 +31,7 @@ export function parseObjectType(data: GetObjectDataResponse): string {
     return 'unknown';
 }
 
-export function getOwnerStr(
-    owner: ObjectOwner | string
-): string {
+export function getOwnerStr(owner: ObjectOwner | string): string {
     if (typeof owner === 'object') {
         if ('AddressOwner' in owner) return owner.AddressOwner;
         if ('ObjectOwner' in owner) return owner.ObjectOwner;
