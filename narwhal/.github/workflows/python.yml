@@ -21,7 +21,7 @@ jobs:
               - 'benchmark/**'
       - name: Set up Python 3.8
         if: steps.filter.outputs.benchmark == 'true'
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: 3.8
       - name: Install flake8, pip-audit
