@@ -509,18 +509,17 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
-        let update_type = UpdateType::Transaction(
-            self.next_tx_seq_number
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-            effects.effects.digest(),
-        );
+        let seq = self
+            .next_tx_seq_number
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.store
             .update_gateway_state(
                 input_objects,
                 mutated_objects,
                 new_certificate.clone(),
+                seq,
                 effects.clone().to_unsigned_effects(),
-                update_type,
+                &effects.effects.digest(),
             )
             .await?;
 

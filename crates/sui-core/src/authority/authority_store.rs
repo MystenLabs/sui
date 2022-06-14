@@ -560,6 +560,99 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             std::iter::once((transaction_digest, certificate)),
         )?;
 
+        self.sequence_tx(
+            write_batch,
+            temporary_store,
+            transaction_digest,
+            proposed_seq,
+            effects,
+            effects_digest,
+        )
+        .await?;
+
+        // Cleanup the lock of the shared objects. This must be done after we write effects, as
+        // effects_exists is used as the guard to avoid re-locking objects for a previously
+        // executed tx. remove_shared_objects_locks.
+        self.remove_shared_objects_locks(transaction_digest, certificate)
+    }
+
+    /// Persist temporary storage to DB for genesis modules
+    pub async fn update_objects_state_for_genesis<BackingPackageStore>(
+        &self,
+        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        transaction_digest: TransactionDigest,
+    ) -> Result<(), SuiError> {
+        debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
+        let write_batch = self.certificates.batch();
+        self.batch_update_objects(
+            write_batch,
+            temporary_store,
+            transaction_digest,
+            UpdateType::Genesis,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// This is used by the Gateway to update its local store after a transaction succeeded
+    /// on the authorities. Since we don't yet have local execution on the gateway, we will
+    /// need to recreate the temporary store based on the inputs and effects to update it properly.
+    pub async fn update_gateway_state(
+        &self,
+        input_objects: InputObjects,
+        mutated_objects: HashMap<ObjectRef, Object>,
+        certificate: CertifiedTransaction,
+        proposed_seq: TxSequenceNumber,
+        effects: TransactionEffectsEnvelope<S>,
+        effects_digest: &TransactionEffectsDigest,
+    ) -> SuiResult {
+        let transaction_digest = certificate.digest();
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
+        for (_, object) in mutated_objects {
+            temporary_store.write_object(object);
+        }
+        for obj_ref in &effects.effects.deleted {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+        }
+        for obj_ref in &effects.effects.wrapped {
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+        }
+
+        let mut write_batch = self.certificates.batch();
+
+        // Store the certificate indexed by transaction digest
+        write_batch = write_batch.insert_batch(
+            &self.certificates,
+            std::iter::once((transaction_digest, &certificate)),
+        )?;
+
+        // Once a transaction is done processing and effects committed, we no longer
+        // need it in the transactions table. This also allows us to track pending
+        // transactions.
+        write_batch =
+            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
+
+        self.sequence_tx(
+            write_batch,
+            temporary_store,
+            transaction_digest,
+            proposed_seq,
+            &effects,
+            effects_digest,
+        )
+        .await
+    }
+
+    async fn sequence_tx<BackingPackageStore>(
+        &self,
+        write_batch: DBBatch,
+        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        transaction_digest: &TransactionDigest,
+        proposed_seq: TxSequenceNumber,
+        effects: &TransactionEffectsEnvelope<S>,
+        effects_digest: &TransactionEffectsDigest,
+    ) -> SuiResult {
         // Safe to unwrap since UpdateType::Transaction ensures we get a sequence number back.
         let assigned_seq = self
             .batch_update_objects(
@@ -596,83 +689,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             &ExecutionDigests::new(*transaction_digest, *effects_digest),
         )?;
 
-        // Cleanup the lock of the shared objects. This must be done after we write effects, as
-        // effects_exists is used as the guard to avoid re-locking objects for a previously
-        // executed tx. remove_shared_objects_locks.
-        self.remove_shared_objects_locks(transaction_digest, certificate)?;
-
         Ok(())
-    }
-
-    /// Persist temporary storage to DB for genesis modules
-    pub async fn update_objects_state_for_genesis<BackingPackageStore>(
-        &self,
-        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
-        transaction_digest: TransactionDigest,
-    ) -> Result<(), SuiError> {
-        debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
-        let write_batch = self.certificates.batch();
-        self.batch_update_objects(
-            write_batch,
-            temporary_store,
-            transaction_digest,
-            UpdateType::Genesis,
-        )
-        .await?;
-        Ok(())
-    }
-
-    /// This is used by the Gateway to update its local store after a transaction succeeded
-    /// on the authorities. Since we don't yet have local execution on the gateway, we will
-    /// need to recreate the temporary store based on the inputs and effects to update it properly.
-    pub async fn update_gateway_state(
-        &self,
-        input_objects: InputObjects,
-        mutated_objects: HashMap<ObjectRef, Object>,
-        certificate: CertifiedTransaction,
-        effects: TransactionEffectsEnvelope<S>,
-        update_type: UpdateType,
-    ) -> SuiResult {
-        let transaction_digest = certificate.digest();
-        let mut temporary_store =
-            AuthorityTemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
-        for (_, object) in mutated_objects {
-            temporary_store.write_object(object);
-        }
-        for obj_ref in &effects.effects.deleted {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
-        }
-        for obj_ref in &effects.effects.wrapped {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
-        }
-
-        let mut write_batch = self.certificates.batch();
-
-        // Store the certificate indexed by transaction digest
-        write_batch = write_batch.insert_batch(
-            &self.certificates,
-            std::iter::once((transaction_digest, &certificate)),
-        )?;
-
-        // Once a transaction is done processing and effects committed, we no longer
-        // need it in the transactions table. This also allows us to track pending
-        // transactions.
-        write_batch =
-            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
-        self.batch_update_objects(
-            write_batch,
-            temporary_store,
-            *transaction_digest,
-            update_type,
-        )
-        .await?;
-
-        // Store the unsigned effects of the transaction. Must be done after batch_update_objects
-        // returns, as we use digest-in-effects? as a proxy for cert-has-been-fully-processed
-        // throughout the code.
-        self.effects
-            .insert(transaction_digest, &effects)
-            .map_err(SuiError::from)
     }
 
     /// Helper function for updating the objects in the state
