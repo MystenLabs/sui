@@ -172,7 +172,7 @@ module NFTs::Geniteam {
             };
 
         // Add it to the player's inventory
-        Bag::add(inventory, farm_cosmetic);
+        bag::add(inventory, farm_cosmetic);
     }
 
     /// Create Monster cosmetic owned by player and add to its inventory
@@ -194,7 +194,7 @@ module NFTs::Geniteam {
             };
 
         // Add it to the player's inventory
-        Bag::add(inventory, monster_cosmetic);
+        bag::add(inventory, monster_cosmetic);
     }
 
     /// Update the attributes of a player
@@ -296,10 +296,10 @@ module NFTs::Geniteam {
         let id = TxContext::new_id(ctx);
 
         // Create inventory collection.
-        let inventory = Bag::new(ctx);
+        let inventory = bag::new(ctx);
 
         // Transfer ownership of inventory to player.
-        let (id, child_ref) = Bag::transfer_to_object_id(inventory, id);
+        let (id, child_ref) = bag::transfer_to_object_id(inventory, id);
 
         let player = Player {
             id,

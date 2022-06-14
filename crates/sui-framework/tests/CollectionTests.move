@@ -55,7 +55,7 @@ module sui::CollectionTests {
         TestScenario::next_tx(scenario, &sender);
         {
             Collection::create<Object>(TestScenario::ctx(scenario));
-            Bag::create(TestScenario::ctx(scenario));
+            bag::create(TestScenario::ctx(scenario));
         };
 
         // Add a new object to the Collection.
@@ -76,11 +76,11 @@ module sui::CollectionTests {
             let id = *ID::id(&obj);
 
             let (obj, child_ref) = Collection::remove(&mut collection, obj);
-            Bag::add_child_object(&mut bag, obj, child_ref);
+            bag::add_child_object(&mut bag, obj, child_ref);
 
             assert!(Collection::size(&collection) == 0, 0);
-            assert!(Bag::size(&bag) == 1, 0);
-            assert!(Bag::contains(&bag, &id), 0);
+            assert!(bag::size(&bag) == 1, 0);
+            assert!(bag::contains(&bag, &id), 0);
 
             TestScenario::return_owned(scenario, collection);
             TestScenario::return_owned(scenario, bag);
@@ -94,11 +94,11 @@ module sui::CollectionTests {
             let obj = TestScenario::take_child_object<Bag, Object>(scenario, &bag);
             let id = *ID::id(&obj);
 
-            let obj = Bag::remove(&mut bag, obj);
+            let obj = bag::remove(&mut bag, obj);
             Collection::add(&mut collection, obj);
 
             assert!(Collection::size(&collection) == 1, 0);
-            assert!(Bag::size(&bag) == 0, 0);
+            assert!(bag::size(&bag) == 0, 0);
             assert!(Collection::contains(&collection, &id), 0);
 
             TestScenario::return_owned(scenario, collection);

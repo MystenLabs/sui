@@ -30,8 +30,8 @@ module NFTs::Marketplace {
     /// Create a new shared Marketplace.
     public entry fun create(ctx: &mut TxContext) {
         let id = TxContext::new_id(ctx);
-        let objects = Bag::new(ctx);
-        let (id, objects) = Bag::transfer_to_object_id(objects, id);
+        let objects = bag::new(ctx);
+        let (id, objects) = bag::transfer_to_object_id(objects, id);
         let market_place = Marketplace {
             id,
             objects,
@@ -53,7 +53,7 @@ module NFTs::Marketplace {
             id: TxContext::new_id(ctx),
             owner: TxContext::sender(ctx),
         };
-        Bag::add(objects, listing)
+        bag::add(objects, listing)
     }
 
     /// Remove listing and get an item back. Only owner can do that.
@@ -63,7 +63,7 @@ module NFTs::Marketplace {
         listing: Listing<T, C>,
         ctx: &mut TxContext
     ): T {
-        let listing = Bag::remove(objects, listing);
+        let listing = bag::remove(objects, listing);
         let Listing { id, item, ask: _, owner } = listing;
 
         assert!(TxContext::sender(ctx) == owner, ENotOwner);
@@ -79,7 +79,7 @@ module NFTs::Marketplace {
         listing: Listing<T, C>,
         ctx: &mut TxContext
     ) {
-        Bag::remove_and_take(objects, listing, ctx)
+        bag::remove_and_take(objects, listing, ctx)
     }
 
     /// Purchase an item using a known Listing. Payment is done in Coin<C>.
@@ -90,7 +90,7 @@ module NFTs::Marketplace {
         listing: Listing<T, C>,
         paid: Coin<C>,
     ): T {
-        let listing = Bag::remove(objects, listing);
+        let listing = bag::remove(objects, listing);
         let Listing { id, item, ask, owner } = listing;
 
         assert!(ask == Coin::value(&paid), EAmountIncorrect);
@@ -113,12 +113,12 @@ module NFTs::Marketplace {
 
     /// Check whether an object was listed on a Marketplace.
     public fun contains(objects: &Bag, id: &ID): bool {
-        Bag::contains(objects, id)
+        bag::contains(objects, id)
     }
 
     /// Returns the size of the Marketplace.
     public fun size(objects: &Bag): u64 {
-        Bag::size(objects)
+        bag::size(objects)
     }
 }
 

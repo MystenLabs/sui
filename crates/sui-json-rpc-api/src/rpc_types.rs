@@ -686,7 +686,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .map(|(id, value)| (id.to_string(), value.clone().into()))
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
-        "0x2::UTF8::String" | "0x1::ASCII::String" => {
+        "0x2::utf8::String" | "0x1::ascii::String" => {
             if let SuiMoveValue::Bytearray(bytes) = fields["bytes"].clone() {
                 if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
