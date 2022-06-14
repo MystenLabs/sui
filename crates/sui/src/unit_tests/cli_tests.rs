@@ -18,8 +18,8 @@ use sui_config::{
     Config, NetworkConfig, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
     SUI_GENESIS_FILENAME, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
-use sui_core::gateway_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::get_key_pair,

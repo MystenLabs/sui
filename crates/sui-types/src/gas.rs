@@ -302,7 +302,7 @@ impl<'a> SuiGasStatus<'a> {
 /// 2. If it's enough to pay the flat minimum transaction fee
 /// 3. If it's less than the max gas budget allowed
 /// 4. If the gas_object actually has enough balance to pay for the budget.
-pub fn check_gas_balance(gas_object: &Object, gas_budget: u64) -> SuiResult {
+pub fn check_gas_balance(gas_object: &Object, gas_budget: u64, gas_price: u64) -> SuiResult {
     ok_or_gas_error!(
         gas_object.is_owned(),
         "Gas object must be owned Move object".to_owned()
@@ -320,9 +320,10 @@ pub fn check_gas_balance(gas_object: &Object, gas_budget: u64) -> SuiResult {
     )?;
 
     let balance = get_gas_balance(gas_object)?;
+    let total_amount: u128 = (gas_budget as u128) * (gas_price as u128);
     ok_or_gas_error!(
-        balance >= gas_budget,
-        format!("Gas balance is {balance}, not enough to pay {gas_budget}")
+        (balance as u128) >= total_amount,
+        format!("Gas balance is {balance}, not enough to pay {total_amount} with gas price of {gas_price}")
     )
 }
 

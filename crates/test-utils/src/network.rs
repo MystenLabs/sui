@@ -14,12 +14,11 @@ use sui::{
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::PersistedConfig;
 use sui_config::{Config, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
-use sui_gateway::api::RpcGatewayApiServer;
-use sui_gateway::api::RpcReadApiServer;
-use sui_gateway::api::RpcTransactionBuilderServer;
-use sui_gateway::rpc_gateway::{
-    create_client, GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
-};
+use sui_gateway::create_client;
+use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_json_rpc_api::QuorumDriverApiServer;
+use sui_json_rpc_api::RpcReadApiServer;
+use sui_json_rpc_api::RpcTransactionBuilderServer;
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 const NUM_VALIDAOTR: usize = 4;

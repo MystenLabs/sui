@@ -1,23 +1,41 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 import { AppType } from './AppType';
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
+import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
+import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { API_ENV } from '_app/ApiProvider';
+import type { AppThunkConfig } from '_store/thunk-extras';
 
 type AppState = {
     appType: AppType;
-    apiEnv: API_ENV | null;
+    apiEnv: API_ENV;
+    showHideNetwork: boolean;
 };
 
 const initialState: AppState = {
     appType: AppType.unknown,
     apiEnv: DEFAULT_API_ENV,
+    showHideNetwork: false,
 };
+
+// On network change, set setNewJsonRpcProvider, fetch all owned objects, and fetch all transactions
+// TODO: add clear Object state because edge cases where use state stays in cache
+export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
+    'changeRPCNetwork',
+    (networkName, { extra: { api }, dispatch }) => {
+        dispatch(setApiEnv(networkName));
+        api.setNewJsonRpcProvider(networkName);
+        dispatch(setNetworkSelector(true));
+        dispatch(getTransactionsByAddress());
+        dispatch(fetchAllOwnedObjects());
+    }
+);
 
 const slice = createSlice({
     name: 'app',
@@ -28,10 +46,15 @@ const slice = createSlice({
         setApiEnv: (state, { payload }: PayloadAction<API_ENV>) => {
             state.apiEnv = payload;
         },
+        // TODO: move to a separate slice
+        setNetworkSelector: (state, { payload }: PayloadAction<boolean>) => {
+            state.showHideNetwork = !payload;
+        },
     },
+
     initialState,
 });
 
-export const { initAppType, setApiEnv } = slice.actions;
+export const { initAppType, setApiEnv, setNetworkSelector } = slice.actions;
 
 export default slice.reducer;

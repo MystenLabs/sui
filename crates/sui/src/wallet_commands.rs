@@ -15,16 +15,18 @@ use colored::Colorize;
 use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use serde::Serialize;
 use serde_json::json;
-use sui_core::gateway_types::{
+use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
     SuiParsedObject,
 };
 use tracing::info;
 
 use sui_core::gateway_state::GatewayClient;
-use sui_core::gateway_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{
+    SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects,
+};
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{

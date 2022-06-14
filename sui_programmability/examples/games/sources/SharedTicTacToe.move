@@ -15,7 +15,7 @@
 // As we can see, by using shared object, the implementation is much
 // simpler than the other implementation.
 module Games::SharedTicTacToe {
-    use Std::Vector;
+    use std::vector;
 
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Event;
@@ -62,7 +62,7 @@ module Games::SharedTicTacToe {
     }
 
     /// `x_address` and `o_address` are the account address of the two players.
-    public(script) fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
+    public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = TxContext::new_id(ctx);
@@ -83,13 +83,13 @@ module Games::SharedTicTacToe {
         Transfer::share_object(game);
     }
 
-    public(script) fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
+    public entry fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
         assert!(row < 3 && col < 3, EInvalidLocation);
         assert!(game.game_status == IN_PROGRESS, EGameEnded);
         let addr = get_cur_turn_address(game);
         assert!(addr == TxContext::sender(ctx), EInvalidTurn);
 
-        let cell = Vector::borrow_mut(Vector::borrow_mut(&mut game.gameboard, (row as u64)), (col as u64));
+        let cell = vector::borrow_mut(vector::borrow_mut(&mut game.gameboard, (row as u64)), (col as u64));
         assert!(*cell == MARK_EMPTY, ECellOccupied);
 
         *cell = game.cur_turn % 2;
@@ -107,12 +107,12 @@ module Games::SharedTicTacToe {
         }
     }
 
-    public(script) fun delete_game(game: TicTacToe) {
+    public entry fun delete_game(game: TicTacToe) {
         let TicTacToe { id, gameboard: _, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         ID::delete(id);
     }
 
-    public(script) fun delete_trophy(trophy: Trophy) {
+    public entry fun delete_trophy(trophy: Trophy) {
         let Trophy { id } = trophy;
         ID::delete(id);
     }
@@ -130,7 +130,7 @@ module Games::SharedTicTacToe {
     }
 
     fun get_cell(game: &TicTacToe, row: u64, col: u64): u8 {
-        *Vector::borrow(Vector::borrow(&game.gameboard, row), col)
+        *vector::borrow(vector::borrow(&game.gameboard, row), col)
     }
 
     fun update_winner(game: &mut TicTacToe) {

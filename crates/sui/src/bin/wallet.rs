@@ -33,7 +33,7 @@ const SUI: &str = "   _____       _    _       __      ____     __
 
 #[derive(Parser)]
 #[clap(
-    name = "wallet",
+    name = "sui-cli",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
@@ -138,7 +138,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
             version.push('-');
             version.push_str(git_rev);
         }
-        writeln!(out, "--- sui wallet {version} ---")?;
+        writeln!(out, "--- Sui CLI {version} ---")?;
         writeln!(out)?;
         writeln!(out, "{}", context.config.deref())?;
         writeln!(out, "Welcome to the Sui interactive shell.")?;

@@ -133,6 +133,19 @@ pub fn create_publish_move_package_transaction(gas_object: Object, path: PathBuf
     Transaction::new(data, signature)
 }
 
+pub fn make_transfer_sui_transaction(gas_object: Object, recipient: SuiAddress) -> Transaction {
+    let (sender, keypair) = test_keys().pop().unwrap();
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    Transaction::new(data, signature)
+}
+
 /// Make a transaction calling a specific move module & function.
 pub fn move_transaction(
     gas_object: Object,

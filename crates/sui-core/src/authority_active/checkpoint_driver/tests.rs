@@ -36,7 +36,7 @@ async fn checkpoint_active_flow_happy_path() {
                 clients,
             )
             .unwrap();
-            active_state.spawn_all_active_processes().await
+            active_state.spawn_checkpoint_process().await
         });
     }
 
@@ -49,7 +49,10 @@ async fn checkpoint_active_flow_happy_path() {
                 .expect("All ok.");
 
             // Check whether this is a success?
-            assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+            assert!(matches!(
+                effects.effects.status,
+                ExecutionStatus::Success { .. }
+            ));
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             // Add some delay between transactions
@@ -110,7 +113,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             .unwrap();
             // Spin the gossip service.
             active_state
-                .spawn_active_processes(true, Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
                 .await;
         });
     }
@@ -120,7 +123,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
         while let Some(t) = transactions.pop() {
             // Get a cert
             let new_certificate = sender_aggregator
-                .process_transaction(t.clone(), Duration::from_secs(60))
+                .process_transaction(t.clone())
                 .await
                 .expect("Unexpected crash");
 
@@ -198,7 +201,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             .unwrap();
             // Spin the gossip service.
             active_state
-                .spawn_active_processes(false, Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
                 .await;
         });
     }
@@ -208,7 +211,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
         while let Some(t) = transactions.pop() {
             // Get a cert
             let new_certificate = sender_aggregator
-                .process_transaction(t.clone(), Duration::from_secs(60))
+                .process_transaction(t.clone())
                 .await
                 .expect("Unexpected crash");
 

@@ -125,16 +125,16 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Run Full Node",
+            "url": "/build/fullnode"
+          },
+          {
             "name": "Program Sui Objects",
             "url": "/build/programming-with-objects/index"
           },
           {
             "name": "Learn Sui Tokenomics",
             "url": "/learn/tokenomics/index"
-          },
-          {
-            "name": "Explore Sui DevNet!",
-            "url": "/explore/devnet"
           }
         ]
       },

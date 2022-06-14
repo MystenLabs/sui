@@ -32,6 +32,7 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
@@ -301,6 +302,7 @@ pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
+    pub gas_price: u64,
     pub gas_budget: u64,
 }
 
@@ -317,6 +319,23 @@ where
         TransactionData {
             kind,
             sender,
+            gas_price: 1,
+            gas_payment,
+            gas_budget,
+        }
+    }
+
+    pub fn new_with_gas_price(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_price,
             gas_payment,
             gas_budget,
         }
@@ -1022,13 +1041,6 @@ impl TransactionEffects {
         }
     }
 
-    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
-        UnsignedTransactionEffects {
-            effects: self,
-            auth_signature: EmptySignInfo {},
-        }
-    }
-
     pub fn digest(&self) -> TransactionEffectsDigest {
         TransactionEffectsDigest(sha3_hash(self))
     }
@@ -1095,6 +1107,28 @@ impl PartialEq for SignedTransactionEffects {
     }
 }
 
+pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityQuorumSignInfo>;
+
+impl CertifiedTransactionEffects {
+    pub fn new(
+        epoch: EpochId,
+        effects: TransactionEffects,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> Self {
+        Self {
+            effects,
+            auth_signature: AuthorityQuorumSignInfo { epoch, signatures },
+        }
+    }
+
+    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
+        UnsignedTransactionEffects {
+            effects: self.effects,
+            auth_signature: EmptySignInfo {},
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
@@ -1150,7 +1184,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction::new(transaction),
+            partial: CertifiedTransaction::new(committee.epoch, transaction),
         }
     }
 
@@ -1188,17 +1222,8 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedTransaction {
-    pub fn new(transaction: Transaction) -> CertifiedTransaction {
-        CertifiedTransaction {
-            transaction_digest: transaction.transaction_digest,
-            is_verified: false,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityQuorumSignInfo {
-                epoch: 0,
-                signatures: Vec::new(),
-            },
-        }
+    pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
+        Self::new_with_signatures(epoch, transaction, vec![])
     }
 
     pub fn new_with_signatures(
@@ -1352,4 +1377,25 @@ impl ConsensusTransaction {
             Self::Checkpoint(fragment) => fragment.verify(committee),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionRequestType {
+    ImmediateReturn,
+    WaitForTxCert,
+    WaitForEffectsCert,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ExecuteTransactionRequest {
+    pub transaction: Transaction,
+    pub request_type: ExecuteTransactionRequestType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ExecuteTransactionResponse {
+    ImmediateReturn,
+    TxCert(Box<CertifiedTransaction>),
+    // TODO: Change to CertifiedTransactionEffects eventually.
+    EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }

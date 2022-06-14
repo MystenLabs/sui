@@ -10,7 +10,7 @@ module Basics::Lock {
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
-    use Std::Option::{Self, Option};
+    use std::option::{Self, Option};
 
     /// Lock is empty, nothing to take.
     const ELockIsEmpty: u64 = 0;
@@ -41,13 +41,13 @@ module Basics::Lock {
 
     /// Lock some content inside a shared object. A Key is created and is
     /// sent to the transaction sender.
-    public(script) fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
+    public entry fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
         let id = TxContext::new_id(ctx);
         let for = *ID::inner(&id);
 
         Transfer::share_object(Lock<T> {
             id,
-            locked: Option::some(obj),
+            locked: option::some(obj),
         });
 
         Transfer::transfer(Key<T> {
@@ -58,15 +58,15 @@ module Basics::Lock {
 
     /// Lock something inside a shared object using a Key. Aborts if
     /// lock is not empty or if key doesn't match the lock.
-    public(script) fun lock<T: store + key>(
+    public entry fun lock<T: store + key>(
         obj: T,
         lock: &mut Lock<T>,
         key: &Key<T>,
     ) {
-        assert!(Option::is_none(&lock.locked), ELockIsFull);
+        assert!(option::is_none(&lock.locked), ELockIsFull);
         assert!(&key.for == ID::id(lock), EKeyMismatch);
 
-        Option::fill(&mut lock.locked, obj);
+        option::fill(&mut lock.locked, obj);
     }
 
     /// Unlock the Lock with a Key and access its contents.
@@ -77,10 +77,10 @@ module Basics::Lock {
         lock: &mut Lock<T>,
         key: &Key<T>,
     ): T {
-        assert!(Option::is_some(&lock.locked), ELockIsEmpty);
+        assert!(option::is_some(&lock.locked), ELockIsEmpty);
         assert!(&key.for == ID::id(lock), EKeyMismatch);
 
-        Option::extract(&mut lock.locked)
+        option::extract(&mut lock.locked)
     }
 
     /// Unlock the Lock and transfer its contents to the transaction sender.
@@ -107,7 +107,7 @@ module Basics::LockTest {
     }
 
     #[test]
-    public(script) fun test_lock() {
+    public entry fun test_lock() {
         let user1 = @0x1;
         let user2 = @0x2;
 

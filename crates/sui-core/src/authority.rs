@@ -9,12 +9,12 @@ use crate::{
     epoch::EpochInfoLocals,
     event_handler::EventHandler,
     execution_engine,
-    gateway_types::TransactionEffectsResponse,
     query_helpers::QueryHelpers,
     transaction_input_checker,
 };
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use chrono::prelude::*;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{
@@ -536,6 +536,7 @@ impl AuthorityState {
         digest: &TransactionDigest,
         cert: &CertifiedTransaction,
         effects: &SignedTransactionEffects,
+        timestamp_ms: u64,
     ) -> SuiResult {
         indexes.index_tx(
             cert.sender_address(),
@@ -543,6 +544,7 @@ impl AuthorityState {
             effects.effects.mutated_and_created(),
             seq,
             digest,
+            timestamp_ms,
         )
     }
 
@@ -562,16 +564,22 @@ impl AuthorityState {
             }
         };
 
+        let timestamp_ms = Self::unixtime_now_ms();
+
         // Index tx
         if let Some(indexes) = &self.indexes {
-            if let Err(e) = self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects) {
+            if let Err(e) =
+                self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
+            {
                 warn!(?digest, "Couldn't index tx: {}", e);
             }
         }
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
-            event_handler.process_events(&effects.effects).await;
+            event_handler
+                .process_events(&effects.effects, timestamp_ms)
+                .await;
         }
 
         Ok(())
@@ -618,6 +626,11 @@ impl AuthorityState {
         }
 
         Ok(())
+    }
+
+    pub fn unixtime_now_ms() -> u64 {
+        let ts_ms = Utc::now().timestamp_millis();
+        u64::try_from(ts_ms).expect("Travelling in time machine")
     }
 
     /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
@@ -1087,7 +1100,7 @@ impl AuthorityState {
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         QueryHelpers::get_transaction(&self.database, digest)
     }
 
@@ -1098,6 +1111,13 @@ impl AuthorityState {
                 error: "extended object indexing is not enabled on this server".into(),
             }),
         }
+    }
+
+    pub async fn get_timestamp_ms(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<u64>, anyhow::Error> {
+        Ok(self.get_indexes()?.get_timestamp_ms(digest)?)
     }
 
     pub async fn get_transactions_by_input_object(

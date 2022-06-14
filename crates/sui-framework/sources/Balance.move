@@ -33,9 +33,10 @@ module Sui::Balance {
     }
 
     /// Join two balances together.
-    public fun join<T>(self: &mut Balance<T>, balance: Balance<T>) {
+    public fun join<T>(self: &mut Balance<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
         self.value = self.value + value;
+        self.value
     }
 
     /// Split a `Balance` and take a sub balance from it.

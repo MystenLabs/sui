@@ -31,7 +31,7 @@ module NFTs::DiscountCoupon {
     }
 
     /// Mint then transfer a new `DiscountCoupon` NFT, and top up recipient with some SUI.
-    public(script) fun mint_and_topup(
+    public entry fun mint_and_topup(
         coin: Coin::Coin<SUI>,
         discount: u8,
         expiration: u64,
@@ -50,7 +50,7 @@ module NFTs::DiscountCoupon {
     }
 
     /// Burn DiscountCoupon.
-    public(script) fun burn(nft: DiscountCoupon) {
+    public entry fun burn(nft: DiscountCoupon) {
         let DiscountCoupon { id, issuer: _, discount: _, expiration: _ } = nft;
         ID::delete(id);
     }
@@ -58,7 +58,7 @@ module NFTs::DiscountCoupon {
     /// Transfer DiscountCoupon to issuer only.
     //  TODO: Consider adding more valid recipients.
     //      If we stick with issuer-as-receiver only, then `recipient` input won't be required).
-    public(script) fun transfer(coupon: DiscountCoupon, recipient: address) {
+    public entry fun transfer(coupon: DiscountCoupon, recipient: address) {
         assert!(&coupon.issuer == &recipient, EWrongRecipient);
         Transfer::transfer(coupon, recipient);
     }

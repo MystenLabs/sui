@@ -3,8 +3,8 @@
 
 /// Sui object identifiers
 module Sui::ID {
-    use Std::BCS;
-    use Std::Vector;
+    use std::bcs;
+    use std::vector;
 
     friend Sui::SuiSystem;
     friend Sui::Transfer;
@@ -69,7 +69,7 @@ module Sui::ID {
     /// Create an `ID` from raw bytes.
     /// Aborts with `EBadIDLength` if the length of `bytes` is not `ID_SIZE`
     public fun new_from_bytes(bytes: vector<u8>): ID {
-        if (Vector::length(&bytes) != ID_SIZE) {
+        if (vector::length(&bytes) != ID_SIZE) {
             abort(EBadIDLength)
         };
         ID { bytes: bytes_to_address(bytes) }
@@ -103,7 +103,7 @@ module Sui::ID {
 
     /// Get the raw bytes of `id`
     public fun bytes(id: &ID): vector<u8> {
-        BCS::to_bytes(&id.bytes)
+        bcs::to_bytes(&id.bytes)
     }
 
     /// Get the inner `ID` of `versioned_id`

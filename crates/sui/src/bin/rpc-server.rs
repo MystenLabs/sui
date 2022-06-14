@@ -8,9 +8,11 @@ use std::{
 };
 use sui_config::sui_config_dir;
 use sui_config::SUI_GATEWAY_CONFIG;
-use sui_gateway::bcs_api::BcsApiImpl;
-use sui_gateway::rpc_gateway::{create_client, GatewayReadApiImpl, TransactionBuilderImpl};
-use sui_gateway::{json_rpc::JsonRpcServerBuilder, rpc_gateway::RpcGatewayImpl};
+use sui_gateway::create_client;
+use sui_json_rpc::bcs_api::BcsApiImpl;
+use sui_json_rpc::gateway_api::RpcGatewayImpl;
+use sui_json_rpc::gateway_api::{GatewayReadApiImpl, TransactionBuilderImpl};
+use sui_json_rpc::JsonRpcServerBuilder;
 use tracing::info;
 
 const DEFAULT_RPC_SERVER_PORT: &str = "5001";

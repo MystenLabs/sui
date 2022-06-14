@@ -18,6 +18,8 @@ use tracing::{debug, instrument};
 
 use crate::authority::SuiDataStore;
 
+// TODO: read this from onchain source (e.g. SystemState)
+const STORAGE_GAS_PRICE: u64 = 1;
 pub struct InputObjects {
     objects: Vec<(InputObjectKind, Object)>,
 }
@@ -113,6 +115,7 @@ where
         store,
         transaction.gas_payment_object_ref().0,
         transaction.data.gas_budget,
+        transaction.data.gas_price,
         transaction.data.kind.is_system_tx(),
     )
     .await?;
@@ -139,6 +142,7 @@ async fn check_gas<const A: bool, S>(
     store: &SuiDataStore<A, S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
+    computation_gas_price: u64,
     is_system_tx: bool,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
@@ -151,9 +155,11 @@ where
         let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
             object_id: gas_payment_id,
         })?;
-        gas::check_gas_balance(&gas_object, gas_budget)?;
+        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
+        gas::check_gas_balance(&gas_object, gas_budget, gas_price)?;
         // TODO: Pass in real computation gas unit price and storage gas unit price.
-        let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
+        let gas_status =
+            gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)?;
         Ok(gas_status)
     }
 }

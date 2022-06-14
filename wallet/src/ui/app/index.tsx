@@ -8,6 +8,7 @@ import HomePage from './pages/home';
 import NftsPage from './pages/home/nfts';
 import SettingsPage from './pages/home/settings';
 import TokensPage from './pages/home/tokens';
+import TransactionsPage from './pages/home/transactions';
 import InitializePage from './pages/initialize';
 import BackupPage from './pages/initialize/backup';
 import CreatePage from './pages/initialize/create';
@@ -40,6 +41,7 @@ const App = () => {
                 />
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
+                <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route

@@ -7,6 +7,7 @@ module Sui::SuiSystem {
     use Sui::Delegation::{Self, Delegation};
     use Sui::EpochRewardRecord::{Self, EpochRewardRecord};
     use Sui::ID::{Self, VersionedID};
+    use Sui::LockedCoin::{Self, LockedCoin};
     use Sui::SUI::SUI;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
@@ -81,7 +82,7 @@ module Sui::SuiSystem {
     /// The amount of stake in the `validator` object must meet the requirements.
     // TODO: Does this need to go through a voting process? Any other criteria for
     // someone to become a validator?
-    public(script) fun request_add_validator(
+    public entry fun request_add_validator(
         self: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
         name: vector<u8>,
@@ -114,7 +115,7 @@ module Sui::SuiSystem {
     /// (i.e. sender must match the sui_address in the validator).
     /// At the end of the epoch, the `validator` object will be returned to the sui_address
     /// of the validator.
-    public(script) fun request_remove_validator(
+    public entry fun request_remove_validator(
         self: &mut SuiSystemState,
         ctx: &mut TxContext,
     ) {
@@ -125,7 +126,7 @@ module Sui::SuiSystem {
     }
 
     /// A validator can request adding more stake. This will be processed at the end of epoch.
-    public(script) fun request_add_stake(
+    public entry fun request_add_stake(
         self: &mut SuiSystemState,
         new_stake: Coin<SUI>,
         ctx: &mut TxContext,
@@ -142,7 +143,7 @@ module Sui::SuiSystem {
     /// in the current epoch and hence is not active yet), the stake will be withdrawn immediately
     /// and a coin with the withdraw amount will be sent to the validator's address.
     /// If the sender represents an active validator, the request will be processed at the end of epoch.
-    public(script) fun request_withdraw_stake(
+    public entry fun request_withdraw_stake(
         self: &mut SuiSystemState,
         withdraw_amount: u64,
         ctx: &mut TxContext,
@@ -155,7 +156,7 @@ module Sui::SuiSystem {
         )
     }
 
-    public(script) fun request_add_delegation(
+    public entry fun request_add_delegation(
         self: &mut SuiSystemState,
         delegate_stake: Coin<SUI>,
         validator_address: address,
@@ -169,7 +170,21 @@ module Sui::SuiSystem {
         Delegation::create(starting_epoch, validator_address, delegate_stake, ctx);
     }
 
-    public(script) fun request_remove_delegation(
+    public entry fun request_add_delegation_with_locked_coin(
+        self: &mut SuiSystemState,
+        delegate_stake: LockedCoin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let amount = LockedCoin::value(&delegate_stake);
+        ValidatorSet::request_add_delegation(&mut self.validators, validator_address, amount);
+
+        // Delegation starts from the next epoch.
+        let starting_epoch = self.epoch + 1;
+        Delegation::create_from_locked_coin(starting_epoch, validator_address, delegate_stake, ctx);
+    }
+
+    public entry fun request_remove_delegation(
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
         ctx: &mut TxContext,
@@ -185,7 +200,7 @@ module Sui::SuiSystem {
     // TODO: Once we support passing vector of object references as arguments,
     // we should support passing a vector of &mut EpochRewardRecord,
     // which will allow delegators to claim all their reward in one transaction.
-    public(script) fun claim_delegation_reward(
+    public entry fun claim_delegation_reward(
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
         epoch_reward_record: &mut EpochRewardRecord,
@@ -208,7 +223,7 @@ module Sui::SuiSystem {
     /// 2. Distribute computation charge to validator stake and delegation stake.
     /// 3. Create reward information records for each validator in this epoch.
     /// 4. Update all validators.
-    public(script) fun advance_epoch(
+    public entry fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
         storage_charge: u64,
@@ -249,7 +264,7 @@ module Sui::SuiSystem {
         );
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `computation_reward`. All of these go to the storage fund.
-        Balance::join(&mut self.storage_fund, computation_reward)
+        Balance::join(&mut self.storage_fund, computation_reward);
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,

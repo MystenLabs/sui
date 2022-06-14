@@ -32,7 +32,7 @@ pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 /// - Alternatively, the function can have zero parameters
 ///
 /// For transaction entry points
-/// - The function must have `Visibility::Script`
+/// - The function must have `is_entry` true
 /// - The function must have at least one parameter: &mut TxContext (see `is_tx_context`)
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
@@ -49,11 +49,10 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
             continue;
         }
 
-        // find candidate entry functions and checke their parameters
+        // find candidate entry functions and check their parameters
         // (ignore other functions)
-        if func_def.visibility != Visibility::Script {
-            // it's not an entry function as a non-script function
-            // cannot be called from Sui
+        if !func_def.is_entry {
+            // it's not an entry function
             continue;
         }
         verify_entry_function_impl(module, func_def)

@@ -25,7 +25,7 @@ module NFTs::DiscountCouponTests {
     }
 
     #[test]
-    public(script) fun test_mint_then_transfer() {
+    public entry fun test_mint_then_transfer() {
         let scenario = &mut TestScenario::begin(&ISSUER_ADDRESS);
         {
             init(TestScenario::ctx(scenario));

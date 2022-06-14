@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::Delegation {
-    use Std::Option::{Self, Option};
+    use std::option::{Self, Option};
     use Sui::Balance::Balance;
     use Sui::Coin::{Self, Coin};
     use Sui::ID::{Self, VersionedID};
+    use Sui::LockedCoin::{Self, LockedCoin};
     use Sui::SUI::SUI;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
+    use Sui::EpochTimeLock::EpochTimeLock;
 
     friend Sui::SuiSystem;
 
@@ -35,6 +37,11 @@ module Sui::Delegation {
         /// is the next epoch that the delegator can claim epoch. Whenever the delegator
         /// claims reward for an epoch, this value increments by one.
         next_reward_unclaimed_epoch: u64,
+        /// The epoch until which the delegated coin is locked until. If the delegated stake
+        /// comes from a Coin<SUI>, this field is None. If it comes from a LockedCoin<SUI>, this
+        /// field is not None, and after undelegation the stake will be returned to a LockedCoin<SUI>
+        /// with locked_until_epoch set to this epoch.
+        coin_locked_until_epoch: Option<EpochTimeLock>,
         /// The delegation target validator.
         validator_address: address,
     }
@@ -48,10 +55,31 @@ module Sui::Delegation {
         let delegate_amount = Coin::value(&stake);
         let delegation = Delegation {
             id: TxContext::new_id(ctx),
-            active_delegation: Option::some(Coin::into_balance(stake)),
-            ending_epoch: Option::none(),
+            active_delegation: option::some(Coin::into_balance(stake)),
+            ending_epoch: option::none(),
             delegate_amount,
             next_reward_unclaimed_epoch: starting_epoch,
+            coin_locked_until_epoch: option::none(),
+            validator_address,
+        };
+        Transfer::transfer(delegation, TxContext::sender(ctx))
+    }
+
+    public(friend) fun create_from_locked_coin(
+        starting_epoch: u64,
+        validator_address: address,
+        stake: LockedCoin<SUI>,
+        ctx: &mut TxContext,
+    ) {
+        let delegate_amount = LockedCoin::value(&stake);
+        let (balance, epoch_lock) = LockedCoin::into_balance(stake);
+        let delegation = Delegation {
+            id: TxContext::new_id(ctx),
+            active_delegation: option::some(balance),
+            ending_epoch: option::none(),
+            delegate_amount,
+            next_reward_unclaimed_epoch: starting_epoch,
+            coin_locked_until_epoch: option::some(epoch_lock),
             validator_address,
         };
         Transfer::transfer(delegation, TxContext::sender(ctx))
@@ -66,11 +94,17 @@ module Sui::Delegation {
         assert!(is_active(self), 0);
         assert!(ending_epoch >= self.next_reward_unclaimed_epoch, 0);
 
-        let stake = Option::extract(&mut self.active_delegation);
+        let stake = option::extract(&mut self.active_delegation);
         let sender = TxContext::sender(ctx);
-        Transfer::transfer(Coin::from_balance(stake, ctx), sender);
 
-        self.ending_epoch = Option::some(ending_epoch);
+        if (option::is_none(&self.coin_locked_until_epoch)) {
+            Transfer::transfer(Coin::from_balance(stake, ctx), sender);
+        } else {
+            let locked_until_epoch = option::extract(&mut self.coin_locked_until_epoch);
+            LockedCoin::new_from_balance(stake, locked_until_epoch, sender, ctx);
+        };
+
+        self.ending_epoch = option::some(ending_epoch);
     }
 
     /// Claim delegation reward. Increment next_reward_unclaimed_epoch.
@@ -87,7 +121,7 @@ module Sui::Delegation {
 
     /// Destroy the delegation object. This can be done only when the delegation
     /// is inactive and all reward have been claimed.
-    public(script) fun burn(self: Delegation) {
+    public entry fun burn(self: Delegation) {
         assert!(!is_active(&self), 0);
 
         let Delegation {
@@ -96,15 +130,17 @@ module Sui::Delegation {
             ending_epoch,
             delegate_amount: _,
             next_reward_unclaimed_epoch,
+            coin_locked_until_epoch,
             validator_address: _,
         } = self;
         ID::delete(id);
-        Option::destroy_none(active_delegation);
-        let ending_epoch = *Option::borrow(&ending_epoch);
+        option::destroy_none(active_delegation);
+        option::destroy_none(coin_locked_until_epoch);
+        let ending_epoch = *option::borrow(&ending_epoch);
         assert!(next_reward_unclaimed_epoch == ending_epoch, 0);
     }
 
-    public(script) fun transfer(self: Delegation, recipient: address) {
+    public entry fun transfer(self: Delegation, recipient: address) {
         Transfer::transfer(self, recipient)
     }
 
@@ -120,7 +156,7 @@ module Sui::Delegation {
         } else if (is_active(self)) {
             self.next_reward_unclaimed_epoch <= epoch_to_claim
         } else {
-            let ending_epoch = *Option::borrow(&self.ending_epoch);
+            let ending_epoch = *option::borrow(&self.ending_epoch);
             ending_epoch > epoch_to_claim
         }
     }
@@ -134,6 +170,6 @@ module Sui::Delegation {
     }
 
     fun is_active(self: &Delegation): bool {
-        Option::is_some(&self.active_delegation) && Option::is_none(&self.ending_epoch)
+        option::is_some(&self.active_delegation) && option::is_none(&self.ending_epoch)
     }
 }

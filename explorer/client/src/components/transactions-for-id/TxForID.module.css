@@ -1,0 +1,37 @@
+.txheader {
+    @apply hidden bg-offblack text-offwhite py-2;
+}
+
+.txheader,
+.txrow {
+    @apply md:flex;
+}
+
+.txheader > div,
+.txrow > div {
+    @apply md:ml-[2vw];
+}
+
+.txid {
+    @apply md:w-[35vw];
+}
+
+.txtype {
+    @apply md:w-[10vw];
+}
+
+.txstatus {
+    @apply md:w-[5vw];
+}
+
+.txadd a {
+    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
+}
+
+.failure {
+    @apply text-red-300;
+}
+
+.success {
+    @apply text-green-400;
+}

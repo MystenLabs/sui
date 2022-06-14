@@ -3,7 +3,7 @@
 
 /// An escrow for atomic swap of objects without a trusted third party
 module defi::shared_escrow {
-    use Std::Option::{Self, Option};
+    use std::option::{Self, Option};
 
     use sui::ID::{Self, ID, VersionedID};
     use sui::Transfer;
@@ -41,7 +41,7 @@ module defi::shared_escrow {
     ) {
         let creator = TxContext::sender(ctx);
         let id = TxContext::new_id(ctx);
-        let escrowed = Option::some(escrowed_item);
+        let escrowed = option::some(escrowed_item);
         Transfer::share_object(
             EscrowedObj<T,ExchangeForT> {
                 id, creator, recipient, exchange_for, escrowed
@@ -50,13 +50,13 @@ module defi::shared_escrow {
     }
 
     /// The `recipient` of the escrow can exchange `obj` with the escrowed item
-    public(script) fun exchange<T: key + store, ExchangeForT: key + store>(
+    public entry fun exchange<T: key + store, ExchangeForT: key + store>(
         obj: ExchangeForT,
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &mut TxContext
     ) {
-        assert!(Option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
-        let escrowed_item = Option::extract<T>(&mut escrow.escrowed);
+        assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
+        let escrowed_item = option::extract<T>(&mut escrow.escrowed);
         assert!(&TxContext::sender(ctx) == &escrow.recipient, EWrongRecipient);
         assert!(ID::id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
         // everything matches. do the swap!
@@ -65,12 +65,12 @@ module defi::shared_escrow {
     }
 
     /// The `creator` can cancel the escrow and get back the escrowed item
-    public(script) fun cancel<T: key + store, ExchangeForT: key + store>(
+    public entry fun cancel<T: key + store, ExchangeForT: key + store>(
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &mut TxContext
     ) {
         assert!(&TxContext::sender(ctx) == &escrow.creator, EWrongOwner);
-        assert!(Option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
-        Transfer::transfer(Option::extract<T>(&mut escrow.escrowed), escrow.creator);
+        assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
+        Transfer::transfer(option::extract<T>(&mut escrow.escrowed), escrow.creator);
     }
 }

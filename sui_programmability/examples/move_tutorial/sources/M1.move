@@ -41,7 +41,7 @@ module MyFirstPackage::M1 {
         self.strength
     }
 
-    public(script) fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         use Sui::Transfer;
         use Sui::TxContext;
         // create a sword
@@ -55,7 +55,7 @@ module MyFirstPackage::M1 {
         forge.swords_created = forge.swords_created + 1;
     }
 
-    public(script) fun sword_transfer(sword: Sword, recipient: address) {
+    public entry fun sword_transfer(sword: Sword, recipient: address) {
         use Sui::Transfer;
         // transfer the sword
         Transfer::transfer(sword, recipient);
@@ -87,7 +87,7 @@ module MyFirstPackage::M1 {
     }
 
     #[test]
-    public(script) fun test_sword_transactions() {
+    public entry fun test_sword_transactions() {
         use Sui::TestScenario;
 
         // create test addresses representing users

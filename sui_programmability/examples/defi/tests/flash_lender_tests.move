@@ -10,7 +10,7 @@ module defi::flash_lender_tests {
     use defi::flash_lender::{Self, AdminCap, FlashLender};
 
     #[test]
-    public(script) fun flash_loan_example() {
+    public entry fun flash_loan_example() {
         let admin = @0x1;
         let borrower = @0x2;
 

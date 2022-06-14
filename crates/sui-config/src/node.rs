@@ -36,6 +36,9 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
+    #[serde(default)]
+    pub enable_gossip: bool,
+
     pub genesis: Genesis,
 }
 
