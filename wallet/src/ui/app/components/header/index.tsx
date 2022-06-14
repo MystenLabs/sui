@@ -22,6 +22,13 @@ function Header() {
             <NavLink to="./nfts" className={makeLinkCls} title="NFTs">
                 <BsIcon className={st.icon} icon="collection" />
             </NavLink>
+            <NavLink
+                to="./transactions"
+                className={makeLinkCls}
+                title="Transactions"
+            >
+                <BsIcon className={st.icon} icon="arrow-left-right" />
+            </NavLink>
             <NavLink to="./settings" className={makeLinkCls} title="Settings">
                 <BsIcon className={st.icon} icon="gear" />
             </NavLink>

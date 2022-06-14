@@ -1,0 +1,111 @@
+.network {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    margin-left: 10px;
+    width: 100%;
+    justify-content: space-between;
+    font-family: 'Space Mono', monospace;
+}
+
+.network-container {
+    max-width: 150px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 100px;
+    border: 1px solid #d1d9e1;
+    padding: 8px 16px;
+    width: 100%;
+    background-color: #f8f8f8;
+    cursor: pointer;
+}
+
+.network-icon {
+    font-size: 13px;
+}
+
+.network-name {
+    color: #000;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
+.network-dropdown {
+    color: #000;
+    font-weight: bold;
+}
+
+.network-options {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    background-color: #fff;
+    position: absolute;
+    z-index: 100;
+    min-height: 100px;
+    width: 250px;
+    border-radius: 10px;
+    margin-right: 23px;
+    top: 56px;
+    box-shadow: 1px 1px 3px 0 #d1d9e1;
+    cursor: auto;
+    font-family: 'Space Mono', monospace;
+    padding: 16px 0 0;
+
+    .network-header {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        line-height: 150%;
+        font-size: 1rem;
+        text-align: center;
+        border-bottom: 1px solid #d1d9e1;
+        padding-bottom: 10px;
+    }
+
+    .network-lists {
+        list-style: none;
+        padding: 0;
+        overflow-y: auto;
+        margin-bottom: 0;
+        margin-top: 0;
+        width: 100%;
+    }
+
+    .network-item {
+        list-style: none;
+        padding: 16px;
+        font-size: 16px;
+        font-style: normal;
+        cursor: pointer;
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        line-height: 20px;
+
+        &:hover {
+            background-color: #e6effe;
+        }
+
+        .network-icon {
+            margin-right: 15px;
+        }
+
+        .selected-network {
+            margin-right: 15px;
+            font-weight: bold;
+            font-size: 20px;
+            opacity: 0;
+        }
+
+        .network-active {
+            opacity: 1;
+            color: #6fbcf0;
+        }
+    }
+}
