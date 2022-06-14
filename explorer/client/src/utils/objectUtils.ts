@@ -32,7 +32,7 @@ export function parseObjectType(data: GetObjectDataResponse): string {
 }
 
 export function getOwnerStr(
-    owner: ObjectOwner | { SingleOwner: string } | string
+    owner: ObjectOwner | string
 ): string {
     if (typeof owner === 'object') {
         if ('AddressOwner' in owner) return owner.AddressOwner;
