@@ -48,6 +48,7 @@ mod gateway_types_tests;
 pub struct TransactionEffectsResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,
+    pub timestamp_ms: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]

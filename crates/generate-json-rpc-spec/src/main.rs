@@ -219,6 +219,7 @@ async fn create_transfer_response(
             TransactionEffectsResponse {
                 certificate,
                 effects,
+                timestamp_ms: None,
             },
         ))
     } else {
@@ -375,6 +376,7 @@ async fn get_nft_response(
         let tx = TransactionResponse::EffectResponse(TransactionEffectsResponse {
             certificate,
             effects,
+            timestamp_ms: None,
         });
         Ok((tx, object))
     } else {

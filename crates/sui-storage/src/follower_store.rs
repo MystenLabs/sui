@@ -22,7 +22,7 @@ pub struct FollowerStore {
 
 impl FollowerStore {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, SuiError> {
-        let (options, _) = default_db_options(None);
+        let (options, _) = default_db_options(None, None);
 
         let db = {
             let path = &path;
