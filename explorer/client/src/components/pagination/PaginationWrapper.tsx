@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-import styles from '../ownedobjects/OwnedObjects.module.css';
+import styles from './PaginationWrapper.module.css';
 
 export default function PaginationWrapper({
     results,
