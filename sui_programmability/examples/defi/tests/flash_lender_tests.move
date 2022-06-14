@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module DeFi::FlashLenderTests {
-    use DeFi::FlashLender::{Self, AdminCap, FlashLender};
+module defi::flash_lender_tests {
+    use defi::flash_lender::{Self, AdminCap, FlashLender};
     use sui::coin;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::test_scenario;
 
     #[test]
@@ -18,7 +18,7 @@ module DeFi::FlashLenderTests {
         {
             let ctx = test_scenario::ctx(scenario);
             let coin = coin::mint_for_testing<SUI>(100, ctx);
-            FlashLender::create(coin, 1, ctx);
+            flash_lender::create(coin, 1, ctx);
         };
         // borrower requests and repays a loan of 10 coins + the fee
         test_scenario::next_tx(scenario, &borrower);
@@ -27,14 +27,14 @@ module DeFi::FlashLenderTests {
             let lender = test_scenario::borrow_mut(&mut lender_wrapper);
             let ctx = test_scenario::ctx(scenario);
 
-            let (loan, receipt) = FlashLender::loan(lender, 10, ctx);
+            let (loan, receipt) = flash_lender::loan(lender, 10, ctx);
             // in practice, borrower does something (e.g., arbitrage) to make a profit from the loan.
             // simulate this by min ting the borrower 5 coins.
             let profit = coin::mint_for_testing<SUI>(5, ctx);
             coin::join(&mut profit, loan);
             let to_keep = coin::withdraw(coin::balance_mut(&mut profit), 4, ctx);
             coin::keep(to_keep, ctx);
-            FlashLender::repay(lender, profit, receipt);
+            flash_lender::repay(lender, profit, receipt);
 
             test_scenario::return_shared(scenario, lender_wrapper);
         };
@@ -47,11 +47,11 @@ module DeFi::FlashLenderTests {
             let ctx = test_scenario::ctx(scenario);
 
             // max loan size should have increased because of the fee payment
-            assert!(FlashLender::max_loan(lender) == 101, 0);
+            assert!(flash_lender::max_loan(lender) == 101, 0);
             // withdraw 1 coin from the pool available for lending
-            let coin = FlashLender::withdraw(lender, &admin_cap, 1, ctx);
+            let coin = flash_lender::withdraw(lender, &admin_cap, 1, ctx);
             // max loan size should decrease accordingly
-            assert!(FlashLender::max_loan(lender) == 100, 0);
+            assert!(flash_lender::max_loan(lender) == 100, 0);
             coin::keep(coin, ctx);
 
             test_scenario::return_shared(scenario, lender_wrapper);

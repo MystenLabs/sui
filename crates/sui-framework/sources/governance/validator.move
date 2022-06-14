@@ -8,7 +8,7 @@ module sui::validator {
 
     use sui::balance::{Self, Balance};
     use sui::coin;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::TxContext;
 

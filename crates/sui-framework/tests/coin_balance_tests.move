@@ -6,7 +6,7 @@ module sui::test_coin {
     use sui::test_scenario::{Self, ctx};
     use sui::coin;
     use sui::balance;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::locked_coin::LockedCoin;
     use sui::tx_context;
     use sui::locked_coin;

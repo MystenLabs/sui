@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module NFTs::Chat {
+module nfts::chat {
     use std::ascii::{Self, String};
     use std::option::{Self, Option, some};
     use sui::id::{Self, ID, VersionedID};

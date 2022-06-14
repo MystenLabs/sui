@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module NFTs::SharedAuctionTests {
+module nfts::shared_auction_tests {
     use std::vector;
 
     use sui::coin::{Self, Coin};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::id::VersionedID;
     use sui::test_scenario::Self;
     use sui::tx_context::{Self, TxContext};
 
-    use NFTs::SharedAuction;
-    use NFTs::AuctionLib::Auction;
+    use nfts::shared_auction;
+    use nfts::auction_lib::Auction;
 
 
     const COIN_VALUE: u64 = 100;
@@ -62,7 +62,7 @@ module NFTs::SharedAuctionTests {
                 id: tx_context::new_id(ctx),
                 value: 42,
             };
-            SharedAuction::create_auction(to_sell, ctx);
+            shared_auction::create_auction(to_sell, ctx);
         };
 
         // a transaction by the first bidder to put a bid
@@ -72,7 +72,7 @@ module NFTs::SharedAuctionTests {
             let auction_wrapper = test_scenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = test_scenario::borrow_mut(&mut auction_wrapper);
 
-            SharedAuction::bid(coin, auction, test_scenario::ctx(scenario));
+            shared_auction::bid(coin, auction, test_scenario::ctx(scenario));
 
             test_scenario::return_shared(scenario, auction_wrapper);
         };
@@ -86,7 +86,7 @@ module NFTs::SharedAuctionTests {
             let auction_wrapper = test_scenario::take_shared<Auction<SomeItemToSell>>(scenario);
             let auction = test_scenario::borrow_mut(&mut auction_wrapper);
 
-            SharedAuction::bid(coin, auction, test_scenario::ctx(scenario));
+            shared_auction::bid(coin, auction, test_scenario::ctx(scenario));
 
             test_scenario::return_shared(scenario, auction_wrapper);
         };
@@ -110,7 +110,7 @@ module NFTs::SharedAuctionTests {
 
             // pass auction as mutable reference as its a shared
             // object that cannot be deleted
-            SharedAuction::end_auction(auction, test_scenario::ctx(scenario));
+            shared_auction::end_auction(auction, test_scenario::ctx(scenario));
 
             test_scenario::return_shared(scenario, auction_wrapper);
         };

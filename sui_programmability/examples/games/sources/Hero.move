@@ -8,7 +8,7 @@ module games::hero {
     use sui::event;
     use sui::id::{Self, ID, VersionedID};
     use sui::math;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};

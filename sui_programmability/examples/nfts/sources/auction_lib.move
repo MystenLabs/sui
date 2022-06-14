@@ -5,18 +5,18 @@
 /// English auction (https://en.wikipedia.org/wiki/English_auction),
 /// one using single-owner objects only and the other using shared
 /// objects.
-module NFTs::AuctionLib {
+module nfts::auction_lib {
     use std::option::{Self, Option};
 
     use sui::coin;
     use sui::balance::{Self, Balance};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
-    friend NFTs::Auction;
-    friend NFTs::SharedAuction;
+    friend nfts::auction;
+    friend nfts::shared_auction;
 
     /// Stores information about an auction bid.
     struct BidData has store {

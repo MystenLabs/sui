@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module NFTs::DiscountCoupon {
+module nfts::discount_coupon {
     use sui::coin;
     use sui::id::{Self, VersionedID};
-    use sui::SUI::{Self, SUI};
+    use sui::sui::{Self, SUI};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -46,7 +46,7 @@ module NFTs::DiscountCoupon {
             expiration,
         };
         transfer::transfer(coupon, recipient);
-        SUI::transfer(coin, recipient);
+        sui::transfer(coin, recipient);
     }
 
     /// Burn DiscountCoupon.

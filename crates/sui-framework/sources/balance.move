@@ -80,7 +80,7 @@ module sui::balance {
 #[test_only]
 module sui::balance_tests {
     use sui::balance;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
 
     #[test]
     fun test_balance() {

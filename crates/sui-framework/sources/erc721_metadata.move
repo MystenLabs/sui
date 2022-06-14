@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::ERC721Metadata {
+module sui::erc721_metadata {
     use std::ascii;
     use sui::url::{Self, Url};
     use sui::utf8;

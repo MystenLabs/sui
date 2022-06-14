@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module NFTs::Num {
+module nfts::num {
     use sui::id::{Self, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};

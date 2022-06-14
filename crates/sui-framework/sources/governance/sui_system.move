@@ -8,7 +8,7 @@ module sui::sui_system {
     use sui::epoch_reward_record::{Self, EpochRewardRecord};
     use sui::id::{Self, VersionedID};
     use sui::locked_coin::{Self, LockedCoin};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};

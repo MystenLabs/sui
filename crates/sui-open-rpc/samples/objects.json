@@ -37,7 +37,7 @@
     "details": {
       "data": {
         "dataType": "moveObject",
-        "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+        "type": "0x2::coin::Coin<0x2::sui::SUI>",
         "fields": {
           "balance": 100000,
           "id": {

@@ -5,7 +5,7 @@
 module sui::validator_set_tests {
     use sui::balance;
     use sui::coin;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::validator_set;

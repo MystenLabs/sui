@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module NFTs::DiscountCouponTests {
-    use NFTs::DiscountCoupon::{Self, DiscountCoupon};
+module nfts::discount_coupon_tests {
+    use nfts::discount_coupon::{Self, DiscountCoupon};
     use sui::coin::{Self, Coin};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::test_scenario::Self;
     use sui::tx_context::TxContext;
 
@@ -35,14 +35,14 @@ module NFTs::DiscountCouponTests {
         test_scenario::next_tx(scenario, &ISSUER_ADDRESS);
         {
             let coin = test_scenario::take_owned<Coin<SUI>>(scenario);
-            DiscountCoupon::mint_and_topup(coin, 10, 1648820870, USER1_ADDRESS, test_scenario::ctx(scenario));
+            discount_coupon::mint_and_topup(coin, 10, 1648820870, USER1_ADDRESS, test_scenario::ctx(scenario));
         };
 
         test_scenario::next_tx(scenario, &USER1_ADDRESS);
         {
             assert!(test_scenario::can_take_owned<DiscountCoupon>(scenario), 0);
             let nft_coupon = test_scenario::take_owned<DiscountCoupon>(scenario); // if can remove, object exists
-            assert!(DiscountCoupon::issuer(&nft_coupon) == ISSUER_ADDRESS, 0);
+            assert!(discount_coupon::issuer(&nft_coupon) == ISSUER_ADDRESS, 0);
             test_scenario::return_owned(scenario, nft_coupon);
         }
     }

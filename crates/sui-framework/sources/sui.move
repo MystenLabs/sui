@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Coin<SUI> is the token used to pay for gas in Sui
-module sui::SUI {
+module sui::sui {
     use sui::coin;
     use sui::coin::TreasuryCap;
     use sui::tx_context::TxContext;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// An escrow for atomic swap of objects without a trusted third party
-module DeFi::SharedEscrow {
+module defi::shared_escrow {
     use std::option::{Self, Option};
 
     use sui::id::{Self, ID, VersionedID};

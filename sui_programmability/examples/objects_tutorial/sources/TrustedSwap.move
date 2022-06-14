@@ -5,7 +5,7 @@ module Tutorial::TrustedSwap {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 

@@ -4,7 +4,7 @@
 #[test_only]
 module sui::validator_tests {
     use sui::coin::{Self, Coin};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::test_scenario;
     use sui::validator;
 

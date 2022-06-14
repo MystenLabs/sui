@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// A flash loan that works for any Coin type
-module DeFi::FlashLender {
+module defi::flash_lender {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::id::{Self, ID, VersionedID};

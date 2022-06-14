@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module MyFirstPackage::M1 {
+module my_first_package::m1 {
     use sui::id::VersionedID;
     use sui::tx_context::TxContext;
 

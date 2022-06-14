@@ -7,7 +7,7 @@ module sui::validator_set {
 
     use sui::balance::{Self, Balance};
     use sui::epoch_reward_record;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator, ValidatorMetadata};
 

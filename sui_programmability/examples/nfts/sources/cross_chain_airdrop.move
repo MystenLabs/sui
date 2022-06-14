@@ -5,9 +5,9 @@
 /// only be one copy for each unique pair of contract_address and token_id. We only
 /// support a single chain(Ethereum) right now, but this can be extended to other
 /// chains by adding a chain_id field.
-module NFTs::CrossChainAirdrop {
+module nfts::cross_chain_airdrop {
     use std::vector;
-    use sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
+    use sui::erc721_metadata::{Self, ERC721Metadata, TokenID};
     use sui::id::{VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -75,13 +75,13 @@ module NFTs::CrossChainAirdrop {
         ctx: &mut TxContext,
     ) {
         let contract = get_or_create_contract(oracle, &source_contract_address);
-        let token_id = ERC721Metadata::new_token_id(source_token_id);
+        let token_id = erc721_metadata::new_token_id(source_token_id);
         // NOTE: this is where the globally uniqueness check happens
         assert!(!is_token_claimed(contract, &token_id), ETokenIDClaimed);
         let nft = ERC721 {
             id: tx_context::new_id(ctx),
             source_contract_address: SourceContractAddress { address: source_contract_address },
-            metadata: ERC721Metadata::new(token_id, name, token_uri),
+            metadata: erc721_metadata::new(token_id, name, token_uri),
         };
         vector::push_back(&mut contract.claimed_source_token_ids, token_id);
         transfer::transfer(nft, recipient)

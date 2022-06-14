@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module NFTs::CrossChainAirdropTests {
-    use NFTs::CrossChainAirdrop::{Self, CrossChainAirdropOracle, ERC721};
+module nfts::cross_chain_airdrop_tests {
+    use nfts::cross_chain_airdrop::{Self, CrossChainAirdropOracle, ERC721};
     use sui::id::{VersionedID};
     use sui::test_scenario::{Self, Scenario};
 
@@ -51,7 +51,7 @@ module NFTs::CrossChainAirdropTests {
         let scenario = test_scenario::begin(&ORACLE_ADDRESS);
         {
             let ctx = test_scenario::ctx(&mut scenario);
-            CrossChainAirdrop::test_init(ctx);
+            cross_chain_airdrop::test_init(ctx);
         };
         (scenario, ORACLE_ADDRESS)
     }
@@ -61,7 +61,7 @@ module NFTs::CrossChainAirdropTests {
         {
             let oracle = test_scenario::take_owned<CrossChainAirdropOracle>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            CrossChainAirdrop::claim(
+            cross_chain_airdrop::claim(
                 &mut oracle,
                 RECIPIENT_ADDRESS,
                 SOURCE_CONTRACT_ADDRESS,

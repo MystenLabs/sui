@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// An escrow for atomic swap of objects that trusts a third party for liveness, but not safety.
-module DeFi::Escrow {
+module defi::escrow {
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};

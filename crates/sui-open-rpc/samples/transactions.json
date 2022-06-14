@@ -265,7 +265,7 @@
                 "module": "coin",
                 "function": "split_vec",
                 "typeArguments": [
-                  "0x2::SUI::SUI"
+                  "0x2::sui::SUI"
                 ],
                 "arguments": [
                   "0x2f7f9837d57a46a77f59b3fe387cad5dc426ab4",
@@ -310,7 +310,7 @@
       "updatedCoin": {
         "data": {
           "dataType": "moveObject",
-          "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
             "balance": 95648,
             "id": {
@@ -334,7 +334,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -357,7 +357,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -380,7 +380,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -403,7 +403,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -426,7 +426,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -450,7 +450,7 @@
       "updatedGas": {
         "data": {
           "dataType": "moveObject",
-          "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
             "balance": 98957,
             "id": {
@@ -546,7 +546,7 @@
       "updatedGas": {
         "data": {
           "dataType": "moveObject",
-          "type": "0x2::coin::Coin<0x2::SUI::SUI>",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
             "balance": 98730,
             "id": {

@@ -32,15 +32,15 @@
 ///   - otherwise the funds accumulated in the auction go to the
 ///   original owner and the item goes to the bidder that won the
 ///   auction
-module NFTs::Auction {
+module nfts::auction {
     use sui::coin::{Self, Coin};
     use sui::balance::Balance;
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
-    use NFTs::AuctionLib::{Self, Auction};
+    use nfts::auction_lib::{Self, Auction};
 
     // Error codes.
 
@@ -68,8 +68,8 @@ module NFTs::Auction {
     public fun create_auction<T: key + store>(
         to_sell: T, id: VersionedID, auctioneer: address, ctx: &mut TxContext
     ) {
-        let auction = AuctionLib::create_auction(id, to_sell, ctx);
-        AuctionLib::transfer(auction, auctioneer);
+        let auction = auction_lib::create_auction(id, to_sell, ctx);
+        auction_lib::transfer(auction, auctioneer);
     }
 
     /// Creates a bid a and send it to the auctioneer along with the
@@ -94,8 +94,8 @@ module NFTs::Auction {
         auction: &mut Auction<T>, bid: Bid, ctx: &mut TxContext
     ) {
         let Bid { id, bidder, auction_id, bid: balance } = bid;
-        assert!(AuctionLib::auction_id(auction) == &auction_id, EWrongAuction);
-        AuctionLib::update_auction(auction, bidder, balance, ctx);
+        assert!(auction_lib::auction_id(auction) == &auction_id, EWrongAuction);
+        auction_lib::update_auction(auction, bidder, balance, ctx);
 
         id::delete(id);
     }
@@ -106,6 +106,6 @@ module NFTs::Auction {
     public entry fun end_auction<T: key + store>(
         auction: Auction<T>, ctx: &mut TxContext
     ) {
-        AuctionLib::end_and_destroy_auction(auction, ctx);
+        auction_lib::end_and_destroy_auction(auction, ctx);
     }
 }

@@ -515,7 +515,7 @@ This should give you output similar to the following:
 ID: 0x124bbde643189b573c98d05c092f4927225421d7
 Version: 1
 Owner: Account Address ( 0x62cd5bc220b28a34265bcb24995fb45a51d39832 )
-Type: 0x2::coin::Coin<0x2::SUI::SUI>
+Type: 0x2::coin::Coin<0x2::sui::SUI>
 ```
 
 The result shows some basic information about the object, the owner,
@@ -535,7 +535,7 @@ Here is example `json` output:
         "fields": {
           "value": 99126
         },
-        "type": "0x2::balance::Balance<0x2::SUI::SUI>"
+        "type": "0x2::balance::Balance<0x2::sui::SUI>"
       },
       "id": {
         "fields": {
@@ -555,7 +555,7 @@ Here is example `json` output:
         "type": "0x2::id::VersionedID"
       }
     },
-    "type": "0x2::coin::Coin<0x2::SUI::SUI>"
+    "type": "0x2::coin::Coin<0x2::sui::SUI>"
   },
   "owner": {
     "AddressOwner": "0x62cd5bc220b28a34265bcb24995fb45a51d39832"
@@ -749,7 +749,7 @@ Module : Coin
 Function : join
 Object Arguments : [(0x149a3493c97fafc696526052fe08e77043d4be0b, SequenceNumber(0), o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5), (1B19F74AD77A95D7562432F6991AC9EC1EA2C57C, SequenceNumber(0), o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352)]
 Pure Arguments : []
-Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("SUI"), name: Identifier("SUI"), type_params: [] })]
+Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })]
 
 ----- Merge Coin Results ----
 Updated Coin : Coin { id: 0x149a3493c97fafc696526052fe08e77043d4be0b, value: 200000 }
@@ -818,7 +818,7 @@ Module : Coin
 Function : split_vec
 Object Arguments : [(0x13347bd461e8a2b9ee5de7f6131063a3050a45c4, SequenceNumber(0), o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1)]
 Pure Arguments : [[3, 232, 3, 0, 0, 0, 0, 0, 0, 136, 19, 0, 0, 0, 0, 0, 0, 184, 11, 0, 0, 0, 0, 0, 0]]
-Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("SUI"), name: Identifier("SUI"), type_params: [] })]
+Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })]
 
 ----- Split Coin Results ----
 Updated Coin : Coin { id: 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4, value: 91000 }
@@ -884,10 +884,10 @@ but for the sake of this exercise, let's choose the last one on the
 list.
 
 We will perform the transfer by calling the `transfer` function from
-the SUI module using the following Sui Wallet command:
+the sui module using the following Sui Wallet command:
 
 ```shell
-$ wallet call --function transfer --module SUI --package 0x2 --args 0x5044DC15D3C71D500116EB026E8B70D0A180F3AC 0xF456EBEF195E4A231488DF56B762AC90695BE2DD --gas-budget 1000
+$ wallet call --function transfer --module sui --package 0x2 --args 0x5044DC15D3C71D500116EB026E8B70D0A180F3AC 0xF456EBEF195E4A231488DF56B762AC90695BE2DD --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
@@ -926,7 +926,7 @@ Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b
 Transaction Kind : Call
 Gas Budget : 1000
 Package ID : 0x2
-Module : SUI
+Module : sui
 Function : transfer
 Object Arguments : [(0x5044dc15d3c71d500116eb026e8b70d0a180f3ac, SequenceNumber(0), o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1)]
 Pure Arguments : [[244, 86, 235, 239, 25, 94, 74, 35, 20, 136, 223, 86, 183, 98, 172, 144, 105, 91, 226, 221]]
@@ -972,7 +972,7 @@ Owner: AddressOwner(k#f456ebef195e4a231488df56b762ac90695be2dd)
 Version: 1
 ID: 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac
 Readonly: false
-Type: 0x2::coin::Coin<0x2::SUI::SUI>
+Type: 0x2::coin::Coin<0x2::sui::SUI>
 ```
 
 ## Publish packages

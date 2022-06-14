@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module DeFi::SharedEscrowTests {
+module defi::shared_escrow_tests {
     use sui::id::{Self, VersionedID};
     use sui::test_scenario::{Self, Scenario};
     use sui::tx_context::{Self};
 
-    use DeFi::SharedEscrow::{Self, EscrowedObj};
+    use defi::shared_escrow::{Self, EscrowedObj};
 
     const ALICE_ADDRESS: address = @0xACE;
     const BOB_ADDRESS: address = @0xACEB;
@@ -121,7 +121,7 @@ module DeFi::SharedEscrowTests {
             let escrow_wrapper = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
             let escrow = test_scenario::borrow_mut(&mut escrow_wrapper);
             let ctx = test_scenario::ctx(scenario);
-            SharedEscrow::cancel(escrow, ctx);
+            shared_escrow::cancel(escrow, ctx);
             test_scenario::return_shared(scenario, escrow_wrapper);
         };
     }
@@ -135,7 +135,7 @@ module DeFi::SharedEscrowTests {
                 id: item_b_verioned_id
             };
             let ctx = test_scenario::ctx(scenario);
-            SharedEscrow::exchange(item_b, escrow, ctx);
+            shared_escrow::exchange(item_b, escrow, ctx);
             test_scenario::return_shared(scenario, escrow_wrapper);
         };
     }
@@ -161,7 +161,7 @@ module DeFi::SharedEscrowTests {
             let escrowed = ItemA {
                 id: item_a_versioned_id
             };
-            SharedEscrow::create<ItemA, ItemB>(
+            shared_escrow::create<ItemA, ItemB>(
                 bob,
                 item_b_id,
                 escrowed,

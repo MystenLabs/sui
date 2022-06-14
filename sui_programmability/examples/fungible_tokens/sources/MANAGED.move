@@ -4,7 +4,7 @@
 /// Example coin with a trusted manager responsible for minting/burning (e.g., a stablecoin)
 /// By convention, modules defining custom coin types use upper case names, in contrast to
 /// ordinary modules, which use camel case.
-module FungibleTokens::MANAGED {
+module fungible_tokens::managed {
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};

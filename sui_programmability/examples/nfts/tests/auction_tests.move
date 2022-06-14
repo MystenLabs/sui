@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module NFTs::AuctionTests {
+module nfts::auction_tests {
     use std::vector;
 
     use sui::coin::{Self, Coin};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::id::{Self, VersionedID};
     use sui::test_scenario::Self;
     use sui::tx_context::{Self, TxContext};
 
-    use NFTs::Auction::{Self, Bid};
-    use NFTs::AuctionLib::Auction;
+    use nfts::auction::{Self, Bid};
+    use nfts::auction_lib::Auction;
 
     // Error codes.
     const EWRONG_ITEM_VALUE: u64 = 1;
@@ -66,14 +66,14 @@ module NFTs::AuctionTests {
         // borrowed and could not be passed argument to a function
         // consuming it
         let auction_id = *id::inner(&id);
-        Auction::create_auction(to_sell, id, auctioneer, ctx);
+        auction::create_auction(to_sell, id, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid
         test_scenario::next_tx(scenario, &bidder1);
         {
             let coin = test_scenario::take_owned<Coin<SUI>>(scenario);
 
-            Auction::bid(coin, auction_id, auctioneer, test_scenario::ctx(scenario));
+            auction::bid(coin, auction_id, auctioneer, test_scenario::ctx(scenario));
         };
 
         // a transaction by the auctioneer to update state of the auction
@@ -82,7 +82,7 @@ module NFTs::AuctionTests {
             let auction = test_scenario::take_owned<Auction<SomeItemToSell>>(scenario);
 
             let bid = test_scenario::take_owned<Bid>(scenario);
-            Auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));
+            auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));
 
             test_scenario::return_owned(scenario, auction);
         };
@@ -93,7 +93,7 @@ module NFTs::AuctionTests {
         {
             let coin = test_scenario::take_owned<Coin<SUI>>(scenario);
 
-            Auction::bid(coin, auction_id, auctioneer, test_scenario::ctx(scenario));
+            auction::bid(coin, auction_id, auctioneer, test_scenario::ctx(scenario));
         };
 
         // a transaction by the auctioneer to update state of the auction
@@ -102,7 +102,7 @@ module NFTs::AuctionTests {
             let auction = test_scenario::take_owned<Auction<SomeItemToSell>>(scenario);
 
             let bid = test_scenario::take_owned<Bid>(scenario);
-            Auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));
+            auction::update_auction(&mut auction, bid, test_scenario::ctx(scenario));
 
             test_scenario::return_owned(scenario, auction);
         };
@@ -112,7 +112,7 @@ module NFTs::AuctionTests {
         {
             let auction = test_scenario::take_owned<Auction<SomeItemToSell>>(scenario);
 
-            Auction::end_auction(auction, test_scenario::ctx(scenario));
+            auction::end_auction(auction, test_scenario::ctx(scenario));
         };
 
         // a transaction to check if the first bidder won (as the

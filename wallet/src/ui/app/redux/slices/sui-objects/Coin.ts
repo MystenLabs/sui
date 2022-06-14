@@ -21,7 +21,7 @@ const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 1000;
 export const DEFAULT_GAS_BUDGET_FOR_MERGE = 500;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
-export const GAS_TYPE_ARG = '0x2::SUI::SUI';
+export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
 
 // TODO use sdk

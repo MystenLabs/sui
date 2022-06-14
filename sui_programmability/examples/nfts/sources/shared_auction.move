@@ -25,12 +25,12 @@
 ///   - otherwise the funds accumulated in the auction go to the owner
 ///   and the item goes to the bidder that won the auction
 
-module NFTs::SharedAuction {
+module nfts::shared_auction {
     use sui::coin::{Self, Coin};
-    use sui::SUI::SUI;
+    use sui::sui::SUI;
     use sui::tx_context::{Self,TxContext};
 
-    use NFTs::AuctionLib::{Self, Auction};
+    use nfts::auction_lib::{Self, Auction};
 
     // Error codes.
 
@@ -42,8 +42,8 @@ module NFTs::SharedAuction {
     /// Creates an auction. This is executed by the owner of the asset
     /// to be auctioned.
     public entry fun create_auction<T: key + store >(to_sell: T, ctx: &mut TxContext) {
-        let auction = AuctionLib::create_auction(tx_context::new_id(ctx), to_sell, ctx);
-        AuctionLib::share_object(auction);
+        let auction = auction_lib::create_auction(tx_context::new_id(ctx), to_sell, ctx);
+        auction_lib::share_object(auction);
     }
 
     /// Sends a bid to the auction. The result is either successful
@@ -53,7 +53,7 @@ module NFTs::SharedAuction {
     public entry fun bid<T: key + store>(
         coin: Coin<SUI>, auction: &mut Auction<T>, ctx: &mut TxContext
     ) {
-        AuctionLib::update_auction(
+        auction_lib::update_auction(
             auction,
             tx_context::sender(ctx),
             coin::into_balance(coin),
@@ -68,9 +68,9 @@ module NFTs::SharedAuction {
     public entry fun end_auction<T: key + store>(
         auction: &mut Auction<T>, ctx: &mut TxContext
     ) {
-        let owner = AuctionLib::auction_owner(auction);
+        let owner = auction_lib::auction_owner(auction);
         assert!(tx_context::sender(ctx) == owner, EWrongOwner);
-        AuctionLib::end_shared_auction(auction, ctx);
+        auction_lib::end_shared_auction(auction, ctx);
     }
 
 }
