@@ -559,10 +559,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             std::iter::once((transaction_digest, certificate)),
         )?;
 
-        // Cleanup the lock of the shared objects.
-        let write_batch =
-            self.remove_shared_objects_locks(write_batch, transaction_digest, certificate)?;
-
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
         let res = self
             .batch_update_objects(
@@ -578,6 +574,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
         self.effects.insert(transaction_digest, effects)?;
+
+        // Cleanup the lock of the shared objects. This must be done after we write effects, as
+        // effects_exists is used as the guard to avoid re-locking objects for a previously
+        // executed tx.
+        self.remove_shared_objects_locks(transaction_digest, certificate)?;
 
         Ok(res)
     }
@@ -861,10 +862,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// Remove the shared objects locks.
     pub fn remove_shared_objects_locks(
         &self,
-        mut write_batch: DBBatch,
         transaction_digest: &TransactionDigest,
         transaction: &CertifiedTransaction,
-    ) -> SuiResult<DBBatch> {
+    ) -> SuiResult {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
         for object_id in transaction.shared_input_objects() {
@@ -873,9 +873,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 schedule_to_delete.push(*object_id);
             }
         }
+        let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
         write_batch = write_batch.delete_batch(&self.schedule, schedule_to_delete)?;
-        Ok(write_batch)
+        write_batch.write()?;
+        Ok(())
     }
 
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
