@@ -60,7 +60,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, warn};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -1345,10 +1345,14 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        let update_type = UpdateType::Transaction(seq, signed_effects.effects.digest());
-
         self.database
-            .update_state(temporary_store, certificate, signed_effects, update_type)
+            .update_state(
+                temporary_store,
+                certificate,
+                seq,
+                signed_effects,
+                &signed_effects.effects.digest(),
+            )
             .await
 
         // implicitly we drop the ticket here and that notifies the batch manager
