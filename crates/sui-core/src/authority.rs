@@ -656,7 +656,7 @@ impl AuthorityState {
         // If we already assigned locks to this transaction, we can try to execute it immediately.
         // This can happen to transaction previously submitted to consensus that failed execution
         // due to missing dependencies.
-        if self.shared_locks_exist(&certificate).await? {
+        if self.transaction_shared_locks_exist(&certificate).await? {
             // Attempt to execute the transaction. This will only succeed if the authority
             // already executed all its dependencies and if the locks are correctly attributed to
             // the transaction (ie. this transaction is the next to be executed).
@@ -1226,7 +1226,10 @@ impl AuthorityState {
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.
-    async fn shared_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+    async fn transaction_shared_locks_exist(
+        &self,
+        certificate: &CertifiedTransaction,
+    ) -> SuiResult<bool> {
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
         let shared_locks = self.database.sequenced(digest, shared_inputs)?;
@@ -1303,6 +1306,9 @@ impl ExecutionState for AuthorityState {
                     SuiError::NotASharedObjectTransaction
                 );
 
+                // Check if we already assigned locks to the shared objects.
+                let shared_locks = self.transaction_shared_locks_exist(&certificate).await?;
+
                 // If we already executed this transaction, return the signed effects.
                 let digest = certificate.digest();
                 if self.database.effects_exists(digest)? {
@@ -1312,7 +1318,7 @@ impl ExecutionState for AuthorityState {
                 }
 
                 // If we didn't already assigned shared-locks to this transaction, we do it now.
-                if !self.shared_locks_exist(&certificate).await? {
+                if !shared_locks {
                     // Check the certificate. Remember that Byzantine authorities may input anything into
                     // consensus.
                     certificate.verify(&self.committee.load())?;
