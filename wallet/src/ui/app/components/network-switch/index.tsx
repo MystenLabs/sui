@@ -36,19 +36,19 @@ const Network = () => {
     useOnClickOutside(ref, clickOutsidehandler);
 
     return (
-        <div className={st['network-container']} ref={ref}>
+        <div
+            className={st['network-container']}
+            ref={ref}
+            onClick={openNetworkSelector}
+        >
             {selectedApiEnv ? (
-                <div
-                    className={st.network}
-                    style={netColor}
-                    onClick={openNetworkSelector}
-                >
+                <div className={st.network} style={netColor}>
                     <BsIcon icon="circle-fill" className={st['network-icon']} />
                     <span className={st['network-name']}>
                         {API_ENV_TO_INFO[selectedApiEnv].name}
                     </span>
                     <BsIcon
-                        icon="chevron-down"
+                        icon={showNetworkSelect ? 'chevron-up' : 'chevron-down'}
                         className={cl(
                             st['network-icon'],
                             st['network-dropdown']

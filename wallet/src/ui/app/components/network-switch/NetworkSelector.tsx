@@ -31,13 +31,15 @@ const NetworkSelector = () => {
         []
     );
 
+    // TODO move the dispatch to combinereducer
     const changeNetwork = useCallback(
-        (networkName: string) => () => {
+        (e: React.MouseEvent<HTMLLIElement>) => {
+            const networkName = e.currentTarget.dataset.network;
             const apiEnv = API_ENV[networkName as keyof typeof API_ENV];
             dispatch(setNetworkSelector(true));
             dispatch(setApiEnv(apiEnv));
             dispatch(changeRPCNetwork());
-            dispatch(getTransactionsByAddress()).unwrap();
+            dispatch(getTransactionsByAddress());
         },
         [dispatch]
     );
@@ -46,11 +48,12 @@ const NetworkSelector = () => {
         <div className={st['network-options']}>
             <div className={st['network-header']}>RPC NETWORK</div>
             <ul className={st['network-lists']}>
-                {netWorks.map((apiEnv, index) => (
+                {netWorks.map((apiEnv) => (
                     <li
                         className={st['network-item']}
-                        key={`networkid-${index}`}
-                        onClick={changeNetwork(apiEnv.networkName)}
+                        key={apiEnv.networkName}
+                        data-network={apiEnv.networkName}
+                        onClick={changeNetwork}
                     >
                         <BsIcon
                             icon="check2"
@@ -69,15 +72,6 @@ const NetworkSelector = () => {
                         {apiEnv.name}
                     </li>
                 ))}
-
-                <li className={st['network-item']}>
-                    <BsIcon
-                        icon="check2"
-                        className={cl(st['selected-network'])}
-                    />
-                    <BsIcon icon="circle-fill" className={st['network-icon']} />
-                    Custom
-                </li>
             </ul>
         </div>
     );
