@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::tx_contextTests {
+module sui::tx_context_tests {
     use sui::ID;
     use sui::tx_context;
 

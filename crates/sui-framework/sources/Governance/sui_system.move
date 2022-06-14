@@ -1,20 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::SuiSystem {
+module sui::sui_system {
     use sui::balance::{Self, Balance};
     use sui::Coin::{Self, Coin, TreasuryCap};
-    use sui::Delegation::{Self, Delegation};
-    use sui::EpochRewardRecord::{Self, EpochRewardRecord};
+    use sui::delegation::{Self, Delegation};
+    use sui::epoch_reward_record::{Self, EpochRewardRecord};
     use sui::ID::{Self, VersionedID};
     use sui::LockedCoin::{Self, LockedCoin};
     use sui::SUI::SUI;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::Validator::{Self, Validator};
-    use sui::ValidatorSet::{Self, ValidatorSet};
+    use sui::validator::{Self, Validator};
+    use sui::validator_set::{Self, ValidatorSet};
 
-    friend sui::Genesis;
+    friend sui::genesis;
 
     /// A list of system config parameters.
     // TDOO: We will likely add more, a few potential ones:
@@ -63,7 +63,7 @@ module sui::SuiSystem {
             // Use a hardcoded ID.
             id: ID::get_sui_system_state_object_id(),
             epoch: 0,
-            validators: ValidatorSet::new(validators),
+            validators: validator_set::new(validators),
             treasury_cap,
             storage_fund,
             parameters: SystemParameters {
@@ -91,7 +91,7 @@ module sui::SuiSystem {
         ctx: &mut TxContext,
     ) {
         assert!(
-            ValidatorSet::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
+            validator_set::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
             0
         );
         let stake_amount = Coin::value(&stake);
@@ -99,7 +99,7 @@ module sui::SuiSystem {
             stake_amount >= self.parameters.min_validator_stake,
             0
         );
-        let validator = Validator::new(
+        let validator = validator::new(
             tx_context::sender(ctx),
             pubkey_bytes,
             name,
@@ -107,7 +107,7 @@ module sui::SuiSystem {
             Coin::into_balance(stake)
         );
 
-        ValidatorSet::request_add_validator(&mut self.validators, validator);
+        validator_set::request_add_validator(&mut self.validators, validator);
     }
 
     /// A validator can call this function to request a removal in the next epoch.
@@ -119,7 +119,7 @@ module sui::SuiSystem {
         self: &mut SuiSystemState,
         ctx: &mut TxContext,
     ) {
-        ValidatorSet::request_remove_validator(
+        validator_set::request_remove_validator(
             &mut self.validators,
             ctx,
         )
@@ -131,7 +131,7 @@ module sui::SuiSystem {
         new_stake: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
-        ValidatorSet::request_add_stake(
+        validator_set::request_add_stake(
             &mut self.validators,
             Coin::into_balance(new_stake),
             ctx,
@@ -148,7 +148,7 @@ module sui::SuiSystem {
         withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
-        ValidatorSet::request_withdraw_stake(
+        validator_set::request_withdraw_stake(
             &mut self.validators,
             withdraw_amount,
             self.parameters.min_validator_stake,
@@ -163,11 +163,11 @@ module sui::SuiSystem {
         ctx: &mut TxContext,
     ) {
         let amount = Coin::value(&delegate_stake);
-        ValidatorSet::request_add_delegation(&mut self.validators, validator_address, amount);
+        validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
 
         // Delegation starts from the next epoch.
         let starting_epoch = self.epoch + 1;
-        Delegation::create(starting_epoch, validator_address, delegate_stake, ctx);
+        delegation::create(starting_epoch, validator_address, delegate_stake, ctx);
     }
 
     public entry fun request_add_delegation_with_locked_coin(
@@ -177,11 +177,11 @@ module sui::SuiSystem {
         ctx: &mut TxContext,
     ) {
         let amount = LockedCoin::value(&delegate_stake);
-        ValidatorSet::request_add_delegation(&mut self.validators, validator_address, amount);
+        validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
 
         // Delegation starts from the next epoch.
         let starting_epoch = self.epoch + 1;
-        Delegation::create_from_locked_coin(starting_epoch, validator_address, delegate_stake, ctx);
+        delegation::create_from_locked_coin(starting_epoch, validator_address, delegate_stake, ctx);
     }
 
     public entry fun request_remove_delegation(
@@ -189,12 +189,12 @@ module sui::SuiSystem {
         delegation: &mut Delegation,
         ctx: &mut TxContext,
     ) {
-        ValidatorSet::request_remove_delegation(
+        validator_set::request_remove_delegation(
             &mut self.validators,
-            Delegation::validator(delegation),
-            Delegation::delegate_amount(delegation),
+            delegation::validator(delegation),
+            delegation::delegate_amount(delegation),
         );
-        Delegation::undelegate(delegation, self.epoch, ctx)
+        delegation::undelegate(delegation, self.epoch, ctx)
     }
 
     // TODO: Once we support passing vector of object references as arguments,
@@ -206,15 +206,15 @@ module sui::SuiSystem {
         epoch_reward_record: &mut EpochRewardRecord,
         ctx: &mut TxContext,
     ) {
-        let epoch = EpochRewardRecord::epoch(epoch_reward_record);
-        let validator = EpochRewardRecord::validator(epoch_reward_record);
-        assert!(Delegation::can_claim_reward(delegation, epoch, validator), 0);
-        let reward_amount = EpochRewardRecord::claim_reward(
+        let epoch = epoch_reward_record::epoch(epoch_reward_record);
+        let validator = epoch_reward_record::validator(epoch_reward_record);
+        assert!(delegation::can_claim_reward(delegation, epoch, validator), 0);
+        let reward_amount = epoch_reward_record::claim_reward(
             epoch_reward_record,
-            Delegation::delegate_amount(delegation),
+            delegation::delegate_amount(delegation),
         );
         let reward = balance::split(&mut self.delegation_reward, reward_amount);
-        Delegation::claim_reward(delegation, reward, ctx);
+        delegation::claim_reward(delegation, reward, ctx);
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
@@ -236,8 +236,8 @@ module sui::SuiSystem {
         let storage_reward = balance::create_with_value(storage_charge);
         let computation_reward = balance::create_with_value(computation_charge);
 
-        let delegation_stake = ValidatorSet::delegation_stake(&self.validators);
-        let validator_stake = ValidatorSet::validator_stake(&self.validators);
+        let delegation_stake = validator_set::delegation_stake(&self.validators);
+        let validator_stake = validator_set::validator_stake(&self.validators);
         let storage_fund = balance::value(&self.storage_fund);
         let total_stake = delegation_stake + validator_stake + storage_fund;
 
@@ -246,7 +246,7 @@ module sui::SuiSystem {
         balance::join(&mut self.storage_fund, storage_reward);
         balance::join(&mut self.delegation_reward, delegator_reward);
 
-        ValidatorSet::create_epoch_records(
+        validator_set::create_epoch_records(
             &self.validators,
             self.epoch,
             computation_charge,
@@ -257,7 +257,7 @@ module sui::SuiSystem {
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
         assert!(new_epoch == self.epoch, 0);
-        ValidatorSet::advance_epoch(
+        validator_set::advance_epoch(
             &mut self.validators,
             &mut computation_reward,
             ctx,

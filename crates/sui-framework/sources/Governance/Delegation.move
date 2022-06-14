@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::Delegation {
+module sui::delegation {
     use std::option::{Self, Option};
     use sui::balance::Balance;
     use sui::Coin::{Self, Coin};
@@ -12,7 +12,7 @@ module sui::Delegation {
     use sui::tx_context::{Self, TxContext};
     use sui::EpochTimeLock::EpochTimeLock;
 
-    friend sui::SuiSystem;
+    friend sui::sui_system;
 
     /// A custodial delegation object. When the delegation is active, the delegation
     /// object holds the delegated stake coin. It also contains the delegation

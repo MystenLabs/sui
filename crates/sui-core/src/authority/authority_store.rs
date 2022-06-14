@@ -1267,7 +1267,7 @@ pub async fn generate_genesis_system_object<
     adapter::execute(
         move_vm,
         &mut temporary_store,
-        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("Genesis").to_owned()),
+        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),
         &ident_str!("create").to_owned(),
         vec![],
         vec![

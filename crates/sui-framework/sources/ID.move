@@ -6,7 +6,7 @@ module sui::ID {
     use std::bcs;
     use std::vector;
 
-    friend sui::SuiSystem;
+    friend sui::sui_system;
     friend sui::Transfer;
     friend sui::tx_context;
 

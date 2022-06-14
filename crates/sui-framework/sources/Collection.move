@@ -11,7 +11,7 @@
 /// Collection allows us to own a list of same-typed objects, but still able to
 /// access and operate on each individual object.
 /// In contrast to `Bag`, `Collection` requires all objects have the same type.
-module sui::Collection {
+module sui::collection {
     use std::errors;
     use std::option::{Self, Option};
     use std::vector::Self;

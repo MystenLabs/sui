@@ -1,14 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::Genesis {
+module sui::genesis {
     use std::vector;
 
     use sui::Coin;
     use sui::SUI;
-    use sui::SuiSystem;
+    use sui::sui_system;
     use sui::tx_context::TxContext;
-    use sui::Validator;
+    use sui::validator;
 
     /// The initial amount of SUI locked in the storage fund.
     /// 10^14, an arbitrary number.
@@ -49,7 +49,7 @@ module sui::Genesis {
             let name = *vector::borrow(&validator_names, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
-            vector::push_back(&mut validators, Validator::new(
+            vector::push_back(&mut validators, validator::new(
                 sui_address,
                 pubkey,
                 name,
@@ -58,7 +58,7 @@ module sui::Genesis {
             ));
             i = i + 1;
         };
-        SuiSystem::create(
+        sui_system::create(
             validators,
             treasury_cap,
             storage_fund,

@@ -1,13 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::EpochRewardRecord {
+module sui::epoch_reward_record {
     use sui::ID::VersionedID;
     use sui::Transfer;
     use sui::tx_context::{Self, TxContext};
 
-    friend sui::SuiSystem;
-    friend sui::ValidatorSet;
+    friend sui::sui_system;
+    friend sui::validator_set;
 
     /// EpochRewardRecord is an immutable record created per epoch per active validator.
     /// Sufficient information is saved in the record so that delegators can claim
@@ -56,6 +56,4 @@ module sui::EpochRewardRecord {
     public fun validator(self: &EpochRewardRecord): address {
         self.validator
     }
-
-
 }

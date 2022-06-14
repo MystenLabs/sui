@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::ValidatorTests {
+module sui::validator_tests {
     use sui::Coin::{Self, Coin};
     use sui::SUI::SUI;
     use sui::TestScenario;
-    use sui::Validator;
+    use sui::validator;
 
     #[test]
     fun test_validator_owner_flow() {
@@ -16,17 +16,17 @@ module sui::ValidatorTests {
             let ctx = TestScenario::ctx(scenario);
 
             let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
-            let validator = Validator::new(
+            let validator = validator::new(
                 sender,
                 x"FF",
                 b"Validator1",
                 x"FFFF",
                 init_stake,
             );
-            assert!(Validator::stake_amount(&validator) == 10, 0);
-            assert!(Validator::sui_address(&validator) == sender, 0);
+            assert!(validator::stake_amount(&validator) == 10, 0);
+            assert!(validator::sui_address(&validator) == sender, 0);
 
-            Validator::destroy(validator, ctx);
+            validator::destroy(validator, ctx);
         };
 
         // Check that after destroy, the original stake still exists.
@@ -44,7 +44,7 @@ module sui::ValidatorTests {
         let scenario = &mut TestScenario::begin(&sender);
         let ctx = TestScenario::ctx(scenario);
         let init_stake = Coin::into_balance(Coin::mint_for_testing(10, ctx));
-        let validator = Validator::new(
+        let validator = validator::new(
             sender,
             x"FF",
             b"Validator1",
@@ -53,22 +53,22 @@ module sui::ValidatorTests {
         );
 
         let new_stake = Coin::into_balance(Coin::mint_for_testing(30, ctx));
-        Validator::request_add_stake(&mut validator, new_stake);
+        validator::request_add_stake(&mut validator, new_stake);
 
-        assert!(Validator::stake_amount(&validator) == 10, 0);
-        assert!(Validator::pending_stake_amount(&validator) == 30, 0);
+        assert!(validator::stake_amount(&validator) == 10, 0);
+        assert!(validator::pending_stake_amount(&validator) == 30, 0);
 
-        Validator::request_withdraw_stake(&mut validator, 5, 35);
-        assert!(Validator::stake_amount(&validator) == 10, 0);
-        assert!(Validator::pending_stake_amount(&validator) == 30, 0);
-        assert!(Validator::pending_withdraw(&validator) == 5, 0);
+        validator::request_withdraw_stake(&mut validator, 5, 35);
+        assert!(validator::stake_amount(&validator) == 10, 0);
+        assert!(validator::pending_stake_amount(&validator) == 30, 0);
+        assert!(validator::pending_withdraw(&validator) == 5, 0);
 
         // Calling `adjust_stake` will withdraw the coin and transfer to sender.
-        Validator::adjust_stake(&mut validator, ctx);
+        validator::adjust_stake(&mut validator, ctx);
 
-        assert!(Validator::stake_amount(&validator) == 35, 0);
-        assert!(Validator::pending_stake_amount(&validator) == 0, 0);
-        assert!(Validator::pending_withdraw(&validator) == 0, 0);
+        assert!(validator::stake_amount(&validator) == 35, 0);
+        assert!(validator::pending_stake_amount(&validator) == 0, 0);
+        assert!(validator::pending_withdraw(&validator) == 0, 0);
 
         TestScenario::next_tx(scenario, &sender);
         {
@@ -77,6 +77,6 @@ module sui::ValidatorTests {
             TestScenario::return_owned(scenario, withdraw);
         };
 
-        Validator::destroy(validator, TestScenario::ctx(scenario));
+        validator::destroy(validator, TestScenario::ctx(scenario));
     }
 }

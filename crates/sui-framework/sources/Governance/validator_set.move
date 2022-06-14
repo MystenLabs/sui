@@ -1,20 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::ValidatorSet {
+module sui::validator_set {
     use std::option::{Self, Option};
     use std::vector;
 
     use sui::balance::{Self, Balance};
-    use sui::EpochRewardRecord;
+    use sui::epoch_reward_record;
     use sui::SUI::SUI;
     use sui::tx_context::{Self, TxContext};
-    use sui::Validator::{Self, Validator, ValidatorMetadata};
+    use sui::validator::{Self, Validator, ValidatorMetadata};
 
-    friend sui::SuiSystem;
+    friend sui::sui_system;
 
     #[test_only]
-    friend sui::ValidatorSetTests;
+    friend sui::validator_set_tests;
 
     struct ValidatorSet has store {
         /// Total amount of stake from all active validators (not including delegation),
@@ -108,7 +108,7 @@ module sui::ValidatorSet {
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        Validator::request_add_stake(validator, new_stake);
+        validator::request_add_stake(validator, new_stake);
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
@@ -122,7 +122,7 @@ module sui::ValidatorSet {
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        Validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
+        validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
     }
 
     public(friend) fun is_active_validator(
@@ -138,7 +138,7 @@ module sui::ValidatorSet {
         delegate_amount: u64,
     ) {
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        Validator::request_add_delegation(validator, delegate_amount);
+        validator::request_add_delegation(validator, delegate_amount);
     }
 
     public(friend) fun request_remove_delegation(
@@ -152,7 +152,7 @@ module sui::ValidatorSet {
         if (option::is_some(&validator_index_opt)) {
             let validator_index = option::extract(&mut validator_index_opt);
             let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-            Validator::request_remove_delegation(validator, delegate_amount);
+            validator::request_remove_delegation(validator, delegate_amount);
         }
     }
 
@@ -167,12 +167,12 @@ module sui::ValidatorSet {
         let i = 0;
         while (i < length) {
             let v = vector::borrow(&self.active_validators, i);
-            EpochRewardRecord::create(
+            epoch_reward_record::create(
                 epoch,
                 computation_charge,
                 total_stake,
-                Validator::delegator_count(v),
-                Validator::sui_address(v),
+                validator::delegator_count(v),
+                validator::sui_address(v),
                 ctx,
             );
             i = i + 1;
@@ -231,7 +231,7 @@ module sui::ValidatorSet {
         let i = 0;
         while (i < len) {
             let v = vector::borrow(validators, i);
-            if (Validator::is_duplicate(v, new_validator)) {
+            if (validator::is_duplicate(v, new_validator)) {
                 return true
             };
             i = i + 1;
@@ -247,7 +247,7 @@ module sui::ValidatorSet {
         let i = 0;
         while (i < length) {
             let v = vector::borrow(validators, i);
-            if (Validator::sui_address(v) == validator_address) {
+            if (validator::sui_address(v) == validator_address) {
                 return option::some(i)
             };
             i = i + 1;
@@ -274,7 +274,7 @@ module sui::ValidatorSet {
         while (!vector::is_empty(withdraw_list)) {
             let index = vector::pop_back(withdraw_list);
             let validator = vector::remove(validators, index);
-            Validator::destroy(validator, ctx);
+            validator::destroy(validator, ctx);
         }
     }
 
@@ -315,8 +315,8 @@ module sui::ValidatorSet {
         let i = 0;
         while (i < length) {
             let v = vector::borrow(validators, i);
-            validator_state = validator_state + Validator::stake_amount(v);
-            delegate_stake = delegate_stake + Validator::delegate_amount(v);
+            validator_state = validator_state + validator::stake_amount(v);
+            delegate_stake = delegate_stake + validator::delegate_amount(v);
             i = i + 1;
         };
         let total_stake = validator_state + delegate_stake;
@@ -338,7 +338,7 @@ module sui::ValidatorSet {
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            Validator::adjust_stake(validator, ctx);
+            validator::adjust_stake(validator, ctx);
             i = i + 1;
         }
     }
@@ -360,7 +360,7 @@ module sui::ValidatorSet {
             // Integer divisions will truncate the results. Because of this, we expect that at the end
             // there will be some reward remaining in `total_reward`.
             // Use u128 to avoid multiplication overflow.
-            let stake_amount: u128 = (Validator::stake_amount(validator) as u128);
+            let stake_amount: u128 = (validator::stake_amount(validator) as u128);
             let reward_amount = stake_amount * (total_reward as u128) / (total_stake as u128);
             vector::push_back(&mut results, (reward_amount as u64));
             i = i + 1;
@@ -377,7 +377,7 @@ module sui::ValidatorSet {
             let reward_amount = *vector::borrow(rewards, i);
             let reward = balance::split(reward, reward_amount);
             // Because reward goes to pending stake, it's the same as calling `request_add_stake`.
-            Validator::request_add_stake(validator, reward);
+            validator::request_add_stake(validator, reward);
             i = i + 1;
         }
     }
@@ -398,7 +398,7 @@ module sui::ValidatorSet {
                     continue
                 };
             };
-            let metadata = Validator::metadata(
+            let metadata = validator::metadata(
                 vector::borrow(&self.active_validators, active_count - 1),
             );
             vector::push_back(&mut result, *metadata);
@@ -423,7 +423,7 @@ module sui::ValidatorSet {
         } = self;
         while (!vector::is_empty(&active_validators)) {
             let v = vector::pop_back(&mut active_validators);
-            Validator::destroy(v, ctx);
+            validator::destroy(v, ctx);
         };
         vector::destroy_empty(active_validators);
         vector::destroy_empty(pending_validators);

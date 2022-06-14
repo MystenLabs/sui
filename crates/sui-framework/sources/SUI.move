@@ -7,7 +7,7 @@ module sui::SUI {
     use sui::Coin::TreasuryCap;
     use sui::tx_context::TxContext;
 
-    friend sui::Genesis;
+    friend sui::genesis;
 
     /// Name of the coin
     struct SUI has drop {}

@@ -3,7 +3,7 @@
 
 module NFTs::Geniteam {
     use sui::bag::{Self, Bag};
-    use sui::Collection::{Self, Collection};
+    use sui::collection::{Self, Collection};
     use sui::ID::VersionedID;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
@@ -150,7 +150,7 @@ module NFTs::Geniteam {
 
         // TODO: Decouple adding monster to farm from creating a monster.
         // Add it to the collection
-        Collection::add(pet_monsters, monster);
+        collection::add(pet_monsters, monster);
     }
 
     /// Create Farm cosmetic owned by player and add to its inventory
@@ -324,10 +324,10 @@ module NFTs::Geniteam {
         let id = tx_context::new_id(ctx);
 
         // Create pet monsters collection.
-        let pet_monsters = Collection::new<Monster>(ctx);
+        let pet_monsters = collection::new<Monster>(ctx);
 
         // Transfer ownership of pet monsters to farm.
-        let (id, child_ref) = Collection::transfer_to_object_id(pet_monsters, id);
+        let (id, child_ref) = collection::transfer_to_object_id(pet_monsters, id);
 
 
         let farm = Farm {

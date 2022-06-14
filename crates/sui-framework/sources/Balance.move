@@ -7,7 +7,7 @@
 /// that needs to hold coins.
 module sui::balance {
     friend sui::Coin;
-    friend sui::SuiSystem;
+    friend sui::sui_system;
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
@@ -78,7 +78,7 @@ module sui::balance {
 }
 
 #[test_only]
-module sui::balanceTests {
+module sui::balance_tests {
     use sui::balance;
     use sui::SUI::SUI;
 
