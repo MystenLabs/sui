@@ -19,7 +19,7 @@
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "Gateway API"
+          "name": "Quorum Driver API"
         }
       ],
       "description": "Execute the transaction using the transaction data, signature and public key.",
@@ -907,7 +907,7 @@
       "name": "sui_syncAccountState",
       "tags": [
         {
-          "name": "Gateway API"
+          "name": "Quorum Driver API"
         }
       ],
       "description": "Synchronize client state with validators.",

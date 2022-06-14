@@ -1,19 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::RpcReadApiServer;
-use crate::api::{RpcFullNodeReadApiServer, SuiRpcModule};
+use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use std::sync::Arc;
+use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
-use sui_core::gateway_types::SuiObjectInfo;
-use sui_core::{
-    authority::AuthorityState,
-    gateway_types::{GetObjectDataResponse, TransactionEffectsResponse},
+use sui_json_rpc_api::rpc_types::{
+    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse,
 };
+use sui_json_rpc_api::RpcFullNodeReadApiServer;
+use sui_json_rpc_api::RpcReadApiServer;
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Owner;
@@ -100,9 +100,11 @@ impl RpcReadApiServer for ReadApi {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<TransactionEffectsResponse> {
+        let (cert, effects) = self.state.get_transaction(digest).await?;
         Ok(TransactionEffectsResponse {
+            certificate: cert.try_into()?,
+            effects: effects.into(),
             timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
-            ..self.state.get_transaction(digest).await?
         })
     }
 }
@@ -113,7 +115,7 @@ impl SuiRpcModule for ReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::RpcReadApiOpenRpc::module_doc()
     }
 }
 
@@ -157,6 +159,6 @@ impl SuiRpcModule for FullNodeApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::RpcFullNodeReadApiOpenRpc::module_doc()
+        sui_json_rpc_api::RpcFullNodeReadApiOpenRpc::module_doc()
     }
 }

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::Write;
 
 use clap::ArgEnum;
 use clap::Parser;
@@ -11,24 +13,23 @@ use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-use std::fs::File;
-use std::io::Write;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_WALLET_CONFIG;
-use sui_core::gateway_types::{
+use sui_json::SuiJsonValue;
+use sui_json_rpc::bcs_api::BcsApiImpl;
+use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
+use sui_json_rpc::sui_rpc_doc;
+use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_gateway::api::RpcGatewayApiClient;
-use sui_gateway::api::RpcReadApiClient;
-use sui_gateway::api::RpcTransactionBuilderClient;
-use sui_gateway::api::{SuiRpcModule, TransactionBytes};
-use sui_gateway::bcs_api::BcsApiImpl;
-use sui_gateway::json_rpc::sui_rpc_doc;
-use sui_gateway::read_api::{FullNodeApi, ReadApi};
-use sui_gateway::rpc_gateway::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
-use sui_json::SuiJsonValue;
+use sui_json_rpc_api::QuorumDriverApiClient;
+use sui_json_rpc_api::RpcReadApiClient;
+use sui_json_rpc_api::RpcTransactionBuilderClient;
+use sui_json_rpc_api::TransactionBytes;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;

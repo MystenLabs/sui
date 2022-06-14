@@ -2,18 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use jsonrpsee::core::RpcResult;
-use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_proc_macros::rpc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use sui_core::gateway_state::GatewayTxSeqNumber;
-use sui_core::gateway_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, SuiInputObjectKind, SuiObjectInfo,
-    SuiObjectRef,
-};
-use sui_core::gateway_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -24,11 +17,20 @@ use sui_types::{
     messages::TransactionData,
 };
 
-use crate::rpc_gateway::responses::SuiTypeTag;
+use crate::rpc_types::SuiTypeTag;
+use crate::rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, SuiInputObjectKind, SuiObjectInfo,
+    SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
+};
 
-#[open_rpc(namespace = "sui", tag = "Gateway API")]
+pub mod client;
+pub mod rpc_types;
+
+type GatewayTxSeqNumber = u64;
+
+#[open_rpc(namespace = "sui", tag = "Quorum Driver API")]
 #[rpc(server, client, namespace = "sui")]
-pub trait RpcGatewayApi {
+pub trait QuorumDriverApi {
     /// Execute the transaction using the transaction data, signature and public key.
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
@@ -217,12 +219,4 @@ impl TransactionBytes {
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
     }
-}
-
-pub trait SuiRpcModule
-where
-    Self: Sized,
-{
-    fn rpc(self) -> RpcModule<Self>;
-    fn rpc_doc_module() -> Module;
 }

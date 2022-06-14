@@ -16,6 +16,8 @@ tempfile = "3.3.0"
 tokio = { version = "1.18.2", features = ["full"] }
 
 sui = { path = "../sui" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-core = { path = "../sui-core" }
 sui-gateway = { path = "../sui-gateway" }
 sui-json = { path = "../sui-json" }

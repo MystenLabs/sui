@@ -6,14 +6,13 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveValue};
 
+use crate::rpc_types::{SuiMoveStruct, SuiMoveValue};
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-
-use crate::gateway_types::{SuiMoveStruct, SuiMoveValue};
 
 #[test]
 fn test_move_value_to_sui_bytearray() {
