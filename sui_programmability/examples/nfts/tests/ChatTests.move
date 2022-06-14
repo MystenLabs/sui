@@ -12,7 +12,7 @@ module NFTs::ChatTests {
     const HELLO: vector<u8> = vector[72, 101, 108, 108, 111]; // "Hello" in ASCII.
 
     #[test]
-    public entry fun test_chat() {
+    fun test_chat() {
         let scenario = &mut TestScenario::begin(&USER1_ADDRESS);
         {
             Chat::post(

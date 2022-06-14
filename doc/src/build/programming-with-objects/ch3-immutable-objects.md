@@ -16,7 +16,7 @@ After this call, the specified object will become permanently immutable. This is
 
 Let's add an entry function to the [ColorObject](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move) module to turn an existing (owned) `ColorObject` into an immutable object:
 ```rust
-public(script) fun freeze_object(object: ColorObject) {
+public entry fun freeze_object(object: ColorObject) {
     Transfer::freeze_object(object)
 }
 ```
@@ -25,7 +25,7 @@ In the above function, one must already own a `ColorObject` to be able to pass i
 
 Alternatively, you can also provide an API that creates an immutable object at birth:
 ```rust
-public(script) fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+public entry fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
     let color_object = new(red, green, blue, ctx);
     Transfer::freeze_object(color_object)
 }
@@ -39,7 +39,7 @@ Once an object becomes immutable, the rules of who could use this object in Move
 
 Recall that we defined a function that copies the value of one object to another:
 ```rust
-public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject);
+public entry fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject);
 ```
 In this function, anyone can pass an immutable object as the first argument `from_object`, but not the second argument.
 
@@ -84,7 +84,7 @@ TestScenario::next_tx(scenario, &sender2);
 
 In order to examine if this object is indeed immutable, let's introduce a function that would mutate a `ColorObject` (we will use this function when describing [on-chain interactions](#on-chain-interactions)):
 ```rust
-public(script) fun update(
+public entry fun update(
     object: &mut ColorObject,
     red: u8, green: u8, blue: u8,
 ) {

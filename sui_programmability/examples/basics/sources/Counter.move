@@ -58,7 +58,7 @@ module Basics::CounterTest {
     use Basics::Counter;
 
     #[test]
-    public entry fun test_counter() {
+    fun test_counter() {
         let owner = @0xC0FFEE;
         let user1 = @0xA1;
 

@@ -107,7 +107,7 @@ module Basics::LockTest {
     }
 
     #[test]
-    public entry fun test_lock() {
+    fun test_lock() {
         let user1 = @0x1;
         let user2 = @0x2;
 

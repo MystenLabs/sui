@@ -122,7 +122,7 @@ module Basics::TestSandwich {
     use Sui::SUI::SUI;
 
     #[test]
-    public entry fun test_make_sandwich() {
+    fun test_make_sandwich() {
         let owner = @0x1;
         let the_guy = @0x2;
 

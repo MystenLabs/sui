@@ -291,29 +291,29 @@ module ABC::Tests {
 
     // === Test handlers; this trick helps reusing scenarios ==
 
-    #[test] public entry fun test_minting() { test_minting_(&mut scenario()) }
-    #[test] public entry fun test_creation() { test_creation_(&mut scenario()) }
-    #[test] public entry fun test_transfer() { test_transfer_(&mut scenario()) }
-    #[test] public entry fun test_burn() { test_burn_(&mut scenario()) }
-    #[test] public entry fun test_take() { test_take_(&mut scenario()) }
-    #[test] public entry fun test_put_back() { test_put_back_(&mut scenario()) }
-    #[test] public entry fun test_ban() { test_ban_(&mut scenario()) }
+    fun test_minting() { test_minting_(&mut scenario()) }
+    fun test_creation() { test_creation_(&mut scenario()) }
+    fun test_transfer() { test_transfer_(&mut scenario()) }
+    fun test_burn() { test_burn_(&mut scenario()) }
+    fun test_take() { test_take_(&mut scenario()) }
+    fun test_put_back() { test_put_back_(&mut scenario()) }
+    fun test_ban() { test_ban_(&mut scenario()) }
 
     #[test]
     #[expected_failure(abort_code = 2)]
-    public entry fun test_address_banned_fail() {
+    fun test_address_banned_fail() {
         test_address_banned_fail_(&mut scenario())
     }
 
     #[test]
     #[expected_failure(abort_code = 2)]
-    public entry fun test_different_account_fail() {
+    fun test_different_account_fail() {
         test_different_account_fail_(&mut scenario())
     }
 
     #[test]
     #[expected_failure(abort_code = 1)]
-    public entry fun test_not_owned_balance_fail() {
+    fun test_not_owned_balance_fail() {
         test_not_owned_balance_fail_(&mut scenario())
     }
 
@@ -323,7 +323,7 @@ module ABC::Tests {
     fun people(): (address, address, address) { (@0xABC, @0xE05, @0xFACE) }
 
     // Admin creates a regulated coin ABC and mints 1,000,000 of it.
-    public entry fun test_minting_(test: &mut Scenario) {
+    fun test_minting_(test: &mut Scenario) {
         let (admin, _, _) = people();
 
         next_tx(test, &admin); {
@@ -344,7 +344,7 @@ module ABC::Tests {
     }
 
     // Admin creates an empty balance for the `user1`.
-    public entry fun test_creation_(test: &mut Scenario) {
+    fun test_creation_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_minting_(test);
@@ -369,7 +369,7 @@ module ABC::Tests {
 
     // Admin transfers 500,000 coins to `user1`.
     // User1 accepts the transfer and checks his balance.
-    public entry fun test_transfer_(test: &mut Scenario) {
+    fun test_transfer_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_creation_(test);
@@ -401,7 +401,7 @@ module ABC::Tests {
     }
 
     // Admin burns 100,000 of `RCoin<ABC>`
-    public entry fun test_burn_(test: &mut Scenario) {
+    fun test_burn_(test: &mut Scenario) {
         let (admin, _, _) = people();
 
         test_transfer_(test);
@@ -421,7 +421,7 @@ module ABC::Tests {
 
     // User1 cashes 100,000 of his `RegulatedCoin` into a `Coin`;
     // User1 sends Coin<ABC> it to `user2`.
-    public entry fun test_take_(test: &mut Scenario) {
+    fun test_take_(test: &mut Scenario) {
         let (_, user1, user2) = people();
 
         test_transfer_(test);
@@ -448,7 +448,7 @@ module ABC::Tests {
 
     // User2 sends his `Coin<ABC>` to `admin`.
     // Admin puts this coin to his RegulatedCoin balance.
-    public entry fun test_put_back_(test: &mut Scenario) {
+    fun test_put_back_(test: &mut Scenario) {
         let (admin, _, user2) = people();
 
         test_take_(test);
@@ -472,7 +472,7 @@ module ABC::Tests {
     }
 
     // Admin bans user1 by adding his address to the registry.
-    public entry fun test_ban_(test: &mut Scenario) {
+    fun test_ban_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_transfer_(test);
@@ -490,7 +490,7 @@ module ABC::Tests {
     }
 
     // Banned User1 fails to create a Transfer.
-    public entry fun test_address_banned_fail_(test: &mut Scenario) {
+    fun test_address_banned_fail_(test: &mut Scenario) {
         let (_, user1, user2) = people();
 
         test_ban_(test);
@@ -508,7 +508,7 @@ module ABC::Tests {
     }
 
     // User1 is banned. Admin tries to make a Transfer to User1 and fails - user banned.
-    public entry fun test_different_account_fail_(test: &mut Scenario) {
+    fun test_different_account_fail_(test: &mut Scenario) {
         let (admin, user1, _) = people();
 
         test_ban_(test);
@@ -527,7 +527,7 @@ module ABC::Tests {
 
     // User1 is banned and transfers the whole balance to User2.
     // User2 tries to use this balance and fails.
-    public entry fun test_not_owned_balance_fail_(test: &mut Scenario) {
+    fun test_not_owned_balance_fail_(test: &mut Scenario) {
         let (_, user1, user2) = people();
 
         test_ban_(test);

@@ -65,7 +65,7 @@ module Sui::Coin {
     // === Functionality for Coin<T> holders ===
 
     /// Send `c` to `recipient`
-    public fun transfer<T>(c: Coin<T>, recipient: address) {
+    public entry fun transfer<T>(c: Coin<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -76,14 +76,14 @@ module Sui::Coin {
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
+    public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
         ID::delete(id);
         Balance::join(&mut self.balance, balance);
     }
 
     /// Join everything in `coins` with `self`
-    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
+    public entry fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
         let i = 0;
         let len = vector::length(&coins);
         while (i < len) {
@@ -172,19 +172,8 @@ module Sui::Coin {
 
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public entry fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun split_and_transfer<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
-    }
-
-    /// Consume the coin `c` and add its value to `self`.
-    /// Aborts if `c.value + self.value > U64_MAX`
-    public entry fun join_<T>(self: &mut Coin<T>, c: Coin<T>) {
-        join(self, c)
-    }
-
-    /// Join everything in `coins` with `self`
-    public entry fun join_vec_<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
-        join_vec(self, coins)
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,

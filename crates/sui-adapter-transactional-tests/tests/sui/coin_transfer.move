@@ -3,12 +3,18 @@
 
 // Test basic coin transfer
 
-//# init --accounts A B
+//# init --accounts A B C
 
 //# view-object 100
 
-//# run Sui::Coin::transfer_ --type-args Sui::SUI::SUI --args object(100) 10 @B
+//# run Sui::Coin::split_and_transfer --type-args Sui::SUI::SUI --args object(100) 10 @B --sender A
 
 //# view-object 100
 
-//# view-object 105
+//# view-object 106
+
+//# run Sui::Coin::transfer --type-args Sui::SUI::SUI --args object(100) @C --sender B
+
+//# view-object 100
+
+//# view-object 107

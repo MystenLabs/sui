@@ -49,7 +49,7 @@ struct Object has key, store {
 ```
 In a real application, we probably would make sure that there is a limited supply of the objects and there is a mechanism to mint them to a list of owners. For simplicity and demonstration purposes, here we will just make it straightforward to create:
 ```rust
-public(script) fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
+public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
     let object = Object {
         id: TxContext::new_id(ctx),
         scarcity,
@@ -60,7 +60,7 @@ public(script) fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
 ```
 Anyone can call `create_object` to create a new object with specified `scarcity` and `style`. The created object will be sent to the signer of the transaction. We will likely also want to be able to transfer the object to others:
 ```rust
-public(script) fun transfer_object(object: Object, ctx: &mut TxContext) {
+public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
     Transfer::transfer(object, TxContext::sender(ctx))
 }
 ```
@@ -82,7 +82,7 @@ struct ObjectWrapper has key {
 ```
 `ObjectWrapper` defines a Sui object type, wraps the object that we want to swap as `to_swap`, and tracks the original owner of the object in `original_owner`. To make this more interesting and realistic, we can also expect that we may need to pay the third party some fee for this swap. Below we define an interface to request a swap by someone who owns an `Object`:
 ```rust
-public(script) fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
+public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
     assert!(Coin::value(&fee) >= MIN_FEE, 0);
     let wrapper = ObjectWrapper {
         id: TxContext::new_id(ctx),
@@ -100,7 +100,7 @@ Although the service operator (`service_address`) now owns the `ObjectWrapper`, 
 
 Finally, let's define the function that the service operator can call in order to perform a swap between two objects sent from two accounts. The function interface will resemble:
 ```rust
-public(script) fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext);
+public entry fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext);
 ```
 Where `wrapper1` and `wrapper2` are two wrapped objects that were sent from different object owners to the service operator. (Hence, the service operator owns both.) Both wrapped objects are passed by value because they will eventually need to be [unpacked](https://move-book.com/advanced-topics/struct.html#destructing-structures).
 We first check that the swap is indeed legit:
@@ -173,7 +173,7 @@ struct Shield has key, store {
 ```
 When we are creating a new warrior, we can set the `sword` and `shield` to `none` to indicate there is no equipment yet:
 ```rust
-public(script) fun create_warrior(ctx: &mut TxContext) {
+public entry fun create_warrior(ctx: &mut TxContext) {
     let warrior = SimpleWarrior {
         id: TxContext::new_id(ctx),
         sword: Option::none(),
@@ -184,7 +184,7 @@ public(script) fun create_warrior(ctx: &mut TxContext) {
 ```
 With this, we can then define functions to equip new swords or new shields:
 ```rust
-public(script) fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
+public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
     if (Option::is_some(&warrior.sword)) {
         let old_sword = Option::extract(&mut warrior.sword);
         Transfer::transfer(old_sword, TxContext::sender(ctx));

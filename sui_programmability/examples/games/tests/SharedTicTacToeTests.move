@@ -14,7 +14,7 @@ module Games::SharedTicTacToeTests {
     const DRAW: u8 = 3;
 
     #[test]
-    public entry fun play_tictactoe() {
+    fun play_tictactoe() {
         let player_x = @0x0;
         let player_o = @0x1;
 
@@ -81,7 +81,7 @@ module Games::SharedTicTacToeTests {
 
 
     #[test]
-    public entry fun play_tictactoe_draw() {
+    fun play_tictactoe_draw() {
         let player_x = @0x0;
         let player_o = @0x1;
 
@@ -188,7 +188,7 @@ module Games::SharedTicTacToeTests {
     }
 
 
-    public entry fun place_mark(
+    fun place_mark(
         row: u8,
         col: u8,
         player: &address,

@@ -111,7 +111,7 @@ GET /object_info?objectId={{monster_id}}
     }
 
     // Create a Monster and add it to the Farm's collection of Monsters
-    public(script) fun create_monster(_player: &mut Player,
+    public entry fun create_monster(_player: &mut Player,
                               farm: &mut Farm,
                               pet_monsters_c: &mut Collection::Collection,
                               monster_name: vector<u8>,
@@ -140,7 +140,7 @@ GET /object_info?objectId={{monster_id}}
     }
 
     // Creates a basic Monster object
-    public(script) fun create_monster_(
+    public entry fun create_monster_(
         monster_name: vector<u8>,
         monster_img_index: u64,
         breed: u8,
@@ -171,7 +171,7 @@ GET /object_info?objectId={{monster_id}}
 
 ```
     // Update the attributes of a monster
-    public(script) fun update_monster_stats(
+    public entry fun update_monster_stats(
         _player: &mut Player,
         _farm: &mut Farm,
         _pet_monsters: &mut Collection::Collection,

@@ -125,13 +125,13 @@ actual object ID, for example one obtained from [`sui_getOwnedObjects`](#sui_get
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", 
-              "method":"sui_transferCoin", 
+--data-raw '{ "jsonrpc":"2.0",
+              "method":"sui_transferCoin",
               "params":["{{owner_address}}",
                         "{{coin_object_id}}",
                         "{{gas_object_id}}",
                         {{gas_budget}},
-                        "{{to_address}}"], 
+                        "{{to_address}}"],
               "id":1}' | json_pp
 ```
 A transaction data response will be returned from the gateway server.
@@ -162,12 +162,12 @@ You will see output resembling:
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", 
-              "method":"sui_executeTransaction", 
+--data-raw '{ "jsonrpc":"2.0",
+              "method":"sui_executeTransaction",
               "params":[{
                   "tx_bytes" : "{{tx_bytes}}",
                   "signature" : "{{signature}}",
-                  "pub_key" : "{{pub_key}}"}], 
+                  "pub_key" : "{{pub_key}}"}],
               "id":1}' | json_pp
 ```
 
@@ -203,9 +203,9 @@ curl --location --request POST $SUI_RPC_HOST \
                   "{{owner_address}}",
                   "0x2",
                   "Coin",
-                  "transfer_",
+                  "transfer",
                   ["0x2::SUI::SUI"],
-                  ["{{coin_object_id}}",10000, "{{recipient_address}}"],
+                  ["{{coin_object_id}}", "{{recipient_address}}"],
                   "{{gas_object_id}}",
                   2000
               ],
@@ -223,7 +223,7 @@ signature.  Gas usage is capped by the gas_budget. The `transfer`
 function is described in more detail in
 the [Sui Wallet](wallet.md#calling-move-code) documentation.
 
-Calling the `transfer_` function in the `Coin` module serves the same
+Calling the `transfer` function in the `Coin` module serves the same
 purpose as the native coin transfer ([`sui_transferCoin`](#sui_transfercoin)), and is mostly used for illustration
 purposes as native transfer is more efficient when it's applicable
 (i.e., we are transferring coins rather than non-coin
@@ -241,12 +241,12 @@ Publish Move module.
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", 
-              "method":"sui_publish", 
+--data-raw '{ "jsonrpc":"2.0",
+              "method":"sui_publish",
               "params":[ "{{owner_address}}",
                          {{vector_of_compiled_modules}},
                          "{{gas_object_id}}",
-                         10000], 
+                         10000],
               "id":1}' | json_pp
 ```
 
