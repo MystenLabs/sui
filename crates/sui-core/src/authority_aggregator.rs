@@ -1069,12 +1069,17 @@ where
     pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
-    ) -> Result<TransactionEffects, SuiError> {
+    ) -> Result<CertifiedTransactionEffects, SuiError> {
+        struct EffectsStakeInfo {
+            stake: StakeUnit,
+            effects: TransactionEffects,
+            signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        }
         struct ProcessCertificateState {
             // Different authorities could return different effects.  We want at least one effect to come
             // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
             // The map here allows us to count the stake for each unique effect.
-            effects_map: HashMap<[u8; 32], (StakeUnit, TransactionEffects)>,
+            effects_map: HashMap<[u8; 32], EffectsStakeInfo>,
             bad_stake: StakeUnit,
             errors: Vec<SuiError>,
         }
@@ -1169,10 +1174,15 @@ where
                                 let entry = state
                                     .effects_map
                                     .entry(inner_effects.digest())
-                                    .or_insert((0, inner_effects.effects));
-                                entry.0 += weight;
+                                    .or_insert(EffectsStakeInfo {
+                                        stake: 0,
+                                        effects: inner_effects.effects,
+                                        signatures: vec![],
+                                    });
+                                entry.stake += weight;
+                                entry.signatures.push((name, inner_effects.auth_signature.signature));
 
-                                if entry.0 >= threshold {
+                                if entry.stake >= threshold {
                                     // It will set the timeout quite high.
                                     return Ok(ReduceOutput::ContinueWithTimeout(
                                         state,
@@ -1213,13 +1223,22 @@ where
 
         // Check that one effects structure has more than 2f votes,
         // and return it.
-        for (stake, effects) in state.effects_map.into_values() {
+        for stake_info in state.effects_map.into_values() {
+            let EffectsStakeInfo {
+                stake,
+                effects,
+                signatures,
+            } = stake_info;
             if stake >= threshold {
                 debug!(
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
-                return Ok(effects);
+                return Ok(CertifiedTransactionEffects::new(
+                    certificate.auth_sign_info.epoch,
+                    effects,
+                    signatures,
+                ));
             }
         }
 
@@ -1241,7 +1260,7 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &Transaction,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
         let new_certificate = self
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
@@ -1275,7 +1294,7 @@ where
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
                 if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {
-                    if effects.is_object_mutated_here(obj_ref) {
+                    if effects.effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
                         // TODO: Report a byzantine fault here
