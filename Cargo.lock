@@ -5168,15 +5168,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "retry"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac95c60a949a63fd2822f4964939662d8f2c16c4fa0624fd954bc6e703b9a3f6"
-dependencies = [
- "rand 0.8.5",
-]
-
-[[package]]
 name = "ring"
 version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8140,10 +8131,12 @@ dependencies = [
  "crc-catalog",
  "crc32fast",
  "crossbeam",
+ "crossbeam-channel 0.4.4",
  "crossbeam-channel 0.5.4",
  "crossbeam-deque",
  "crossbeam-epoch",
  "crossbeam-queue",
+ "crossbeam-utils 0.7.2",
  "crossbeam-utils 0.8.8",
  "crossterm 0.21.0",
  "crossterm 0.22.1",
@@ -8305,6 +8298,7 @@ dependencies = [
  "matchers",
  "matches",
  "matchit",
+ "maybe-uninit",
  "memchr",
  "memoffset",
  "merlin",
@@ -8449,7 +8443,6 @@ dependencies = [
  "regex-syntax",
  "remove_dir_all",
  "reqwest",
- "retry",
  "ring",
  "rocksdb",
  "rust-ini",
@@ -8555,6 +8548,7 @@ dependencies = [
  "tokio",
  "tokio-io-timeout",
  "tokio-macros",
+ "tokio-retry",
  "tokio-rustls 0.22.0",
  "tokio-rustls 0.23.4",
  "tokio-stream",

@@ -97,11 +97,13 @@ crc = { version = "2", default-features = false }
 crc-catalog = { version = "1", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
-crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
+crossbeam-channel-9fbad63c4bcf4a8f = { package = "crossbeam-channel", version = "0.4", default-features = false }
+crossbeam-channel-d8f496e17d97b5cb = { package = "crossbeam-channel", version = "0.5", features = ["crossbeam-utils", "std"] }
 crossbeam-deque = { version = "0.8", features = ["crossbeam-epoch", "crossbeam-utils", "std"] }
 crossbeam-epoch = { version = "0.9", default-features = false, features = ["alloc", "lazy_static", "std"] }
 crossbeam-queue = { version = "0.3", features = ["alloc", "std"] }
-crossbeam-utils = { version = "0.8", features = ["lazy_static", "std"] }
+crossbeam-utils-ca01ad9e24f5d932 = { package = "crossbeam-utils", version = "0.7", features = ["lazy_static", "std"] }
+crossbeam-utils-c38e5c1d305a1b54 = { package = "crossbeam-utils", version = "0.8", features = ["lazy_static", "std"] }
 crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", features = ["ark-bls12-377", "ark-ec", "ark-ff", "ark-serialize", "ark-std", "celo", "celo-bls", "serde_with"] }
@@ -240,6 +242,7 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matches = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
+maybe-uninit = { version = "2", default-features = false }
 memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "2", default-features = false }
@@ -361,7 +364,6 @@ regex-automata = { version = "0.1", features = ["regex-syntax", "std"] }
 regex-syntax = { version = "0.6", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 remove_dir_all = { version = "0.5", default-features = false }
 reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "hyper-tls", "json", "native-tls-crate", "serde_json", "tokio-native-tls"] }
-retry = { version = "1", features = ["rand", "random"] }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 rocksdb = { version = "0.18", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
@@ -448,6 +450,7 @@ tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
+tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-3c51e837cfc5589a = { package = "tokio-rustls", version = "0.22", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
@@ -614,11 +617,13 @@ crc = { version = "2", default-features = false }
 crc-catalog = { version = "1", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
-crossbeam-channel = { version = "0.5", features = ["crossbeam-utils", "std"] }
+crossbeam-channel-9fbad63c4bcf4a8f = { package = "crossbeam-channel", version = "0.4", default-features = false }
+crossbeam-channel-d8f496e17d97b5cb = { package = "crossbeam-channel", version = "0.5", features = ["crossbeam-utils", "std"] }
 crossbeam-deque = { version = "0.8", features = ["crossbeam-epoch", "crossbeam-utils", "std"] }
 crossbeam-epoch = { version = "0.9", default-features = false, features = ["alloc", "lazy_static", "std"] }
 crossbeam-queue = { version = "0.3", features = ["alloc", "std"] }
-crossbeam-utils = { version = "0.8", features = ["lazy_static", "std"] }
+crossbeam-utils-ca01ad9e24f5d932 = { package = "crossbeam-utils", version = "0.7", features = ["lazy_static", "std"] }
+crossbeam-utils-c38e5c1d305a1b54 = { package = "crossbeam-utils", version = "0.8", features = ["lazy_static", "std"] }
 crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", features = ["ark-bls12-377", "ark-ec", "ark-ff", "ark-serialize", "ark-std", "celo", "celo-bls", "serde_with"] }
@@ -779,6 +784,7 @@ match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matches = { version = "0.1", default-features = false }
 matchit = { version = "0.5" }
+maybe-uninit = { version = "2", default-features = false }
 memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "2", default-features = false }
@@ -923,7 +929,6 @@ regex-automata = { version = "0.1", features = ["regex-syntax", "std"] }
 regex-syntax = { version = "0.6", features = ["unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
 remove_dir_all = { version = "0.5", default-features = false }
 reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "hyper-tls", "json", "native-tls-crate", "serde_json", "tokio-native-tls"] }
-retry = { version = "1", features = ["rand", "random"] }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 rocksdb = { version = "0.18", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
@@ -1029,6 +1034,7 @@ tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "1", default-features = false }
+tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-3c51e837cfc5589a = { package = "tokio-rustls", version = "0.22", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
