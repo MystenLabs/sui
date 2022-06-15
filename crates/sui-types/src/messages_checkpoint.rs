@@ -357,19 +357,13 @@ impl CertifiedCheckpoint {
         let mut message = Vec::new();
         self.checkpoint.write(&mut message);
 
-        let idx = obligation.messages.len();
-        obligation.messages.push(message);
+        let idx = obligation.add_message(message);
 
         for tuple in self.signatures.iter() {
             let (authority, signature) = tuple;
-            // do we know, or can we build a valid public key?
-            match committee.expanded_keys.get(authority) {
-                Some(v) => obligation.public_keys.push(*v),
-                None => {
-                    let public_key = (*authority).try_into()?;
-                    obligation.public_keys.push(public_key);
-                }
-            }
+            obligation
+                .public_keys
+                .push(committee.public_key(authority)?);
 
             // build a signature
             obligation.signatures.push(signature.0);
