@@ -51,7 +51,7 @@ module defi::pool {
 
     /// The pool with exchange.
     ///
-    /// - `fee_percent` should be in the range: 0-1000, meaning
+    /// - `fee_percent` should be in the range: [0-10000), meaning
     /// that 1000 is 100% and 1 is 0.1%
     struct Pool<phantom P, phantom T> has key {
         id: VersionedID,
