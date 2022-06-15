@@ -39,7 +39,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     for _ in 0..N {
         transactions.push(SingleTransactionKind::Call(MoveCall {
             package: package_object_ref,
-            module: ident_str!("ObjectBasics").to_owned(),
+            module: ident_str!("object_basics").to_owned(),
             function: ident_str!("create").to_owned(),
             type_arguments: vec![],
             arguments: vec![
@@ -106,7 +106,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     let package_object_ref = authority_state.get_framework_object_ref().await?;
     transactions.push(SingleTransactionKind::Call(MoveCall {
         package: package_object_ref,
-        module: ident_str!("ObjectBasics").to_owned(),
+        module: ident_str!("object_basics").to_owned(),
         function: ident_str!("create").to_owned(),
         type_arguments: vec![],
         arguments: vec![],
@@ -186,7 +186,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     for _ in 0..N {
         transactions.push(SingleTransactionKind::Call(MoveCall {
             package: package_object_ref,
-            module: ident_str!("ObjectBasics").to_owned(),
+            module: ident_str!("object_basics").to_owned(),
             function: ident_str!("create").to_owned(),
             type_arguments: vec![],
             arguments: vec![

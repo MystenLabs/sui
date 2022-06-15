@@ -6,4 +6,4 @@ version = "0.0.1"
 Sui = { local = "../../../crates/sui-framework" }
 
 [addresses]
-FungibleTokens = "0x0"
+fungible_tokens = "0x0"

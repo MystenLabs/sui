@@ -1,4 +1,4 @@
 processed 1 task
 
 task 0 'publish'. lines 4-31:
-Error: Failed to verify the Move module, reason: "Access to Move global storage is not allowed. Found in function no: [Exists(StructDefinitionIndex(0)), ExistsGeneric(StructDefInstantiationIndex(0)), ImmBorrowGlobal(StructDefinitionIndex(0)), ImmBorrowGlobalGeneric(StructDefInstantiationIndex(0)), MutBorrowGlobal(StructDefinitionIndex(0)), MutBorrowGlobalGeneric(StructDefInstantiationIndex(0)), MoveFrom(StructDefinitionIndex(0)), MoveFromGeneric(StructDefInstantiationIndex(0)), MoveTo(StructDefinitionIndex(0)), MoveToGeneric(StructDefInstantiationIndex(0))]".
+Error: Dependency not provided for 0000000000000000000000000000000000000002.ID

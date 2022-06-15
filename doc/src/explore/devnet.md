@@ -72,7 +72,7 @@ Successfully created an ExampleNFT:
 ID: ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
 Version: 1
 Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
-Type: 0x2::DevNetNFT::DevNetNFT
+Type: 0x2::devnet_nft::DevNetNFT
 ```
 
 The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `wallet` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
@@ -96,7 +96,7 @@ Successfully created an ExampleNFT:
 ID: EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 Version: 1
 Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
-Type: 0x2::DevNetNFT::DevNetNFT
+Type: 0x2::devnet_nft::DevNetNFT
 ```
 
 That you can similarly view at:

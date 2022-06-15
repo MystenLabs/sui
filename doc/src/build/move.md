@@ -92,7 +92,7 @@ file.
 Let's see how module definition appears in the `Coin` module file:
 
 ```rust
-module Sui::Coin {
+module sui::coin {
 ...
 }
 ```
@@ -124,7 +124,7 @@ file:
 
 ```
 [addresses]
-Sui = "0x2"
+sui = "0x2"
 ```
 
 ### Move structs
@@ -241,7 +241,7 @@ simplest entry functions is defined in the
 to implement gas object transfer:
 
 ```rust
-public entry fun transfer(c: Coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
+public entry fun transfer(c: coin::Coin<SUI>, recipient: address, _ctx: &mut TxContext) {
     ...
 }
 ```
@@ -343,7 +343,7 @@ definitions in the `M1.move` file:
 
 ``` rust
 module MyFirstPackage::M1 {
-    use Sui::ID::VersionedID;
+    use sui::id::VersionedID;
 
     struct Sword has key, store {
         id: VersionedID,
@@ -455,14 +455,14 @@ file:
 ``` rust
     #[test]
     public fun test_sword_create() {
-        use Sui::TxContext;
+        use sui::tx_context;
 
         // create a dummy TxContext for testing
-        let ctx = TxContext::dummy();
+        let ctx = tx_context::dummy();
 
         // create a sword
         let sword = Sword {
-            id: TxContext::new_id(&mut ctx),
+            id: tx_context::new_id(&mut ctx),
             magic: 42,
             strength: 7,
         };
@@ -477,7 +477,7 @@ create a dummy instance of the `TxContext` struct needed to create
 a unique identifier of our sword object, then create the sword itself,
 and finally call its accessor functions to verify that they return
 correct values. Note the dummy context is passed to the
-`TxContext::new_id` function as a mutable reference argument (`&mut`),
+`tx_context::new_id` function as a mutable reference argument (`&mut`),
 and the sword itself is passed to its accessor functions as a
 read-only reference argument.
 
@@ -500,7 +500,7 @@ error[E06001]: unused value without 'drop'
 27 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             id: TxContext::new_id(&mut ctx),
+28 │ │             id: tx_context::new_id(&mut ctx),
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
@@ -536,7 +536,7 @@ the beginning of our testing function to import the
 [Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move):
 
 ``` rust
-        use Sui::Transfer;
+        use sui::transfer;
 
 ```
 
@@ -547,7 +547,7 @@ the end of our test function:
 ``` rust
         // create a dummy address and transfer the sword
         let dummy_address = @0xCAFE;
-        Transfer::transfer(sword, dummy_address);
+        transfer::transfer(sword, dummy_address);
 ```
 
 We can now run the test command again and see that indeed a single
@@ -580,7 +580,7 @@ $ sui-move test -h
 
 The testing example we have seen so far is largely *pure Move* and has
 little to do with Sui beyond using some Sui packages, such as
-`Sui::TxContext` and `Sui::Transfer`. While this style of testing is
+`sui::tx_context` and `sui::transfer`. While this style of testing is
 already very useful for developers writing Move code for Sui, they may
 also want to test additional Sui-specific features. In particular, a
 Move call in Sui is encapsulated in a Sui
@@ -590,15 +590,15 @@ transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).
 
 Sui-specific testing is supported via the
-[TestScenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TestScenario.move)
+[test_scenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test_scenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
 [testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md).
 
-The main concept in the `TestScenario` is a scenario that emulates a
+The main concept in the `test_scenario` is a scenario that emulates a
 series of Sui transactions, each executed by a (potentially) different
 user. At a high level, a developer writing a test starts the first
-transaction using the `TestScenario::begin` function that takes an
+transaction using the `test_scenario::begin` function that takes an
 address of the user executing this transaction as the first and only
 argument and returns an instance of the `Scenario` struct representing
 a scenario.
@@ -607,34 +607,34 @@ An instance of the `Scenario` struct contains a
 per-address object pool emulating Sui's object storage, with helper
 functions provided to manipulate objects in the pool. Once the first
 transaction is finished, subsequent transactions can be started using
-the `TestScenario::next_tx` function that takes an instance of the
+the `test_scenario::next_tx` function that takes an instance of the
 `Scenario` struct representing the current scenario and an address of
 a (new) user as arguments.
 
 Let us extend our running example with a multi-transaction test that
-uses the `TestScenario` to test sword creation and transfer from the
+uses the `test_scenario` to test sword creation and transfer from the
 point of view of a Sui developer. First, let us create
 [entry functions](#entry-functions) callable from Sui that implement
 sword creation and transfer and put them into the `M1.move` file:
 
 ``` rust
     public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
-        use Sui::Transfer;
-        use Sui::TxContext;
+        use sui::transfer;
+        use sui::tx_context;
         // create a sword
         let sword = Sword {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             magic: magic,
             strength: strength,
         };
         // transfer the sword
-        Transfer::transfer(sword, recipient);
+        transfer::transfer(sword, recipient);
     }
 
     public entry fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
-        use Sui::Transfer;
+        use sui::transfer;
         // transfer the sword
-        Transfer::transfer(sword, recipient);
+        transfer::transfer(sword, recipient);
     }
 ```
 
@@ -649,7 +649,7 @@ existing module-wide `ID` module import) to make the `TxContext`
 struct available for function definitions:
 
 ``` rust
-    use Sui::TxContext::TxContext;
+    use sui::tx_context::TxContext;
 ```
 
 We can now build the module extended with the new functions but still
@@ -659,35 +659,35 @@ function.
 ``` rust
     #[test]
     fun test_sword_transactions() {
-        use Sui::TestScenario;
+        use sui::test_scenario;
 
         let admin = @0xABBA;
         let initial_owner = @0xCAFE;
         let final_owner = @0xFACE;
 
         // first transaction executed by admin
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         {
             // create the sword and transfer it to the initial owner
-            sword_create(42, 7, initial_owner, TestScenario::ctx(scenario));
+            sword_create(42, 7, initial_owner, test_scenario::ctx(scenario));
         };
         // second transaction executed by the initial sword owner
-        TestScenario::next_tx(scenario, &initial_owner);
+        test_scenario::next_tx(scenario, &initial_owner);
         {
             // extract the sword owned by the initial owner
-            let sword = TestScenario::take_owned<Sword>(scenario);
+            let sword = test_scenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
-            sword_transfer(sword, final_owner, TestScenario::ctx(scenario));
+            sword_transfer(sword, final_owner, test_scenario::ctx(scenario));
         };
         // third transaction executed by the final sword owner
-        TestScenario::next_tx(scenario, &final_owner);
+        test_scenario::next_tx(scenario, &final_owner);
         {
             // extract the sword owned by the final owner
-            let sword = TestScenario::take_owned<Sword>(scenario);
+            let sword = test_scenario::take_owned<Sword>(scenario);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
             // return the sword to the object pool (it cannot be simply "dropped")
-            TestScenario::return_owned(scenario, sword)
+            test_scenario::return_owned(scenario, sword)
         }
     }
 ```
@@ -701,11 +701,11 @@ address that creates a sword and transfers its ownership to the
 initial owner.
 
 The second transaction is executed by the initial owner (passed as an
-argument to the `TestScenario::next_tx` function) who then transfers
+argument to the `test_scenario::next_tx` function) who then transfers
 the sword it now owns to its final owner. Please note that in *pure
 Move* we do not have the notion of Sui storage and, consequently, no
 easy way for the emulated Sui transaction to retrieve it from
-storage. This is where the `TestScenario` module comes to help - its
+storage. This is where the `test_scenario` module comes to help - its
 `take_owned` function makes an object of a given type (in this case
 of type `Sword`) owned by an address executing the current transaction
 available for manipulation by the Move code. (For now, we assume that
@@ -722,10 +722,10 @@ disappear.
 
 In the *pure Move* testing function, we handled this problem
 by transferring the sword object to the fake address. But the
-`TestScenario` package gives us a more elegant solution, which is
+`test_scenario` package gives us a more elegant solution, which is
 closer to what happens when Move code is actually executed in the
 context of Sui - we can simply return the sword to the object pool
-using the `TestScenario::return_owned` function.
+using the `test_scenario::return_owned` function.
 
 We can now run the test command again and see that we now have two
 successful tests for our module:
@@ -822,15 +822,15 @@ And module initializer is the perfect place to do it:
 ``` rust
     // module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
-        use Sui::Transfer;
-        use Sui::TxContext;
+        use sui::transfer;
+        use sui::tx_context;
         let admin = Forge {
-            id: TxContext::new_id(ctx),
+            id: tx_context::new_id(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
         // (presumably the game admin)
-        Transfer::transfer(admin, TxContext::sender(ctx));
+        transfer::transfer(admin, tx_context::sender(ctx));
     }
 ```
 
@@ -850,26 +850,26 @@ We can now create a function to test the module initialization:
 ``` rust
     #[test]
     public fun test_module_init() {
-        use Sui::TestScenario;
+        use sui::test_scenario;
 
         // create test address representing game admin
         let admin = @0xABBA;
 
         // first transaction to emulate module initialization
-        let scenario = &mut TestScenario::begin(&admin);
+        let scenario = &mut test_scenario::begin(&admin);
         {
-            init(TestScenario::ctx(scenario));
+            init(test_scenario::ctx(scenario));
         };
         // second transaction to check if the forge has been created
         // and has initial value of zero swords created
-        TestScenario::next_tx(scenario, &admin);
+        test_scenario::next_tx(scenario, &admin);
         {
             // extract the Forge object
-            let forge = TestScenario::take_owned<Forge>(scenario);
+            let forge = test_scenario::take_owned<Forge>(scenario);
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
             // return the Forge object to the object pool
-            TestScenario::return_owned(scenario, forge)
+            test_scenario::return_owned(scenario, forge)
         }
     }
 
@@ -903,9 +903,9 @@ The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framewor
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
-use Sui::Transfer;
+use sui::transfer;
 
-Transfer::transfer(obj, recipient);
+transfer::transfer(obj, recipient);
 ```
 This call will fully consume the object, making it no longer accessible in the current transaction.
 Once an account address owns an object, for any future use (either read or write) of this object, the signer of the transaction must be the owner of the object.
@@ -921,28 +921,28 @@ public entry fun entry_function(a: &A, b: &B, c: &mut C, ctx: &mut TxContext);
 A common pattern of object owning another object is to have a field in the parent object to track the ID of the child object. It is important to ensure that we keep such a field's value consistent with the actual ownership relationship. For example, we do not end up in a situation where the parent's child field contains an ID pointing to object A, while in fact the parent owns object B. To ensure the consistency, we defined a custom type called `ChildRef` to represent object ownership. Whenever an object is transferred to another object, a `ChildRef` instance is created to uniquely identify the ownership. The library implementation ensures that the `ChildRef` goes side-by-side with the child object so that we never lose track or mix up objects.
 To transfer an object `obj` (whose owner is an account address) to another object `owner`:
 ```
-Transfer::transfer_to_object(obj, &mut owner);
+transfer::transfer_to_object(obj, &mut owner);
 ```
 This function returns a `ChildRef` instance that cannot be dropped arbitrarily. It can be stored in the parent as a field.
 Sometimes we need to set the child field of a parent while constructing it. In this case, we don't yet have a parent object to transfer into. In this case, we can call the `transfer_to_object_id` API. Example:
 ```
-let parent_id = TxContext::new_id(ctx);
-let child = Child { id: TxContext::new_id(ctx) };
-let (parent_id, child_ref) = Transfer::transfer_to_object_id(child, parent_id);
+let parent_id = tx_context::new_id(ctx);
+let child = Child { id: tx_context::new_id(ctx) };
+let (parent_id, child_ref) = transfer::transfer_to_object_id(child, parent_id);
 let parent = Parent {
     id: parent_id,
     child: child_ref,
 };
-Transfer::transfer(parent, TxContext::sender(ctx));
+transfer::transfer(parent, tx_context::sender(ctx));
 ```
 To transfer an object `child` from one parent object to a new parent object `new_parent`, we can use the following API:
 ```
-Transfer::transfer_child_to_object(child, child_ref, &mut new_parent);
+transfer::transfer_child_to_object(child, child_ref, &mut new_parent);
 ```
 Note that in this call, we must also have the `child_ref` to prove the original ownership. The call will return a new instance of `ChildRef` that the new parent can maintain.
 To transfer an object `child` from an object to an account address `recipient`, we can use the following API:
 ```
-Transfer::transfer_child_to_address(child, child_ref, recipient);
+transfer::transfer_child_to_address(child, child_ref, recipient);
 ```
 This call also requires to have the `child_ref` as proof of original ownership.
 After this transfer, the object will be owned by `recipient`.
@@ -953,7 +953,7 @@ More examples of how objects can be transferred and owned can be found in
 #### Freeze an object
 To make an object `obj` shared and immutable, one can call:
 ```
-Transfer::freeze_object(obj);
+transfer::freeze_object(obj);
 ```
 After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An immutable object can be used as reference by anyone in their Move call.
 
@@ -962,7 +962,7 @@ This feature is still in development. It only works in Move for demo purpose, an
 
 To make an object `obj` shared and mutable, one can call:
 ```
-Transfer::share_object(obj);
+transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
 
@@ -973,15 +973,15 @@ Shared mutable object can be powerful in that it will make programming a lot sim
 
 To create a new ID for a new object:
 ```
-use Sui::TxContext;
+use sui::tx_context;
 
 // assmue `ctx` has type `&mut TxContext`.
-let id = TxContext::new_id(ctx);
+let id = tx_context::new_id(ctx);
 ```
 
 To obtain the current transaction sender's account address:
 ```
-TxContext::sender(ctx)
+tx_context::sender(ctx)
 ```
 
 ## Next steps

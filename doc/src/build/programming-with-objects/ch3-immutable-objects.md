@@ -17,17 +17,17 @@ After this call, the specified object will become permanently immutable. This is
 Let's add an entry function to the [ColorObject](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move) module to turn an existing (owned) `ColorObject` into an immutable object:
 ```rust
 public entry fun freeze_object(object: ColorObject) {
-    Transfer::freeze_object(object)
+    transfer::freeze_object(object)
 }
 ```
 In the above function, one must already own a `ColorObject` to be able to pass it in. At the end of this call, this object is *frozen* and can never be mutated. It is also no longer owned by anyone.
-> :bulb: Note the `Transfer::freeze_object` API requires passing the object by value. Had we allowed passing the object by a mutable reference, we would then still be able to mutate the object after the `freeze_object` call; this contradicts the fact that it should have become immutable.
+> :bulb: Note the `transfer::freeze_object` API requires passing the object by value. Had we allowed passing the object by a mutable reference, we would then still be able to mutate the object after the `freeze_object` call; this contradicts the fact that it should have become immutable.
 
 Alternatively, you can also provide an API that creates an immutable object at birth:
 ```rust
 public entry fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
     let color_object = new(red, green, blue, ctx);
-    Transfer::freeze_object(color_object)
+    transfer::freeze_object(color_object)
 }
 ```
 In this function, a fresh new `ColorObject` is created and immediately turned into an immutable object before being owned by anyone.
@@ -48,22 +48,22 @@ Since immutable objects can never be mutated, there will never be a data race ev
 ### Test immutable object
 Let's take a look at how we interact with immutable objects in unit tests.
 
-Previously, we used the `TestScenario::take_owned<T>` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. And `take_owned` returns an object by value, which allows you to mutate, delete or transfer it.
+Previously, we used the `test_scenario::take_owned<T>` API to take an object from the global storage that's owned by the sender of the transaction in a unit test. And `take_owned` returns an object by value, which allows you to mutate, delete or transfer it.
 
-To take an immutable object, we will need to use a new API: `TestScenario::take_immutable<T>`. This is required because immutable objects can be accessed only through read-only references. To ensure this, instead of returning the object directly, `take_immutable<T>` returns a wrapper, which we will need to make another call to get a read-only reference: `TestScenario::borrow`.
+To take an immutable object, we will need to use a new API: `test_scenario::take_immutable<T>`. This is required because immutable objects can be accessed only through read-only references. To ensure this, instead of returning the object directly, `take_immutable<T>` returns a wrapper, which we will need to make another call to get a read-only reference: `test_scenario::borrow`.
 
 Let's see it work in action (`ColorObjectTests::test_immutable`):
 ```rust
 let sender1 = @0x1;
-let scenario = &mut TestScenario::begin(&sender1);
+let scenario = &mut test_scenario::begin(&sender1);
 {
-    let ctx = TestScenario::ctx(scenario);
-    ColorObject::create_immutable(255, 0, 255, ctx);
+    let ctx = test_scenario::ctx(scenario);
+    color_object::create_immutable(255, 0, 255, ctx);
 };
-TestScenario::next_tx(scenario, &sender1);
+test_scenario::next_tx(scenario, &sender1);
 {
     // take_owned does not work for immutable objects.
-    assert!(!TestScenario::can_take_owned<ColorObject>(scenario), 0);
+    assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
 };
 ```
 In this test, we submit a transaction as `sender1`, which would create an immutable object.
@@ -71,13 +71,13 @@ As we can see above, `can_take_owned<ColorObject>` will no longer return `true`,
 ```rust
 // Any sender can work.
 let sender2 = @0x2;
-TestScenario::next_tx(scenario, &sender2);
+test_scenario::next_tx(scenario, &sender2);
 {
-    let object_wrapper = TestScenario::take_immutable<ColorObject>(scenario);
-    let object = TestScenario::borrow(&object_wrapper);
-    let (red, green, blue) = ColorObject::get_color(object);
+    let object_wrapper = test_scenario::take_immutable<ColorObject>(scenario);
+    let object = test_scenario::borrow(&object_wrapper);
+    let (red, green, blue) = color_object::get_color(object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
-    TestScenario::return_immutable(scenario, object_wrapper);
+    test_scenario::return_immutable(scenario, object_wrapper);
 };
 ```
  To show that this object is indeed not owned by anyone, we start the next transaction with `sender2`. As explained earlier, we used `take_immutable` and subsequently `borrow` to obtain a read-only reference to the object. It succeeded! This means that any sender will be able to take an immutable object. In the end, to return the object, we also need to call a new API: `return_immutable`.
@@ -94,9 +94,9 @@ public entry fun update(
 }
 ```
 To summarize, we introduced three new API functions to interact with immutable objects in unit tests:
-- `TestScenario::take_immutable<T>` to take an immutable object wrapper from global storage.
-- `TestScenario::borrow` to obtain a read-only reference from the wrapper above.
-- `TestScenario::return_mmutable` to return the wrapper back to the global storage.
+- `test_scenario::take_immutable<T>` to take an immutable object wrapper from global storage.
+- `test_scenario::borrow` to obtain a read-only reference from the wrapper above.
+- `test_scenario::return_mmutable` to return the wrapper back to the global storage.
 
 
 ### On-chain interactions
@@ -114,7 +114,7 @@ Set the package object ID to the `$PACKAGE` environment variable as we did in pr
 
 Then create a new `ColorObject`:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
+$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 Set the newly created object ID to `$OBJECT`. If we look at the list of objects in the current active account address's wallet:
 ```
@@ -122,7 +122,7 @@ $ wallet objects --address=$ADDR
 ```
 There should be one more, with ID `$OBJECT`. Let's turn it into an immutable object:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "freeze_object" --args \"0x$OBJECT\"
+$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"0x$OBJECT\"
 ```
 Now let's look at the list of objects we own again:
 ```
@@ -136,6 +136,6 @@ Owner: Immutable
 ```
 If we try to mutate it:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "update" --args \"0x$OBJECT\" 0 0 0
+$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "update" --args \"0x$OBJECT\" 0 0 0
 ```
 It will complain that an immutable object cannot be passed to a mutable argument.

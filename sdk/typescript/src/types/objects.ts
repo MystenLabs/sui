@@ -29,7 +29,7 @@ export type SuiData = { dataType: ObjectType } & (
 );
 
 export type SuiMoveObject = {
-  /** Move type (e.g., "0x2::Coin::Coin<0x2::SUI::SUI>") */
+  /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string;
   /** Fields and values stored inside the Move object */
   fields: ObjectContentFields;

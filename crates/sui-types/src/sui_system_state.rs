@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::{balance::Balance, coin::TreasuryCap, id::VersionedID, SUI_FRAMEWORK_ADDRESS};
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
-pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("SuiSystem");
+pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 
-/// Rust version of the Move Sui::SuiSystem::SystemParameters type
+/// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SystemParameters {
     pub min_validator_stake: u64,
@@ -35,7 +35,7 @@ pub struct ValidatorMetadata {
     pub next_epoch_stake: u64,
 }
 
-/// Rust version of the Move Sui::Validator::Validator type
+/// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
@@ -50,7 +50,7 @@ pub struct Validator {
     pub pending_delegator_withdraw_count: u64,
 }
 
-/// Rust version of the Move Sui::ValidatorSet::ValidatorSet type
+/// Rust version of the Move sui::validator_set::ValidatorSet type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ValidatorSet {
     pub validator_stake: u64,
@@ -62,7 +62,7 @@ pub struct ValidatorSet {
     pub next_epoch_validators: Vec<ValidatorMetadata>,
 }
 
-/// Rust version of the Move Sui::SuiSystem::SuiSystemState type
+/// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemState {
     pub id: VersionedID,

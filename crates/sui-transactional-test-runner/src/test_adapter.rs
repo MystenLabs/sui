@@ -137,7 +137,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     (n.clone(), addr)
                 }));
         for (name, addr) in additional_mapping {
-            if named_address_mapping.contains_key(&name) || name == "Sui" {
+            if named_address_mapping.contains_key(&name) || name == "sui" {
                 panic!("Invalid init. The named address '{}' is reserved", name)
             }
             named_address_mapping.insert(name, addr);
@@ -688,7 +688,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     assert!(map.get("std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
     // TODO fix Sui framework constants
     map.insert(
-        "Sui".to_string(),
+        "sui".to_string(),
         NumericalAddress::new(
             SUI_FRAMEWORK_ADDRESS.into_bytes(),
             move_compiler::shared::NumberFormat::Hex,

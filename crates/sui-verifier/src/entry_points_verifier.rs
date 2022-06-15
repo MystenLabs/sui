@@ -141,7 +141,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         Ok(())
     } else {
         Err(format!(
-            "Expected parameter for {}::{} to be &mut mut {}::{}::{}, but found {}",
+            "Expected parameter for {}::{} to be &mut {}::{}::{}, but found {}",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,

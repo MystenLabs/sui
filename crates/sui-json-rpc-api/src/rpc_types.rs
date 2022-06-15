@@ -693,7 +693,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .map(|(id, value)| (id.to_string(), value.clone().into()))
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
-        "0x2::UTF8::String" | "0x1::ascii::String" => {
+        "0x2::utf8::String" | "0x1::ascii::String" => {
             if let SuiMoveValue::Bytearray(bytes) = fields["bytes"].clone() {
                 if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
@@ -702,18 +702,18 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 }
             }
         }
-        "0x2::Url::Url" => return Some(fields["url"].clone()),
-        "0x2::ID::ID" => {
+        "0x2::url::Url" => return Some(fields["url"].clone()),
+        "0x2::id::ID" => {
             if let SuiMoveValue::Address(id) = fields["bytes"] {
                 return Some(SuiMoveValue::Address(id));
             }
         }
-        "0x2::ID::UniqueID" => {
+        "0x2::id::UniqueID" => {
             if let SuiMoveValue::Address(id) = fields["id"].clone() {
                 return Some(SuiMoveValue::Address(id));
             }
         }
-        "0x2::ID::VersionedID" => {
+        "0x2::id::VersionedID" => {
             if let SuiMoveValue::Address(address) = fields["id"].clone() {
                 if let SuiMoveValue::Number(version) = fields["version"].clone() {
                     return Some(SuiMoveValue::VersionedID {
@@ -723,12 +723,12 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 }
             }
         }
-        "0x2::Balance::Balance" => {
+        "0x2::balance::Balance" => {
             if let SuiMoveValue::Number(value) = fields["value"].clone() {
                 return Some(SuiMoveValue::Number(value));
             }
         }
-        "0x1::Option::Option" => {
+        "0x1::option::Option" => {
             if let SuiMoveValue::Vector(values) = fields["vec"].clone() {
                 return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
             }

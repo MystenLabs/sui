@@ -86,7 +86,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     let mut transactions = Vec::new();
     let shared_object_id = test_shared_object().id();
     for gas_object in test_gas_objects() {
-        let module = "ObjectBasics";
+        let module = "object_basics";
         let function = "create";
         let genesis_package_objects = genesis::clone_genesis_packages();
         let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
