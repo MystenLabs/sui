@@ -83,14 +83,40 @@ transaction rate, etc) although we don't anticipate running a fullnode on
 devnet will require more than a handful of GBs given it is reset upon each
 release roughly every two weeks.
 
+### Software requirements
+
+We recommend running Sui fullnodes on Linux. The Sui team supports the Ubuntu and
+Debian distributions and tests against
+[Ubuntu version 18.04 (Bionic Beaver)](https://releases.ubuntu.com/18.04/).
+
+That said, you are welcome to run a Sui fullnode on the operating system of your
+choosing and submit changes to accommodate that environment.
+
+Before building, ensure the required tools are installed in your environment as
+outlined in the [Prerequisites](../build/install#prerequisites) section. Note,
+you will fork the Sui repository here rather than clone it as described in
+*Prerequisites*. So you can skip that step.
+
+If you are using Linux, install these extra dependencies. For example, in Ubuntu, run:
+```shell
+    apt-get update \
+    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y --no-install-recommends \
+    tzdata \
+    git \
+    ca-certificates \
+    curl \
+    build-essential \
+    libssl-dev \
+    pkg-config \
+    libclang-dev \
+    cmake
+```
+
 ## Configuring your fullnode
 
 Currently, the only supported way of running a fullnode requires building from
 source. In the future, we will provide Docker images for more flexibility
 in how a fullnode is run.
-
-Before building, ensure the required tools are installed in your environment as
-outlined in the [Prerequisites](../build/install#prerequisites) section.
 
 ### Building from source
 
