@@ -1,4 +1,4 @@
 processed 2 tasks
 
 task 1 'publish'. lines 8-10:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModulePublishFailure, source: None } }
+Error: MiscellaneousError
