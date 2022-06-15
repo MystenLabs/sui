@@ -19,7 +19,7 @@ disseminate it to the rest of the network.
 prerequisite. We encourage auditors, bridges, state mirrors and other
 interested parties to join us. At this time, we offer no guarantees on performance
 or stability of our fullnode software. We expect things to evolve and stabilize
-over time, and we're seeking feedback in the form of [issues filed in
+over time, and we're seeking feedback in the form of [Sui Code Bug issues filed in
 GitHub](https://github.com/MystenLabs/sui/issues/new/choose) for any problems
 encountered.
 
