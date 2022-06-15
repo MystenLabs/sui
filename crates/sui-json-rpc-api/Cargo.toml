@@ -20,8 +20,8 @@ serde_json = "1.0.80"
 serde_with = { version = "1.14.0", features = ["hex"] }
 colored = "2.0.0"
 either = "1.6.1"
-move-core-types = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2", features = ["address20"] }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 itertools = "0.10.3"
 
 sui-types = { path = "../sui-types" }
