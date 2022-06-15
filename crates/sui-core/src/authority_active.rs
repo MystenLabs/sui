@@ -32,6 +32,7 @@
 use arc_swap::ArcSwap;
 use std::{
     collections::{BTreeMap, HashMap},
+    ops::Deref,
     sync::Arc,
     time::Duration,
 };
@@ -48,7 +49,7 @@ use crate::{
 use tokio::time::Instant;
 
 pub mod gossip;
-use gossip::gossip_process;
+use gossip::{gossip_process, node_sync_process};
 
 pub mod checkpoint_driver;
 use checkpoint_driver::checkpoint_process;
@@ -233,9 +234,26 @@ where
     pub async fn spawn_gossip_process(self, degree: usize) -> JoinHandle<()> {
         let active = Arc::new(self);
 
-        let gossip_locals = active;
+        // Number of tasks at most "degree" and no more than committee - 1
+        // (validators do not follow themselves for gossip)
+        let committee = active.state.committee.load().deref().clone();
+        let target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+
         tokio::task::spawn(async move {
-            gossip_process(&gossip_locals, degree).await;
+            gossip_process(&active, target_num_tasks).await;
+        })
+    }
+
+    pub async fn spawn_node_sync_process(self) -> JoinHandle<()> {
+        let active = Arc::new(self);
+        let committee = active.state.committee.load().deref().clone();
+        // nodes follow all validators to ensure they can eventually determine
+        // finality of certs. We need to follow 2f+1 _honest_ validators to
+        // eventually find finality, therefore we must follow all validators.
+        let target_num_tasks = committee.voting_rights.len();
+
+        tokio::task::spawn(async move {
+            node_sync_process(&active, target_num_tasks).await;
         })
     }
 }
