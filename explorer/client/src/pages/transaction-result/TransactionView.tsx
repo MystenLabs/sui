@@ -197,6 +197,43 @@ function formatByTransactionKind(
     }
 }
 
+function ItemView({ itm, text }: { itm: any; text: string }) {
+    return itm.link ? (
+        <Longtext
+            text={text}
+            category={itm.category ? itm.category : 'unknown'}
+            isLink={true}
+        />
+    ) : (
+        <>{text}</>
+    );
+}
+
+function SubListView({ itm, list, n }: { itm: any; list: any; n: number }) {
+    return (
+        <li className={styles.list} key={n}>
+            <div>
+                {list.map((sublist: string, l: number) => (
+                    <div className={styles.sublist} key={l}>
+                        <div className={styles.sublist}>
+                            {itm.subLabel ? (
+                                <div className={styles.sublistlabel}>
+                                    {itm.subLabel[l]}:
+                                </div>
+                            ) : (
+                                ''
+                            )}
+                            <div className={styles.sublistvalue}>
+                                <ItemView itm={itm} text={sublist} />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </li>
+    );
+}
+
 function TransactionView({ txdata }: { txdata: DataType }) {
     return (
         <>
@@ -233,78 +270,11 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                 {itm.value.map(
                                                     (list: any, n: number) =>
                                                         itm.sublist ? (
-                                                            <li
-                                                                className={
-                                                                    styles.list
-                                                                }
-                                                                key={n}
-                                                            >
-                                                                <div>
-                                                                    {list.map(
-                                                                        (
-                                                                            sublist: string,
-                                                                            l: number
-                                                                        ) => (
-                                                                            <div
-                                                                                className={
-                                                                                    styles.sublist
-                                                                                }
-                                                                                key={
-                                                                                    l
-                                                                                }
-                                                                            >
-                                                                                <div
-                                                                                    className={
-                                                                                        styles.sublist
-                                                                                    }
-                                                                                >
-                                                                                    {itm.subLabel ? (
-                                                                                        <div
-                                                                                            className={
-                                                                                                styles.sublistlabel
-                                                                                            }
-                                                                                        >
-                                                                                            {
-                                                                                                itm
-                                                                                                    .subLabel[
-                                                                                                    l
-                                                                                                ]
-                                                                                            }
-
-                                                                                            :
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        ''
-                                                                                    )}
-                                                                                    <div
-                                                                                        className={
-                                                                                            styles.sublistvalue
-                                                                                        }
-                                                                                    >
-                                                                                        {itm.link ? (
-                                                                                            <Longtext
-                                                                                                text={
-                                                                                                    sublist
-                                                                                                }
-                                                                                                category={
-                                                                                                    itm.category
-                                                                                                        ? itm.category
-                                                                                                        : 'unknown'
-                                                                                                }
-                                                                                                isLink={
-                                                                                                    true
-                                                                                                }
-                                                                                            />
-                                                                                        ) : (
-                                                                                            sublist
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        )
-                                                                    )}
-                                                                </div>
-                                                            </li>
+                                                            <SubListView
+                                                                itm={itm}
+                                                                n={n}
+                                                                list={list}
+                                                            />
                                                         ) : (
                                                             <li
                                                                 className={
@@ -312,39 +282,20 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                                 }
                                                                 key={n}
                                                             >
-                                                                {itm.link ? (
-                                                                    <Longtext
-                                                                        text={
-                                                                            list
-                                                                        }
-                                                                        category={
-                                                                            itm.category
-                                                                                ? itm.category
-                                                                                : 'unknown'
-                                                                        }
-                                                                        isLink={
-                                                                            true
-                                                                        }
-                                                                    />
-                                                                ) : (
-                                                                    list
-                                                                )}
+                                                                {' '}
+                                                                <ItemView
+                                                                    itm={itm}
+                                                                    text={list}
+                                                                />
                                                             </li>
                                                         )
                                                 )}
                                             </ul>
-                                        ) : itm.link ? (
-                                            <Longtext
-                                                text={itm.value}
-                                                category={
-                                                    itm.category
-                                                        ? itm.category
-                                                        : 'unknown'
-                                                }
-                                                isLink={true}
-                                            />
                                         ) : (
-                                            itm.value
+                                            <ItemView
+                                                itm={itm}
+                                                text={itm.value}
+                                            />
                                         )}
                                     </div>
                                 </div>
