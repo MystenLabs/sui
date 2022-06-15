@@ -115,6 +115,11 @@ message NewNetworkInfoRequest {
     repeated ValidatorData validators = 2;
 }
 
+message NewEpochRequest {
+    uint32 epoch_number = 1;
+    repeated ValidatorData validators = 2;
+}
+
 // A bincode encoded payload. This is intended to be used in the short-term
 // while we don't have good protobuf definitions for Narwhal types
 message BincodeEncodedPayload {
@@ -145,6 +150,8 @@ service Proposer {
 }
 
 service Configuration {
+    // Signals a new epoch
+    rpc NewEpoch (NewEpochRequest) returns (Empty);
     // Signals a change in networking info
     rpc NewNetworkInfo (NewNetworkInfoRequest) returns (Empty);
 }

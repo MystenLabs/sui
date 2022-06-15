@@ -75,7 +75,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
 
         let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), Arc::clone(&self.committee));
 
-        let narwhal_configuration = NarwhalConfiguration::new();
+        let narwhal_configuration = NarwhalConfiguration::new(Arc::clone(&self.committee));
 
         let config = mysten_network::config::Config::default();
         let server = config

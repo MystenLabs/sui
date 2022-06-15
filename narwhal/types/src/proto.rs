@@ -34,7 +34,7 @@ pub use narwhal::{
     Batch as BatchProto, BatchDigest as BatchDigestProto, BatchMessage as BatchMessageProto,
     BincodeEncodedPayload, CertificateDigest as CertificateDigestProto, CollectionError,
     CollectionErrorType, CollectionRetrievalResult, Empty, GetCollectionsRequest,
-    GetCollectionsResponse, MultiAddr as MultiAddrProto, NewNetworkInfoRequest,
+    GetCollectionsResponse, MultiAddr as MultiAddrProto, NewEpochRequest, NewNetworkInfoRequest,
     NodeReadCausalRequest, NodeReadCausalResponse, PublicKey as PublicKeyProto, ReadCausalRequest,
     ReadCausalResponse, RemoveCollectionsRequest, RoundsRequest, RoundsResponse,
     Transaction as TransactionProto, ValidatorData,

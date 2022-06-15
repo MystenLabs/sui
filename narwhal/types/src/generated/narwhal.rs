@@ -137,6 +137,13 @@ pub struct NewNetworkInfoRequest {
     #[prost(message, repeated, tag="2")]
     pub validators: ::prost::alloc::vec::Vec<ValidatorData>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NewEpochRequest {
+    #[prost(uint32, tag="1")]
+    pub epoch_number: u32,
+    #[prost(message, repeated, tag="2")]
+    pub validators: ::prost::alloc::vec::Vec<ValidatorData>,
+}
 /// A bincode encoded payload. This is intended to be used in the short-term
 /// while we don't have good protobuf definitions for Narwhal types
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -451,6 +458,26 @@ pub mod configuration_client {
         pub fn accept_gzip(mut self) -> Self {
             self.inner = self.inner.accept_gzip();
             self
+        }
+        /// Signals a new epoch
+        pub async fn new_epoch(
+            &mut self,
+            request: impl tonic::IntoRequest<super::NewEpochRequest>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/narwhal.Configuration/NewEpoch",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
         }
         /// Signals a change in networking info
         pub async fn new_network_info(
@@ -1370,6 +1397,11 @@ pub mod configuration_server {
     ///Generated trait containing gRPC methods that should be implemented for use with ConfigurationServer.
     #[async_trait]
     pub trait Configuration: Send + Sync + 'static {
+        /// Signals a new epoch
+        async fn new_epoch(
+            &self,
+            request: tonic::Request<super::NewEpochRequest>,
+        ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
         /// Signals a change in networking info
         async fn new_network_info(
             &self,
@@ -1423,6 +1455,44 @@ pub mod configuration_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
+                "/narwhal.Configuration/NewEpoch" => {
+                    #[allow(non_camel_case_types)]
+                    struct NewEpochSvc<T: Configuration>(pub Arc<T>);
+                    impl<
+                        T: Configuration,
+                    > tonic::server::UnaryService<super::NewEpochRequest>
+                    for NewEpochSvc<T> {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::NewEpochRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).new_epoch(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = NewEpochSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/narwhal.Configuration/NewNetworkInfo" => {
                     #[allow(non_camel_case_types)]
                     struct NewNetworkInfoSvc<T: Configuration>(pub Arc<T>);
