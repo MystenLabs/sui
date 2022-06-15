@@ -359,7 +359,7 @@ async fn get_nft_response(
 
     let result = WalletCommands::Call {
         package: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-        module: "DevNetNFT".to_string(),
+        module: "devnet_nft".to_string(),
         function: "mint".to_string(),
         type_args: vec![],
         args,

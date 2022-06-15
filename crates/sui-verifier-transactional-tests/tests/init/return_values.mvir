@@ -3,8 +3,8 @@
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
-    init(ctx: &mut TxContext.TxContext): u64 {
+    import 0x2.tx_context;
+    init(ctx: &mut tx_context.TxContext): u64 {
         label l0:
         abort 0;
     }

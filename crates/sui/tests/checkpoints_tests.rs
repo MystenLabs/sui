@@ -247,7 +247,7 @@ async fn checkpoint_with_shared_objects() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -266,7 +266,7 @@ async fn checkpoint_with_shared_objects() {
     tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
         vec![CallArg::SharedObject(counter_id)],

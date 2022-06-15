@@ -7,5 +7,4 @@ MoveStdlib = { local = "../../../crates/sui-framework/deps/move-stdlib/" }
 Sui = { local = "../../../crates/sui-framework/" }
 
 [addresses]
-Tutorial = "0x0"
-
+tutorial = "0x0"

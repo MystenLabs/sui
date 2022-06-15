@@ -295,8 +295,8 @@ impl IntoPoint for ExecutionDigests {
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = ident_str!("Option");
 
-pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
-pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
+pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
+pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {

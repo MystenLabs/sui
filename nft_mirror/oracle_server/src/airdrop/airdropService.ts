@@ -228,7 +228,7 @@ export class AirdropService {
     ): Promise<[string, string]> {
         const objects = await connection.bulkFetchObjects(oracleAddress);
         const gasCoin = objects.filter(
-            (o) => o.objType === '0x2::Coin::Coin<0x2::GAS::GAS>'
+            (o) => o.objType === '0x2::coin::Coin<0x2::GAS::GAS>'
         )[0].id;
         const oracle_object_identifier =
             this.getPackageAndModule().join('::') +

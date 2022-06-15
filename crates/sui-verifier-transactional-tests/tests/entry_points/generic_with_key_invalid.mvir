@@ -5,10 +5,10 @@
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
+    import 0x2.tx_context;
     import 0x1.option;
 
-    public entry no<T:key>(l0: option.Option<T>, ctx: &mut TxContext.TxContext) {
+    public entry no<T:key>(l0: option.Option<T>, ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }
@@ -17,10 +17,10 @@ module 0x0.M {
 
 //# publish
 module 0x0.M {
-    import 0x2.TxContext;
+    import 0x2.tx_context;
     import 0x1.option;
 
-    public entry no<T:key>(l0: vector<option.Option<T>>, ctx: &mut TxContext.TxContext) {
+    public entry no<T:key>(l0: vector<option.Option<T>>, ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }

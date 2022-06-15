@@ -116,7 +116,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let gas = objects.first().unwrap();
 
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
-    let module = "ObjectBasics".to_string();
+    let module = "object_basics".to_string();
     let function = "create".to_string();
 
     let json_args = vec![

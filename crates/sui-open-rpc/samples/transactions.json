@@ -12,7 +12,7 @@
                   "version": 1,
                   "digest": "aWgI94W3rJkcG74fwSfZmmd+XKuueGL9ulSCeVW0kD0="
                 },
-                "module": "DevNetNFT",
+                "module": "devnet_nft",
                 "function": "mint",
                 "arguments": [
                   "Example NFT",
@@ -96,7 +96,7 @@
         "events": [
           {
             "moveEvent": {
-              "type": "0x2::DevNetNFT::MintNFTEvent",
+              "type": "0x2::devnet_nft::MintNFTEvent",
               "fields": {
                 "creator": "0x08177f0d3cb878f43ed6f6d1990629b0ce3d3122",
                 "name": "Example NFT",
@@ -229,10 +229,10 @@
                   "version": 1,
                   "digest": "aWgI94W3rJkcG74fwSfZmmd+XKuueGL9ulSCeVW0kD0="
                 },
-                "module": "Coin",
+                "module": "coin",
                 "function": "split_vec",
                 "typeArguments": [
-                  "0x2::SUI::SUI"
+                  "0x2::sui::SUI"
                 ],
                 "arguments": [
                   "0xbb7abe79e65f28206759931b2cc00e0bab373f4",
@@ -277,7 +277,7 @@
       "updatedCoin": {
         "data": {
           "dataType": "moveObject",
-          "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
             "balance": 95582,
             "id": {
@@ -301,7 +301,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -324,7 +324,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -347,7 +347,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -370,7 +370,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -393,7 +393,7 @@
         {
           "data": {
             "dataType": "moveObject",
-            "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+            "type": "0x2::coin::Coin<0x2::sui::SUI>",
             "fields": {
               "balance": 20,
               "id": {
@@ -417,7 +417,7 @@
       "updatedGas": {
         "data": {
           "dataType": "moveObject",
-          "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
             "balance": 98935,
             "id": {
@@ -513,7 +513,7 @@
       "updatedGas": {
         "data": {
           "dataType": "moveObject",
-          "type": "0x2::Coin::Coin<0x2::SUI::SUI>",
+          "type": "0x2::coin::Coin<0x2::sui::SUI>",
           "fields": {
             "balance": 98686,
             "id": {

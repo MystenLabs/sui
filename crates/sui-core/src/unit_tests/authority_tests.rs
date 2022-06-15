@@ -207,7 +207,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
 
     // Make a sample transaction.
-    let module = "ObjectBasics";
+    let module = "object_basics";
     let function = "create";
     let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
@@ -1038,7 +1038,7 @@ async fn test_move_call_mutable_object_not_mutated() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "update",
         vec![],
         vec![
@@ -1096,7 +1096,7 @@ async fn test_move_call_delete() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "update",
         vec![],
         vec![
@@ -1116,7 +1116,7 @@ async fn test_move_call_delete() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "delete",
         vec![],
         vec![TestCallArg::Object(new_object_id1)],
@@ -1148,7 +1148,7 @@ async fn test_get_latest_parent_entry() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "update",
         vec![],
         vec![
@@ -1174,7 +1174,7 @@ async fn test_get_latest_parent_entry() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "delete",
         vec![],
         vec![TestCallArg::Object(new_object_id1)],
@@ -1696,7 +1696,7 @@ pub async fn create_move_object(
         gas_object_id,
         sender,
         sender_key,
-        "ObjectBasics",
+        "object_basics",
         "create",
         vec![],
         vec![TestCallArg::U64(16), TestCallArg::Address(*sender)],
@@ -1726,7 +1726,7 @@ async fn shared_object() {
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
 
     // Make a sample transaction.
-    let module = "ObjectBasics";
+    let module = "object_basics";
     let function = "create";
     let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 

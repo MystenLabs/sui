@@ -132,7 +132,7 @@ fn transfer_object_move_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
-            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("object_basics").to_owned(),
             ident_str!("transfer").to_owned(),
             Vec::new(),
             gas_object_ref,
@@ -151,7 +151,7 @@ pub fn crate_object_move_transaction(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    // When creating an object_basics object, we provide the value (u64) and address which will own the object
     let arguments = vec![
         CallArg::Pure(value.to_le_bytes().to_vec()),
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
@@ -161,7 +161,7 @@ pub fn crate_object_move_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
-            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("object_basics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),
             gas_object_ref,
@@ -183,7 +183,7 @@ pub fn delete_object_move_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
-            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("object_basics").to_owned(),
             ident_str!("delete").to_owned(),
             Vec::new(),
             gas_object_ref,
@@ -211,7 +211,7 @@ pub fn set_object_move_transaction(
         TransactionData::new_move_call(
             src,
             framework_obj_ref,
-            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("object_basics").to_owned(),
             ident_str!("set_value").to_owned(),
             Vec::new(),
             gas_object_ref,

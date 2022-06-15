@@ -6,4 +6,4 @@ version = "0.0.1"
 Sui = { local = "../../../../../sui-framework" }
 
 [addresses]
-Examples = "0x0"
+examples = "0x0"

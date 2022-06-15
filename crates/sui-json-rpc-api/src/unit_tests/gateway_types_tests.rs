@@ -57,8 +57,8 @@ fn test_move_value_to_string() {
     let move_value = MoveValue::Struct(MoveStruct::WithTypes {
         type_: StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
+            module: ident_str!("utf8").to_owned(),
             name: ident_str!("String").to_owned(),
-            module: ident_str!("UTF8").to_owned(),
             type_params: vec![],
         },
         fields: vec![(ident_str!("bytes").to_owned(), MoveValue::Vector(values))],
@@ -81,8 +81,8 @@ fn test_move_value_to_url() {
     let string_move_value = MoveValue::Struct(MoveStruct::WithTypes {
         type_: StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
+            module: ident_str!("utf8").to_owned(),
             name: ident_str!("String").to_owned(),
-            module: ident_str!("UTF8").to_owned(),
             type_params: vec![],
         },
         fields: vec![(ident_str!("bytes").to_owned(), MoveValue::Vector(values))],
@@ -91,8 +91,8 @@ fn test_move_value_to_url() {
     let url_move_value = MoveValue::Struct(MoveStruct::WithTypes {
         type_: StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
+            module: ident_str!("url").to_owned(),
             name: ident_str!("Url").to_owned(),
-            module: ident_str!("Url").to_owned(),
             type_params: vec![],
         },
         fields: vec![(ident_str!("url").to_owned(), string_move_value)],

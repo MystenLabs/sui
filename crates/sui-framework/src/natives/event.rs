@@ -14,7 +14,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-/// Implementation of Move native function `Event::emit<T: copy + drop>(event: T)`
+/// Implementation of Move native function `event::emit<T: copy + drop>(event: T)`
 /// Adds an event to the transaction's event log
 pub fn emit(
     context: &mut NativeContext,

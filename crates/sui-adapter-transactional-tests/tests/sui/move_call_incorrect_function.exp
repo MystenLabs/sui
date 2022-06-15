@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'run'. lines 7-9:
-Error: Failed to verify the Move module, reason: "VMError with status LINKER_ERROR at location UNDEFINED and message Cannot find ModuleId { address: _, name: Identifier(\"ObjectBasics\") } in data cache".
+Error: Failed to verify the Move module, reason: "VMError with status LINKER_ERROR at location UNDEFINED and message Cannot find ModuleId { address: _, name: Identifier(\"object_basics\") } in data cache".
 
 task 1 'run'. lines 10-10:
-Error: Function resolution failure: "Could not resolve function 'foo' in module Sui::ObjectBasics".
+Error: Function resolution failure: "Could not resolve function 'foo' in module sui::object_basics".

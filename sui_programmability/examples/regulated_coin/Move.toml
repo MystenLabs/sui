@@ -3,8 +3,9 @@ name = "RegulatedCoin"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../framework" }
+MoveStdlib = { local = "../../../crates/sui-framework/deps/move-stdlib/" }
+Sui = { local = "../../../crates/sui-framework/" }
 
 [addresses]
-RC = "0x0"
-ABC = "0x0"
+rc = "0x0"
+abc = "0x0"

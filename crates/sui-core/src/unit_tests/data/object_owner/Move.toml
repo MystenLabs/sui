@@ -1,9 +1,9 @@
 [package]
-name = "ObjectOwner"
+name = "object_owner"
 version = "0.0.1"
 
 [dependencies]
 Sui = { local = "../../../../../sui-framework" }
 
 [addresses]
-ObjectOwner = "0x0"
+object_owner = "0x0"

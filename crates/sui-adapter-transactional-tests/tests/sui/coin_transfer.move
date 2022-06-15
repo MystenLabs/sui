@@ -7,13 +7,13 @@
 
 //# view-object 100
 
-//# run Sui::Coin::split_and_transfer --type-args Sui::SUI::SUI --args object(100) 10 @B --sender A
+//# run sui::coin::split_and_transfer --type-args sui::sui::SUI --args object(100) 10 @B --sender A
 
 //# view-object 100
 
 //# view-object 106
 
-//# run Sui::Coin::transfer --type-args Sui::SUI::SUI --args object(100) @C --sender B
+//# run sui::coin::transfer --type-args sui::sui::SUI --args object(100) @C --sender B
 
 //# view-object 100
 

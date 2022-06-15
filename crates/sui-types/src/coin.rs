@@ -17,12 +17,12 @@ use crate::{
 };
 use schemars::JsonSchema;
 
-pub const COIN_MODULE_NAME: &IdentStr = ident_str!("Coin");
-pub const COIN_STRUCT_NAME: &IdentStr = COIN_MODULE_NAME;
+pub const COIN_MODULE_NAME: &IdentStr = ident_str!("coin");
+pub const COIN_STRUCT_NAME: &IdentStr = ident_str!("Coin");
 pub const COIN_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
 pub const COIN_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 
-// Rust version of the Move Sui::Coin::Coin type
+// Rust version of the Move sui::coin::Coin type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
 pub struct Coin {
     pub id: VersionedID,
@@ -79,7 +79,7 @@ impl Coin {
     }
 }
 
-// Rust version of the Move Sui::Coin::TreasuryCap type
+// Rust version of the Move sui::coin::TreasuryCap type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TreasuryCap {
     pub id: VersionedID,
