@@ -405,6 +405,11 @@ impl TransactionDigest {
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
     }
+
+    /// Translates digest into a Vec of bytes
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
