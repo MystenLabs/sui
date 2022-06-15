@@ -36,12 +36,19 @@ use sui_types::{
 
 use crate::transaction_input_checker;
 use crate::{
-    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
+    authority::{GatewayStore, UpdateType},
+    authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
+    query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+use sui_json_rpc_api::rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, PublishResponse,
+    SplitCoinResponse, SuiMoveObject, SuiObject, SuiObjectInfo, TransactionEffectsResponse,
+    TransactionResponse,
+};
 
-use crate::gateway_types::*;
+use crate::transaction_input_checker::InputObjects;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
@@ -53,7 +60,6 @@ pub type GatewayClient = Arc<dyn GatewayAPI + Sync + Send>;
 
 pub type GatewayTxSeqNumber = u64;
 
-const MAX_TX_RANGE_SIZE: u64 = 4096;
 /// Number of times to retry failed TX
 const MAX_NUM_TX_RETRIES: usize = 5;
 
@@ -243,6 +249,16 @@ pub trait GatewayAPI {
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error>;
 
+    /// Send SUI coin object to a Sui address. The SUI object is also used as the gas object.
+    async fn transfer_sui(
+        &self,
+        signer: SuiAddress,
+        sui_object_id: ObjectID,
+        gas_budget: u64,
+        recipient: SuiAddress,
+        amount: Option<u64>,
+    ) -> Result<TransactionData, anyhow::Error>;
+
     /// Synchronise account state with a random authorities, updates all object_ids
     /// from account_addr, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, caller will have to handle potential byzantine authority
@@ -306,6 +322,12 @@ pub trait GatewayAPI {
     async fn get_object(&self, object_id: ObjectID)
         -> Result<GetObjectDataResponse, anyhow::Error>;
 
+    /// Get the object data
+    async fn get_raw_object(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetRawObjectDataResponse, anyhow::Error>;
+
     /// Get refs of all objects we own from local cache.
     async fn get_objects_owned_by_address(
         &self,
@@ -351,30 +373,36 @@ where
             .await?)
     }
 
-    // Get object locally, try get from the network if not found.
+    /// This function now always fetch the latest state of the object from validators.
+    /// We need to do so because it's possible for the state on the gateway to be out-of-dated.
+    /// TODO: Once we move the gateway to the wallet SDK and serve the wallet locally,
+    /// we should be able to speculate that the object state is up-to-date most of the time.
+    /// And when it's out-of-dated in the rare case, we need to be able to understand the error
+    /// returned from validators and update the object locally so that the wallet can retry.
     async fn get_object_internal(&self, object_id: &ObjectID) -> SuiResult<Object> {
-        Ok(if let Some(object) = self.store.get_object(object_id)? {
-            debug!(?object_id, ?object, "Fetched object from local store");
-            object
-        } else {
-            let object = self
-                .download_object_from_authorities(*object_id)
-                .await?
-                .into_object()?;
-            debug!(?object_id, ?object, "Fetched object from validators");
-            object
-        })
+        let object = self
+            .download_object_from_authorities(*object_id)
+            .await?
+            .into_object()?;
+        debug!(?object_id, ?object, "Fetched object from validators");
+        Ok(object)
     }
 
-    async fn get_sui_object(&self, object_id: &ObjectID) -> Result<SuiObject, anyhow::Error> {
+    async fn get_sui_object<T: SuiMoveObject>(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<SuiObject<T>, anyhow::Error> {
         let object = self.get_object_internal(object_id).await?;
         self.to_sui_object(object)
     }
 
-    fn to_sui_object(&self, object: Object) -> Result<SuiObject, anyhow::Error> {
+    fn to_sui_object<T: SuiMoveObject>(
+        &self,
+        object: Object,
+    ) -> Result<SuiObject<T>, anyhow::Error> {
         let cache = ModuleCache::new(&*self.store);
         let layout = object.get_layout(ObjectFormatOptions::default(), &cache)?;
-        SuiObject::try_from(object, layout)
+        SuiObject::<T>::try_from(object, layout)
     }
 
     async fn get_object_ref(&self, object_id: &ObjectID) -> SuiResult<ObjectRef> {
@@ -422,9 +450,9 @@ where
 
     async fn execute_transaction_impl_inner(
         &self,
-        all_objects: Vec<(InputObjectKind, Object)>,
+        input_objects: InputObjects,
         transaction: Transaction,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
         // If execute_transaction ever fails due to panic, we should fix the panic and make sure it doesn't.
         // If execute_transaction fails, we should retry the same transaction, and it will
         // properly unlock the objects used in this transaction. In the short term, we will ask the wallet to retry failed transactions.
@@ -461,20 +489,25 @@ where
 
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
+            .effects
             .mutated_and_created()
             .map(|(obj_ref, _)| *obj_ref)
             .collect();
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
+        let update_type = UpdateType::Transaction(
+            self.next_tx_seq_number
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            effects.effects.digest(),
+        );
         self.store
             .update_gateway_state(
-                all_objects,
+                input_objects,
                 mutated_objects,
                 new_certificate.clone(),
                 effects.clone().to_unsigned_effects(),
-                self.next_tx_seq_number
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                update_type,
             )
             .await?;
 
@@ -487,26 +520,26 @@ where
         &self,
         transaction: Transaction,
         is_last_retry: bool,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        transaction.verify_signature()?;
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        transaction.verify()?;
 
         self.sync_input_objects_with_authorities(&transaction)
             .await?;
 
-        let (_gas_status, all_objects) = transaction_input_checker::check_transaction_input(
+        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.store,
             &transaction,
             &self.metrics.shared_obj_tx,
         )
         .await?;
 
-        let owned_objects = transaction_input_checker::filter_owned_objects(&all_objects);
+        let owned_objects = input_objects.filter_owned_objects();
         self.set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
         let exec_result = self
-            .execute_transaction_impl_inner(all_objects, transaction)
+            .execute_transaction_impl_inner(input_objects, transaction)
             .await;
         if exec_result.is_err() && is_last_retry {
             // If we cannot successfully execute this transaction, even after all the retries,
@@ -870,6 +903,7 @@ where
 
         // Okay to unwrap() since we checked that this is Ok
         let (certificate, effects) = res.unwrap();
+        let effects = effects.effects;
 
         debug!(?tx, ?certificate, ?effects, "Transaction succeeded");
         // Create custom response base on the request type
@@ -901,6 +935,7 @@ where
             TransactionEffectsResponse {
                 certificate: certificate.try_into()?,
                 effects: effects.into(),
+                timestamp_ms: None,
             },
         ));
     }
@@ -920,6 +955,21 @@ where
         let object_ref = object.compute_object_reference();
         let data =
             TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
+        Ok(data)
+    }
+
+    async fn transfer_sui(
+        &self,
+        signer: SuiAddress,
+        sui_object_id: ObjectID,
+        gas_budget: u64,
+        recipient: SuiAddress,
+        amount: Option<u64>,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let object = self.get_object_internal(&sui_object_id).await?;
+        let object_ref = object.compute_object_reference();
+        let data =
+            TransactionData::new_transfer_sui(recipient, signer, amount, object_ref, gas_budget);
         Ok(data)
     }
 
@@ -1111,6 +1161,14 @@ where
         Ok(result.try_into()?)
     }
 
+    async fn get_raw_object(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+        let result = self.download_object_from_authorities(object_id).await?;
+        Ok(result.try_into()?)
+    }
+
     async fn get_objects_owned_by_address(
         &self,
         account_addr: SuiAddress,
@@ -1138,7 +1196,7 @@ where
     }
 
     fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
-        Ok(self.store.next_sequence_number()?)
+        QueryHelpers::get_total_transaction_number(&self.store)
     }
 
     fn get_transactions_in_range(
@@ -1146,62 +1204,26 @@ where
         start: GatewayTxSeqNumber,
         end: GatewayTxSeqNumber,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            start <= end,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "start must not exceed end, (start={}, end={}) given",
-                    start, end
-                ),
-            }
-            .into()
-        );
-        fp_ensure!(
-            end - start <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE,
-                    end - start
-                ),
-            }
-            .into()
-        );
-        let res = self.store.transactions_in_seq_range(start, end)?;
-        debug!(?start, ?end, ?res, "Fetched transactions");
-        Ok(res)
+        QueryHelpers::get_transactions_in_range(&self.store, start, end)
     }
 
     fn get_recent_transactions(
         &self,
         count: u64,
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            count <= MAX_TX_RANGE_SIZE,
-            SuiError::GatewayInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE, count
-                ),
-            }
-            .into()
-        );
-        let end = self.get_total_transaction_number()?;
-        let start = if end >= count { end - count } else { 0 };
-        self.get_transactions_in_range(start, end)
+        QueryHelpers::get_recent_transactions(&self.store, count)
     }
 
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        let opt = self.store.get_certified_transaction(&digest)?;
-        match opt {
-            Some(certificate) => Ok(TransactionEffectsResponse {
-                certificate: certificate.try_into()?,
-                effects: self.store.get_effects(&digest)?.into(),
-            }),
-            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
-        }
+        let (cert, effect) = QueryHelpers::get_transaction(&self.store, digest)?;
+
+        Ok(TransactionEffectsResponse {
+            certificate: cert.try_into()?,
+            effects: effect.into(),
+            timestamp_ms: None,
+        })
     }
 }

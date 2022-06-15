@@ -5,10 +5,13 @@ import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { Base64DataBuffer } from '../serialization/base64';
-import { TransactionResponse } from '../types';
+import { SuiAddress, TransactionResponse } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
+  MoveCallTransaction,
+  MergeCoinTransaction,
+  SplitCoinTransaction,
   TransferCoinTransaction,
   TxnDataSerializer,
 } from './txn-data-serializers/txn-data-serializer';
@@ -23,7 +26,7 @@ export abstract class SignerWithProvider implements Signer {
   // Sub-classes MUST implement these
 
   // Returns the checksum address
-  abstract getAddress(): Promise<string>;
+  abstract getAddress(): Promise<SuiAddress>;
 
   /**
    * Returns the signature for the data and the public key of the signer
@@ -68,7 +71,53 @@ export abstract class SignerWithProvider implements Signer {
   async transferCoin(
     transaction: TransferCoinTransaction
   ): Promise<TransactionResponse> {
-    const txBytes = await this.serializer.newTransferCoin(transaction);
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newTransferCoin(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  /**
+   * Serialize and Sign a `MergeCoin` transaction and submit to the Gateway for execution
+   */
+  async mergeCoin(
+    transaction: MergeCoinTransaction
+  ): Promise<TransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newMergeCoin(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  /**
+   * Serialize and Sign a `SplitCoin` transaction and submit to the Gateway for execution
+   */
+  async splitCoin(
+    transaction: SplitCoinTransaction
+  ): Promise<TransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newSplitCoin(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  /**
+   * Serialize and Sign a `MoveCall` transaction and submit to the Gateway for execution
+   */
+  async executeMoveCall(
+    transaction: MoveCallTransaction
+  ): Promise<TransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newMoveCall(
+      signerAddress,
+      transaction
+    );
     return await this.signAndExecuteTransaction(txBytes);
   }
 }

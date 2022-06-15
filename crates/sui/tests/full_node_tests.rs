@@ -4,30 +4,25 @@
 use futures::StreamExt;
 use std::sync::Arc;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui_config::{NetworkConfig, PersistedConfig, SUI_NETWORK_CONFIG};
 use sui_core::authority::AuthorityState;
 use sui_node::SuiNode;
 
-use sui_types::object::Owner;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
 };
-use test_utils::network::setup_network_and_wallet_in_working_dir;
+use test_utils::network::setup_network_and_wallet;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
 async fn transfer_coin(
-    node: &SuiNode,
     context: &mut WalletContext,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
     let sender = context.config.accounts.get(0).cloned().unwrap();
     let receiver = context.config.accounts.get(1).cloned().unwrap();
 
-    let object_refs = node
-        .state()
-        .get_owner_objects(Owner::AddressOwner(sender))?;
+    let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
     let gas_object = object_refs.get(0).unwrap().object_id;
     let object_to_send = object_refs.get(1).unwrap().object_id;
 
@@ -83,7 +78,7 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
                     // Upon receiving a transaction digest we store it, if it is not processed already.
                     Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
                         info!(?digest, "Received Transaction");
-                        if wait_digest == digest {
+                        if wait_digest == digest.transaction {
                             info!(?digest, "Digest found");
                             break;
                         }
@@ -111,17 +106,14 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
 
 #[tokio::test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
+    telemetry_subscribers::init_for_testing();
 
-    let (_network, mut context, _) = setup_network_and_wallet_in_working_dir(&working_dir).await?;
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
-    let network_config_path = working_dir.path().join(SUI_NETWORK_CONFIG);
-    let config: NetworkConfig = PersistedConfig::read(&network_config_path)?;
-    let config = config.generate_fullnode_config();
-
+    let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
 
-    let (transfered_object, _, receiver, digest) = transfer_coin(&node, &mut context).await?;
+    let (transfered_object, _, receiver, digest) = transfer_coin(&mut context).await?;
     wait_for_tx(digest, node.state().clone()).await;
 
     // verify that the node has seen the transfer
@@ -130,28 +122,21 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
 
+    // timestamp is recorded
+    let ts = node.state().get_timestamp_ms(&digest).await?;
+    assert!(ts.is_some());
+
     Ok(())
 }
 
 #[tokio::test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
-    let subscriber = ::tracing_subscriber::FmtSubscriber::builder()
-        .with_test_writer()
-        .with_env_filter(::tracing_subscriber::EnvFilter::from_default_env())
-        .finish();
-    let _ = ::tracing::subscriber::set_global_default(subscriber);
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
-    let working_dir = tempfile::tempdir()?;
-
-    let (_network, mut context, _) = setup_network_and_wallet_in_working_dir(&working_dir).await?;
-
-    let network_config_path = working_dir.path().join(SUI_NETWORK_CONFIG);
-    let config: NetworkConfig = PersistedConfig::read(&network_config_path)?;
-    let config = config.generate_fullnode_config();
-
+    let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
 
-    let (transfered_object, sender, receiver, digest) = transfer_coin(&node, &mut context).await?;
+    let (transfered_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -159,28 +144,63 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         .state()
         .get_transactions_by_input_object(transfered_object)
         .await?;
+
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     let txes = node
         .state()
         .get_transactions_by_mutated_object(transfered_object)
         .await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     let txes = node.state().get_transactions_from_addr(sender).await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     let txes = node.state().get_transactions_to_addr(receiver).await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     // Note that this is also considered a tx to the sender, because it mutated
     // one or more of the sender's objects.
     let txes = node.state().get_transactions_to_addr(sender).await?;
+    assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
 
     // No transactions have originated from the receiver
     let txes = node.state().get_transactions_from_addr(receiver).await?;
     assert_eq!(txes.len(), 0);
+
+    // timestamp is recorded
+    let ts = node.state().get_timestamp_ms(&digest).await?;
+    assert!(ts.is_some());
+
+    Ok(())
+}
+
+// Test for syncing a node to an authority that already has many txes.
+#[tokio::test]
+async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_transfered_object, sender, _receiver, digest) = transfer_coin(&mut context).await?;
+
+    sleep(Duration::from_millis(1000)).await;
+
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config).await?;
+
+    wait_for_tx(digest, node.state().clone()).await;
+
+    let txes = node.state().get_transactions_from_addr(sender).await?;
+    assert_eq!(txes.last().unwrap().1, digest);
 
     Ok(())
 }

@@ -70,3 +70,13 @@
     overflow-y: auto;
     max-height: 100%;
 }
+
+.explorer-link {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    font-size: 10px;
+    padding: 5px;
+    color: #43b0e6;
+    text-decoration: none;
+}

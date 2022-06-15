@@ -8,7 +8,7 @@ use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::PartialVMResult,
-    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex, Visibility},
+    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use sui_framework::EventType;
 use sui_types::{
@@ -23,7 +23,7 @@ use sui_types::{
     storage::{DeleteKind, Storage},
 };
 use sui_verifier::{
-    entry_points_verifier::{INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
+    entry_points_verifier::{is_tx_context, INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
     verifier,
 };
 
@@ -41,6 +41,7 @@ use std::{
     fmt::Debug,
 };
 
+use crate::object_root_ancestor_map::ObjectRootAncestorMap;
 pub use move_vm_runtime::move_vm::MoveVM;
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
@@ -80,14 +81,16 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     let is_genesis = ctx.digest() == TransactionDigest::genesis();
     let TypeCheckSuccess {
         module_id,
-        args,
+        mut args,
         object_data,
         by_value_objects,
         mutable_ref_objects,
+        has_ctx_arg,
     } = resolve_and_type_check(&objects, &module, function, &type_args, args, is_genesis)?;
 
-    let mut args = args;
-    args.push(ctx.to_vec());
+    if has_ctx_arg {
+        args.push(ctx.to_vec());
+    }
     execute_internal(
         vm,
         state_view,
@@ -95,6 +98,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         function,
         type_args,
         args,
+        has_ctx_arg,
         object_data,
         by_value_objects,
         mutable_ref_objects,
@@ -116,6 +120,7 @@ fn execute_internal<
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
+    has_ctx_arg: bool,
     object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     by_value_objects: BTreeSet<ObjectID>,
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
@@ -157,7 +162,12 @@ fn execute_internal<
             // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
-            debug_assert!(mutable_ref_objects.len() + 1 == mutable_reference_outputs.len());
+            let num_mut_objects = if has_ctx_arg {
+                mutable_ref_objects.len() + 1
+            } else {
+                mutable_ref_objects.len()
+            };
+            debug_assert!(num_mut_objects == mutable_reference_outputs.len());
 
             // When this function is used during publishing, it
             // may be executed several times, with objects being
@@ -166,9 +176,11 @@ fn execute_internal<
             // reflects what happened each time we call into the
             // Move VM (e.g. to account for the number of created
             // objects).
-            let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
-            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
-            ctx.update_state(updated_ctx)?;
+            if has_ctx_arg {
+                let (_, ctx_bytes, _) = mutable_reference_outputs.pop().unwrap();
+                let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
+                ctx.update_state(updated_ctx)?;
+            }
 
             let mutable_refs = mutable_reference_outputs
                 .into_iter()
@@ -246,17 +258,12 @@ pub fn store_package_and_init_modules<
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
-            let init_fdef = module.function_defs.iter().find(|fdef| {
+            module.function_defs.iter().find(|fdef| {
                 let fhandle = module.function_handle_at(fdef.function).name;
                 let fname = module.identifier_at(fhandle);
                 fname == INIT_FN_NAME
             })?;
-
-            let fhandle = module.function_handle_at(init_fdef.function);
-            let parameters = &module.signature_at(fhandle.parameters).0;
-            debug_assert!(parameters.len() <= 1);
-            let needs_tx_context = !parameters.is_empty();
-            Some((module.self_id(), needs_tx_context))
+            Some(module.self_id())
         })
         .collect();
 
@@ -273,17 +280,14 @@ pub fn store_package_and_init_modules<
 fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     vm: &MoveVM,
-    module_ids_to_init: Vec<(ModuleId, /* needs TxContext */ bool)>,
+    module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> SuiResult {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
-    for (module_id, needs_tx_context) in module_ids_to_init {
-        let args = if needs_tx_context {
-            vec![ctx.to_vec()]
-        } else {
-            vec![]
-        };
+    for module_id in module_ids_to_init {
+        let args = vec![ctx.to_vec()];
+        let has_ctx_arg = true;
 
         execute_internal(
             vm,
@@ -292,6 +296,7 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             &init_ident,
             Vec::new(),
             args,
+            has_ctx_arg,
             BTreeMap::new(),
             BTreeSet::new(),
             BTreeMap::new(),
@@ -419,7 +424,7 @@ fn process_successful_execution<
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents(new_contents);
+            .update_contents_and_increment_version(new_contents);
         state_view.write_object(obj);
     }
     let tx_digest = ctx.digest();
@@ -646,6 +651,8 @@ pub struct TypeCheckSuccess {
     pub by_value_objects: BTreeSet<ObjectID>,
     pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     pub args: Vec<Vec<u8>>,
+    /// is TxContext included in the arguments?
+    pub has_ctx_arg: bool,
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -661,6 +668,7 @@ pub fn resolve_and_type_check(
     is_genesis: bool,
 ) -> Result<TypeCheckSuccess, SuiError> {
     // Resolve the function we are calling
+    let view = &BinaryIndexedView::Module(module);
     let function_str = function.as_ident_str();
     let module_id = module.self_id();
     let fdef_opt = module.function_defs.iter().find(|fdef| {
@@ -677,14 +685,14 @@ pub fn resolve_and_type_check(
             })
         }
     };
-    // Check for script visibility, but ignore for genesis.
-    // Genesis calls private functions, and bypasses this rule. This is helpful for ensuring the
-    // functions are not called again later.
+    // Check for entry modifier, but ignore for genesis.
+    // Genesis calls non-entry, private functions, and bypasses this rule. This is helpful for
+    // ensuring the functions are not called again later.
     // In other words, this is an implementation detail that we are using `execute` for genesis
     // functions, and as such need to bypass this check.
-    if fdef.visibility != Visibility::Script && !is_genesis {
-        return Err(SuiError::InvalidFunctionVisibility {
-            error: "Can only call functions with 'public(script)' visibility".to_string(),
+    if !fdef.is_entry && !is_genesis {
+        return Err(SuiError::InvalidNonEntryFunction {
+            error: "Can only call `entry` functions".to_string(),
         });
     }
     let fhandle = module.function_handle_at(fdef.function);
@@ -701,8 +709,16 @@ pub fn resolve_and_type_check(
     }
 
     // total number of args is (|objects| + |pure_args|) + 1 for the the `TxContext` object
-    let num_args = args.len() + 1;
     let parameters = &module.signature_at(fhandle.parameters).0;
+    let has_ctx_arg = parameters
+        .last()
+        .map(|t| is_tx_context(view, t))
+        .unwrap_or(false);
+    let num_args = if has_ctx_arg {
+        args.len() + 1
+    } else {
+        args.len()
+    };
     if parameters.len() != num_args {
         return Err(SuiError::InvalidFunctionSignature {
             error: format!(
@@ -722,7 +738,6 @@ pub fn resolve_and_type_check(
     // Track the mapping from each input object to its Move type.
     // This will be needed latter in `check_child_object_of_shared_object`.
     let mut object_type_map = BTreeMap::new();
-    let view = &BinaryIndexedView::Module(module);
     let bcs_args = args
         .into_iter()
         .enumerate()
@@ -843,6 +858,7 @@ pub fn resolve_and_type_check(
         by_value_objects,
         mutable_ref_objects,
         args: bcs_args,
+        has_ctx_arg,
     })
 }
 
@@ -854,61 +870,25 @@ fn check_child_object_of_shared_object(
     object_type_map: &BTreeMap<ObjectID, ModuleId>,
     current_module: ModuleId,
 ) -> SuiResult {
-    // ancestor_map is a cache that remembers the top ancestor of each object.
-    // Top ancestor is the root object at the top in the object ownership chain whose
-    // parent is no longer an object.
-    let mut ancestor_map: BTreeMap<ObjectID, ObjectID> = BTreeMap::new();
-    for (object_id, obj) in objects {
-        // We only need to look at objects that are owned by other objects.
-        if !matches!(obj.borrow().owner, Owner::ObjectOwner(_)) {
+    let object_owner_map = objects
+        .iter()
+        .map(|(id, obj)| (*id, obj.borrow().owner))
+        .collect();
+    let ancestor_map = ObjectRootAncestorMap::new(&object_owner_map)?;
+    for (object_id, owner) in object_owner_map {
+        // We are only interested in objects owned by objects.
+        if !matches!(owner, Owner::ObjectOwner(..)) {
             continue;
         }
-        // We trace the object up through the ownership chain, until we either hit
-        // the top (no more parent object), or we hit an object that's already
-        // in the `ancestor_map` (because we visited this object previously).
-        // We then have a pair between this object and its top ancestor. If the top
-        // ancestor is a shared object, we check on their types.
-        let mut ancestor_stack = vec![];
-        let mut cur_id = *object_id;
-        let mut cur_obj = obj;
-        let ancestor_id = loop {
-            if let Some(ancestor) = ancestor_map.get(&cur_id) {
-                break *ancestor;
-            }
-            ancestor_stack.push(cur_id);
-            match cur_obj.borrow().owner {
-                Owner::ObjectOwner(parent_id) => {
-                    cur_obj =
-                        objects
-                            .get(&parent_id.into())
-                            .ok_or(SuiError::MissingObjectOwner {
-                                child_id: cur_id,
-                                parent_id: parent_id.into(),
-                            })?;
-                    cur_id = parent_id.into();
-                    fp_ensure!(
-                        cur_id != ancestor_stack[0],
-                        SuiError::CircularObjectOwnership
-                    );
-                }
-                Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared => {
-                    break cur_id;
-                }
-            };
-        };
-        // For each ancestor we have visited, cache their top ancestor so that if we
-        // ever visit them in the future, we know the answer.
-        while let Some(id) = ancestor_stack.pop() {
-            ancestor_map.insert(id, ancestor_id);
-        }
-        // Check the orphan rule.
-        if objects.get(&ancestor_id).unwrap().borrow().is_shared() {
-            let child_module = object_type_map.get(object_id).unwrap();
+        let (ancestor_id, ancestor_owner) = ancestor_map.get_root_ancestor(&object_id)?;
+        if ancestor_owner.is_shared() {
+            // unwrap safe because the object ID exists in object_owner_map.
+            let child_module = object_type_map.get(&object_id).unwrap();
             let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
             fp_ensure!(
                 child_module == &current_module || ancestor_module == &current_module,
                 SuiError::InvalidSharedChildUse {
-                    child: *object_id,
+                    child: object_id,
                     child_module: current_module.to_string(),
                     ancestor: ancestor_id,
                     ancestor_module: ancestor_module.to_string(),

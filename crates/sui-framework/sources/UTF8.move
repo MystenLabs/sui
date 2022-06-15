@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module Sui::UTF8 {
-    use Std::ASCII;
-    use Std::Option::Option;
+    use std::ascii;
+    use std::option::Option;
 
     /// Wrapper type that should be interpreted as a UTF8 string by clients
     struct String has store, copy, drop {
@@ -18,13 +18,13 @@ module Sui::UTF8 {
     }
 
     /// Construct a UTF8 string from the ASCII string `s`
-    public fun from_ascii(s: ASCII::String): String {
-        String { bytes: ASCII::into_bytes(s) }
+    public fun from_ascii(s: ascii::String): String {
+        String { bytes: ascii::into_bytes(s) }
     }
 
     /// Try to convert `self` to an ASCCI string
-    public fun try_into_ascii(self: String): Option<ASCII::String> {
-        ASCII::try_string(self.bytes)
+    public fun try_into_ascii(self: String): Option<ascii::String> {
+        ascii::try_string(self.bytes)
     }
 
     /// Return the underlying bytes of `self`

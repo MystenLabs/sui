@@ -37,6 +37,11 @@ impl GasCostSummary {
     pub fn gas_used(&self) -> u64 {
         self.computation_cost + self.storage_cost
     }
+
+    /// Get net gas usage, positive number means used gas; negative number means refund.
+    pub fn net_gas_usage(&self) -> i64 {
+        self.gas_used() as i64 - self.storage_rebate as i64
+    }
 }
 
 /// ComputationCost is a newtype wrapper of InternalGasUnits
@@ -121,6 +126,7 @@ fn to_internal(external_units: GasUnits<GasCarrier>) -> InternalGasUnits<GasCarr
 pub struct SuiGasStatus<'a> {
     gas_status: GasStatus<'a>,
     init_budget: GasUnits<GasCarrier>,
+    charge: bool,
     computation_gas_unit_price: GasPrice<GasCarrier>,
     storage_gas_unit_price: GasPrice<GasCarrier>,
     /// storage_cost is the total storage gas units charged so far, due to writes into storage.
@@ -142,13 +148,18 @@ impl<'a> SuiGasStatus<'a> {
         Self::new(
             GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(gas_budget)),
             gas_budget,
+            true,
             computation_gas_unit_price,
             storage_gas_unit_price,
         )
     }
 
     pub fn new_unmetered() -> SuiGasStatus<'a> {
-        Self::new(GasStatus::new_unmetered(), 0, 0, 0)
+        Self::new(GasStatus::new_unmetered(), 0, false, 0, 0)
+    }
+
+    pub fn is_unmetered(&self) -> bool {
+        !self.charge
     }
 
     pub fn get_move_gas_status(&mut self) -> &mut GasStatus<'a> {
@@ -183,6 +194,10 @@ impl<'a> SuiGasStatus<'a> {
         new_size: usize,
         storage_rebate: GasCarrier,
     ) -> SuiResult<u64> {
+        if self.is_unmetered() {
+            return Ok(0);
+        }
+
         // Computation cost of a mutation is charged based on the sum of the old and new size.
         // This is because to update an object in the store, we have to erase the old one and
         // write a new one.
@@ -234,12 +249,14 @@ impl<'a> SuiGasStatus<'a> {
     fn new(
         move_gas_status: GasStatus<'a>,
         gas_budget: u64,
+        charge: bool,
         computation_gas_unit_price: GasCarrier,
         storage_gas_unit_price: u64,
     ) -> SuiGasStatus<'a> {
         SuiGasStatus {
             gas_status: move_gas_status,
             init_budget: GasUnits::new(gas_budget),
+            charge,
             computation_gas_unit_price: GasPrice::new(computation_gas_unit_price),
             storage_gas_unit_price: GasPrice::new(storage_gas_unit_price),
             storage_cost: GasUnits::new(0),
@@ -258,6 +275,9 @@ impl<'a> SuiGasStatus<'a> {
     }
 
     fn deduct_storage_cost(&mut self, cost: &StorageCost) -> SuiResult<GasCarrier> {
+        if self.is_unmetered() {
+            return Ok(0);
+        }
         let ext_cost = to_external(cost.0);
         let charge_amount = to_internal(ext_cost);
         let remaining_gas = self.gas_status.remaining_gas();
@@ -282,7 +302,7 @@ impl<'a> SuiGasStatus<'a> {
 /// 2. If it's enough to pay the flat minimum transaction fee
 /// 3. If it's less than the max gas budget allowed
 /// 4. If the gas_object actually has enough balance to pay for the budget.
-pub fn check_gas_balance(gas_object: &Object, gas_budget: u64) -> SuiResult {
+pub fn check_gas_balance(gas_object: &Object, gas_budget: u64, gas_price: u64) -> SuiResult {
     ok_or_gas_error!(
         gas_object.is_owned(),
         "Gas object must be owned Move object".to_owned()
@@ -300,9 +320,10 @@ pub fn check_gas_balance(gas_object: &Object, gas_budget: u64) -> SuiResult {
     )?;
 
     let balance = get_gas_balance(gas_object)?;
+    let total_amount: u128 = (gas_budget as u128) * (gas_price as u128);
     ok_or_gas_error!(
-        balance >= gas_budget,
-        format!("Gas balance is {balance}, not enough to pay {gas_budget}")
+        (balance as u128) >= total_amount,
+        format!("Gas balance is {balance}, not enough to pay {total_amount} with gas price of {gas_price}")
     )
 }
 
@@ -336,7 +357,7 @@ pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u6
         balance + rebate_amount - deduct_amount,
     );
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap());
+    move_object.update_contents_and_increment_version(bcs::to_bytes(&new_gas_coin).unwrap());
 }
 
 pub fn refund_gas(gas_object: &mut Object, amount: u64) {
@@ -345,7 +366,7 @@ pub fn refund_gas(gas_object: &mut Object, amount: u64) {
     let balance = gas_coin.value();
     let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), balance + amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap());
+    move_object.update_contents_and_increment_version(bcs::to_bytes(&new_gas_coin).unwrap());
 }
 
 pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {

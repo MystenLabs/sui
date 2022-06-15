@@ -6,6 +6,8 @@ import { memo } from 'react';
 
 import Field from './field';
 import CopyToClipboard from '_components/copy-to-clipboard';
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { useMiddleEllipsis, useMediaUrl, useSuiObjectFields } from '_hooks';
 
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
@@ -17,7 +19,8 @@ export type SuiObjectProps = {
 };
 
 function SuiObject({ obj }: SuiObjectProps) {
-    const shortId = useMiddleEllipsis(obj.reference.objectId);
+    const { objectId } = obj.reference;
+    const shortId = useMiddleEllipsis(objectId);
     const objType =
         (isSuiMoveObject(obj.data) && obj.data.type) || 'Move Package';
     const imgUrl = useMediaUrl(obj.data);
@@ -27,10 +30,8 @@ function SuiObject({ obj }: SuiObjectProps) {
         : null;
     return (
         <div className={st.container}>
-            <span className={st.id} title={obj.reference.objectId}>
-                <CopyToClipboard txt={obj.reference.objectId}>
-                    {shortId}
-                </CopyToClipboard>
+            <span className={st.id} title={objectId}>
+                <CopyToClipboard txt={objectId}>{shortId}</CopyToClipboard>
             </span>
             <span className={st.type}>{objType}</span>
             <div className={st.content}>
@@ -60,6 +61,12 @@ function SuiObject({ obj }: SuiObjectProps) {
                     ) : null}
                 </div>
             </div>
+            <ExplorerLink
+                type={ExplorerLinkType.object}
+                objectID={objectId}
+                title="View on Sui Explorer"
+                className={st['explorer-link']}
+            />
         </div>
     );
 }

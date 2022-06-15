@@ -6,7 +6,6 @@
 use crate::{args::*, in_memory_storage::InMemoryStorage};
 use anyhow::{anyhow, bail};
 use bimap::btree::BiBTreeMap;
-use itertools::Itertools;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -31,12 +30,14 @@ use move_vm_runtime::{
 };
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::fmt::Write;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
     sync::Arc,
 };
 use sui_adapter::{adapter::new_move_vm, genesis};
+use sui_core::transaction_input_checker::InputObjects;
 use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
@@ -48,9 +49,7 @@ use sui_types::{
     error::SuiError,
     event::Event,
     gas,
-    messages::{
-        ExecutionStatus, InputObjectKind, Transaction, TransactionData, TransactionEffects,
-    },
+    messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -184,7 +183,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             if !output.is_empty() {
                 output.push_str(", ")
             }
-            output.push_str(&format!("{}: object({})", account, fake))
+            write!(output, "{}: object({})", account, fake).unwrap()
         }
         for object_id in object_ids {
             test_adapter.enumerate_fake(object_id);
@@ -279,7 +278,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let arguments = args
             .into_iter()
             .map(|arg| arg.into_call_args(self))
-            .collect();
+            .collect::<anyhow::Result<_>>()?;
         let package_id = ObjectID::from(*module_id.address());
         let package_ref = match self.storage.get_object(&package_id) {
             Some(obj) => obj.compute_object_reference(),
@@ -443,18 +442,11 @@ impl<'a> SuiTestAdapter<'a> {
                 Some((kind, obj))
             })
             .collect::<Vec<_>>();
-        let transaction_dependencies = objects_by_kind
-            .iter()
-            .map(|(_, obj)| obj.previous_transaction)
-            .collect();
-        let shared_object_refs: Vec<_> = objects_by_kind
-            .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
-            .map(|(_, obj)| obj.compute_object_reference())
-            .sorted()
-            .collect();
+        let input_objects = InputObjects::new(objects_by_kind);
+        let transaction_dependencies = input_objects.transaction_dependencies();
+        let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.storage.clone(), objects_by_kind, transaction_digest);
+            AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
         let TransactionEffects {
             status,
             events,
@@ -564,26 +556,26 @@ impl<'a> SuiTestAdapter<'a> {
             if events.is_empty() {
                 out += "No events"
             } else {
-                out += &format!("events: {}", self.list_events(events))
+                write!(out, "events: {}", self.list_events(events)).unwrap();
             }
         }
         if !created.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("created: {}", self.list_objs(created));
+            write!(out, "created: {}", self.list_objs(created)).unwrap();
         }
         if !written.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("written: {}", self.list_objs(written));
+            write!(out, "written: {}", self.list_objs(written)).unwrap();
         }
         if !deleted.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("deleted: {}", self.list_objs(deleted));
+            write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
         }
 
         if out.is_empty() {
@@ -693,7 +685,7 @@ impl<'a> GetModule for &'a SuiTestAdapter<'_> {
 
 static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| {
     let mut map = move_stdlib::move_stdlib_named_addresses();
-    assert!(map.get("Std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
+    assert!(map.get("std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
     // TODO fix Sui framework constants
     map.insert(
         "Sui".to_string(),

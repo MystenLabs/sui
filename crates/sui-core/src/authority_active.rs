@@ -29,14 +29,17 @@
 
 */
 
+use arc_swap::ArcSwap;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
     time::Duration,
 };
+use sui_storage::follower_store::FollowerStore;
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -46,6 +49,11 @@ use tokio::time::Instant;
 
 pub mod gossip;
 use gossip::gossip_process;
+
+pub mod checkpoint_driver;
+use checkpoint_driver::checkpoint_process;
+
+use self::checkpoint_driver::CheckpointProcessControl;
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
@@ -94,8 +102,9 @@ impl AuthorityHealth {
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
+    pub follower_store: Arc<FollowerStore>,
     // The network interfaces to other authorities
-    pub net: Arc<AuthorityAggregator<A>>,
+    pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
 }
@@ -103,9 +112,10 @@ pub struct ActiveAuthority<A> {
 impl<A> ActiveAuthority<A> {
     pub fn new(
         authority: Arc<AuthorityState>,
+        follower_store: Arc<FollowerStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> SuiResult<Self> {
-        let committee = authority.committee.clone();
+        let committee = authority.clone_committee();
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
@@ -116,8 +126,21 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
-            net: Arc::new(AuthorityAggregator::new(committee, authority_clients)),
+            follower_store,
+            net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
+                committee,
+                authority_clients,
+            ))),
         })
+    }
+
+    pub fn new_with_ephemeral_follower_store(
+        authority: Arc<AuthorityState>,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> SuiResult<Self> {
+        let working_dir = tempfile::tempdir().unwrap();
+        let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
+        Self::new(authority, follower_store, authority_clients)
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -127,10 +150,10 @@ impl<A> ActiveAuthority<A> {
     /// even if we have a few connections.
     pub async fn minimum_wait_for_majority_honest_available(&self) -> Instant {
         let lock = self.health.lock().await;
-        let (_, instant) = self.net.committee.robust_value(
+        let (_, instant) = self.net.load().committee.robust_value(
             lock.iter().map(|(name, h)| (*name, h.no_contact_before)),
             // At least one honest node is at or above it.
-            self.net.committee.quorum_threshold(),
+            self.net.load().committee.quorum_threshold(),
         );
         instant
     }
@@ -166,15 +189,53 @@ impl<A> ActiveAuthority<A> {
     }
 }
 
+impl<A> Clone for ActiveAuthority<A> {
+    fn clone(&self) -> Self {
+        ActiveAuthority {
+            state: self.state.clone(),
+            follower_store: self.follower_store.clone(),
+            net: ArcSwap::from(self.net.load().clone()),
+            health: self.health.clone(),
+        }
+    }
+}
+
 impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    pub async fn spawn_checkpoint_process(self) {
+        self.spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+            .await
+    }
+
     /// Spawn all active tasks.
-    pub async fn spawn_all_active_processes(self) -> JoinHandle<()> {
-        // Spawn a task to take care of gossip
+    pub async fn spawn_checkpoint_process_with_config(
+        self,
+        checkpoint_process_control: Option<CheckpointProcessControl>,
+    ) {
+        let active = Arc::new(self);
+
+        // Spawn task to take care of checkpointing
+        let checkpoint_locals = active; // .clone();
+        let _checkpoint_join = tokio::task::spawn(async move {
+            if let Some(checkpoint) = checkpoint_process_control {
+                checkpoint_process(&checkpoint_locals, &checkpoint).await;
+            }
+        });
+
+        if let Err(err) = _checkpoint_join.await {
+            error!("Join checkpoint task end error: {:?}", err);
+        }
+    }
+
+    /// Spawn gossip process
+    pub async fn spawn_gossip_process(self, degree: usize) -> JoinHandle<()> {
+        let active = Arc::new(self);
+
+        let gossip_locals = active;
         tokio::task::spawn(async move {
-            gossip_process(&self, 4).await;
+            gossip_process(&gossip_locals, degree).await;
         })
     }
 }

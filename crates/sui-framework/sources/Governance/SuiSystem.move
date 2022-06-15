@@ -7,6 +7,7 @@ module Sui::SuiSystem {
     use Sui::Delegation::{Self, Delegation};
     use Sui::EpochRewardRecord::{Self, EpochRewardRecord};
     use Sui::ID::{Self, VersionedID};
+    use Sui::LockedCoin::{Self, LockedCoin};
     use Sui::SUI::SUI;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
@@ -24,8 +25,6 @@ module Sui::SuiSystem {
     struct SystemParameters has store {
         /// Lower-bound on the amount of stake required to become a validator.
         min_validator_stake: u64,
-        /// Upper-bound on the amount of stake allowed to become a validator.
-        max_validator_stake: u64,
         /// Maximum number of validator candidates at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
         max_validator_candidate_count: u64,
@@ -59,9 +58,7 @@ module Sui::SuiSystem {
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
-        max_validator_stake: u64,
     ) {
-        assert!(min_validator_stake < max_validator_stake, 0);
         let state = SuiSystemState {
             // Use a hardcoded ID.
             id: ID::get_sui_system_state_object_id(),
@@ -71,7 +68,6 @@ module Sui::SuiSystem {
             storage_fund,
             parameters: SystemParameters {
                 min_validator_stake,
-                max_validator_stake,
                 max_validator_candidate_count,
             },
             delegation_reward: Balance::zero(),
@@ -86,7 +82,7 @@ module Sui::SuiSystem {
     /// The amount of stake in the `validator` object must meet the requirements.
     // TODO: Does this need to go through a voting process? Any other criteria for
     // someone to become a validator?
-    public(script) fun request_add_validator(
+    public entry fun request_add_validator(
         self: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
         name: vector<u8>,
@@ -100,8 +96,7 @@ module Sui::SuiSystem {
         );
         let stake_amount = Coin::value(&stake);
         assert!(
-            stake_amount >= self.parameters.min_validator_stake
-                && stake_amount <= self.parameters.max_validator_stake,
+            stake_amount >= self.parameters.min_validator_stake,
             0
         );
         let validator = Validator::new(
@@ -120,7 +115,7 @@ module Sui::SuiSystem {
     /// (i.e. sender must match the sui_address in the validator).
     /// At the end of the epoch, the `validator` object will be returned to the sui_address
     /// of the validator.
-    public(script) fun request_remove_validator(
+    public entry fun request_remove_validator(
         self: &mut SuiSystemState,
         ctx: &mut TxContext,
     ) {
@@ -131,7 +126,7 @@ module Sui::SuiSystem {
     }
 
     /// A validator can request adding more stake. This will be processed at the end of epoch.
-    public(script) fun request_add_stake(
+    public entry fun request_add_stake(
         self: &mut SuiSystemState,
         new_stake: Coin<SUI>,
         ctx: &mut TxContext,
@@ -139,7 +134,6 @@ module Sui::SuiSystem {
         ValidatorSet::request_add_stake(
             &mut self.validators,
             Coin::into_balance(new_stake),
-            self.parameters.max_validator_stake,
             ctx,
         )
     }
@@ -149,7 +143,7 @@ module Sui::SuiSystem {
     /// in the current epoch and hence is not active yet), the stake will be withdrawn immediately
     /// and a coin with the withdraw amount will be sent to the validator's address.
     /// If the sender represents an active validator, the request will be processed at the end of epoch.
-    public(script) fun request_withdraw_stake(
+    public entry fun request_withdraw_stake(
         self: &mut SuiSystemState,
         withdraw_amount: u64,
         ctx: &mut TxContext,
@@ -162,7 +156,7 @@ module Sui::SuiSystem {
         )
     }
 
-    public(script) fun request_add_delegation(
+    public entry fun request_add_delegation(
         self: &mut SuiSystemState,
         delegate_stake: Coin<SUI>,
         validator_address: address,
@@ -176,7 +170,21 @@ module Sui::SuiSystem {
         Delegation::create(starting_epoch, validator_address, delegate_stake, ctx);
     }
 
-    public(script) fun request_remove_delegation(
+    public entry fun request_add_delegation_with_locked_coin(
+        self: &mut SuiSystemState,
+        delegate_stake: LockedCoin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let amount = LockedCoin::value(&delegate_stake);
+        ValidatorSet::request_add_delegation(&mut self.validators, validator_address, amount);
+
+        // Delegation starts from the next epoch.
+        let starting_epoch = self.epoch + 1;
+        Delegation::create_from_locked_coin(starting_epoch, validator_address, delegate_stake, ctx);
+    }
+
+    public entry fun request_remove_delegation(
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
         ctx: &mut TxContext,
@@ -192,7 +200,7 @@ module Sui::SuiSystem {
     // TODO: Once we support passing vector of object references as arguments,
     // we should support passing a vector of &mut EpochRewardRecord,
     // which will allow delegators to claim all their reward in one transaction.
-    public(script) fun claim_delegation_reward(
+    public entry fun claim_delegation_reward(
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
         epoch_reward_record: &mut EpochRewardRecord,
@@ -215,15 +223,15 @@ module Sui::SuiSystem {
     /// 2. Distribute computation charge to validator stake and delegation stake.
     /// 3. Create reward information records for each validator in this epoch.
     /// 4. Update all validators.
-    public(script) fun advance_epoch(
+    public entry fun advance_epoch(
         self: &mut SuiSystemState,
         new_epoch: u64,
         storage_charge: u64,
         computation_charge: u64,
         ctx: &mut TxContext,
     ) {
-        // Only an active validator can make a call to this function.
-        assert!(ValidatorSet::is_active_validator(&self.validators, TxContext::sender(ctx)), 0);
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(TxContext::sender(ctx) == @0x0, 0);
 
         let storage_reward = Balance::create_with_value(storage_charge);
         let computation_reward = Balance::create_with_value(computation_charge);

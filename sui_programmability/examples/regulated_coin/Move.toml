@@ -1,0 +1,10 @@
+[package]
+name = "RegulatedCoin"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../framework" }
+
+[addresses]
+RC = "0x0"
+ABC = "0x0"

@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use move_core_types::{account_address::AccountAddress, ident_str};
-use once_cell::sync::Lazy;
 use signature::Signer;
 
 use sui_adapter::genesis;
@@ -31,8 +30,6 @@ pub fn authority_genesis_objects(
     objects
 }
 
-static LOGGING_INIT: Lazy<()> = Lazy::new(tracing_subscriber::fmt::init);
-
 pub async fn init_local_authorities(
     genesis_objects: Vec<Vec<Object>>,
 ) -> (
@@ -50,8 +47,7 @@ pub async fn init_local_authorities_with_genesis(
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
 ) {
-    #[allow(clippy::no_effect)]
-    *LOGGING_INIT; // Initialize logging if needed
+    telemetry_subscribers::init_for_testing();
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..genesis_objects.len() {
@@ -76,7 +72,15 @@ pub async fn init_local_authorities_with_genesis(
         states.push(client.state.clone());
         clients.insert(authority_name, client);
     }
-    (AuthorityAggregator::new(committee, clients), states)
+    let timeouts = TimeoutConfig {
+        authority_request_timeout: Duration::from_secs(5),
+        pre_quorum_timeout: Duration::from_secs(5),
+        post_quorum_timeout: Duration::from_secs(5),
+    };
+    (
+        AuthorityAggregator::new_with_timeouts(committee, clients, timeouts),
+        states,
+    )
 }
 
 pub fn get_local_client(
@@ -89,7 +93,7 @@ pub fn get_local_client(
         clients.next();
         i += 1;
     }
-    clients.next().unwrap().authority_client()
+    clients.next().unwrap().authority_client_mut()
 }
 
 pub fn transfer_coin_transaction(
@@ -223,18 +227,24 @@ pub fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> 
     Transaction::new(data, signature)
 }
 
-pub async fn do_transaction<A: AuthorityAPI>(authority: &A, transaction: &Transaction) {
+pub async fn do_transaction<A>(authority: &SafeClient<A>, transaction: &Transaction)
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     authority
         .handle_transaction(transaction.clone())
         .await
         .unwrap();
 }
 
-pub async fn extract_cert<A: AuthorityAPI>(
-    authorities: &[&A],
+pub async fn extract_cert<A>(
+    authorities: &[&SafeClient<A>],
     committee: &Committee,
     transaction_digest: &TransactionDigest,
-) -> CertifiedTransaction {
+) -> CertifiedTransaction
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     let mut votes = vec![];
     let mut transaction: Option<SignedTransaction> = None;
     for authority in authorities {
@@ -256,7 +266,7 @@ pub async fn extract_cert<A: AuthorityAPI>(
         }
     }
 
-    let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
+    let stake: StakeUnit = votes.iter().map(|(name, _)| committee.weight(name)).sum();
     let quorum_threshold = committee.quorum_threshold();
     assert!(stake >= quorum_threshold);
 
@@ -267,10 +277,13 @@ pub async fn extract_cert<A: AuthorityAPI>(
     )
 }
 
-pub async fn do_cert<A: AuthorityAPI>(
-    authority: &A,
+pub async fn do_cert<A>(
+    authority: &SafeClient<A>,
     cert: &CertifiedTransaction,
-) -> TransactionEffects {
+) -> TransactionEffects
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     authority
         .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
         .await
@@ -280,7 +293,10 @@ pub async fn do_cert<A: AuthorityAPI>(
         .effects
 }
 
-pub async fn do_cert_configurable<A: AuthorityAPI>(authority: &A, cert: &CertifiedTransaction) {
+pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     let result = authority
         .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
         .await;
@@ -289,7 +305,10 @@ pub async fn do_cert_configurable<A: AuthorityAPI>(authority: &A, cert: &Certifi
     }
 }
 
-pub async fn get_latest_ref<A: AuthorityAPI>(authority: &A, object_id: ObjectID) -> ObjectRef {
+pub async fn get_latest_ref<A>(authority: &SafeClient<A>, object_id: ObjectID) -> ObjectRef
+where
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
+{
     if let Ok(ObjectInfoResponse {
         requested_object_reference: Some(object_ref),
         ..
@@ -330,20 +349,16 @@ async fn execute_transaction_with_fault_configs(
         gas_object1.compute_object_reference(),
         gas_object2.compute_object_reference(),
     );
-    let cert = authorities
-        .process_transaction(tx, Duration::from_secs(5))
-        .await?;
+    let cert = authorities.process_transaction(tx).await?;
 
     for client in authorities.authority_clients.values_mut() {
-        client.authority_client().fault_config.reset();
+        client.authority_client_mut().fault_config.reset();
     }
     for (index, config) in configs_before_process_certificate {
         get_local_client(&mut authorities, *index).fault_config = *config;
     }
 
-    authorities
-        .process_certificate(cert, Duration::from_secs(5))
-        .await?;
+    authorities.process_certificate(cert).await?;
     Ok(())
 }
 
@@ -709,7 +724,7 @@ async fn test_process_transaction1() {
     // on all of them. Note that one authority has processed cert 1, and none cert2,
     // and auth 3 has no seen either.
     authorities
-        .process_transaction(create2.clone(), Duration::from_secs(10))
+        .process_transaction(create2.clone())
         .await
         .unwrap();
 
@@ -782,10 +797,7 @@ async fn test_process_certificate() {
 
     // Test: process the certificate, including bring up to date authority 3.
     //       which is 2 certs behind.
-    authorities
-        .process_certificate(cert2, Duration::from_secs(10))
-        .await
-        .unwrap();
+    authorities.process_certificate(cert2).await.unwrap();
 
     // As a result, we have 2 gas objects and 1 created object.
     let owned_object = get_owned_objects(&authorities, addr1).await;

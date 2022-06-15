@@ -3,8 +3,7 @@
 
 use anyhow::{anyhow, bail};
 use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{SignatureToken, Visibility},
+    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
 };
 use move_core_types::account_address::AccountAddress;
 use move_core_types::{
@@ -18,6 +17,7 @@ use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
 use sui_types::base_types::{decode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::move_package::MovePackage;
+use sui_verifier::entry_points_verifier::is_tx_context;
 
 const HEX_PREFIX: &str = "0x";
 
@@ -366,7 +366,7 @@ pub fn resolve_move_function_args(
     let function_signature = module.function_handle_at(fdef.function);
     let parameters = &module.signature_at(function_signature.parameters).0;
 
-    if fdef.visibility != Visibility::Script {
+    if !fdef.is_entry {
         bail!(
             "{}::{} does not have public(script) visibility",
             module.self_id(),
@@ -375,7 +375,12 @@ pub fn resolve_move_function_args(
     }
 
     // Lengths have to match, less one, due to TxContext
-    let expected_len = parameters.len() - 1;
+    let expected_len = match parameters.last() {
+        Some(param) if is_tx_context(&BinaryIndexedView::Module(&module), param) => {
+            parameters.len() - 1
+        }
+        _ => parameters.len(),
+    };
     if combined_args_json.len() != expected_len {
         return Err(anyhow!(
             "Expected {} args, found {}",

@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::transaction_input_checker::InputObjects;
 use move_core_types::account_address::AccountAddress;
-use sui_types::{event::Event, gas::SuiGasStatus};
+use sui_types::{event::Event, gas::SuiGasStatus, object::Owner};
 
 use super::*;
 
@@ -20,7 +21,7 @@ pub struct AuthorityTemporaryStore<S> {
     package_store: Arc<S>,
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
-    active_inputs: Vec<ObjectRef>, // Inputs that are not read only
+    mutable_inputs: Vec<ObjectRef>, // Inputs that are mutable
     written: BTreeMap<ObjectID, (ObjectRef, Object)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
@@ -36,32 +37,16 @@ impl<S> AuthorityTemporaryStore<S> {
     /// initial objects.
     pub fn new(
         package_store: Arc<S>,
-        input_objects: Vec<(InputObjectKind, Object)>,
+        input_objects: InputObjects,
         tx_digest: TransactionDigest,
     ) -> Self {
-        let active_inputs = input_objects
-            .iter()
-            .filter_map(|(kind, object)| match kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
-            })
-            .collect();
-        let objects = input_objects
-            .into_iter()
-            .map(|(_, object)| (object.id(), object))
-            .collect();
+        let mutable_inputs = input_objects.mutable_inputs();
+        let objects = input_objects.into_object_map();
         Self {
             package_store,
             tx_digest,
             objects,
-            active_inputs,
+            mutable_inputs,
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
@@ -90,7 +75,7 @@ impl<S> AuthorityTemporaryStore<S> {
         }
         (
             self.objects,
-            self.active_inputs,
+            self.mutable_inputs,
             self.written,
             self.deleted,
             self.events,
@@ -100,10 +85,12 @@ impl<S> AuthorityTemporaryStore<S> {
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
     /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
-    /// We skip the last object, which is always the gas object, because gas object will be
-    /// updated after this.
-    pub fn ensure_active_inputs_mutated(&mut self) {
-        for (id, _seq, _) in self.active_inputs[..self.active_inputs.len() - 1].iter() {
+    /// We skip the gas object, because gas object will be updated separately.
+    pub fn ensure_active_inputs_mutated(&mut self, gas_object_id: &ObjectID) {
+        for (id, _seq, _) in &self.mutable_inputs {
+            if id == gas_object_id {
+                continue;
+            }
             if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.
@@ -184,9 +171,16 @@ impl<S> AuthorityTemporaryStore<S> {
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
-        gas_object_id: &ObjectID,
+        gas_object_ref: ObjectRef,
     ) -> TransactionEffects {
-        let (gas_reference, gas_object) = &self.written[gas_object_id];
+        // In the case of special transactions that don't require a gas object,
+        // we don't really care about the effects to gas, just use the input for it.
+        let updated_gas_object_info = if gas_object_ref.0 == ObjectID::ZERO {
+            (gas_object_ref, Owner::AddressOwner(SuiAddress::default()))
+        } else {
+            let (gas_reference, gas_object) = &self.written[&gas_object_ref.0];
+            (*gas_reference, gas_object.owner)
+        };
         TransactionEffects {
             status,
             shared_objects: shared_object_refs,
@@ -233,7 +227,7 @@ impl<S> AuthorityTemporaryStore<S> {
                     }
                 })
                 .collect(),
-            gas_object: (*gas_reference, gas_object.owner),
+            gas_object: updated_gas_object_info,
             events: self.events.clone(),
             dependencies: transaction_dependencies,
         }
@@ -259,7 +253,7 @@ impl<S> AuthorityTemporaryStore<S> {
                 self.written.iter().all(|(elt, _)| used.insert(elt));
                 self.deleted.iter().all(|elt| used.insert(elt.0));
 
-                self.active_inputs.iter().all(|elt| !used.insert(&elt.0))
+                self.mutable_inputs.iter().all(|elt| !used.insert(&elt.0))
             },
             "Mutable input neither written nor deleted."
         );

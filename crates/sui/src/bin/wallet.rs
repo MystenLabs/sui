@@ -33,7 +33,7 @@ const SUI: &str = "   _____       _    _       __      ____     __
 
 #[derive(Parser)]
 #[clap(
-    name = "wallet",
+    name = "sui-cli",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
@@ -53,15 +53,11 @@ struct ClientOpt {
 }
 
 async fn try_main() -> Result<(), anyhow::Error> {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "wallet".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        log_file: Some("wallet.log".into()),
-        ..Default::default()
-    };
-    #[allow(unused)]
-    let guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_log_file("wallet.log")
+        .with_env()
+        .init();
+
     if let Some(git_rev) = std::option_env!("GIT_REV") {
         debug!("Wallet built at git revision {git_rev}");
     }
@@ -142,7 +138,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
             version.push('-');
             version.push_str(git_rev);
         }
-        writeln!(out, "--- sui wallet {version} ---")?;
+        writeln!(out, "--- Sui CLI {version} ---")?;
         writeln!(out)?;
         writeln!(out, "{}", context.config.deref())?;
         writeln!(out, "Welcome to the Sui interactive shell.")?;

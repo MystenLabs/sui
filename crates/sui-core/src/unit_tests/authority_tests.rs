@@ -147,6 +147,99 @@ async fn test_handle_transfer_transaction_bad_signature() {
 }
 
 #[tokio::test]
+async fn test_handle_transfer_transaction_with_max_sequence_number() {
+    let (sender, sender_key) = get_key_pair();
+    let object_id: ObjectID = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let recipient = dbg_addr(2);
+    let authority_state = init_state_with_ids_and_versions(vec![
+        (sender, object_id, SequenceNumber::MAX),
+        (sender, gas_object_id, SequenceNumber::new()),
+    ])
+    .await;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let transfer_transaction = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+    );
+    let res = authority_state
+        .handle_transaction(transfer_transaction)
+        .await;
+    assert!(res.is_err());
+    assert_eq!(
+        res.err(),
+        Some(SuiError::LockErrors {
+            errors: vec![SuiError::InvalidSequenceNumber],
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_handle_shared_object_with_max_sequence_number() {
+    let (sender, keypair) = get_key_pair();
+
+    // Initialize an authority with a (owned) gas object and a shared object.
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::gas_coin::GasCoin;
+        use sui_types::object::MoveObject;
+
+        let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, 10);
+        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
+    };
+    let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
+
+    // Make a sample transaction.
+    let module = "ObjectBasics";
+    let function = "create";
+    let package_object_ref = authority.get_framework_object_ref().await.unwrap();
+
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        gas_object_ref,
+        /* args */
+        vec![
+            CallArg::SharedObject(shared_object_id),
+            CallArg::Pure(16u64.to_le_bytes().to_vec()),
+            CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+        ],
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    let transaction = Transaction::new(data, signature);
+    // Submit the transaction and assemble a certificate.
+    let response = authority.handle_transaction(transaction.clone()).await;
+    assert!(response.is_err());
+    assert_eq!(
+        response.err(),
+        Some(SuiError::LockErrors {
+            errors: vec![SuiError::InvalidSequenceNumber],
+        })
+    );
+}
+
+#[tokio::test]
 async fn test_handle_transfer_transaction_unknown_sender() {
     let sender = get_new_address();
     let (unknown_address, unknown_key) = get_key_pair();
@@ -375,7 +468,8 @@ pub async fn send_and_confirm_transaction(
     let vote = response.signed_transaction.unwrap();
 
     // Collect signatures from a quorum of authorities
-    let mut builder = SignatureAggregator::try_new(transaction, &authority.committee).unwrap();
+    let committee = authority.committee.load();
+    let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     let certificate = builder
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
@@ -459,9 +553,8 @@ async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = MAX_GAS;
-    let gas_seq = SequenceNumber::new();
     let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -695,7 +788,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
-        o.update_contents(old_contents);
+        o.update_contents_and_increment_version(old_contents);
         authority_state.insert_genesis_object(sender_object).await;
     }
 
@@ -1255,6 +1348,147 @@ async fn test_genesis_sui_sysmtem_state_object() {
     assert_eq!(move_object.type_, SuiSystemState::type_());
 }
 
+#[tokio::test]
+async fn test_change_epoch_transaction() {
+    let authority_state = init_state().await;
+    let signed_tx = SignedTransaction::new_change_epoch(
+        1,
+        100,
+        100,
+        authority_state.name,
+        &*authority_state.secret,
+    );
+    // Make sure that the raw transaction will never be accepted by the validator.
+    assert_eq!(
+        authority_state
+            .handle_transaction(signed_tx.clone().to_transaction())
+            .await
+            .unwrap_err(),
+        SuiError::InvalidSystemTransaction
+    );
+    let committee = authority_state.committee.load();
+    let mut builder =
+        SignatureAggregator::try_new(signed_tx.clone().to_transaction(), &committee).unwrap();
+    let certificate = builder
+        .append(
+            signed_tx.auth_sign_info.authority,
+            signed_tx.auth_sign_info.signature,
+        )
+        .unwrap()
+        .unwrap();
+    let result = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction::new(certificate))
+        .await
+        .unwrap();
+    assert!(result.signed_effects.unwrap().effects.status.is_ok());
+    let sui_system_object = authority_state.get_sui_system_state_object().await.unwrap();
+    assert_eq!(sui_system_object.epoch, 1);
+}
+
+#[tokio::test]
+async fn test_transfer_sui_no_amount() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let init_balance = sui_types::gas::get_gas_balance(&gas_object).unwrap();
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&tx_data, &sender_key);
+    let transaction = Transaction::new(tx_data, signature);
+
+    // Make sure transaction handling works as usual.
+    authority_state
+        .handle_transaction(transaction.clone())
+        .await
+        .unwrap();
+
+    let certificate = init_certified_transaction(transaction, &authority_state);
+    let response = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .await
+        .unwrap();
+    let effects = response.signed_effects.unwrap().effects;
+    // Check that the transaction was successful, and the gas object is the only mutated object,
+    // and got transferred. Also check on its version and new balance.
+    assert!(effects.status.is_ok());
+    assert!(effects.mutated_excluding_gas().next().is_none());
+    assert_eq!(effects.gas_object.0 .1, SequenceNumber::new().increment());
+    assert_eq!(effects.gas_object.1, Owner::AddressOwner(recipient));
+    let new_balance = sui_types::gas::get_gas_balance(
+        &authority_state
+            .get_object(&gas_object_id)
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage(),
+        init_balance as i64
+    );
+}
+
+#[tokio::test]
+async fn test_transfer_sui_with_amount() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let init_balance = sui_types::gas::get_gas_balance(&gas_object).unwrap();
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        Some(500),
+        gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&tx_data, &sender_key);
+    let transaction = Transaction::new(tx_data, signature);
+
+    let certificate = init_certified_transaction(transaction, &authority_state);
+    let response = authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .await
+        .unwrap();
+    let effects = response.signed_effects.unwrap().effects;
+    // Check that the transaction was successful, the gas object remains in the original owner,
+    // and an amount is split out and send to the recipient.
+    assert!(effects.status.is_ok());
+    assert!(effects.mutated_excluding_gas().next().is_none());
+    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.created[0].1, Owner::AddressOwner(recipient));
+    let new_gas = authority_state
+        .get_object(&effects.created[0].0 .0)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(sui_types::gas::get_gas_balance(&new_gas).unwrap(), 500);
+    assert_eq!(effects.gas_object.0 .1, SequenceNumber::new().increment());
+    assert_eq!(effects.gas_object.1, Owner::AddressOwner(sender));
+    let new_balance = sui_types::gas::get_gas_balance(
+        &authority_state
+            .get_object(&gas_object_id)
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage() + 500,
+        init_balance as i64
+    );
+}
+
 // helpers
 
 #[cfg(test)]
@@ -1288,6 +1522,7 @@ pub async fn init_state() -> AuthorityState {
         None,
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
+        false,
     )
     .await
 }
@@ -1304,6 +1539,20 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
     state
 }
 
+#[cfg(test)]
+pub async fn init_state_with_ids_and_versions<
+    I: IntoIterator<Item = (SuiAddress, ObjectID, SequenceNumber)>,
+>(
+    objects: I,
+) -> AuthorityState {
+    let state = init_state().await;
+    for (address, object_id, version) in objects {
+        let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
+        state.insert_genesis_object(obj).await;
+    }
+    state
+}
+
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
     for o in objects {
@@ -1315,6 +1564,18 @@ pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I)
 #[cfg(test)]
 pub async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> AuthorityState {
     init_state_with_ids(std::iter::once((address, object))).await
+}
+
+#[cfg(test)]
+pub async fn update_state_with_object_id_and_version(
+    state: AuthorityState,
+    address: SuiAddress,
+    object_id: ObjectID,
+    version: SequenceNumber,
+) -> AuthorityState {
+    let obj = Object::with_id_owner_version_for_testing(object_id, version, address);
+    state.insert_genesis_object(obj).await;
+    state
 }
 
 #[cfg(test)]
@@ -1341,14 +1602,22 @@ fn init_certified_transfer_transaction(
 ) -> CertifiedTransaction {
     let transfer_transaction =
         init_transfer_transaction(sender, secret, recipient, object_ref, gas_object_ref);
+    init_certified_transaction(transfer_transaction, authority_state)
+}
+
+#[cfg(test)]
+fn init_certified_transaction(
+    transaction: Transaction,
+    authority_state: &AuthorityState,
+) -> CertifiedTransaction {
     let vote = SignedTransaction::new(
         0,
-        transfer_transaction.clone(),
+        transaction.clone(),
         authority_state.name,
         &*authority_state.secret,
     );
-    let mut builder =
-        SignatureAggregator::try_new(transfer_transaction, &authority_state.committee).unwrap();
+    let committee = authority_state.committee.load();
+    let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     builder
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
@@ -1486,7 +1755,7 @@ async fn shared_object() {
         .await
         .unwrap();
     let vote = response.signed_transaction.unwrap();
-    let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
+    let certificate = SignatureAggregator::try_new(transaction, &authority.committee.load())
         .unwrap()
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()

@@ -17,16 +17,15 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::{debug, info, trace, Instrument};
+use tracing::{debug, info, instrument, trace, Instrument};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::time::Duration;
+use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 
-// TODO: Make timeout duration configurable.
-const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -37,6 +36,23 @@ pub mod authority_aggregator_tests;
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
+pub struct TimeoutConfig {
+    pub authority_request_timeout: Duration,
+    pub pre_quorum_timeout: Duration,
+    pub post_quorum_timeout: Duration,
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            authority_request_timeout: Duration::from_secs(60),
+            pre_quorum_timeout: Duration::from_secs(60),
+            post_quorum_timeout: Duration::from_secs(30),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,
@@ -44,10 +60,19 @@ pub struct AuthorityAggregator<A> {
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     // Metrics
     pub metrics: &'static GatewayMetrics,
+    pub timeouts: TimeoutConfig,
 }
 
 impl<A> AuthorityAggregator<A> {
     pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
+        Self::new_with_timeouts(committee, authority_clients, Default::default())
+    }
+
+    pub fn new_with_timeouts(
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+        timeouts: TimeoutConfig,
+    ) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
@@ -55,7 +80,26 @@ impl<A> AuthorityAggregator<A> {
                 .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
                 .collect(),
             metrics: &METRICS,
+            timeouts,
         }
+    }
+
+    pub fn clone_client(&self, name: &AuthorityName) -> SafeClient<A>
+    where
+        A: Clone,
+    {
+        self.authority_clients[name].clone()
+    }
+
+    pub fn clone_inner_clients(&self) -> BTreeMap<AuthorityName, A>
+    where
+        A: Clone,
+    {
+        let mut clients = BTreeMap::new();
+        for (name, client) in &self.authority_clients {
+            clients.insert(*name, client.authority_client().clone());
+        }
+        clients
     }
 }
 
@@ -104,6 +148,11 @@ where
     /// Note: Both source and destination may be byzantine, therefore one should always
     /// time limit the call to this function to avoid byzantine authorities consuming
     /// an unbounded amount of resources.
+    #[instrument(
+        name = "sync_authority_source_to_destination",
+        level = "trace",
+        skip_all
+    )]
     pub async fn sync_authority_source_to_destination<
         CertHandler: ConfirmationTransactionHandler,
     >(
@@ -119,18 +168,26 @@ where
         // represent certificates that earlier insertions depend on. Thus updating an
         // authority in the order we pop() the certificates from this stack should ensure
         // certificates are uploaded in causal order.
-        let digest = *cert.certificate.digest();
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid duplicates
-        let mut candidate_certificates: HashSet<TransactionDigest> =
-            vec![digest].into_iter().collect();
+        let mut processed_certificates: HashSet<TransactionDigest> = HashSet::new();
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
 
         while let Some(target_cert) = missing_certificates.pop() {
-            debug!(?digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+            let cert_digest = *target_cert.certificate.digest();
+
+            if processed_certificates.contains(&cert_digest) {
+                continue;
+            }
+
+            debug!(digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+
             match cert_handler.handle(target_cert.clone()).await {
-                Ok(_) => continue,
+                Ok(_) => {
+                    processed_certificates.insert(cert_digest);
+                    continue;
+                }
                 Err(SuiError::LockErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
@@ -139,18 +196,18 @@ where
             // the previous certificates, so we need to read them from the source
             // authority.
             debug!(
-                ?digest,
+                digest = ?cert_digest,
                 "Missing previous certificates, need to find parents from source authorities"
             );
 
             // The first time we cannot find the cert from the destination authority
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
-            let cert_digest = target_cert.certificate.digest();
-            if attempted_certificates.contains(cert_digest) {
+            if attempted_certificates.contains(&cert_digest) {
+                trace!(digest = ?cert_digest, "bailing out after second attempt to fetch");
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
-            attempted_certificates.insert(*cert_digest);
+            attempted_certificates.insert(cert_digest);
 
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
@@ -188,7 +245,7 @@ where
                 );
                 source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
-                        transaction_digest: *cert_digest,
+                        transaction_digest: cert_digest,
                     })
                     .await?
             };
@@ -199,34 +256,43 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
+            trace!(digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
             for returned_digest in &signed_effects.effects.dependencies {
                 trace!(digest =? returned_digest, "Found parent of missing cert");
-                // We check that we are not processing twice the same certificate, as
-                // it would be common if two objects used by one transaction, were also both
-                // mutated by the same preceding transaction.
-                if !candidate_certificates.contains(returned_digest) {
-                    // Add this cert to the set we have processed
-                    candidate_certificates.insert(*returned_digest);
 
-                    let inner_transaction_info = source_client
-                        .handle_transaction_info_request(TransactionInfoRequest {
-                            transaction_digest: *returned_digest,
-                        })
-                        .await?;
-                    trace!(?returned_digest, source =? source_authority, "Got transaction info from source");
+                let inner_transaction_info = source_client
+                    .handle_transaction_info_request(TransactionInfoRequest {
+                        transaction_digest: *returned_digest,
+                    })
+                    .await?;
+                trace!(?returned_digest, source =? source_authority, "Got transaction info from source");
 
-                    let returned_certificate = inner_transaction_info
-                        .certified_transaction
-                        .ok_or(SuiError::AuthorityInformationUnavailable)?;
+                let returned_certificate = inner_transaction_info
+                    .certified_transaction
+                    .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-                    // Add it to the list of certificates to sync
-                    missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
-                }
+                // Add it to the list of certificates to sync
+                trace!(?returned_digest, source =? source_authority, "Pushing transaction onto stack");
+                missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
             }
         }
 
         Ok(())
+    }
+
+    pub async fn sync_certificate_to_authority(
+        &self,
+        cert: ConfirmationTransaction,
+        destination_authority: AuthorityName,
+        retries: usize,
+    ) -> Result<(), SuiError> {
+        self.sync_certificate_to_authority_with_timeout(
+            cert,
+            destination_authority,
+            self.timeouts.authority_request_timeout,
+            retries,
+        )
+        .await
     }
 
     /// Sync a certificate to an authority.
@@ -236,7 +302,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    async fn sync_certificate_to_authority_with_timeout(
+    pub async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: ConfirmationTransaction,
         destination_authority: AuthorityName,
@@ -357,7 +423,7 @@ where
     /// This function provides a flexible way to communicate with a quorum of authorities, processing and
     /// processing their results into a safe overall result, and also safely allowing operations to continue
     /// past the quorum to ensure all authorities are up to date (up to a timeout).
-    async fn quorum_map_then_reduce_with_timeout<'a, S, V, FMap, FReduce>(
+    pub(crate) async fn quorum_map_then_reduce_with_timeout<'a, S, V, FMap, FReduce>(
         &'a self,
         // The initial state that will be used to fold in values from authorities.
         initial_state: S,
@@ -375,7 +441,7 @@ where
         FReduce: Fn(
             S,
             AuthorityName,
-            usize,
+            StakeUnit,
             Result<V, SuiError>,
         ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
@@ -435,7 +501,6 @@ where
     async fn get_object_by_id(
         &self,
         object_id: ObjectID,
-        timeout_after_quorum: Duration,
     ) -> Result<
         (
             BTreeMap<
@@ -452,8 +517,8 @@ where
     > {
         #[derive(Default)]
         struct GetObjectByIDRequestState {
-            good_weight: usize,
-            bad_weight: usize,
+            good_weight: StakeUnit,
+            bad_weight: StakeUnit,
             responses: Vec<(AuthorityName, SuiResult<ObjectInfoResponse>)>,
         }
         let initial_state = GetObjectByIDRequestState::default();
@@ -508,13 +573,13 @@ where
                             // After we reach threshold we wait for potentially less time.
                             Ok(ReduceOutput::ContinueWithTimeout(
                                 state,
-                                timeout_after_quorum,
+                                self.timeouts.post_quorum_timeout,
                             ))
                         }
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
 
@@ -599,8 +664,8 @@ where
     ) -> Result<(BTreeMap<ObjectRef, Vec<AuthorityName>>, Vec<AuthorityName>), SuiError> {
         #[derive(Default)]
         struct OwnedObjectQueryState {
-            good_weight: usize,
-            bad_weight: usize,
+            good_weight: StakeUnit,
+            bad_weight: StakeUnit,
             object_map: BTreeMap<ObjectRef, Vec<AuthorityName>>,
             responded_authorities: Vec<AuthorityName>,
             errors: Vec<(AuthorityName, SuiError)>,
@@ -671,7 +736,7 @@ where
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
         Ok((final_state.object_map, final_state.responded_authorities))
@@ -682,7 +747,6 @@ where
     pub async fn sync_all_given_objects(
         &self,
         objects: &[ObjectID],
-        timeout_after_quorum: Duration,
     ) -> Result<
         (
             Vec<(
@@ -707,9 +771,7 @@ where
                 .map(|(name, _)| *name)
                 .collect();
 
-            let (aggregate_object_info, certificates) = self
-                .get_object_by_id(*object_id, timeout_after_quorum)
-                .await?;
+            let (aggregate_object_info, certificates) = self.get_object_by_id(*object_id).await?;
 
             let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
 
@@ -772,10 +834,9 @@ where
                 // NOTE: this is right now done sequentially, we should do them in parallel using
                 //       the usual FuturesUnordered.
                 let _result = self
-                    .sync_certificate_to_authority_with_timeout(
+                    .sync_certificate_to_authority(
                         ConfirmationTransaction::new(cert.clone()),
                         name,
-                        timeout_after_quorum,
                         DEFAULT_RETRIES,
                     )
                     .await;
@@ -817,11 +878,8 @@ where
         let all_object_ids: HashSet<_> = object_map.keys().map(|object_ref| object_ref.0).collect();
 
         // Then sync all the owned objects
-        self.sync_all_given_objects(
-            &all_object_ids.into_iter().collect::<Vec<_>>(),
-            timeout_after_quorum,
-        )
-        .await
+        self.sync_all_given_objects(&all_object_ids.into_iter().collect::<Vec<_>>())
+            .await
     }
 
     /// Takes a transaction, brings all authorities up to date with the versions of the
@@ -829,7 +887,6 @@ where
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
-        timeout_after_quorum: Duration,
     ) -> Result<CertifiedTransaction, SuiError> {
         // Find out which objects are required by this transaction and
         // ensure they are synced on authorities.
@@ -840,9 +897,8 @@ where
             .map(|o| o.object_id())
             .collect();
 
-        let (_active_objects, _deleted_objects) = self
-            .sync_all_given_objects(&required_ids, timeout_after_quorum)
-            .await?;
+        let (_active_objects, _deleted_objects) =
+            self.sync_all_given_objects(&required_ids).await?;
 
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
@@ -850,7 +906,6 @@ where
         debug!(
             quorum_threshold = threshold,
             validity_threshold = validity,
-            ?timeout_after_quorum,
             "Broadcasting transaction request to authorities"
         );
         trace!("Transaction data: {:?}", transaction.data);
@@ -863,8 +918,8 @@ where
             // The list of errors gathered at any point
             errors: Vec<SuiError>,
             // Tally of stake for good vs bad responses.
-            good_stake: usize,
-            bad_stake: usize,
+            good_stake: StakeUnit,
+            bad_stake: StakeUnit,
         }
 
         let state = ProcessTransactionState {
@@ -936,8 +991,12 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                             // In case we don't get an error but also don't get a valid value
-                            _ => {
-                                state.errors.push(SuiError::ErrorWhileProcessingTransaction);
+                            ret => {
+                                state.errors.push(
+                                    SuiError::ErrorWhileProcessingTransactionTransaction {
+                                        err: format!("Unexpected: {:?}", ret),
+                                    },
+                                );
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
                         };
@@ -977,7 +1036,7 @@ where
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
 
@@ -996,7 +1055,9 @@ where
         // If we have some certificate return it, or return an error.
         state
             .certificate
-            .ok_or(SuiError::ErrorWhileProcessingTransaction)
+            .ok_or_else(|| SuiError::ErrorWhileProcessingTransactionTransaction {
+                err: format!("No certificate: {:?}", state.errors),
+            })
     }
 
     /// Process a certificate assuming that 2f+1 authorities already are up to date.
@@ -1005,23 +1066,31 @@ where
     /// At that point (and after) enough authorities are up to date with all objects
     /// needed to process the certificate that a submission should succeed. However,
     /// in case an authority returns an error, we do try to bring it up to speed.
-    async fn process_certificate(
+    pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
-        timeout_after_quorum: Duration,
-    ) -> Result<TransactionEffects, SuiError> {
+    ) -> Result<CertifiedTransactionEffects, SuiError> {
+        struct EffectsStakeInfo {
+            stake: StakeUnit,
+            effects: TransactionEffects,
+            signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        }
         struct ProcessCertificateState {
             // Different authorities could return different effects.  We want at least one effect to come
             // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
             // The map here allows us to count the stake for each unique effect.
-            effects_map: HashMap<[u8; 32], (usize, TransactionEffects)>,
-            bad_stake: usize,
+            effects_map: HashMap<[u8; 32], EffectsStakeInfo>,
+            bad_stake: StakeUnit,
+            errors: Vec<SuiError>,
         }
 
         let state = ProcessCertificateState {
             effects_map: HashMap::new(),
             bad_stake: 0,
+            errors: vec![],
         };
+
+        let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
@@ -1044,17 +1113,18 @@ where
                         // - we try to update the authority with the cert, and on error return Err.
                         // - we try to re-process the certificate and return the result.
 
-                        let handle = if contains_shared_object {
+                        let res = if contains_shared_object {
                             client.handle_consensus_transaction(ConsensusTransaction::UserTransaction(Box::new(cert_ref.clone())))
+                                .instrument(tracing::trace_span!("handle_consensus_cert", authority =? name))
+                                .await
                         } else {
                             client
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
+                                .instrument(tracing::trace_span!("handle_cert", authority =? name))
+                                .await
                         };
-                        let res = handle
-                            .instrument(tracing::trace_span!("handle_cert", authority =? name))
-                            .await;
 
                         if res.is_ok() {
                             // We got an ok answer, so returning the result of processing
@@ -1073,10 +1143,9 @@ where
                         debug!(authority =? name, error =? res, ?timeout_after_quorum, "Authority out of date - syncing certificates");
                         // If we got LockErrors, we try to update the authority.
                         self
-                            .sync_certificate_to_authority_with_timeout(
+                            .sync_certificate_to_authority(
                                 ConfirmationTransaction::new(cert_ref.clone()),
                                 name,
-                                timeout_after_quorum,
                                 DEFAULT_RETRIES,
                             )
                             .instrument(tracing::trace_span!("sync_cert", authority =? name))
@@ -1092,43 +1161,57 @@ where
                             .await
                     })
                 },
-                |mut state, _name, weight, result| {
+                |mut state, name, weight, result| {
                     Box::pin(async move {
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
-                        if let Ok(TransactionInfoResponse {
-                            signed_effects: Some(inner_effects),
-                            ..
-                        }) = result
-                        {
-                            // Note: here we aggregate votes by the hash of the effects structure
-                            let entry = state
-                                .effects_map
-                                .entry(inner_effects.digest())
-                                .or_insert((0usize, inner_effects.effects));
-                            entry.0 += weight;
+                        match result {
+                            Ok(TransactionInfoResponse {
+                                signed_effects: Some(inner_effects),
+                                ..
+                            }) => {
+                                // Note: here we aggregate votes by the hash of the effects structure
+                                let entry = state
+                                    .effects_map
+                                    .entry(inner_effects.digest())
+                                    .or_insert(EffectsStakeInfo {
+                                        stake: 0,
+                                        effects: inner_effects.effects,
+                                        signatures: vec![],
+                                    });
+                                entry.stake += weight;
+                                entry.signatures.push((name, inner_effects.auth_signature.signature));
 
-                            if entry.0 >= threshold {
-                                // It will set the timeout quite high.
-                                return Ok(ReduceOutput::ContinueWithTimeout(
-                                    state,
-                                    timeout_after_quorum,
-                                ));
+                                if entry.stake >= threshold {
+                                    // It will set the timeout quite high.
+                                    return Ok(ReduceOutput::ContinueWithTimeout(
+                                        state,
+                                        timeout_after_quorum,
+                                    ));
+                                }
                             }
-                        } else {
-                            state.bad_stake += weight;
-                            if state.bad_stake > validity {
-                                debug!(bad_stake = state.bad_stake,
-                                    "Too many bad responses from cert processing, validity threshold exceeded.");
-                                return Err(SuiError::ErrorWhileRequestingCertificate);
+                            maybe_err => {
+                                // Returning Ok but without signed effects is unexpected.
+                                let err = match maybe_err {
+                                    Err(err) => err,
+                                    Ok(_) => SuiError::ByzantineAuthoritySuspicion {
+                                        authority: name,
+                                    }
+                                };
+                                state.errors.push(err);
+                                state.bad_stake += weight;
+                                if state.bad_stake > validity {
+                                    debug!(bad_stake = state.bad_stake,
+                                        "Too many bad responses from cert processing, validity threshold exceeded.");
+                                    return Err(SuiError::QuorumFailedToExecuteCertificate { errors: state.errors });
+                                }
                             }
                         }
-
                         Ok(ReduceOutput::Continue(state))
                     })
                 },
                 // A long timeout before we hear back from a quorum
-                Duration::from_secs(60),
+                self.timeouts.pre_quorum_timeout,
             )
             .await?;
 
@@ -1140,28 +1223,36 @@ where
 
         // Check that one effects structure has more than 2f votes,
         // and return it.
-        for (stake, effects) in state.effects_map.into_values() {
+        for stake_info in state.effects_map.into_values() {
+            let EffectsStakeInfo {
+                stake,
+                effects,
+                signatures,
+            } = stake_info;
             if stake >= threshold {
                 debug!(
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
-                return Ok(effects);
+                return Ok(CertifiedTransactionEffects::new(
+                    certificate.auth_sign_info.epoch,
+                    effects,
+                    signatures,
+                ));
             }
         }
 
         // If none has, fail.
-        Err(SuiError::ErrorWhileRequestingCertificate)
+        Err(SuiError::QuorumFailedToExecuteCertificate {
+            errors: state.errors,
+        })
     }
 
-    /// Find the highest sequence number that is known to a quorum of authorities.
+    /// Find the higgest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
     async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let (object_infos, _certificates) = self
-            .get_object_by_id(object_id, Duration::from_secs(60))
-            .await
-            .unwrap(); // Not safe, but want to blow up if testing.
+        let (object_infos, _certificates) = self.get_object_by_id(object_id).await.unwrap(); // Not safe, but want to blow up if testing.
         let top_ref = object_infos.keys().last().unwrap().0;
         top_ref.1
     }
@@ -1169,14 +1260,14 @@ where
     pub async fn execute_transaction(
         &self,
         transaction: &Transaction,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
         let new_certificate = self
-            .process_transaction(transaction.clone(), Duration::from_secs(60))
+            .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         self.metrics.total_tx_certificates.inc();
         let response = self
-            .process_certificate(new_certificate.clone(), Duration::from_secs(60))
+            .process_certificate(new_certificate.clone())
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
@@ -1184,15 +1275,13 @@ where
     }
 
     pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
-        let (object_map, cert_map) = self
-            .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
-            .await?;
+        let (object_map, cert_map) = self.get_object_by_id(object_id).await?;
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
         while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
             object_ref_stack.pop()
         {
-            let stake: usize = authorities
+            let stake: StakeUnit = authorities
                 .iter()
                 .map(|(name, _)| self.committee.weight(name))
                 .sum();
@@ -1204,11 +1293,8 @@ where
             } else if cert_map.contains_key(&tx_digest) {
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
-                if let Ok(effects) = self
-                    .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
-                    .await
-                {
-                    if effects.is_object_mutated_here(obj_ref) {
+                if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {
+                    if effects.effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
                         // TODO: Report a byzantine fault here
@@ -1243,7 +1329,7 @@ where
             tokio::spawn(Self::fetch_one_object(
                 self.authority_clients.clone(),
                 object_ref,
-                AUTHORITY_REQUEST_TIMEOUT,
+                self.timeouts.authority_request_timeout,
                 sender,
             ));
         }

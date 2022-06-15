@@ -9,7 +9,7 @@ module 0x0.M {
         abort 0;
     }
 
-    public(script) init_again(ctx: &mut TxContext.TxContext) {
+    public entry init_again(ctx: &mut TxContext.TxContext) {
         label l0:
         Self.init(move(ctx));
         return;

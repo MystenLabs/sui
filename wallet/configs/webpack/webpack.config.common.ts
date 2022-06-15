@@ -3,6 +3,7 @@
 
 import { exec } from 'child_process';
 import CopyPlugin from 'copy-webpack-plugin';
+import DotEnv from 'dotenv-webpack';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import { resolve } from 'path';
@@ -18,9 +19,10 @@ const CONFIGS_ROOT = resolve(PROJECT_ROOT, 'configs');
 const SRC_ROOT = resolve(PROJECT_ROOT, 'src');
 const OUTPUT_ROOT = resolve(PROJECT_ROOT, 'dist');
 const TS_CONFIGS_ROOT = resolve(CONFIGS_ROOT, 'ts');
+const IS_DEV = process.env.NODE_ENV === 'development';
 const TS_CONFIG_FILE = resolve(
     TS_CONFIGS_ROOT,
-    `tsconfig.${process.env.NODE_ENV === 'development' ? 'dev' : 'prod'}.json`
+    `tsconfig.${IS_DEV ? 'dev' : 'prod'}.json`
 );
 
 function loadTsConfig(tsConfigFilePath: string) {
@@ -110,7 +112,18 @@ const commonConfig: () => Promise<Configuration> = async () => {
                     test: /\.(s)?css$/i,
                     use: [
                         MiniCssExtractPlugin.loader,
-                        'css-loader',
+                        {
+                            loader: 'css-loader',
+                            options: {
+                                modules: {
+                                    auto: true,
+                                    localIdentName: IS_DEV
+                                        ? '[name]__[local]__[hash:base64:8]'
+                                        : '[hash:base64]',
+                                    exportLocalsConvention: 'dashes',
+                                },
+                            },
+                        },
                         'postcss-loader',
                         'sass-loader',
                     ],
@@ -149,6 +162,11 @@ const commonConfig: () => Promise<Configuration> = async () => {
                         },
                     },
                 ],
+            }),
+            new DotEnv({
+                path: resolve(CONFIGS_ROOT, 'environment', '.env'),
+                defaults: resolve(CONFIGS_ROOT, 'environment', '.env.defaults'),
+                expand: true,
             }),
             new DefinePlugin({
                 'typeof window': JSON.stringify(typeof {}),

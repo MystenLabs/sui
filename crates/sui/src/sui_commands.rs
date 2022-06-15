@@ -16,11 +16,10 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
     SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
+use sui_swarm::memory::Swarm;
 use sui_types::base_types::decode_bytes_hex;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
-
-pub use crate::make::SuiNetwork;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -79,11 +78,18 @@ impl SuiCommand {
                         ))
                     })?;
 
-                // Start a sui validator (including its consensus node).
-                SuiNetwork::start(&network_config)
-                    .await?
-                    .wait_for_completion()
-                    .await
+                let mut swarm =
+                    Swarm::builder().from_network_config(sui_config_dir()?, network_config);
+                swarm.launch().await?;
+
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                loop {
+                    for node in swarm.validators_mut() {
+                        node.health_check().await?;
+                    }
+
+                    interval.tick().await;
+                }
             }
             SuiCommand::Network {
                 config,
@@ -171,7 +177,7 @@ impl SuiCommand {
 
                 let mut genesis_conf = match from_config {
                     Some(q) => PersistedConfig::read(q)?,
-                    None => GenesisConfig::for_local_testing()?,
+                    None => GenesisConfig::for_local_testing(),
                 };
 
                 if let Some(path) = write_config {
@@ -243,10 +249,9 @@ impl SuiCommand {
                 wallet_config.save(&wallet_path)?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
 
-                let fullnode_config = network_config
-                    .generate_fullnode_config()
-                    .persisted(&sui_config_dir.join(SUI_FULLNODE_CONFIG));
-                fullnode_config.save()?;
+                let mut fullnode_config = network_config.generate_fullnode_config();
+                fullnode_config.json_rpc_address = sui_config::node::default_json_rpc_address();
+                fullnode_config.save(sui_config_dir.join(SUI_FULLNODE_CONFIG))?;
 
                 for (i, validator) in network_config
                     .into_validator_configs()

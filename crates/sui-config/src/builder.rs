@@ -15,6 +15,7 @@ use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
 
@@ -103,7 +104,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
         let initial_accounts_config = self
             .initial_accounts_config
-            .unwrap_or_else(|| GenesisConfig::for_local_testing().unwrap());
+            .unwrap_or_else(GenesisConfig::for_local_testing);
         let (account_keys, objects) = initial_accounts_config
             .generate_accounts(&mut self.rng)
             .unwrap();
@@ -183,12 +184,14 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 NodeConfig {
-                    key_pair: validator.key_pair,
+                    key_pair: Arc::new(validator.key_pair),
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
                     json_rpc_address: utils::available_local_socket_address(),
                     consensus_config: Some(consensus_config),
+                    enable_event_processing: false,
+                    enable_gossip: true,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })

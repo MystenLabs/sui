@@ -7,13 +7,14 @@
 use rocksdb::Options;
 use serde::{de::DeserializeOwned, Serialize};
 
+use crate::default_db_options;
 use std::path::Path;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
-
 use sui_types::error::SuiResult;
 
-use sui_types::object::Object;
+use sui_types::base_types::ObjectRef;
+use sui_types::object::Owner;
 
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
@@ -30,18 +31,17 @@ pub struct IndexStore {
 
     /// Index from object id to transactions that modified/created that object id.
     transactions_by_mutated_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
+
+    /// This is a map between the transaction digest and its timestamp (UTC timestamp in
+    /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
+    /// on a node according to the local machine time, so it varies across nodes.
+    /// The timestamping happens when the node sees a txn certificate for the first time.
+    timestamps: DBMap<TransactionDigest, u64>,
 }
 
 impl IndexStore {
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
-        let mut options = db_options.unwrap_or_default();
-
-        // The table cache is locked for updates and this determines the number
-        // of shareds, ie 2^10. Increase in case of lock contentions.
-        let row_cache = rocksdb::Cache::new_lru_cache(1_000_000).expect("Cache is ok");
-        options.set_row_cache(&row_cache);
-        options.set_table_cache_num_shard_bits(10);
-        options.set_compression_type(rocksdb::DBCompressionType::None);
+        let (options, point_lookup) = default_db_options(db_options, Some(1_000_000));
 
         let db = {
             let path = &path;
@@ -51,6 +51,7 @@ impl IndexStore {
                 ("transactions_to_addr", &options),
                 ("transactions_by_input_object_id", &options),
                 ("transactions_by_mutated_object_id", &options),
+                ("timestamps", &point_lookup),
             ];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
         }
@@ -61,12 +62,14 @@ impl IndexStore {
             transactions_to_addr,
             transactions_by_input_object_id,
             transactions_by_mutated_object_id,
+            timestamps,
         ) = reopen!(
             &db,
             "transactions_from_addr"; <(SuiAddress, TxSequenceNumber), TransactionDigest>,
             "transactions_to_addr"; <(SuiAddress, TxSequenceNumber), TransactionDigest>,
             "transactions_by_input_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
-            "transactions_by_mutated_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>
+            "transactions_by_mutated_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
+            "timestamps";<TransactionDigest, u64>
         );
 
         Self {
@@ -74,16 +77,18 @@ impl IndexStore {
             transactions_to_addr,
             transactions_by_input_object_id,
             transactions_by_mutated_object_id,
+            timestamps,
         }
     }
 
-    pub fn index_tx(
+    pub fn index_tx<'a>(
         &self,
         sender: SuiAddress,
-        active_inputs: &[&Object],
-        mutated_objects: &[&Object],
+        active_inputs: impl Iterator<Item = ObjectID>,
+        mutated_objects: impl Iterator<Item = &'a (ObjectRef, Owner)> + Clone,
         sequence: TxSequenceNumber,
         digest: &TransactionDigest,
+        timestamp_ms: u64,
     ) -> SuiResult {
         let batch = self.transactions_from_addr.batch();
 
@@ -94,30 +99,41 @@ impl IndexStore {
 
         let batch = batch.insert_batch(
             &self.transactions_by_input_object_id,
-            active_inputs
-                .iter()
-                .map(|object| ((object.id(), sequence), *digest)),
+            active_inputs.map(|id| ((id, sequence), *digest)),
         )?;
 
         let batch = batch.insert_batch(
             &self.transactions_by_mutated_object_id,
             mutated_objects
-                .iter()
-                .map(|object| ((object.id(), sequence), *digest)),
+                .clone()
+                .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
         )?;
 
         let batch = batch.insert_batch(
             &self.transactions_to_addr,
-            mutated_objects.iter().filter_map(|object| {
-                object
-                    .get_single_owner()
+            mutated_objects.filter_map(|(_, owner)| {
+                owner
+                    .get_owner_address()
+                    .ok()
                     .map(|addr| ((addr, sequence), digest))
             }),
         )?;
 
+        let batch =
+            batch.insert_batch(&self.timestamps, std::iter::once((*digest, timestamp_ms)))?;
+
         batch.write()?;
 
         Ok(())
+    }
+
+    /// Returns unix timestamp for a transaction if it exists
+    pub fn get_timestamp_ms(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<Option<u64>> {
+        let ts = self.timestamps.get(transaction_digest)?;
+        Ok(ts)
     }
 
     fn get_transactions_by_object<

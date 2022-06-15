@@ -6,7 +6,7 @@
 /// support a single chain(Ethereum) right now, but this can be extended to other
 /// chains by adding a chain_id field.
 module NFTs::CrossChainAirdrop {
-    use Std::Vector;
+    use std::vector;
     use Sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
     use Sui::ID::{VersionedID};
     use Sui::Transfer;
@@ -58,14 +58,14 @@ module NFTs::CrossChainAirdrop {
         Transfer::transfer(
             CrossChainAirdropOracle {
                 id: TxContext::new_id(ctx),
-                managed_contracts: Vector::empty(),
+                managed_contracts: vector::empty(),
             },
             TxContext::sender(ctx)
         )
     }
 
     /// Called by the oracle to mint the airdrop NFT and transfer to the recipient
-    public(script) fun claim(
+    public entry fun claim(
         oracle: &mut CrossChainAirdropOracle,
         recipient: address,
         source_contract_address: vector<u8>,
@@ -83,15 +83,15 @@ module NFTs::CrossChainAirdrop {
             source_contract_address: SourceContractAddress { address: source_contract_address },
             metadata: ERC721Metadata::new(token_id, name, token_uri),
         };
-        Vector::push_back(&mut contract.claimed_source_token_ids, token_id);
+        vector::push_back(&mut contract.claimed_source_token_ids, token_id);
         Transfer::transfer(nft, recipient)
     }
 
     fun get_or_create_contract(oracle: &mut CrossChainAirdropOracle, source_contract_address: &vector<u8>): &mut PerContractAirdropInfo {
         let index = 0;
         // TODO: replace this with SparseSet so that the on-chain uniqueness check can be O(1)
-        while (index < Vector::length(&oracle.managed_contracts)) {
-            let info = Vector::borrow_mut(&mut oracle.managed_contracts, index);
+        while (index < vector::length(&oracle.managed_contracts)) {
+            let info = vector::borrow_mut(&mut oracle.managed_contracts, index);
             if (&info.source_contract_address.address == source_contract_address) {
                 return info
             };
@@ -104,18 +104,18 @@ module NFTs::CrossChainAirdrop {
     fun create_contract(oracle: &mut CrossChainAirdropOracle, source_contract_address: &vector<u8>): &mut PerContractAirdropInfo {
         let info =  PerContractAirdropInfo {
             source_contract_address: SourceContractAddress { address: *source_contract_address },
-            claimed_source_token_ids: Vector::empty()
+            claimed_source_token_ids: vector::empty()
         };
-        Vector::push_back(&mut oracle.managed_contracts, info);
-        let idx = Vector::length(&oracle.managed_contracts) - 1;
-        Vector::borrow_mut(&mut oracle.managed_contracts, idx)
+        vector::push_back(&mut oracle.managed_contracts, info);
+        let idx = vector::length(&oracle.managed_contracts) - 1;
+        vector::borrow_mut(&mut oracle.managed_contracts, idx)
     }
 
     fun is_token_claimed(contract: &PerContractAirdropInfo, source_token_id: &TokenID): bool {
         // TODO: replace this with SparseSet so that the on-chain uniqueness check can be O(1)
         let index = 0;
-        while (index < Vector::length(&contract.claimed_source_token_ids)) {
-            let claimed_id = Vector::borrow(&contract.claimed_source_token_ids, index);
+        while (index < vector::length(&contract.claimed_source_token_ids)) {
+            let claimed_id = vector::borrow(&contract.claimed_source_token_ids, index);
             if (claimed_id == source_token_id) {
                 return true
             };

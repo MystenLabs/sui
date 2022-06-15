@@ -1,0 +1,22 @@
+.pagination {
+    @apply flex flex-row items-center justify-center list-none;
+}
+
+.pagination ul {
+    @apply flex flex-row items-center justify-center list-none pl-0;
+}
+
+.pagination ul li {
+    @apply mr-2;
+}
+
+.pagination ul li button {
+    @apply bg-gray-200 hover:bg-gray-300 focus:bg-gray-300 text-gray-800 hover:text-gray-800 focus:text-gray-800 font-medium py-2 px-4 rounded-none border-0 cursor-pointer 
+     md:pr-3  md:pl-3  pr-1.5  pl-1.5;
+
+    transition: all 0.4s ease;
+}
+
+.activepag {
+    @apply bg-sui text-white !important;
+}

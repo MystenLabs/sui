@@ -32,7 +32,7 @@ pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 /// - Alternatively, the function can have zero parameters
 ///
 /// For transaction entry points
-/// - The function must have `Visibility::Script`
+/// - The function must have `is_entry` true
 /// - The function must have at least one parameter: &mut TxContext (see `is_tx_context`)
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
@@ -49,11 +49,10 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
             continue;
         }
 
-        // find candidate entry functions and checke their parameters
+        // find candidate entry functions and check their parameters
         // (ignore other functions)
-        if func_def.visibility != Visibility::Script {
-            // it's not an entry function as a non-script function
-            // cannot be called from Sui
+        if !func_def.is_entry {
+            // it's not an entry function
             continue;
         }
         verify_entry_function_impl(module, func_def)
@@ -127,27 +126,29 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     }
 
     let parameters = &view.signature_at(fhandle.parameters).0;
-    match parameters.len() {
-        0 => Ok(()),
-        1 => {
-            if is_tx_context(view, &parameters[0]) {
-                Ok(())
-            } else {
-                Err(format!(
-                    "Expected parameter for {}::{} to be &mut mut {}::{}::{}, but found {}",
-                    module.self_id(),
-                    INIT_FN_NAME,
-                    SUI_FRAMEWORK_ADDRESS,
-                    TX_CONTEXT_MODULE_NAME,
-                    TX_CONTEXT_STRUCT_NAME,
-                    format_signature_token(view, &parameters[0]),
-                ))
-            }
-        }
-        _ => Err(format!(
-            "'{}' function can have 0 or 1 parameter(s)",
-            INIT_FN_NAME
-        )),
+    if parameters.len() != 1 {
+        return Err(format!(
+            "Expected exactly one parameter for {}::{}  of type &mut {}::{}::{}",
+            module.self_id(),
+            INIT_FN_NAME,
+            SUI_FRAMEWORK_ADDRESS,
+            TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
+        ));
+    }
+
+    if is_tx_context(view, &parameters[0]) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Expected parameter for {}::{} to be &mut mut {}::{}::{}, but found {}",
+            module.self_id(),
+            INIT_FN_NAME,
+            SUI_FRAMEWORK_ADDRESS,
+            TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
+            format_signature_token(view, &parameters[0]),
+        ))
     }
 }
 
@@ -159,30 +160,11 @@ fn verify_entry_function_impl(
     let handle = view.function_handle_at(func_def.function);
     let params = view.signature_at(handle.parameters);
 
-    // must have at least on &mut TxContext param
-    if params.is_empty() {
-        return Err(format!(
-            "No parameters in entry function {}",
-            view.identifier_at(handle.name)
-        ));
-    }
-
-    let last_param = params.0.last().unwrap();
-    let last_param_idx = params.0.len() - 1;
-    if !is_tx_context(view, last_param) {
-        return Err(format!(
-            "{}::{}. Expected last parameter of function signature to be &mut {}::{}::{}, but \
-            found {}",
-            module.self_id(),
-            view.identifier_at(handle.name),
-            SUI_FRAMEWORK_ADDRESS,
-            TX_CONTEXT_MODULE_NAME,
-            TX_CONTEXT_STRUCT_NAME,
-            format_signature_token(view, last_param),
-        ));
-    }
-
-    for param in &params.0[0..last_param_idx] {
+    let all_non_ctx_params = match params.0.last() {
+        Some(last_param) if is_tx_context(view, last_param) => &params.0[0..params.0.len() - 1],
+        _ => &params.0,
+    };
+    for param in all_non_ctx_params {
         verify_param_type(view, &handle.type_parameters, param)?;
     }
 
@@ -257,7 +239,7 @@ fn is_primitive(
     }
 }
 
-fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
+pub fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
     match p {
         SignatureToken::MutableReference(m) => match &**m {
             SignatureToken::Struct(idx) => {

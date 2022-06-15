@@ -7,6 +7,8 @@ import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
 import Header from '_components/header';
 import Loading from '_components/loading';
+import Logo from '_components/logo';
+import NetworkSwitch from '_components/network-switch';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
 import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
 
@@ -30,11 +32,18 @@ const HomePage = () => {
             .subscribe();
         return () => sub.unsubscribe();
     }, [guardChecking, dispatch]);
+
     return (
         <Loading loading={guardChecking}>
             <div className={st.container}>
-                <Header />
-                <Outlet />
+                <div className={st['outer-container']}>
+                    <Logo txt={true} />
+                    <NetworkSwitch />
+                </div>
+                <div className={st['inner-container']}>
+                    <Header />
+                    <Outlet />
+                </div>
             </div>
         </Loading>
     );

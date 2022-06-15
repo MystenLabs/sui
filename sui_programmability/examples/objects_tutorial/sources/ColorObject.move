@@ -24,7 +24,7 @@ module Tutorial::ColorObject {
         }
     }
 
-    public(script) fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+    public entry fun create(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
         let color_object = new(red, green, blue, ctx);
         Transfer::transfer(color_object, TxContext::sender(ctx))
     }
@@ -36,36 +36,35 @@ module Tutorial::ColorObject {
     // == Functions covered in Chapter 2 ==
 
     /// Copies the values of `from_object` into `into_object`.
-    public(script) fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject, _ctx: &mut TxContext) {
+    public entry fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject) {
         into_object.red = from_object.red;
         into_object.green = from_object.green;
         into_object.blue = from_object.blue;
     }
 
-    public(script) fun delete(object: ColorObject, _ctx: &mut TxContext) {
+    public entry fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         ID::delete(id);
     }
 
-    public(script) fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
+    public entry fun transfer(object: ColorObject, recipient: address) {
         Transfer::transfer(object, recipient)
     }
 
     // == Functions covered in Chapter 3 ==
 
-    public(script) fun freeze_object(object: ColorObject, _ctx: &mut TxContext) {
+    public entry fun freeze_object(object: ColorObject) {
         Transfer::freeze_object(object)
     }
 
-    public(script) fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+    public entry fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
         let color_object = new(red, green, blue, ctx);
         Transfer::freeze_object(color_object)
     }
 
-    public(script) fun update(
+    public entry fun update(
         object: &mut ColorObject,
         red: u8, green: u8, blue: u8,
-        _ctx: &mut TxContext,
     ) {
         object.red = red;
         object.green = green;
@@ -82,7 +81,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 1 ==
 
     #[test]
-    public(script) fun test_create() {
+    fun test_create() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -110,7 +109,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 2 ==
 
     #[test]
-    public(script) fun test_copy_into() {
+    fun test_copy_into() {
         let owner = @0x1;
         let scenario = &mut TestScenario::begin(&owner);
         // Create two ColorObjects owned by `owner`, and obtain their IDs.
@@ -129,8 +128,7 @@ module Tutorial::ColorObjectTests {
             let (red, green, blue) = ColorObject::get_color(&obj1);
             assert!(red == 255 && green == 255 && blue == 255, 0);
 
-            let ctx = TestScenario::ctx(scenario);
-            ColorObject::copy_into(&obj2, &mut obj1, ctx);
+            ColorObject::copy_into(&obj2, &mut obj1);
             TestScenario::return_owned(scenario, obj1);
             TestScenario::return_owned(scenario, obj2);
         };
@@ -144,7 +142,7 @@ module Tutorial::ColorObjectTests {
     }
 
     #[test]
-    public(script) fun test_delete() {
+    fun test_delete() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -156,8 +154,7 @@ module Tutorial::ColorObjectTests {
         TestScenario::next_tx(scenario, &owner);
         {
             let object = TestScenario::take_owned<ColorObject>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            ColorObject::delete(object, ctx);
+            ColorObject::delete(object);
         };
         // Verify that the object was indeed deleted.
         TestScenario::next_tx(scenario, &owner);
@@ -167,7 +164,7 @@ module Tutorial::ColorObjectTests {
     }
 
     #[test]
-    public(script) fun test_transfer() {
+    fun test_transfer() {
         let owner = @0x1;
         // Create a ColorObject and transfer it to @owner.
         let scenario = &mut TestScenario::begin(&owner);
@@ -180,8 +177,7 @@ module Tutorial::ColorObjectTests {
         TestScenario::next_tx(scenario, &owner);
         {
             let object = TestScenario::take_owned<ColorObject>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            ColorObject::transfer(object, recipient, ctx);
+            ColorObject::transfer(object, recipient);
         };
         // Check that owner no longer owns the object.
         TestScenario::next_tx(scenario, &owner);
@@ -198,7 +194,7 @@ module Tutorial::ColorObjectTests {
     // == Tests covered in Chapter 3 ==
 
     #[test]
-    public(script) fun test_immutable() {
+    fun test_immutable() {
         let sender1 = @0x1;
         let scenario = &mut TestScenario::begin(&sender1);
         {
