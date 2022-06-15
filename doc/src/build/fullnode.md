@@ -93,15 +93,14 @@ in how a fullnode is run.
 0. Before beginning ensure that the required tools are installed
    in your environment as outlined in the
    [Prerequisites](../build/install#prerequisites) section.
-
 1. Set up your fork of the Sui repository:
     * Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
       and click the *Fork* button in the top right-hand corner of the screen.
-    * Clone your personal fork of the Sui repository to your local machine
+    * Clone your personal fork of the Sui repository to your local machine\
       (ensure that you insert your GitHub username into the URL):
-    ```
-    $ git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
-    ```
+      ```
+      $ git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
+      ```
 2. `cd` into your `sui` repository:
     ```
     $ cd sui
