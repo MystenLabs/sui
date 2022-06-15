@@ -16,6 +16,7 @@ use base64ct::Encoding;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
+use move_core_types::vm_status::AbortLocation;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
@@ -899,16 +900,30 @@ pub enum CallResult {
 pub enum ExecutionStatus {
     Success,
     // Gas used in the failed case, and the error.
-    Failure { error: ExecutionErrorKind },
-    // OutOfGas,
-    // MoveAbort(AbortLocation, /* code */ u64),
-    // MiscError
+    Failure { error: ExecutionFailureStatus },
 }
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum ExecutionFailureStatus {
+    InsufficientGas,
+    /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
+    /// abort code
+    MoveAbort(AbortLocation, u64),
+    MiscellaneousError,
+}
+
+impl std::fmt::Display for ExecutionFailureStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionFailureStatus {}
 
 impl ExecutionStatus {
     pub fn new_failure(error: ExecutionError) -> ExecutionStatus {
         ExecutionStatus::Failure {
-            error: *error.kind(),
+            error: error.to_execution_status(),
         }
     }
 
@@ -929,7 +944,7 @@ impl ExecutionStatus {
         }
     }
 
-    pub fn unwrap_err(self) -> ExecutionErrorKind {
+    pub fn unwrap_err(self) -> ExecutionFailureStatus {
         match self {
             ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);

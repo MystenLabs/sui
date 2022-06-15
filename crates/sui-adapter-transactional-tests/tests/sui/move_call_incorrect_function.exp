@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'run'. lines 7-9:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: None } }
+Error: MiscellaneousError
 
 task 1 'run'. lines 10-10:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: None } }
+Error: MiscellaneousError

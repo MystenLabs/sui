@@ -5,7 +5,7 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 14-16:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidFunctionSignature, source: None } }
+Error: MiscellaneousError
 
 task 3 'run'. lines 17-17:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: None } }
+Error: MiscellaneousError

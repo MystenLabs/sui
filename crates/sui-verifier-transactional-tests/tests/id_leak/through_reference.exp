@@ -1,4 +1,4 @@
 processed 1 task
 
 task 0 'publish'. lines 4-20:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: None } }
+Error: MiscellaneousError

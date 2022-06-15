@@ -8,7 +8,6 @@ use super::move_integration_tests::build_and_try_publish_test_package;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use sui_adapter::genesis;
-use sui_types::error::ExecutionErrorKind;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
@@ -167,7 +166,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
     assert_eq!(
         effects.status.unwrap_err(),
-        ExecutionErrorKind::InsufficientGas
+        ExecutionFailureStatus::InsufficientGas
     );
 }
 
@@ -207,12 +206,12 @@ async fn test_native_transfer_insufficient_gas_execution() {
 
     assert_eq!(
         effects.status.unwrap_err(),
-        ExecutionErrorKind::InsufficientGas,
+        ExecutionFailureStatus::InsufficientGas,
     );
 }
 
 #[tokio::test]
-async fn test_publish_gas() -> SuiResult {
+async fn test_publish_gas() -> anyhow::Result<()> {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
@@ -296,7 +295,7 @@ async fn test_publish_gas() -> SuiResult {
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
 
-    assert_eq!(err, ExecutionErrorKind::InsufficientGas);
+    assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
 
     // Make sure that we are not charging storage cost at failure.
     assert_eq!(gas_cost.storage_cost, 0);
@@ -326,7 +325,7 @@ async fn test_publish_gas() -> SuiResult {
     let effects = response.signed_effects.unwrap().effects;
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
-    assert_eq!(err, ExecutionErrorKind::InsufficientGas,);
+    assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
     assert_eq!(gas_cost.storage_cost, 0);
     assert_eq!(gas_cost.storage_rebate, 0);
     Ok(())
@@ -449,7 +448,7 @@ async fn test_move_call_gas() -> SuiResult {
     let gas_cost = effects.gas_used;
     let err = effects.status.unwrap_err();
     // We will run out of gas during VM execution.
-    assert!(matches!(err, ExecutionErrorKind::VmError));
+    assert!(matches!(err, ExecutionFailureStatus::InsufficientGas));
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;
     assert_eq!(
