@@ -34,6 +34,8 @@ type TxDataProps = CertifiedTransaction & {
     created: SuiObjectRef[];
 };
 
+const IS_MODULE = (itm: any) => itm.label === 'Modules';
+
 // Generate an Arr of Obj with Label and Value
 // TODO rewrite to use sui.js, verify tx types and dynamically generate list
 function formatTxResponse(tx: TxDataProps, txId: string) {
@@ -212,28 +214,26 @@ function ItemView({ itm, text }: { itm: any; text: string }) {
     }
 }
 
-function SubListView({ itm, list, n }: { itm: any; list: any; n: number }) {
+function SubListView({ itm, list }: { itm: any; list: any }) {
     return (
-        <li className={styles.list} key={n}>
-            <div>
-                {list.map((sublist: string, l: number) => (
-                    <div className={styles.sublist} key={l}>
-                        <div className={styles.sublist}>
-                            {itm.subLabel ? (
-                                <div className={styles.sublistlabel}>
-                                    {itm.subLabel[l]}:
-                                </div>
-                            ) : (
-                                ''
-                            )}
-                            <div className={styles.sublistvalue}>
-                                <ItemView itm={itm} text={sublist} />
+        <div>
+            {list.map((sublist: string, l: number) => (
+                <div className={styles.sublist} key={l}>
+                    <div className={styles.sublist}>
+                        {itm.subLabel ? (
+                            <div className={styles.sublistlabel}>
+                                {itm.subLabel[l]}:
                             </div>
+                        ) : (
+                            ''
+                        )}
+                        <div className={styles.sublistvalue}>
+                            <ItemView itm={itm} text={sublist} />
                         </div>
                     </div>
-                ))}
-            </div>
-        </li>
+                </div>
+            ))}
+        </div>
     );
 }
 
@@ -268,19 +268,24 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                 : ''
                                         }
                                     >
-                                        {itm.label === 'Modules' && (
+                                        {IS_MODULE(itm) ? (
                                             <pre>{itm.value}</pre>
-                                        )}
-                                        {itm.list && itm.label !== 'Modules' && (
+                                        ) : itm.list ? (
                                             <ul className={styles.listitems}>
                                                 {itm.value.map(
                                                     (list: any, n: number) =>
                                                         itm.sublist ? (
-                                                            <SubListView
-                                                                itm={itm}
-                                                                n={n}
-                                                                list={list}
-                                                            />
+                                                            <li
+                                                                className={
+                                                                    styles.list
+                                                                }
+                                                                key={n}
+                                                            >
+                                                                <SubListView
+                                                                    itm={itm}
+                                                                    list={list}
+                                                                />
+                                                            </li>
                                                         ) : (
                                                             <li
                                                                 className={
@@ -297,14 +302,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                         )
                                                 )}
                                             </ul>
+                                        ) : (
+                                            <ItemView
+                                                itm={itm}
+                                                text={itm.value}
+                                            />
                                         )}
-                                        {!itm.list &&
-                                            !(itm.label !== 'Modules') && (
-                                                <ItemView
-                                                    itm={itm}
-                                                    text={itm.value}
-                                                />
-                                            )}
                                     </div>
                                 </div>
                             )
