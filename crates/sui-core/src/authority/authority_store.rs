@@ -635,11 +635,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
-        // Once a transaction is done processing and effects committed, we no longer
-        // need it in the transactions table. This also allows us to track pending
-        // transactions.
-        write_batch =
-            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
         self.batch_update_objects(
             write_batch,
             temporary_store,
@@ -725,6 +720,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 )
             }),
         )?;
+
+        // Once a transaction is done processing and effects committed, we no longer
+        // need it in the transactions table. This also allows us to track pending
+        // transactions.
+        write_batch =
+            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
 
         if ALL_OBJ_VER {
             // Keep all versions of every object if ALL_OBJ_VER is true.
