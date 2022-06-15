@@ -129,12 +129,12 @@ Before beginning, ensure the required tools are installed
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-1. Edit your `fullnode.yaml` file:
+1. Optionally, edit your `fullnode.yaml` file to reflect any custom paths you employ:
     1. Update the `db-path` field with the path to where the fullnode's database
       will be located. By default this will create the database in a directory
       `./suidb` relative to your current directory:
     ```yaml
-    db-path: "/path/to/db"
+    db-path: "/path/to/suidb"
     ```
     1. Update the `genesis-file-location` with the path to the `genesis` file.
       By default, the config looks for the file `genesis.blob` in your
@@ -144,9 +144,10 @@ Before beginning, ensure the required tools are installed
       genesis-file-location: "/path/to/genesis.blob"
     ```
 1. Start your Sui fullnode:
-    ```
+    ```shell
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
+1. Post build, receive the success confirmation message, `SuiNode started!`
 
 Your fullnode will now be serving the read endpoints of the [Sui JSON-RPC
 API](../build/json-rpc.md#sui-json-rpc-api) at:
@@ -154,16 +155,16 @@ API](../build/json-rpc.md#sui-json-rpc-api) at:
 
 ## Using the Explorer with your fullnode
 
-The [Sui Explorer](https://explorer.devnet.sui.io/) supports configuring where
+The [Sui Explorer](https://explorer.devnet.sui.io/) lets you configure where
 it should issue read requests to query the blockchain. This enables you to
-point the explorer at your locally running fullnode and explore the
-transactions that it has synced from the network. You can do this by:
+point the Explorer at your locally running fullnode and see the
+transactions it has synced from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.devnet.sui.io/
-2. Click the button in the top right-hand corner of the page and select
-   `Local` from the drop-down menu.
+2. Click the **Devnet** button in the top right-hand corner of the Explorer and select
+   the *Local* network from the drop-down menu.
 
-The Explorer will now be using your local fullnode to explore the state of the chain.
+The Explorer will now use your local fullnode to explore the state of the chain.
 
 ## Monitoring
 
@@ -173,46 +174,52 @@ Observability](https://docs.sui.io/contribute/observability).
 ## Updating your fullnode with new releases
 
 Whenever a new release is deployed to `devnet`, the blockchain state is
-generally wiped clean. In order to have your fullnode continue to properly
+typically wiped clean. In order to have your fullnode continue to properly
 synchronize with the new state of devnet, you'll need to follow a few steps
 based on how you originally set up your node. See below.
 
 ### Built from source
 
-If you followed the [Building from
-Source](#markdown-header-building-from-source) directions, update as follows:
+If you followed the instructions for [building from
+Source](#building-from-source), update your fullnode as follows:
 
 1. Shut down your currently running fullnode.
-2. `cd` into your local Sui repository:
-    ```
+1. `cd` into your local Sui repository:
+    ```shell
     $ cd sui
     ```
-3. Remove the old on-disk database and 'genesis.blob' file:
-    ```
+1. Remove the old on-disk database and 'genesis.blob' file:
+    ```shell
     $ rm -r suidb genesis.blob
     ```
-4. Fetch the source from the latest release:
-    ```
+1. Fetch the source from the latest release:
+    ```shell
     $ git fetch upstream
+    ```
+1. Reset your branch:
+    ```shell
     $ git checkout -B devnet --track upstream/devnet
     ```
-5. Download the latest
+1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet.
-6. Update your `fullnode.yaml` configuration file if needed.
-7. Start your Sui fullnode:
-    ```
+   state for devnet as described above.
+1. Update your `fullnode.yaml` configuration file if needed.
+1. Restart your Sui fullnode:
+    ```shell
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
+Your fullnode will once again be running at:
+`http://127.0.0.1:9000`
 
 ## Future plans
 
 Today, a fullnode relies only on synchronizing with 2f+1 validators in order to
-ensure that it has seen all committed transactions. In the future, we expect
+ensure it has seen all committed transactions. In the future, we expect
 fullnodes to fully participate in a peer-to-peer (p2p) environment where the
 load of disseminating new transactions can be shared with the whole network and
-not have the burden be solely on the validators. We also expect future
+not place the burden solely on the validators. We also expect future
 features, such as checkpoints, to enable improved performance of synchronizing the
 state of the chain from genesis.
 
-Please see our privacy policy to learn how we handle information about our nodes.
+Please see our [privacy policy](https://sui.io/policy/) to learn how we handle
+information about our nodes.
