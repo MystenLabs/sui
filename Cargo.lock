@@ -6374,6 +6374,7 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
+ "move-bytecode-utils",
  "move-core-types",
  "once_cell",
  "schemars",

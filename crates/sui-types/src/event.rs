@@ -131,7 +131,7 @@ impl Event {
     /// Extracts the Move package ID associated with the event, or the package published.
     pub fn package_id(&self) -> Option<ObjectID> {
         match self {
-            Event::MoveEvent { type_, .. } => Some(type_.address.into()),
+            Event::MoveEvent(event_obj) => Some(event_obj.type_.address.into()),
             Event::Publish { package_id } => Some(*package_id),
             _ => None,
         }
@@ -149,9 +149,7 @@ impl Event {
     /// Extracts the function name from a SuiEvent, if available
     pub fn function_name(&self) -> Option<String> {
         match self {
-            Event::MoveEvent {
-                type_: struct_tag, ..
-            } => Some(struct_tag.name.to_string()),
+            Event::MoveEvent(event_obj) => Some(event_obj.type_.name.to_string()),
             _ => None,
         }
     }

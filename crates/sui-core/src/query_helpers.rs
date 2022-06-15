@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::SuiDataStore;
-use crate::gateway_types::SuiTransactionEffects;
 use anyhow::anyhow;
-use move_bytecode_utils::module_cache::GetModule;
 use serde::{Deserialize, Serialize};
 use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::{base_types::*, batch::TxSequenceNumber, error::SuiError, fp_ensure};
@@ -81,7 +79,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
     pub fn get_transaction(
         database: &SuiDataStore<ALL_OBJ_VER, S>,
-        module_cache: &impl GetModule,
         digest: TransactionDigest,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let opt = database.get_certified_transaction(&digest)?;

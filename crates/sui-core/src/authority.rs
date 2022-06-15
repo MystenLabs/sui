@@ -241,7 +241,7 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     event_handler: Option<Arc<EventHandler>>,
 
@@ -1101,7 +1101,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        QueryHelpers::get_transaction(&self.database, &self.module_cache, digest)
+        QueryHelpers::get_transaction(&self.database, digest)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
