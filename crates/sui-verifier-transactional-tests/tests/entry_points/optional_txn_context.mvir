@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
     public entry t() {
         label l0:
@@ -12,10 +12,10 @@ module 0x0.M {
 
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
-    import 0x2.ID;
-    struct Obj has key { id: ID.VersionedID }
+    import 0x2.id;
+    struct Obj has key { id: id.VersionedID }
     public entry t(flag: bool, arg: &mut Self.Obj) {
         label l0:
         abort 0;

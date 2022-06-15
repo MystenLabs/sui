@@ -4,7 +4,7 @@
 // valid, type parameters with key are valid as long as they are not nested
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
     import 0x1.option;
 

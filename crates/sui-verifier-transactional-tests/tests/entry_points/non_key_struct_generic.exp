@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 6-21:
-Error: Dependency not provided for 0000000000000000000000000000000000000002.ID
+Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: _::m::Obj<_::m::NoStore>".
 
 task 1 'publish'. lines 23-35:
-Error: Dependency not provided for 0000000000000000000000000000000000000002.ID
+Error: Failed to verify the Move module, reason: "Invalid entry point parameter type. Expected primitive or object type. Got: _::m::Obj<T0>".

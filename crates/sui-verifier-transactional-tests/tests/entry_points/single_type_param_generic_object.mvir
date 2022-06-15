@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.ID;
+module 0x0.m {
+    import 0x2.id;
     import 0x2.tx_context;
     struct Obj<T> has key {
-        id: ID.VersionedID,
+        id: id.VersionedID,
     }
     public entry foo<T: store>(l: Self.Obj<T>, ctx: &mut tx_context.TxContext) {
         label l0:

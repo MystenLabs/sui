@@ -5,4 +5,5 @@ created: object(103)
 written: object(102)
 
 task 1 'publish'. lines 14-23:
-Error: Dependency not provided for 0000000000000000000000000000000000000002.ID
+created: object(105)
+written: object(104)

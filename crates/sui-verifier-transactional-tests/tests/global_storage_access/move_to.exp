@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 4-15:
-Error: Dependency not provided for 0000000000000000000000000000000000000002.ID
+Error: Failed to verify the Move module, reason: "Access to Move global storage is not allowed. Found in function no: [MoveTo(StructDefinitionIndex(0))]".
 
 task 1 'publish'. lines 17-27:
-Error: Dependency not provided for 0000000000000000000000000000000000000002.ID
+Error: Failed to verify the Move module, reason: "Access to Move global storage is not allowed. Found in function no: [MoveToGeneric(StructDefInstantiationIndex(0))]".

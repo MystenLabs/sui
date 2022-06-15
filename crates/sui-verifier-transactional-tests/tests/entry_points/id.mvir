@@ -4,14 +4,14 @@
 // valid, ID is allowed
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
-    import 0x2.ID;
+    import 0x2.id;
 
     public entry yes<T>(
-        l0: ID.ID,
-        l1: vector<ID.ID>,
-        l2: vector<vector<ID.ID>>,
+        l0: id.ID,
+        l1: vector<id.ID>,
+        l2: vector<vector<id.ID>>,
         ctx: &mut tx_context.TxContext,
     ) {
         label l0:
