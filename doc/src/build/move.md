@@ -83,7 +83,7 @@ user-defined coin types, which are custom assets defined in the Move
 language. Sui framework code contains the `Coin` module supporting
 creation and management of custom coins. The `Coin` module is
 located in the
-[Coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Coin.move)
+[Coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/coin.move)
 file. As you would expect, the manifest file describing how to build the
 package containing the `Coin` module is located in the corresponding
 [Move.toml](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/Move.toml)
@@ -152,7 +152,7 @@ in the Move book.
 In order for a Move struct type to define a Sui object type such as
 `Coin`, its first field must be `id: VersionedID`, which is a
 struct type defined in the
-[ID module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move). The
+[ID module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move). The
 Move struct type must
 also have the `key` ability, which allows the object to be persisted
 in Sui's global storage. Abilities of a Move struct are listed after
@@ -195,7 +195,7 @@ section describing how to
 Similarly to other popular programming languages, the main unit of
 computation in Move is a function. Let us look at one of the simplest
 functions defined in the
-[Coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Coin.move), that is
+[Coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/coin.move), that is
 the `value` function.
 
 ``` rust
@@ -358,7 +358,7 @@ Since we are developing a fantasy game, in addition to the mandatory
 `Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the
-[ID package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) from
+[ID package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) from
 Sui framework to gain access to the `VersionedID` struct type defined
 in this package.
 
