@@ -3,8 +3,8 @@
 
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
-module examples::Hero {
-    use examples::Trustedcoin::EXAMPLE;
+module examples::hero {
+    use examples::trusted_coin::EXAMPLE;
     use sui::coin::{Self, Coin};
     use sui::event;
     use sui::id::{Self, ID, VersionedID};
@@ -296,7 +296,7 @@ module examples::Hero {
 
     #[test]
     public fun slay_boar_test() {
-        use examples::Trustedcoin::{Self, EXAMPLE};
+        use examples::trusted_coin::{Self, EXAMPLE};
         use sui::coin::{Self, TreasuryCap};
         use sui::test_scenario;
 
@@ -307,7 +307,7 @@ module examples::Hero {
         // Run the module initializers
         {
             let ctx = test_scenario::ctx(scenario);
-            Trustedcoin::test_init(ctx);
+            trusted_coin::test_init(ctx);
             init(ctx);
         };
         // Admin mints 500 coins and sends them to the Player so they can buy game items

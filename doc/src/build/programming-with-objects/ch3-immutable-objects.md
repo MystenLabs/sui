@@ -58,7 +58,7 @@ let sender1 = @0x1;
 let scenario = &mut test_scenario::begin(&sender1);
 {
     let ctx = test_scenario::ctx(scenario);
-    ColorObject::create_immutable(255, 0, 255, ctx);
+    color_object::create_immutable(255, 0, 255, ctx);
 };
 test_scenario::next_tx(scenario, &sender1);
 {
@@ -75,7 +75,7 @@ test_scenario::next_tx(scenario, &sender2);
 {
     let object_wrapper = test_scenario::take_immutable<ColorObject>(scenario);
     let object = test_scenario::borrow(&object_wrapper);
-    let (red, green, blue) = ColorObject::get_color(object);
+    let (red, green, blue) = color_object::get_color(object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
     test_scenario::return_immutable(scenario, object_wrapper);
 };
@@ -114,7 +114,7 @@ Set the package object ID to the `$PACKAGE` environment variable as we did in pr
 
 Then create a new `ColorObject`:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
+$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 Set the newly created object ID to `$OBJECT`. If we look at the list of objects in the current active account address's wallet:
 ```
@@ -122,7 +122,7 @@ $ wallet objects --address=$ADDR
 ```
 There should be one more, with ID `$OBJECT`. Let's turn it into an immutable object:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "freeze_object" --args \"0x$OBJECT\"
+$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"0x$OBJECT\"
 ```
 Now let's look at the list of objects we own again:
 ```
@@ -136,6 +136,6 @@ Owner: Immutable
 ```
 If we try to mutate it:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "update" --args \"0x$OBJECT\" 0 0 0
+$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "update" --args \"0x$OBJECT\" 0 0 0
 ```
 It will complain that an immutable object cannot be passed to a mutable argument.

@@ -137,16 +137,16 @@ transfer::transfer(coin::from_balance(fee1, ctx), service_address);
 ```
 `fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, we signal Sui that we have deleted both wrapper objects:
 ```rust
-ID::delete(id1);
-ID::delete(id2);
+id::delete(id1);
+id::delete(id2);
 ```
 At the end of this call, the two objects have been swapped (sent to the opposite owner) and the service provider takes the service fee.
 
 Since the contract defined only one way to deal with `ObjectWrapper` - `execute_swap` - there is no other way the service operator can interact with `ObjectWrapper` despite its ownership.
 
-The full source code can be found in [TrustedSwap.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/TrustedSwap.move).
+The full source code can be found in [trusted_swap.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/trusted_swap.move).
 
-A more complex example of using direct wrapping can be found in [Escrow.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Escrow.move).
+A more complex example of using direct wrapping can be found in [escrow.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move).
 
 ### Wrapping through `Option`
 When Sui object type `Bar` is directly wrapped into `Foo`, there is not much flexiblity: a `Foo` object must have a `Bar` object in it, and in order to take out the `Bar` object one must destroy the `Foo` object. However, there are cases where we want more flexibility: the wrapping type may or may not always have the wrapped object in it, and the wrapped object may be replaced with a different object at some point.
@@ -176,8 +176,8 @@ When we are creating a new warrior, we can set the `sword` and `shield` to `none
 public entry fun create_warrior(ctx: &mut TxContext) {
     let warrior = SimpleWarrior {
         id: tx_context::new_id(ctx),
-        sword: Option::none(),
-        shield: Option::none(),
+        sword: option::none(),
+        shield: option::none(),
     };
     transfer::transfer(warrior, tx_context::sender(ctx))
 }
@@ -185,20 +185,20 @@ public entry fun create_warrior(ctx: &mut TxContext) {
 With this, we can then define functions to equip new swords or new shields:
 ```rust
 public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
-    if (Option::is_some(&warrior.sword)) {
-        let old_sword = Option::extract(&mut warrior.sword);
+    if (option::is_some(&warrior.sword)) {
+        let old_sword = option::extract(&mut warrior.sword);
         transfer::transfer(old_sword, tx_context::sender(ctx));
     };
-    Option::fill(&mut warrior.sword, sword);
+    option::fill(&mut warrior.sword, sword);
 }
 ```
 In the above function, we are passing a `warrior` as mutable reference of `SimpleWarrior`, and a `sword` passed by value because we need to wrap it into the `warrior`.
 
 It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `Option::fill` without first checking and taking out the existing sword, a runtime error may occur. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would expect when you equip a new sword--you get the old sword back, if there is one.
 
-Full code can be found in [SimpleWarrior.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/SimpleWarrior.move).
+Full code can be found in [simple_warrior.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/simple_warrior.move).
 
-You can also find a more complex example in [Hero.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/Hero.move).
+You can also find a more complex example in [hero.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/hero.move).
 
 ### Wrapping through `vector`
 The concept of wrapping objects in a vector field of another Sui object is very similar to wrapping through `Option`: an object may contain 0, 1 or many of the wrapped objects of the same type.

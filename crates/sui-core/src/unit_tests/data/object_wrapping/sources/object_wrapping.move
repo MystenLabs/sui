@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module ObjectWrapping::ObjectWrapping {
+module object_wrapping::object_wrapping {
     use std::option::{Self, Option};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};

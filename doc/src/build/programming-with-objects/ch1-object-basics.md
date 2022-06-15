@@ -105,7 +105,7 @@ let owner = @0x1;
 let scenario = &mut test_scenario::begin(&owner);
 {
     let ctx = test_scenario::ctx(scenario);
-    ColorObject::create(255, 0, 255, ctx);
+    color_object::create(255, 0, 255, ctx);
 };
 ```
 >:books: Note there is a "`;`" after "`}`". This is required except for the last statement in the function. Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for a detailed explanation.
@@ -129,7 +129,7 @@ Finally we check that `@0x1` owns the object and the object value is consistent:
 test_scenario::next_tx(scenario, &owner);
 {
     let object = test_scenario::take_owned<ColorObject>(scenario);
-    let (red, green, blue) = ColorObject::get_color(&object);
+    let (red, green, blue) = color_object::get_color(&object);
     assert!(red == 255 && green == 0 && blue == 255, 0);
     test_scenario::return_owned(scenario, object);
 };
@@ -191,7 +191,7 @@ Owner: AddressOwner(k#5db53ebb05fd3ea5f1d163d9d487ee8cd7b591ee)
 Version: 1
 ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 Readonly: false
-Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::ColorObject
+Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
 ```
 As we can see, it's owned by the current default wallet address that we saw earlier. And the type of this object is `ColorObject`!
 

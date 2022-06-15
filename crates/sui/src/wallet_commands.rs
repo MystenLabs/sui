@@ -664,7 +664,7 @@ impl Display for WalletCommandResult {
                 for oref in object_refs {
                     let owner_type = match oref.owner {
                         Owner::AddressOwner(_) => "AddressOwner",
-                        Owner::ObjectOwner(_) => "ObjectOwner",
+                        Owner::ObjectOwner(_) => "object_owner",
                         Owner::Shared => "Shared",
                         Owner::Immutable => "Immutable",
                     };

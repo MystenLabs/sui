@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module ObjectOwner::ObjectOwner {
+module object_owner::object_owner {
     use std::option::{Self, Option};
     use sui::id::{Self, VersionedID};
     use sui::transfer::{Self, ChildRef};

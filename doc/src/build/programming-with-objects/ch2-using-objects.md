@@ -42,9 +42,9 @@ let scenario = &mut test_scenario::begin(&owner);
 // Create two ColorObjects owned by `owner`, and obtain their IDs.
 let (id1, id2) = {
     let ctx = test_scenario::ctx(scenario);
-    ColorObject::create(255, 255, 255, ctx);
+    color_object::create(255, 255, 255, ctx);
     let id1 = tx_context::last_created_object_id(ctx);
-    ColorObject::create(0, 0, 0, ctx);
+    color_object::create(0, 0, 0, ctx);
     let id2 = tx_context::last_created_object_id(ctx);
     (id1, id2)
 };
@@ -55,11 +55,11 @@ test_scenario::next_tx(scenario, &owner);
 {
     let obj1 = test_scenario::take_owned_by_id<ColorObject>(scenario, id1);
     let obj2 = test_scenario::take_owned_by_id<ColorObject>(scenario, id2);
-    let (red, green, blue) = ColorObject::get_color(&obj1);
+    let (red, green, blue) = color_object::get_color(&obj1);
     assert!(red == 255 && green == 255 && blue == 255, 0);
 
     let ctx = test_scenario::ctx(scenario);
-    ColorObject::copy_into(&obj2, &mut obj1);
+    color_object::copy_into(&obj2, &mut obj1);
     test_scenario::return_owned(scenario, obj1);
     test_scenario::return_owned(scenario, obj2);
 };
@@ -69,7 +69,7 @@ We used `take_owned_by_id` to take both objects using different IDs. We then use
 test_scenario::next_tx(scenario, &owner);
 {
     let obj1 = test_scenario::take_owned_by_id<ColorObject>(scenario, id1);
-    let (red, green, blue) = ColorObject::get_color(&obj1);
+    let (red, green, blue) = color_object::get_color(&obj1);
     assert!(red == 0 && green == 0 && blue == 0, 0);
     test_scenario::return_owned(scenario, obj1);
 }
@@ -93,10 +93,10 @@ Let's define a function in the `ColorObject` module that allows us to delete the
 ```rust
     public entry fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
-        ID::delete(id);
+        id::delete(id);
     }
 ```
-As we can see, the object is unpacked, generating individual fields. The u8 values are primitive types and can all be dropped. However the `id` cannot be dropped and must be explicitly deleted through the `ID::delete` API. At the end of this call, the object will no longer be stored on-chain.
+As we can see, the object is unpacked, generating individual fields. The u8 values are primitive types and can all be dropped. However the `id` cannot be dropped and must be explicitly deleted through the `id::delete` API. At the end of this call, the object will no longer be stored on-chain.
 
 We can add a unit test for it, as well:
 ```rust
@@ -105,13 +105,13 @@ let owner = @0x1;
 let scenario = &mut test_scenario::begin(&owner);
 {
     let ctx = test_scenario::ctx(scenario);
-    ColorObject::create(255, 0, 255, ctx);
+    color_object::create(255, 0, 255, ctx);
 };
 // Delete the ColorObject we just created.
 test_scenario::next_tx(scenario, &owner);
 {
     let object = test_scenario::take_owned<ColorObject>(scenario);
-    ColorObject::delete(object);
+    color_object::delete(object);
 };
 // Verify that the object was indeed deleted.
 test_scenario::next_tx(scenario, &owner);
@@ -137,7 +137,7 @@ let owner = @0x1;
 let scenario = &mut test_scenario::begin(&owner);
 {
     let ctx = test_scenario::ctx(scenario);
-    ColorObject::create(255, 0, 255, ctx);
+    color_object::create(255, 0, 255, ctx);
 };
 // Transfer the object to recipient.
 let recipient = @0x2;
@@ -145,7 +145,7 @@ test_scenario::next_tx(scenario, &owner);
 {
     let object = test_scenario::take_owned<ColorObject>(scenario);
     let ctx = test_scenario::ctx(scenario);
-    ColorObject::transfer(object, recipient, ctx);
+    color_object::transfer(object, recipient, ctx);
 };
 ```
 Note that in the second transaction, the sender of the transaction should still be `owner`, because only the `owner` can transfer the object that it owns. After the tranfser, we can verify that `owner` no longer owns the object, while `recipient` now owns it:
