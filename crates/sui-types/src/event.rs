@@ -1,11 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_bytecode_utils::{layout::TypeLayoutBuilder, module_cache::GetModule};
-use move_core_types::{
-    language_storage::{StructTag, TypeTag},
-    value::{MoveStruct, MoveTypeLayout},
-};
+use move_core_types::language_storage::StructTag;
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -16,14 +12,13 @@ use crate::object::MoveObject;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
     committee::EpochId,
-    error::SuiError,
     messages_checkpoint::CheckpointSequenceNumber,
 };
 use schemars::JsonSchema;
 use serde_with::serde_as;
 
 /// A universal Sui event type encapsulating different types of events
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventEnvelope {
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     pub timestamp: u64,
@@ -96,7 +91,7 @@ pub enum Event {
     DeleteObject(ObjectID),
     /// New object creation
     NewObject(ObjectID),
-    /// Epooch change
+    /// Epoch change
     EpochChange(EpochId),
     /// New checkpoint
     Checkpoint(CheckpointSequenceNumber),
@@ -151,38 +146,6 @@ impl Event {
         match self {
             Event::MoveEvent(event_obj) => Some(event_obj.type_.name.to_string()),
             _ => None,
-        }
-    }
-
-    /// Extracts a MoveStruct, if possible, from the event
-    pub fn extract_move_struct(
-        &self,
-        resolver: &impl GetModule,
-    ) -> Result<Option<MoveStruct>, SuiError> {
-        match self {
-            Event::MoveEvent(event_obj) => {
-                let typestruct = TypeTag::Struct(event_obj.type_.clone());
-                let layout =
-                    TypeLayoutBuilder::build_with_fields(&typestruct, resolver).map_err(|e| {
-                        SuiError::ObjectSerializationError {
-                            error: e.to_string(),
-                        }
-                    })?;
-                match layout {
-                    MoveTypeLayout::Struct(l) => {
-                        let s = MoveStruct::simple_deserialize(event_obj.contents(), &l).map_err(
-                            |e| SuiError::ObjectSerializationError {
-                                error: e.to_string(),
-                            },
-                        )?;
-                        Ok(Some(s))
-                    }
-                    _ => unreachable!(
-                        "We called build_with_types on Struct type, should get a struct layout"
-                    ),
-                }
-            }
-            _ => Ok(None),
         }
     }
 }

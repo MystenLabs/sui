@@ -693,7 +693,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .map(|(id, value)| (id.to_string(), value.clone().into()))
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
-        "0x2::UTF8::String" | "0x1::ASCII::String" => {
+        "0x2::UTF8::String" | "0x1::ascii::String" => {
             if let SuiMoveValue::Bytearray(bytes) = fields["bytes"].clone() {
                 if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
@@ -781,7 +781,7 @@ impl TryFrom<MoveModulePublish> for SuiMovePackage {
 #[serde(rename = "TransactionData", rename_all = "camelCase")]
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
-    sender: SuiAddress,
+    pub sender: SuiAddress,
     gas_payment: SuiObjectRef,
     pub gas_budget: u64,
 }
@@ -1230,7 +1230,7 @@ pub enum SuiEvent {
 }
 
 impl SuiEvent {
-    fn try_from(event: Event, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
+    pub fn try_from(event: Event, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match event {
             Event::MoveEvent(event) => {
                 let bcs = event.contents().to_vec();
