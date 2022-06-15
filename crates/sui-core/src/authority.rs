@@ -81,7 +81,7 @@ pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::{
-    AuthorityStore, AuthorityStoreWrapper, GatewayStore, SuiDataStore, UpdateType,
+    AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
@@ -241,9 +241,9 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    module_cache: SyncModuleCache<AuthorityStoreWrapper>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
-    event_handler: Option<Arc<EventHandler>>,
+    pub event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -332,7 +332,7 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
-        transaction.verify_signature().map_err(|e| {
+        transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;
@@ -656,7 +656,7 @@ impl AuthorityState {
         // If we already assigned locks to this transaction, we can try to execute it immediately.
         // This can happen to transaction previously submitted to consensus that failed execution
         // due to missing dependencies.
-        if self.shared_locks_exist(&certificate).await? {
+        if self.transaction_shared_locks_exist(&certificate).await? {
             // Attempt to execute the transaction. This will only succeed if the authority
             // already executed all its dependencies and if the locks are correctly attributed to
             // the transaction (ie. this transaction is the next to be executed).
@@ -929,7 +929,7 @@ impl AuthorityState {
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            module_cache: SyncModuleCache::new(AuthorityStoreWrapper(store.clone())),
+            module_cache: SyncModuleCache::new(ResolverWrapper(store.clone())),
             event_handler,
             checkpoints,
             batch_channels: tx,
@@ -1226,7 +1226,10 @@ impl AuthorityState {
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.
-    async fn shared_locks_exist(&self, certificate: &CertifiedTransaction) -> SuiResult<bool> {
+    async fn transaction_shared_locks_exist(
+        &self,
+        certificate: &CertifiedTransaction,
+    ) -> SuiResult<bool> {
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
         let shared_locks = self.database.sequenced(digest, shared_inputs)?;
@@ -1303,6 +1306,9 @@ impl ExecutionState for AuthorityState {
                     SuiError::NotASharedObjectTransaction
                 );
 
+                // Check if we already assigned locks to the shared objects.
+                let shared_locks = self.transaction_shared_locks_exist(&certificate).await?;
+
                 // If we already executed this transaction, return the signed effects.
                 let digest = certificate.digest();
                 if self.database.effects_exists(digest)? {
@@ -1312,7 +1318,7 @@ impl ExecutionState for AuthorityState {
                 }
 
                 // If we didn't already assigned shared-locks to this transaction, we do it now.
-                if !self.shared_locks_exist(&certificate).await? {
+                if !shared_locks {
                     // Check the certificate. Remember that Byzantine authorities may input anything into
                     // consensus.
                     certificate.verify(&self.committee.load())?;

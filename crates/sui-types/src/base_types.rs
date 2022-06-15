@@ -244,9 +244,7 @@ pub struct ObjectDigest(
 ); // We use SHA3-256 hence 32 bytes here
 
 #[serde_as]
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema, Debug,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionEffectsDigest(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -407,6 +405,11 @@ impl TransactionDigest {
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
     }
+
+    /// Translates digest into a Vec of bytes
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
 }
 
 impl AsRef<[u8]> for TransactionDigest {
@@ -563,6 +566,14 @@ impl TryFrom<&[u8]> for ObjectDigest {
 }
 
 impl std::fmt::Debug for TransactionDigest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = base64ct::Base64::encode_string(&self.0);
+        write!(f, "{}", s)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for TransactionEffectsDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = base64ct::Base64::encode_string(&self.0);
         write!(f, "{}", s)?;

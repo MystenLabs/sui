@@ -83,7 +83,8 @@ export type TransactionEffects = {
    */
   gasObject: OwnedObjectRef;
   /** The events emitted during execution. Note that only successful transactions emit events */
-  events?: Event[];
+  // TODO: properly define type when this is being used
+  events?: any[];
   /** The set of transaction digests this transaction depends on */
   dependencies?: TransactionDigest[];
 };
@@ -96,11 +97,6 @@ export type TransactionEffectsResponse = {
 export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];
-
-export type Event = {
-  type_: string;
-  contents: any;
-};
 
 export type MoveCall = {
   package: SuiObjectRef;

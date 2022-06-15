@@ -470,6 +470,8 @@ pub struct TransactionEnvelope<S> {
     #[serde(skip)]
     transaction_digest: OnceCell<TransactionDigest>,
     // Deserialization sets this to "false"
+    // TODO: is_verified is only set to true in some callsites after verification.
+    // Hence it's not optimal.
     #[serde(skip)]
     pub is_verified: bool,
 
@@ -484,13 +486,7 @@ pub struct TransactionEnvelope<S> {
 }
 
 impl<S> TransactionEnvelope<S> {
-    pub fn verify_signature(&self) -> Result<(), SuiError> {
-        let mut obligation = VerificationObligation::default();
-        self.add_tx_sig_to_verification_obligation(&mut obligation)?;
-        obligation.verify_all().map(|_| ())
-    }
-
-    pub fn add_tx_sig_to_verification_obligation(
+    fn add_sender_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
@@ -505,8 +501,7 @@ impl<S> TransactionEnvelope<S> {
         let (message, signature, public_key) = self
             .tx_signature
             .get_verification_inputs(&self.data, self.data.sender)?;
-        let idx = obligation.messages.len();
-        obligation.messages.push(message);
+        let idx = obligation.add_message(message);
         let key = obligation.lookup_public_key(&public_key)?;
         obligation.public_keys.push(key);
         obligation.signatures.push(signature);
@@ -620,6 +615,12 @@ impl Transaction {
             auth_sign_info: EmptySignInfo {},
         }
     }
+
+    pub fn verify(&self) -> Result<(), SuiError> {
+        let mut obligation = VerificationObligation::default();
+        self.add_sender_sig_to_verification_obligation(&mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
 }
 
 impl Hash for Transaction {
@@ -695,12 +696,17 @@ impl SignedTransaction {
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn verify(&self, committee: &Committee) -> Result<u64, SuiError> {
-        self.verify_signature()?;
+        let mut obligation = VerificationObligation::default();
+        self.add_sender_sig_to_verification_obligation(&mut obligation)?;
         let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
+        let mut message = Vec::new();
+        self.data.write(&mut message);
+        let idx = obligation.add_message(message);
         self.auth_sign_info
-            .signature
-            .verify(&self.data, self.auth_sign_info.authority)?;
+            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+
+        obligation.verify_all()?;
         Ok(weight)
     }
 
@@ -1174,7 +1180,7 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
-        transaction.verify_signature()?;
+        transaction.verify()?;
         Ok(Self::new_unsafe(transaction, committee))
     }
 
@@ -1259,70 +1265,21 @@ impl CertifiedTransaction {
         obligation.verify_all().map(|_| ())
     }
 
-    pub fn add_to_verification_obligation(
+    fn add_to_verification_obligation(
         &self,
         committee: &Committee,
         obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
-        // Check epoch
-        fp_ensure!(
-            self.auth_sign_info.epoch == committee.epoch(),
-            SuiError::WrongEpoch {
-                expected_epoch: committee.epoch()
-            }
-        );
+        // Add the obligation of the sender signature verification.
+        self.add_sender_sig_to_verification_obligation(obligation)?;
 
-        // First check the quorum is sufficient
-
-        let mut weight = 0;
-        let mut used_authorities = HashSet::new();
-        for (authority, _) in self.auth_sign_info.signatures.iter() {
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
-            // Update weight.
-            let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-            weight += voting_rights;
-        }
-        fp_ensure!(
-            weight >= committee.quorum_threshold(),
-            SuiError::CertificateRequiresQuorum
-        );
-
-        // Add the obligation of the transaction
-        self.add_tx_sig_to_verification_obligation(obligation)?;
-
-        // Create obligations for the committee signatures
-
+        // Add the obligation of the authority signature verifications.
         let mut message = Vec::new();
         self.data.write(&mut message);
+        let idx = obligation.add_message(message);
 
-        let idx = obligation.messages.len();
-        obligation.messages.push(message);
-
-        for tuple in self.auth_sign_info.signatures.iter() {
-            let (authority, signature) = tuple;
-            // do we know, or can we build a valid public key?
-            match committee.expanded_keys.get(authority) {
-                Some(v) => obligation.public_keys.push(*v),
-                None => {
-                    let public_key = (*authority).try_into()?;
-                    obligation.public_keys.push(public_key);
-                }
-            }
-
-            // build a signature
-            obligation.signatures.push(signature.0);
-
-            // collect the message
-            obligation.message_index.push(idx);
-        }
-
-        Ok(())
+        self.auth_sign_info
+            .add_to_verification_obligation(committee, obligation, idx)
     }
 }
 

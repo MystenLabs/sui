@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
+use crate::error::SuiResult;
 use ed25519_dalek::PublicKey;
 use itertools::Itertools;
 use rand::distributions::{Distribution, Uniform};
@@ -22,7 +23,7 @@ pub struct Committee {
     pub total_votes: StakeUnit,
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
-    pub expanded_keys: HashMap<AuthorityName, PublicKey>,
+    expanded_keys: HashMap<AuthorityName, PublicKey>,
 }
 
 impl Committee {
@@ -30,6 +31,8 @@ impl Committee {
         let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
         let expanded_keys: HashMap<_, _> = voting_rights
             .iter()
+            // TODO: Verify all code path to make sure we always have valid public keys.
+            // e.g. when a new validator is registering themself on-chain.
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
         Committee {
@@ -42,6 +45,13 @@ impl Committee {
 
     pub fn epoch(&self) -> EpochId {
         self.epoch
+    }
+
+    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<PublicKey> {
+        match self.expanded_keys.get(authority) {
+            Some(v) => Ok(*v),
+            None => (*authority).try_into(),
+        }
     }
 
     /// Samples authorities by weight
