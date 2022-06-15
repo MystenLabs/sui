@@ -4,11 +4,11 @@
 // valid, T has store, thus Obj has key
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
-    import 0x2.ID;
+    import 0x2.id;
 
-    struct Obj<T> has key { id: ID.VersionedID }
+    struct Obj<T> has key { id: id.VersionedID }
 
     public entry no<T: store>(s: Self.Obj<T>, ctx: &mut tx_context.TxContext) {
         label l0:

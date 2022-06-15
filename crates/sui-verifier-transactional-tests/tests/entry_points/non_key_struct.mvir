@@ -4,7 +4,7 @@
 // invalid, non key structs are not supported
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
 
     struct S has copy, drop, store { value: u64 }
