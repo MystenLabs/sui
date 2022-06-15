@@ -21,6 +21,7 @@ serde_with = { version = "1.14.0", features = ["hex"] }
 colored = "2.0.0"
 either = "1.6.1"
 move-core-types = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2", features = ["address20"] }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
 itertools = "0.10.3"
 
 sui-types = { path = "../sui-types" }

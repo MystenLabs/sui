@@ -10,7 +10,7 @@ use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse,
+    GetObjectDataResponse, SuiObjectInfo, SuiTransactionEffects, TransactionEffectsResponse,
 };
 use sui_json_rpc_api::RpcFullNodeReadApiServer;
 use sui_json_rpc_api::RpcReadApiServer;
@@ -103,7 +103,7 @@ impl RpcReadApiServer for ReadApi {
         let (cert, effects) = self.state.get_transaction(digest).await?;
         Ok(TransactionEffectsResponse {
             certificate: cert.try_into()?,
-            effects: effects.into(),
+            effects: SuiTransactionEffects::try_from(effects, &self.state.module_cache)?,
             timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
         })
     }

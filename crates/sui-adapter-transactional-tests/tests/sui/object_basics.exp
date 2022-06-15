@@ -23,7 +23,7 @@ created: object(108)
 written: object(107)
 
 task 6 'run'. lines 18-18:
-events: MoveEvent { type_: StructTag { address: Sui, module: Identifier("ObjectBasics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
+events: MoveEvent(MoveObject { type_: StructTag { address: Sui, module: Identifier("ObjectBasics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] })
 written: object(105), object(108), object(109)
 
 task 7 'run'. lines 20-20:
