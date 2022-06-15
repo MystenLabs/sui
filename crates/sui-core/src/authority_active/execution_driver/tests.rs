@@ -33,7 +33,7 @@ async fn pending_exec_storage_notify() {
                 clients,
             )
             .unwrap();
-            active_state.spawn_all_active_processes().await
+            active_state.spawn_checkpoint_process().await
         });
     }
 
@@ -47,7 +47,10 @@ async fn pending_exec_storage_notify() {
                 .expect("All ok.");
 
             // Check whether this is a success?
-            assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+            assert!(matches!(
+                effects.effects.status,
+                ExecutionStatus::Success { .. }
+            ));
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             certs.push(_cert);
