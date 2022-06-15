@@ -5,10 +5,10 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 26-26:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: None } }
+Error: MiscellaneousError
 
 task 3 'run'. lines 28-28:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: None } }
+Error: MiscellaneousError
 
 task 4 'run'. lines 30-30:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: None } }
+Error: MiscellaneousError

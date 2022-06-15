@@ -11,7 +11,6 @@ use move_package::BuildConfig;
 use sui_types::{
     crypto::KeyPair,
     crypto::{get_key_pair, Signature},
-    error::ExecutionErrorKind,
     event::{Event, EventType, TransferType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
@@ -405,7 +404,7 @@ async fn test_object_owning_another_object() {
     // we expect this to be and error due to Deleting an Object Owned Object
     assert!(matches!(
         effects.status.unwrap_err(),
-        ExecutionErrorKind::DeleteObjectOwnedObject
+        ExecutionFailureStatus::MiscellaneousError,
     ));
 
     // Remove the child from the parent.

@@ -4,7 +4,7 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 use crate::{args::*, in_memory_storage::InMemoryStorage};
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
@@ -46,7 +46,6 @@ use sui_types::{
         SUI_ADDRESS_LENGTH,
     },
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
-    error::SuiError,
     event::Event,
     gas,
     messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
@@ -505,7 +504,7 @@ impl<'a> SuiTestAdapter<'a> {
                 deleted: deleted_ids,
                 events,
             }),
-            ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(error.into())),
+            ExecutionStatus::Failure { error, .. } => Err(error.into()),
         }
     }
 
@@ -598,11 +597,6 @@ impl<'a> SuiTestAdapter<'a> {
             .map(|id| format!("object({})", self.real_to_fake_object_id(id).unwrap()))
             .collect::<Vec<_>>()
             .join(", ")
-    }
-
-    fn render_sui_error(&self, sui_error: SuiError) -> anyhow::Error {
-        let error_string: String = format!("{}", sui_error);
-        anyhow!(self.stabilize_str(&error_string))
     }
 
     fn stabilize_str(&self, input: impl AsRef<str>) -> String {

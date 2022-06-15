@@ -24,7 +24,7 @@ task 6 'run'. lines 86-88:
 written: object(109), object(111), object(112)
 
 task 7 'run'. lines 89-89:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidSharedChildUse, source: None } }
+Error: MiscellaneousError
 
 task 8 'run'. lines 91-91:
 written: object(109), object(111), object(114)

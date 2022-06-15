@@ -1,4 +1,12 @@
 ---
+AbortLocation:
+  ENUM:
+    0:
+      Module:
+        NEWTYPE:
+          TYPENAME: ModuleId
+    1:
+      Script: UNIT
 AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -61,48 +69,17 @@ ExecutionDigests:
         TYPENAME: TransactionDigest
     - effects:
         TYPENAME: TransactionEffectsDigest
-ExecutionErrorKind:
+ExecutionFailureStatus:
   ENUM:
     0:
       InsufficientGas: UNIT
     1:
-      TransferUnowned: UNIT
+      MoveAbort:
+        TUPLE:
+          - TYPENAME: AbortLocation
+          - U64
     2:
-      TransferNonCoin: UNIT
-    3:
-      TransferInsufficientBalance: UNIT
-    4:
-      InvalidTransactionUpdate: UNIT
-    5:
-      ObjectNotFound: UNIT
-    6:
-      DeleteObjectOwnedObject: UNIT
-    7:
-      FunctionNotFound: UNIT
-    8:
-      ModuleNotFound: UNIT
-    9:
-      InvalidFunctionSignature: UNIT
-    10:
-      InvalidFunctionVisibility: UNIT
-    11:
-      InvalidNonEntryFunction: UNIT
-    12:
-      ExecutionInvariantViolation: UNIT
-    13:
-      TypeError: UNIT
-    14:
-      CircularObjectOwnership: UNIT
-    15:
-      MissingObjectOwner: UNIT
-    16:
-      InvalidSharedChildUse: UNIT
-    17:
-      ModulePublishFailure: UNIT
-    18:
-      ModuleVerificationFailure: UNIT
-    19:
-      VmError: UNIT
+      MiscellaneousError: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -111,9 +88,15 @@ ExecutionStatus:
       Failure:
         STRUCT:
           - error:
-              TYPENAME: ExecutionErrorKind
+              TYPENAME: ExecutionFailureStatus
 Identifier:
   NEWTYPESTRUCT: STR
+ModuleId:
+  STRUCT:
+    - address:
+        TYPENAME: AccountAddress
+    - name:
+        TYPENAME: Identifier
 MoveCall:
   STRUCT:
     - package:

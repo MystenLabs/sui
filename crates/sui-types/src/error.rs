@@ -2,11 +2,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId, messages::ExecutionStatus};
-use move_binary_format::errors::{PartialVMError, VMError};
+use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
+use move_binary_format::errors::{Location, PartialVMError, VMError};
+use move_core_types::vm_status::{AbortLocation, StatusCode};
 use narwhal_executor::{ExecutionStateError, SubscriberError};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{error::Error, fmt::Debug};
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
 
@@ -512,8 +513,84 @@ impl ExecutionError {
         &self.inner.kind
     }
 
-    pub fn to_execution_status(&self) -> ExecutionStatus {
-        todo!()
+    pub fn to_execution_status(&self) -> ExecutionFailureStatus {
+        match self.kind() {
+            ExecutionErrorKind::InsufficientGas => ExecutionFailureStatus::InsufficientGas,
+            ExecutionErrorKind::TransferUnowned
+            | ExecutionErrorKind::TransferNonCoin
+            | ExecutionErrorKind::TransferInsufficientBalance
+            | ExecutionErrorKind::InvalidTransactionUpdate
+            | ExecutionErrorKind::ObjectNotFound
+            | ExecutionErrorKind::DeleteObjectOwnedObject
+            | ExecutionErrorKind::FunctionNotFound
+            | ExecutionErrorKind::ModuleNotFound
+            | ExecutionErrorKind::InvalidFunctionSignature
+            | ExecutionErrorKind::InvalidFunctionVisibility
+            | ExecutionErrorKind::InvalidNonEntryFunction
+            | ExecutionErrorKind::ExecutionInvariantViolation
+            | ExecutionErrorKind::TypeError
+            | ExecutionErrorKind::CircularObjectOwnership
+            | ExecutionErrorKind::MissingObjectOwner
+            | ExecutionErrorKind::InvalidSharedChildUse
+            | ExecutionErrorKind::ModulePublishFailure
+            | ExecutionErrorKind::ModuleVerificationFailure => {
+                ExecutionFailureStatus::MiscellaneousError
+            }
+            ExecutionErrorKind::VmError => {
+                let source = if let Some(source) = self.source() {
+                    source
+                } else {
+                    return ExecutionFailureStatus::MiscellaneousError;
+                };
+
+                if let Some(vmerror) = source.downcast_ref::<VMError>() {
+                    match (
+                        vmerror.major_status(),
+                        vmerror.sub_status(),
+                        vmerror.location(),
+                    ) {
+                        (StatusCode::EXECUTED, _, _) => {
+                            // If we have an error the status probably shouldn't ever be Executed
+                            debug_assert!(
+                                false,
+                                "VmError shouldn't ever report successful execution"
+                            );
+                        }
+                        (StatusCode::ABORTED, Some(code), Location::Script) => {
+                            return ExecutionFailureStatus::MoveAbort(AbortLocation::Script, code);
+                        }
+                        (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
+                            return ExecutionFailureStatus::MoveAbort(
+                                AbortLocation::Module(id.to_owned()),
+                                code,
+                            );
+                        }
+                        (StatusCode::OUT_OF_GAS, _, _) => {
+                            return ExecutionFailureStatus::InsufficientGas;
+                        }
+                        _ => return ExecutionFailureStatus::MiscellaneousError,
+                    }
+                }
+
+                if let Some(partial_vmerror) = source.downcast_ref::<PartialVMError>() {
+                    match partial_vmerror.major_status() {
+                        StatusCode::EXECUTED => {
+                            // If we have an error the status probably shouldn't ever be Executed
+                            debug_assert!(
+                                false,
+                                "VmError shouldn't ever report successful execution"
+                            );
+                        }
+                        StatusCode::OUT_OF_GAS => {
+                            return ExecutionFailureStatus::InsufficientGas;
+                        }
+                        _ => return ExecutionFailureStatus::MiscellaneousError,
+                    }
+                }
+
+                ExecutionFailureStatus::MiscellaneousError
+            }
+        }
     }
 }
 

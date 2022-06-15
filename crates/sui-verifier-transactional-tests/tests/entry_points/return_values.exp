@@ -1,13 +1,13 @@
 processed 4 tasks
 
 task 0 'publish'. lines 4-11:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
+Error: MiscellaneousError
 
 task 1 'publish'. lines 13-20:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
+Error: MiscellaneousError
 
 task 2 'publish'. lines 22-29:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
+Error: MiscellaneousError
 
 task 3 'publish'. lines 32-39:
-Error: Error executing ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: None } }
+Error: MiscellaneousError
