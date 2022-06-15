@@ -328,7 +328,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     }
 
     /// Get all stored certificate digests
-    pub fn get_pending_certificates(&self) -> SuiResult<Vec<(InternalSequenceNumber, TransactionDigest)>> {
+    pub fn get_pending_certificates(
+        &self,
+    ) -> SuiResult<Vec<(InternalSequenceNumber, TransactionDigest)>> {
         Ok(self.pending_execution.iter().collect())
     }
 

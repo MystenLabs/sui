@@ -1,16 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    authority_active::{ ActiveAuthority},
-    checkpoints::checkpoint_tests::TestSetup,
-};
+use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
-use std::{ time::Duration};
-use sui_types::messages::{ ExecutionStatus};
+use std::time::Duration;
+use sui_types::messages::ExecutionStatus;
 
 use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
-
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn pending_exec_storage_notify() {
@@ -68,11 +64,21 @@ async fn pending_exec_storage_notify() {
 
     // Insert the certificates
     let num_certs = certs.len();
-    authority_state.database.add_pending_certificates(certs.into_iter().map(|cert| (*cert.digest(), cert)).collect()).expect("Storage is ok");
+    authority_state
+        .database
+        .add_pending_certificates(
+            certs
+                .into_iter()
+                .map(|cert| (*cert.digest(), cert))
+                .collect(),
+        )
+        .expect("Storage is ok");
     // Wait for a notification (must arrive)
     authority_state.database.wait_for_new_pending().await;
     // get back the certificates
-    let certs_back = authority_state.database.get_pending_certificates().expect("DB should be there");
+    let certs_back = authority_state
+        .database
+        .get_pending_certificates()
+        .expect("DB should be there");
     assert_eq!(num_certs, certs_back.len());
-
 }
