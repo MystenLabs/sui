@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use tracing::{debug};
+use tracing::debug;
 use typed_store::Map;
 
 use crate::authority_client::AuthorityAPI;
