@@ -8,7 +8,7 @@ end clients or by helping other fullnodes get up-to-date with the latest
 transactions that have been committed to the chain.
 
 This role enables
-[validators](https://docs.sui.io/learn/architecture/validators) (or miners in
+[validators](../learn/architecture/validators.md) (or miners in
 other networks) to focus on servicing the write path and processing
 transactions as fast as possible. Once a validator has committed a new set of
 transactions (or a block of transactions), the validator will push that block
@@ -17,10 +17,10 @@ disseminate it to the rest of the network.
 
 **Important**: For potential validators, running a Sui fullnode is an absolute
 prerequisite. We encourage auditors, bridges, state mirrors and other
-interested parties to join us. At this time we offer no guarantees on performance or
-stability of our fullnode software. We expect things to evolve and stabilize
-over time and we're seeking feedback in the form of [issues filed in
-GitHub](https://github.com/MystenLabs/sui/issues/new/choose) for any issues
+interested parties to join us. At this time, we offer no guarantees on performance
+or stability of our fullnode software. We expect things to evolve and stabilize
+over time, and we're seeking feedback in the form of [issues filed in
+GitHub](https://github.com/MystenLabs/sui/issues/new/choose) for any problems
 encountered.
 
 ## Features
@@ -31,25 +31,26 @@ Sui fullnodes exist to:
 * Serve read requests from clients.
 * Conduct local app testing against verified data.
 
-## State-Synchronization
+## State synchronization
 
-Today Sui fullnodes sync with validators to be able to learn about newly committed transactions.
+Today Sui fullnodes sync with validators to be able to learn about newly
+committed transactions.
 
 The normal life of a transaction requires a few round trips to 2f+1 validators
 to be able to form a TxCert, at which point a transaction is guaranteed to be
 committed and executed.
 
-Today this synchronization process is performed by:
+Today, this synchronization process is performed by:
 
 1. Following 2f+1 validators and listening for newly committed transactions.
-2. Requesting the transaction from one validator.
-3. Locally executing the transaction and updating the local DB.
+1. Requesting the transaction from one validator.
+1. Locally executing the transaction and updating the local DB.
 
-Today this synchronization process is far from ideal as it requires listening
+This synchronization process is far from ideal as it requires listening
 to at a minimum 2f+1 validators to ensure that a fullnode has properly seen all
-new transactions. Overtime we will improve this process (e.g. with the
+new transactions. Over time, we will improve this process (e.g. with the
 introduction of checkpoints, ability to synchronize with other fullnodes,
-etc) in order to have better guarantees around a fullnode’s ability to be
+etc.) in order to have better guarantees around a fullnode’s ability to be
 confident it has seen all recent transactions.
 
 ## Architecture
@@ -59,9 +60,9 @@ validator nodes, fullnodes cannot sign transactions, although they can validate
 the integrity of the chain by re-executing transactions that were previously
 committed by a quorum of validators.
 
-Today, a fullnode is expected to maintain the full history of the chain,
-although in the future sufficiently old history may need to be pruned and
-offloaded to cheaper storage.
+Today, a fullnode is expected to maintain the full history of the chain; in the
+future, sufficiently old history may need to be pruned and offloaded to cheaper
+storage.
 
 Conversely, a validator needs to store only the latest transactions on the
 *frontier* of the object graph (e.g., txes with >0 unspent output objects).
@@ -88,11 +89,10 @@ Currently, the only supported way of running a fullnode requires building from
 source. In the future, we will provide Docker images for more flexibility
 in how a fullnode is run.
 
-### Building from source
+Before building, ensure the required tools are installed in your environment as
+outlined in the [Prerequisites](../build/install#prerequisites) section.
 
-Before beginning, ensure the required tools are installed
-   in your environment as outlined in the
-   [Prerequisites](../build/install#prerequisites) section.
+### Building from source
 
 1. Set up your fork of the Sui repository:
     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
