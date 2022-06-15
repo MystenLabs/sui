@@ -198,15 +198,18 @@ function formatByTransactionKind(
 }
 
 function ItemView({ itm, text }: { itm: any; text: string }) {
-    return itm.link ? (
-        <Longtext
-            text={text}
-            category={itm.category ? itm.category : 'unknown'}
-            isLink={true}
-        />
-    ) : (
-        <>{text}</>
-    );
+    switch (itm) {
+        case itm.link:
+            return (
+                <Longtext
+                    text={text}
+                    category={itm.category ? itm.category : 'unknown'}
+                    isLink={true}
+                />
+            );
+        default:
+            return <>{text}</>;
+    }
 }
 
 function SubListView({ itm, list, n }: { itm: any; list: any; n: number }) {
@@ -265,7 +268,10 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                 : ''
                                         }
                                     >
-                                        {itm.list ? (
+                                        {itm.label === 'Modules' && (
+                                            <pre>{itm.value}</pre>
+                                        )}
+                                        {itm.list && itm.label !== 'Modules' && (
                                             <ul className={styles.listitems}>
                                                 {itm.value.map(
                                                     (list: any, n: number) =>
@@ -291,12 +297,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                         )
                                                 )}
                                             </ul>
-                                        ) : (
-                                            <ItemView
-                                                itm={itm}
-                                                text={itm.value}
-                                            />
                                         )}
+                                        {!itm.list &&
+                                            !(itm.label !== 'Modules') && (
+                                                <ItemView
+                                                    itm={itm}
+                                                    text={itm.value}
+                                                />
+                                            )}
                                     </div>
                                 </div>
                             )
