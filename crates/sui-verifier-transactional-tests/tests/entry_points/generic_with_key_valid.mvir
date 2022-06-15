@@ -4,11 +4,11 @@
 // valid, type parameters with key are valid as long as they are not nested
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
+module 0x0.m {
+    import 0x2.tx_context;
     import 0x1.option;
 
-    public entry yes<T:key>(l0: T, l1: &T, l2: &mut T, ctx: &mut TxContext.TxContext) {
+    public entry yes<T:key>(l0: T, l1: &T, l2: &mut T, ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }

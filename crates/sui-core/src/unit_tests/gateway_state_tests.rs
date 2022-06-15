@@ -556,7 +556,7 @@ async fn test_get_owner_object() {
         .move_call(
             addr1,
             package,
-            "ObjectOwner".to_string(),
+            "object_owner".to_string(),
             "create_parent".to_string(),
             vec![],
             vec![],
@@ -577,7 +577,7 @@ async fn test_get_owner_object() {
         .move_call(
             addr1,
             package,
-            "ObjectOwner".to_string(),
+            "object_owner".to_string(),
             "create_child".to_string(),
             vec![],
             vec![],
@@ -600,7 +600,7 @@ async fn test_get_owner_object() {
         .move_call(
             addr1,
             package,
-            "ObjectOwner".to_string(),
+            "object_owner".to_string(),
             "add_child".to_string(),
             vec![],
             vec![

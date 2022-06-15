@@ -355,7 +355,7 @@ async fn test_move_call_gas() -> SuiResult {
     let package_object_ref = authority_state.get_framework_object_ref().await?;
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
 
-    let module = ident_str!("ObjectBasics").to_owned();
+    let module = ident_str!("object_basics").to_owned();
     let function = ident_str!("create").to_owned();
     let args = vec![
         CallArg::Pure(16u64.to_le_bytes().to_vec()),

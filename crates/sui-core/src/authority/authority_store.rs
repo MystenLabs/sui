@@ -846,7 +846,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }))
     }
 
-    /// Remove the shared objects locks. This function is not safety-critical and is only need to cleanup the store.
+    /// Remove the shared objects locks.
     pub fn remove_shared_objects_locks(
         &self,
         mut write_batch: DBBatch,
@@ -1129,10 +1129,10 @@ impl<const A: bool, S: Eq + Serialize + for<'de> Deserialize<'de>> ModuleResolve
 }
 
 /// A wrapper to make Orphan Rule happy
-pub struct AuthorityStoreWrapper(pub Arc<AuthorityStore>);
+pub struct ResolverWrapper<T: ModuleResolver>(pub Arc<T>);
 
-impl ModuleResolver for AuthorityStoreWrapper {
-    type Error = SuiError;
+impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
+    type Error = T::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.0.get_module(module_id)
     }
@@ -1243,11 +1243,10 @@ pub async fn generate_genesis_system_object<
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
         AuthorityTemporaryStore::new(store.clone(), InputObjects::new(vec![]), genesis_digest);
-    let pubkeys: Vec<Vec<u8>> = committee
-        .expanded_keys
-        .values()
-        .map(|pk| pk.to_bytes().to_vec())
-        .collect();
+    let mut pubkeys = Vec::new();
+    for name in committee.voting_rights.keys() {
+        pubkeys.push(committee.public_key(name)?.to_bytes().to_vec());
+    }
     // TODO: May use separate sui address than derived from pubkey.
     let sui_addresses: Vec<AccountAddress> = committee
         .voting_rights
@@ -1267,7 +1266,7 @@ pub async fn generate_genesis_system_object<
     adapter::execute(
         move_vm,
         &mut temporary_store,
-        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("Genesis").to_owned()),
+        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),
         &ident_str!("create").to_owned(),
         vec![],
         vec![

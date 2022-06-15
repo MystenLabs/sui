@@ -6,4 +6,4 @@ version = "0.0.1"
 Sui = { local = "../../../crates/sui-framework" }
 
 [addresses]
-MyFirstPackage = "0x0"
+my_first_package = "0x0"

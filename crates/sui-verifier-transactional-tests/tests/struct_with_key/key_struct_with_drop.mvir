@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.ID;
+module 0x0.m {
+    import 0x2.id;
     struct S has key, drop {
         flag: bool
     }

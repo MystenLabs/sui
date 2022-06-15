@@ -72,7 +72,7 @@ Successfully created an ExampleNFT:
 ID: ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
 Version: 1
 Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
-Type: 0x2::DevNetNFT::DevNetNFT
+Type: 0x2::devnet_nft::DevNetNFT
 ```
 
 The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `wallet` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
@@ -96,7 +96,7 @@ Successfully created an ExampleNFT:
 ID: EC97467A40A1305FFDEF7019C3045FBC7AA31E29
 Version: 1
 Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
-Type: 0x2::DevNetNFT::DevNetNFT
+Type: 0x2::devnet_nft::DevNetNFT
 ```
 
 That you can similarly view at:
@@ -166,7 +166,7 @@ Which yields output resembling:
 Created new keypair for address : 2D32ED71381BEF7F3D8C57B48DF82123593672AA
 ```
 
-In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/f4afb603801c90236772a1b2b56f2e216a9adf82/sui_programmability/examples/move_tutorial/sources/M1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/f4afb603801c90236772a1b2b56f2e216a9adf82/sui_programmability/examples/move_tutorial/sources/M1.move#L4) of the package we previously published.
+In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/M1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/M1.move#L4) of the package we previously published.
 
 > **Important:** Note placeholders on the command line and formatting of function parameters as it is important to follow the same pattern.
 

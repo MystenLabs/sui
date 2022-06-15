@@ -502,7 +502,7 @@ impl WalletCommands {
                 }
                 let (_, effects) = call_move(
                     ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                    "DevNetNFT",
+                    "devnet_nft",
                     "mint",
                     vec![],
                     gas,
@@ -664,7 +664,7 @@ impl Display for WalletCommandResult {
                 for oref in object_refs {
                     let owner_type = match oref.owner {
                         Owner::AddressOwner(_) => "AddressOwner",
-                        Owner::ObjectOwner(_) => "ObjectOwner",
+                        Owner::ObjectOwner(_) => "object_owner",
                         Owner::Shared => "Shared",
                         Owner::Immutable => "Immutable",
                     };

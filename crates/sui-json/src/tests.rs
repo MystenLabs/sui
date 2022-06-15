@@ -295,7 +295,7 @@ fn test_basic_args_linter_top_level() {
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
     let example_package = example_package.data.try_as_package().unwrap();
 
-    let module = Identifier::new("Geniteam").unwrap();
+    let module = Identifier::new("geniteam").unwrap();
     let function = Identifier::new("create_monster").unwrap();
 
     /*
@@ -404,7 +404,7 @@ fn test_basic_args_linter_top_level() {
         .try_as_package()
         .unwrap();
 
-    let module = Identifier::new("ObjectBasics").unwrap();
+    let module = Identifier::new("object_basics").unwrap();
     let function = Identifier::new("create").unwrap();
 
     /*
@@ -440,7 +440,7 @@ fn test_basic_args_linter_top_level() {
 
     // Test with object args
 
-    let module = Identifier::new("ObjectBasics").unwrap();
+    let module = Identifier::new("object_basics").unwrap();
     let function = Identifier::new("transfer").unwrap();
 
     /*

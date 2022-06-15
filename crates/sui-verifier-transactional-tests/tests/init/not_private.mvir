@@ -2,27 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    public init(ctx: &mut TxContext.TxContext) {
+module 0x0.m {
+    import 0x2.tx_context;
+    public init(ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }
 }
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    public entry init(ctx: &mut TxContext.TxContext) {
+module 0x0.m {
+    import 0x2.tx_context;
+    public entry init(ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }
 }
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    public(friend) init(ctx: &mut TxContext.TxContext) {
+module 0x0.m {
+    import 0x2.tx_context;
+    public(friend) init(ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }

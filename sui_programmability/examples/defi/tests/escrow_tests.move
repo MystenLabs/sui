@@ -3,9 +3,9 @@
 
 #[test_only]
 module defi::escrow_tests {
-    use sui::ID::{Self, VersionedID};
-    use sui::TestScenario::{Self, Scenario};
-    use sui::TxContext::{Self};
+    use sui::id::{Self, VersionedID};
+    use sui::test_scenario::{Self, Scenario};
+    use sui::tx_context::{Self};
 
     use defi::escrow::{Self, EscrowedObj};
 
@@ -29,7 +29,7 @@ module defi::escrow_tests {
     }
 
     #[test]
-    public entry fun test_escrow_flow() {
+    fun test_escrow_flow() {
         // Both Alice and Bob send items to the third party
         let scenario = &mut send_to_escrow(ALICE_ADDRESS, BOB_ADDRESS);
         swap(scenario, &THIRD_PARTY_ADDRESS);
@@ -40,17 +40,17 @@ module defi::escrow_tests {
     }
 
     #[test]
-    public entry fun test_return_to_sender() {
+    fun test_return_to_sender() {
         // Both Alice and Bob send items to the third party
         let scenario = &mut send_to_escrow(ALICE_ADDRESS, BOB_ADDRESS);
 
         // The third party returns item A to Alice, item B to Bob
-        TestScenario::next_tx(scenario, &THIRD_PARTY_ADDRESS);
+        test_scenario::next_tx(scenario, &THIRD_PARTY_ADDRESS);
         {
-            let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
+            let item_a = test_scenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
             escrow::return_to_sender<ItemA, ItemB>(item_a);
 
-            let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
+            let item_b = test_scenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
             escrow::return_to_sender<ItemB, ItemA>(item_b);
         };
 
@@ -61,7 +61,7 @@ module defi::escrow_tests {
 
     #[test]
     #[expected_failure(abort_code = 1)]
-    public entry fun test_swap_wrong_objects() {
+    fun test_swap_wrong_objects() {
         // Both Alice and Bob send items to the third party except that Alice wants to exchange
         // for a different object than Bob's
         let scenario = &mut send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, true, false);
@@ -70,18 +70,18 @@ module defi::escrow_tests {
 
     #[test]
     #[expected_failure(abort_code = 0)]
-    public entry fun test_swap_wrong_recipient() {
+    fun test_swap_wrong_recipient() {
         // Both Alice and Bob send items to the third party except that Alice put a different
         // recipient than Bob
         let scenario = &mut send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, false, true);
         swap(scenario, &THIRD_PARTY_ADDRESS);
     }
 
-    public entry fun swap(scenario: &mut Scenario, third_party: &address) {
-        TestScenario::next_tx(scenario, third_party);
+    fun swap(scenario: &mut Scenario, third_party: &address) {
+        test_scenario::next_tx(scenario, third_party);
         {
-            let item_a = TestScenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
-            let item_b = TestScenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
+            let item_a = test_scenario::take_owned<EscrowedObj<ItemA, ItemB>>(scenario);
+            let item_b = test_scenario::take_owned<EscrowedObj<ItemB, ItemA>>(scenario);
             escrow::swap(item_a, item_b);
         };
     }
@@ -99,25 +99,25 @@ module defi::escrow_tests {
         override_exchange_for: bool,
         override_recipient: bool,
     ): Scenario {
-        let new_scenario = TestScenario::begin(&alice);
+        let new_scenario = test_scenario::begin(&alice);
         let scenario = &mut new_scenario;
-        let ctx = TestScenario::ctx(scenario);
-        let item_a_versioned_id = TxContext::new_id(ctx);
+        let ctx = test_scenario::ctx(scenario);
+        let item_a_versioned_id = tx_context::new_id(ctx);
 
-        TestScenario::next_tx(scenario, &bob);
-        let ctx = TestScenario::ctx(scenario);
-        let item_b_versioned_id = TxContext::new_id(ctx);
+        test_scenario::next_tx(scenario, &bob);
+        let ctx = test_scenario::ctx(scenario);
+        let item_b_versioned_id = tx_context::new_id(ctx);
 
-        let item_a_id = *ID::inner(&item_a_versioned_id);
-        let item_b_id = *ID::inner(&item_b_versioned_id);
+        let item_a_id = *id::inner(&item_a_versioned_id);
+        let item_b_id = *id::inner(&item_b_versioned_id);
         if (override_exchange_for) {
-            item_b_id = ID::new(RANDOM_ADDRESS);
+            item_b_id = id::new(RANDOM_ADDRESS);
         };
 
         // Alice sends item A to the third party
-        TestScenario::next_tx(scenario, &alice);
+        test_scenario::next_tx(scenario, &alice);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             let escrowed = ItemA {
                 id: item_a_versioned_id
             };
@@ -135,9 +135,9 @@ module defi::escrow_tests {
         };
 
         // Bob sends item B to the third party
-        TestScenario::next_tx(scenario, &BOB_ADDRESS);
+        test_scenario::next_tx(scenario, &BOB_ADDRESS);
         {
-            let ctx = TestScenario::ctx(scenario);
+            let ctx = test_scenario::ctx(scenario);
             let escrowed = ItemB {
                 id: item_b_versioned_id
             };
@@ -153,7 +153,7 @@ module defi::escrow_tests {
     }
 
     fun owns_object<T: key + store>(scenario: &mut Scenario, owner: &address): bool{
-        TestScenario::next_tx(scenario, owner);
-        TestScenario::can_take_owned<T>(scenario)
+        test_scenario::next_tx(scenario, owner);
+        test_scenario::can_take_owned<T>(scenario)
     }
 }

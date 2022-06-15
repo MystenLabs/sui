@@ -1,4 +1,4 @@
 processed 2 tasks
 
 task 1 'publish'. lines 5-24:
-Error: Failed to verify the Move module, reason: "Expected exactly one parameter for _::M1::init  of type &mut Sui::TxContext::TxContext".
+Error: Failed to verify the Move module, reason: "Expected exactly one parameter for _::M1::init  of type &mut sui::tx_context::TxContext".

@@ -476,7 +476,7 @@ fn process_successful_execution<
                             // If an object is owned by another object, we are not allowed to directly delete the child
                             // object because this could lead to a dangling reference of the ownership. Such
                             // dangling reference can never be dropped. To delete this object, one must either first transfer
-                            // the child object to an account address, or call through Transfer::delete_child_object(),
+                            // the child object to an account address, or call through transfer::delete_child_object(),
                             // which would consume both the child object and the ChildRef ownership reference,
                             // and emit the DeleteChildObject event. These child objects can be safely deleted.
                             return Err(SuiError::DeleteObjectOwnedObject);

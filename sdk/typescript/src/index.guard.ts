@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferCoinTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferCoin, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, Event, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, TransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferCoinTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferCoin, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, TransactionResponse } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
 import { PublicKey } from "./cryptography/publickey";
@@ -489,10 +489,7 @@ export function isTransactionEffects(obj: any, _argumentName?: string): obj is T
             )) &&
         isOwnedObjectRef(obj.gasObject) as boolean &&
         (typeof obj.events === "undefined" ||
-            Array.isArray(obj.events) &&
-            obj.events.every((e: any) =>
-                isEvent(e) as boolean
-            )) &&
+            Array.isArray(obj.events)) &&
         (typeof obj.dependencies === "undefined" ||
             Array.isArray(obj.dependencies) &&
             obj.dependencies.every((e: any) =>
@@ -525,15 +522,6 @@ export function isGetTxnDigestsResponse(obj: any, _argumentName?: string): obj i
             isSequenceNumber(e[0]) as boolean &&
             isTransactionDigest(e[1]) as boolean
         )
-    )
-}
-
-export function isEvent(obj: any, _argumentName?: string): obj is Event {
-    return (
-        (obj !== null &&
-            typeof obj === "object" ||
-            typeof obj === "function") &&
-        isTransactionDigest(obj.type_) as boolean
     )
 }
 

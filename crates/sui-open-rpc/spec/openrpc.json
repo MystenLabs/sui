@@ -1162,24 +1162,147 @@
         ]
       },
       "Event": {
-        "type": "object",
-        "required": [
-          "contents",
-          "type_"
-        ],
-        "properties": {
-          "contents": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+        "oneOf": [
+          {
+            "description": "Move-specific event",
+            "type": "object",
+            "required": [
+              "moveEvent"
+            ],
+            "properties": {
+              "moveEvent": {
+                "type": "object",
+                "required": [
+                  "bcs",
+                  "fields",
+                  "type"
+                ],
+                "properties": {
+                  "bcs": {
+                    "$ref": "#/components/schemas/Base64"
+                  },
+                  "fields": {
+                    "$ref": "#/components/schemas/MoveStruct"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           },
-          "type_": {
-            "type": "string"
+          {
+            "description": "Module published",
+            "type": "object",
+            "required": [
+              "publish"
+            ],
+            "properties": {
+              "publish": {
+                "type": "object",
+                "required": [
+                  "packageId"
+                ],
+                "properties": {
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Transfer objects to new address / wrap in another object / coin",
+            "type": "object",
+            "required": [
+              "transferObject"
+            ],
+            "properties": {
+              "transferObject": {
+                "type": "object",
+                "required": [
+                  "destinationAddr",
+                  "objectId",
+                  "type",
+                  "version"
+                ],
+                "properties": {
+                  "destinationAddr": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "type": {
+                    "$ref": "#/components/schemas/TransferType"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Delete object",
+            "type": "object",
+            "required": [
+              "deleteObject"
+            ],
+            "properties": {
+              "deleteObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "New object creation",
+            "type": "object",
+            "required": [
+              "newObject"
+            ],
+            "properties": {
+              "newObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Epooch change",
+            "type": "object",
+            "required": [
+              "epochChange"
+            ],
+            "properties": {
+              "epochChange": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "New checkpoint",
+            "type": "object",
+            "required": [
+              "checkpoint"
+            ],
+            "properties": {
+              "checkpoint": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
           }
-        }
+        ]
       },
       "ExecutionStatus": {
         "oneOf": [
@@ -2131,6 +2254,14 @@
             "$ref": "#/components/schemas/SuiAddress"
           }
         }
+      },
+      "TransferType": {
+        "type": "string",
+        "enum": [
+          "Coin",
+          "ToAddress",
+          "ToObject"
+        ]
       },
       "TypeTag": {
         "type": "string"

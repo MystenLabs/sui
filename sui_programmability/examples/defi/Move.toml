@@ -7,4 +7,3 @@ Sui = { local = "../../../crates/sui-framework" }
 
 [addresses]
 defi = "0x0"
-sui = "0x2"

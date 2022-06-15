@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    init(ctx: &mut TxContext.TxContext) {
+module 0x0.m {
+    import 0x2.tx_context;
+    init(ctx: &mut tx_context.TxContext) {
         label l0:
         abort 0;
     }
 
-    public entry init_again(ctx: &mut TxContext.TxContext) {
+    public entry init_again(ctx: &mut tx_context.TxContext) {
         label l0:
         Self.init(move(ctx));
         return;

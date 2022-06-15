@@ -6,4 +6,4 @@ version = "0.0.1"
 Sui = { local = "../../../crates/sui-framework" }
 
 [addresses]
-Games = "0x0"
+games = "0x0"

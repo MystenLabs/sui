@@ -3,11 +3,11 @@
 
 /// A flash loan that works for any Coin type
 module defi::flash_lender {
-    use sui::Balance::{Self, Balance};
-    use sui::Coin::{Self, Coin};
-    use sui::ID::{Self, ID, VersionedID};
-    use sui::Transfer;
-    use sui::TxContext::{Self, TxContext};
+    use sui::balance::{Self, Balance};
+    use sui::coin::{Self, Coin};
+    use sui::id::{Self, ID, VersionedID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
 
     /// A shared object offering flash loans to any buyer willing to pay `fee`.
     struct FlashLender<phantom T> has key {
@@ -68,20 +68,20 @@ module defi::flash_lender {
     /// Any borrower will need to repay the borrowed amount and `fee` by the end of the
     /// current transaction.
     public fun new<T>(to_lend: Balance<T>, fee: u64, ctx: &mut TxContext): AdminCap {
-        let id = TxContext::new_id(ctx);
-        let flash_lender_id = *ID::inner(&id);
+        let id = tx_context::new_id(ctx);
+        let flash_lender_id = *id::inner(&id);
         let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
-        Transfer::share_object(flash_lender);
+        transfer::share_object(flash_lender);
         // give the creator admin permissions
-        AdminCap { id: TxContext::new_id(ctx), flash_lender_id }
+        AdminCap { id: tx_context::new_id(ctx), flash_lender_id }
     }
 
     /// Same as `new`, but transfer `WithdrawCap` to the transaction sender
     public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
-        let balance = Coin::into_balance(to_lend);
+        let balance = coin::into_balance(to_lend);
         let withdraw_cap = new(balance, fee, ctx);
-        Transfer::transfer(withdraw_cap, TxContext::sender(ctx))
+        transfer::transfer(withdraw_cap, tx_context::sender(ctx))
     }
 
     // === Core functionality: requesting a loan and repaying it ===
@@ -93,10 +93,10 @@ module defi::flash_lender {
         self: &mut FlashLender<T>, amount: u64, ctx: &mut TxContext
     ): (Coin<T>, Receipt<T>) {
         let to_lend = &mut self.to_lend;
-        assert!(Balance::value(to_lend) >= amount, ELoanTooLarge);
-        let loan = Coin::withdraw(to_lend, amount, ctx);
+        assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
+        let loan = coin::withdraw(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
-        let receipt = Receipt { flash_lender_id: *ID::id(self), repay_amount };
+        let receipt = Receipt { flash_lender_id: *id::id(self), repay_amount };
         (loan, receipt)
     }
 
@@ -105,10 +105,10 @@ module defi::flash_lender {
     /// that issued the original loan.
     public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receipt<T>) {
         let Receipt { flash_lender_id, repay_amount } = receipt;
-        assert!(ID::id(self) == &flash_lender_id, ERepayToWrongLender);
-        assert!(Coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
+        assert!(id::id(self) == &flash_lender_id, ERepayToWrongLender);
+        assert!(coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
 
-        Coin::deposit(&mut self.to_lend, payment)
+        coin::deposit(&mut self.to_lend, payment)
     }
 
     // === Admin-only functionality ===
@@ -124,8 +124,8 @@ module defi::flash_lender {
         check_admin(self, admin_cap);
 
         let to_lend = &mut self.to_lend;
-        assert!(Balance::value(to_lend) >= amount, EWithdrawTooLarge);
-        Coin::withdraw(to_lend, amount, ctx)
+        assert!(balance::value(to_lend) >= amount, EWithdrawTooLarge);
+        coin::withdraw(to_lend, amount, ctx)
     }
 
     /// Allow admin to add more funds to `self`
@@ -134,7 +134,7 @@ module defi::flash_lender {
     ) {
         // only the holder of the `AdminCap` for `self` can deposit funds
         check_admin(self, admin_cap);
-        Coin::deposit(&mut self.to_lend, coin);
+        coin::deposit(&mut self.to_lend, coin);
     }
 
     /// Allow admin to update the fee for `self`
@@ -148,7 +148,7 @@ module defi::flash_lender {
     }
 
     fun check_admin<T>(self: &FlashLender<T>, admin_cap: &AdminCap) {
-        assert!(ID::id(self) == &admin_cap.flash_lender_id, EAdminOnly);
+        assert!(id::id(self) == &admin_cap.flash_lender_id, EAdminOnly);
     }
 
     // === Reads ===
@@ -160,7 +160,7 @@ module defi::flash_lender {
 
     /// Return the maximum amount available for borrowing
     public fun max_loan<T>(self: &FlashLender<T>): u64 {
-        Balance::value(&self.to_lend)
+        balance::value(&self.to_lend)
     }
 
     /// Return the amount that the holder of `self` must repay

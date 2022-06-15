@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
+module 0x0.m {
+    import 0x2.tx_context;
     init(ctx: u64) {
         label l0:
         abort 0;
@@ -11,7 +11,7 @@ module 0x0.M {
 }
 
 //# publish
-module 0x0.TxContext {
+module 0x0.tx_context {
     struct TxContext { value: u64 }
     init(ctx: Self.TxContext) {
         label l0:
@@ -20,9 +20,9 @@ module 0x0.TxContext {
 }
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    init(ctx: &TxContext.TxContext) {
+module 0x0.m {
+    import 0x2.tx_context;
+    init(ctx: &tx_context.TxContext) {
         label l0:
         abort 0;
     }
@@ -30,9 +30,9 @@ module 0x0.M {
 
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    init(ctx: TxContext.TxContext) {
+module 0x0.m {
+    import 0x2.tx_context;
+    init(ctx: tx_context.TxContext) {
         label l0:
         abort 0;
     }

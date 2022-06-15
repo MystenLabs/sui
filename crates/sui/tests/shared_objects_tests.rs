@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use sui_core::authority_client::AuthorityAPI;
 use sui_core::gateway_state::{GatewayAPI, GatewayState};
-use sui_types::messages::{CallArg, ExecutionStatus};
+use sui_types::messages::{CallArg, ExecutionStatus, ObjectInfoRequest, ObjectInfoRequestKind};
 use sui_types::object::OBJECT_START_VERSION;
-use test_utils::authority::test_authority_aggregator;
+use test_utils::authority::{get_client, test_authority_aggregator};
 use test_utils::transaction::{
     publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
 };
@@ -80,7 +81,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -93,7 +94,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -110,7 +111,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
@@ -124,7 +125,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -158,7 +159,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -171,7 +172,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -188,7 +189,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
@@ -202,7 +203,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
@@ -234,7 +235,7 @@ async fn shared_object_sync() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -247,11 +248,33 @@ async fn shared_object_sync() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let ((counter_id, _, _), _) = effects.created[0];
 
+    // Check that the counter object only exist in the first validator, but not the rest.
+    get_client(&configs.validator_set()[0])
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id: counter_id,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+        })
+        .await
+        .unwrap()
+        .object()
+        .unwrap();
+    for config in configs.validator_set().iter().skip(1) {
+        assert!(get_client(config)
+            .handle_object_info_request(ObjectInfoRequest {
+                object_id: counter_id,
+                request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+            })
+            .await
+            .unwrap()
+            .object()
+            .is_none());
+    }
+
     // Make a transaction to increment the counter.
     tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
         vec![CallArg::SharedObject(counter_id)],
@@ -313,7 +336,7 @@ async fn replay_shared_object_transaction() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -354,7 +377,7 @@ async fn shared_object_on_gateway() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -382,7 +405,7 @@ async fn shared_object_on_gateway() {
                 let g = gateway.clone();
                 let increment_counter_transaction = move_transaction(
                     gas_object,
-                    "Counter",
+                    "counter",
                     "increment",
                     package_ref,
                     /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
@@ -403,7 +426,7 @@ async fn shared_object_on_gateway() {
 
     let assert_value_transaction = move_transaction(
         last_gas_object,
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
