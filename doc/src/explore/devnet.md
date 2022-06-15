@@ -166,7 +166,7 @@ Which yields output resembling:
 Created new keypair for address : 2D32ED71381BEF7F3D8C57B48DF82123593672AA
 ```
 
-In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/f4afb603801c90236772a1b2b56f2e216a9adf82/sui_programmability/examples/move_tutorial/sources/M1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/f4afb603801c90236772a1b2b56f2e216a9adf82/sui_programmability/examples/move_tutorial/sources/M1.move#L4) of the package we previously published.
+In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/M1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/M1.move#L4) of the package we previously published.
 
 > **Important:** Note placeholders on the command line and formatting of function parameters as it is important to follow the same pattern.
 
