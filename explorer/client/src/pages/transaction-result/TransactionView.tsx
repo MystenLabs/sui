@@ -14,6 +14,7 @@ import {
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
+import codestyle from '../../styles/bytecode.module.css';
 import { type DataType } from './TransactionResultType';
 
 import type {
@@ -269,7 +270,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                         }
                                     >
                                         {IS_MODULE(itm) ? (
-                                            <pre>{itm.value}</pre>
+                                            <div className={codestyle.code}>
+                                                {itm.value}
+                                            </div>
                                         ) : itm.list ? (
                                             <ul className={styles.listitems}>
                                                 {itm.value.map(
