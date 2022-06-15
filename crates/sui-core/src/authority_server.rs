@@ -21,7 +21,7 @@ use sui_network::{
     tonic,
 };
 
-use sui_types::{crypto::VerificationObligation, error::*, messages::*};
+use sui_types::{error::*, messages::*};
 use tokio::{
     sync::mpsc::{channel, Sender},
     task::JoinHandle,
@@ -244,12 +244,8 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut transaction = request.into_inner();
 
-        let mut obligation = VerificationObligation::default();
         transaction
-            .add_tx_sig_to_verification_obligation(&mut obligation)
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        obligation
-            .verify_all()
+            .verify()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         //TODO This is really really bad, we should have different types for signature-verified transactions
         transaction.is_verified = true;
@@ -279,12 +275,8 @@ impl Validator for ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut transaction = request.into_inner();
 
-        let mut obligation = VerificationObligation::default();
         transaction
-            .add_to_verification_obligation(&self.state.committee.load(), &mut obligation)
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        obligation
-            .verify_all()
+            .verify(&self.state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         //TODO This is really really bad, we should have different types for signature verified transactions
         transaction.is_verified = true;

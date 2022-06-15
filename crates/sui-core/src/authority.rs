@@ -332,7 +332,7 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
-        transaction.verify_signature().map_err(|e| {
+        transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;

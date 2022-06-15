@@ -1243,11 +1243,10 @@ pub async fn generate_genesis_system_object<
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
         AuthorityTemporaryStore::new(store.clone(), InputObjects::new(vec![]), genesis_digest);
-    let pubkeys: Vec<Vec<u8>> = committee
-        .expanded_keys
-        .values()
-        .map(|pk| pk.to_bytes().to_vec())
-        .collect();
+    let mut pubkeys = Vec::new();
+    for name in committee.voting_rights.keys() {
+        pubkeys.push(committee.public_key(name)?.to_bytes().to_vec());
+    }
     // TODO: May use separate sui address than derived from pubkey.
     let sui_addresses: Vec<AccountAddress> = committee
         .voting_rights
