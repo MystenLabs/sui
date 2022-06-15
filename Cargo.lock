@@ -6412,6 +6412,8 @@ dependencies = [
  "serde 1.0.137",
  "serde_json",
  "sqlx",
+ "strum",
+ "strum_macros",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",

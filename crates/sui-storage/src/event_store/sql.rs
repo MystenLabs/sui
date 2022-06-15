@@ -7,6 +7,7 @@ use super::*;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use strum::{EnumMessage, IntoEnumIterator};
 
 use sqlx::{sqlite::SqliteRow, Executor, Row, SqlitePool};
 use sui_types::event::Event;
@@ -26,19 +27,31 @@ pub struct SqlEventStore {
     pool: SqlitePool,
 }
 
-const SQL_TABLE_CREATE: &str = "\
-    CREATE TABLE IF NOT EXISTS events(
-        timestamp INTEGER NOT NULL,
-        checkpoint INTEGER,
-        tx_digest BLOB,
-        event_type INTEGER,
-        package_id BLOB,
-        module_name TEXT,
-        function TEXT,
-        object_id BLOB,
-        fields TEXT
-    );
-";
+// OK this is some strum macros magic so we can programmatically get the column number / position,
+// and generate consistent tables as well.
+// Put the SQL CREATE TABLE line for each field in the comments
+#[derive(strum_macros::EnumMessage, strum_macros::EnumIter)]
+#[repr(u8)]
+enum EventsTableColumns {
+    /// timestamp INTEGER NOT NULL
+    Timestamp = 0,
+    /// checkpoint INTEGER
+    Checkpoint,
+    /// tx_digest BLOB
+    TxDigest,
+    /// event_type INTEGER
+    EventType,
+    /// package_id BLOB
+    PackageId,
+    /// module_name TEXT
+    ModuleName,
+    /// function TEXT
+    Function,
+    /// object_id BLOB
+    ObjectId,
+    /// fields TEXT
+    Fields,
+}
 
 const INDEXED_COLUMNS: &[&str] = &[
     "timestamp",
@@ -60,8 +73,16 @@ impl SqlEventStore {
     /// Initializes the database, creating tables and indexes as needed
     /// It should be safe to call this every time after new_sqlite() as IF NOT EXISTS are used.
     pub async fn initialize(&self) -> Result<(), EventStoreError> {
-        // First create the table if needed
-        self.pool.execute(SQL_TABLE_CREATE).await?;
+        // First create the table if needed... make the create out of the enum for consistency
+        // NOTE: If the below line errors, docstring might be missing for a field
+        let table_columns: Vec<_> = EventsTableColumns::iter()
+            .map(|c| c.get_documentation().unwrap())
+            .collect();
+        let create_sql = format!(
+            "CREATE TABLE IF NOT EXISTS events({});",
+            table_columns.join(", ")
+        );
+        self.pool.execute(create_sql.as_str()).await?;
         info!("SQLite events table is initialized");
 
         // Then, create indexes
@@ -94,7 +115,7 @@ impl SqlEventStore {
     }
 }
 
-fn try_extract_object_id(row: &SqliteRow, col: &str) -> Result<Option<ObjectID>, EventStoreError> {
+fn try_extract_object_id(row: &SqliteRow, col: usize) -> Result<Option<ObjectID>, EventStoreError> {
     let raw_bytes: Option<Vec<u8>> = row.get(col);
     match raw_bytes {
         Some(bytes) => Ok(Some(
@@ -107,9 +128,9 @@ fn try_extract_object_id(row: &SqliteRow, col: &str) -> Result<Option<ObjectID>,
 // Translate a Row into StoredEvent
 // TODO: convert to use FromRow trait so query_as() could be used?
 fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
-    let timestamp: i64 = row.get(0);
-    let checkpoint: i64 = row.get(1);
-    let digest_raw: Option<Vec<u8>> = row.get(2);
+    let timestamp: i64 = row.get(EventsTableColumns::Timestamp as usize);
+    let checkpoint: i64 = row.get(EventsTableColumns::Checkpoint as usize);
+    let digest_raw: Option<Vec<u8>> = row.get(EventsTableColumns::TxDigest as usize);
     let tx_digest = digest_raw.map(|bytes| {
         TransactionDigest::new(
             bytes
@@ -117,15 +138,14 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
                 .expect("Cannot convert digest bytes to TxDigest"),
         )
     });
-    // TODO: switch from string gets to INTs but safe way - maybe using enums?
-    let event_type: u16 = row.get("event_type");
-    let package_id =
-        try_extract_object_id(&row, "package_id").expect("Error converting package ID bytes");
-    let object_id =
-        try_extract_object_id(&row, "object_id").expect("Error converting object ID bytes");
-    let module_name: Option<String> = row.get("module_name");
-    let function: Option<String> = row.get("function");
-    let fields_text: &str = row.get("fields");
+    let event_type: u16 = row.get(EventsTableColumns::EventType as usize);
+    let package_id = try_extract_object_id(&row, EventsTableColumns::PackageId as usize)
+        .expect("Error converting package ID bytes");
+    let object_id = try_extract_object_id(&row, EventsTableColumns::ObjectId as usize)
+        .expect("Error converting object ID bytes");
+    let module_name: Option<String> = row.get(EventsTableColumns::ModuleName as usize);
+    let function: Option<String> = row.get(EventsTableColumns::Function as usize);
+    let fields_text: &str = row.get(EventsTableColumns::Fields as usize);
     let fields: Vec<_> = if fields_text.is_empty() {
         Vec::new()
     } else {
@@ -467,6 +487,10 @@ mod tests {
             queried.module_name,
             orig.event.module_name().map(SharedStr::from)
         );
+        assert_eq!(
+            queried.function_name,
+            orig.event.function_name().map(SharedStr::from)
+        );
         assert_eq!(queried.object_id, orig.event.object_id());
     }
 
@@ -487,7 +511,7 @@ mod tests {
         assert_eq!(db.total_event_count().await?, 6);
 
         // Query for records in time range, end should be exclusive - should get 2
-        let event_it = db.event_iterator(1_000_000, 1_002_000, 10).await?;
+        let event_it = db.event_iterator(1_000_000, 1_002_000, 20).await?;
         let queried_events: Vec<_> = event_it.collect();
 
         assert_eq!(queried_events.len(), 2);
@@ -599,10 +623,6 @@ mod tests {
         assert_eq!(event_it.next(), None); // Should be no more events, just that one
 
         test_queried_event_vs_test_envelope(&move_event, &to_insert[5]);
-        assert_eq!(
-            move_event.function_name,
-            to_insert[5].event.function_name().map(SharedStr::from)
-        );
         assert_eq!(move_event.fields.len(), 2);
 
         // Query by module ID
@@ -617,10 +637,6 @@ mod tests {
         assert_eq!(queried_events.len(), 1);
 
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
-        assert_eq!(
-            queried_events[0].function_name,
-            to_insert[5].event.function_name().map(SharedStr::from)
-        );
         assert_eq!(queried_events[0].fields.len(), 2);
 
         Ok(())
