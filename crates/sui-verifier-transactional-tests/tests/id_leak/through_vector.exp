@@ -1,4 +1,4 @@
 processed 1 task
 
 task 0 'publish'. lines 4-20:
-Error: Dependency not provided for 0000000000000000000000000000000000000002.ID
+Error: Failed to verify the Move module, reason: "ID leak detected in function foo: ID is leaked into a vector".

@@ -1,4 +1,4 @@
 processed 1 task
 
 task 0 'publish'. lines 4-10:
-Error: Failed to publish the Move module(s), reason: "VMError with status LINKER_ERROR at location UNDEFINED and message Cannot find ModuleId { address: sui, name: Identifier(\"ID\") } in data cache".
+Error: Failed to verify the Move module, reason: "First field of struct S must be of ID type, Bool type found".

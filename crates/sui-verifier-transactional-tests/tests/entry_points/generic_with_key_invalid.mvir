@@ -4,7 +4,7 @@
 // invalid, type parameters with key are not valid when nested as no primitive has key
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
     import 0x1.option;
 
@@ -16,7 +16,7 @@ module 0x0.M {
 }
 
 //# publish
-module 0x0.M {
+module 0x0.m {
     import 0x2.tx_context;
     import 0x1.option;
 
