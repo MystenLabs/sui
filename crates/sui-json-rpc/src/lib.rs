@@ -16,6 +16,7 @@ use sui_open_rpc::{Module, Project};
 use tracing::info;
 
 pub mod bcs_api;
+pub mod event_api;
 pub mod gateway_api;
 pub mod read_api;
 
