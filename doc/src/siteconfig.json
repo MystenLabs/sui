@@ -125,7 +125,7 @@
         "name": "See what's New",
         "sublist": [
           {
-            "name": "Run Full Node",
+            "name": "Run a Fullnode",
             "url": "/build/fullnode"
           },
           {
