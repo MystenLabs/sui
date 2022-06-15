@@ -56,7 +56,7 @@ use checkpoint_driver::checkpoint_process;
 
 pub mod execution_driver;
 
-use self::checkpoint_driver::CheckpointProcessControl;
+use self::{checkpoint_driver::CheckpointProcessControl, execution_driver::execution_process};
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
@@ -256,6 +256,16 @@ where
 
         tokio::task::spawn(async move {
             node_sync_process(&active, target_num_tasks).await;
+        })
+    }
+
+    /// Spawn gossip process
+    pub async fn spawn_execute_process(self) -> JoinHandle<()> {
+        let active = Arc::new(self);
+
+        let locals = active;
+        tokio::task::spawn(async move {
+            execution_process(&locals).await;
         })
     }
 }

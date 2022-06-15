@@ -188,8 +188,8 @@ async fn wait_for_one_gossip_task_to_finish<A>(
     peer_names.remove(&finished_name);
 }
 
-struct LocalConfirmationTransactionHandler {
-    state: Arc<AuthorityState>,
+pub struct LocalConfirmationTransactionHandler {
+    pub state: Arc<AuthorityState>,
 }
 
 #[async_trait]
@@ -258,7 +258,7 @@ impl GossipDigestHandler {
                 .sync_authority_source_to_destination(
                     ConfirmationTransaction { certificate },
                     follower.peer_name,
-                    LocalConfirmationTransactionHandler {
+                    &LocalConfirmationTransactionHandler {
                         state: follower.state.clone(),
                     },
                 )

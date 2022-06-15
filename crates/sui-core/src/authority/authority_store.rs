@@ -83,7 +83,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
-    certificates: DBMap<TransactionDigest, CertifiedTransaction>,
+    pub(crate) certificates: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// The pending execution table holds a sequence of transactions that are present
     /// in the certificates table, but may not have yet been executed, and should be executed.
