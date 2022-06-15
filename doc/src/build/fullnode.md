@@ -85,69 +85,72 @@ release roughly every two weeks.
 ## Configuring your fullnode
 
 Currently, the only supported way of running a fullnode requires building from
-source. In the future, we plan on providing Docker images for more flexibility
+source. In the future, we will provide Docker images for more flexibility
 in how a fullnode is run.
 
 ### Building from source
 
-0. Before beginning ensure that the required tools are installed
+Before beginning, ensure the required tools are installed
    in your environment as outlined in the
    [Prerequisites](../build/install#prerequisites) section.
 
 1. Set up your fork of the Sui repository:
-    * Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
+    1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
       and click the *Fork* button in the top right-hand corner of the screen.
-    * Clone your personal fork of the Sui repository to your local machine
+    1. Clone your personal fork of the Sui repository to your local machine
       (ensure that you insert your GitHub username into the URL):
-    ```
+    ```shell
     $ git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
     ```
-2. `cd` into your `sui` repository:
-    ```
+1. `cd` into your `sui` repository:
+    ```shell
     $ cd sui
     ```
-3. Set up the Sui repository as a git remote:
-    ```
+1. Set up the Sui repository as a git remote:
+    ```shell
     $ git remote add upstream https://github.com/MystenLabs/sui
+    ```
+1. Sync your fork:
+    ```shell
     $ git fetch upstream
     ```
-4. Check out the `devnet` branch:
-    ```
+1. Check out the `devnet` branch:
+    ```shell
     $ git checkout --track upstream/devnet
     ```
-5. Make a copy of the fullnode configuration template:
-   ```
+1. Make a copy of the fullnode configuration template:
+   ```shell
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
-6. Download the latest
+1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet by clicking the link or by running the following in your
+   state for devnet by clicking that link or by running the following in your
    terminal:
-    ```
+    ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-7. Edit your `fullnode.yaml` file:
-    * Update the `db-path` field with a path to where the fullnode's database
+1. Edit your `fullnode.yaml` file:
+    1. Update the `db-path` field with the path to where the fullnode's database
       will be located. By default this will create the database in a directory
       `./suidb` relative to your current directory:
     ```yaml
     db-path: "/path/to/db"
     ```
-    * Update the `genesis-file-location` to the path where the `genesis` file
-      is located. By default the config looks for a file `genesis.blob` in your
+    1. Update the `genesis-file-location` with the path to the `genesis` file.
+      By default, the config looks for the file `genesis.blob` in your
       current directory:
     ```yaml
     genesis:
       genesis-file-location: "/path/to/genesis.blob"
     ```
-8. Start your Sui fullnode:
+1. Start your Sui fullnode:
     ```
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 
 Your fullnode will now be serving the read endpoints of the [Sui JSON-RPC
-API](../build/json-rpc.md#sui-json-rpc-api) at
-`http://127.0.0.1:9000`.
+API](../build/json-rpc.md#sui-json-rpc-api) at:
+`http://127.0.0.1:9000`
 
 ## Using the Explorer with your fullnode
 
