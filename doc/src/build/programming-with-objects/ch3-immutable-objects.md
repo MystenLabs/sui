@@ -8,7 +8,7 @@ Objects in Sui can have different types of [ownership](../objects.md#object-owne
 
 ### Create immutable object
 
-Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [Transfer Library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move):
+Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [Transfer Library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 ```rust
 public native fun freeze_object<T: key>(obj: T);
 ```
