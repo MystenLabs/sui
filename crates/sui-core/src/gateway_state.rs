@@ -11,7 +11,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
-use move_bytecode_utils::module_cache::ModuleCache;
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
@@ -34,6 +34,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
+use crate::authority::ResolverWrapper;
 use crate::transaction_input_checker;
 use crate::{
     authority::{GatewayStore, UpdateType},
@@ -44,8 +45,8 @@ use crate::{
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, PublishResponse,
-    SplitCoinResponse, SuiMoveObject, SuiObject, SuiObjectInfo, TransactionEffectsResponse,
-    TransactionResponse,
+    SplitCoinResponse, SuiMoveObject, SuiObject, SuiObjectInfo, SuiTransactionEffects,
+    TransactionEffectsResponse, TransactionResponse,
 };
 
 use crate::transaction_input_checker::InputObjects;
@@ -183,6 +184,7 @@ pub struct GatewayState<A> {
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
     metrics: &'static GatewayMetrics,
+    module_cache: SyncModuleCache<ResolverWrapper<GatewayStore>>,
 }
 
 impl<A> GatewayState<A> {
@@ -202,10 +204,11 @@ impl<A> GatewayState<A> {
         let store = Arc::new(GatewayStore::open(path, None));
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
         Ok(Self {
-            store,
+            store: store.clone(),
             authorities,
             next_tx_seq_number,
             metrics: &METRICS,
+            module_cache: SyncModuleCache::new(ResolverWrapper(store)),
         })
     }
 
@@ -400,8 +403,7 @@ where
         &self,
         object: Object,
     ) -> Result<SuiObject<T>, anyhow::Error> {
-        let cache = ModuleCache::new(&*self.store);
-        let layout = object.get_layout(ObjectFormatOptions::default(), &cache)?;
+        let layout = object.get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
         SuiObject::<T>::try_from(object, layout)
     }
 
@@ -934,7 +936,7 @@ where
         return Ok(TransactionResponse::EffectResponse(
             TransactionEffectsResponse {
                 certificate: certificate.try_into()?,
-                effects: effects.into(),
+                effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
                 timestamp_ms: None,
             },
         ));
@@ -1222,7 +1224,7 @@ where
 
         Ok(TransactionEffectsResponse {
             certificate: cert.try_into()?,
-            effects: effect.into(),
+            effects: SuiTransactionEffects::try_from(effect, &self.module_cache)?,
             timestamp_ms: None,
         })
     }
