@@ -5,7 +5,6 @@ use crate::epoch::EpochInfoLocals;
 use crate::gateway_state::GatewayTxSeqNumber;
 use crate::transaction_input_checker::InputObjects;
 use narwhal_executor::ExecutionIndices;
-use tokio_retry::strategy::{ExponentialBackoff, jitter};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -20,6 +19,7 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::{Owner, OBJECT_START_VERSION};
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
@@ -348,7 +348,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 let mut tx_option = None;
                 for duration in retry_strategy {
                     tx_option = self.transactions.get(&tx_digest)?;
-                    if tx_option.is_some() { break; }
+                    if tx_option.is_some() {
+                        break;
+                    }
                     // Wait to retry
                     tokio::time::sleep(duration).await;
                     trace!(?tx_digest, "Retrying getting pending transaction");
