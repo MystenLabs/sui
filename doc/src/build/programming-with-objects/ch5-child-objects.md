@@ -191,7 +191,7 @@ There are two ways to transfer a child object:
 2. Transfer it to another object, thus it will still be a child object but with the parent object changed.
 
 #### transfer_child_to_address
-First of all, let's look at how to transfer a child object to an account address. The [Transfer](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) library provides the following API:
+First of all, let's look at how to transfer a child object to an account address. The [Transfer](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) library provides the following API:
 ```rust
 public fun transfer_child_to_address<T: key>(
     child: T,
