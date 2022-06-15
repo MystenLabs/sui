@@ -151,7 +151,7 @@
         "fileName": "build/sui-json"
       },
       {
-        "label": "Run Full Node",
+        "label": "Run a Fullnode",
         "fileName": "build/fullnode"
       }
     ],
