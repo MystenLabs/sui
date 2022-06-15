@@ -86,7 +86,7 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ```
 
 ## Publish the TicTacToe game on Sui
-To keep this tutorial simple, use the TicTacToe game we implemented in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move).
+To keep this tutorial simple, use the TicTacToe game we implemented in [tic_tac_toe.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move).
 
 Find even more [examples](examples.md) in the Sui repository. Of course, you are welcome to
 [write your own package](../build/move.md#writing-a-package).
@@ -120,7 +120,7 @@ As a high level, the game works as following:
 2. Each player takes turns to send a *Mark* object to the admin indicating where they want to place their mark.
 3. The admin, upon receiving marks (in practice, this is done through monitoring events), places the mark to the gameboard.
 4. (2) and (3) repeats until game ends.
-Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [TicTacToeTests](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/tests/TicTacToeTests.move).
+Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [tic_tac_toe_tests](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/tests/tic_tac_toe_tests.move) file.
 
 Now let's begin the game!
 First of all, let's create a game with the command:
