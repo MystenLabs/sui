@@ -3196,10 +3196,10 @@ dependencies = [
 [[package]]
 name = "move-binary-format"
 version = "0.0.3"
-source = "git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b#1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b"
+source = "git+https://github.com/move-language/move?rev=4e15a34ecf155b7e2d9729d3b07f83c146149f02#4e15a34ecf155b7e2d9729d3b07f83c146149f02"
 dependencies = [
  "anyhow",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4e15a34ecf155b7e2d9729d3b07f83c146149f02)",
  "once_cell",
  "ref-cast",
  "serde 1.0.137",
@@ -3242,11 +3242,11 @@ dependencies = [
 [[package]]
 name = "move-bytecode-utils"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b#1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b"
+source = "git+https://github.com/move-language/move?rev=4e15a34ecf155b7e2d9729d3b07f83c146149f02#4e15a34ecf155b7e2d9729d3b07f83c146149f02"
 dependencies = [
  "anyhow",
- "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b)",
- "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b)",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4e15a34ecf155b7e2d9729d3b07f83c146149f02)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4e15a34ecf155b7e2d9729d3b07f83c146149f02)",
  "petgraph 0.5.1",
  "serde-reflection",
 ]
@@ -3380,7 +3380,7 @@ dependencies = [
 [[package]]
 name = "move-core-types"
 version = "0.0.4"
-source = "git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b#1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b"
+source = "git+https://github.com/move-language/move?rev=4e15a34ecf155b7e2d9729d3b07f83c146149f02#4e15a34ecf155b7e2d9729d3b07f83c146149f02"
 dependencies = [
  "anyhow",
  "bcs",
@@ -6343,7 +6343,7 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
- "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=1b2d3b4274345f5b4b6a1a1bde5aee452003ab5b)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4e15a34ecf155b7e2d9729d3b07f83c146149f02)",
  "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=c2949bc7967de5b93f0850ce4987fc06c529f9f2)",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "once_cell",
@@ -6393,15 +6393,21 @@ dependencies = [
  "anyhow",
  "async-trait",
  "ed25519-dalek",
+ "futures",
  "jsonrpsee",
  "jsonrpsee-core",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=c2949bc7967de5b93f0850ce4987fc06c529f9f2)",
  "once_cell",
  "prometheus_exporter",
+ "serde 1.0.137",
+ "serde_json",
  "sui-core",
  "sui-json",
  "sui-json-rpc-api",
  "sui-open-rpc",
  "sui-types",
+ "tokio",
+ "tokio-stream",
  "tracing",
  "workspace-hack",
 ]
@@ -6468,6 +6474,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-json-rpc",
+ "sui-json-rpc-api",
  "sui-network",
  "sui-open-rpc",
  "sui-storage",

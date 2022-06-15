@@ -8,7 +8,6 @@ use std::sync::Arc;
 use futures::{StreamExt, TryStream};
 use jsonrpsee_core::error::SubscriptionClosed;
 use jsonrpsee_core::server::rpc_module::{PendingSubscription, SubscriptionSink};
-use jsonrpsee_proc_macros::rpc;
 use move_core_types::parser::parse_struct_tag;
 use serde::Serialize;
 use serde_json::Value;
@@ -17,14 +16,8 @@ use tracing::warn;
 use sui_core::authority::AuthorityState;
 use sui_core::event_filter::EventFilter;
 use sui_core::event_handler::EventHandler;
-use sui_core::gateway_types::SuiEvent;
-
-#[rpc(server, client, namespace = "sui")]
-pub trait EventApi {
-    #[subscription(name = "subscribeMoveEventsByType", item = SuiEvent)]
-    fn subscribe_move_event_by_type(&self, event: String, field_filter: BTreeMap<String, Value>);
-}
-
+use sui_json_rpc_api::rpc_types::SuiEvent;
+use sui_json_rpc_api::EventApiServer;
 pub struct EventApiImpl {
     state: Arc<AuthorityState>,
     event_handler: Arc<EventHandler>,
