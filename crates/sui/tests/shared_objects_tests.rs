@@ -143,6 +143,7 @@ async fn call_shared_object_contract() {
 /// transaction (one copy per authority).
 #[tokio::test]
 async fn shared_object_flood() {
+    telemetry_subscribers::init_for_testing();
     let mut gas_objects = test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
