@@ -46,10 +46,12 @@ impl EventHandler {
 
     pub async fn process_event(&self, event: &Event, timestamp_ms: u64) -> SuiResult {
         let json_value = match event {
-            Event::MoveEvent(event_obj) => {
+            Event::MoveEvent {
+                type_, contents, ..
+            } => {
                 debug!(event =? event, "Process MoveEvent.");
-                let move_object =
-                    MoveObject::new(event_obj.type_.clone(), event_obj.contents.clone());
+                let move_object = MoveObject::new(type_.clone(), contents.clone());
+                // Convert into `SuiMoveStruct` which is a mirror of MoveStruct but will additional type supports, (e.g. ascii::String).
                 let move_struct: SuiMoveStruct = move_object
                     .to_move_struct_with_resolver(
                         ObjectFormatOptions::default(),

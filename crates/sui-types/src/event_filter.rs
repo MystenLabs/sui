@@ -1,24 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::StructTag;
+use serde_json::Value;
+
 use crate::base_types::SuiAddress;
 use crate::event::EventType;
 use crate::event::{Event, EventEnvelope};
 use crate::ObjectID;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::StructTag;
-use serde_json::Value;
-use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
 pub enum EventFilter {
-    ByPackage(ObjectID),
-    ByModule(Identifier),
-    ByFunction(Identifier),
-    ByMoveEventType(StructTag),
-    ByEventType(EventType),
-    ByMoveEventFields(BTreeMap<String, Value>),
-    BySenderAddress(SuiAddress),
+    Package(ObjectID),
+    Module(Identifier),
+    Function(Identifier),
+    MoveEventType(StructTag),
+    EventType(EventType),
+    MoveEventField { path: String, value: Value },
+    SenderAddress(SuiAddress),
     ObjectId(ObjectID),
     MatchAll(Vec<EventFilter>),
     MatchAny(Vec<EventFilter>),
@@ -26,40 +26,32 @@ pub enum EventFilter {
 impl EventFilter {
     fn try_matches(&self, item: &EventEnvelope) -> Result<bool, anyhow::Error> {
         Ok(match self {
-            EventFilter::ByMoveEventType(event_type) => match &item.event {
-                Event::MoveEvent(event_obj) => &event_obj.type_ == event_type,
+            EventFilter::MoveEventType(event_type) => match &item.event {
+                Event::MoveEvent { type_, .. } => type_ == event_type,
                 _ => false,
             },
-            EventFilter::ByMoveEventFields(fields_filter) => {
-                if let Some(json) = &item.move_struct_json_value {
-                    for (pointer, value) in fields_filter {
-                        if let Some(v) = json.pointer(pointer) {
-                            if v != value {
-                                return Ok(false);
-                            }
-                        } else {
-                            return Ok(false);
-                        }
-                    }
-                    true
-                } else {
-                    false
+            EventFilter::MoveEventField { path, value } => match &item.move_struct_json_value {
+                Some(json) => {
+                    matches!(json.pointer(path), Some(v) if v == value)
                 }
-            }
-            EventFilter::BySenderAddress(sender) => {
+                _ => false,
+            },
+            EventFilter::SenderAddress(sender) => {
                 matches!(&item.event.sender(), Some(addr) if addr == sender)
             }
-            EventFilter::ByPackage(obj_id) => {
+            EventFilter::Package(obj_id) => {
                 matches!(&item.event.package_id(), Some(id) if id == obj_id)
             }
-            EventFilter::ByModule(module) => {
+            EventFilter::Module(module) => {
                 matches!(item.event.module_name(), Some(name) if name == module.as_str())
             }
-            EventFilter::ByFunction(function) => {
+            EventFilter::Function(function) => {
                 matches!(item.event.function_name(), Some(name) if name == function.as_str())
             }
-            EventFilter::ObjectId(_) => true,
-            EventFilter::ByEventType(type_) => &item.event.event_type() == type_,
+            EventFilter::ObjectId(object_id) => {
+                matches!(item.event.object_id(), Some(id) if &id ==object_id)
+            }
+            EventFilter::EventType(type_) => &item.event.event_type() == type_,
             EventFilter::MatchAll(filters) => filters.iter().all(|f| f.matches(item)),
             EventFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(item)),
         })
