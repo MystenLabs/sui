@@ -77,11 +77,7 @@ We recommend the following minimum hardware requirements for running a fullnode:
 
 * CPUs: 2
 * RAM: 8GB
-
-Storage requirements will vary based on various factors (age of the chain,
-transaction rate, etc) although we don't anticipate running a fullnode on
-devnet will require more than a handful of GBs given it is reset upon each
-release roughly every two weeks.
+* Storage: 50GB
 
 ### Software requirements
 
