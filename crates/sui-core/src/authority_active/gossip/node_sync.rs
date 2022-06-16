@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use std::collections::{hash_map, HashMap};
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests, TransactionDigest},
+    base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     committee::{Committee, StakeUnit},
     error::{SuiError, SuiResult},
     messages::{CertifiedTransaction, ConfirmationTransaction, SignedTransactionEffects},
@@ -36,10 +36,10 @@ struct EffectsStakeMap {
     /// Keep track of how much stake has voted for a given effects digest
     /// any entry in this map with >2f+1 stake can be sequenced locally and
     /// removed from the map.
-    effects_stake_map: HashMap<ExecutionDigests, StakeUnit>,
+    effects_stake_map: HashMap<TransactionEffectsDigest, StakeUnit>,
     /// Keep track of stake votes per validator - needed to double check the total stored in
     /// effects_stake_map, which can otherwise be corrupted by byzantine double-voting.
-    effects_vote_map: HashMap<(ExecutionDigests, AuthorityName), StakeUnit>,
+    effects_vote_map: HashMap<TransactionEffectsDigest, HashMap<AuthorityName, StakeUnit>>,
 }
 
 impl EffectsStakeMap {
@@ -57,20 +57,25 @@ impl EffectsStakeMap {
         source: &AuthorityName,
         stake: StakeUnit,
         quorum_threshold: StakeUnit,
-        digests: &ExecutionDigests,
+        effects_digest: &TransactionEffectsDigest,
     ) -> bool {
-        let vote_entry = self.effects_vote_map.entry((*digests, *source));
+        let validator_map = self
+            .effects_vote_map
+            .entry(*effects_digest)
+            .or_insert_with(HashMap::new);
+
+        let vote_entry = validator_map.entry(*source);
 
         let cur_stake = if let hash_map::Entry::Occupied(_) = &vote_entry {
             // TODO: report byzantine authority suspciion
-            warn!(peer = ?source, digest = ?digests.transaction, effects = ?digests.effects,
+            warn!(peer = ?source, ?effects_digest,
                 "ByzantineAuthoritySuspicion: peer double-voted for effects digest");
-            self.effects_stake_map.entry(*digests).or_insert(0)
+            self.effects_stake_map.entry(*effects_digest).or_insert(0)
         } else {
             vote_entry.or_insert(stake);
 
             self.effects_stake_map
-                .entry(*digests)
+                .entry(*effects_digest)
                 .and_modify(|cur| *cur += stake)
                 .or_insert(stake)
         };
@@ -78,13 +83,17 @@ impl EffectsStakeMap {
         let is_final = *cur_stake >= quorum_threshold;
         if !is_final {
             trace!(
-                ?digests,
+                ?effects_digest,
                 "tx cert/effects not yet final: {} < {}",
                 *cur_stake,
                 quorum_threshold
             );
         }
         is_final
+    }
+
+    pub fn forget_effects(&mut self, digests: &TransactionEffectsDigest) {
+        self.effects_stake_map.remove(digests);
     }
 }
 
@@ -206,7 +215,7 @@ where
             &peer,
             stake,
             quorum_threshold,
-            &digests,
+            &digests.effects,
         );
 
         if !is_final {
@@ -245,9 +254,16 @@ where
         self.state
             .handle_confirmation_transaction(ConfirmationTransaction { certificate: cert })
             .await?;
+
+        // Garbage collect data for this tx.
         self.node_sync_store
             .delete_cert_and_effects(&digests.transaction)?;
+        self.effects_stake
+            .lock()
+            .await
+            .forget_effects(&digests.effects);
 
+        // Notify waiting child transactions.
         self.pending_txes.notify(&digests.transaction, ()).await?;
         Ok(())
     }
@@ -392,9 +408,7 @@ mod tests {
     // Note: this code is tested end-to-end in full_node_tests.rs
 
     use sui_types::{
-        base_types::{
-            AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest,
-        },
+        base_types::{AuthorityName, TransactionEffectsDigest},
         crypto::get_key_pair,
     };
 
@@ -415,10 +429,7 @@ mod tests {
         let validator2 = random_authority_name();
         let validator3 = random_authority_name();
 
-        let digests = ExecutionDigests {
-            transaction: TransactionDigest::random(),
-            effects: TransactionEffectsDigest::random(),
-        };
+        let digests = TransactionEffectsDigest::random();
 
         assert!(!map.note_effects_digest(&byzantine, 1, threshold, &digests));
         assert!(!map.note_effects_digest(&validator2, 1, threshold, &digests));
