@@ -1,4 +1,5 @@
 processed 2 tasks
 
 task 1 'publish'. lines 8-10:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModulePublishFailure, source: Some("Publishing module M with non-zero address is not allowed") } }

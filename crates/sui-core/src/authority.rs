@@ -584,7 +584,7 @@ impl AuthorityState {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let mut temporary_store =
             AuthorityTemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let effects = execution_engine::execute_transaction_to_effects(
+        let (effects, _execution_error) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
             certificate.data.clone(),
@@ -594,7 +594,7 @@ impl AuthorityState {
             &self._native_functions,
             gas_status,
             self.committee.load().epoch,
-        )?;
+        );
 
         self.metrics.total_effects.inc();
         self.metrics

@@ -921,10 +921,8 @@ impl std::fmt::Display for ExecutionFailureStatus {
 impl std::error::Error for ExecutionFailureStatus {}
 
 impl ExecutionStatus {
-    pub fn new_failure(error: ExecutionError) -> ExecutionStatus {
-        ExecutionStatus::Failure {
-            error: error.to_execution_status(),
-        }
+    pub fn new_failure(error: ExecutionFailureStatus) -> ExecutionStatus {
+        ExecutionStatus::Failure { error }
     }
 
     pub fn is_ok(&self) -> bool {

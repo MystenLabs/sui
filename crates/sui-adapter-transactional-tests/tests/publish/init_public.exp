@@ -1,4 +1,5 @@
 processed 2 tasks
 
 task 1 'publish'. lines 5-25:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: Some("_::M1. 'init' function must be private") } }

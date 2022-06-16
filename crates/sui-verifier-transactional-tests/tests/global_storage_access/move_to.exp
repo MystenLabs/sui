@@ -1,7 +1,9 @@
 processed 2 tasks
 
 task 0 'publish'. lines 4-15:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: Some("Access to Move global storage is not allowed. Found in function no: [MoveTo(StructDefinitionIndex(0))]") } }
 
 task 1 'publish'. lines 17-27:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: Some("Access to Move global storage is not allowed. Found in function no: [MoveToGeneric(StructDefInstantiationIndex(0))]") } }
