@@ -31,7 +31,7 @@ So there is no global storage in Sui Move. None of the global storage-related op
 
 In Move, there is a special _address_ type. This type is used to represent account addresses in core Move. Core Move needs to know the address of an account when dealing with the global storage. The _address_ type is 16 bytes, which is sufficient for the core Move security model.
 
-In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [ID.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) file in Sui framework for an understanding of address use.
+In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [id.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) file in Sui framework for an understanding of address use.
 
 ## Object with key ability, globally unique IDs
 
@@ -54,4 +54,4 @@ Sui offers entry functions that can be called directly from Sui, in addition to 
 
 ## Conclusion
 
-In summary, Sui takes advantage of Move’s security and flexibility and enhances it with the features described above to vastly improve throughput, reduce delays in finality, and make Move programming easier. Now see [how Sui works](how-sui-works.md). For full details, see the [Sui Smart Contracts Platform](../../paper/sui.pdf) white paper.
+In summary, Sui takes advantage of Move’s security and flexibility and enhances it with the features described above to vastly improve throughput, reduce delays in finality, and make Move programming easier. Now see [how Sui works](how-sui-works.md). For full details, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.
