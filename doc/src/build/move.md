@@ -180,7 +180,7 @@ In particular, one type of custom coin already defined in Sui is
 `Coin<SUI>`, which represents a token used to pay for Sui
 computations (more generally known as _gas_) - in this case, the concrete type used to parameterize the
 `Coin` struct is the `SUI` struct in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move):
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move):
 
 ``` rust
 struct SUI has drop {}
@@ -237,7 +237,7 @@ One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move)
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move)
 to implement gas object transfer:
 
 ```rust
