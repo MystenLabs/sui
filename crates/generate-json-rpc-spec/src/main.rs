@@ -252,7 +252,7 @@ async fn create_hero_response(
         let coin = SuiJsonValue::new(json!(coins.first().unwrap().object_id.to_hex_literal()))?;
         let result = WalletCommands::Call {
             package: package_id,
-            module: "Hero".to_string(),
+            module: "hero".to_string(),
             function: "acquire_hero".to_string(),
             type_args: vec![],
             args: vec![game_info, coin],
@@ -289,7 +289,7 @@ async fn create_error_response(
         .move_call(
             address,
             hero_package,
-            "Hero".to_string(),
+            "hero".to_string(),
             "new_game".to_string(),
             vec![],
             vec![],
