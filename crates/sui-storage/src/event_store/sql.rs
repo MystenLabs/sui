@@ -404,7 +404,6 @@ mod tests {
     fn new_test_publish_event() -> Event {
         Event::Publish {
             sender: SuiAddress::random_for_testing_only(),
-            transaction_digest: TransactionDigest::random(),
             package_id: ObjectID::random(),
         }
     }
@@ -415,7 +414,6 @@ mod tests {
             module: Identifier::new("module").unwrap(),
             function: Identifier::new("function").unwrap(),
             sender: SuiAddress::random_for_testing_only(),
-            transaction_digest: TransactionDigest::random(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
         }
@@ -423,8 +421,10 @@ mod tests {
 
     fn new_test_deleteobj_event() -> Event {
         Event::DeleteObject {
+            package_id: ObjectID::random(),
+            module: Identifier::new("module").unwrap(),
+            function: Identifier::new("function").unwrap(),
             sender: SuiAddress::random_for_testing_only(),
-            transaction_digest: TransactionDigest::random(),
             object_id: ObjectID::random(),
         }
     }
@@ -450,7 +450,6 @@ mod tests {
                 module: Identifier::new("module").unwrap(),
                 function: Identifier::new("function").unwrap(),
                 sender: SuiAddress::random_for_testing_only(),
-                transaction_digest: TransactionDigest::random(),
                 type_: TestEvent::struct_tag(),
                 contents: event_bytes,
             },

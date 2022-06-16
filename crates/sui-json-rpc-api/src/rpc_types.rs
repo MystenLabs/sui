@@ -1201,7 +1201,6 @@ pub enum SuiEvent {
         module: String,
         function: String,
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         type_: String,
         fields: SuiMoveStruct,
         #[serde_as(as = "Base64")]
@@ -1212,7 +1211,6 @@ pub enum SuiEvent {
     #[serde(rename_all = "camelCase")]
     Publish {
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         package_id: ObjectID,
     },
     /// Transfer objects to new address / wrap in another object / coin
@@ -1225,8 +1223,10 @@ pub enum SuiEvent {
     },
     /// Delete object
     DeleteObject {
+        package_id: ObjectID,
+        module: String,
+        function: String,
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         object_id: ObjectID,
     },
     /// New object creation
@@ -1235,7 +1235,6 @@ pub enum SuiEvent {
         module: String,
         function: String,
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         recipient: Owner,
         object_id: ObjectID,
     },
@@ -1253,7 +1252,6 @@ impl SuiEvent {
                 module,
                 function,
                 sender,
-                transaction_digest,
                 type_,
                 contents,
             } => {
@@ -1265,21 +1263,12 @@ impl SuiEvent {
                     module: module.to_string(),
                     function: function.to_string(),
                     sender,
-                    transaction_digest,
                     type_: move_obj.type_,
                     fields: move_obj.fields,
                     bcs,
                 }
             }
-            Event::Publish {
-                sender,
-                transaction_digest,
-                package_id,
-            } => SuiEvent::Publish {
-                sender,
-                transaction_digest,
-                package_id,
-            },
+            Event::Publish { sender, package_id } => SuiEvent::Publish { sender, package_id },
             Event::TransferObject {
                 object_id,
                 version,
@@ -1292,12 +1281,16 @@ impl SuiEvent {
                 type_,
             },
             Event::DeleteObject {
+                package_id,
+                module,
+                function,
                 sender,
-                transaction_digest,
                 object_id,
             } => SuiEvent::DeleteObject {
+                package_id,
+                module: module.to_string(),
+                function: function.to_string(),
                 sender,
-                transaction_digest,
                 object_id,
             },
             Event::NewObject {
@@ -1305,7 +1298,6 @@ impl SuiEvent {
                 module,
                 function,
                 sender,
-                transaction_digest,
                 recipient,
                 object_id,
             } => SuiEvent::NewObject {
@@ -1313,7 +1305,6 @@ impl SuiEvent {
                 module: module.to_string(),
                 function: function.to_string(),
                 sender,
-                transaction_digest,
                 recipient,
                 object_id,
             },

@@ -84,7 +84,6 @@ pub enum Event {
         module: Identifier,
         function: Identifier,
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         type_: StructTag,
         #[serde_as(as = "Bytes")]
         contents: Vec<u8>,
@@ -92,7 +91,6 @@ pub enum Event {
     /// Module published
     Publish {
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         package_id: ObjectID,
     },
     /// Transfer objects to new address / wrap in another object / coin
@@ -104,8 +102,10 @@ pub enum Event {
     },
     /// Delete object
     DeleteObject {
+        package_id: ObjectID,
+        module: Identifier,
+        function: Identifier,
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         object_id: ObjectID,
     },
     /// New object creation
@@ -114,7 +114,6 @@ pub enum Event {
         module: Identifier,
         function: Identifier,
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         recipient: Owner,
         object_id: ObjectID,
     },
@@ -129,7 +128,6 @@ impl Event {
         package_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        transaction_digest: TransactionDigest,
         sender: SuiAddress,
         type_: StructTag,
         contents: Vec<u8>,
@@ -139,20 +137,23 @@ impl Event {
             module,
             function,
             sender,
-            transaction_digest,
             type_,
             contents,
         }
     }
 
     pub fn delete_object(
+        package_id: ObjectID,
+        module: Identifier,
+        function: Identifier,
         sender: SuiAddress,
-        transaction_digest: TransactionDigest,
         object_id: ObjectID,
     ) -> Self {
         Event::DeleteObject {
+            package_id,
+            module,
+            function,
             sender,
-            transaction_digest,
             object_id,
         }
     }
@@ -161,7 +162,6 @@ impl Event {
         package_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        transaction_digest: TransactionDigest,
         sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -171,7 +171,6 @@ impl Event {
             module,
             function,
             sender,
-            transaction_digest,
             recipient,
             object_id,
         }
