@@ -8,7 +8,7 @@ import {
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
   isTransactionEffectsResponse,
-  isTransactionResponse
+  isTransactionResponse,
 } from '../index.guard';
 import {
   GatewayTxSeqNumber,
@@ -17,7 +17,7 @@ import {
   SuiObjectInfo,
   TransactionDigest,
   TransactionEffectsResponse,
-  TransactionResponse
+  TransactionResponse,
 } from '../types';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
@@ -90,54 +90,63 @@ export class JsonRpcProvider extends Provider {
       throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
     }
   }
-  async getTransactionsForObject(objectID: string): Promise<GetTxnDigestsResponse> {
+
+  // Transactions
+
+  async getTransactionsForObject(
+    objectID: string
+  ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
         method: 'sui_getTransactionsByInputObject',
-        args: [objectID]
+        args: [objectID],
       },
       {
         method: 'sui_getTransactionsByMutatedObject',
-        args: [objectID]
-      }
-    ]
+        args: [objectID],
+      },
+    ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
         isGetTxnDigestsResponse
-      )
-        return [...results[0], ...results[1]];
+      );
+      return [...results[0], ...results[1]];
     } catch (err) {
-      throw new Error(`Error getting transactions for object: ${err} for id ${objectID}`)
+      throw new Error(
+        `Error getting transactions for object: ${err} for id ${objectID}`
+      );
     }
   }
 
-  //Addresses
-  async getTransactionsForAddress(addressID: string): Promise<GetTxnDigestsResponse> {
+  async getTransactionsForAddress(
+    addressID: string
+  ): Promise<GetTxnDigestsResponse> {
     const requests = [
       {
         method: 'sui_getTransactionsToAddress',
-        args: [addressID]
+        args: [addressID],
       },
       {
         method: 'sui_getTransactionsFromAddress',
-        args: [addressID]
-      }
-    ]
+        args: [addressID],
+      },
+    ];
 
     try {
       const results = await this.client.batchRequestWithType(
         requests,
         isGetTxnDigestsResponse
-      )
+      );
       return [...results[0], ...results[1]];
     } catch (err) {
-      throw new Error(`Error getting transactions for address: ${err} for id ${addressID}`)
+      throw new Error(
+        `Error getting transactions for address: ${err} for id ${addressID}`
+      );
     }
   }
 
-  // Transactions
   async getTransactionWithEffects(
     digest: TransactionDigest
   ): Promise<TransactionEffectsResponse> {
