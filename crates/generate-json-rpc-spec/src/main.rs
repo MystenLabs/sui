@@ -26,6 +26,7 @@ use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
+use sui_json_rpc_api::EventApiOpenRpc;
 use sui_json_rpc_api::QuorumDriverApiClient;
 use sui_json_rpc_api::RpcReadApiClient;
 use sui_json_rpc_api::RpcTransactionBuilderClient;
@@ -82,6 +83,7 @@ async fn main() {
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
+    open_rpc.add_module(EventApiOpenRpc::module_doc());
 
     match options.action {
         Action::Print => {

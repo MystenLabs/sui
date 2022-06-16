@@ -4,10 +4,11 @@
 use std::sync::Arc;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use sui_json_rpc_api::rpc_types::SuiMoveStruct;
 use tokio_stream::Stream;
 use tracing::{debug, error};
 
-use sui_types::object::ObjectFormatOptions;
+use sui_types::object::{MoveObject, ObjectFormatOptions};
 use sui_types::{
     error::{SuiError, SuiResult},
     event::{Event, EventEnvelope},
@@ -15,8 +16,8 @@ use sui_types::{
 };
 
 use crate::authority::{AuthorityStore, ResolverWrapper};
-use crate::event_filter::EventFilter;
 use crate::streamer::Streamer;
+use sui_types::event_filter::EventFilter;
 
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
@@ -47,10 +48,14 @@ impl EventHandler {
         let json_value = match event {
             Event::MoveEvent(event_obj) => {
                 debug!(event =? event, "Process MoveEvent.");
-                let move_struct = event_obj.to_move_struct_with_resolver(
-                    ObjectFormatOptions::default(),
-                    &self.module_cache,
-                )?;
+                let move_object =
+                    MoveObject::new(event_obj.type_.clone(), event_obj.contents.clone());
+                let move_struct: SuiMoveStruct = move_object
+                    .to_move_struct_with_resolver(
+                        ObjectFormatOptions::default(),
+                        &self.module_cache,
+                    )?
+                    .into();
                 Some(serde_json::to_value(&move_struct).map_err(|e| {
                     SuiError::ObjectSerializationError {
                         error: e.to_string(),

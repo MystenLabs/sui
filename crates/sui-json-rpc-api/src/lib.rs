@@ -5,10 +5,9 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::serde_as;
-use std::collections::BTreeMap;
 
+use crate::rpc_types::SuiEventFilter;
 use crate::rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams, SuiEvent,
     SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
@@ -231,8 +230,9 @@ impl TransactionBytes {
     }
 }
 
+#[open_rpc(namespace = "sui", tag = "Event Subscription")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventApi {
-    #[subscription(name = "subscribeMoveEventsByType", item = SuiEvent)]
-    fn subscribe_move_event_by_type(&self, event: String, field_filter: BTreeMap<String, Value>);
+    #[subscription(name = "subscribeEvent", item = SuiEvent)]
+    fn subscribe_event(&self, filter: SuiEventFilter);
 }

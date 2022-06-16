@@ -197,6 +197,8 @@ fn execute_internal<
         .collect();
     process_successful_execution(
         state_view,
+        module_id,
+        function,
         by_value_object_map,
         mutable_refs,
         events,
@@ -227,7 +229,11 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-    state_view.log_event(Event::Publish { package_id });
+    state_view.log_event(Event::Publish {
+        sender: ctx.sender(),
+        transaction_digest: ctx.digest(),
+        package_id,
+    });
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
@@ -394,6 +400,8 @@ fn process_successful_execution<
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
     state_view: &mut S,
+    module_id: &ModuleId,
+    function: &Identifier,
     mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     events: Vec<MoveEvent>,
@@ -500,7 +508,15 @@ fn process_successful_execution<
             }
             EventType::User => {
                 match type_ {
-                    TypeTag::Struct(s) => state_view.log_event(Event::move_event(s, event_bytes)),
+                    TypeTag::Struct(s) => state_view.log_event(Event::move_event(
+                        ObjectID::from(*module_id.address()),
+                        Identifier::from(module_id.name()),
+                        function.clone(),
+                        ctx.digest(),
+                        ctx.sender(),
+                        s,
+                        event_bytes,
+                    )),
                     _ => unreachable!(
                         "Native function emit_event<T> ensures that T is always bound to structs"
                     ),
