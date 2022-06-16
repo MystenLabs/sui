@@ -60,7 +60,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
 #[cfg(test)]
@@ -418,7 +418,7 @@ impl AuthorityState {
                 let err = "previous attempt of transaction resulted in an error - \
                           transaction will be retried offline"
                     .to_owned();
-                info!(?digest, "{}", err);
+                debug!(?digest, "{}", err);
                 Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err })
             }
         }
@@ -494,7 +494,7 @@ impl AuthorityState {
         if self.database.effects_exists(&transaction_digest)? {
             let info = self.make_transaction_info(&transaction_digest).await?;
             debug!("Transaction {transaction_digest:?} already executed");
-            tx_guard.commit_tx();
+            tx_guard.release();
             return Ok(info);
         }
 
@@ -508,7 +508,7 @@ impl AuthorityState {
         {
             Err(e) => {
                 debug!(name = ?self.name, digest = ?transaction_digest, "Error preparing transaction: {}", e);
-                tx_guard.commit_tx();
+                tx_guard.release();
                 return Err(e);
             }
             Ok(res) => res,
@@ -1077,7 +1077,7 @@ impl AuthorityState {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
-            if let Some(tx_guard) = self.database.wal.pop_one_recoverable_tx().await {
+            if let Some(tx_guard) = self.database.wal.read_one_recoverable_tx().await {
                 let digest = tx_guard.tx_id();
 
                 let (cert, retry_count) = self.database.wal.get_tx_data(&tx_guard)?;
@@ -1094,7 +1094,7 @@ impl AuthorityState {
                         "Abandoning in-progress TX after {} retries.", MAX_TX_RECOVERY_RETRY
                     );
                     // prevent the tx from going back into the recovery list again.
-                    tx_guard.commit_tx();
+                    tx_guard.release();
                     continue;
                 }
 

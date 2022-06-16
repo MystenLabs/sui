@@ -30,8 +30,14 @@ use tracing::{debug, error, instrument, trace, warn};
 /// if the guard is dropped without commit_tx being called.
 #[allow(drop_bounds)]
 pub trait TxGuard<'a>: Drop {
+    /// Return the transaction digest.
     fn tx_id(&self) -> TransactionDigest;
+
+    /// Mark the TX as completed.
     fn commit_tx(self);
+
+    /// Mark the TX as abandoned/aborted but not requiring any recovery or rollback.
+    fn release(self);
 }
 
 // WriteAheadLog is parameterized on the value type (C) because:
@@ -48,7 +54,7 @@ pub trait WriteAheadLog<'a, C> {
     ///
     ///   Ok(None) => There was a concurrent instance of the same tx in progress, but it ended
     ///   witout being committed. The caller may not proceed processing that tx. A TxGuard for
-    ///   that tx can be (eventually) obtained by calling pop_one_recoverable_tx().
+    ///   that tx can be (eventually) obtained by calling read_one_recoverable_tx().
     ///
     ///   Ok(Some(TxGuard)) => No other concurrent instance of the same tx is in progress, nor can
     ///   one start while the guard is held. However, a prior instance of the same tx could have
@@ -71,7 +77,7 @@ pub trait WriteAheadLog<'a, C> {
     ///
     /// Recoverable TXes will remain in the on-disk log until they are explicitly committed.
     #[must_use]
-    async fn pop_one_recoverable_tx(&'a self) -> Option<Self::Guard>;
+    async fn read_one_recoverable_tx(&'a self) -> Option<Self::Guard>;
 
     /// Get the data associated with a given digest - returns an error if no such transaction is
     /// currently open.
@@ -120,6 +126,11 @@ where
         if let Err(e) = self.wal.commit_tx(&self.tx) {
             warn!(digest = ?self.tx, "Couldn't write tx completion to WriteAheadLog: {}", e);
         }
+    }
+
+    // Identical to commit_tx (for now), but we provide different names to make intent clearer.
+    fn release(self) {
+        self.commit_tx()
     }
 }
 
@@ -261,7 +272,7 @@ where
             // log, it was dropped (errored out) and not committed. Return None to indicate
             // that the caller does not hold a guard on this tx and cannot proceed.
             //
-            // (The dropped tx must be retried later by calling pop_one_recoverable_tx() and
+            // (The dropped tx must be retried later by calling read_one_recoverable_tx() and
             // obtaining a TxGuard).
             return Ok(None);
         }
@@ -272,7 +283,7 @@ where
     }
 
     #[must_use]
-    async fn pop_one_recoverable_tx(&'a self) -> Option<DBTxGuard<'a, C>> {
+    async fn read_one_recoverable_tx(&'a self) -> Option<DBTxGuard<'a, C>> {
         let candidate = self.pop_one_tx();
 
         match candidate {
@@ -302,7 +313,7 @@ mod tests {
     use sui_types::base_types::TransactionDigest;
 
     async fn recover_queue_empty(log: &DBWriteAheadLog<u32>) -> bool {
-        log.pop_one_recoverable_tx().await.is_none()
+        log.read_one_recoverable_tx().await.is_none()
     }
 
     #[tokio::test]
@@ -328,7 +339,7 @@ mod tests {
                 // implicit drop
             }
 
-            let r = log.pop_one_recoverable_tx().await.unwrap();
+            let r = log.read_one_recoverable_tx().await.unwrap();
             // tx3 in recoverable txes because we dropped the guard.
             assert_eq!(r.tx_id(), tx3_id);
 
@@ -341,7 +352,7 @@ mod tests {
             let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(&working_dir);
 
             // recoverable txes still there
-            let r = log.pop_one_recoverable_tx().await.unwrap();
+            let r = log.read_one_recoverable_tx().await.unwrap();
             assert_eq!(r.tx_id(), tx3_id);
             assert_eq!(log.get_tx_data(&r).unwrap(), (3, 2 /* retry */));
             assert!(recover_queue_empty(&log).await);
