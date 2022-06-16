@@ -142,7 +142,7 @@ async fn test_start_epoch_change() {
         ),
         tx_digest,
     );
-    let effects = execution_engine::execute_transaction_to_effects(
+    let (effects, _) = execution_engine::execute_transaction_to_effects(
         vec![],
         &mut temporary_store,
         transaction.data.clone(),
@@ -152,8 +152,7 @@ async fn test_start_epoch_change() {
         &state._native_functions,
         SuiGasStatus::new_with_budget(1000, 1, 1),
         state.committee.load().epoch,
-    )
-    .unwrap();
+    );
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state

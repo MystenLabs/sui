@@ -14,7 +14,6 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
-    error::SuiResult,
     event::{Event, TransferType},
     gas::{self, SuiGasStatus},
     messages::{
@@ -39,11 +38,11 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
     epoch: EpochId,
-) -> SuiResult<TransactionEffects> {
+) -> (TransactionEffects, Option<ExecutionError>) {
     let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
     let gas_object_ref = *transaction_data.gas_payment_object_ref();
-    let (gas_cost_summary, status) = execute_transaction(
+    let (gas_cost_summary, execution_result) = execute_transaction(
         temporary_store,
         transaction_data,
         gas_object_ref.0,
@@ -52,6 +51,14 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         native_functions,
         gas_status,
     );
+
+    let (status, execution_error) = match execution_result {
+        Ok(()) => (ExecutionStatus::Success, None),
+        Err(error) => (
+            ExecutionStatus::new_failure(error.to_execution_status()),
+            Some(error),
+        ),
+    };
     debug!(
         computation_gas_cost = gas_cost_summary.computation_cost,
         storage_gas_cost = gas_cost_summary.storage_cost,
@@ -71,7 +78,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         status,
         gas_object_ref,
     );
-    Ok(effects)
+    (effects, execution_error)
 }
 
 fn charge_gas_for_object_read<S>(
@@ -98,7 +105,7 @@ fn execute_transaction<S: BackingPackageStore>(
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
-) -> (GasCostSummary, ExecutionStatus) {
+) -> (GasCostSummary, Result<(), ExecutionError>) {
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let mut result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -228,11 +235,7 @@ fn execute_transaction<S: BackingPackageStore>(
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
-    let status = match result {
-        Ok(()) => ExecutionStatus::Success,
-        Err(error) => ExecutionStatus::new_failure(error),
-    };
-    (cost_summary, status)
+    (cost_summary, result)
 }
 
 fn transfer_coin<S>(

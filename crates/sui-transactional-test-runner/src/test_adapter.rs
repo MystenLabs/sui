@@ -446,19 +446,22 @@ impl<'a> SuiTestAdapter<'a> {
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
             AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
-        let TransactionEffects {
-            status,
-            events,
-            created,
-            // TODO display all these somehow
-            transaction_digest: _,
-            mutated: _,
-            unwrapped: _,
-            deleted: _,
-            wrapped: _,
-            gas_object: _,
-            ..
-        } = execution_engine::execute_transaction_to_effects(
+        let (
+            TransactionEffects {
+                status,
+                events,
+                created,
+                // TODO display all these somehow
+                transaction_digest: _,
+                mutated: _,
+                unwrapped: _,
+                deleted: _,
+                wrapped: _,
+                gas_object: _,
+                ..
+            },
+            execution_error,
+        ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
             transaction.data,
@@ -469,7 +472,7 @@ impl<'a> SuiTestAdapter<'a> {
             gas_status,
             // TODO: Support different epochs in transactional tests.
             0,
-        )?;
+        );
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();
@@ -504,7 +507,15 @@ impl<'a> SuiTestAdapter<'a> {
                 deleted: deleted_ids,
                 events,
             }),
-            ExecutionStatus::Failure { error, .. } => Err(error.into()),
+            ExecutionStatus::Failure { error, .. } => {
+                Err(anyhow::anyhow!(self.stabilize_str(format!(
+                    "Transaction Effects Status: {}\nExecution Error: {}",
+                    error,
+                    execution_error.expect(
+                        "to have an execution error if a transaction's status is a failure"
+                    )
+                ))))
+            }
         }
     }
 
