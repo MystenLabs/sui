@@ -43,10 +43,10 @@ use crate::{
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, PublishResponse,
-    RPCMoveCallRequestParams, RPCTransactionRequestParams, RPCTransferCoinRequestParams,
-    SplitCoinResponse, SuiMoveObject, SuiObject, SuiObjectInfo, SuiTypeTag,
-    TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
+    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
+    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse, TransferCoinParams,
 };
 
 use crate::transaction_input_checker::InputObjects;
@@ -842,7 +842,7 @@ where
 
     async fn create_transfer_coin_transaction_kind(
         &self,
-        params: RPCTransferCoinRequestParams,
+        params: TransferCoinParams,
         used_object_ids: &mut BTreeSet<ObjectID>,
     ) -> Result<SingleTransactionKind, anyhow::Error> {
         used_object_ids.insert(params.object_id);
@@ -856,10 +856,10 @@ where
 
     async fn create_move_call_transaction_kind(
         &self,
-        params: RPCMoveCallRequestParams,
+        params: MoveCallParams,
         used_object_ids: &mut BTreeSet<ObjectID>,
     ) -> Result<SingleTransactionKind, anyhow::Error> {
-        let RPCMoveCallRequestParams {
+        let MoveCallParams {
             module,
             function,
             package_object_id,
@@ -1048,7 +1048,7 @@ where
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
         let mut used_object_ids = BTreeSet::new();
-        let params = RPCTransferCoinRequestParams {
+        let params = TransferCoinParams {
             recipient,
             object_id,
         };
@@ -1084,6 +1084,13 @@ where
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
+        fp_ensure!(
+            !single_transaction_params.is_empty(),
+            SuiError::InvalidBatchTransaction {
+                error: "Batch Transaction cannot be empty".to_owned(),
+            }
+            .into()
+        );
         let mut all_tx_kind = vec![];
         let mut used_object_ids = BTreeSet::new();
         for param in single_transaction_params {
@@ -1145,7 +1152,7 @@ where
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let params = RPCMoveCallRequestParams {
+        let params = MoveCallParams {
             package_object_id,
             module,
             function,

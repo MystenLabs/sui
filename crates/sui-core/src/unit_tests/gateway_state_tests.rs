@@ -718,17 +718,17 @@ async fn test_batch_transaction() {
     );
     let gateway = create_gateway_state(genesis_objects).await;
     let params = vec![
-        RPCTransactionRequestParams::TransferCoinRequestParams(RPCTransferCoinRequestParams {
+        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
             object_id: coin_object1.id(),
             recipient: addr2,
         }),
-        RPCTransactionRequestParams::TransferCoinRequestParams(RPCTransferCoinRequestParams {
+        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
             object_id: coin_object2.id(),
             recipient: addr2,
         }),
-        RPCTransactionRequestParams::MoveCallRequestParams(RPCMoveCallRequestParams {
+        RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
             package_object_id: gateway.get_framework_object_ref().await.unwrap().0,
-            module: "Bag".to_string(),
+            module: "bag".to_string(),
             function: "create".to_string(),
             type_arguments: vec![],
             arguments: vec![],

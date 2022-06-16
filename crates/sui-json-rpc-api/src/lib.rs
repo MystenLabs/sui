@@ -9,12 +9,10 @@ use serde_json::Value;
 use serde_with::serde_as;
 use std::collections::BTreeMap;
 
-use crate::rpc_types::SuiEvent;
-use crate::rpc_types::SuiTypeTag;
 use crate::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, SuiInputObjectKind, SuiObjectInfo,
-    SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
-    RPCTransactionRequestParams, SuiTypeTag,
+    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams, SuiEvent,
+    SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse,
 };
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
