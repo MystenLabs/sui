@@ -12,6 +12,7 @@ use serde_with::Bytes;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 
+use crate::object::Owner;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
     committee::EpochId,
@@ -108,7 +109,15 @@ pub enum Event {
         object_id: ObjectID,
     },
     /// New object creation
-    NewObject(ObjectID),
+    NewObject {
+        package_id: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        sender: SuiAddress,
+        transaction_digest: TransactionDigest,
+        recipient: Owner,
+        object_id: ObjectID,
+    },
     /// Epoch change
     EpochChange(EpochId),
     /// New checkpoint
@@ -117,7 +126,7 @@ pub enum Event {
 
 impl Event {
     pub fn move_event(
-        package: ObjectID,
+        package_id: ObjectID,
         module: Identifier,
         function: Identifier,
         transaction_digest: TransactionDigest,
@@ -126,7 +135,7 @@ impl Event {
         contents: Vec<u8>,
     ) -> Self {
         Event::MoveEvent {
-            package_id: package,
+            package_id,
             module,
             function,
             sender,
@@ -148,6 +157,26 @@ impl Event {
         }
     }
 
+    pub fn new_object(
+        package_id: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        transaction_digest: TransactionDigest,
+        sender: SuiAddress,
+        recipient: Owner,
+        object_id: ObjectID,
+    ) -> Self {
+        Event::NewObject {
+            package_id,
+            module,
+            function,
+            sender,
+            transaction_digest,
+            recipient,
+            object_id,
+        }
+    }
+
     pub fn name_from_ordinal(ordinal: usize) -> &'static str {
         Event::VARIANTS[ordinal]
     }
@@ -164,7 +193,7 @@ impl Event {
         match self {
             Event::TransferObject { object_id, .. } => Some(*object_id),
             Event::DeleteObject { object_id, .. } => Some(*object_id),
-            Event::NewObject(obj_id) => Some(*obj_id),
+            Event::NewObject { object_id, .. } => Some(*object_id),
             _ => None,
         }
     }
@@ -174,6 +203,7 @@ impl Event {
         match self {
             Event::MoveEvent { package_id, .. } => Some(*package_id),
             Event::Publish { package_id, .. } => Some(*package_id),
+            Event::NewObject { package_id, .. } => Some(*package_id),
             _ => None,
         }
     }
@@ -184,6 +214,7 @@ impl Event {
             Event::MoveEvent { sender, .. } => Some(*sender),
             Event::DeleteObject { sender, .. } => Some(*sender),
             Event::Publish { sender, .. } => Some(*sender),
+            Event::NewObject { sender, .. } => Some(*sender),
             _ => None,
         }
     }
@@ -193,6 +224,7 @@ impl Event {
     pub fn module_name(&self) -> Option<&str> {
         match self {
             Event::MoveEvent { module, .. } => Some(module.as_ident_str().as_str()),
+            Event::NewObject { module, .. } => Some(module.as_ident_str().as_str()),
             _ => None,
         }
     }
@@ -201,6 +233,7 @@ impl Event {
     pub fn function_name(&self) -> Option<&str> {
         match self {
             Event::MoveEvent { function, .. } => Some(function.as_ident_str().as_str()),
+            Event::NewObject { function, .. } => Some(function.as_ident_str().as_str()),
             _ => None,
         }
     }

@@ -1,15 +1,29 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet, HashSet},
+    convert::TryFrom,
+    fmt::Debug,
+};
 
-use crate::bytecode_rewriter::ModuleHandleRewriter;
+use anyhow::Result;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::PartialVMResult,
     file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
+use move_core_types::{
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::{ModuleId, StructTag, TypeTag},
+    resolver::{ModuleResolver, ResourceResolver},
+};
+pub use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
+
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
@@ -27,22 +41,8 @@ use sui_verifier::{
     verifier,
 };
 
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
-use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, BTreeSet, HashSet},
-    convert::TryFrom,
-    fmt::Debug,
-};
-
+use crate::bytecode_rewriter::ModuleHandleRewriter;
 use crate::object_root_ancestor_map::ObjectRootAncestorMap;
-pub use move_vm_runtime::move_vm::MoveVM;
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
     MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -446,12 +446,15 @@ fn process_successful_execution<
                     _ => unreachable!(),
                 };
                 handle_transfer(
+                    ctx.sender(),
                     new_owner,
                     type_,
                     event_bytes,
                     tx_digest,
                     &mut by_value_objects,
                     state_view,
+                    module_id,
+                    function,
                     &mut object_owner_map,
                     &newly_generated_ids,
                 )
@@ -549,12 +552,15 @@ fn handle_transfer<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
+    sender: SuiAddress,
     recipient: Owner,
     type_: TypeTag,
     contents: Vec<u8>,
     tx_digest: TransactionDigest,
     by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     state_view: &mut S,
+    module_id: &ModuleId,
+    function: &Identifier,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
 ) -> Result<(), ExecutionError> {
@@ -581,7 +587,15 @@ fn handle_transfer<
             if old_object.is_none() {
                 // Newly created object
                 if newly_generated_ids.contains(&obj_id) {
-                    state_view.log_event(Event::NewObject(obj_id));
+                    state_view.log_event(Event::new_object(
+                        ObjectID::from(*module_id.address()),
+                        Identifier::from(module_id.name()),
+                        function.clone(),
+                        tx_digest,
+                        sender,
+                        recipient,
+                        obj_id,
+                    ));
                 } else {
                     // When an object was wrapped at version `v`, we added an record into `parent_sync`
                     // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,

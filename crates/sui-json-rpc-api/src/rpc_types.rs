@@ -1230,7 +1230,15 @@ pub enum SuiEvent {
         object_id: ObjectID,
     },
     /// New object creation
-    NewObject(ObjectID),
+    NewObject {
+        package_id: ObjectID,
+        module: String,
+        function: String,
+        sender: SuiAddress,
+        transaction_digest: TransactionDigest,
+        recipient: Owner,
+        object_id: ObjectID,
+    },
     /// Epoch change
     EpochChange(EpochId),
     /// New checkpoint
@@ -1292,7 +1300,23 @@ impl SuiEvent {
                 transaction_digest,
                 object_id,
             },
-            Event::NewObject(id) => SuiEvent::NewObject(id),
+            Event::NewObject {
+                package_id,
+                module,
+                function,
+                sender,
+                transaction_digest,
+                recipient,
+                object_id,
+            } => SuiEvent::NewObject {
+                package_id,
+                module: module.to_string(),
+                function: function.to_string(),
+                sender,
+                transaction_digest,
+                recipient,
+                object_id,
+            },
             Event::EpochChange(id) => SuiEvent::EpochChange(id),
             Event::Checkpoint(seq) => SuiEvent::Checkpoint(seq),
         })

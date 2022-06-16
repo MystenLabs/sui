@@ -361,6 +361,7 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
+    use sui_types::object::Owner;
     use sui_types::{
         base_types::SuiAddress,
         event::{Event, EventEnvelope, TransferType},
@@ -409,7 +410,15 @@ mod tests {
     }
 
     fn new_test_newobj_event() -> Event {
-        Event::NewObject(ObjectID::random())
+        Event::NewObject {
+            package_id: ObjectID::random(),
+            module: Identifier::new("module").unwrap(),
+            function: Identifier::new("function").unwrap(),
+            sender: SuiAddress::random_for_testing_only(),
+            transaction_digest: TransactionDigest::random(),
+            recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+            object_id: ObjectID::random(),
+        }
     }
 
     fn new_test_deleteobj_event() -> Event {
