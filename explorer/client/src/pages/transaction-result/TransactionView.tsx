@@ -35,8 +35,6 @@ type TxDataProps = CertifiedTransaction & {
     created: SuiObjectRef[];
 };
 
-const IS_MODULE = (itm: any) => itm.label === 'Modules';
-
 // Generate an Arr of Obj with Label and Value
 // TODO rewrite to use sui.js, verify tx types and dynamically generate list
 function formatTxResponse(tx: TxDataProps, txId: string) {
@@ -200,36 +198,24 @@ function formatByTransactionKind(
     }
 }
 
-function ItemView({
-    itm,
-    text,
-    isLink,
-}: {
-    itm: any;
-    text: string;
-    isLink: boolean;
-}) {
-    if (isLink) {
-        return (
-            <Longtext
-                text={text}
-                category={itm.category ? itm.category : 'unknown'}
-                isLink={true}
-            />
-        );
+function ItemView({ itm, text }: { itm: any; text: string }) {
+    switch (true) {
+        case itm.label === 'Modules':
+            return <div className={codestyle.code}>{itm.value}</div>;
+        case itm.link:
+            return (
+                <Longtext
+                    text={text}
+                    category={itm.category ? itm.category : 'unknown'}
+                    isLink={true}
+                />
+            );
+        default:
+            return <>{text}</>;
     }
-    return <>{text}</>;
 }
 
-function SubListView({
-    itm,
-    list,
-    isLink,
-}: {
-    itm: any;
-    list: any;
-    isLink: boolean;
-}) {
+function SubListView({ itm, list }: { itm: any; list: any }) {
     return (
         <div>
             {list.map((sublist: string, l: number) => (
@@ -243,11 +229,7 @@ function SubListView({
                             ''
                         )}
                         <div className={styles.sublistvalue}>
-                            <ItemView
-                                itm={itm}
-                                text={sublist}
-                                isLink={isLink}
-                            />
+                            <ItemView itm={itm} text={sublist} />
                         </div>
                     </div>
                 </div>
@@ -287,53 +269,35 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                 : ''
                                         }
                                     >
-                                        {IS_MODULE(itm) ? (
-                                            <div className={codestyle.code}>
-                                                {itm.value}
-                                            </div>
-                                        ) : itm.list ? (
+                                        {itm.list ? (
                                             <ul className={styles.listitems}>
                                                 {itm.value.map(
-                                                    (list: any, n: number) =>
-                                                        itm.sublist ? (
-                                                            <li
-                                                                className={
-                                                                    styles.list
-                                                                }
-                                                                key={n}
-                                                            >
+                                                    (list: any, n: number) => (
+                                                        <li
+                                                            className={
+                                                                styles.list
+                                                            }
+                                                            key={n}
+                                                        >
+                                                            {itm.sublist ? (
                                                                 <SubListView
                                                                     itm={itm}
                                                                     list={list}
-                                                                    isLink={
-                                                                        itm.link
-                                                                    }
                                                                 />
-                                                            </li>
-                                                        ) : (
-                                                            <li
-                                                                className={
-                                                                    styles.list
-                                                                }
-                                                                key={n}
-                                                            >
-                                                                {' '}
+                                                            ) : (
                                                                 <ItemView
                                                                     itm={itm}
                                                                     text={list}
-                                                                    isLink={
-                                                                        itm.link
-                                                                    }
                                                                 />
-                                                            </li>
-                                                        )
+                                                            )}
+                                                        </li>
+                                                    )
                                                 )}
                                             </ul>
                                         ) : (
                                             <ItemView
                                                 itm={itm}
                                                 text={itm.value}
-                                                isLink={itm.link}
                                             />
                                         )}
                                     </div>
