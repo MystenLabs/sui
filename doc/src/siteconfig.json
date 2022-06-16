@@ -182,12 +182,12 @@
         "sublist": [
           {
             "name": "Create an escrow",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Escrow.move",
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move",
             "external": true
           },
           {
             "name": "Try A flash loan",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/FlashLender.move",
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/flash_lender.move",
             "external": true
           },
           {
