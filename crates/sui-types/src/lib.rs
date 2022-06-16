@@ -33,6 +33,7 @@ pub mod sui_serde;
 pub mod sui_system_state;
 pub mod waypoint;
 
+pub mod event_filter;
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 

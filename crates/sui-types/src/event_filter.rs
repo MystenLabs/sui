@@ -1,23 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::account_address::AccountAddress;
+use crate::base_types::SuiAddress;
+use crate::event::EventType;
+use crate::event::{Event, EventEnvelope};
+use crate::ObjectID;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use sui_types::base_types::SuiAddress;
-use sui_types::event::{Event, EventEnvelope};
 
 #[derive(Clone, Debug)]
 pub enum EventFilter {
-    ByPackage(AccountAddress),
+    ByPackage(ObjectID),
     ByModule(Identifier),
     ByFunction(Identifier),
     ByMoveEventType(StructTag),
+    ByEventType(EventType),
     ByMoveEventFields(BTreeMap<String, Value>),
     BySenderAddress(SuiAddress),
-    ObjectId(SuiAddress),
+    ObjectId(ObjectID),
     MatchAll(Vec<EventFilter>),
     MatchAny(Vec<EventFilter>),
 }
@@ -26,7 +28,6 @@ impl EventFilter {
         Ok(match self {
             EventFilter::ByMoveEventType(event_type) => match &item.event {
                 Event::MoveEvent(event_obj) => &event_obj.type_ == event_type,
-                // TODO: impl for non-move event
                 _ => false,
             },
             EventFilter::ByMoveEventFields(fields_filter) => {
@@ -45,29 +46,22 @@ impl EventFilter {
                     false
                 }
             }
-            // TODO: Implement the rest
-            EventFilter::BySenderAddress(_) => true,
-            EventFilter::ByPackage(_) => true,
-            EventFilter::ByModule(_) => true,
-            EventFilter::ByFunction(_) => true,
+            EventFilter::BySenderAddress(sender) => {
+                matches!(&item.event.sender(), Some(addr) if addr == sender)
+            }
+            EventFilter::ByPackage(obj_id) => {
+                matches!(&item.event.package_id(), Some(id) if id == obj_id)
+            }
+            EventFilter::ByModule(module) => {
+                matches!(item.event.module_name(), Some(name) if name == module.as_str())
+            }
+            EventFilter::ByFunction(function) => {
+                matches!(item.event.function_name(), Some(name) if name == function.as_str())
+            }
             EventFilter::ObjectId(_) => true,
-
-            EventFilter::MatchAll(filters) => {
-                for filter in filters {
-                    if !filter.matches(item) {
-                        return Ok(false);
-                    }
-                }
-                true
-            }
-            EventFilter::MatchAny(filters) => {
-                for filter in filters {
-                    if filter.matches(item) {
-                        return Ok(true);
-                    }
-                }
-                false
-            }
+            EventFilter::ByEventType(type_) => &item.event.event_type() == type_,
+            EventFilter::MatchAll(filters) => filters.iter().all(|f| f.matches(item)),
+            EventFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(item)),
         })
     }
 

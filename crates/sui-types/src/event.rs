@@ -1,21 +1,22 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use name_variant::NamedVariant;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::serde_as;
+use serde_with::Bytes;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 
-use crate::object::MoveObject;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
     committee::EpochId,
     messages_checkpoint::CheckpointSequenceNumber,
 };
-use schemars::JsonSchema;
-use serde_with::serde_as;
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,13 +74,17 @@ pub enum TransferType {
     EnumDiscriminants,
     EnumVariantNames,
 )]
-#[strum_discriminants(name(EventType))]
+#[strum_discriminants(name(EventType), derive(Serialize, Deserialize, JsonSchema))]
 // Developer note: PLEASE only append new entries, do not modify existing entries (binary compat)
 pub enum Event {
     /// Move-specific event
-    MoveEvent(MoveObject),
+    MoveEvent(MoveEventObject),
     /// Module published
-    Publish { package_id: ObjectID },
+    Publish {
+        sender: SuiAddress,
+        transaction_digest: TransactionDigest,
+        package_id: ObjectID,
+    },
     /// Transfer objects to new address / wrap in another object / coin
     TransferObject {
         object_id: ObjectID,
@@ -97,9 +102,38 @@ pub enum Event {
     Checkpoint(CheckpointSequenceNumber),
 }
 
+#[serde_as]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub struct MoveEventObject {
+    pub package: ObjectID,
+    pub module: Identifier,
+    pub function: Identifier,
+    pub sender: SuiAddress,
+    pub transaction_digest: TransactionDigest,
+    pub type_: StructTag,
+    #[serde_as(as = "Bytes")]
+    pub contents: Vec<u8>,
+}
+
 impl Event {
-    pub fn move_event(type_: StructTag, contents: Vec<u8>) -> Self {
-        Event::MoveEvent(MoveObject::new(type_, contents))
+    pub fn move_event(
+        package: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        transaction_digest: TransactionDigest,
+        sender: SuiAddress,
+        type_: StructTag,
+        contents: Vec<u8>,
+    ) -> Self {
+        Event::MoveEvent(MoveEventObject {
+            package,
+            module,
+            function,
+            sender,
+            transaction_digest,
+            type_,
+            contents,
+        })
     }
 
     pub fn name_from_ordinal(ordinal: usize) -> &'static str {
@@ -126,8 +160,17 @@ impl Event {
     /// Extracts the Move package ID associated with the event, or the package published.
     pub fn package_id(&self) -> Option<ObjectID> {
         match self {
-            Event::MoveEvent(event_obj) => Some(event_obj.type_.address.into()),
-            Event::Publish { package_id } => Some(*package_id),
+            Event::MoveEvent(event_obj) => Some(event_obj.package),
+            Event::Publish { package_id, .. } => Some(*package_id),
+            _ => None,
+        }
+    }
+
+    /// Extracts the Sender address associated with the event.
+    pub fn sender(&self) -> Option<SuiAddress> {
+        match self {
+            Event::MoveEvent(event_obj) => Some(event_obj.sender),
+            Event::Publish { sender, .. } => Some(*sender),
             _ => None,
         }
     }
@@ -136,15 +179,15 @@ impl Event {
     // TODO: should we switch to IdentStr or &str?  These are more complicated to make work due to lifetimes
     pub fn module_name(&self) -> Option<&str> {
         match self {
-            Event::MoveEvent(event) => Some(event.type_.module.as_ident_str().as_str()),
+            Event::MoveEvent(event_obj) => Some(event_obj.module.as_ident_str().as_str()),
             _ => None,
         }
     }
 
     /// Extracts the function name from a SuiEvent, if available
-    pub fn function_name(&self) -> Option<String> {
+    pub fn function_name(&self) -> Option<&str> {
         match self {
-            Event::MoveEvent(event_obj) => Some(event_obj.type_.name.to_string()),
+            Event::MoveEvent(event_obj) => Some(event_obj.function.as_ident_str().as_str()),
             _ => None,
         }
     }
