@@ -698,3 +698,55 @@ async fn test_multiple_gateways() {
     .unwrap();
     assert!(response.effects.status.is_ok());
 }
+
+#[tokio::test]
+async fn test_batch_transaction() {
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _key2) = get_key_pair();
+
+    let coin_object1 = Object::with_owner_for_testing(addr1);
+    let coin_object2 = Object::with_owner_for_testing(addr1);
+    let gas_object = Object::with_owner_for_testing(addr1);
+
+    let genesis_objects = authority_genesis_objects(
+        4,
+        vec![
+            coin_object1.clone(),
+            coin_object2.clone(),
+            gas_object.clone(),
+        ],
+    );
+    let gateway = create_gateway_state(genesis_objects).await;
+    let params = vec![
+        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
+            object_id: coin_object1.id(),
+            recipient: addr2,
+        }),
+        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
+            object_id: coin_object2.id(),
+            recipient: addr2,
+        }),
+        RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
+            package_object_id: gateway.get_framework_object_ref().await.unwrap().0,
+            module: "bag".to_string(),
+            function: "create".to_string(),
+            type_arguments: vec![],
+            arguments: vec![],
+        }),
+    ];
+    // Gateway should be able to figure out the only usable gas object.
+    let data = gateway
+        .batch_transaction(addr1, params, None, 5000)
+        .await
+        .unwrap();
+    let signature = key1.sign(&data.to_bytes());
+    let effects = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_effect_response()
+        .unwrap()
+        .effects;
+    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.mutated.len(), 3);
+}

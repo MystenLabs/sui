@@ -11,10 +11,10 @@ use tracing::debug;
 use crate::SuiRpcModule;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::rpc_types::SuiTypeTag;
 use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
+use sui_json_rpc_api::rpc_types::{RPCTransactionRequestParams, SuiTypeTag};
 use sui_json_rpc_api::{
     QuorumDriverApiServer, RpcReadApiServer, RpcTransactionBuilderServer, TransactionBytes,
 };
@@ -249,14 +249,27 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
                     package_object_id,
                     module,
                     function,
-                    type_arguments
-                        .into_iter()
-                        .map(|tag| tag.try_into())
-                        .collect::<Result<Vec<_>, _>>()?,
+                    type_arguments,
                     rpc_arguments,
                     gas,
                     gas_budget,
                 )
+                .await
+        }
+        .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        params: Vec<RPCTransactionRequestParams>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = async {
+            self.client
+                .batch_transaction(signer, params, gas, gas_budget)
                 .await
         }
         .await?;
