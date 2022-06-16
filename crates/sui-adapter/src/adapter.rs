@@ -475,7 +475,11 @@ fn process_successful_execution<
                             return Err(ExecutionErrorKind::DeleteObjectOwnedObject.into());
                         }
                         Some(_) => {
-                            state_view.log_event(Event::DeleteObject(*obj_id));
+                            state_view.log_event(Event::delete_object(
+                                ctx.sender(),
+                                ctx.digest(),
+                                *obj_id,
+                            ));
                             state_view.delete_object(obj_id, id.version(), DeleteKind::Normal)
                         }
                         None => {
@@ -486,7 +490,11 @@ fn process_successful_execution<
                             // it will also have version `v+1`, leading to a violation of the invariant that any
                             // object_id and version pair must be unique. Hence for any object that's just unwrapped,
                             // we force incrementing its version number again to make it `v+2` before writing to the store.
-                            state_view.log_event(Event::DeleteObject(*obj_id));
+                            state_view.log_event(Event::delete_object(
+                                ctx.sender(),
+                                ctx.digest(),
+                                *obj_id,
+                            ));
                             state_view.delete_object(
                                 obj_id,
                                 id.version().increment(),

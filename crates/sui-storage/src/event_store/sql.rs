@@ -361,7 +361,6 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
-    use sui_types::object::MoveObject;
     use sui_types::{
         base_types::SuiAddress,
         event::{Event, EventEnvelope, TransferType},
@@ -403,6 +402,8 @@ mod tests {
 
     fn new_test_publish_event() -> Event {
         Event::Publish {
+            sender: SuiAddress::random_for_testing_only(),
+            transaction_digest: TransactionDigest::random(),
             package_id: ObjectID::random(),
         }
     }
@@ -412,7 +413,11 @@ mod tests {
     }
 
     fn new_test_deleteobj_event() -> Event {
-        Event::DeleteObject(ObjectID::random())
+        Event::DeleteObject {
+            sender: SuiAddress::random_for_testing_only(),
+            transaction_digest: TransactionDigest::random(),
+            object_id: ObjectID::random(),
+        }
     }
 
     fn new_test_transfer_event(typ: TransferType) -> Event {
@@ -431,7 +436,15 @@ mod tests {
         };
         let event_bytes = bcs::to_bytes(&move_event).unwrap();
         (
-            Event::MoveEvent(MoveObject::new(TestEvent::struct_tag(), event_bytes)),
+            Event::MoveEvent {
+                package_id: ObjectID::random(),
+                module: Identifier::new("module").unwrap(),
+                function: Identifier::new("function").unwrap(),
+                sender: SuiAddress::random_for_testing_only(),
+                transaction_digest: TransactionDigest::random(),
+                type_: TestEvent::struct_tag(),
+                contents: event_bytes,
+            },
             move_event.move_struct(),
         )
     }
