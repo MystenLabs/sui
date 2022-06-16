@@ -77,10 +77,11 @@ We recommend the following minimum hardware requirements for running a fullnode:
 
 * CPUs: 2
 * RAM: 8GB
+* Storage: 50GB
 
 Storage requirements will vary based on various factors (age of the chain,
 transaction rate, etc) although we don't anticipate running a fullnode on
-devnet will require more than a handful of GBs given it is reset upon each
+devnet will require more than 50 GBs today given it is reset upon each
 release roughly every two weeks.
 
 ### Software requirements
@@ -155,7 +156,9 @@ in how a fullnode is run.
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-1. Optionally, edit your `fullnode.yaml` file to reflect any custom paths you employ:
+1. Optional: You can skip this set of steps if you are willing to accept the default paths to
+    resources. If you need custom paths, edit your `fullnode.yaml` file to reflect the paths
+    you employ:
     1. Update the `db-path` field with the path to where the fullnode's database
        will be located. By default this will create the database in a directory
        `./suidb` relative to your current directory:
@@ -187,8 +190,9 @@ point the Explorer at your locally running fullnode and see the
 transactions it has synced from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.devnet.sui.io/
-2. Click the **Devnet** button in the top right-hand corner of the Explorer and select
+1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
    the *Local* network from the drop-down menu.
+1. Close the *Choose a Network* menu to see the latest transactions. 
 
 The Explorer will now use your local fullnode to explore the state of the chain.
 
