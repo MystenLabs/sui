@@ -79,6 +79,11 @@ We recommend the following minimum hardware requirements for running a fullnode:
 * RAM: 8GB
 * Storage: 50GB
 
+Storage requirements will vary based on various factors (age of the chain,
+transaction rate, etc) although we don't anticipate running a fullnode on
+devnet will require more than 50 GBs today given it is reset upon each
+release roughly every two weeks.
+
 ### Software requirements
 
 We recommend running Sui fullnodes on Linux. The Sui team supports the Ubuntu and
@@ -186,8 +191,7 @@ transactions it has synced from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.devnet.sui.io/
 1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
-   the *Custom RPC URL* network from the drop-down menu.
-1. Populate that field with: http://127.0.0.1:9000
+   the *Local* network from the drop-down menu.
 1. Close the *Choose a Network* menu to see the latest transactions. 
 
 The Explorer will now use your local fullnode to explore the state of the chain.
