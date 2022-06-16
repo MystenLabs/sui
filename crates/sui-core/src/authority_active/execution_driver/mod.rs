@@ -1,16 +1,42 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::error::SuiResult;
+use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::debug;
 use typed_store::Map;
 
-use crate::authority_client::AuthorityAPI;
+use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 
 use super::{gossip::LocalConfirmationTransactionHandler, ActiveAuthority};
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+pub trait PendCertificateForExecution {
+    fn pending_execution(
+        &self,
+        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+    ) -> SuiResult<()>;
+}
+
+impl PendCertificateForExecution for AuthorityState {
+    fn pending_execution(
+        &self,
+        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+    ) -> SuiResult<()> {
+        self.database.add_pending_certificates(certs)
+    }
+}
+
+pub struct PendCertificateForExecutionNoop;
+impl PendCertificateForExecution for PendCertificateForExecutionNoop {
+    fn pending_execution(
+        &self,
+        _certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+    ) -> SuiResult<()> {
+        Ok(())
+    }
+}
 
 /// When a notification that a new pending transaction is received we activate
 /// processing the transaction in a loop.
@@ -68,6 +94,7 @@ where
         state: active_authority.state.clone(),
     };
 
+    // TODO: implement properly efficient execution for the block of transactions.
     let mut executed = vec![];
     for (i, d, c) in cert_seq {
         // Only execute if not already executed.
