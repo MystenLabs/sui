@@ -185,8 +185,10 @@ point the Explorer at your locally running fullnode and see the
 transactions it has synced from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.devnet.sui.io/
-2. Click the **Devnet** button in the top right-hand corner of the Explorer and select
-   the *Local* network from the drop-down menu.
+1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
+   the *Custom RPC URL* network from the drop-down menu.
+1. Populate that field with: http://127.0.0.1:9000
+1. Close the *Choose a Network* menu to see the latest transactions. 
 
 The Explorer will now use your local fullnode to explore the state of the chain.
 
