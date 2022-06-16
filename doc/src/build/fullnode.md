@@ -151,7 +151,9 @@ in how a fullnode is run.
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-1. Optionally, edit your `fullnode.yaml` file to reflect any custom paths you employ:
+1. Optional: You can skip this set of steps if you are willing to accept the default paths to
+    resources. If you need custom paths, edit your `fullnode.yaml` file to reflect the paths
+    you employ:
     1. Update the `db-path` field with the path to where the fullnode's database
        will be located. By default this will create the database in a directory
        `./suidb` relative to your current directory:
