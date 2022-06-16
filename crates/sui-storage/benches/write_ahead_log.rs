@@ -35,7 +35,7 @@ fn main() {
 
                     if let Some(g) = g {
                         sleep(Duration::from_millis(1)).await;
-                        g.commit_tx().unwrap();
+                        g.commit_tx();
                     }
                 }
             }));

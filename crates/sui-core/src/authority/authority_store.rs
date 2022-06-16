@@ -12,6 +12,7 @@ use std::path::Path;
 use sui_storage::{
     default_db_options,
     mutex_table::{LockGuard, MutexTable},
+    write_ahead_log::DBWriteAheadLog,
     LockService,
 };
 use sui_types::base_types::SequenceNumber;
@@ -39,6 +40,10 @@ const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct SuiDataStore<const ALL_OBJ_VER: bool, S> {
+    /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
+    /// crashes.
+    pub wal: Arc<DBWriteAheadLog<CertifiedTransaction>>,
+
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
@@ -179,7 +184,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         let lock_service =
             LockService::new(lockdb_path, None).expect("Could not initialize lockdb");
 
+        let wal_path = path.as_ref().join("recovery_log");
+        let wal = Arc::new(DBWriteAheadLog::new(wal_path));
+
         Self {
+            wal,
             objects,
             all_object_versions,
             lock_service,
@@ -536,8 +545,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         &self,
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         certificate: &CertifiedTransaction,
+        proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
-        update_type: UpdateType,
+        effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
@@ -550,24 +560,20 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             std::iter::once((transaction_digest, certificate)),
         )?;
 
-        // Store the signed effects of the transaction
-        write_batch = write_batch.insert_batch(
-            &self.effects,
-            std::iter::once((transaction_digest, effects)),
-        )?;
-
-        // Cleanup the lock of the shared objects.
-        let write_batch =
-            self.remove_shared_objects_locks(write_batch, transaction_digest, certificate)?;
-
-        // Safe to unwrap since the "true" flag ensures we get a sequence value back.
-        self.batch_update_objects(
+        self.sequence_tx(
             write_batch,
             temporary_store,
-            *transaction_digest,
-            update_type,
+            transaction_digest,
+            proposed_seq,
+            effects,
+            effects_digest,
         )
-        .await
+        .await?;
+
+        // Cleanup the lock of the shared objects. This must be done after we write effects, as
+        // effects_exists is used as the guard to avoid re-locking objects for a previously
+        // executed tx. remove_shared_objects_locks.
+        self.remove_shared_objects_locks(transaction_digest, certificate)
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -584,7 +590,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             transaction_digest,
             UpdateType::Genesis,
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     /// This is used by the Gateway to update its local store after a transaction succeeded
@@ -595,8 +602,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         input_objects: InputObjects,
         mutated_objects: HashMap<ObjectRef, Object>,
         certificate: CertifiedTransaction,
+        proposed_seq: TxSequenceNumber,
         effects: TransactionEffectsEnvelope<S>,
-        update_type: UpdateType,
+        effects_digest: &TransactionEffectsDigest,
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
@@ -624,20 +632,64 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // transactions.
         write_batch =
             write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
-        self.batch_update_objects(
+
+        self.sequence_tx(
             write_batch,
             temporary_store,
-            *transaction_digest,
-            update_type,
+            transaction_digest,
+            proposed_seq,
+            &effects,
+            effects_digest,
         )
-        .await?;
+        .await
+    }
 
-        // Store the unsigned effects of the transaction. Must be done after batch_update_objects
-        // returns, as we use digest-in-effects? as a proxy for cert-has-been-fully-processed
-        // throughout the code.
-        self.effects
-            .insert(transaction_digest, &effects)
-            .map_err(SuiError::from)
+    async fn sequence_tx<BackingPackageStore>(
+        &self,
+        write_batch: DBBatch,
+        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        transaction_digest: &TransactionDigest,
+        proposed_seq: TxSequenceNumber,
+        effects: &TransactionEffectsEnvelope<S>,
+        effects_digest: &TransactionEffectsDigest,
+    ) -> SuiResult {
+        // Safe to unwrap since UpdateType::Transaction ensures we get a sequence number back.
+        let assigned_seq = self
+            .batch_update_objects(
+                write_batch,
+                temporary_store,
+                *transaction_digest,
+                UpdateType::Transaction(proposed_seq, *effects_digest),
+            )
+            .await?
+            .unwrap();
+
+        // Store the signed effects of the transaction
+        // We can't write this until after sequencing succeeds (which happens in
+        // batch_update_objects), as effects_exists is used as a check in many places
+        // for "did the tx finish".
+        self.effects.insert(transaction_digest, effects)?;
+
+        // Writing to executed_sequence must be done *after* writing to effects, so that we never
+        // broadcast a sequenced transaction (via the batch system) for which no effects can be
+        // retrieved.
+        //
+        // Note that this write may be done repeatedly when retrying a tx. The
+        // sequence_transaction call in batch_update_objects assigns a sequence number to
+        // the transaction the first time it is called and will return that same sequence
+        // on subsequent calls.
+        trace!(
+            ?assigned_seq,
+            digest = ?transaction_digest,
+            ?effects_digest,
+            "storing sequence number to executed_sequence"
+        );
+        self.executed_sequence.insert(
+            &assigned_seq,
+            &ExecutionDigests::new(*transaction_digest, *effects_digest),
+        )?;
+
+        Ok(())
     }
 
     /// Helper function for updating the objects in the state
@@ -647,7 +699,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
         update_type: UpdateType,
-    ) -> Result<(), SuiError> {
+    ) -> SuiResult<Option<TxSequenceNumber>> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
@@ -749,7 +801,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // certs which may overwrite newer objects with older ones.  This can be removed once we have
         // an object storage supporting multiple object versions at once, then there is idempotency and
         // old writes would be OK.
-        {
+        let assigned_seq = {
             // Acquire the lock to ensure no one else writes when we are in here.
             let _mutexes = self.acquire_locks(&owned_inputs[..]).await;
 
@@ -772,48 +824,36 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 .collect();
 
             match update_type {
-                UpdateType::Transaction(seq, effects_digest) => {
+                UpdateType::Transaction(seq, _) => {
                     // sequence_transaction atomically assigns a sequence number to the tx and
                     // initializes locks for the output objects.
                     // It also (not atomically) deletes the locks for input objects.
                     // After this call completes, new txes can run on the output locks, so all
                     // output objects must be written already.
-                    let assigned_seq = self
-                        .lock_service
-                        .sequence_transaction(
-                            transaction_digest,
-                            seq,
-                            owned_inputs,
-                            new_locks_to_init,
-                        )
-                        .await?;
-
-                    // This write may be done repeatedly when retrying a tx. The
-                    // sequence_transaction call above assigns a sequence number to the transaction
-                    // the first time it is called and will return that same sequence on subsequent
-                    // calls.
-                    trace!(
-                        "assigning seq {:?} -> {:?}",
-                        transaction_digest,
-                        effects_digest
-                    );
-                    self.executed_sequence.insert(
-                        &assigned_seq,
-                        &ExecutionDigests::new(transaction_digest, effects_digest),
-                    )?;
+                    Some(
+                        self.lock_service
+                            .sequence_transaction(
+                                transaction_digest,
+                                seq,
+                                owned_inputs,
+                                new_locks_to_init,
+                            )
+                            .await?,
+                    )
                 }
                 UpdateType::Genesis => {
                     info!("Creating locks for genesis objects");
                     self.lock_service
                         .create_locks_for_genesis_objects(new_locks_to_init)
                         .await?;
+                    None
                 }
             }
 
             // implicit: drop(_mutexes);
-        }
+        };
 
-        Ok(())
+        Ok(assigned_seq)
     }
 
     /// Returns the last entry we have for this object in the parents_sync index used
@@ -849,10 +889,9 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     /// Remove the shared objects locks.
     pub fn remove_shared_objects_locks(
         &self,
-        mut write_batch: DBBatch,
         transaction_digest: &TransactionDigest,
         transaction: &CertifiedTransaction,
-    ) -> SuiResult<DBBatch> {
+    ) -> SuiResult {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
         for object_id in transaction.shared_input_objects() {
@@ -861,9 +900,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 schedule_to_delete.push(*object_id);
             }
         }
+        let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
         write_batch = write_batch.delete_batch(&self.schedule, schedule_to_delete)?;
-        Ok(write_batch)
+        write_batch.write()?;
+        Ok(())
     }
 
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
@@ -897,6 +938,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 (sequenced, scheduled)
             })
             .unzip();
+
+        trace!(digest = ?transaction_digest,
+               ?sequenced_to_write, ?schedule_to_write,
+               "locking shared objects");
 
         // Make an iterator to update the last consensus index.
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
