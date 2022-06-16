@@ -28,7 +28,7 @@ use tracing::{error, info, trace, warn};
 const NODE_SYNC_QUEUE_LEN: usize = 500;
 
 // Process up to 20 digests concurrently.
-const MAX_NODE_SYNC_CONCURRENCY: usize = 100;
+const MAX_NODE_SYNC_CONCURRENCY: usize = 20;
 
 /// EffectsStakeMap tracks which effects digests have been attested by a quorum of validators and
 /// are thus final.
