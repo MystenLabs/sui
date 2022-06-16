@@ -365,23 +365,8 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        self.metrics.total_certs.inc();
         let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
-
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
-            // TODO: Do we want to include the new validator set?
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
-
-        // Check the certificate and retrieve the transfer data.
-        let committee = &self.committee.load();
-        tracing::trace_span!("cert_check_signature")
-            .in_scope(|| certificate.verify(committee))
-            .map_err(|e| {
-                self.metrics.signature_errors.inc();
-                e
-            })?;
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -487,7 +472,22 @@ impl AuthorityState {
         tx_guard: CertTxGuard<'_>,
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
+        self.metrics.total_certs.inc();
         let transaction_digest = *certificate.digest();
+
+        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+            // TODO: Do we want to include the new validator set?
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+        }
+
+        // Check the certificate and retrieve the transfer data.
+        let committee = &self.committee.load();
+        tracing::trace_span!("cert_check_signature")
+            .in_scope(|| certificate.verify(committee))
+            .map_err(|e| {
+                self.metrics.signature_errors.inc();
+                e
+            })?;
 
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
