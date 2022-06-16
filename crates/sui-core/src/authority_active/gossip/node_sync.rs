@@ -159,7 +159,7 @@ impl<A> NodeSyncState<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    fn start(self_: Arc<Self>, mut receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
+    fn start(self: Arc<Self>, mut receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
         tokio::spawn(async move {
             // this pattern for limiting concurrency is from
             // https://github.com/tokio-rs/tokio/discussions/2648
@@ -167,12 +167,12 @@ where
 
             while let Some(DigestsMessage { digests, peer }) = receiver.recv().await {
                 let permit = Arc::clone(&limit).acquire_owned().await;
-                let self_ = self_.clone();
+                let state = self.clone();
                 tokio::spawn(async move {
                     let _permit = permit; // hold semaphore permit until task completes
                                           // TODO: must send status back to follower so that it knows whether to advance
                                           // the watermark.
-                    if let Err(error) = self_.process_digest(peer, digests).await {
+                    if let Err(error) = state.process_digest(peer, digests).await {
                         error!(?digests, ?peer, "process_digest failed: {}", error);
                     }
                 });
@@ -360,7 +360,7 @@ impl NodeSyncDigestHandler {
             pending_txes: Waiter::new(),
         });
 
-        let _sync_join_handle = Arc::new(NodeSyncState::start(sync_state, receiver));
+        let _sync_join_handle = Arc::new(sync_state.start(receiver));
 
         Self {
             _sync_join_handle,
