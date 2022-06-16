@@ -94,7 +94,7 @@ That said, you are welcome to run a Sui fullnode on the operating system of your
 choosing and submit changes to accommodate that environment.
 
 Before building, ensure the required tools are installed in your environment as
-outlined in the [Prerequisites](../build/install#prerequisites) section. Note,
+outlined in the [Prerequisites](../build/install.md#prerequisites) section. Note,
 you will fork the Sui repository here rather than clone it as described in
 *Prerequisites*. So you can skip that step.
 
