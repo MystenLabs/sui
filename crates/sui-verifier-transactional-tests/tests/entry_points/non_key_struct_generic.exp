@@ -1,7 +1,9 @@
 processed 2 tasks
 
 task 0 'publish'. lines 6-21:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: Some("Invalid entry point parameter type. Expected primitive or object type. Got: _::m::Obj<_::m::NoStore>") } }
 
 task 1 'publish'. lines 23-35:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: Some("Invalid entry point parameter type. Expected primitive or object type. Got: _::m::Obj<T0>") } }

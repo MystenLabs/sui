@@ -5,10 +5,13 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 26-26:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: Some("Can only call `entry` functions") } }
 
 task 3 'run'. lines 28-28:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: Some("Can only call `entry` functions") } }
 
 task 4 'run'. lines 30-30:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidNonEntryFunction, source: Some("Can only call `entry` functions") } }

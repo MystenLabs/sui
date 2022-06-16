@@ -24,7 +24,8 @@ task 6 'run'. lines 86-88:
 written: object(109), object(111), object(112)
 
 task 7 'run'. lines 89-89:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidSharedChildUse, source: Some("When an (either direct or indirect) child object of a shared object is passed as a Move argument,either the child object's type or the shared object's type must be defined in the same module as the called function. This is violated by object fake(109) (defined in module 'T1::O1'), whose ancestor fake(111) is a shared object (defined in module 'T2::O2'), and neither are defined in this module 'T1::O1'") } }
 
 task 8 'run'. lines 91-91:
 written: object(109), object(111), object(114)

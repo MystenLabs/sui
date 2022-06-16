@@ -5,7 +5,9 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 14-16:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidFunctionSignature, source: Some("Expected 2 arguments calling function 'create', but found 1") } }
 
 task 3 'run'. lines 17-17:
-Error: MiscellaneousError
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: Some(VMError { major_status: FAILED_TO_DESERIALIZE_ARGUMENT, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }) } }
