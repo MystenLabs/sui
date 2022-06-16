@@ -200,22 +200,36 @@ function formatByTransactionKind(
     }
 }
 
-function ItemView({ itm, text }: { itm: any; text: string }) {
-    switch (itm) {
-        case itm.link:
-            return (
-                <Longtext
-                    text={text}
-                    category={itm.category ? itm.category : 'unknown'}
-                    isLink={true}
-                />
-            );
-        default:
-            return <>{text}</>;
+function ItemView({
+    itm,
+    text,
+    isLink,
+}: {
+    itm: any;
+    text: string;
+    isLink: boolean;
+}) {
+    if (isLink) {
+        return (
+            <Longtext
+                text={text}
+                category={itm.category ? itm.category : 'unknown'}
+                isLink={true}
+            />
+        );
     }
+    return <>{text}</>;
 }
 
-function SubListView({ itm, list }: { itm: any; list: any }) {
+function SubListView({
+    itm,
+    list,
+    isLink,
+}: {
+    itm: any;
+    list: any;
+    isLink: boolean;
+}) {
     return (
         <div>
             {list.map((sublist: string, l: number) => (
@@ -229,7 +243,11 @@ function SubListView({ itm, list }: { itm: any; list: any }) {
                             ''
                         )}
                         <div className={styles.sublistvalue}>
-                            <ItemView itm={itm} text={sublist} />
+                            <ItemView
+                                itm={itm}
+                                text={sublist}
+                                isLink={isLink}
+                            />
                         </div>
                     </div>
                 </div>
@@ -287,6 +305,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                                 <SubListView
                                                                     itm={itm}
                                                                     list={list}
+                                                                    isLink={
+                                                                        itm.link
+                                                                    }
                                                                 />
                                                             </li>
                                                         ) : (
@@ -300,6 +321,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                                 <ItemView
                                                                     itm={itm}
                                                                     text={list}
+                                                                    isLink={
+                                                                        itm.link
+                                                                    }
                                                                 />
                                                             </li>
                                                         )
@@ -309,6 +333,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                             <ItemView
                                                 itm={itm}
                                                 text={itm.value}
+                                                isLink={itm.link}
                                             />
                                         )}
                                     </div>
