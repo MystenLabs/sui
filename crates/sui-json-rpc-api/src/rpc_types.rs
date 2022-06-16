@@ -1337,7 +1337,7 @@ pub struct ObjectNotExistsResponse {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TypeTag")]
+#[serde(rename = "TypeTag", rename_all = "camelCase")]
 pub struct SuiTypeTag(String);
 
 impl TryInto<TypeTag> for SuiTypeTag {
@@ -1351,4 +1351,29 @@ impl From<TypeTag> for SuiTypeTag {
     fn from(tag: TypeTag) -> Self {
         Self(format!("{}", tag))
     }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum RPCTransactionRequestParams {
+    TransferCoinRequestParams(TransferCoinParams),
+    MoveCallRequestParams(MoveCallParams),
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferCoinParams {
+    pub recipient: SuiAddress,
+    pub object_id: ObjectID,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveCallParams {
+    pub package_object_id: ObjectID,
+    pub module: String,
+    pub function: String,
+    #[serde(default)]
+    pub type_arguments: Vec<SuiTypeTag>,
+    pub arguments: Vec<SuiJsonValue>,
 }
