@@ -283,7 +283,7 @@ impl Primary {
         // digests from our workers and it back to the `Core`.
         Proposer::spawn(
             name.clone(),
-            &committee,
+            committee.clone(),
             signature_service,
             parameters.header_size,
             parameters.max_header_delay,

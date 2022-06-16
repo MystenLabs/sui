@@ -19,7 +19,7 @@ async fn propose_empty() {
     // Spawn the proposer.
     Proposer::spawn(
         name,
-        &committee(None),
+        committee(None),
         signature_service,
         /* header_size */ 1_000,
         /* max_header_delay */ Duration::from_millis(20),
@@ -48,7 +48,7 @@ async fn propose_payload() {
     // Spawn the proposer.
     Proposer::spawn(
         name.clone(),
-        &committee(None),
+        committee(None),
         signature_service,
         /* header_size */ 32,
         /* max_header_delay */

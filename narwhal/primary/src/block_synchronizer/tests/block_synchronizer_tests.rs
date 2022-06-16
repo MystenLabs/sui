@@ -826,6 +826,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         let header = builder
             .author(name.clone())
             .round(1)
+            .epoch(0)
             .parents(
                 Certificate::genesis(&committee)
                     .iter()

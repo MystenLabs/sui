@@ -906,6 +906,7 @@ async fn fixture_certificate(
     let header = builder
         .author(key.public().clone())
         .round(1)
+        .epoch(0)
         .parents(
             Certificate::genesis(&committee(None))
                 .iter()

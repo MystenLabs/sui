@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
+use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerAddresses};
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     traits::{KeyPair, Signer},
@@ -37,6 +37,7 @@ fn get_registry() -> Result<Registry> {
     // Trace the correspondng header
     let keys: Vec<_> = (0..4).map(|_| Ed25519KeyPair::generate(&mut rng)).collect();
     let committee = Committee {
+        epoch: Epoch::default(),
         authorities: arc_swap::ArcSwap::from_pointee(
             keys.iter()
                 .enumerate()

@@ -34,6 +34,7 @@ Header:
     - author:
         TYPENAME: Ed25519PublicKey
     - round: U64
+    - epoch: U64
     - payload:
         MAP:
           KEY:

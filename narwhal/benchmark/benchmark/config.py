@@ -62,7 +62,7 @@ class Committee:
         assert isinstance(base_port, int) and base_port > 1024
 
         port = base_port
-        self.json = {'authorities': OrderedDict()}
+        self.json = {'authorities': OrderedDict(), 'epoch': 0}
         for name, hosts in addresses.items():
             host = hosts.pop(0)
             primary_addr = {

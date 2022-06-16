@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{HeaderDigest, Round};
+use config::Epoch;
 use crypto::{CryptoError, Digest};
 use store::StoreError;
 use thiserror::Error;
@@ -58,4 +59,7 @@ pub enum DagError {
 
     #[error("Message {0} (round {1}) too old")]
     TooOld(Digest, Round),
+
+    #[error("Invalid epoch (expected {received}, received {received})")]
+    InvalidEpoch { expected: Epoch, received: Epoch },
 }

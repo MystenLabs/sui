@@ -334,6 +334,13 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
     fn sanitize_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         ensure!(
+            self.committee.epoch() == header.epoch,
+            DagError::InvalidEpoch {
+                expected: self.committee.epoch(),
+                received: header.epoch
+            }
+        );
+        ensure!(
             self.gc_round < header.round,
             DagError::TooOld(header.id.into(), header.round)
         );
@@ -347,6 +354,13 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     fn sanitize_vote(&mut self, vote: &Vote<PublicKey>) -> DagResult<()> {
+        ensure!(
+            self.committee.epoch() == vote.epoch,
+            DagError::InvalidEpoch {
+                expected: self.committee.epoch(),
+                received: vote.epoch
+            }
+        );
         ensure!(
             self.current_header.round <= vote.round,
             DagError::TooOld(vote.digest().into(), vote.round)
@@ -365,6 +379,13 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     fn sanitize_certificate(&mut self, certificate: &Certificate<PublicKey>) -> DagResult<()> {
+        ensure!(
+            self.committee.epoch() == certificate.epoch(),
+            DagError::InvalidEpoch {
+                expected: self.committee.epoch(),
+                received: certificate.epoch()
+            }
+        );
         ensure!(
             self.gc_round < certificate.round(),
             DagError::TooOld(certificate.digest().into(), certificate.round())
@@ -422,7 +443,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                     error!("{e}");
                     panic!("Storage failure: killing node.");
                 }
-                Err(e @ DagError::TooOld(..)) => debug!("{e}"),
+                Err(e @ DagError::TooOld(..) | e @ DagError::InvalidEpoch { .. }) => debug!("{e}"),
                 Err(e) => warn!("{e}"),
             }
 

@@ -120,7 +120,7 @@ pub struct DeleteBatchMessage {
 ///     let (tx_delete_block_result, mut rx_delete_block_result) = channel(1);
 ///
 ///     let name = Ed25519PublicKey::default();
-///     let committee = Arc::new(Committee{ authorities: ArcSwap::from_pointee(BTreeMap::new()) });
+///     let committee = Arc::new(Committee{ epoch: 0, authorities: ArcSwap::from_pointee(BTreeMap::new()) });
 ///     // A dag with genesis for the committee
 ///     let (tx_new_certificates, rx_new_certificates) = channel(1);
 ///     let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);

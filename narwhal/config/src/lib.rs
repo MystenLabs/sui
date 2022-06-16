@@ -27,6 +27,9 @@ use utils::get_available_port;
 mod duration_format;
 pub mod utils;
 
+/// The epoch number.
+pub type Epoch = u64;
+
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Node {0} is not in the committee")]
@@ -297,14 +300,22 @@ pub type SharedCommittee<PK> = Arc<Committee<PK>>;
 
 #[derive(Serialize, Deserialize)]
 pub struct Committee<PublicKey> {
+    /// The authorities of epoch.
     #[serde(bound(
         serialize = "PublicKey:Ord + Serialize",
         deserialize = "PublicKey:Ord + DeserializeOwned"
     ))]
     pub authorities: ArcSwap<BTreeMap<PublicKey, Authority>>,
+    /// The epoch number of this committee
+    pub epoch: Epoch,
 }
 
 impl<PublicKey: VerifyingKey> Committee<PublicKey> {
+    /// Returns the number of authorities.
+    pub fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
     /// Returns the number of authorities.
     pub fn size(&self) -> usize {
         self.authorities.load().len()

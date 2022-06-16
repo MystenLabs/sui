@@ -59,7 +59,6 @@ pub enum NodeDagError {
 
 impl<T: Affiliated> NodeDag<T> {
     /// Creates a new Node dag
-    ///
     pub fn new() -> NodeDag<T> {
         NodeDag {
             node_table: DashMap::new(),
@@ -129,7 +128,7 @@ impl<T: Affiliated> NodeDag<T> {
     /// Marks the node passed as argument as compressible, leaving it to be reaped by path compression.
     /// Returns true if the node was made compressible, and false if it already was
     ///
-    /// This returne an error if the queried node is unknown or dropped from the graph
+    /// This return an error if the queried node is unknown or dropped from the graph
     pub fn make_compressible(&self, hash: T::TypedDigest) -> Result<bool, NodeDagError> {
         let node_ref = self.get(hash)?;
         Ok(node_ref.make_compressible())
@@ -359,7 +358,7 @@ mod tests {
         #[test]
         fn test_insert_missing(
             digests in prop::collection::vec(arb_test_digest(), 0..10),
-            // Note random_parents must be non-empty, or the insertion will succceed
+            // Note random_parents must be non-empty, or the insertion will succeed
             random_parents in prop::collection::vec(arb_test_digest(), 1..10)
         ) {
             let nodes = digests.into_iter().map(|digest| {
@@ -379,6 +378,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore = "Issue #375"]
         fn test_dag_sanity_check(
             dag in arb_dag_complete(10, 10)
         ) {
@@ -391,7 +391,7 @@ mod tests {
         ) {
             let mut node_dag = NodeDag::new();
             for node in dag.into_iter() {
-                // the elements are generated in order & with no missing parents => no suprises
+                // the elements are generated in order & with no missing parents => no surprises
                 assert!(node_dag.try_insert(node).is_ok());
             }
             for ref_multi in node_dag.node_table.iter() {

@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, WorkerId};
+use config::{SharedCommittee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
@@ -20,6 +20,8 @@ pub mod proposer_tests;
 pub struct Proposer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
+    /// The committee information.
+    committee: SharedCommittee<PublicKey>,
     /// Service to sign headers.
     signature_service: SignatureService<PublicKey::Sig>,
     /// The size of the headers' payload.
@@ -47,7 +49,7 @@ pub struct Proposer<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: &Committee<PublicKey>,
+        committee: SharedCommittee<PublicKey>,
         signature_service: SignatureService<PublicKey::Sig>,
         header_size: usize,
         max_header_delay: Duration,
@@ -55,7 +57,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
     ) {
-        let genesis = Certificate::genesis(committee)
+        let genesis = Certificate::genesis(&committee)
             .iter()
             .map(|x| x.digest())
             .collect();
@@ -64,6 +66,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
             Self {
                 name,
                 signature_service,
+                committee,
                 header_size,
                 max_header_delay,
                 rx_core,
@@ -84,6 +87,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         let header = Header::new(
             self.name.clone(),
             self.round,
+            self.committee.epoch(),
             self.digests.drain(..).collect(),
             self.last_parents.drain(..).collect(),
             &mut self.signature_service,

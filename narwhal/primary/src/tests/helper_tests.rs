@@ -27,6 +27,8 @@ async fn test_process_certificates_stream_mode() {
     let (name, committee) = resolve_name_and_committee();
     let (tx_primaries, rx_primaries) = channel(10);
 
+    println!("1");
+
     // AND a helper
     Helper::spawn(
         name.clone(),
@@ -36,6 +38,8 @@ async fn test_process_certificates_stream_mode() {
         rx_primaries,
     );
 
+    println!("2");
+
     // AND some mock certificates
     let mut certificates = HashMap::new();
     for _ in 0..5 {
@@ -43,6 +47,8 @@ async fn test_process_certificates_stream_mode() {
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
             .build(&key)
             .unwrap();
+
+        println!("3");
 
         let certificate = certificate(&header);
         let id = certificate.clone().digest();

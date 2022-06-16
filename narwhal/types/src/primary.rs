@@ -7,7 +7,7 @@ use crate::{
 };
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
-use config::{Committee, WorkerId};
+use config::{Committee, Epoch, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     Digest, Hash, SignatureService, DIGEST_LEN,
@@ -80,6 +80,7 @@ impl Hash for Batch {
 pub struct Header<PublicKey: VerifyingKey> {
     pub author: PublicKey,
     pub round: Round,
+    pub epoch: Epoch,
     pub payload: BTreeMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: HeaderDigest,
@@ -94,6 +95,7 @@ impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
         let h = Header {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
+            epoch: self.epoch.unwrap(),
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             id: HeaderDigest::default(),
@@ -125,6 +127,7 @@ impl<PublicKey: VerifyingKey> Header<PublicKey> {
     pub async fn new(
         author: PublicKey,
         round: Round,
+        epoch: Epoch,
         payload: BTreeMap<BatchDigest, WorkerId>,
         parents: BTreeSet<CertificateDigest>,
         signature_service: &mut SignatureService<PublicKey::Sig>,
@@ -132,6 +135,7 @@ impl<PublicKey: VerifyingKey> Header<PublicKey> {
         let header = Self {
             author,
             round,
+            epoch,
             payload,
             parents,
             id: HeaderDigest::default(),
@@ -147,6 +151,15 @@ impl<PublicKey: VerifyingKey> Header<PublicKey> {
     }
 
     pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            self.epoch == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: self.epoch
+            }
+        );
+
         // Ensure the header id is well formed.
         ensure!(self.digest() == self.id, DagError::InvalidHeaderId);
 
@@ -200,6 +213,7 @@ impl<PublicKey: VerifyingKey> Hash for Header<PublicKey> {
         let hasher_update = |hasher: &mut VarBlake2b| {
             hasher.update(&self.author);
             hasher.update(self.round.to_le_bytes());
+            hasher.update(self.epoch.to_le_bytes());
             for (x, y) in self.payload.iter() {
                 hasher.update(Digest::from(*x));
                 hasher.update(y.to_le_bytes());
@@ -216,10 +230,11 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Header<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}: B{}({}, {})",
+            "{}: B{}({}, {}, {})",
             self.id,
             self.round,
             self.author.encode_base64(),
+            self.epoch,
             self.payload
                 .keys()
                 .map(|x| Digest::from(*x).size())
@@ -246,6 +261,7 @@ impl<PublicKey: VerifyingKey> PartialEq for Header<PublicKey> {
 pub struct Vote<PublicKey: VerifyingKey> {
     pub id: HeaderDigest,
     pub round: Round,
+    pub epoch: Epoch,
     pub origin: PublicKey,
     pub author: PublicKey,
     pub signature: <PublicKey as VerifyingKey>::Sig,
@@ -260,6 +276,7 @@ impl<PublicKey: VerifyingKey> Vote<PublicKey> {
         let vote = Self {
             id: header.id,
             round: header.round,
+            epoch: header.epoch,
             origin: header.author.clone(),
             author: author.clone(),
             signature: PublicKey::Sig::default(),
@@ -271,6 +288,15 @@ impl<PublicKey: VerifyingKey> Vote<PublicKey> {
     }
 
     pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            self.epoch == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: self.epoch
+            }
+        );
+
         // Ensure the authority has voting rights.
         ensure!(
             committee.stake(&self.author) > 0,
@@ -312,6 +338,7 @@ impl<PublicKey: VerifyingKey> Hash for Vote<PublicKey> {
         let hasher_update = |hasher: &mut VarBlake2b| {
             hasher.update(Digest::from(self.id));
             hasher.update(self.round.to_le_bytes());
+            hasher.update(self.epoch.to_le_bytes());
             hasher.update(&self.origin);
         };
 
@@ -323,11 +350,12 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Vote<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}: V{}({}, {})",
+            "{}: V{}({}, {}, {})",
             self.digest(),
             self.round,
             self.author.encode_base64(),
-            self.id
+            self.id,
+            self.epoch
         )
     }
 }
@@ -354,6 +382,7 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
             .map(|name| Self {
                 header: Header {
                     author: name.clone(),
+                    epoch: committee.epoch(),
                     ..Header::default()
                 },
                 ..Self::default()
@@ -362,6 +391,15 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
     }
 
     pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            self.epoch() == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: self.epoch()
+            }
+        );
+
         // Genesis certificates are always valid.
         if Self::genesis(committee).contains(self) {
             return Ok(());
@@ -398,6 +436,10 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
 
     pub fn round(&self) -> Round {
         self.header.round
+    }
+
+    pub fn epoch(&self) -> Epoch {
+        self.header.epoch
     }
 
     pub fn origin(&self) -> PublicKey {
@@ -445,6 +487,7 @@ impl<PublicKey: VerifyingKey> Hash for Certificate<PublicKey> {
         let hasher_update = |hasher: &mut VarBlake2b| {
             hasher.update(Digest::from(self.header.id));
             hasher.update(self.round().to_le_bytes());
+            hasher.update(self.epoch().to_le_bytes());
             hasher.update(&self.origin());
         };
 
@@ -456,11 +499,12 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Certificate<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}: C{}({}, {})",
+            "{}: C{}({}, {}, {})",
             self.digest(),
             self.round(),
             self.origin().encode_base64(),
-            self.header.id
+            self.header.id,
+            self.epoch()
         )
     }
 }
@@ -469,6 +513,7 @@ impl<PublicKey: VerifyingKey> PartialEq for Certificate<PublicKey> {
     fn eq(&self, other: &Self) -> bool {
         let mut ret = self.header.id == other.header.id;
         ret &= self.round() == other.round();
+        ret &= self.epoch() == other.epoch();
         ret &= self.origin() == other.origin();
         ret
     }
