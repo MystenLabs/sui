@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_types::error::SuiResult;
 use tracing::debug;
 use typed_store::Map;
 
@@ -11,6 +12,8 @@ use super::{gossip::LocalConfirmationTransactionHandler, ActiveAuthority};
 #[cfg(test)]
 pub(crate) mod tests;
 
+/// When a notification that a new pending transaction is received we activate
+/// processing the transaction in a loop.
 pub async fn execution_process<A>(active_authority: &ActiveAuthority<A>)
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -27,72 +30,73 @@ where
 
         debug!("Pending certificate execution activated.");
 
-        // Get a copy of the committee:
-        let _committee = active_authority.state.committee.load().clone();
-        let _net = active_authority.net.load().clone();
-        // TODO: check for committee change to signal epoch change and deal with it.
+        if let Err(err) = execute_pending(active_authority).await {
+            tracing::error!("Error in pending execution subsystem: {err}");
+            // The above should not return an error if the DB works, and we are connected to
+            // the network. However if it does, we should backoff a little.
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        }
+    }
+}
 
-        // Get the pending transactions
-        let pending_transactions = active_authority
-            .state
-            .database
-            .get_pending_certificates()
-            .expect("If an error occurs here we are dead");
+/// Reads all pending transactions as a block and executes them.
+async fn execute_pending<A>(active_authority: &ActiveAuthority<A>) -> SuiResult<()>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let _committee = active_authority.state.committee.load().clone();
+    let _net = active_authority.net.load().clone();
 
-        // Get all the actual certificates mapping to these pending transactions
-        let certs = active_authority
-            .state
-            .database
-            .certificates
-            .multi_get(pending_transactions.iter().map(|(_, d)| *d))
-            .expect("We cannot tolerate DB errors here.");
+    // Get the pending transactions
+    let pending_transactions = active_authority.state.database.get_pending_certificates()?;
 
-        // Zip seq, digest with certs. Note the cert must exist in the DB
-        let cert_seq: Vec<_> = pending_transactions
-            .iter()
-            .zip(certs.iter())
-            .map(|((i, d), c)| (i, d, c.as_ref().expect("certificate must exist")))
-            .collect();
+    // Get all the actual certificates mapping to these pending transactions
+    let certs = active_authority
+        .state
+        .database
+        .certificates
+        .multi_get(pending_transactions.iter().map(|(_, d)| *d))?;
 
-        let local_handler = LocalConfirmationTransactionHandler {
-            state: active_authority.state.clone(),
-        };
+    // Zip seq, digest with certs. Note the cert must exist in the DB
+    let cert_seq: Vec<_> = pending_transactions
+        .iter()
+        .zip(certs.iter())
+        .map(|((i, d), c)| (i, d, c.as_ref().expect("certificate must exist")))
+        .collect();
 
-        let mut executed = vec![];
-        for (i, d, c) in cert_seq {
-            // Only execute if not already executed.
-            if active_authority
-                .state
-                .database
-                .effects_exists(d)
-                .expect("DB should be ok.")
-            {
-                executed.push(*i);
-                continue;
-            }
+    let local_handler = LocalConfirmationTransactionHandler {
+        state: active_authority.state.clone(),
+    };
 
-            debug!(digest=?d, "Pending execution for certificate.");
-
-            // Sync and Execute with local authority state
-            _net.sync_certificate_to_authority_with_timeout_inner(
-                sui_types::messages::ConfirmationTransaction::new(c.clone()),
-                active_authority.state.name,
-                &local_handler,
-                tokio::time::Duration::from_secs(10),
-                10,
-            )
-            .await
-            .expect("Assume this work for now.");
-
-            // Remove from the execution list
+    let mut executed = vec![];
+    for (i, d, c) in cert_seq {
+        // Only execute if not already executed.
+        if active_authority.state.database.effects_exists(d)? {
             executed.push(*i);
+            continue;
         }
 
-        // Now update the pending store.
-        active_authority
-            .state
-            .database
-            .remove_pending_certificates(executed)
-            .expect("DB should be ok");
+        debug!(digest=?d, "Pending execution for certificate.");
+
+        // Sync and Execute with local authority state
+        _net.sync_certificate_to_authority_with_timeout_inner(
+            sui_types::messages::ConfirmationTransaction::new(c.clone()),
+            active_authority.state.name,
+            &local_handler,
+            tokio::time::Duration::from_secs(10),
+            10,
+        )
+        .await?;
+
+        // Remove from the execution list
+        executed.push(*i);
     }
+
+    // Now update the pending store.
+    active_authority
+        .state
+        .database
+        .remove_pending_certificates(executed)?;
+
+    Ok(())
 }
