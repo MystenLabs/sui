@@ -102,7 +102,11 @@ struct Waiter<Key, ResultT> {
     waiters: Mutex<HashMap<Key, broadcast::Sender<ResultT>>>,
 }
 
-impl<Key: std::hash::Hash + Eq + Clone + std::fmt::Debug, ResultT: Clone> Waiter<Key, ResultT> {
+impl<Key, ResultT> Waiter<Key, ResultT>
+where
+    Key: std::hash::Hash + Eq + Clone + std::fmt::Debug,
+    ResultT: Clone,
+{
     fn new() -> Self {
         Self {
             waiters: Mutex::new(HashMap::new()),
