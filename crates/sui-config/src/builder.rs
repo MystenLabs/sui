@@ -189,6 +189,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
                     json_rpc_address: utils::available_local_socket_address(),
+                    websocket_address: None,
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_gossip: true,

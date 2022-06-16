@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+<<<<<<< HEAD
 use futures::{future, StreamExt};
 use serde_json::json;
 use std::collections::HashSet;
@@ -13,13 +14,33 @@ use sui_json_rpc_api::rpc_types::{SplitCoinResponse, TransactionResponse};
 use sui_node::SuiNode;
 
 use move_package::BuildConfig;
+=======
+use futures::StreamExt;
+use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
+use jsonrpsee::rpc_params;
+use jsonrpsee::ws_client::WsClientBuilder;
+use serde_json::Value;
+use std::net::SocketAddr;
+use std::{collections::BTreeMap, sync::Arc};
+use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::rpc_types::{
+    SuiEvent, SuiMoveStruct, SuiMoveValue, SuiObjectInfo, SuiObjectRead,
+};
+use sui_node::SuiNode;
+use sui_swarm::memory::Swarm;
+>>>>>>> 53cc57a3 (add ws socket in config and e2e test)
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction},
 };
 use test_utils::network::setup_network_and_wallet;
+<<<<<<< HEAD
 use tokio::sync::Mutex;
+=======
+use tokio::time::timeout;
+>>>>>>> 53cc57a3 (add ws socket in config and e2e test)
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
@@ -53,6 +74,42 @@ async fn transfer_coin(
     };
 
     Ok((object_to_send, sender, receiver, digest))
+}
+
+async fn get_account_and_objects(
+    context: &mut WalletContext,
+) -> Result<(SuiAddress, Vec<SuiObjectInfo>), anyhow::Error> {
+    let sender = context.config.accounts.get(0).cloned().unwrap();
+    let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
+    Ok((sender, object_refs))
+}
+
+async fn emit_move_events(
+    context: &mut WalletContext,
+) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
+    let (sender, object_refs) = get_account_and_objects(context).await.unwrap();
+    let gas_object = object_refs.get(0).unwrap().object_id;
+
+    let res = WalletCommands::CreateExampleNFT {
+        name: Some("example_nft_name".into()),
+        description: Some("example_nft_desc".into()),
+        url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
+        gas: Some(gas_object),
+        gas_budget: Some(50000),
+    }
+    .execute(context)
+    .await?;
+
+    let (object_id, digest) = if let WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists(
+        obj,
+    )) = res
+    {
+        (obj.reference.object_id, obj.previous_transaction)
+    } else {
+        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists, got {:?}", res);
+    };
+
+    Ok((sender, object_id, digest))
 }
 
 async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {
@@ -460,6 +517,76 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
     wait_for_all_txes(digests, node.state().clone()).await;
+/// Call this function to set up a network and a fullnode with subscription enabled.
+/// Pass in an unique port for each test case otherwise they may interfere with one another.
+async fn set_up_subscription(port: u16, swarm: &Swarm) -> Result<(SuiNode, Client), anyhow::Error> {
+    let ws_server_url = format!("127.0.0.1:{}", port);
+    let ws_addr: SocketAddr = ws_server_url.parse().unwrap();
+
+    let mut config = swarm.config().generate_fullnode_config();
+    config.websocket_address = Some(ws_addr);
+
+    let node = SuiNode::start(&config).await?;
+
+    let client = WsClientBuilder::default()
+        .build(&format!("ws://{}", ws_server_url))
+        .await?;
+    Ok((node, client))
+}
+
+#[tokio::test]
+async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+    // Pass in an unique port for each test case otherwise they may interfere with one another.
+    let (node, ws_client) = set_up_subscription(6666, &swarm).await?;
+
+    let params = BTreeMap::<String, Value>::new();
+    let mut sub: Subscription<SuiEvent> = ws_client
+        .subscribe(
+            "sui_subscribeMoveEventsByType",
+            rpc_params!["0x2::devnet_nft::MintNFTEvent", params],
+            // TODO: update unsub function when it's added
+            "foo",
+        )
+        .await
+        .unwrap();
+
+    let (sender, object_id, digest) = emit_move_events(&mut context).await?;
+    wait_for_tx(digest, node.state().clone()).await;
+
+    match timeout(Duration::from_secs(5), sub.next()).await {
+        Ok(Some(Ok(SuiEvent::MoveEvent {
+            type_,
+            fields,
+            bcs: _,
+        }))) => {
+            assert_eq!(type_, "0x2::devnet_nft::MintNFTEvent");
+            assert_eq!(
+                fields,
+                SuiMoveStruct::WithFields(BTreeMap::from([
+                    ("creator".into(), SuiMoveValue::Address(sender)),
+                    (
+                        "name".into(),
+                        SuiMoveValue::String("example_nft_name".into())
+                    ),
+                    (
+                        "object_id".into(),
+                        SuiMoveValue::Address(SuiAddress::from(object_id))
+                    ),
+                ]))
+            );
+            // TODO: verify bcs contents
+        }
+        other => panic!("Failed to get SuiEvent, but {:?}", other),
+    }
+
+    match timeout(Duration::from_secs(5), sub.next()).await {
+        Err(_) => (),
+        other => panic!(
+            "Expect to time out because no new events are coming in. Got {:?}",
+            other
+        ),
+    }
 
     Ok(())
 }

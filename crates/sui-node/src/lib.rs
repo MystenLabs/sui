@@ -170,8 +170,8 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let (json_rpc_service, ws_subscription_service) = if config.consensus_config().is_some() {
-            (None, None)
+        let json_rpc_service = if config.consensus_config().is_some() {
+            None
         } else {
             let mut server = JsonRpcServerBuilder::new()?;
             server.register_module(ReadApi::new(state.clone()))?;
@@ -179,19 +179,22 @@ impl SuiNode {
             server.register_module(BcsApiImpl::new(state.clone()))?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
+            Some(server_handle)
+        };
 
-            let ws_handle = if let Some(event_handler) = state.event_handler.clone() {
-                let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+        // TODO: we will change the conditions soon when we introduce txn subs
+        let ws_subscription_service = match (config.websocket_address, state.event_handler.clone())
+        {
+            (Some(ws_addr), Some(event_handler)) => {
+                let ws_server = WsServerBuilder::default().build(ws_addr).await?;
                 let server_addr = ws_server.local_addr()?;
                 let ws_handle =
                     ws_server.start(EventApiImpl::new(state.clone(), event_handler).into_rpc())?;
 
                 info!("Starting WS endpoint at ws://{}", server_addr);
                 Some(ws_handle)
-            } else {
-                None
-            };
-            (Some(server_handle), ws_handle)
+            }
+            _ => None,
         };
 
         let node = Self {
