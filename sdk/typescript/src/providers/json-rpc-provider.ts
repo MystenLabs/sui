@@ -92,6 +92,61 @@ export class JsonRpcProvider extends Provider {
   }
 
   // Transactions
+
+  async getTransactionsForObject(
+    objectID: string
+  ): Promise<GetTxnDigestsResponse> {
+    const requests = [
+      {
+        method: 'sui_getTransactionsByInputObject',
+        args: [objectID],
+      },
+      {
+        method: 'sui_getTransactionsByMutatedObject',
+        args: [objectID],
+      },
+    ];
+
+    try {
+      const results = await this.client.batchRequestWithType(
+        requests,
+        isGetTxnDigestsResponse
+      );
+      return [...results[0], ...results[1]];
+    } catch (err) {
+      throw new Error(
+        `Error getting transactions for object: ${err} for id ${objectID}`
+      );
+    }
+  }
+
+  async getTransactionsForAddress(
+    addressID: string
+  ): Promise<GetTxnDigestsResponse> {
+    const requests = [
+      {
+        method: 'sui_getTransactionsToAddress',
+        args: [addressID],
+      },
+      {
+        method: 'sui_getTransactionsFromAddress',
+        args: [addressID],
+      },
+    ];
+
+    try {
+      const results = await this.client.batchRequestWithType(
+        requests,
+        isGetTxnDigestsResponse
+      );
+      return [...results[0], ...results[1]];
+    } catch (err) {
+      throw new Error(
+        `Error getting transactions for address: ${err} for id ${addressID}`
+      );
+    }
+  }
+
   async getTransactionWithEffects(
     digest: TransactionDigest
   ): Promise<TransactionEffectsResponse> {

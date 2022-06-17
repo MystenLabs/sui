@@ -7,6 +7,7 @@ pub mod entry_points_verifier;
 pub mod global_storage_access_verifier;
 pub mod id_immutable_verifier;
 pub mod id_leak_verifier;
+pub mod private_transfer;
 pub mod struct_with_key_verifier;
 
 use move_binary_format::{
@@ -14,10 +15,10 @@ use move_binary_format::{
     file_format::{SignatureToken, StructHandleIndex},
 };
 use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
-use sui_types::error::SuiError;
+use sui_types::error::{ExecutionError, ExecutionErrorKind};
 
-fn verification_failure(error: String) -> SuiError {
-    SuiError::ModuleVerificationFailure { error }
+fn verification_failure(error: String) -> ExecutionError {
+    ExecutionError::new_with_source(ExecutionErrorKind::ModuleVerificationFailure, error)
 }
 
 // TODO move these to move bytecode utils

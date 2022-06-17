@@ -14,14 +14,14 @@ use std::fmt::{Display, Formatter};
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     coin::Coin,
-    error::{SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorKind},
     id::VersionedID,
     object::{Data, MoveObject, Object},
     SUI_FRAMEWORK_ADDRESS,
 };
 
-pub const GAS_MODULE_NAME: &IdentStr = ident_str!("SUI");
-pub const GAS_STRUCT_NAME: &IdentStr = GAS_MODULE_NAME;
+pub const GAS_MODULE_NAME: &IdentStr = ident_str!("sui");
+pub const GAS_STRUCT_NAME: &IdentStr = ident_str!("SUI");
 
 pub struct GAS {}
 impl GAS {
@@ -39,7 +39,7 @@ impl GAS {
     }
 }
 
-/// Rust version of the Move Sui::Coin::Coin<Sui::SUI::SUI> type
+/// Rust version of the Move sui::coin::Coin<Sui::sui::SUI> type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GasCoin(pub Coin);
 
@@ -77,31 +77,35 @@ impl GasCoin {
     }
 }
 impl TryFrom<&MoveObject> for GasCoin {
-    type Error = SuiError;
+    type Error = ExecutionError;
 
-    fn try_from(value: &MoveObject) -> SuiResult<GasCoin> {
+    fn try_from(value: &MoveObject) -> Result<GasCoin, ExecutionError> {
         if value.type_ != GasCoin::type_() {
-            return Err(SuiError::TypeError {
-                error: format!("Gas object type is not a gas coin: {}", value.type_),
-            });
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::TypeError,
+                format!("Gas object type is not a gas coin: {}", value.type_),
+            ));
         }
-        let gas_coin: GasCoin =
-            bcs::from_bytes(value.contents()).map_err(|err| SuiError::TypeError {
-                error: format!("Unable to deserialize gas object: {:?}", err),
-            })?;
+        let gas_coin: GasCoin = bcs::from_bytes(value.contents()).map_err(|err| {
+            ExecutionError::new_with_source(
+                ExecutionErrorKind::TypeError,
+                format!("Unable to deserialize gas object: {:?}", err),
+            )
+        })?;
         Ok(gas_coin)
     }
 }
 
 impl TryFrom<&Object> for GasCoin {
-    type Error = SuiError;
+    type Error = ExecutionError;
 
-    fn try_from(value: &Object) -> SuiResult<GasCoin> {
+    fn try_from(value: &Object) -> Result<GasCoin, ExecutionError> {
         match &value.data {
             Data::Move(obj) => obj.try_into(),
-            Data::Package(_) => Err(SuiError::TypeError {
-                error: format!("Gas object type is not a gas coin: {:?}", value),
-            }),
+            Data::Package(_) => Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::TypeError,
+                format!("Gas object type is not a gas coin: {:?}", value),
+            )),
         }
     }
 }

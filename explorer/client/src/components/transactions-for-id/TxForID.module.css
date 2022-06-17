@@ -1,0 +1,41 @@
+.txresults {
+    @apply font-mono mt-2 w-[100%];
+}
+
+.txheader {
+    @apply hidden bg-offblack text-offwhite py-2 md:grid md:grid-cols-12;
+}
+
+.txrow {
+    @apply mb-10 md:grid md:grid-cols-12 md:mb-2;
+}
+
+.txheader > div,
+.txrow > div {
+    @apply break-all mx-[0.5vw];
+}
+
+.txid {
+    @apply col-span-5;
+}
+
+.txadd {
+    @apply col-span-3;
+}
+
+.txtype,
+.txstatus {
+    @apply col-span-2;
+}
+
+.txadd a {
+    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
+}
+
+.failure {
+    @apply text-red-300;
+}
+
+.success {
+    @apply text-green-400;
+}

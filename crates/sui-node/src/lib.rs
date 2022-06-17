@@ -5,24 +5,34 @@ use anyhow::Result;
 use futures::TryFutureExt;
 use parking_lot::Mutex;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
+
+use jsonrpsee::ws_server::WsServerBuilder;
+use tracing::info;
+
 use sui_config::NodeConfig;
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::{gossip::gossip_process_with_start_seq, ActiveAuthority},
+    authority_active::ActiveAuthority,
     authority_client::NetworkAuthorityClient,
     checkpoints::CheckpointStore,
 };
-use sui_gateway::json_rpc::JsonRpcServerBuilder;
-use sui_gateway::read_api::{FullNodeApi, ReadApi};
+use sui_json_rpc::bcs_api::BcsApiImpl;
+use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
-use sui_storage::IndexStore;
-use tracing::info;
+use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore, IndexStore};
+
+use sui_json_rpc::event_api::EventApiImpl;
+use sui_json_rpc::read_api::FullNodeApi;
+use sui_json_rpc::read_api::ReadApi;
+use sui_json_rpc_api::EventApiServer;
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<jsonrpsee::http_server::HttpServerHandle>,
+    _ws_subscription_service: Option<jsonrpsee::ws_server::WsServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
+    _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
 }
@@ -42,7 +52,6 @@ impl SuiNode {
                 config.db_path().join("checkpoints"),
                 None,
                 config.public_key(),
-                genesis.committee(),
                 secret.clone(),
             )?)))
         } else {
@@ -58,22 +67,29 @@ impl SuiNode {
             )))
         };
 
+        let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
+
         let state = Arc::new(
             AuthorityState::new(
                 genesis.committee(),
                 config.public_key(),
                 secret,
                 store,
-                index_store,
+                index_store.clone(),
                 checkpoint_store,
                 genesis,
+                config.enable_event_processing,
             )
             .await,
         );
 
-        let gossip_handle = if config.consensus_config().is_some() {
-            None
-        } else {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let is_validator = config.consensus_config().is_some();
+        let is_node = !is_validator;
+
+        let should_start_follower = is_node || config.enable_gossip;
+
+        let gossip_handle = if should_start_follower {
             let mut net_config = mysten_network::config::Config::new();
             net_config.connect_timeout = Some(Duration::from_secs(5));
             net_config.request_timeout = Some(Duration::from_secs(5));
@@ -88,19 +104,23 @@ impl SuiNode {
                 authority_clients.insert(validator.public_key(), client);
             }
 
-            let active_authority = ActiveAuthority::new(state.clone(), authority_clients)?;
+            let active_authority =
+                ActiveAuthority::new(state.clone(), follower_store, authority_clients)?;
 
-            // Start following validators
-            Some(tokio::task::spawn(async move {
-                gossip_process_with_start_seq(
-                    &active_authority,
-                    // listen to all authorities (note that gossip_process caps this to total minus 1.)
-                    active_authority.state.committee.load().voting_rights.len(),
-                    // start receiving the earliest TXes the validator has.
-                    Some(0),
-                )
-                .await;
-            }))
+            Some(if is_validator {
+                // TODO: get degree from config file.
+                let degree = 4;
+                active_authority.spawn_gossip_process(degree).await
+            } else {
+                let pending_store =
+                    Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
+
+                active_authority
+                    .spawn_node_sync_process(pending_store)
+                    .await
+            })
+        } else {
+            None
         };
 
         let batch_subsystem_handle = {
@@ -113,6 +133,19 @@ impl SuiNode {
                     .map_err(Into::into)
             })
         };
+
+        let post_processing_subsystem_handle =
+            if index_store.is_some() || config.enable_event_processing {
+                let indexing_state = state.clone();
+                Some(tokio::task::spawn(async move {
+                    indexing_state
+                        .run_tx_post_processing_process()
+                        .await
+                        .map_err(Into::into)
+                }))
+            } else {
+                None
+            };
 
         let validator_service = if config.consensus_config().is_some() {
             Some(ValidatorService::new(config, state.clone()).await?)
@@ -134,22 +167,37 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let json_rpc_service = if config.consensus_config().is_some() {
-            None
+        let (json_rpc_service, ws_subscription_service) = if config.consensus_config().is_some() {
+            (None, None)
         } else {
             let mut server = JsonRpcServerBuilder::new()?;
             server.register_module(ReadApi::new(state.clone()))?;
             server.register_module(FullNodeApi::new(state.clone()))?;
+            server.register_module(BcsApiImpl::new(state.clone()))?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
-            Some(server_handle)
+
+            let ws_handle = if let Some(event_handler) = state.event_handler.clone() {
+                let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+                let server_addr = ws_server.local_addr()?;
+                let ws_handle =
+                    ws_server.start(EventApiImpl::new(state.clone(), event_handler).into_rpc())?;
+
+                info!("Starting WS endpoint at ws://{}", server_addr);
+                Some(ws_handle)
+            } else {
+                None
+            };
+            (Some(server_handle), ws_handle)
         };
 
         let node = Self {
             grpc_server,
             _json_rpc_service: json_rpc_service,
+            _ws_subscription_service: ws_subscription_service,
             _gossip_handle: gossip_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
+            _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
         };
 

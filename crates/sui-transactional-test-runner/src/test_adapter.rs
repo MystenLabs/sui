@@ -4,9 +4,8 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 use crate::{args::*, in_memory_storage::InMemoryStorage};
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use bimap::btree::BiBTreeMap;
-use itertools::Itertools;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -31,12 +30,14 @@ use move_vm_runtime::{
 };
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::fmt::Write;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
     sync::Arc,
 };
 use sui_adapter::{adapter::new_move_vm, genesis};
+use sui_core::transaction_input_checker::InputObjects;
 use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
@@ -45,12 +46,9 @@ use sui_types::{
         SUI_ADDRESS_LENGTH,
     },
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
-    error::SuiError,
     event::Event,
     gas,
-    messages::{
-        ExecutionStatus, InputObjectKind, Transaction, TransactionData, TransactionEffects,
-    },
+    messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -138,7 +136,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     (n.clone(), addr)
                 }));
         for (name, addr) in additional_mapping {
-            if named_address_mapping.contains_key(&name) || name == "Sui" {
+            if named_address_mapping.contains_key(&name) || name == "sui" {
                 panic!("Invalid init. The named address '{}' is reserved", name)
             }
             named_address_mapping.insert(name, addr);
@@ -184,7 +182,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             if !output.is_empty() {
                 output.push_str(", ")
             }
-            output.push_str(&format!("{}: object({})", account, fake))
+            write!(output, "{}: object({})", account, fake).unwrap()
         }
         for object_id in object_ids {
             test_adapter.enumerate_fake(object_id);
@@ -279,7 +277,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let arguments = args
             .into_iter()
             .map(|arg| arg.into_call_args(self))
-            .collect();
+            .collect::<anyhow::Result<_>>()?;
         let package_id = ObjectID::from(*module_id.address());
         let package_ref = match self.storage.get_object(&package_id) {
             Some(obj) => obj.compute_object_reference(),
@@ -443,31 +441,27 @@ impl<'a> SuiTestAdapter<'a> {
                 Some((kind, obj))
             })
             .collect::<Vec<_>>();
-        let transaction_dependencies = objects_by_kind
-            .iter()
-            .map(|(_, obj)| obj.previous_transaction)
-            .collect();
-        let shared_object_refs: Vec<_> = objects_by_kind
-            .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
-            .map(|(_, obj)| obj.compute_object_reference())
-            .sorted()
-            .collect();
+        let input_objects = InputObjects::new(objects_by_kind);
+        let transaction_dependencies = input_objects.transaction_dependencies();
+        let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.storage.clone(), objects_by_kind, transaction_digest);
-        let TransactionEffects {
-            status,
-            events,
-            created,
-            // TODO display all these somehow
-            transaction_digest: _,
-            mutated: _,
-            unwrapped: _,
-            deleted: _,
-            wrapped: _,
-            gas_object: _,
-            ..
-        } = execution_engine::execute_transaction_to_effects(
+            AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
+        let (
+            TransactionEffects {
+                status,
+                events,
+                created,
+                // TODO display all these somehow
+                transaction_digest: _,
+                mutated: _,
+                unwrapped: _,
+                deleted: _,
+                wrapped: _,
+                gas_object: _,
+                ..
+            },
+            execution_error,
+        ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
             transaction.data,
@@ -478,7 +472,7 @@ impl<'a> SuiTestAdapter<'a> {
             gas_status,
             // TODO: Support different epochs in transactional tests.
             0,
-        )?;
+        );
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();
@@ -513,7 +507,15 @@ impl<'a> SuiTestAdapter<'a> {
                 deleted: deleted_ids,
                 events,
             }),
-            ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(*error)),
+            ExecutionStatus::Failure { error, .. } => {
+                Err(anyhow::anyhow!(self.stabilize_str(format!(
+                    "Transaction Effects Status: {}\nExecution Error: {}",
+                    error,
+                    execution_error.expect(
+                        "to have an execution error if a transaction's status is a failure"
+                    )
+                ))))
+            }
         }
     }
 
@@ -564,26 +566,26 @@ impl<'a> SuiTestAdapter<'a> {
             if events.is_empty() {
                 out += "No events"
             } else {
-                out += &format!("events: {}", self.list_events(events))
+                write!(out, "events: {}", self.list_events(events)).unwrap();
             }
         }
         if !created.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("created: {}", self.list_objs(created));
+            write!(out, "created: {}", self.list_objs(created)).unwrap();
         }
         if !written.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("written: {}", self.list_objs(written));
+            write!(out, "written: {}", self.list_objs(written)).unwrap();
         }
         if !deleted.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            out += &format!("deleted: {}", self.list_objs(deleted));
+            write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
         }
 
         if out.is_empty() {
@@ -606,11 +608,6 @@ impl<'a> SuiTestAdapter<'a> {
             .map(|id| format!("object({})", self.real_to_fake_object_id(id).unwrap()))
             .collect::<Vec<_>>()
             .join(", ")
-    }
-
-    fn render_sui_error(&self, sui_error: SuiError) -> anyhow::Error {
-        let error_string: String = format!("{}", sui_error);
-        anyhow!(self.stabilize_str(&error_string))
     }
 
     fn stabilize_str(&self, input: impl AsRef<str>) -> String {
@@ -693,10 +690,10 @@ impl<'a> GetModule for &'a SuiTestAdapter<'_> {
 
 static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| {
     let mut map = move_stdlib::move_stdlib_named_addresses();
-    assert!(map.get("Std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
+    assert!(map.get("std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
     // TODO fix Sui framework constants
     map.insert(
-        "Sui".to_string(),
+        "sui".to_string(),
         NumericalAddress::new(
             SUI_FRAMEWORK_ADDRESS.into_bytes(),
             move_compiler::shared::NumberFormat::Hex,

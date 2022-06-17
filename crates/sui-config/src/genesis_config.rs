@@ -75,12 +75,7 @@ impl GenesisConfig {
             }
 
             for (object_id, value) in preload_objects_map {
-                let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                    object_id,
-                    sui_types::base_types::SequenceNumber::new(),
-                    address,
-                    value,
-                );
+                let new_object = Object::with_id_owner_gas_for_testing(object_id, address, value);
                 preload_objects.push(new_object);
             }
         }
@@ -171,7 +166,7 @@ const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
-    pub fn for_local_testing() -> Result<Self, anyhow::Error> {
+    pub fn for_local_testing() -> Self {
         Self::custom_genesis(
             DEFAULT_NUMBER_OF_AUTHORITIES,
             DEFAULT_NUMBER_OF_ACCOUNT,
@@ -183,7 +178,7 @@ impl GenesisConfig {
         num_authorities: usize,
         num_accounts: usize,
         num_objects_per_account: usize,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Self {
         assert!(
             num_authorities > 0,
             "num_authorities should be larger than 0"
@@ -205,10 +200,10 @@ impl GenesisConfig {
             })
         }
 
-        Ok(Self {
+        Self {
             accounts,
             ..Default::default()
-        })
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::base_types::{AuthorityName, SuiAddress};
-use crate::committee::EpochId;
+use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
@@ -20,7 +20,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
@@ -481,6 +481,22 @@ impl PartialEq for AuthoritySignInfo {
     }
 }
 
+impl AuthoritySignInfo {
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()> {
+        obligation
+            .public_keys
+            .push(committee.public_key(&self.authority)?);
+        obligation.signatures.push(self.signature.0);
+        obligation.message_index.push(message_index);
+        Ok(())
+    }
+}
+
 /// Represents at least a quorum (could be more) of authority signatures.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthorityQuorumSignInfo {
@@ -500,6 +516,53 @@ pub struct AuthorityQuorumSignInfo {
 //
 static_assertions::assert_not_impl_any!(AuthorityQuorumSignInfo: Hash, Eq, PartialEq);
 impl AuthoritySignInfoTrait for AuthorityQuorumSignInfo {}
+
+impl AuthorityQuorumSignInfo {
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()> {
+        // Check epoch
+        fp_ensure!(
+            self.epoch == committee.epoch(),
+            SuiError::WrongEpoch {
+                expected_epoch: committee.epoch()
+            }
+        );
+
+        let mut weight = 0;
+        let mut used_authorities = HashSet::new();
+
+        // Create obligations for the committee signatures
+        for (authority, signature) in self.signatures.iter() {
+            // Check that each authority only appears once.
+            fp_ensure!(
+                !used_authorities.contains(authority),
+                SuiError::CertificateAuthorityReuse
+            );
+            used_authorities.insert(*authority);
+            // Update weight.
+            let voting_rights = committee.weight(authority);
+            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
+            weight += voting_rights;
+
+            obligation
+                .public_keys
+                .push(committee.public_key(authority)?);
+            obligation.signatures.push(signature.0);
+            obligation.message_index.push(message_index);
+        }
+
+        fp_ensure!(
+            weight >= committee.quorum_threshold(),
+            SuiError::CertificateRequiresQuorum
+        );
+
+        Ok(())
+    }
+}
 
 mod private {
     pub trait SealedAuthoritySignInfoTrait {}
@@ -560,7 +623,7 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
 #[derive(Default)]
 pub struct VerificationObligation {
     lookup: PubKeyLookup,
-    pub messages: Vec<Vec<u8>>,
+    messages: Vec<Vec<u8>>,
     pub message_index: Vec<usize>,
     pub signatures: Vec<dalek::Signature>,
     pub public_keys: Vec<dalek::PublicKey>,
@@ -586,6 +649,14 @@ impl VerificationObligation {
                 Ok(public_key)
             }
         }
+    }
+
+    /// Add a new message to the list of messages to be verified.
+    /// Returns the index of the message.
+    pub fn add_message(&mut self, message: Vec<u8>) -> usize {
+        let idx = self.messages.len();
+        self.messages.push(message);
+        idx
     }
 
     pub fn verify_all(self) -> SuiResult<PubKeyLookup> {

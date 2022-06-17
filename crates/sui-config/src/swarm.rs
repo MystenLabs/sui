@@ -68,9 +68,9 @@ impl NetworkConfig {
             network_address: utils::new_network_address(),
             metrics_address: utils::available_local_socket_address(),
             json_rpc_address: utils::available_local_socket_address(),
-
             consensus_config: None,
-
+            enable_event_processing: true,
+            enable_gossip: true,
             genesis: validator_config.genesis.clone(),
         }
     }

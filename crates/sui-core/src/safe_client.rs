@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
-use async_trait::async_trait;
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::PublicKeyBytes;
@@ -31,8 +30,12 @@ impl<C> SafeClient<C> {
         }
     }
 
+    pub fn authority_client(&self) -> &C {
+        &self.authority_client
+    }
+
     #[cfg(test)]
-    pub fn authority_client(&mut self) -> &mut C {
+    pub fn authority_client_mut(&mut self) -> &mut C {
         &mut self.authority_client
     }
 
@@ -40,6 +43,7 @@ impl<C> SafeClient<C> {
     fn check_transaction_response(
         &self,
         digest: TransactionDigest,
+        effects_digest: Option<TransactionEffectsDigest>,
         response: &TransactionInfoResponse,
     ) -> SuiResult {
         if let Some(signed_transaction) = &response.signed_transaction {
@@ -86,6 +90,15 @@ impl<C> SafeClient<C> {
                     authority: self.address
                 }
             );
+            // check that the effects digest is correct.
+            if let Some(effects_digest) = effects_digest {
+                fp_ensure!(
+                    signed_effects.digest() == effects_digest.0,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address
+                    }
+                );
+            }
             // Check it has the right signer
             fp_ensure!(
                 signed_effects.auth_signature.authority == self.address,
@@ -180,7 +193,7 @@ impl<C> SafeClient<C> {
         _request: BatchInfoRequest,
         signed_batch: &SignedBatch,
         transactions_and_last_batch: &Option<(
-            Vec<(TxSequenceNumber, TransactionDigest)>,
+            Vec<(TxSequenceNumber, ExecutionDigests)>,
             AuthorityBatch,
         )>,
     ) -> SuiResult {
@@ -240,7 +253,7 @@ where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     /// Uses the follower API and augments each digest received with a full transactions info structure.
-    pub async fn handle_transaction_info_request_to_transaction_info(
+    pub async fn handle_batch_stream_request_to_transaction_info(
         &self,
         request: BatchInfoRequest,
     ) -> Result<
@@ -260,7 +273,8 @@ where
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => None,
                         Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
                             // Download the full transaction info
-                            let transaction_info_request = TransactionInfoRequest::from(*digest);
+                            let transaction_info_request =
+                                TransactionInfoRequest::from(digest.transaction);
                             let res = _client
                                 .handle_transaction_info_request(transaction_info_request)
                                 .await
@@ -274,15 +288,9 @@ where
 
         Ok(new_stream)
     }
-}
 
-#[async_trait]
-impl<C> AuthorityAPI for SafeClient<C>
-where
-    C: AuthorityAPI + Send + Sync + Clone + 'static,
-{
     /// Initiate a new transfer to a Sui or Primary account.
-    async fn handle_transaction(
+    pub async fn handle_transaction(
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -291,7 +299,7 @@ where
             .authority_client
             .handle_transaction(transaction)
             .await?;
-        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
@@ -299,7 +307,7 @@ where
     }
 
     /// Confirm a transfer to a Sui or Primary account.
-    async fn handle_confirmation_transaction(
+    pub async fn handle_confirmation_transaction(
         &self,
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -309,14 +317,14 @@ where
             .handle_confirmation_transaction(transaction)
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
         Ok(transaction_info)
     }
 
-    async fn handle_consensus_transaction(
+    pub async fn handle_consensus_transaction(
         &self,
         transaction: ConsensusTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -326,7 +334,7 @@ where
             .await
     }
 
-    async fn handle_account_info_request(
+    pub async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
@@ -335,7 +343,7 @@ where
             .await
     }
 
-    async fn handle_object_info_request(
+    pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
@@ -350,8 +358,8 @@ where
         Ok(response)
     }
 
-    /// Handle Object information requests for this account.
-    async fn handle_transaction_info_request(
+    /// Handle Transaction information requests for this account.
+    pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -361,14 +369,36 @@ where
             .handle_transaction_info_request(request)
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
         Ok(transaction_info)
     }
 
-    async fn handle_checkpoint(
+    /// Handle Transaction + Effects information requests for this account.
+    pub async fn handle_transaction_and_effects_info_request(
+        &self,
+        digests: &ExecutionDigests,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let digest = digests.transaction;
+        let effects_digest = digests.effects;
+
+        let transaction_info = self
+            .authority_client
+            .handle_transaction_info_request(digest.into())
+            .await?;
+
+        if let Err(err) =
+            self.check_transaction_response(digest, Some(effects_digest), &transaction_info)
+        {
+            self.report_client_error(err.clone());
+            return Err(err);
+        }
+        Ok(transaction_info)
+    }
+
+    pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
@@ -378,7 +408,7 @@ where
     }
 
     /// Handle Batch information requests for this authority.
-    async fn handle_batch_stream(
+    pub async fn handle_batch_stream(
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {

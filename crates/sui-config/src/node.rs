@@ -33,6 +33,12 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
 
+    #[serde(default)]
+    pub enable_event_processing: bool,
+
+    #[serde(default)]
+    pub enable_gossip: bool,
+
     pub genesis: Genesis,
 }
 
@@ -147,7 +153,7 @@ impl ValidatorInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
 pub struct Genesis {
     #[serde(flatten)]
     location: GenesisLocation,
@@ -185,7 +191,7 @@ impl Genesis {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
 #[serde(untagged)]
 enum GenesisLocation {
     InPlace {

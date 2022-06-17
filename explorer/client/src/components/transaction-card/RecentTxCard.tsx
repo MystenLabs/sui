@@ -1,17 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getExecutionStatusType,
-    getTotalGasUsed,
-    getTransactions,
-    getTransactionDigest,
-    getTransactionKindName,
-    getTransferCoinTransaction,
-} from '@mysten/sui.js';
 import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
 import { NetworkContext } from '../../context';
@@ -19,15 +11,16 @@ import theme from '../../styles/theme.module.css';
 import {
     DefaultRpcClient as rpc,
     type Network,
+    getDataOnTxDigests,
 } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
+import { truncate } from '../../utils/stringUtils';
 import ErrorResult from '../error-result/ErrorResult';
+import Pagination from '../pagination/Pagination';
 
 import type {
-    CertifiedTransaction,
     GetTxnDigestsResponse,
-    TransactionEffectsResponse,
     ExecutionStatusType,
     TransactionKindName,
 } from '@mysten/sui.js';
@@ -49,82 +42,55 @@ type TxnData = {
     From: string;
 };
 
+function generateStartEndRange(
+    txCount: number,
+    txNum: number,
+    pageNum?: number
+): { startGatewayTxSeqNumber: number; endGatewayTxSeqNumber: number } {
+    // Pagination pageNum from query params - default to 0; No negative values
+    const txPaged = pageNum && pageNum > 0 ? pageNum - 1 : 0;
+    const endGatewayTxSeqNumber: number = txCount - txNum * txPaged;
+    const tempStartGatewayTxSeqNumber: number = endGatewayTxSeqNumber - txNum;
+    // If startGatewayTxSeqNumber is less than 0, then set it 1 the first transaction sequence number
+    const startGatewayTxSeqNumber: number =
+        tempStartGatewayTxSeqNumber > 0 ? tempStartGatewayTxSeqNumber : 1;
+    return {
+        startGatewayTxSeqNumber,
+        endGatewayTxSeqNumber,
+    };
+}
+
 async function getRecentTransactions(
     network: Network | string,
-    txNum: number
+    totalTx: number,
+    txNum: number,
+    pageNum?: number
 ): Promise<TxnData[]> {
     try {
         // Get the latest transactions
-        const transactions = await rpc(network)
-            .getRecentTransactions(txNum)
-            .then((res: GetTxnDigestsResponse) => res);
 
-        const digests = transactions.map((tx) => tx[1]);
+        // Instead of getRecentTransactions, use getTransactionCount
+        // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
+        // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
+        const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
+            generateStartEndRange(totalTx, txNum, pageNum);
 
-        const txLatest = await rpc(network)
-            .getTransactionWithEffectsBatch(digests)
-            .then((txEffs: TransactionEffectsResponse[]) => {
-                return txEffs.map((txEff, i) => {
-                    const [seq, digest] = transactions.filter(
-                        (transactionId) =>
-                            transactionId[1] ===
-                            getTransactionDigest(txEff.certificate)
-                    )[0];
-                    const res: CertifiedTransaction = txEff.certificate;
-                    // TODO: handle multiple transactions
-                    const txns = getTransactions(res);
-                    if (txns.length > 1) {
-                        console.error(
-                            'Handling multiple transactions is not yet supported',
-                            txEff
-                        );
-                        return null;
-                    }
-                    const txn = txns[0];
-                    const txKind = getTransactionKindName(txn);
-                    const recipient =
-                        getTransferCoinTransaction(txn)?.recipient;
-
-                    return {
-                        seq,
-                        txId: digest,
-                        status: getExecutionStatusType(txEff),
-                        txGas: getTotalGasUsed(txEff),
-                        kind: txKind,
-                        From: res.data.sender,
-                        ...(recipient
-                            ? {
-                                  To: recipient,
-                              }
-                            : {}),
-                    };
-                });
-            });
-
-        // Remove failed transactions and sort by sequence number
-        return txLatest
-            .filter((itm) => itm)
-            .sort((a, b) => b!.seq - a!.seq) as TxnData[];
+        // TODO: Add error page
+        // If paged tx value is less than 0, out of range
+        if (endGatewayTxSeqNumber < 0) {
+            throw new Error('Invalid transaction number');
+        }
+        return (await rpc(network)
+            .getTransactionDigestsInRange(
+                startGatewayTxSeqNumber,
+                endGatewayTxSeqNumber
+            )
+            .then((res: GetTxnDigestsResponse) =>
+                getDataOnTxDigests(network, res)
+            )) as TxnData[];
     } catch (error) {
         throw error;
     }
-}
-
-function truncate(fullStr: string, strLen: number, separator: string) {
-    if (fullStr.length <= strLen) return fullStr;
-
-    separator = separator || '...';
-
-    const sepLen = separator.length,
-        charsToShow = strLen - sepLen,
-        frontChars = Math.ceil(charsToShow / 2),
-        backChars = Math.floor(charsToShow / 2);
-
-    return (
-        fullStr.substr(0, frontChars) +
-        separator +
-        fullStr.substr(fullStr.length - backChars)
-    );
 }
 
 function LatestTxView({
@@ -175,7 +141,7 @@ function LatestTxView({
                                     styles.txstatus
                                 )}
                             >
-                                {tx.status === 'success' ? '✔' : '✖'}
+                                {tx.status === 'success' ? '\u2714' : '\u2716'}
                             </div>
                             <div className={styles.txgas}>{tx.txGas}</div>
                             <div className={styles.txadd}>
@@ -208,27 +174,38 @@ function LatestTxView({
     );
 }
 
-function LatestTxCardStatic() {
+function LatestTxCardStatic({ count }: { count: number }) {
     const latestTx = getAllMockTransaction().map((tx) => ({
         ...tx,
         status: tx.status as ExecutionStatusType,
         kind: tx.kind as TransactionKindName,
     }));
+    const [searchParams] = useSearchParams();
+    const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
+
     const results = {
         loadState: 'loaded',
         latestTx: latestTx,
     };
-    return <LatestTxView results={results} />;
+    return (
+        <>
+            <LatestTxView results={results} />
+            <Pagination totalTxCount={count} txNum={pagedNum} />
+        </>
+    );
 }
 
-function LatestTxCardAPI() {
+function LatestTxCardAPI({ count }: { count: number }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
+    const [searchParams] = useSearchParams();
+    const [txNumPerPage] = useState(15);
     useEffect(() => {
         let isMounted = true;
-        getRecentTransactions(network, 15)
-            .then((resp: any) => {
+        const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
+        getRecentTransactions(network, count, txNumPerPage, pagedNum)
+            .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
                 }
@@ -248,7 +225,8 @@ function LatestTxCardAPI() {
         return () => {
             isMounted = false;
         };
-    }, [network]);
+    }, [count, network, searchParams, txNumPerPage]);
+
     if (results.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
@@ -270,10 +248,19 @@ function LatestTxCardAPI() {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
-    return <LatestTxView results={results} />;
+    return (
+        <>
+            <LatestTxView results={results} />
+            <Pagination totalTxCount={count} txNum={txNumPerPage} />
+        </>
+    );
 }
 
-const LatestTxCard = () =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI />;
+const LatestTxCard = ({ count }: { count: number }) =>
+    IS_STATIC_ENV ? (
+        <LatestTxCardStatic count={count} />
+    ) : (
+        <LatestTxCardAPI count={count} />
+    );
 
 export default LatestTxCard;

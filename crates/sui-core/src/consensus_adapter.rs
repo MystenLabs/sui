@@ -3,7 +3,6 @@
 use crate::authority::AuthorityState;
 use crate::checkpoints::CheckpointLocals;
 use crate::checkpoints::ConsensusSender;
-use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -278,6 +277,14 @@ pub struct CheckpointSender {
     tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>,
 }
 
+impl CheckpointSender {
+    pub fn new(tx_checkpoint_consensus_adapter: Sender<CheckpointFragment>) -> Self {
+        Self {
+            tx_checkpoint_consensus_adapter,
+        }
+    }
+}
+
 impl ConsensusSender for CheckpointSender {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> SuiResult {
         self.tx_checkpoint_consensus_adapter
@@ -295,7 +302,7 @@ pub struct CheckpointConsensusAdapter {
     /// Receive new checkpoint fragments to sequence.
     rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
     /// A pointer to the checkpoints local store.
-    checkpoint_locals: ArcSwapOption<CheckpointLocals>,
+    checkpoint_locals: Arc<CheckpointLocals>,
     /// The initial delay to wait before re-attempting a connection with consensus (in ms).
     retry_delay: Duration,
     /// The maximum number of checkpoint fragment pending sequencing.
@@ -310,7 +317,7 @@ impl CheckpointConsensusAdapter {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
-        checkpoint_locals: ArcSwapOption<CheckpointLocals>,
+        checkpoint_locals: Arc<CheckpointLocals>,
         retry_delay: Duration,
         max_pending_transactions: usize,
     ) -> Self {
@@ -332,8 +339,8 @@ impl CheckpointConsensusAdapter {
     }
 
     /// Spawn a `CheckpointConsensusAdapter` in a dedicated tokio task.
-    pub fn spawn(mut instance: Self) -> JoinHandle<()> {
-        tokio::spawn(async move { instance.run().await })
+    pub fn spawn(mut self) -> JoinHandle<()> {
+        tokio::spawn(async move { self.run().await })
     }
 
     /// Submit a transaction to consensus.
@@ -403,8 +410,7 @@ impl CheckpointConsensusAdapter {
                     // Cleanup the buffer.
                     if self.buffer.len() >= self.max_pending_transactions {
                         // Drop the earliest fragments. They are not needed for liveness.
-                        let locals = self.checkpoint_locals.load_full();
-                        if let Some(proposal) = &locals.as_ref().unwrap().current_proposal {
+                        if let Some(proposal) = &self.checkpoint_locals.current_proposal {
                             let current_sequence_number = proposal.sequence_number();
                             self.buffer.retain(|(_, s)| s >= current_sequence_number);
                         }

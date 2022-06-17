@@ -15,18 +15,18 @@ use colored::Colorize;
 use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use serde::Serialize;
 use serde_json::json;
-use sui_core::gateway_types::{
-    MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
+use sui_json_rpc_api::rpc_types::{
+    GetObjectDataResponse, MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
+    SuiParsedObject,
 };
 use tracing::info;
 
 use sui_core::gateway_state::GatewayClient;
-use sui_core::gateway_types::{
-    GetObjectDataResponse, SuiCertifiedTransaction, SuiExecutionStatus, SuiObject,
-    SuiTransactionEffects,
-};
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{
+    SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects,
+};
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
@@ -155,6 +155,27 @@ pub enum WalletCommands {
         #[clap(long)]
         gas_budget: u64,
     },
+    /// Transfer SUI, and pay gas with the same SUI coin object.
+    /// If amount is specified, only the amount is transferred; otherwise the entire object
+    /// is transferred.
+    #[clap(name = "transfer-sui")]
+    TransferSui {
+        /// Recipient address
+        #[clap(long)]
+        to: SuiAddress,
+
+        /// Sui coin object to transfer, ID in 20 bytes Hex string. This is also the gas object.
+        #[clap(long)]
+        sui_coin_object_id: ObjectID,
+
+        /// Gas budget for this transfer
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// The amount to transfer, if not specified, the entire coin object will be transferred.
+        #[clap(long)]
+        amount: Option<u64>,
+    },
     /// Synchronize client state with authorities.
     #[clap(name = "sync")]
     SyncClientState {
@@ -192,7 +213,12 @@ pub enum WalletCommands {
         #[clap(long)]
         coin_id: ObjectID,
         /// Amount to split out from the coin
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(
+            long,
+            multiple_occurrences = false,
+            multiple_values = true,
+            required = true
+        )]
         amounts: Vec<u64>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -325,6 +351,33 @@ impl WalletCommands {
                 WalletCommandResult::Transfer(time_total, cert, effects)
             }
 
+            WalletCommands::TransferSui {
+                to,
+                sui_coin_object_id: object_id,
+                gas_budget,
+                amount,
+            } => {
+                let from = context.get_object_owner(&object_id).await?;
+
+                let data = context
+                    .gateway
+                    .transfer_sui(from, object_id, gas_budget, to, amount)
+                    .await?;
+                let signature = context.keystore.sign(&from, &data.to_bytes())?;
+                let response = context
+                    .gateway
+                    .execute_transaction(Transaction::new(data, signature))
+                    .await?
+                    .to_effect_response()?;
+                let cert = response.certificate;
+                let effects = response.effects;
+
+                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status));
+                }
+                WalletCommandResult::TransferSui(cert, effects)
+            }
+
             WalletCommands::Addresses => {
                 WalletCommandResult::Addresses(context.config.accounts.clone())
             }
@@ -449,7 +502,7 @@ impl WalletCommands {
                 }
                 let (_, effects) = call_move(
                     ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                    "DevNetNFT",
+                    "devnet_nft",
                     "mint",
                     vec![],
                     gas,
@@ -518,7 +571,7 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiObject)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiParsedObject)>, anyhow::Error> {
         let object_refs = self.gateway.get_objects_owned_by_address(address).await?;
 
         // TODO: We should ideally fetch the objects from local cache
@@ -561,7 +614,7 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiObject), anyhow::Error> {
+    ) -> Result<(u64, SuiParsedObject), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
                 return Ok(o);
@@ -592,6 +645,9 @@ impl Display for WalletCommandResult {
                 writeln!(writer, "Transfer confirmed after {} us", time_elapsed)?;
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
+            WalletCommandResult::TransferSui(cert, effects) => {
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            }
             WalletCommandResult::Addresses(addresses) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
@@ -608,7 +664,7 @@ impl Display for WalletCommandResult {
                 for oref in object_refs {
                     let owner_type = match oref.owner {
                         Owner::AddressOwner(_) => "AddressOwner",
-                        Owner::ObjectOwner(_) => "ObjectOwner",
+                        Owner::ObjectOwner(_) => "object_owner",
                         Owner::Shared => "Shared",
                         Owner::Immutable => "Immutable",
                     };
@@ -697,7 +753,10 @@ pub async fn call_move(
             package,
             module.to_string(),
             function.to_string(),
-            type_args,
+            type_args
+                .into_iter()
+                .map(|arg| arg.try_into())
+                .collect::<Result<Vec<_>, _>>()?,
             args,
             gas,
             gas_budget,
@@ -786,6 +845,7 @@ pub enum WalletCommandResult {
         SuiCertifiedTransaction,
         SuiTransactionEffects,
     ),
+    TransferSui(SuiCertifiedTransaction, SuiTransactionEffects),
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,

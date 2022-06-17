@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
+import TxForID from '../../components/transactions-for-id/TxForID';
 import theme from '../../styles/theme.module.css';
 
 type DataType = {
@@ -43,6 +44,10 @@ function AddressResult() {
                     <div>
                         {<OwnedObjects id={addressID} byAddress={true} />}
                     </div>
+                </div>
+                <div>
+                    <div>Transactions</div>
+                    <TxForID id={addressID} category="address" />
                 </div>
             </div>
         );

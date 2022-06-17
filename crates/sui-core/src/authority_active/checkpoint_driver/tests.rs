@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority_active::ActiveAuthority, authority_client::LocalAuthorityClient,
-    checkpoints::checkpoint_tests::TestSetup, safe_client::SafeClient,
+    authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    authority_client::LocalAuthorityClient,
+    checkpoints::checkpoint_tests::TestSetup,
+    safe_client::SafeClient,
 };
 
 use std::{collections::BTreeSet, time::Duration};
@@ -27,11 +29,14 @@ async fn checkpoint_active_flow_happy_path() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.authority_clients.clone();
+        let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state =
-                ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
-            active_state.spawn_all_active_processes().await
+            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
+                inner_state.authority.clone(),
+                clients,
+            )
+            .unwrap();
+            active_state.spawn_checkpoint_process().await
         });
     }
 
@@ -44,7 +49,10 @@ async fn checkpoint_active_flow_happy_path() {
                 .expect("All ok.");
 
             // Check whether this is a success?
-            assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+            assert!(matches!(
+                effects.effects.status,
+                ExecutionStatus::Success { .. }
+            ));
             println!("Execute at {:?}", tokio::time::Instant::now());
 
             // Add some delay between transactions
@@ -82,6 +90,9 @@ async fn checkpoint_active_flow_happy_path() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_active_flow_crash_client_with_gossip() {
+    use telemetry_subscribers::init_for_testing;
+    init_for_testing();
+
     let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;
 
     let TestSetup {
@@ -93,12 +104,17 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.authority_clients.clone();
+        let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state =
-                ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
+            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
+                inner_state.authority.clone(),
+                clients,
+            )
+            .unwrap();
             // Spin the gossip service.
-            active_state.spawn_active_processes(true, true).await;
+            active_state
+                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .await;
         });
     }
 
@@ -107,19 +123,18 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
         while let Some(t) = transactions.pop() {
             // Get a cert
             let new_certificate = sender_aggregator
-                .process_transaction(t.clone(), Duration::from_secs(60))
+                .process_transaction(t.clone())
                 .await
                 .expect("Unexpected crash");
 
             // Send it only to 1 random node
-            use crate::authority_client::AuthorityAPI;
             let sample_authority = sender_aggregator.committee.sample();
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
                 .handle_confirmation_transaction(ConfirmationTransaction::new(new_certificate))
                 .await
-                .expect("Problem processing certificare");
+                .expect("Problem processing certificate");
 
             // Check whether this is a success?
             assert!(matches!(
@@ -177,12 +192,17 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.authority_clients.clone();
+        let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state =
-                ActiveAuthority::new(inner_state.authority.clone(), clients).unwrap();
+            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
+                inner_state.authority.clone(),
+                clients,
+            )
+            .unwrap();
             // Spin the gossip service.
-            active_state.spawn_active_processes(false, true).await;
+            active_state
+                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .await;
         });
     }
 
@@ -191,19 +211,18 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
         while let Some(t) = transactions.pop() {
             // Get a cert
             let new_certificate = sender_aggregator
-                .process_transaction(t.clone(), Duration::from_secs(60))
+                .process_transaction(t.clone())
                 .await
                 .expect("Unexpected crash");
 
             // Send it only to 1 random node
-            use crate::authority_client::AuthorityAPI;
             let sample_authority = sender_aggregator.committee.sample();
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
                 .handle_confirmation_transaction(ConfirmationTransaction::new(new_certificate))
                 .await
-                .expect("Problem processing certificare");
+                .expect("Problem processing certificate");
 
             // Check whether this is a success?
             assert!(matches!(

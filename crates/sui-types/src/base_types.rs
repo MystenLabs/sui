@@ -10,7 +10,9 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::Encoding;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
+use ed25519_dalek::Sha512;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -25,11 +27,14 @@ use sha3::Sha3_256;
 
 use crate::committee::EpochId;
 use crate::crypto::PublicKeyBytes;
+use crate::error::ExecutionError;
+use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Hex;
 use crate::sui_serde::Readable;
+use crate::waypoint::IntoPoint;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -225,6 +230,12 @@ pub struct TransactionDigest(
     [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
+impl IntoPoint for TransactionDigest {
+    fn into_point(&self) -> RistrettoPoint {
+        RistrettoPoint::hash_from_bytes::<Sha512>(&self.0)
+    }
+}
+
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -242,11 +253,52 @@ pub struct TransactionEffectsDigest(
     pub [u8; TRANSACTION_DIGEST_LENGTH],
 );
 
-pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("Option");
-pub const STD_OPTION_STRUCT_NAME: &IdentStr = STD_OPTION_MODULE_NAME;
+impl TransactionEffectsDigest {
+    // for testing
+    pub fn random() -> Self {
+        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        Self(random_bytes)
+    }
+}
 
-pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
-pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema, Debug,
+)]
+pub struct ExecutionDigests {
+    pub transaction: TransactionDigest,
+    pub effects: TransactionEffectsDigest,
+}
+
+impl ExecutionDigests {
+    pub fn new(transaction: TransactionDigest, effects: TransactionEffectsDigest) -> Self {
+        Self {
+            transaction,
+            effects,
+        }
+    }
+
+    pub fn random() -> Self {
+        Self {
+            transaction: TransactionDigest::random(),
+            effects: TransactionEffectsDigest::random(),
+        }
+    }
+}
+
+impl IntoPoint for ExecutionDigests {
+    fn into_point(&self) -> RistrettoPoint {
+        let mut data = [0; 64];
+        data[0..32].clone_from_slice(&self.transaction.0);
+        data[32..64].clone_from_slice(&self.effects.0);
+        RistrettoPoint::from_uniform_bytes(&data)
+    }
+}
+
+pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("option");
+pub const STD_OPTION_STRUCT_NAME: &IdentStr = ident_str!("Option");
+
+pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
+pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
@@ -295,12 +347,12 @@ impl TxContext {
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
-    pub fn update_state(&mut self, other: TxContext) -> Result<(), SuiError> {
+    pub fn update_state(&mut self, other: TxContext) -> Result<(), ExecutionError> {
         if self.sender != other.sender
             || self.digest != other.digest
             || other.ids_created < self.ids_created
         {
-            return Err(SuiError::InvalidTxUpdate);
+            return Err(ExecutionErrorKind::InvalidTransactionUpdate.into());
         }
         self.ids_created = other.ids_created;
         Ok(())
@@ -354,6 +406,11 @@ impl TransactionDigest {
     pub fn random() -> Self {
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
+    }
+
+    /// Translates digest into a Vec of bytes
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_vec()
     }
 }
 
@@ -511,6 +568,14 @@ impl TryFrom<&[u8]> for ObjectDigest {
 }
 
 impl std::fmt::Debug for TransactionDigest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = base64ct::Base64::encode_string(&self.0);
+        write!(f, "{}", s)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for TransactionEffectsDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = base64ct::Base64::encode_string(&self.0);
         write!(f, "{}", s)?;

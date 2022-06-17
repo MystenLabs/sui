@@ -53,7 +53,7 @@ async fn transfer_coin(
             signer,
             coin_object_id,
             Some(gas_object_id),
-            GAS_VALUE_FOR_TESTING,
+            GAS_VALUE_FOR_TESTING / 10,
             recipient,
         )
         .await?;
@@ -441,7 +441,7 @@ async fn test_transfer_coin_with_retry() {
     // However objects in the transaction should no longer be locked since we reset
     // them at the last failed retry.
     assert_eq!(gateway.store().pending_transactions().iter().count(), 1);
-    let (tx_digest, _tx) = gateway
+    let (tx_digest, tx) = gateway
         .store()
         .pending_transactions()
         .iter()
@@ -462,17 +462,13 @@ async fn test_transfer_coin_with_retry() {
         .fail_after_handle_confirmation = false;
 
     // Retry transaction, and this time it should succeed.
-    let effects = transfer_coin(
-        &gateway,
-        addr1,
-        &key1,
-        coin_object.id(),
-        gas_object.id(),
-        addr2,
-    )
-    .await
-    .unwrap()
-    .effects;
+    let effects = gateway
+        .execute_transaction(tx)
+        .await
+        .unwrap()
+        .to_effect_response()
+        .unwrap()
+        .effects;
     let oref = effects.mutated_excluding_gas().next().unwrap();
     let updated_obj_ref = &oref.reference;
     let new_owner = &oref.owner;
@@ -560,7 +556,7 @@ async fn test_get_owner_object() {
         .move_call(
             addr1,
             package,
-            "ObjectOwner".to_string(),
+            "object_owner".to_string(),
             "create_parent".to_string(),
             vec![],
             vec![],
@@ -581,7 +577,7 @@ async fn test_get_owner_object() {
         .move_call(
             addr1,
             package,
-            "ObjectOwner".to_string(),
+            "object_owner".to_string(),
             "create_child".to_string(),
             vec![],
             vec![],
@@ -604,7 +600,7 @@ async fn test_get_owner_object() {
         .move_call(
             addr1,
             package,
-            "ObjectOwner".to_string(),
+            "object_owner".to_string(),
             "add_child".to_string(),
             vec![],
             vec![
@@ -638,4 +634,119 @@ async fn test_get_owner_object() {
         .await
         .unwrap();
     assert!(objects.is_empty())
+}
+
+#[tokio::test]
+async fn test_multiple_gateways() {
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _key2) = get_key_pair();
+
+    let coin_object1 = Object::with_owner_for_testing(addr1);
+    let coin_object2 = Object::with_owner_for_testing(addr1);
+    let coin_object3 = Object::with_owner_for_testing(addr1);
+    let gas_object = Object::with_owner_for_testing(addr1);
+
+    let genesis_objects = authority_genesis_objects(
+        4,
+        vec![
+            coin_object1.clone(),
+            coin_object2.clone(),
+            coin_object3.clone(),
+            gas_object.clone(),
+        ],
+    );
+    let gateway1 = create_gateway_state(genesis_objects).await;
+    let path = tempfile::tempdir().unwrap().into_path();
+    // gateway2 shares the same set of authorities as gateway1.
+    let gateway2 = GatewayState::new_with_authorities(path, gateway1.authorities.clone()).unwrap();
+    let response = transfer_coin(
+        &gateway1,
+        addr1,
+        &key1,
+        coin_object1.id(),
+        gas_object.id(),
+        addr2,
+    )
+    .await
+    .unwrap();
+    assert!(response.effects.status.is_ok());
+
+    // gas_object on gateway2 should be out-of-dated.
+    // Show that we can still handle the transaction successfully if we use it on gateway2.
+    let response = transfer_coin(
+        &gateway2,
+        addr1,
+        &key1,
+        coin_object2.id(),
+        gas_object.id(),
+        addr2,
+    )
+    .await
+    .unwrap();
+    assert!(response.effects.status.is_ok());
+
+    // Now we try to use the same gas object on gateway1, and it will still work.
+    let response = transfer_coin(
+        &gateway1,
+        addr1,
+        &key1,
+        coin_object3.id(),
+        gas_object.id(),
+        addr2,
+    )
+    .await
+    .unwrap();
+    assert!(response.effects.status.is_ok());
+}
+
+#[tokio::test]
+async fn test_batch_transaction() {
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _key2) = get_key_pair();
+
+    let coin_object1 = Object::with_owner_for_testing(addr1);
+    let coin_object2 = Object::with_owner_for_testing(addr1);
+    let gas_object = Object::with_owner_for_testing(addr1);
+
+    let genesis_objects = authority_genesis_objects(
+        4,
+        vec![
+            coin_object1.clone(),
+            coin_object2.clone(),
+            gas_object.clone(),
+        ],
+    );
+    let gateway = create_gateway_state(genesis_objects).await;
+    let params = vec![
+        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
+            object_id: coin_object1.id(),
+            recipient: addr2,
+        }),
+        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
+            object_id: coin_object2.id(),
+            recipient: addr2,
+        }),
+        RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
+            package_object_id: gateway.get_framework_object_ref().await.unwrap().0,
+            module: "bag".to_string(),
+            function: "create".to_string(),
+            type_arguments: vec![],
+            arguments: vec![],
+        }),
+    ];
+    // Gateway should be able to figure out the only usable gas object.
+    let data = gateway
+        .batch_transaction(addr1, params, None, 5000)
+        .await
+        .unwrap();
+    let signature = key1.sign(&data.to_bytes());
+    let effects = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_effect_response()
+        .unwrap()
+        .effects;
+    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.mutated.len(), 3);
 }

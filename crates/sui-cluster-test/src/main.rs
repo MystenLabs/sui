@@ -11,9 +11,9 @@ use sui::{
         call_move, WalletContext, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL,
     },
 };
-use sui_core::gateway_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
 use sui_faucet::FaucetResponse;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
     crypto::get_key_pair,
@@ -259,7 +259,7 @@ impl ClusterTest {
         }
         let (_, effects) = call_move(
             ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-            "DevNetNFT",
+            "devnet_nft",
             "mint",
             vec![],
             Some(gas_obj_id),
@@ -405,13 +405,9 @@ impl ClusterTest {
 
 #[tokio::main]
 async fn main() {
-    let config = telemetry_subscribers::TelemetryConfig {
-        service_name: "cluster-test".into(),
-        enable_tracing: std::env::var("SUI_TRACING_ENABLE").is_ok(),
-        json_log_output: std::env::var("SUI_JSON_SPAN_LOGS").is_ok(),
-        ..Default::default()
-    };
-    let _guard = telemetry_subscribers::init(config);
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_env()
+        .init();
 
     let options = ClusterTestOpt::parse();
     let mut test = ClusterTest::setup(options);

@@ -32,7 +32,7 @@ fn make_transfer_transaction(
 
         SingleTransactionKind::Call(MoveCall {
             package: framework_obj_ref,
-            module: ident_str!("SUI").to_owned(),
+            module: ident_str!("sui").to_owned(),
             function: ident_str!("transfer").to_owned(),
             type_arguments: Vec::new(),
             arguments: vec![
@@ -50,19 +50,14 @@ fn make_transfer_transaction(
 
 /// Creates an object for use in the microbench
 fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
-    Object::with_id_owner_gas_coin_object_for_testing(
-        object_id,
-        SequenceNumber::new(),
-        owner,
-        GAS_PER_TX,
-    )
+    Object::with_id_owner_gas_for_testing(object_id, owner, GAS_PER_TX)
 }
 
 /// This builds, signs a cert
 fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTransaction {
     // Make certificate
-    let mut certificate = CertifiedTransaction::new(tx.clone());
     let committee = network_config.committee();
+    let mut certificate = CertifiedTransaction::new(committee.epoch(), tx.clone());
     certificate.auth_sign_info.epoch = committee.epoch();
     // TODO: Why iterating from 0 to quorum_threshold??
     for i in 0..committee.quorum_threshold() {

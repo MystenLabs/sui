@@ -5,20 +5,20 @@
 
 //# publish
 module Test::M {
-    use Sui::TxContext::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext};
     struct Obj has key {
-        id: Sui::ID::VersionedID,
+        id: sui::id::VersionedID,
         value: u64
     }
 
-    public(script) fun mint(ctx: &mut TxContext) {
-        Sui::Transfer::transfer(
-            Obj { id: TxContext::new_id(ctx), value: 0 },
-            TxContext::sender(ctx),
+    public entry fun mint(ctx: &mut TxContext) {
+        sui::transfer::transfer(
+            Obj { id: tx_context::new_id(ctx), value: 0 },
+            tx_context::sender(ctx),
         )
     }
 
-    public(script) fun incr(obj: &mut Obj) {
+    public entry fun incr(obj: &mut Obj) {
         obj.value = obj.value + 1
     }
 }

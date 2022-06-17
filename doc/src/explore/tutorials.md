@@ -86,7 +86,7 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ```
 
 ## Publish the TicTacToe game on Sui
-To keep this tutorial simple, use the TicTacToe game we implemented in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move).
+To keep this tutorial simple, use the TicTacToe game we implemented in [tic_tac_toe.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move).
 
 Find even more [examples](examples.md) in the Sui repository. Of course, you are welcome to
 [write your own package](../build/move.md#writing-a-package).
@@ -120,12 +120,12 @@ As a high level, the game works as following:
 2. Each player takes turns to send a *Mark* object to the admin indicating where they want to place their mark.
 3. The admin, upon receiving marks (in practice, this is done through monitoring events), places the mark to the gameboard.
 4. (2) and (3) repeats until game ends.
-Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [TicTacToeTests](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/tests/TicTacToeTests.move).
+Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [tic_tac_toe_tests](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/tests/tic_tac_toe_tests.move) file.
 
 Now let's begin the game!
 First of all, let's create a game with the command:
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function create_game --args \"0x$PLAYER_X\" \"0x$PLAYER_O\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function create_game --args $PLAYER_X $PLAYER_O --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 You will see output like:
@@ -187,11 +187,11 @@ export GAME=F1B8161BD97D3CD6627E739AD675089C5ACFB452
 By convention, Player X goes first. Player X wants to put a mark at the center of the gameboard ((1, 1)). This needs to take two steps. First Player X creates a Mark object with the placement intention and send it to the admin.
 We will call the `send_mark_to_game` function in `TicTacToe`, whose signature looks like this:
 ```
-public(script) fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext);
+public entry fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext);
 ```
 The `cap` argument will be Player X's capability object (XCAP), and `game_address` argument will be the admin's address (ADMIN):
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 1 1 --gas $X_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 1 1 --gas $X_GAS --gas-budget 1000
 ```
 And its output:
 ```shell
@@ -215,11 +215,11 @@ Mutated Objects:
 The above call created a Mark object, with ID `AE3CE9176F1A8C1F21D922722486DF667FA00394`, and it was sent to the admin.
 The admin can now place the mark on the gameboard. The function to place the mark looks like this:
 ```
-public(script) fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext);
+public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext);
 ```
 The first argument is the game board, and the second argument is the mark the admin just received from the player. We will call this function (replace the second argument with the Mark object ID above):
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0xAE3CE9176F1A8C1F21D922722486DF667FA00394\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0xAE3CE9176F1A8C1F21D922722486DF667FA00394 --gas $ADMIN_GAS --gas-budget 1000
 ```
 The gameboard now looks like this (this won't be printed out, so keep it in your imagination):
 ```
@@ -230,7 +230,7 @@ _|X|_
 
 Player O now tries to put a mark at (0, 0):
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$OCAP\" \"0x$ADMIN\" 0 0 --gas $O_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 0 0 --gas $O_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -246,7 +246,7 @@ Created Objects:
 
 Note, in this second call, the second argument comes from the created objects in the first call.
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x7A16D266DAD41145F34649258BC1F744D147BF2F\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x7A16D266DAD41145F34649258BC1F744D147BF2F --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -266,7 +266,7 @@ _|X|_
 
 Player X puts a mark at (0, 2):
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 0 2 --gas $X_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 0 2 --gas $X_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -282,7 +282,7 @@ Created Objects:
 
 Then run:
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 The gameboard now looks like this:
@@ -294,7 +294,7 @@ _|X|_
 
 Player O places a mark at (1, 0):
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$OCAP\" \"0x$ADMIN\" 1 0 --gas $O_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 1 0 --gas $O_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -310,7 +310,7 @@ Created Objects:
 
 Now run:
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9 --gas $ADMIN_GAS --gas-budget 1000
 ...
 ```
 The gameboard now looks like:
@@ -321,7 +321,7 @@ O|X|_
 ```
 This is a chance for Player X to win! X now mints the winning mark at (2, 0):
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 2 0 --gas $X_GAS --gas-budget 1000
+$ wallet call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 2 0 --gas $X_GAS --gas-budget 1000
 ```
 
 And its output:
@@ -337,7 +337,7 @@ AA7A6624E16E5E447801462FF6614013FC4AD156 SequenceNumber(1) o#e5e1b15f03531db118e
 
 And then finally the admin places the winning mark:
 ```shell
-$ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0xAA7A6624E16E5E447801462FF6614013FC4AD156\" --gas $ADMIN_GAS --gas-budget 1000
+   $ wallet call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0xAA7A6624E16E5E447801462FF6614013FC4AD156 --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 With output:

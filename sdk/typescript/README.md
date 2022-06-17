@@ -70,7 +70,7 @@ const txn = await provider.getTransaction(
 
 For any operations that involves signing or submitting transactions, you should use the `Signer` API. For example:
 
-To transfer a `0x2::Coin::Coin<SUI>`:
+To transfer a `0x2::coin::Coin<SUI>`:
 
 ```typescript
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
@@ -88,7 +88,7 @@ const transferTxn = await signer.transferCoin({
 console.log('transferTxn', transferTxn);
 ```
 
-To split a `0x2::Coin::Coin<SUI>` into multiple coins
+To split a `0x2::coin::Coin<SUI>` into multiple coins
 
 ```typescript
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
@@ -139,7 +139,7 @@ const signer = new RawSigner(
 );
 const moveCallTxn = await signer.executeMoveCall({
   packageObjectId: '0x2',
-  module: 'DevNetNFT',
+  module: 'devnet_nft',
   function: 'mint',
   typeArguments: [],
   arguments: [

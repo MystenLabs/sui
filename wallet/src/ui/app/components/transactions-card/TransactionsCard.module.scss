@@ -1,0 +1,30 @@
+.title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #404040;
+}
+
+.card {
+    box-shadow: 0 1px 2px 0 #0000000d;
+    background-color: #fff;
+    display: grid;
+    height: auto;
+    margin-bottom: 1rem;
+    margin-top: 1rem;
+    padding: 0.8rem;
+    text-align: left;
+    font-family: 'Space Mono', ui-monospace, monospace;
+
+    a {
+        color: #4caad8;
+        text-decoration: none;
+    }
+}
+
+.failure {
+    color: #fca5a5;
+}
+
+.success {
+    color: #4ade80;
+}

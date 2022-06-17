@@ -54,6 +54,7 @@ export const sendTokens = createAsyncThunk<
             amount,
             recipientAddress
         );
+
         // TODO: better way to sync latest objects
         dispatch(fetchAllOwnedObjects());
         // TODO: is this correct? Find a better way to do it

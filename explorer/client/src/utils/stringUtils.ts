@@ -20,7 +20,7 @@ export const trimStdLibPrefix = (str: string): string =>
     str.replace(/^0x2::/, '');
 
 export const handleCoinType = (str: string): string =>
-    str === '0x2::Coin::Coin<0x2::SUI::SUI>'
+    str === '0x2::coin::Coin<0x2::sui::SUI>'
         ? 'SUI'
         : str.match(/^([a-zA-Z0-9:]*)<([a-zA-Z0-9:]*)>$/)?.[2] || str;
 
@@ -38,6 +38,23 @@ function transformURL(url: string) {
         return url;
     }
     return `https://ipfs.io/ipfs/${found[1]}`;
+}
+
+export function truncate(fullStr: string, strLen: number, separator: string) {
+    if (fullStr.length <= strLen) return fullStr;
+
+    separator = separator || '...';
+
+    const sepLen = separator.length,
+        charsToShow = strLen - sepLen,
+        frontChars = Math.ceil(charsToShow / 2),
+        backChars = Math.floor(charsToShow / 2);
+
+    return (
+        fullStr.substr(0, frontChars) +
+        separator +
+        fullStr.substr(fullStr.length - backChars)
+    );
 }
 
 /* Currently unused but potentially useful:

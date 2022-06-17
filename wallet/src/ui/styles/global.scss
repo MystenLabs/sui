@@ -1,4 +1,5 @@
 @import url('bootstrap-icons');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
 html,
 body {
@@ -26,6 +27,7 @@ body {
     display: inline-block;
     font-weight: 700;
     cursor: pointer;
+    color: black;
 
     &:visited,
     &:active {

@@ -1,10 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use prometheus_exporter::prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
+use sui_types::base_types::TransactionDigest;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -17,12 +18,96 @@ use tracing::{debug, instrument};
 
 use crate::authority::SuiDataStore;
 
+// TODO: read this from onchain source (e.g. SystemState)
+const STORAGE_GAS_PRICE: u64 = 1;
+pub struct InputObjects {
+    objects: Vec<(InputObjectKind, Object)>,
+}
+
+impl InputObjects {
+    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
+        Self { objects }
+    }
+
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.objects.is_empty()
+    }
+
+    pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
+        let owned_objects: Vec<_> = self
+            .objects
+            .iter()
+            .filter_map(|(object_kind, object)| match object_kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some(*object_ref)
+                    }
+                }
+                InputObjectKind::SharedMoveObject(_) => None,
+            })
+            .collect();
+
+        debug!(
+            num_mutable_objects = owned_objects.len(),
+            "Checked locks and found mutable objects"
+        );
+
+        owned_objects
+    }
+
+    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
+        self.objects
+            .iter()
+            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .map(|(_, obj)| obj.compute_object_reference())
+            .collect()
+    }
+
+    pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
+        self.objects
+            .iter()
+            .map(|(_, obj)| obj.previous_transaction)
+            .collect()
+    }
+
+    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
+        self.objects
+            .iter()
+            .filter_map(|(kind, object)| match kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some(*object_ref)
+                    }
+                }
+                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+            })
+            .collect()
+    }
+
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
+        self.objects
+            .into_iter()
+            .map(|(_, object)| (object.id(), object))
+            .collect()
+    }
+}
+
 #[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<const A: bool, const B: bool, S, T>(
-    store: &SuiDataStore<A, B, S>,
+pub async fn check_transaction_input<const A: bool, S, T>(
+    store: &SuiDataStore<A, S>,
     transaction: &TransactionEnvelope<T>,
     shared_obj_metric: &IntCounter,
-) -> Result<(SuiGasStatus<'static>, Vec<(InputObjectKind, Object)>), SuiError>
+) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
 where
     S: Eq + Serialize + for<'de> Deserialize<'de>,
 {
@@ -30,11 +115,12 @@ where
         store,
         transaction.gas_payment_object_ref().0,
         transaction.data.gas_budget,
+        transaction.data.gas_price,
         transaction.data.kind.is_system_tx(),
     )
     .await?;
 
-    let objects_by_kind = check_locks(store, &transaction.data).await?;
+    let input_objects = check_locks(store, &transaction.data).await?;
 
     if transaction.contains_shared_object() {
         shared_obj_metric.inc();
@@ -44,7 +130,7 @@ where
         gas_status.charge_consensus()?;
     }
 
-    Ok((gas_status, objects_by_kind))
+    Ok((gas_status, input_objects))
 }
 
 /// Checking gas budget by fetching the gas object only from the store,
@@ -52,10 +138,11 @@ where
 /// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
-async fn check_gas<const A: bool, const B: bool, S>(
-    store: &SuiDataStore<A, B, S>,
+async fn check_gas<const A: bool, S>(
+    store: &SuiDataStore<A, S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
+    computation_gas_price: u64,
     is_system_tx: bool,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
@@ -68,16 +155,18 @@ where
         let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
             object_id: gas_payment_id,
         })?;
-        gas::check_gas_balance(&gas_object, gas_budget)?;
+        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
+        gas::check_gas_balance(&gas_object, gas_budget, gas_price)?;
         // TODO: Pass in real computation gas unit price and storage gas unit price.
-        let gas_status = gas::start_gas_metering(gas_budget, 1, 1)?;
+        let gas_status =
+            gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)?;
         Ok(gas_status)
     }
 }
 
 #[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
-async fn fetch_objects<const A: bool, const B: bool, S>(
-    store: &SuiDataStore<A, B, S>,
+async fn fetch_objects<const A: bool, S>(
+    store: &SuiDataStore<A, S>,
     input_objects: &[InputObjectKind],
 ) -> Result<Vec<Option<Object>>, SuiError>
 where
@@ -90,10 +179,10 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_locks<const A: bool, const B: bool, S>(
-    store: &SuiDataStore<A, B, S>,
+async fn check_locks<const A: bool, S>(
+    store: &SuiDataStore<A, S>,
     transaction: &TransactionData,
-) -> Result<Vec<(InputObjectKind, Object)>, SuiError>
+) -> Result<InputObjects, SuiError>
 where
     S: Eq + Serialize + for<'de> Deserialize<'de>,
 {
@@ -172,31 +261,7 @@ where
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
 
-    Ok(all_objects)
-}
-
-pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<ObjectRef> {
-    let owned_objects: Vec<_> = all_objects
-        .iter()
-        .filter_map(|(object_kind, object)| match object_kind {
-            InputObjectKind::MovePackage(_) => None,
-            InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                if object.is_immutable() {
-                    None
-                } else {
-                    Some(*object_ref)
-                }
-            }
-            InputObjectKind::SharedMoveObject(_) => None,
-        })
-        .collect();
-
-    debug!(
-        num_mutable_objects = owned_objects.len(),
-        "Checked locks and found mutable objects"
-    );
-
-    owned_objects
+    Ok(InputObjects::new(all_objects))
 }
 
 /// The logic to check one object against a reference, and return the object if all is well
@@ -222,7 +287,7 @@ fn check_one_lock(
                 SuiError::MovePackageAsObject { object_id }
             );
             fp_ensure!(
-                sequence_number <= SequenceNumber::MAX,
+                sequence_number < SequenceNumber::MAX,
                 SuiError::InvalidSequenceNumber
             );
 
@@ -278,6 +343,10 @@ fn check_one_lock(
             };
         }
         InputObjectKind::SharedMoveObject(..) => {
+            fp_ensure!(
+                object.version() < SequenceNumber::MAX,
+                SuiError::InvalidSequenceNumber
+            );
             // When someone locks an object as shared it must be shared already.
             fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
         }

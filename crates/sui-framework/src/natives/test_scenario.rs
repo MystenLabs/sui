@@ -100,7 +100,7 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
         };
 
         if *event_type_byte == WRAPPED_OBJECT_EVENT {
-            // special, TestScenario-only event for object wrapping. treat the same as DeleteObjectID for inventory purposes--a wrapped object is not available for use
+            // special, test_scenario-only event for object wrapping. treat the same as DeleteObjectID for inventory purposes--a wrapped object is not available for use
             assert!(inventory.remove(&obj_id).is_some());
             continue;
         }
@@ -348,7 +348,7 @@ pub fn get_object_owned_inventory(
 }
 
 /// Delete the given object
-pub fn delete_object_for_testing(
+pub fn drop_object_for_testing(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,

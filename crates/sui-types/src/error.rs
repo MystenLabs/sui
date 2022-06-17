@@ -2,11 +2,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId};
-use move_binary_format::errors::{PartialVMError, VMError};
+use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
+use move_binary_format::errors::{Location, PartialVMError, VMError};
+use move_core_types::vm_status::{AbortLocation, StatusCode};
 use narwhal_executor::{ExecutionStateError, SubscriberError};
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{error::Error, fmt::Debug};
 use thiserror::Error;
 use typed_store::rocks::TypedStoreError;
 
@@ -53,6 +54,8 @@ pub enum SuiError {
     TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
+    #[error("The SUI coin to be transferred has balance {balance}, which is not enough to cover the transfer amount {required}")]
+    TransferInsufficientBalance { balance: u64, required: u64 },
     #[error("A move object is expected, instead a move package is passed: {object_id}")]
     MovePackageAsObject { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
@@ -101,8 +104,11 @@ pub enum SuiError {
     ErrorWhileProcessingTransactionTransaction { err: String },
     #[error("Confirmation transaction processing failed: {err}")]
     ErrorWhileProcessingConfirmationTransaction { err: String },
-    #[error("An invalid answer was returned by the authority while requesting a certificate")]
-    ErrorWhileRequestingCertificate,
+    #[error(
+    "Failed to execute certificate on a quorum of validators, cause by : {:#?}",
+    errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
+    )]
+    QuorumFailedToExecuteCertificate { errors: Vec<SuiError> },
     #[error("Module publish failed: {err}")]
     ErrorWhileProcessingPublish { err: String },
     #[error("Move call failed: {err}")]
@@ -213,8 +219,8 @@ pub enum SuiError {
     ModuleNotFound { module_name: String },
     #[error("Function signature is invalid: {error:?}.")]
     InvalidFunctionSignature { error: String },
-    #[error("Function visibility is invalid for an entry point to execution: {error:?}.")]
-    InvalidFunctionVisibility { error: String },
+    #[error("Non-`entry` function used for entry point to execution: {error:?}.")]
+    InvalidNonEntryFunction { error: String },
     #[error("Type error while binding function arguments: {error:?}.")]
     TypeError { error: String },
     #[error("Execution aborted: {error:?}.")]
@@ -289,6 +295,9 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
+    #[error("Failed to dispatch event: {error:?}")]
+    EventFailedToDispatch { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
@@ -350,6 +359,12 @@ pub enum SuiError {
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
+
+    #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
+    QuorumDriverCommunicationError { error: String },
+
+    #[error("Error executing {0}")]
+    ExecutionError(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -360,6 +375,12 @@ impl std::convert::From<PartialVMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
+    }
+}
+
+impl std::convert::From<ExecutionError> for SuiError {
+    fn from(error: ExecutionError) -> Self {
+        SuiError::ExecutionError(error.to_string())
     }
 }
 
@@ -380,6 +401,12 @@ impl std::convert::From<SubscriberError> for SuiError {
 impl From<tonic::Status> for SuiError {
     fn from(status: tonic::Status) -> Self {
         Self::RpcError(status.message().to_owned())
+    }
+}
+
+impl From<ExecutionErrorKind> for SuiError {
+    fn from(kind: ExecutionErrorKind) -> Self {
+        ExecutionError::from_kind(kind).into()
     }
 }
 
@@ -404,5 +431,195 @@ impl ExecutionStateError for SuiError {
 
     fn to_string(&self) -> String {
         ToString::to_string(&self)
+    }
+}
+
+type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+#[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, Serialize, Deserialize)]
+pub enum ExecutionErrorKind {
+    InsufficientGas,
+
+    // Naitive Transfer errors
+    TransferUnowned,
+    TransferNonCoin,
+    TransferInsufficientBalance,
+
+    InvalidTransactionUpdate,
+
+    ObjectNotFound,
+    /// An object that's owned by another object cannot be deleted or wrapped. It must be
+    /// transferred to an account address first before deletion
+    DeleteObjectOwnedObject,
+    /// #[error("Function resolution failure: {error:?}.")]
+    FunctionNotFound,
+    /// #[error("Module not found in package: {module_name:?}.")]
+    ModuleNotFound,
+    /// #[error("Function signature is invalid: {error:?}.")]
+    InvalidFunctionSignature,
+    /// #[error("Function visibility is invalid for an entry point to execution: {error:?}.")]
+    InvalidFunctionVisibility,
+    InvalidNonEntryFunction,
+    ExecutionInvariantViolation,
+    /// #[error("Type error while binding function arguments: {error:?}.")]
+    TypeError,
+    /// Circular object ownership detected
+    CircularObjectOwnership,
+    MissingObjectOwner,
+    InvalidSharedChildUse,
+
+    ModulePublishFailure,
+    ModuleVerificationFailure,
+
+    // Move Error
+    VmError,
+}
+
+impl std::fmt::Display for ExecutionErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExecutionErrorKind: {:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionErrorKind {}
+
+#[derive(Debug)]
+pub struct ExecutionError {
+    inner: Box<ExecutionErrorInner>,
+}
+
+#[derive(Debug)]
+struct ExecutionErrorInner {
+    kind: ExecutionErrorKind,
+    source: Option<BoxError>,
+}
+
+impl ExecutionError {
+    pub fn new(kind: ExecutionErrorKind, source: Option<BoxError>) -> Self {
+        Self {
+            inner: Box::new(ExecutionErrorInner { kind, source }),
+        }
+    }
+
+    pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
+        Self::new(kind, Some(source.into()))
+    }
+
+    pub fn from_kind(kind: ExecutionErrorKind) -> Self {
+        Self::new(kind, None)
+    }
+
+    pub fn kind(&self) -> &ExecutionErrorKind {
+        &self.inner.kind
+    }
+
+    pub fn to_execution_status(&self) -> ExecutionFailureStatus {
+        match self.kind() {
+            ExecutionErrorKind::InsufficientGas => ExecutionFailureStatus::InsufficientGas,
+            ExecutionErrorKind::TransferUnowned
+            | ExecutionErrorKind::TransferNonCoin
+            | ExecutionErrorKind::TransferInsufficientBalance
+            | ExecutionErrorKind::InvalidTransactionUpdate
+            | ExecutionErrorKind::ObjectNotFound
+            | ExecutionErrorKind::DeleteObjectOwnedObject
+            | ExecutionErrorKind::FunctionNotFound
+            | ExecutionErrorKind::ModuleNotFound
+            | ExecutionErrorKind::InvalidFunctionSignature
+            | ExecutionErrorKind::InvalidFunctionVisibility
+            | ExecutionErrorKind::InvalidNonEntryFunction
+            | ExecutionErrorKind::ExecutionInvariantViolation
+            | ExecutionErrorKind::TypeError
+            | ExecutionErrorKind::CircularObjectOwnership
+            | ExecutionErrorKind::MissingObjectOwner
+            | ExecutionErrorKind::InvalidSharedChildUse
+            | ExecutionErrorKind::ModulePublishFailure
+            | ExecutionErrorKind::ModuleVerificationFailure => {
+                ExecutionFailureStatus::MiscellaneousError
+            }
+            ExecutionErrorKind::VmError => {
+                let source = if let Some(source) = self.source() {
+                    source
+                } else {
+                    return ExecutionFailureStatus::MiscellaneousError;
+                };
+
+                if let Some(vmerror) = source.downcast_ref::<VMError>() {
+                    match (
+                        vmerror.major_status(),
+                        vmerror.sub_status(),
+                        vmerror.location(),
+                    ) {
+                        (StatusCode::EXECUTED, _, _) => {
+                            // If we have an error the status probably shouldn't ever be Executed
+                            debug_assert!(
+                                false,
+                                "VmError shouldn't ever report successful execution"
+                            );
+                        }
+                        (StatusCode::ABORTED, Some(code), Location::Script) => {
+                            return ExecutionFailureStatus::MoveAbort(AbortLocation::Script, code);
+                        }
+                        (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
+                            return ExecutionFailureStatus::MoveAbort(
+                                AbortLocation::Module(id.to_owned()),
+                                code,
+                            );
+                        }
+                        (StatusCode::OUT_OF_GAS, _, _) => {
+                            return ExecutionFailureStatus::InsufficientGas;
+                        }
+                        _ => return ExecutionFailureStatus::MiscellaneousError,
+                    }
+                }
+
+                if let Some(partial_vmerror) = source.downcast_ref::<PartialVMError>() {
+                    match partial_vmerror.major_status() {
+                        StatusCode::EXECUTED => {
+                            // If we have an error the status probably shouldn't ever be Executed
+                            debug_assert!(
+                                false,
+                                "VmError shouldn't ever report successful execution"
+                            );
+                        }
+                        StatusCode::OUT_OF_GAS => {
+                            return ExecutionFailureStatus::InsufficientGas;
+                        }
+                        _ => return ExecutionFailureStatus::MiscellaneousError,
+                    }
+                }
+
+                ExecutionFailureStatus::MiscellaneousError
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExecutionError: {:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source.as_ref().map(|e| &**e as _)
+    }
+}
+
+impl From<ExecutionErrorKind> for ExecutionError {
+    fn from(kind: ExecutionErrorKind) -> Self {
+        Self::from_kind(kind)
+    }
+}
+
+impl From<VMError> for ExecutionError {
+    fn from(error: VMError) -> Self {
+        Self::new_with_source(ExecutionErrorKind::VmError, error)
+    }
+}
+
+impl From<PartialVMError> for ExecutionError {
+    fn from(error: PartialVMError) -> Self {
+        Self::new_with_source(ExecutionErrorKind::VmError, error)
     }
 }

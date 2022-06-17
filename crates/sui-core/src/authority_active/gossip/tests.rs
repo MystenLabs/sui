@@ -9,7 +9,7 @@ use crate::authority_active::MAX_RETRY_DELAY_MS;
 use std::time::Duration;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-pub async fn test_gossip() {
+pub async fn test_gossip_plain() {
     let action_sequence = vec![
         BatchAction::EmitUpdateItem(),
         BatchAction::EmitUpdateItem(),
@@ -25,8 +25,10 @@ pub async fn test_gossip() {
         let inner_clients = clients.clone();
 
         let handle = tokio::task::spawn(async move {
-            let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
-            active_state.spawn_all_active_processes().await;
+            let active_state =
+                ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
+                    .unwrap();
+            active_state.spawn_gossip_process(3).await;
         });
 
         active_authorities.push(handle);
@@ -39,7 +41,7 @@ pub async fn test_gossip() {
         for digest in &digests {
             let result1 = client
                 .handle_transaction_info_request(TransactionInfoRequest {
-                    transaction_digest: *digest,
+                    transaction_digest: digest.transaction,
                 })
                 .await;
 
@@ -65,8 +67,10 @@ pub async fn test_gossip_error() {
         let inner_clients = clients.clone();
 
         let handle = tokio::task::spawn(async move {
-            let active_state = ActiveAuthority::new(inner_state, inner_clients).unwrap();
-            active_state.spawn_all_active_processes().await;
+            let active_state =
+                ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
+                    .unwrap();
+            active_state.spawn_gossip_process(3).await;
         });
         active_authorities.push(handle);
     }
@@ -78,7 +82,7 @@ pub async fn test_gossip_error() {
         for digest in &digests {
             let result1 = client
                 .handle_transaction_info_request(TransactionInfoRequest {
-                    transaction_digest: *digest,
+                    transaction_digest: digest.transaction,
                 })
                 .await;
 

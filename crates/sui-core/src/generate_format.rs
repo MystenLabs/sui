@@ -5,18 +5,19 @@ use clap::*;
 use move_core_types::{
     language_storage::TypeTag,
     value::{MoveStructLayout, MoveTypeLayout},
+    vm_status::AbortLocation,
 };
 use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use signature::Signer;
 use std::{fs::File, io::Write};
 use sui_types::{
-    base_types::{self, ObjectDigest, ObjectID, TransactionDigest},
+    base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
     batch::UpdateItem,
     crypto::{get_key_pair, AuthoritySignature, Signature},
-    error::SuiError,
     messages::{
-        CallArg, ExecutionStatus, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
+        CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectInfoRequestKind,
+        SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
 };
@@ -54,10 +55,14 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &od)?;
     tracer.trace_value(&mut samples, &td)?;
 
+    let teff = TransactionEffectsDigest::random();
+    tracer.trace_value(&mut samples, &teff)?;
+
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<SuiError>(&samples)?;
     tracer.trace_type::<Owner>(&samples)?;
     tracer.trace_type::<ExecutionStatus>(&samples)?;
+    tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
+    tracer.trace_type::<AbortLocation>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;
     tracer.trace_type::<TypeTag>(&samples)?;

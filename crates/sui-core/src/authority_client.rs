@@ -312,13 +312,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     ) -> Result<CheckpointResponse, SuiError> {
         let state = self.state.clone();
 
-        let result = state
-            .checkpoints
-            .as_ref()
-            .unwrap()
-            .lock()
-            .handle_checkpoint_request(&request);
-        result
+        state.handle_checkpoint_request(&request)
     }
 }
 
@@ -347,14 +341,8 @@ impl LocalAuthorityClient {
         let store = Arc::new(AuthorityStore::open(&store_path, None));
         let mut checkpoints_path = path.clone();
         checkpoints_path.push("checkpoints");
-        let checkpoints = CheckpointStore::open(
-            &checkpoints_path,
-            None,
-            address,
-            committee.clone(),
-            secret.clone(),
-        )
-        .expect("Should not fail to open local checkpoint DB");
+        let checkpoints = CheckpointStore::open(&checkpoints_path, None, address, secret.clone())
+            .expect("Should not fail to open local checkpoint DB");
 
         let state = AuthorityState::new(
             committee.clone(),
@@ -364,6 +352,7 @@ impl LocalAuthorityClient {
             None,
             Some(Arc::new(Mutex::new(checkpoints))),
             genesis,
+            false,
         )
         .await;
         Self {
@@ -389,7 +378,6 @@ impl LocalAuthorityClient {
         client
     }
 
-    #[cfg(test)]
     pub fn new_from_authority(state: Arc<AuthorityState>) -> Self {
         Self {
             state,

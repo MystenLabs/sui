@@ -25,31 +25,40 @@ export const navigateWithUnknown = async (
 
     // object IDs and addresses can't be distinguished just by the string, so search both.
     // allow navigating to the standard Move packages at 0x1 & 0x2 as a convenience
+    // Get Search results for a given query from both the object and address index
     else if (isValidSuiAddress(input) || isGenesisLibAddress(input)) {
-        const addrPromise = rpc(network)
-            .getObjectsOwnedByAddress(input)
-            .then((data) => {
-                if (data.length <= 0) throw new Error('No objects for Address');
+        const addrObjPromise = Promise.allSettled([
+            rpc(network)
+                .getObjectsOwnedByAddress(input)
+                .then((data) => {
+                    if (data.length <= 0)
+                        throw new Error('No objects for Address');
 
-                return {
-                    category: 'addresses',
-                    data: data,
-                };
-            });
-        const objInfoPromise = rpc(network)
-            .getObject(input)
-            .then((data) => {
-                if (data.status !== 'Exists') {
-                    throw new Error('no object found');
-                }
-
-                return {
-                    category: 'objects',
-                    data: data,
-                };
-            });
-
-        searchPromises.push(addrPromise, objInfoPromise);
+                    return {
+                        category: 'addresses',
+                        data: data,
+                    };
+                }),
+            rpc(network)
+                .getObject(input)
+                .then((data) => {
+                    if (data.status !== 'Exists') {
+                        throw new Error('no object found');
+                    }
+                    return {
+                        category: 'objects',
+                        data: data,
+                    };
+                }),
+        ]).then((results) => {
+            // return only the successful results
+            const searchResult = results
+                .filter((result: any) => result.status === 'fulfilled')
+                .map((data: any) => data.value);
+            // return array of objects if results are found for both address and object, return just the data obj if only one is found
+            return searchResult.length > 1 ? searchResult : searchResult[0];
+        });
+        searchPromises.push(addrObjPromise);
     }
 
     if (searchPromises.length === 0) {
@@ -59,7 +68,13 @@ export const navigateWithUnknown = async (
 
     return (
         Promise.any(searchPromises)
-            .then((pac) => {
+            .then((pac: any) => {
+                // Redirect to search result page if there are multiple categories with the same query
+                if (Array.isArray(pac)) {
+                    navigate(`../search-result/${encodeURIComponent(input)}`);
+                    return;
+                }
+
                 if (
                     pac?.data &&
                     (pac?.category === 'objects' ||

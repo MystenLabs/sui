@@ -5,10 +5,10 @@
 
 //# init --accounts A
 
-//# run Sui::ObjectBasics::create --args 10 @A
+//# run sui::object_basics::create --args 10 @A
 
-//# run Sui::ObjectBasics::freeze_object --args object(104)
+//# run sui::object_basics::freeze_object --args object(104)
 
-//# run Sui::ObjectBasics::transfer --args object(104) @A
+//# run sui::object_basics::transfer --args object(104) @A
 
-//# run Sui::ObjectBasics::set_value --args object(104) 1
+//# run sui::object_basics::set_value --args object(104) 1

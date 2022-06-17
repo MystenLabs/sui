@@ -18,8 +18,8 @@ use sui_config::{
     Config, NetworkConfig, PersistedConfig, SUI_FULLNODE_CONFIG, SUI_GATEWAY_CONFIG,
     SUI_GENESIS_FILENAME, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG,
 };
-use sui_core::gateway_types::{GetObjectDataResponse, SuiObject, SuiTransactionEffects};
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::get_key_pair,
@@ -173,7 +173,7 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     match result {
         WalletCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
             assert_eq!(obj.owner, address);
-            assert_eq!(obj.data.type_().unwrap(), "0x2::DevNetNFT::DevNetNFT");
+            assert_eq!(obj.data.type_().unwrap(), "0x2::devnet_nft::DevNetNFT");
             Ok(obj)
         }
         _ => Err(anyhow!(
@@ -189,7 +189,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
 
-    let mut config = GenesisConfig::for_local_testing()?;
+    let mut config = GenesisConfig::for_local_testing();
     config.accounts.clear();
     let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
@@ -232,7 +232,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create and save genesis config file
     // Create 4 authorities and 1 account
     let num_authorities = 4;
-    let mut config = GenesisConfig::custom_genesis(num_authorities, 1, 1)?;
+    let mut config = GenesisConfig::custom_genesis(num_authorities, 1, 1);
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
@@ -432,7 +432,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // Test case with no gas specified
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "create".to_string(),
         type_args: vec![],
         args,
@@ -472,7 +472,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "create".to_string(),
         type_args: vec![],
         args: args.to_vec(),
@@ -500,7 +500,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
@@ -513,7 +513,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     assert!(resp.is_err());
 
     let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Expected argument of type 0x2::ObjectBasics::Object, but found type 0x2::Coin::Coin<0x2::SUI::SUI>"));
+    assert!(err_string.contains("Expected argument of type 0x2::object_basics::Object, but found type 0x2::coin::Coin<0x2::sui::SUI>"));
 
     // Try a proper transfer
     let obj_str = format!("0x{:02x}", created_obj);
@@ -527,7 +527,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
@@ -889,11 +889,11 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn get_gas_value(o: &SuiObject) -> u64 {
+fn get_gas_value(o: &SuiParsedObject) -> u64 {
     GasCoin::try_from(o).unwrap().value()
 }
 
-async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiObject> {
+async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiParsedObject> {
     if let GetObjectDataResponse::Exists(o) = context.gateway.get_object(id).await.unwrap() {
         Some(o)
     } else {

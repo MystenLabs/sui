@@ -17,8 +17,10 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{ConfirmationTransaction, SignatureAggregator, Transaction, TransactionData},
     object::Object,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+use crate::transaction_input_checker::InputObjects;
 use crate::{
     authority::AuthorityTemporaryStore, authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
@@ -57,7 +59,11 @@ async fn test_start_epoch_change() {
         })
         .unwrap();
     // Create an active authority for the first authority state.
-    let active = ActiveAuthority::new(state.clone(), net.authority_clients).unwrap();
+    let active = ActiveAuthority::new_with_ephemeral_follower_store(
+        state.clone(),
+        net.clone_inner_clients(),
+    )
+    .unwrap();
     // Make the high watermark differ from low watermark.
     let ticket = state.batch_notifier.ticket().unwrap();
 
@@ -125,16 +131,18 @@ async fn test_start_epoch_change() {
     let tx_digest = *transaction.digest();
     let mut temporary_store = AuthorityTemporaryStore::new(
         state.database.clone(),
-        transaction
-            .data
-            .input_objects()
-            .unwrap()
-            .into_iter()
-            .zip(genesis_objects)
-            .collect(),
+        InputObjects::new(
+            transaction
+                .data
+                .input_objects()
+                .unwrap()
+                .into_iter()
+                .zip(genesis_objects)
+                .collect(),
+        ),
         tx_digest,
     );
-    let effects = execution_engine::execute_transaction_to_effects(
+    let (effects, _) = execution_engine::execute_transaction_to_effects(
         vec![],
         &mut temporary_store,
         transaction.data.clone(),
@@ -144,12 +152,11 @@ async fn test_start_epoch_change() {
         &state._native_functions,
         SuiGasStatus::new_with_budget(1000, 1, 1),
         state.committee.load().epoch,
-    )
-    .unwrap();
+    );
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state
-            .update_state(temporary_store, &certificate, &signed_effects)
+            .commit_certificate(temporary_store, &certificate, &signed_effects)
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd
@@ -167,50 +174,85 @@ async fn test_finish_epoch_change() {
         genesis_objects.clone(),
     ])
     .await;
-    let state = states[0].clone();
-    // Set the checkpoint number to be near the end of epoch.
-    let mut locals = CheckpointLocals {
-        next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH - 1,
-        proposal_next_transaction: None,
-        next_transaction_sequence: 0,
-        no_more_fragments: true,
-        current_proposal: None,
-    };
-    state
-        .checkpoints
-        .as_ref()
-        .unwrap()
-        .lock()
-        .set_locals_for_testing(locals.clone())
-        .unwrap();
-    // Create an active authority for the first authority state.
-    let active = ActiveAuthority::new(state.clone(), net.authority_clients).unwrap();
-
-    active.start_epoch_change().await.unwrap();
-
-    locals.next_checkpoint += 1;
-    state
-        .checkpoints
-        .as_ref()
-        .unwrap()
-        .lock()
-        .set_locals_for_testing(locals.clone())
-        .unwrap();
-    active.finish_epoch_change().await.unwrap();
-    // Verify that epoch changed in authority state.
-    assert_eq!(active.state.committee.load().epoch, 1);
-    assert_eq!(
-        active
-            .state
-            .db()
-            .get_last_epoch_info()
+    let actives: Vec<_> = states
+        .iter()
+        .map(|state| {
+            ActiveAuthority::new_with_ephemeral_follower_store(
+                state.clone(),
+                net.clone_inner_clients(),
+            )
             .unwrap()
-            .committee
-            .epoch,
-        1
-    );
-    // Verify that validator is no longer halted.
-    assert!(!active.state.halted.load(Ordering::SeqCst));
-    // Verify that the special system tx is set.
-    assert!(active.state.change_epoch_tx.load().is_some());
+        })
+        .collect();
+    let results: Vec<_> = states
+        .iter()
+        .zip(actives.iter())
+        .map(|(state, active)| {
+            async {
+                // Set the checkpoint number to be near the end of epoch.
+                let mut locals = CheckpointLocals {
+                    next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH - 1,
+                    proposal_next_transaction: None,
+                    next_transaction_sequence: 0,
+                    no_more_fragments: true,
+                    current_proposal: None,
+                };
+                state
+                    .checkpoints
+                    .as_ref()
+                    .unwrap()
+                    .lock()
+                    .set_locals_for_testing(locals.clone())
+                    .unwrap();
+
+                active.start_epoch_change().await.unwrap();
+
+                locals.next_checkpoint += 1;
+                state
+                    .checkpoints
+                    .as_ref()
+                    .unwrap()
+                    .lock()
+                    .set_locals_for_testing(locals.clone())
+                    .unwrap();
+
+                active.finish_epoch_change().await.unwrap()
+            }
+        })
+        .collect();
+    futures::future::join_all(results).await;
+
+    // Verify that epoch changed in every authority state.
+    for active in actives {
+        assert_eq!(active.state.committee.load().epoch, 1);
+        assert_eq!(active.net.load().committee.epoch, 1);
+        assert_eq!(
+            active
+                .state
+                .db()
+                .get_last_epoch_info()
+                .unwrap()
+                .committee
+                .epoch,
+            1
+        );
+        // Verify that validator is no longer halted.
+        assert!(!active.state.halted.load(Ordering::SeqCst));
+        let system_state = active.state.get_sui_system_state_object().await.unwrap();
+        assert_eq!(system_state.epoch, 1);
+        let (_, tx_digest) = active
+            .state
+            .get_latest_parent_entry(SUI_SYSTEM_STATE_OBJECT_ID)
+            .await
+            .unwrap()
+            .unwrap();
+        let response = active
+            .state
+            .handle_transaction_info_request(tx_digest.into())
+            .await
+            .unwrap();
+        assert!(response.signed_effects.is_some());
+        assert!(response.certified_transaction.is_some());
+        assert!(response.signed_effects.is_some());
+    }
 }

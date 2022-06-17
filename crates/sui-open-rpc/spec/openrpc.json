@@ -16,10 +16,59 @@
   },
   "methods": [
     {
+      "name": "sui_batchTransaction",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "params": [
+        {
+          "name": "signer",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "single_transaction_params",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RPCTransactionRequestParams"
+            }
+          }
+        },
+        {
+          "name": "gas",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "Gateway API"
+          "name": "Quorum Driver API"
         }
       ],
       "description": "Execute the transaction using the transaction data, signature and public key.",
@@ -211,6 +260,31 @@
           "items": {
             "$ref": "#/components/schemas/ObjectInfo"
           }
+        }
+      }
+    },
+    {
+      "name": "sui_getRawObject",
+      "tags": [
+        {
+          "name": "BCS API"
+        }
+      ],
+      "description": "Return the raw BCS serialised move object bytes for a specified object",
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "GetRawObjectDataResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectRead"
         }
       }
     },
@@ -882,7 +956,7 @@
       "name": "sui_syncAccountState",
       "tags": [
         {
-          "name": "Gateway API"
+          "name": "Quorum Driver API"
         }
       ],
       "description": "Synchronize client state with validators.",
@@ -946,6 +1020,62 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_transferSui",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Send SUI coin object to a Sui address. The SUI object is also used as the gas object.",
+      "params": [
+        {
+          "name": "signer",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "sui_object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "recipient",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "amount",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
@@ -1039,10 +1169,16 @@
         "oneOf": [
           {
             "type": "object",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoveObject"
+              },
+              {
+                "$ref": "#/components/schemas/RawMoveObject"
+              }
+            ],
             "required": [
-              "dataType",
-              "fields",
-              "type"
+              "dataType"
             ],
             "properties": {
               "dataType": {
@@ -1050,12 +1186,6 @@
                 "enum": [
                   "moveObject"
                 ]
-              },
-              "fields": {
-                "$ref": "#/components/schemas/MoveStruct"
-              },
-              "type": {
-                "type": "string"
               }
             }
           },
@@ -1081,37 +1211,156 @@
         ]
       },
       "Event": {
-        "type": "object",
-        "required": [
-          "contents",
-          "type_"
-        ],
-        "properties": {
-          "contents": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
+        "oneOf": [
+          {
+            "description": "Move-specific event",
+            "type": "object",
+            "required": [
+              "moveEvent"
+            ],
+            "properties": {
+              "moveEvent": {
+                "type": "object",
+                "required": [
+                  "bcs",
+                  "fields",
+                  "type"
+                ],
+                "properties": {
+                  "bcs": {
+                    "$ref": "#/components/schemas/Base64"
+                  },
+                  "fields": {
+                    "$ref": "#/components/schemas/MoveStruct"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
           },
-          "type_": {
-            "type": "string"
+          {
+            "description": "Module published",
+            "type": "object",
+            "required": [
+              "publish"
+            ],
+            "properties": {
+              "publish": {
+                "type": "object",
+                "required": [
+                  "packageId"
+                ],
+                "properties": {
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Transfer objects to new address / wrap in another object / coin",
+            "type": "object",
+            "required": [
+              "transferObject"
+            ],
+            "properties": {
+              "transferObject": {
+                "type": "object",
+                "required": [
+                  "destinationAddr",
+                  "objectId",
+                  "type",
+                  "version"
+                ],
+                "properties": {
+                  "destinationAddr": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "type": {
+                    "$ref": "#/components/schemas/TransferType"
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Delete object",
+            "type": "object",
+            "required": [
+              "deleteObject"
+            ],
+            "properties": {
+              "deleteObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "New object creation",
+            "type": "object",
+            "required": [
+              "newObject"
+            ],
+            "properties": {
+              "newObject": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Epooch change",
+            "type": "object",
+            "required": [
+              "epochChange"
+            ],
+            "properties": {
+              "epochChange": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "New checkpoint",
+            "type": "object",
+            "required": [
+              "checkpoint"
+            ],
+            "properties": {
+              "checkpoint": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
           }
-        }
+        ]
       },
       "ExecutionStatus": {
         "oneOf": [
           {
             "type": "object",
             "required": [
-              "gas_cost",
               "status"
             ],
             "properties": {
-              "gas_cost": {
-                "$ref": "#/components/schemas/GasCostSummary"
-              },
               "status": {
                 "type": "string",
                 "enum": [
@@ -1124,15 +1373,11 @@
             "type": "object",
             "required": [
               "error",
-              "gas_cost",
               "status"
             ],
             "properties": {
               "error": {
                 "type": "string"
-              },
-              "gas_cost": {
-                "$ref": "#/components/schemas/GasCostSummary"
               },
               "status": {
                 "type": "string",
@@ -1143,31 +1388,6 @@
             }
           }
         ]
-      },
-      "GasCostSummary": {
-        "type": "object",
-        "required": [
-          "computationCost",
-          "storageCost",
-          "storageRebate"
-        ],
-        "properties": {
-          "computationCost": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storageCost": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "storageRebate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
       },
       "Hex": {
         "type": "string"
@@ -1274,6 +1494,54 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "MoveCallParams": {
+        "type": "object",
+        "required": [
+          "arguments",
+          "function",
+          "module",
+          "packageObjectId"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiJsonValue"
+            }
+          },
+          "function": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "packageObjectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "typeArguments": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TypeTag"
+            }
+          }
+        }
+      },
+      "MoveObject": {
+        "type": "object",
+        "required": [
+          "fields",
+          "type"
+        ],
+        "properties": {
+          "fields": {
+            "$ref": "#/components/schemas/MoveStruct"
+          },
+          "type": {
+            "type": "string"
           }
         }
       },
@@ -1636,6 +1904,49 @@
           }
         }
       },
+      "RPCTransactionRequestParams": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "transferCoinRequestParams"
+            ],
+            "properties": {
+              "transferCoinRequestParams": {
+                "$ref": "#/components/schemas/TransferCoinParams"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "moveCallRequestParams"
+            ],
+            "properties": {
+              "moveCallRequestParams": {
+                "$ref": "#/components/schemas/MoveCallParams"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "RawMoveObject": {
+        "type": "object",
+        "required": [
+          "bcs_bytes",
+          "type"
+        ],
+        "properties": {
+          "bcs_bytes": {
+            "$ref": "#/components/schemas/Base64"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
       "SequenceNumber": {
         "type": "integer",
         "format": "uint64",
@@ -1855,6 +2166,14 @@
           },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
+          },
+          "timestamp_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -1895,6 +2214,19 @@
             "properties": {
               "Call": {
                 "$ref": "#/components/schemas/MoveCall"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Initiate a SUI coin transfer between addresses",
+            "type": "object",
+            "required": [
+              "TransferSui"
+            ],
+            "properties": {
+              "TransferSui": {
+                "$ref": "#/components/schemas/TransferSui"
               }
             },
             "additionalProperties": false
@@ -1980,6 +2312,48 @@
             "$ref": "#/components/schemas/SuiAddress"
           }
         }
+      },
+      "TransferCoinParams": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "recipient"
+        ],
+        "properties": {
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "TransferSui": {
+        "type": "object",
+        "required": [
+          "recipient"
+        ],
+        "properties": {
+          "amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "TransferType": {
+        "type": "string",
+        "enum": [
+          "Coin",
+          "ToAddress",
+          "ToObject"
+        ]
       },
       "TypeTag": {
         "type": "string"
