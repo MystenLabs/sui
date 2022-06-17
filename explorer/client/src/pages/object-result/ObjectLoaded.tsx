@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useState, useCallback } from 'react';
+import ReactJson from 'react-json-view';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
+import {
+    type AddressOwner
+} from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
 import {
     asciiFromNumberBytes,
@@ -52,7 +55,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const clickSetShowTx = useCallback(() => setShowTx(!showTx), [showTx]);
     const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
-        ['number', 'string'].includes(typeof value);
+        ['number', 'string',].includes(typeof value);
 
     //TODO - a backend convention on how owned objects are labelled and how values are stored
     //This would facilitate refactoring the below and stopping bugs when a variant is missed:
@@ -179,6 +182,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                 ? toHexString(data.data.tx_digest as number[])
                 : data.data.tx_digest,
         owner: processOwner(data.owner),
+        // address: getTransactionSender()
         url: parseImageURL(data.data.contents),
     };
 
@@ -191,6 +195,11 @@ function ObjectLoaded({ data }: { data: DataType }) {
         //TO DO: remove when have distinct 'name' field in Description
         .filter(([key, _]) => !/name/i.test(key))
         .filter(([_, value]) => checkIsPropertyType(value));
+
+    const structProperties = Object.entries(viewedData.data?.contents)
+        .filter(([_, value]) => typeof value == 'object')
+        .filter(([key, _]) => key !== 'id');
+
 
     const descriptionTitle =
         data.objType === 'Move Package' ? 'Package Description' : 'Description';
@@ -357,6 +366,19 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         </>
                     )}
                     {}
+                    {structProperties.length > 0 && (
+                        <div className={styles.jsondata}>
+                            <div>
+                      
+                                <ReactJson
+                                    src={structProperties[0]}
+                                  
+                                    collapsed={3}
+                                    name={false}
+                                />
+                            </div>
+                        </div>
+                    )}
                     {data.objType !== 'Move Package' ? (
                         <h2
                             className={styles.clickableheader}
