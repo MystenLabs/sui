@@ -53,7 +53,11 @@ curl --location --request POST 'http://127.0.0.1:9000/' \
 
 # use your fullnode with explorer 
 
-Open https://explorer.devnet.sui.io, click the green Devnet in the top right, select 'Custom RPC URL' and set it to http://127.0.0.1:9000.
+To use the DevNet explorer with your fullnode follow these steps:
+- Open https://explorer.devnet.sui.io
+- Click the green Devnet button in the top right
+- Select 'Custom RPC URL'
+- Set it to http://127.0.0.1:9000
 
 # troubleshoot / tips / documentation
 
@@ -87,7 +91,7 @@ Inspect the database:
 
 ## local rpc connectivity issues
 
-For Linux, update the json-rpc-address in the fullnode config to listen on all addresses:
+Update the json-rpc-address in the fullnode config to listen on all addresses:
 
 ```sed -i 's/127.0.0.1/0.0.0.0/' fullnode-template.yaml```
 
