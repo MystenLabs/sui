@@ -71,8 +71,11 @@ where
 {
     let mut disassembled = BTreeMap::new();
     for bytecode in modules {
-        let module = CompiledModule::deserialize(bytecode)
-            .expect("Adapter publish flow ensures that this bytecode deserializes");
+        let module = CompiledModule::deserialize(bytecode).map_err(|error| {
+            SuiError::ModuleDeserializationFailure {
+                error: error.to_string(),
+            }
+        })?;
         let view = BinaryIndexedView::Module(&module);
         let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
             SuiError::ObjectSerializationError {
