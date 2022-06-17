@@ -27,6 +27,8 @@ import type {
 
 import styles from './RecentTxCard.module.css';
 
+const TRUNCATE_LENGTH = 25;
+
 const initState: { loadState: string; latestTx: TxnData[] } = {
     loadState: 'pending',
     latestTx: [],
@@ -130,7 +132,10 @@ function LatestTxView({
                                         text={tx.txId}
                                         category="transactions"
                                         isLink={true}
-                                        alttext={truncate(tx.txId, 26, '...')}
+                                        alttext={truncate(
+                                            tx.txId,
+                                            TRUNCATE_LENGTH
+                                        )}
                                     />
                                 </div>
                             </div>
@@ -151,7 +156,7 @@ function LatestTxView({
                                         className={styles.txlink}
                                         to={'addresses/' + tx.From}
                                     >
-                                        {truncate(tx.From, 25, '...')}
+                                        {truncate(tx.From, TRUNCATE_LENGTH)}
                                     </Link>
                                 </div>
                                 {tx.To && (
@@ -161,7 +166,7 @@ function LatestTxView({
                                             className={styles.txlink}
                                             to={'addresses/' + tx.To}
                                         >
-                                            {truncate(tx.To, 25, '...')}
+                                            {truncate(tx.To, TRUNCATE_LENGTH)}
                                         </Link>
                                     </div>
                                 )}

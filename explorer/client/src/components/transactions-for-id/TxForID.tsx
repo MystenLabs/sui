@@ -25,6 +25,8 @@ import PaginationWrapper from '../pagination/PaginationWrapper';
 
 import styles from './TxForID.module.css';
 
+const TRUNCATE_LENGTH = 14;
+
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
 };
@@ -88,7 +90,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                                 className={styles.txlink}
                                 to={'addresses/' + x.From}
                             >
-                                {truncate(x.From, 14, '...')}
+                                {truncate(x.From, TRUNCATE_LENGTH)}
                             </Link>
                         </div>
                         {x.To && (
@@ -98,7 +100,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                                     className={styles.txlink}
                                     to={'addresses/' + x.To}
                                 >
-                                    {truncate(x.To, 14, '...')}
+                                    {truncate(x.To, TRUNCATE_LENGTH)}
                                 </Link>
                             </div>
                         )}
