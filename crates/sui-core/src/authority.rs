@@ -360,28 +360,46 @@ impl AuthorityState {
         }
     }
 
+    pub async fn handle_node_sync_transaction(
+        &self,
+        certificate: CertifiedTransaction,
+        // Signed effects is signed by only one validator, it is not a
+        // CertifiedTransactionEffects. The caller of this (node_sync) must promise to
+        // wait until it has seen at least f+1 identifical effects digests matching this
+        // SignedTransactionEffects before calling this function, in order to prevent a
+        // byzantine validator from giving us incorrect effects.
+        signed_effects: SignedTransactionEffects,
+    ) -> SuiResult {
+        let transaction_digest = *certificate.digest();
+        fp_ensure!(
+            signed_effects.effects.transaction_digest == transaction_digest,
+            // NOTE: the error message here will say 'Error acquiring lock' but what it means is
+            // 'error checking lock'.
+            SuiError::ErrorWhileProcessingConfirmationTransaction {
+                err: "effects/tx digest mismatch".to_string()
+            }
+        );
+
+        let tx_guard = self
+            .acquire_tx_guard(&transaction_digest, &certificate)
+            .await?;
+
+        if certificate.contains_shared_object() {
+            self.database
+                .acquire_shared_locks_from_effects(&certificate, &signed_effects.effects)?;
+        }
+
+        self.process_certificate(tx_guard, certificate).await?;
+        Ok(())
+    }
+
     /// Confirm a transfer.
     pub async fn handle_confirmation_transaction(
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        self.metrics.total_certs.inc();
         let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
-
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
-            // TODO: Do we want to include the new validator set?
-            return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
-
-        // Check the certificate and retrieve the transfer data.
-        let committee = &self.committee.load();
-        tracing::trace_span!("cert_check_signature")
-            .in_scope(|| certificate.verify(committee))
-            .map_err(|e| {
-                self.metrics.signature_errors.inc();
-                e
-            })?;
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -487,7 +505,22 @@ impl AuthorityState {
         tx_guard: CertTxGuard<'_>,
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
+        self.metrics.total_certs.inc();
         let transaction_digest = *certificate.digest();
+
+        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+            // TODO: Do we want to include the new validator set?
+            return Err(SuiError::ValidatorHaltedAtEpochEnd);
+        }
+
+        // Check the certificate and retrieve the transfer data.
+        let committee = &self.committee.load();
+        tracing::trace_span!("cert_check_signature")
+            .in_scope(|| certificate.verify(committee))
+            .map_err(|e| {
+                self.metrics.signature_errors.inc();
+                e
+            })?;
 
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
