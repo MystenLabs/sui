@@ -21,6 +21,7 @@ import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
+import PaginationWrapper from '../pagination/PaginationWrapper';
 
 import styles from './TxForID.module.css';
 
@@ -47,6 +48,8 @@ const getTx = async (
     category === 'address'
         ? rpc(network).getTransactionsForAddress(id)
         : rpc(network).getTransactionsForObject(id);
+
+const viewFn = (results: any) => <TxForIDView showData={results} />;
 
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData || showData.length === 0) return <></>;
@@ -119,7 +122,7 @@ function TxForIDStatic({
         .map((id) => findTxDatafromID(id))
         .filter((x) => x !== undefined) as TxnData[];
     if (!data) return <></>;
-    return <TxForIDView showData={data} />;
+    return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
 }
 
 function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
@@ -163,7 +166,8 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
 
     if (showData.loadState === 'loaded') {
         const data = showData.data;
-        return <TxForIDView showData={data} />;
+        if (!data) return <></>;
+        return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
     }
 
     return (

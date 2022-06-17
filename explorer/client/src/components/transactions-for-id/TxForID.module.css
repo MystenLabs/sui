@@ -1,5 +1,5 @@
 .txresults {
-    @apply font-mono ml-[1vw] w-[100%];
+    @apply font-mono mt-2 w-[100%];
 }
 
 .txheader {
@@ -7,7 +7,7 @@
 }
 
 .txrow {
-    @apply md:grid md:grid-cols-12;
+    @apply mb-10 md:grid md:grid-cols-12 md:mb-2;
 }
 
 .txheader > div,
