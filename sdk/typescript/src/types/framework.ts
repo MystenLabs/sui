@@ -13,7 +13,7 @@ import BN from 'bn.js';
  */
 export class Coin {
   static isCoin(data: GetObjectDataResponse): boolean {
-    return getMoveObjectType(data)?.startsWith('0x2::coin::Coin') ?? false;
+    return getMoveObjectType(data)?.startsWith('0x2::Coin::Coin') ?? false;
   }
 
   static getBalance(data: GetObjectDataResponse): BN | undefined {
