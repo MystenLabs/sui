@@ -170,7 +170,7 @@ function formatByTransactionKind(
                 {
                     label: 'Arguments',
                     value: moveCall.arguments,
-                    list:true,
+                    list: true,
                 },
             ];
         case 'Publish':
