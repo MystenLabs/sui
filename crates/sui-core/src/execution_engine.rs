@@ -11,6 +11,7 @@ use sui_types::committee::EpochId;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages::ObjectArg;
 use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -175,7 +176,7 @@ fn execute_transaction<S: BackingPackageStore>(
                         &function,
                         vec![],
                         vec![
-                            CallArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID),
+                            CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
                             CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),

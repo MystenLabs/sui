@@ -39,9 +39,11 @@ impl TestCallArg {
             Self::Object(object_id) => {
                 let object = state.get_object(&object_id).await.unwrap().unwrap();
                 if object.is_shared() {
-                    CallArg::SharedObject(object_id)
+                    CallArg::Object(ObjectArg::SharedObject(object_id))
                 } else {
-                    CallArg::ImmOrOwnedObject(object.compute_object_reference())
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                        object.compute_object_reference(),
+                    ))
                 }
             }
             Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
@@ -220,7 +222,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         gas_object_ref,
         /* args */
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
             CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],
@@ -1739,7 +1741,7 @@ async fn shared_object() {
         gas_object_ref,
         /* args */
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
             CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],

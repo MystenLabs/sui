@@ -35,7 +35,7 @@ use sui_types::event::{Event, TransferType};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, CertifiedTransaction, ExecutionStatus, InputObjectKind, MoveModulePublish,
+    CallArg, CertifiedTransaction, ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg,
     SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
 };
 use sui_types::move_package::disassemble_modules;
@@ -914,10 +914,10 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     .into_iter()
                     .map(|arg| match arg {
                         CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
-                        CallArg::ImmOrOwnedObject((id, _, _)) => {
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => {
                             SuiJsonValue::new(Value::String(id.to_hex_literal()))
                         }
-                        CallArg::SharedObject(id) => {
+                        CallArg::Object(ObjectArg::SharedObject(id)) => {
                             SuiJsonValue::new(Value::String(id.to_hex_literal()))
                         }
                     })

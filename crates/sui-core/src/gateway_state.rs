@@ -694,7 +694,9 @@ where
         let signer = certificate.data.signer();
         let (gas_payment, _, _) = certificate.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
-            [CallArg::ImmOrOwnedObject((id, _, _)), CallArg::Pure(arg)] => (id, arg),
+            [CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))), CallArg::Pure(arg)] => {
+                (id, arg)
+            }
             _ => {
                 return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
@@ -747,7 +749,7 @@ where
     ) -> Result<TransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
         let primary_coin = match call.arguments.first() {
-            Some(CallArg::ImmOrOwnedObject((id, _, _))) => id,
+            Some(CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))) => id,
             _ => {
                 return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
@@ -883,9 +885,9 @@ where
                 SuiJsonCallArg::Object(id) => {
                     let obj = self.get_object_internal(&id).await?;
                     let arg = if obj.is_shared() {
-                        CallArg::SharedObject(id)
+                        CallArg::Object(ObjectArg::SharedObject(id))
                     } else {
-                        CallArg::ImmOrOwnedObject(obj.compute_object_reference())
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj.compute_object_reference()))
                     };
                     objects.insert(id, obj);
                     arg
@@ -1205,7 +1207,7 @@ where
             vec![coin_type],
             gas,
             vec![
-                CallArg::ImmOrOwnedObject(coin_object_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_object_ref)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts)?),
             ],
             gas_budget,
@@ -1243,8 +1245,8 @@ where
             vec![coin_type],
             gas,
             vec![
-                CallArg::ImmOrOwnedObject(primary_coin_ref),
-                CallArg::ImmOrOwnedObject(coin_to_merge_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(primary_coin_ref)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_to_merge_ref)),
             ],
             gas_budget,
         );
