@@ -8,7 +8,6 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useState, useEffect, useContext } from 'react';
-import { Link } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
 import {
@@ -86,22 +85,24 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                     <div className={styles.txadd}>
                         <div>
                             From:
-                            <Link
-                                className={styles.txlink}
-                                to={'addresses/' + x.From}
-                            >
-                                {truncate(x.From, TRUNCATE_LENGTH)}
-                            </Link>
+                            <Longtext
+                                text={x.From}
+                                category="addresses"
+                                isLink={true}
+                                isCopyButton={false}
+                                alttext={truncate(x.From, TRUNCATE_LENGTH)}
+                            />
                         </div>
                         {x.To && (
                             <div>
                                 To :
-                                <Link
-                                    className={styles.txlink}
-                                    to={'addresses/' + x.To}
-                                >
-                                    {truncate(x.To, TRUNCATE_LENGTH)}
-                                </Link>
+                                <Longtext
+                                    text={x.To}
+                                    category="addresses"
+                                    isLink={true}
+                                    isCopyButton={false}
+                                    alttext={truncate(x.To, TRUNCATE_LENGTH)}
+                                />
                             </div>
                         )}
                     </div>
