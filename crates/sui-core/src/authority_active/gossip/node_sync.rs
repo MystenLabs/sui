@@ -18,9 +18,9 @@ use sui_types::{
 };
 
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
+use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::task::JoinHandle;
 
 use tracing::{error, info, trace, warn};
@@ -122,7 +122,7 @@ where
         Option<broadcast::Sender<ResultT>>,
         broadcast::Receiver<ResultT>,
     ) {
-        let waiters = &mut self.waiters.lock().await;
+        let waiters = &mut self.waiters.lock().unwrap();
         let entry = waiters.entry(key.clone());
 
         match entry {
@@ -136,7 +136,7 @@ where
     }
 
     async fn notify(&self, key: &Key, res: ResultT) -> SuiResult {
-        if let Some(tx) = self.waiters.lock().await.remove(key) {
+        if let Some(tx) = self.waiters.lock().unwrap().remove(key) {
             tx.send(res).map_err(|_| SuiError::GenericAuthorityError {
                 error: format!("couldn't notify waiters for key {:?}", key),
             })?;
@@ -216,7 +216,7 @@ where
         // Check if the tx is final.
         let stake = self.committee.weight(&peer);
         let quorum_threshold = self.committee.quorum_threshold();
-        let is_final = self.effects_stake.lock().await.note_effects_digest(
+        let is_final = self.effects_stake.lock().unwrap().note_effects_digest(
             &peer,
             stake,
             quorum_threshold,
@@ -265,7 +265,7 @@ where
             .delete_cert_and_effects(&digests.transaction)?;
         self.effects_stake
             .lock()
-            .await
+            .unwrap()
             .forget_effects(&digests.effects);
 
         // Notify waiting child transactions.
