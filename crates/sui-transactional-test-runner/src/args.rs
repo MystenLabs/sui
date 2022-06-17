@@ -8,7 +8,7 @@ use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToke
 use move_compiler::shared::parse_u128;
 use move_core_types::identifier::Identifier;
 use move_core_types::value::{MoveStruct, MoveValue};
-use sui_types::messages::CallArg;
+use sui_types::messages::{CallArg, ObjectArg};
 
 use crate::test_adapter::SuiTestAdapter;
 
@@ -92,10 +92,10 @@ impl SuiValue {
                     None => bail!("INVALID TEST. Could not load object argument {}", id),
                 };
                 if obj.is_shared() {
-                    CallArg::SharedObject(id)
+                    CallArg::Object(ObjectArg::SharedObject(id))
                 } else {
                     let obj_ref = obj.compute_object_reference();
-                    CallArg::ImmOrOwnedObject(obj_ref)
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
                 }
             }
             SuiValue::MoveValue(v) => CallArg::Pure(v.simple_serialize().unwrap()),

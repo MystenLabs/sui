@@ -4,7 +4,9 @@
 use std::sync::Arc;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::gateway_state::{GatewayAPI, GatewayState};
-use sui_types::messages::{CallArg, ExecutionStatus, ObjectInfoRequest, ObjectInfoRequestKind};
+use sui_types::messages::{
+    CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
+};
 use sui_types::object::OBJECT_START_VERSION;
 use test_utils::authority::{get_client, test_authority_aggregator};
 use test_utils::transaction::{
@@ -98,7 +100,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -114,7 +116,7 @@ async fn call_shared_object_contract() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
     let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
@@ -129,7 +131,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -177,7 +179,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -193,7 +195,7 @@ async fn shared_object_flood() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
         .await
@@ -208,7 +210,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -278,7 +280,7 @@ async fn shared_object_sync() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).
@@ -409,7 +411,8 @@ async fn shared_object_on_gateway() {
                     "counter",
                     "increment",
                     package_ref,
-                    /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
+                    /* arguments */
+                    vec![CallArg::Object(ObjectArg::SharedObject(shared_object_id))],
                 );
                 async move { g.execute_transaction(increment_counter_transaction).await }
             })
@@ -431,7 +434,7 @@ async fn shared_object_on_gateway() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
         ],
     );

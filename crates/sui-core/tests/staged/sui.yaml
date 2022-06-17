@@ -38,16 +38,9 @@ CallArg:
         NEWTYPE:
           SEQ: U8
     1:
-      ImmOrOwnedObject:
+      Object:
         NEWTYPE:
-          TUPLE:
-            - TYPENAME: ObjectID
-            - TYPENAME: SequenceNumber
-            - TYPENAME: ObjectDigest
-    2:
-      SharedObject:
-        NEWTYPE:
-          TYPENAME: ObjectID
+          TYPENAME: ObjectArg
 ChangeEpoch:
   STRUCT:
     - epoch: U64
@@ -179,6 +172,19 @@ MoveTypeLayout:
           TYPENAME: MoveStructLayout
     7:
       signer: UNIT
+ObjectArg:
+  ENUM:
+    0:
+      ImmOrOwnedObject:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    1:
+      SharedObject:
+        NEWTYPE:
+          TYPENAME: ObjectID
 ObjectDigest:
   NEWTYPESTRUCT: BYTES
 ObjectFormatOptions:
