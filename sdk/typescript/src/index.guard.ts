@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferCoinTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferCoin, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, TransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferCoinTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, PublicTransferObject, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, TransactionResponse } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
 import { PublicKey } from "./cryptography/publickey";
@@ -325,7 +325,7 @@ export function isSequenceNumber(obj: any, _argumentName?: string): obj is Seque
     )
 }
 
-export function isTransferCoin(obj: any, _argumentName?: string): obj is TransferCoin {
+export function isPublicTransferObject(obj: any, _argumentName?: string): obj is PublicTransferObject {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -345,7 +345,7 @@ export function isRawAuthoritySignInfo(obj: any, _argumentName?: string): obj is
 
 export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
     return (
-        (obj === "TransferCoin" ||
+        (obj === "PublicTransferObject" ||
             obj === "Publish" ||
             obj === "Call")
     )
@@ -356,7 +356,7 @@ export function isSuiTransactionKind(obj: any, _argumentName?: string): obj is S
         ((obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-            isTransferCoin(obj.TransferCoin) as boolean ||
+            isTransferCoin(obj.PublicTransferObject) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&

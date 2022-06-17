@@ -4,15 +4,15 @@
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
-export type TransferCoin = {
+export type PublicTransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
 };
 export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
-export type TransactionKindName = 'TransferCoin' | 'Publish' | 'Call';
+export type TransactionKindName = 'PublicTransferObject' | 'Publish' | 'Call';
 export type SuiTransactionKind =
-  | { TransferCoin: TransferCoin }
+  | { PublicTransferObject: PublicTransferObject }
   | { Publish: SuiMovePackage }
   | { Call: MoveCall };
 export type TransactionData = {
@@ -190,8 +190,8 @@ export function getTransactionGasBudget(tx: CertifiedTransaction): number {
 
 export function getTransferCoinTransaction(
   data: SuiTransactionKind
-): TransferCoin | undefined {
-  return 'TransferCoin' in data ? data.TransferCoin : undefined;
+): PublicTransferObject | undefined {
+  return 'PublicTransferObject' in data ? data.PublicTransferObject : undefined;
 }
 
 export function getPublishTransaction(

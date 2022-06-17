@@ -335,7 +335,7 @@ pub trait GatewayAPI {
 
     /// Create a Batch Transaction that contains a vector of parameters needed to construct
     /// all the single transactions in it.
-    /// Supported single transactions are TransferCoin and MoveCall.
+    /// Supported single transactions are PublicTransferObject and MoveCall.
     async fn batch_transaction(
         &self,
         signer: SuiAddress,
