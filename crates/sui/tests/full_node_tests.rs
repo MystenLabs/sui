@@ -3,6 +3,7 @@
 
 use futures::{future, StreamExt};
 use serde_json::json;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
@@ -29,7 +30,6 @@ async fn transfer_coin(
     let receiver = context.config.accounts.get(1).cloned().unwrap();
 
     let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
-    let gas_object = object_refs.get(0).unwrap().object_id;
     let object_to_send = object_refs.get(1).unwrap().object_id;
 
     // Send an object
@@ -40,7 +40,7 @@ async fn transfer_coin(
     let res = WalletCommands::Transfer {
         to: receiver,
         coin_object_id: object_to_send,
-        gas: Some(gas_object),
+        gas: None,
         gas_budget: 50000,
     }
     .execute(context)
@@ -56,6 +56,13 @@ async fn transfer_coin(
 }
 
 async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {
+    wait_for_all_txes(vec![wait_digest], state).await
+}
+
+async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
+
+    let mut wait_digests: HashSet<_> = wait_digests.iter().collect();
+
     let mut timeout = Box::pin(sleep(Duration::from_millis(5000)));
 
     let mut max_seq = Some(0);
@@ -84,8 +91,11 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
                     // Upon receiving a transaction digest we store it, if it is not processed already.
                     Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
                         info!(?digest, "Received Transaction");
-                        if wait_digest == digest.transaction {
+                        if wait_digests.remove(&digest.transaction) {
                             info!(?digest, "Digest found");
+                        }
+                        if wait_digests.is_empty() {
+                            info!(?digest, "all digests found");
                             break;
                         }
                     },
@@ -137,10 +147,9 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
 async fn publish_basics_package(
     context: &WalletContext,
-    gas_object_id: ObjectID,
     sender: SuiAddress,
 ) -> ObjectRef {
-    info!(?gas_object_id, ?sender, "publish_basics_package");
+    info!(?sender, "publish_basics_package");
 
     let transaction = {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -160,7 +169,7 @@ async fn publish_basics_package(
 
         let data = context
             .gateway
-            .publish(sender, all_module_bytes, Some(gas_object_id), 50000)
+            .publish(sender, all_module_bytes, None, 50000)
             .await
             .unwrap();
 
@@ -185,14 +194,14 @@ async fn publish_basics_package(
 
 async fn move_transaction(
     context: &WalletContext,
-    gas_object_id: ObjectID,
     module: &'static str,
     function: &'static str,
     package_ref: ObjectRef,
     arguments: Vec<SuiJsonValue>,
     sender: SuiAddress,
+    gas_object: Option<ObjectID>,
 ) -> TransactionResponse {
-    info!(?gas_object_id, ?package_ref, ?arguments, "move_transaction");
+    info!(?package_ref, ?arguments, "move_transaction");
 
     let data = context
         .gateway
@@ -203,7 +212,7 @@ async fn move_transaction(
             function.into(),
             vec![], // type_args
             arguments,
-            Some(gas_object_id),
+            gas_object,
             50000,
         )
         .await
@@ -217,21 +226,20 @@ async fn move_transaction(
 
 async fn publish_package_and_make_counter(
     context: &WalletContext,
-    gas_object_id: ObjectID,
     sender: SuiAddress,
 ) -> (ObjectRef, ObjectID) {
-    let package_ref = publish_basics_package(context, gas_object_id, sender).await;
+    let package_ref = publish_basics_package(context, sender).await;
 
     info!(?package_ref);
 
     let create_shared_obj_resp = move_transaction(
         context,
-        gas_object_id,
         "counter",
         "create",
         package_ref,
         vec![],
         sender,
+        None,
     )
     .await;
 
@@ -246,19 +254,19 @@ async fn publish_package_and_make_counter(
 
 async fn increment_counter(
     context: &WalletContext,
-    gas_object_id: ObjectID,
     sender: SuiAddress,
+    gas_object: Option<ObjectID>,
     package_ref: ObjectRef,
     counter_id: ObjectID,
 ) -> TransactionDigest {
     let resp = move_transaction(
         context,
-        gas_object_id,
         "counter",
         "increment",
         package_ref,
         vec![SuiJsonValue::new(json!(counter_id.to_hex_literal())).unwrap()],
         sender,
+        gas_object,
     )
     .await;
 
@@ -272,12 +280,6 @@ async fn increment_counter(
     digest
 }
 
-async fn get_gas_object_id(context: &WalletContext, owner: &SuiAddress) -> ObjectID {
-    let object_refs = context.gateway.get_objects_owned_by_address(*owner).await.unwrap();
-    let gas_object_info = object_refs.get(0).unwrap();
-    gas_object_info.object_id
-}
-
 #[tokio::test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
@@ -289,12 +291,10 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
     let sender = context.config.accounts.get(0).cloned().unwrap();
 
-    let gas_object_id = get_gas_object_id(&context, &sender).await;
-
     let (package_ref, counter_id) =
-        publish_package_and_make_counter(&context, gas_object_id, sender).await;
+        publish_package_and_make_counter(&context, sender).await;
 
-    let digest = increment_counter(&context, gas_object_id, sender, package_ref, counter_id).await;
+    let digest = increment_counter(&context, sender, None, package_ref, counter_id).await;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -389,9 +389,8 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let mut futures = Vec::new();
 
     let sender = context.config.accounts.get(0).cloned().unwrap();
-    let gas_object_id = get_gas_object_id(&context, &sender).await;
     let (package_ref, counter_id) =
-        publish_package_and_make_counter(&context, gas_object_id, sender).await;
+        publish_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -400,7 +399,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let context = context.clone();
         tokio::task::spawn(async move {
-            let (sender, gas_object, object_to_split) = {
+            let (sender, object_to_split) = {
                 let context = &mut context.lock().await;
                 let address = context.config.accounts[i];
                 WalletCommands::SyncClientState {
@@ -412,25 +411,21 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
                 let sender = context.config.accounts.get(0).cloned().unwrap();
 
-                let object_refs = context
-                    .gateway
-                    .get_objects_owned_by_address(sender)
-                    .await
-                    .unwrap();
-                let gas_object = object_refs.get(0).unwrap().object_id;
-                let object_to_split = object_refs.get(1).unwrap().object_id;
-                (sender, gas_object, object_to_split)
+                let coins = context.gas_objects(sender).await.unwrap();
+                let object_to_split = coins.first().unwrap().1.reference.to_object_ref();
+                (sender, object_to_split)
             };
 
             let mut owned_tx_digest = None;
             let mut shared_tx_digest = None;
+            let mut gas_object = None;
             for _ in 0..10 {
                 let res = {
                     let context = &mut context.lock().await;
                     WalletCommands::SplitCoin {
                         amounts: vec![1],
-                        coin_id: object_to_split,
-                        gas: Some(gas_object),
+                        coin_id: object_to_split.0,
+                        gas: gas_object,
                         gas_budget: 50000,
                     }
                     .execute(context)
@@ -440,15 +435,19 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
                 owned_tx_digest = if let WalletCommandResult::SplitCoin(SplitCoinResponse {
                     certificate,
+                    updated_gas,
                     ..
                 }) = res
                 {
+                    // Re-use the same gas id next time to avoid O(n^2) fetches due to automatic
+                    // gas selection.
+                    gas_object = Some(updated_gas.id());
                     Some(certificate.transaction_digest)
                 } else {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };
 
-                shared_tx_digest = Some(increment_counter(&&context.lock().await, gas_object_id, sender, package_ref, counter_id).await);
+                shared_tx_digest = Some(increment_counter(&&context.lock().await, sender, gas_object, package_ref, counter_id).await);
 
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap())).unwrap();
@@ -457,12 +456,12 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     }
 
     // make sure the node syncs up to the last digest sent by each task.
-    let mut digests = future::join_all(futures).await;
-    while let Some(digest) = digests.pop() {
-        let (owned_tx_digest, shared_tx_digest) = digest.unwrap();
-        wait_for_tx(owned_tx_digest, node.state().clone()).await;
-        wait_for_tx(shared_tx_digest, node.state().clone()).await;
-    }
+    let digests = future::join_all(futures).await
+        .iter()
+        .map(|r| r.clone().unwrap())
+        .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
+        .collect();
+    wait_for_all_txes(digests, node.state().clone()).await;
 
     Ok(())
 }
