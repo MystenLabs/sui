@@ -476,7 +476,7 @@ where
         let tx_digest = transaction.digest();
         let span = tracing::debug_span!(
             "execute_transaction",
-            ?tx_digest,
+            digest = ?tx_digest,
             tx_kind = transaction.data.kind_as_str()
         );
         let exec_result = self
@@ -493,8 +493,7 @@ where
         let (new_certificate, effects) = exec_result?;
 
         debug!(
-            ?new_certificate,
-            ?effects,
+            digest = ?tx_digest,
             "Transaction completed successfully"
         );
 
@@ -673,7 +672,7 @@ where
             ?package,
             ?created_objects,
             ?updated_gas,
-            ?certificate,
+            digest = ?certificate.digest(),
             "Created Publish response"
         );
 
@@ -953,7 +952,7 @@ where
         let tx_kind = tx.data.kind.clone();
         let tx_digest = tx.digest();
 
-        debug!(?tx_digest, ?tx, "Received execute_transaction request");
+        debug!(digest = ?tx_digest, "Received execute_transaction request");
 
         let span = tracing::debug_span!(
             "gateway_execute_transaction",
@@ -1001,7 +1000,7 @@ where
         let (certificate, effects) = res.unwrap();
         let effects = effects.effects;
 
-        debug!(?tx, ?certificate, ?effects, "Transaction succeeded");
+        debug!(digest = ?tx_digest, "Transaction succeeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
