@@ -6,6 +6,8 @@ import { useEffect, useState, useCallback } from 'react';
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
+import TxForID from '../../components/transactions-for-id/TxForID';
+import codestyle from '../../styles/bytecode.module.css';
 import theme from '../../styles/theme.module.css';
 import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
 import { parseImageURL } from '../../utils/objectUtils';
@@ -22,12 +24,19 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
+    const [showTx, setShowTx] = useState(true);
 
     useEffect(() => {
         setShowDescription(true);
         setShowProperties(true);
         setShowConnectedEntities(true);
-    }, [setShowDescription, setShowProperties, setShowConnectedEntities]);
+        setShowTx(true);
+    }, [
+        setShowDescription,
+        setShowProperties,
+        setShowConnectedEntities,
+        setShowTx,
+    ]);
 
     const clickSetShowDescription = useCallback(
         () => setShowDescription(!showDescription),
@@ -41,6 +50,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
         () => setShowConnectedEntities(!showConnectedEntities),
         [showConnectedEntities]
     );
+    const clickSetShowTx = useCallback(() => setShowTx(!showTx), [showTx]);
     const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
@@ -243,7 +253,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     </div>
                                 </div>
                             )}
-
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
@@ -369,7 +378,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
                                             <div>{prepLabel(key)}</div>
-                                            <div>{value}</div>
+                                            <div className={codestyle.code}>
+                                                {value}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -380,6 +391,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         data.objType !== 'Move Package' && (
                             <OwnedObjects id={data.id} byAddress={false} />
                         )}
+                    <h2
+                        className={styles.clickableheader}
+                        onClick={clickSetShowTx}
+                    >
+                        Transactions {showTx ? '' : '+'}
+                    </h2>
+                    {showTx && <TxForID id={data.id} category="object" />}
                 </div>
             </div>
         </>

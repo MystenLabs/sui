@@ -51,17 +51,17 @@ In a real application, we probably would make sure that there is a limited suppl
 ```rust
 public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
     let object = Object {
-        id: TxContext::new_id(ctx),
+        id: tx_context::new_id(ctx),
         scarcity,
         style,
     };
-    Transfer::transfer(object, TxContext::sender(ctx))
+    transfer::transfer(object, tx_context::sender(ctx))
 }
 ```
 Anyone can call `create_object` to create a new object with specified `scarcity` and `style`. The created object will be sent to the signer of the transaction. We will likely also want to be able to transfer the object to others:
 ```rust
 public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
-    Transfer::transfer(object, TxContext::sender(ctx))
+    transfer::transfer(object, tx_context::sender(ctx))
 }
 ```
 
@@ -83,14 +83,14 @@ struct ObjectWrapper has key {
 `ObjectWrapper` defines a Sui object type, wraps the object that we want to swap as `to_swap`, and tracks the original owner of the object in `original_owner`. To make this more interesting and realistic, we can also expect that we may need to pay the third party some fee for this swap. Below we define an interface to request a swap by someone who owns an `Object`:
 ```rust
 public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
-    assert!(Coin::value(&fee) >= MIN_FEE, 0);
+    assert!(coin::value(&fee) >= MIN_FEE, 0);
     let wrapper = ObjectWrapper {
-        id: TxContext::new_id(ctx),
-        original_owner: TxContext::sender(ctx),
+        id: tx_context::new_id(ctx),
+        original_owner: tx_context::sender(ctx),
         to_swap: object,
-        fee: Coin::into_balance(fee),
+        fee: coin::into_balance(fee),
     };
-    Transfer::transfer(wrapper, service_address);
+    transfer::transfer(wrapper, service_address);
 }
 ```
 In the above entry function, to request swapping an `object`, one must pass the object by value so that it's fully consumed and wrapped into `ObjectWrapper`. A fee (in the type of `Coin<SUI>`) is also provided. The function also checks that the fee is sufficient. Note that we turn `Coin` into `Balance` when putting it into the `wrapper` object. This is because `Coin` is a Sui object type and used only to pass around as Sui objects (e.g. as entry function arguments or objects sent to addresses). For coin balances that need to be embedded in another Sui object struct, we use `Balance` instead because it's not a Sui object type and hence is much cheaper to use.
@@ -126,27 +126,27 @@ let ObjectWrapper {
 ```
 We now have all the things we need for the actual swap:
 ```rust
-Transfer::transfer(object1, original_owner2);
-Transfer::transfer(object2, original_owner1);
+transfer::transfer(object1, original_owner2);
+transfer::transfer(object2, original_owner1);
 ```
 The above code does the swap: it sends `object1` to the original owner of `object2`, and sends `object1` to the original owner of `object2`. The service provider is also happy to take the fee:
 ```rust
-let service_address = TxContext::sender(ctx);
+let service_address = tx_context::sender(ctx);
 Balance::join(&mut fee1, fee2);
-Transfer::transfer(Coin::from_balance(fee1, ctx), service_address);
+transfer::transfer(coin::from_balance(fee1, ctx), service_address);
 ```
 `fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, we signal Sui that we have deleted both wrapper objects:
 ```rust
-ID::delete(id1);
-ID::delete(id2);
+id::delete(id1);
+id::delete(id2);
 ```
 At the end of this call, the two objects have been swapped (sent to the opposite owner) and the service provider takes the service fee.
 
 Since the contract defined only one way to deal with `ObjectWrapper` - `execute_swap` - there is no other way the service operator can interact with `ObjectWrapper` despite its ownership.
 
-The full source code can be found in [TrustedSwap.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/TrustedSwap.move).
+The full source code can be found in [trusted_swap.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/trusted_swap.move).
 
-A more complex example of using direct wrapping can be found in [Escrow.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Escrow.move).
+A more complex example of using direct wrapping can be found in [escrow.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move).
 
 ### Wrapping through `Option`
 When Sui object type `Bar` is directly wrapped into `Foo`, there is not much flexiblity: a `Foo` object must have a `Bar` object in it, and in order to take out the `Bar` object one must destroy the `Foo` object. However, there are cases where we want more flexibility: the wrapping type may or may not always have the wrapped object in it, and the wrapped object may be replaced with a different object at some point.
@@ -175,30 +175,30 @@ When we are creating a new warrior, we can set the `sword` and `shield` to `none
 ```rust
 public entry fun create_warrior(ctx: &mut TxContext) {
     let warrior = SimpleWarrior {
-        id: TxContext::new_id(ctx),
-        sword: Option::none(),
-        shield: Option::none(),
+        id: tx_context::new_id(ctx),
+        sword: option::none(),
+        shield: option::none(),
     };
-    Transfer::transfer(warrior, TxContext::sender(ctx))
+    transfer::transfer(warrior, tx_context::sender(ctx))
 }
 ```
 With this, we can then define functions to equip new swords or new shields:
 ```rust
 public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
-    if (Option::is_some(&warrior.sword)) {
-        let old_sword = Option::extract(&mut warrior.sword);
-        Transfer::transfer(old_sword, TxContext::sender(ctx));
+    if (option::is_some(&warrior.sword)) {
+        let old_sword = option::extract(&mut warrior.sword);
+        transfer::transfer(old_sword, tx_context::sender(ctx));
     };
-    Option::fill(&mut warrior.sword, sword);
+    option::fill(&mut warrior.sword, sword);
 }
 ```
 In the above function, we are passing a `warrior` as mutable reference of `SimpleWarrior`, and a `sword` passed by value because we need to wrap it into the `warrior`.
 
 It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `Option::fill` without first checking and taking out the existing sword, a runtime error may occur. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would expect when you equip a new sword--you get the old sword back, if there is one.
 
-Full code can be found in [SimpleWarrior.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/SimpleWarrior.move).
+Full code can be found in [simple_warrior.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/simple_warrior.move).
 
-You can also find a more complex example in [Hero.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/Hero.move).
+You can also find a more complex example in [hero.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/hero.move).
 
 ### Wrapping through `vector`
 The concept of wrapping objects in a vector field of another Sui object is very similar to wrapping through `Option`: an object may contain 0, 1 or many of the wrapped objects of the same type.

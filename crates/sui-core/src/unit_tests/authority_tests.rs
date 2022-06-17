@@ -39,9 +39,11 @@ impl TestCallArg {
             Self::Object(object_id) => {
                 let object = state.get_object(&object_id).await.unwrap().unwrap();
                 if object.is_shared() {
-                    CallArg::SharedObject(object_id)
+                    CallArg::Object(ObjectArg::SharedObject(object_id))
                 } else {
-                    CallArg::ImmOrOwnedObject(object.compute_object_reference())
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                        object.compute_object_reference(),
+                    ))
                 }
             }
             Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
@@ -207,7 +209,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
 
     // Make a sample transaction.
-    let module = "ObjectBasics";
+    let module = "object_basics";
     let function = "create";
     let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
@@ -220,7 +222,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         gas_object_ref,
         /* args */
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
             CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],
@@ -419,10 +421,10 @@ async fn test_transfer_package() {
         package_object_ref,
         gas_object.compute_object_reference(),
     );
-    let result = authority_state
+    authority_state
         .handle_transaction(transfer_transaction.clone())
-        .await;
-    assert_eq!(result.unwrap_err(), SuiError::TransferUnownedError);
+        .await
+        .unwrap_err();
 }
 
 // This test attempts to use an immutable gas object to pay for gas.
@@ -1038,7 +1040,7 @@ async fn test_move_call_mutable_object_not_mutated() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "update",
         vec![],
         vec![
@@ -1096,7 +1098,7 @@ async fn test_move_call_delete() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "update",
         vec![],
         vec![
@@ -1116,7 +1118,7 @@ async fn test_move_call_delete() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "delete",
         vec![],
         vec![TestCallArg::Object(new_object_id1)],
@@ -1148,7 +1150,7 @@ async fn test_get_latest_parent_entry() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "update",
         vec![],
         vec![
@@ -1174,7 +1176,7 @@ async fn test_get_latest_parent_entry() {
         &gas_object_id,
         &sender,
         &sender_key,
-        "ObjectBasics",
+        "object_basics",
         "delete",
         vec![],
         vec![TestCallArg::Object(new_object_id1)],
@@ -1431,7 +1433,7 @@ async fn test_transfer_sui_no_amount() {
     )
     .unwrap();
     assert_eq!(
-        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage(),
+        new_balance as i64 + effects.gas_cost_summary().net_gas_usage(),
         init_balance as i64
     );
 }
@@ -1484,7 +1486,7 @@ async fn test_transfer_sui_with_amount() {
     )
     .unwrap();
     assert_eq!(
-        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage() + 500,
+        new_balance as i64 + effects.gas_cost_summary().net_gas_usage() + 500,
         init_balance as i64
     );
 }
@@ -1696,7 +1698,7 @@ pub async fn create_move_object(
         gas_object_id,
         sender,
         sender_key,
-        "ObjectBasics",
+        "object_basics",
         "create",
         vec![],
         vec![TestCallArg::U64(16), TestCallArg::Address(*sender)],
@@ -1726,7 +1728,7 @@ async fn shared_object() {
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
 
     // Make a sample transaction.
-    let module = "ObjectBasics";
+    let module = "object_basics";
     let function = "create";
     let package_object_ref = authority.get_framework_object_ref().await.unwrap();
 
@@ -1739,7 +1741,7 @@ async fn shared_object() {
         gas_object_ref,
         /* args */
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
             CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],

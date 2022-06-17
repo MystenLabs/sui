@@ -2,27 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    public entry foo(ctx: &mut TxContext.TxContext): u64 {
+module 0x0.m {
+    import 0x2.tx_context;
+    public entry foo(ctx: &mut tx_context.TxContext): u64 {
         label l0:
         abort 0;
     }
 }
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    public entry foo(ctx: &mut TxContext.TxContext): u64 * u8 {
+module 0x0.m {
+    import 0x2.tx_context;
+    public entry foo(ctx: &mut tx_context.TxContext): u64 * u8 {
         label l0:
         abort 0;
     }
 }
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    public entry foo(ctx: &mut TxContext.TxContext): vector<u8> {
+module 0x0.m {
+    import 0x2.tx_context;
+    public entry foo(ctx: &mut tx_context.TxContext): vector<u8> {
         label l0:
         abort 0;
     }
@@ -30,9 +30,9 @@ module 0x0.M {
 
 
 //# publish
-module 0x0.M {
-    import 0x2.TxContext;
-    public entry foo(ctx: &mut TxContext.TxContext): &u8 {
+module 0x0.m {
+    import 0x2.tx_context;
+    public entry foo(ctx: &mut tx_context.TxContext): &u8 {
         label l0:
         abort 0;
     }

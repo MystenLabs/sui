@@ -8,12 +8,12 @@ import { getMoveObjectType } from './objects';
 import BN from 'bn.js';
 
 /**
- * Utility class for 0x2::Coin
+ * Utility class for 0x2::coin
  * as defined in https://github.com/MystenLabs/sui/blob/ca9046fd8b1a9e8634a4b74b0e7dabdc7ea54475/sui_programmability/framework/sources/Coin.move#L4
  */
 export class Coin {
   static isCoin(data: GetObjectDataResponse): boolean {
-    return getMoveObjectType(data)?.startsWith('0x2::Coin::Coin') ?? false;
+    return getMoveObjectType(data)?.startsWith('0x2::coin::Coin') ?? false;
   }
 
   static getBalance(data: GetObjectDataResponse): BN | undefined {

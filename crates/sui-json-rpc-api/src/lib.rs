@@ -5,8 +5,15 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use serde_with::serde_as;
+use std::collections::BTreeMap;
 
+use crate::rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams, SuiEvent,
+    SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse,
+};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -15,12 +22,6 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     crypto::SignableBytes,
     messages::TransactionData,
-};
-
-use crate::rpc_types::SuiTypeTag;
-use crate::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, SuiInputObjectKind, SuiObjectInfo,
-    SuiObjectRef, TransactionEffectsResponse, TransactionResponse,
 };
 
 pub mod client;
@@ -184,6 +185,15 @@ pub trait RpcTransactionBuilder {
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
+
+    #[method(name = "batchTransaction")]
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        single_transaction_params: Vec<RPCTransactionRequestParams>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
 }
 
 #[open_rpc(namespace = "sui", tag = "BCS API")]
@@ -219,4 +229,10 @@ impl TransactionBytes {
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
     }
+}
+
+#[rpc(server, client, namespace = "sui")]
+pub trait EventApi {
+    #[subscription(name = "subscribeMoveEventsByType", item = SuiEvent)]
+    fn subscribe_move_event_by_type(&self, event: String, field_filter: BTreeMap<String, Value>);
 }

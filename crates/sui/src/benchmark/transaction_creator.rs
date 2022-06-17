@@ -32,11 +32,11 @@ fn make_transfer_transaction(
 
         SingleTransactionKind::Call(MoveCall {
             package: framework_obj_ref,
-            module: ident_str!("SUI").to_owned(),
+            module: ident_str!("sui").to_owned(),
             function: ident_str!("transfer").to_owned(),
             type_arguments: Vec::new(),
             arguments: vec![
-                CallArg::ImmOrOwnedObject(object_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(recipient)).unwrap()),
             ],
         })

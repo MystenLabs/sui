@@ -161,6 +161,7 @@ where
         source_authority: AuthorityName,
         cert_handler: CertHandler,
     ) -> Result<(), SuiError> {
+        // TODO(panic): this panics
         let source_client = self.authority_clients[&source_authority].clone();
 
         // This represents a stack of certificates that we need to register with the

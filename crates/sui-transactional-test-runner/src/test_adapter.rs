@@ -4,7 +4,7 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 use crate::{args::*, in_memory_storage::InMemoryStorage};
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
@@ -46,7 +46,6 @@ use sui_types::{
         SUI_ADDRESS_LENGTH,
     },
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
-    error::SuiError,
     event::Event,
     gas,
     messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
@@ -137,7 +136,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     (n.clone(), addr)
                 }));
         for (name, addr) in additional_mapping {
-            if named_address_mapping.contains_key(&name) || name == "Sui" {
+            if named_address_mapping.contains_key(&name) || name == "sui" {
                 panic!("Invalid init. The named address '{}' is reserved", name)
             }
             named_address_mapping.insert(name, addr);
@@ -447,19 +446,22 @@ impl<'a> SuiTestAdapter<'a> {
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
             AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
-        let TransactionEffects {
-            status,
-            events,
-            created,
-            // TODO display all these somehow
-            transaction_digest: _,
-            mutated: _,
-            unwrapped: _,
-            deleted: _,
-            wrapped: _,
-            gas_object: _,
-            ..
-        } = execution_engine::execute_transaction_to_effects(
+        let (
+            TransactionEffects {
+                status,
+                events,
+                created,
+                // TODO display all these somehow
+                transaction_digest: _,
+                mutated: _,
+                unwrapped: _,
+                deleted: _,
+                wrapped: _,
+                gas_object: _,
+                ..
+            },
+            execution_error,
+        ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
             transaction.data,
@@ -470,7 +472,7 @@ impl<'a> SuiTestAdapter<'a> {
             gas_status,
             // TODO: Support different epochs in transactional tests.
             0,
-        )?;
+        );
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();
@@ -505,7 +507,15 @@ impl<'a> SuiTestAdapter<'a> {
                 deleted: deleted_ids,
                 events,
             }),
-            ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(*error)),
+            ExecutionStatus::Failure { error, .. } => {
+                Err(anyhow::anyhow!(self.stabilize_str(format!(
+                    "Transaction Effects Status: {}\nExecution Error: {}",
+                    error,
+                    execution_error.expect(
+                        "to have an execution error if a transaction's status is a failure"
+                    )
+                ))))
+            }
         }
     }
 
@@ -600,11 +610,6 @@ impl<'a> SuiTestAdapter<'a> {
             .join(", ")
     }
 
-    fn render_sui_error(&self, sui_error: SuiError) -> anyhow::Error {
-        let error_string: String = format!("{}", sui_error);
-        anyhow!(self.stabilize_str(&error_string))
-    }
-
     fn stabilize_str(&self, input: impl AsRef<str>) -> String {
         fn candidate_is_hex(s: &str) -> bool {
             const HEX_STR_LENGTH: usize = SUI_ADDRESS_LENGTH * 2;
@@ -688,7 +693,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     assert!(map.get("std").unwrap().into_inner() == MOVE_STDLIB_ADDRESS);
     // TODO fix Sui framework constants
     map.insert(
-        "Sui".to_string(),
+        "sui".to_string(),
         NumericalAddress::new(
             SUI_FRAMEWORK_ADDRESS.into_bytes(),
             move_compiler::shared::NumberFormat::Hex,

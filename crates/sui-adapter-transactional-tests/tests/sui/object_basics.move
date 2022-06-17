@@ -5,16 +5,16 @@
 
 //# init --accounts A B
 
-//# run Sui::ObjectBasics::create --sender A --args 10 @A
+//# run sui::object_basics::create --sender A --args 10 @A
 
 //# view-object 105
 
-//# run Sui::ObjectBasics::transfer --sender A --args object(105) @B
+//# run sui::object_basics::transfer --sender A --args object(105) @B
 
 //# view-object 105
 
-//# run Sui::ObjectBasics::create --sender B --args 20 @B
+//# run sui::object_basics::create --sender B --args 20 @B
 
-//# run Sui::ObjectBasics::update --sender B --args object(105) object(108) --view-events
+//# run sui::object_basics::update --sender B --args object(105) object(108) --view-events
 
-//# run Sui::ObjectBasics::delete --sender B --args object(105)
+//# run sui::object_basics::delete --sender B --args object(105)

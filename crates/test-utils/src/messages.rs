@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use sui_adapter::genesis;
 use sui_types::base_types::ObjectRef;
 use sui_types::messages::{
-    CertifiedTransaction, SignatureAggregator, SignedTransaction, Transaction, TransactionData,
+    CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
+    TransactionData,
 };
 use sui_types::object::Object;
 use sui_types::{base_types::SuiAddress, crypto::Signature};
@@ -86,7 +87,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     let mut transactions = Vec::new();
     let shared_object_id = test_shared_object().id();
     for gas_object in test_gas_objects() {
-        let module = "ObjectBasics";
+        let module = "object_basics";
         let function = "create";
         let genesis_package_objects = genesis::clone_genesis_packages();
         let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
@@ -100,7 +101,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
             gas_object.compute_object_reference(),
             /* args */
             vec![
-                CallArg::SharedObject(shared_object_id),
+                CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],

@@ -21,6 +21,7 @@ import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
+import PaginationWrapper from '../pagination/PaginationWrapper';
 
 import styles from './TxForID.module.css';
 
@@ -37,86 +38,94 @@ type TxnData = {
     To?: string;
 };
 
+type categoryType = 'address' | 'object';
+
 const getTx = async (
     id: string,
     network: string,
-    category: 'address'
-): Promise<GetTxnDigestsResponse> => rpc(network).getTransactionsForAddress(id);
+    category: categoryType
+): Promise<GetTxnDigestsResponse> =>
+    category === 'address'
+        ? rpc(network).getTransactionsForAddress(id)
+        : rpc(network).getTransactionsForObject(id);
+
+const viewFn = (results: any) => <TxForIDView showData={results} />;
 
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData || showData.length === 0) return <></>;
 
     return (
-        <>
-            <div>
-                <div>Transactions</div>
-                <div id="tx">
-                    <div className={styles.txheader}>
-                        <div className={styles.txid}>TxId</div>
-                        <div className={styles.txtype}>TxType</div>
-                        <div className={styles.txstatus}>Status</div>
-                        <div className={styles.txadd}>Addresses</div>
-                    </div>
-
-                    {showData.map((x, index) => (
-                        <div key={`txid-${index}`} className={styles.txrow}>
-                            <div className={styles.txid}>
-                                <Longtext
-                                    text={x.txId}
-                                    category="transactions"
-                                    isLink={true}
-                                />
-                            </div>
-                            <div className={styles.txtype}>{x.kind}</div>
-                            <div
-                                className={cl(
-                                    styles.txstatus,
-                                    styles[x.status.toLowerCase()]
-                                )}
-                            >
-                                {x.status === 'success' ? '\u2714' : '\u2716'}
-                            </div>
-                            <div className={styles.txadd}>
-                                <div>
-                                    From:
-                                    <Link
-                                        className={styles.txlink}
-                                        to={'addresses/' + x.From}
-                                    >
-                                        {truncate(x.From, 14, '...')}
-                                    </Link>
-                                </div>
-                                {x.To && (
-                                    <div>
-                                        To :
-                                        <Link
-                                            className={styles.txlink}
-                                            to={'addresses/' + x.To}
-                                        >
-                                            {truncate(x.To, 14, '...')}
-                                        </Link>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+        <div id="tx" className={styles.txresults}>
+            <div className={styles.txheader}>
+                <div className={styles.txid}>TxId</div>
+                <div className={styles.txtype}>TxType</div>
+                <div className={styles.txstatus}>Status</div>
+                <div className={styles.txadd}>Addresses</div>
             </div>
-        </>
+
+            {showData.map((x, index) => (
+                <div key={`txid-${index}`} className={styles.txrow}>
+                    <div className={styles.txid}>
+                        <Longtext
+                            text={x.txId}
+                            category="transactions"
+                            isLink={true}
+                        />
+                    </div>
+                    <div className={styles.txtype}>{x.kind}</div>
+                    <div
+                        className={cl(
+                            styles.txstatus,
+                            styles[x.status.toLowerCase()]
+                        )}
+                    >
+                        {x.status === 'success' ? '\u2714' : '\u2716'}
+                    </div>
+                    <div className={styles.txadd}>
+                        <div>
+                            From:
+                            <Link
+                                className={styles.txlink}
+                                to={'addresses/' + x.From}
+                            >
+                                {truncate(x.From, 14, '...')}
+                            </Link>
+                        </div>
+                        {x.To && (
+                            <div>
+                                To :
+                                <Link
+                                    className={styles.txlink}
+                                    to={'addresses/' + x.To}
+                                >
+                                    {truncate(x.To, 14, '...')}
+                                </Link>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
     );
 }
 
-function TxForIDStatic({ id, category }: { id: string; category: 'address' }) {
+function TxForIDStatic({
+    id,
+    category,
+}: {
+    id: string;
+    category: categoryType;
+}) {
     const data = deduplicate(
         findTxfromID(id)?.data as [number, string][] | undefined
     )
         .map((id) => findTxDatafromID(id))
         .filter((x) => x !== undefined) as TxnData[];
     if (!data) return <></>;
-    return <TxForIDView showData={data} />;
+    return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
 }
 
-function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
+function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     const [showData, setData] =
         useState<{ data?: TxnData[]; loadState: string }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
@@ -157,7 +166,8 @@ function TxForIDAPI({ id, category }: { id: string; category: 'address' }) {
 
     if (showData.loadState === 'loaded') {
         const data = showData.data;
-        return <TxForIDView showData={data} />;
+        if (!data) return <></>;
+        return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
     }
 
     return (
@@ -173,7 +183,7 @@ export default function TxForID({
     category,
 }: {
     id: string;
-    category: 'address';
+    category: categoryType;
 }) {
     return IS_STATIC_ENV ? (
         <TxForIDStatic id={id} category={category} />

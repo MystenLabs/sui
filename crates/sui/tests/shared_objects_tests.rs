@@ -4,7 +4,9 @@
 use std::sync::Arc;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::gateway_state::{GatewayAPI, GatewayState};
-use sui_types::messages::{CallArg, ExecutionStatus, ObjectInfoRequest, ObjectInfoRequestKind};
+use sui_types::messages::{
+    CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
+};
 use sui_types::object::OBJECT_START_VERSION;
 use test_utils::authority::{get_client, test_authority_aggregator};
 use test_utils::transaction::{
@@ -81,7 +83,7 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -94,11 +96,11 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -111,10 +113,10 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
     let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
@@ -125,11 +127,11 @@ async fn call_shared_object_contract() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -143,6 +145,7 @@ async fn call_shared_object_contract() {
 /// transaction (one copy per authority).
 #[tokio::test]
 async fn shared_object_flood() {
+    telemetry_subscribers::init_for_testing();
     let mut gas_objects = test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
@@ -159,7 +162,7 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -172,11 +175,11 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -189,10 +192,10 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
         .await
@@ -203,11 +206,11 @@ async fn shared_object_flood() {
     tokio::task::yield_now().await;
     let transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -235,7 +238,7 @@ async fn shared_object_sync() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -274,10 +277,10 @@ async fn shared_object_sync() {
     tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).
@@ -336,7 +339,7 @@ async fn replay_shared_object_transaction() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -377,7 +380,7 @@ async fn shared_object_on_gateway() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -405,10 +408,11 @@ async fn shared_object_on_gateway() {
                 let g = gateway.clone();
                 let increment_counter_transaction = move_transaction(
                     gas_object,
-                    "Counter",
+                    "counter",
                     "increment",
                     package_ref,
-                    /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
+                    /* arguments */
+                    vec![CallArg::Object(ObjectArg::SharedObject(shared_object_id))],
                 );
                 async move { g.execute_transaction(increment_counter_transaction).await }
             })
@@ -426,11 +430,11 @@ async fn shared_object_on_gateway() {
 
     let assert_value_transaction = move_transaction(
         last_gas_object,
-        "Counter",
+        "counter",
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
         ],
     );

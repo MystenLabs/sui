@@ -16,6 +16,7 @@ use base64ct::Encoding;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
+use move_core_types::vm_status::AbortLocation;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
@@ -41,7 +42,13 @@ mod messages_tests;
 pub enum CallArg {
     // contains no structs or objects
     Pure(Vec<u8>),
+    // an object
+    Object(ObjectArg),
     // TODO support more than one object (object vector of some sort)
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum ObjectArg {
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedObject(ObjectRef),
     // A Move object that's shared and mutable.
@@ -122,8 +129,8 @@ impl SingleTransactionKind {
         match &self {
             Self::Call(MoveCall { arguments, .. }) => {
                 Either::Left(arguments.iter().filter_map(|arg| match arg {
-                    CallArg::Pure(_) | CallArg::ImmOrOwnedObject(_) => None,
-                    CallArg::SharedObject(id) => Some(id),
+                    CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                    CallArg::Object(ObjectArg::SharedObject(id)) => Some(id),
                 }))
             }
             _ => Either::Right(std::iter::empty()),
@@ -145,10 +152,12 @@ impl SingleTransactionKind {
                 .iter()
                 .filter_map(|arg| match arg {
                     CallArg::Pure(_) => None,
-                    CallArg::ImmOrOwnedObject(object_ref) => {
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
                         Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
                     }
-                    CallArg::SharedObject(id) => Some(InputObjectKind::SharedMoveObject(*id)),
+                    CallArg::Object(ObjectArg::SharedObject(id)) => {
+                        Some(InputObjectKind::SharedMoveObject(*id))
+                    }
                 })
                 .chain([InputObjectKind::MovePackage(package.0)])
                 .collect(),
@@ -897,23 +906,31 @@ pub enum CallResult {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
-    // Gas used in the success case.
-    Success {
-        gas_cost: GasCostSummary,
-    },
+    Success,
     // Gas used in the failed case, and the error.
-    Failure {
-        gas_cost: GasCostSummary,
-        error: Box<SuiError>,
-    },
+    Failure { error: ExecutionFailureStatus },
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum ExecutionFailureStatus {
+    InsufficientGas,
+    /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
+    /// abort code
+    MoveAbort(AbortLocation, u64),
+    MiscellaneousError,
+}
+
+impl std::fmt::Display for ExecutionFailureStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionFailureStatus {}
+
 impl ExecutionStatus {
-    pub fn new_failure(gas_used: GasCostSummary, error: SuiError) -> ExecutionStatus {
-        ExecutionStatus::Failure {
-            gas_cost: gas_used,
-            error: Box::new(error),
-        }
+    pub fn new_failure(error: ExecutionFailureStatus) -> ExecutionStatus {
+        ExecutionStatus::Failure { error }
     }
 
     pub fn is_ok(&self) -> bool {
@@ -924,36 +941,21 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> GasCostSummary {
+    pub fn unwrap(self) {
         match self {
-            ExecutionStatus::Success { gas_cost: gas_used } => gas_used,
+            ExecutionStatus::Success => {}
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
         }
     }
 
-    pub fn unwrap_err(self) -> (GasCostSummary, SuiError) {
+    pub fn unwrap_err(self) -> ExecutionFailureStatus {
         match self {
             ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure {
-                gas_cost: gas_used,
-                error,
-            } => (gas_used, *error),
-        }
-    }
-
-    /// Returns the gas used from the status
-    pub fn gas_cost_summary(&self) -> &GasCostSummary {
-        match &self {
-            ExecutionStatus::Success {
-                gas_cost: gas_used, ..
-            } => gas_used,
-            ExecutionStatus::Failure {
-                gas_cost: gas_used, ..
-            } => gas_used,
+            ExecutionStatus::Failure { error } => error,
         }
     }
 }
@@ -963,6 +965,7 @@ impl ExecutionStatus {
 pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
+    pub gas_used: GasCostSummary,
     // The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     pub shared_objects: Vec<ObjectRef>,
     // The transaction digest
@@ -999,6 +1002,10 @@ impl TransactionEffects {
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
+    }
+
+    pub fn gas_cost_summary(&self) -> &GasCostSummary {
+        &self.gas_used
     }
 
     pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {

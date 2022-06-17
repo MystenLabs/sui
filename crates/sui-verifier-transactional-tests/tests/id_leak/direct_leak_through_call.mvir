@@ -2,20 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.ID;
+module 0x0.m {
+    import 0x2.id;
 
     struct Foo has key {
-        id: ID.VersionedID,
+        id: id.VersionedID,
     }
 
-    transfer(id: ID.VersionedID) {
+    transfer(id: id.VersionedID) {
         label l0:
         abort 0;
     }
 
-    foo(f: Self.Foo, v: &mut vector<ID.VersionedID>) {
-        let id: ID.VersionedID;
+    foo(f: Self.Foo, v: &mut vector<id.VersionedID>) {
+        let id: id.VersionedID;
         label l0:
         Foo { id } = move(f);
         Self.transfer(move(id));

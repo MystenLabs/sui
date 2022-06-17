@@ -5,6 +5,10 @@ use anyhow::Result;
 use futures::TryFutureExt;
 use parking_lot::Mutex;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
+
+use jsonrpsee::ws_server::WsServerBuilder;
+use tracing::info;
+
 use sui_config::NodeConfig;
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
@@ -16,15 +20,17 @@ use sui_core::{
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
-use sui_storage::{follower_store::FollowerStore, IndexStore};
-use tracing::info;
+use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore, IndexStore};
 
+use sui_json_rpc::event_api::EventApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
+use sui_json_rpc_api::EventApiServer;
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<jsonrpsee::http_server::HttpServerHandle>,
+    _ws_subscription_service: Option<jsonrpsee::ws_server::WsServerHandle>,
     _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
@@ -77,7 +83,13 @@ impl SuiNode {
             .await,
         );
 
-        let gossip_handle = if config.enable_gossip {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let is_validator = config.consensus_config().is_some();
+        let is_node = !is_validator;
+
+        let should_start_follower = is_node || config.enable_gossip;
+
+        let gossip_handle = if should_start_follower {
             let mut net_config = mysten_network::config::Config::new();
             net_config.connect_timeout = Some(Duration::from_secs(5));
             net_config.request_timeout = Some(Duration::from_secs(5));
@@ -95,15 +107,18 @@ impl SuiNode {
             let active_authority =
                 ActiveAuthority::new(state.clone(), follower_store, authority_clients)?;
 
-            let degree = active_authority.state.committee.load().voting_rights.len();
-            // Start following validators
-            let handle = active_authority
-                .spawn_gossip_process(
-                    // listen to all authorities (note that gossip_process caps this to total minus 1.)
-                    degree,
-                )
-                .await;
-            Some(handle)
+            Some(if is_validator {
+                // TODO: get degree from config file.
+                let degree = 4;
+                active_authority.spawn_gossip_process(degree).await
+            } else {
+                let pending_store =
+                    Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
+
+                active_authority
+                    .spawn_node_sync_process(pending_store)
+                    .await
+            })
         } else {
             None
         };
@@ -152,8 +167,8 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let json_rpc_service = if config.consensus_config().is_some() {
-            None
+        let (json_rpc_service, ws_subscription_service) = if config.consensus_config().is_some() {
+            (None, None)
         } else {
             let mut server = JsonRpcServerBuilder::new()?;
             server.register_module(ReadApi::new(state.clone()))?;
@@ -161,12 +176,25 @@ impl SuiNode {
             server.register_module(BcsApiImpl::new(state.clone()))?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
-            Some(server_handle)
+
+            let ws_handle = if let Some(event_handler) = state.event_handler.clone() {
+                let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+                let server_addr = ws_server.local_addr()?;
+                let ws_handle =
+                    ws_server.start(EventApiImpl::new(state.clone(), event_handler).into_rpc())?;
+
+                info!("Starting WS endpoint at ws://{}", server_addr);
+                Some(ws_handle)
+            } else {
+                None
+            };
+            (Some(server_handle), ws_handle)
         };
 
         let node = Self {
             grpc_server,
             _json_rpc_service: json_rpc_service,
+            _ws_subscription_service: ws_subscription_service,
             _gossip_handle: gossip_handle,
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,

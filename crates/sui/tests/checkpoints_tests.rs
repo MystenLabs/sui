@@ -9,7 +9,7 @@ use sui_core::{
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     crypto::get_key_pair_from_rng,
-    messages::{CallArg, ExecutionStatus},
+    messages::{CallArg, ExecutionStatus, ObjectArg},
 };
 use test_utils::transaction::publish_counter_package;
 use test_utils::{
@@ -247,7 +247,7 @@ async fn checkpoint_with_shared_objects() {
     tokio::task::yield_now().await;
     let create_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "create",
         package_ref,
         /* arguments */ Vec::default(),
@@ -266,10 +266,10 @@ async fn checkpoint_with_shared_objects() {
     tokio::task::yield_now().await;
     let increment_counter_transaction = move_transaction(
         gas_objects.pop().unwrap(),
-        "Counter",
+        "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
     let replies = submit_shared_object_transaction(
         increment_counter_transaction.clone(),

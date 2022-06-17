@@ -8,7 +8,7 @@ div.textresults > div:first-child {
 }
 
 div.textresults > div:last-child {
-    @apply mb-[2vh];
+    @apply mb-[10vh];
 }
 
 div.textresults > div > div:first-child {

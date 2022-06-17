@@ -5,10 +5,10 @@
 
 //# publish
 module Test::M1 {
-    use Sui::ID::VersionedID;
-    use Sui::TxContext::{Self, TxContext};
-    use Sui::Transfer;
-    use Sui::Coin::Coin;
+    use sui::id::VersionedID;
+    use sui::tx_context::{Self, TxContext};
+    use sui::transfer;
+    use sui::coin::Coin;
 
     struct Object has key, store {
         id: VersionedID,
@@ -20,8 +20,8 @@ module Test::M1 {
     }
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        Transfer::transfer(
-            Object { id: TxContext::new_id(ctx), value },
+        transfer::transfer(
+            Object { id: tx_context::new_id(ctx), value },
             recipient
         )
     }

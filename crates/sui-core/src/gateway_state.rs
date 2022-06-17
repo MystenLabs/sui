@@ -11,9 +11,8 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
-use move_bytecode_utils::module_cache::ModuleCache;
+use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::TypeTag;
 use once_cell::sync::Lazy;
 use prometheus_exporter::prometheus::{
     register_histogram, register_int_counter, Histogram, IntCounter,
@@ -34,18 +33,18 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
+use crate::authority::ResolverWrapper;
 use crate::transaction_input_checker;
 use crate::{
-    authority::{GatewayStore, UpdateType},
-    authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
-    query_helpers::QueryHelpers,
+    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI, query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, PublishResponse,
-    SplitCoinResponse, SuiMoveObject, SuiObject, SuiObjectInfo, TransactionEffectsResponse,
-    TransactionResponse,
+    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
+    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
+    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse, TransferCoinParams,
 };
 
 use crate::transaction_input_checker::InputObjects;
@@ -183,6 +182,7 @@ pub struct GatewayState<A> {
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
     metrics: &'static GatewayMetrics,
+    module_cache: SyncModuleCache<ResolverWrapper<GatewayStore>>,
 }
 
 impl<A> GatewayState<A> {
@@ -202,10 +202,11 @@ impl<A> GatewayState<A> {
         let store = Arc::new(GatewayStore::open(path, None));
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
         Ok(Self {
-            store,
+            store: store.clone(),
             authorities,
             next_tx_seq_number,
             metrics: &METRICS,
+            module_cache: SyncModuleCache::new(ResolverWrapper(store)),
         })
     }
 
@@ -271,7 +272,7 @@ pub trait GatewayAPI {
         package_object_id: ObjectID,
         module: String,
         function: String,
-        type_arguments: Vec<TypeTag>,
+        type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
@@ -314,6 +315,17 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error>;
+
+    /// Create a Batch Transaction that contains a vector of parameters needed to construct
+    /// all the single transactions in it.
+    /// Supported single transactions are TransferCoin and MoveCall.
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        single_transaction_params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
@@ -400,8 +412,7 @@ where
         &self,
         object: Object,
     ) -> Result<SuiObject<T>, anyhow::Error> {
-        let cache = ModuleCache::new(&*self.store);
-        let layout = object.get_layout(ObjectFormatOptions::default(), &cache)?;
+        let layout = object.get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
         SuiObject::<T>::try_from(object, layout)
     }
 
@@ -496,18 +507,17 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
-        let update_type = UpdateType::Transaction(
-            self.next_tx_seq_number
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-            effects.effects.digest(),
-        );
+        let seq = self
+            .next_tx_seq_number
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.store
             .update_gateway_state(
                 input_objects,
                 mutated_objects,
                 new_certificate.clone(),
+                seq,
                 effects.clone().to_unsigned_effects(),
-                update_type,
+                &effects.effects.digest(),
             )
             .await?;
 
@@ -596,7 +606,7 @@ where
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
     ) -> Result<TransactionResponse, anyhow::Error> {
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(
@@ -684,7 +694,9 @@ where
         let signer = certificate.data.signer();
         let (gas_payment, _, _) = certificate.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
-            [CallArg::ImmOrOwnedObject((id, _, _)), CallArg::Pure(arg)] => (id, arg),
+            [CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))), CallArg::Pure(arg)] => {
+                (id, arg)
+            }
             _ => {
                 return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
@@ -694,7 +706,7 @@ where
         };
         let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
 
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         let created = &effects.created;
@@ -737,7 +749,7 @@ where
     ) -> Result<TransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
         let primary_coin = match call.arguments.first() {
-            Some(CallArg::ImmOrOwnedObject((id, _, _))) => id,
+            Some(CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))) => id,
             _ => {
                 return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
@@ -747,7 +759,7 @@ where
         };
         let (gas_payment, _, _) = certificate.data.gas();
 
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(
@@ -792,7 +804,7 @@ where
         address: SuiAddress,
         budget: u64,
         gas: Option<ObjectID>,
-        used_coins: Vec<ObjectID>,
+        used_object_ids: BTreeSet<ObjectID>,
     ) -> Result<ObjectRef, anyhow::Error> {
         if let Some(id) = gas {
             Ok(self
@@ -800,9 +812,8 @@ where
                 .await?
                 .compute_object_reference())
         } else {
-            let used_coins = used_coins.into_iter().collect::<BTreeSet<_>>();
             for (id, balance) in self.get_owned_coins(address).await.unwrap() {
-                if balance >= budget && !used_coins.contains(&id.0) {
+                if balance >= budget && !used_object_ids.contains(&id.0) {
                     return Ok(id);
                 }
             }
@@ -826,6 +837,93 @@ where
             }
         }
         Ok(coins)
+    }
+
+    async fn create_transfer_coin_transaction_kind(
+        &self,
+        params: TransferCoinParams,
+        used_object_ids: &mut BTreeSet<ObjectID>,
+    ) -> Result<SingleTransactionKind, anyhow::Error> {
+        used_object_ids.insert(params.object_id);
+        let object = self.get_object_internal(&params.object_id).await?;
+        let object_ref = object.compute_object_reference();
+        Ok(SingleTransactionKind::TransferCoin(TransferCoin {
+            recipient: params.recipient,
+            object_ref,
+        }))
+    }
+
+    async fn create_move_call_transaction_kind(
+        &self,
+        params: MoveCallParams,
+        used_object_ids: &mut BTreeSet<ObjectID>,
+    ) -> Result<SingleTransactionKind, anyhow::Error> {
+        let MoveCallParams {
+            module,
+            function,
+            package_object_id,
+            type_arguments,
+            arguments,
+        } = params;
+        let module = Identifier::new(module)?;
+        let function = Identifier::new(function)?;
+        let package_obj = self.get_object_internal(&package_object_id).await?;
+        let package_obj_ref = package_obj.compute_object_reference();
+        let json_args = resolve_move_function_args(
+            package_obj.data.try_as_package().unwrap(),
+            module.clone(),
+            function.clone(),
+            arguments,
+        )?;
+
+        // Fetch all the objects needed for this call
+        let mut objects = BTreeMap::new();
+        let mut args = Vec::with_capacity(json_args.len());
+
+        for json_arg in json_args {
+            args.push(match json_arg {
+                SuiJsonCallArg::Object(id) => {
+                    let obj = self.get_object_internal(&id).await?;
+                    let arg = if obj.is_shared() {
+                        CallArg::Object(ObjectArg::SharedObject(id))
+                    } else {
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj.compute_object_reference()))
+                    };
+                    objects.insert(id, obj);
+                    arg
+                }
+                SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
+            })
+        }
+
+        // Pass in the objects for a deeper check
+        let is_genesis = false;
+        let type_arguments = type_arguments
+            .into_iter()
+            .map(|arg| arg.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+        let compiled_module = package_obj
+            .data
+            .try_as_package()
+            .ok_or_else(|| anyhow!("Cannot get package from object"))?
+            .deserialize_module(&module)?;
+        resolve_and_type_check(
+            &objects,
+            &compiled_module,
+            &function,
+            &type_arguments,
+            args.clone(),
+            is_genesis,
+        )?;
+        used_object_ids.extend(objects.keys());
+
+        Ok(SingleTransactionKind::Call(MoveCall {
+            package: package_obj_ref,
+            module,
+            function,
+            type_arguments,
+            arguments: args,
+        }))
     }
 
     #[cfg(test)]
@@ -934,7 +1032,7 @@ where
         return Ok(TransactionResponse::EffectResponse(
             TransactionEffectsResponse {
                 certificate: certificate.try_into()?,
-                effects: effects.into(),
+                effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
                 timestamp_ms: None,
             },
         ));
@@ -948,14 +1046,19 @@ where
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
+        let mut used_object_ids = BTreeSet::new();
+        let params = TransferCoinParams {
+            recipient,
+            object_id,
+        };
+        let kind = TransactionKind::Single(
+            self.create_transfer_coin_transaction_kind(params, &mut used_object_ids)
+                .await?,
+        );
         let gas_payment = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![object_id])
+            .choose_gas_for_address(signer, gas_budget, gas, used_object_ids)
             .await?;
-        let object = self.get_object_internal(&object_id).await?;
-        let object_ref = object.compute_object_reference();
-        let data =
-            TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
-        Ok(data)
+        Ok(TransactionData::new(kind, signer, gas_payment, gas_budget))
     }
 
     async fn transfer_sui(
@@ -971,6 +1074,46 @@ where
         let data =
             TransactionData::new_transfer_sui(recipient, signer, amount, object_ref, gas_budget);
         Ok(data)
+    }
+
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        single_transaction_params: Vec<RPCTransactionRequestParams>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        fp_ensure!(
+            !single_transaction_params.is_empty(),
+            SuiError::InvalidBatchTransaction {
+                error: "Batch Transaction cannot be empty".to_owned(),
+            }
+            .into()
+        );
+        let mut all_tx_kind = vec![];
+        let mut used_object_ids = BTreeSet::new();
+        for param in single_transaction_params {
+            let kind = match param {
+                RPCTransactionRequestParams::TransferCoinRequestParams(t) => {
+                    self.create_transfer_coin_transaction_kind(t, &mut used_object_ids)
+                        .await?
+                }
+                RPCTransactionRequestParams::MoveCallRequestParams(m) => {
+                    self.create_move_call_transaction_kind(m, &mut used_object_ids)
+                        .await?
+                }
+            };
+            all_tx_kind.push(kind);
+        }
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, used_object_ids)
+            .await?;
+        Ok(TransactionData::new(
+            TransactionKind::Batch(all_tx_kind),
+            signer,
+            gas,
+            gas_budget,
+        ))
     }
 
     // TODO: Get rid of the sync API.
@@ -1003,74 +1146,27 @@ where
         package_object_id: ObjectID,
         module: String,
         function: String,
-        type_arguments: Vec<TypeTag>,
+        type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let module = Identifier::new(module)?;
-        let function = Identifier::new(function)?;
-        let package_obj = self.get_object_internal(&package_object_id).await?;
-        let package_obj_ref = package_obj.compute_object_reference();
-        let json_args = resolve_move_function_args(
-            package_obj.data.try_as_package().unwrap(),
-            module.clone(),
-            function.clone(),
-            arguments,
-        )?;
-
-        // Fetch all the objects needed for this call
-        let mut objects = BTreeMap::new();
-        let mut args = Vec::with_capacity(json_args.len());
-
-        for json_arg in json_args {
-            args.push(match json_arg {
-                SuiJsonCallArg::Object(id) => {
-                    let obj = self.get_object_internal(&id).await?;
-                    let arg = if obj.is_shared() {
-                        CallArg::SharedObject(id)
-                    } else {
-                        CallArg::ImmOrOwnedObject(obj.compute_object_reference())
-                    };
-                    objects.insert(id, obj);
-                    arg
-                }
-                SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
-            })
-        }
-
-        let forbidden_gas_objects = objects.keys().copied().collect();
-        let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, forbidden_gas_objects)
-            .await?;
-
-        // Pass in the objects for a deeper check
-        let is_genesis = false;
-        let compiled_module = package_obj
-            .data
-            .try_as_package()
-            .ok_or_else(|| anyhow!("Cannot get package from object"))?
-            .deserialize_module(&module)?;
-        resolve_and_type_check(
-            &objects,
-            &compiled_module,
-            &function,
-            &type_arguments,
-            args.clone(),
-            is_genesis,
-        )?;
-
-        let data = TransactionData::new_move_call(
-            signer,
-            package_obj_ref,
+        let params = MoveCallParams {
+            package_object_id,
             module,
             function,
             type_arguments,
-            gas,
-            args,
-            gas_budget,
+            arguments,
+        };
+        let mut used_object_ids = BTreeSet::new();
+        let kind = TransactionKind::Single(
+            self.create_move_call_transaction_kind(params, &mut used_object_ids)
+                .await?,
         );
-
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, used_object_ids)
+            .await?;
+        let data = TransactionData::new(kind, signer, gas, gas_budget);
         debug!(?data, "Created Move Call transaction data");
         Ok(data)
     }
@@ -1083,7 +1179,7 @@ where
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![])
+            .choose_gas_for_address(signer, gas_budget, gas, BTreeSet::new())
             .await?;
         let data = TransactionData::new_module(signer, gas, package_bytes, gas_budget);
         Ok(data)
@@ -1098,7 +1194,7 @@ where
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_object_id])
+            .choose_gas_for_address(signer, gas_budget, gas, BTreeSet::from([coin_object_id]))
             .await?;
         let coin_object = self.get_object_internal(&coin_object_id).await?;
         let coin_object_ref = coin_object.compute_object_reference();
@@ -1111,7 +1207,7 @@ where
             vec![coin_type],
             gas,
             vec![
-                CallArg::ImmOrOwnedObject(coin_object_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_object_ref)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts)?),
             ],
             gas_budget,
@@ -1129,7 +1225,12 @@ where
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_to_merge, primary_coin])
+            .choose_gas_for_address(
+                signer,
+                gas_budget,
+                gas,
+                BTreeSet::from([coin_to_merge, primary_coin]),
+            )
             .await?;
         let primary_coin_ref = self.get_object_ref(&primary_coin).await?;
         let coin_to_merge = self.get_object_internal(&coin_to_merge).await?;
@@ -1144,8 +1245,8 @@ where
             vec![coin_type],
             gas,
             vec![
-                CallArg::ImmOrOwnedObject(primary_coin_ref),
-                CallArg::ImmOrOwnedObject(coin_to_merge_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(primary_coin_ref)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_to_merge_ref)),
             ],
             gas_budget,
         );
@@ -1222,7 +1323,7 @@ where
 
         Ok(TransactionEffectsResponse {
             certificate: cert.try_into()?,
-            effects: effect.into(),
+            effects: SuiTransactionEffects::try_from(effect, &self.module_cache)?,
             timestamp_ms: None,
         })
     }

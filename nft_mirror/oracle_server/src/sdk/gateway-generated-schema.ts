@@ -24,7 +24,7 @@ export interface paths {
          * {
          *     "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
          *     "package_object_id": "0x2",
-         *     "module": "ObjectBasics",
+         *     "module": "object_basics",
          *     "function": "create",
          *     "args": [
          *         200,
@@ -237,7 +237,7 @@ export interface operations {
      * {
      *     "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
      *     "package_object_id": "0x2",
-     *     "module": "ObjectBasics",
+     *     "module": "object_basics",
      *     "function": "create",
      *     "args": [
      *         200,

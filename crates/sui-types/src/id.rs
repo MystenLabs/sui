@@ -14,26 +14,26 @@ use move_core_types::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const ID_MODULE_NAME: &IdentStr = ident_str!("ID");
+pub const ID_MODULE_NAME: &IdentStr = ident_str!("id");
 pub const VERSIONED_ID_STRUCT_NAME: &IdentStr = ident_str!("VersionedID");
 pub const UNIQUE_ID_STRUCT_NAME: &IdentStr = ident_str!("UniqueID");
-pub const ID_STRUCT_NAME: &IdentStr = ID_MODULE_NAME;
+pub const ID_STRUCT_NAME: &IdentStr = ident_str!("ID");
 
-/// Rust version of the Move Sui::ID::VersionedID type
+/// Rust version of the Move sui::id::VersionedID type
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
 pub struct VersionedID {
     pub id: UniqueID,
     pub version: u64,
 }
 
-/// Rust version of the Move Sui::ID::UniqueID type
+/// Rust version of the Move sui::id::UniqueID type
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(transparent)]
 pub struct UniqueID {
     pub id: ID,
 }
 
-/// Rust version of the Move Sui::ID::ID type
+/// Rust version of the Move sui::id::ID type
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(transparent)]
 pub struct ID {
@@ -53,8 +53,8 @@ impl VersionedID {
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            name: VERSIONED_ID_STRUCT_NAME.to_owned(),
             module: ID_MODULE_NAME.to_owned(),
+            name: VERSIONED_ID_STRUCT_NAME.to_owned(),
             type_params: Vec::new(),
         }
     }
@@ -89,8 +89,8 @@ impl UniqueID {
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            name: UNIQUE_ID_STRUCT_NAME.to_owned(),
             module: ID_MODULE_NAME.to_owned(),
+            name: UNIQUE_ID_STRUCT_NAME.to_owned(),
             type_params: Vec::new(),
         }
     }
@@ -110,8 +110,8 @@ impl ID {
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            name: ID_STRUCT_NAME.to_owned(),
             module: ID_MODULE_NAME.to_owned(),
+            name: ID_STRUCT_NAME.to_owned(),
             type_params: Vec::new(),
         }
     }

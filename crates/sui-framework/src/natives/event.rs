@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::EventType;
-use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_schedule::GasAlgebra;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::{gas_schedule::GasAlgebra, vm_status::StatusCode};
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     gas_schedule::NativeCostIndex,
@@ -14,7 +14,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-/// Implementation of Move native function `Event::emit<T: copy + drop>(event: T)`
+/// Implementation of Move native function `event::emit<T: copy + drop>(event: T)`
 /// Adds an event to the transaction's event log
 pub fn emit(
     context: &mut NativeContext,
@@ -33,8 +33,9 @@ pub fn emit(
     match ty {
         Type::Struct(..) | Type::StructInstantiation(..) => (),
         ty => {
-            // TODO: // TODO(https://github.com/MystenLabs/sui/issues/19): enforce this in the ability system
-            panic!("Unsupported event type {:?}--struct expected", ty)
+            // TODO (https://github.com/MystenLabs/sui/issues/19): ideally enforce this in the ability system
+            return Err(PartialVMError::new(StatusCode::DATA_FORMAT_ERROR)
+                .with_message(format!("Unsupported event type {:?} (struct expected)", ty)));
         }
     }
 

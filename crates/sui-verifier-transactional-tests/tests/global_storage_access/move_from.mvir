@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.M {
-    import 0x2.ID;
-    struct R has key { id: ID.VersionedID }
+module 0x0.m {
+    import 0x2.id;
+    struct R has key { id: id.VersionedID }
 
     no(addr: address) acquires R {
         label l0:
@@ -20,9 +20,9 @@ module 0x0.M {
 }
 
 //# publish
-module 0x0.M {
-    import 0x2.ID;
-    struct R<phantom T> has key { id: ID.VersionedID }
+module 0x0.m {
+    import 0x2.id;
+    struct R<phantom T> has key { id: id.VersionedID }
 
     no<T>(addr: address) acquires R {
         label l0:

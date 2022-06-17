@@ -3,12 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    error::{ExecutionError, ExecutionErrorKind},
     error::{SuiError, SuiResult},
     gas_coin::GasCoin,
     object::Object,
 };
-use move_core_types::gas_schedule::{
-    AbstractMemorySize, GasAlgebra, GasCarrier, GasPrice, GasUnits, InternalGasUnits,
+use move_core_types::{
+    gas_schedule::{
+        AbstractMemorySize, GasAlgebra, GasCarrier, GasPrice, GasUnits, InternalGasUnits,
+    },
+    vm_status::StatusCode,
 };
 use move_vm_types::gas_schedule::{GasStatus, INITIAL_COST_SCHEDULE};
 use once_cell::sync::Lazy;
@@ -166,22 +170,22 @@ impl<'a> SuiGasStatus<'a> {
         &mut self.gas_status
     }
 
-    pub fn charge_min_tx_gas(&mut self) -> SuiResult {
+    pub fn charge_min_tx_gas(&mut self) -> Result<(), ExecutionError> {
         self.deduct_computation_cost(&INIT_SUI_COST_TABLE.min_transaction_cost)
     }
 
-    pub fn charge_consensus(&mut self) -> SuiResult {
+    pub fn charge_consensus(&mut self) -> Result<(), ExecutionError> {
         self.deduct_computation_cost(&INIT_SUI_COST_TABLE.consensus_cost)
     }
 
-    pub fn charge_publish_package(&mut self, size: usize) -> SuiResult {
+    pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
         let computation_cost = INIT_SUI_COST_TABLE
             .package_publish_per_byte_cost
             .with_size(size);
         self.deduct_computation_cost(&computation_cost)
     }
 
-    pub fn charge_storage_read(&mut self, size: usize) -> SuiResult {
+    pub fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
         let cost = INIT_SUI_COST_TABLE
             .object_read_per_byte_cost
             .with_size(size);
@@ -193,7 +197,7 @@ impl<'a> SuiGasStatus<'a> {
         old_size: usize,
         new_size: usize,
         storage_rebate: GasCarrier,
-    ) -> SuiResult<u64> {
+    ) -> Result<u64, ExecutionError> {
         if self.is_unmetered() {
             return Ok(0);
         }
@@ -216,9 +220,13 @@ impl<'a> SuiGasStatus<'a> {
 
     /// This function is only called during testing, where we need to mock
     /// Move VM charging gas.
-    pub fn charge_vm_exec_test_only(&mut self, cost: u64) -> SuiResult {
-        self.gas_status.deduct_gas(InternalGasUnits::new(cost))?;
-        Ok(())
+    pub fn charge_vm_exec_test_only(&mut self, cost: u64) -> Result<(), ExecutionError> {
+        self.gas_status
+            .deduct_gas(InternalGasUnits::new(cost))
+            .map_err(|e| {
+                debug_assert_eq!(e.major_status(), StatusCode::OUT_OF_GAS);
+                ExecutionErrorKind::InsufficientGas.into()
+            })
     }
 
     /// Returns the final (computation cost, storage cost, storage rebate) of the gas meter.
@@ -264,17 +272,14 @@ impl<'a> SuiGasStatus<'a> {
         }
     }
 
-    fn deduct_computation_cost(&mut self, cost: &ComputationCost) -> SuiResult {
-        if self.gas_status.deduct_gas(cost.0).is_err() {
-            Err(SuiError::InsufficientGas {
-                error: "Ran out of gas while deducting computation cost".to_owned(),
-            })
-        } else {
-            Ok(())
-        }
+    fn deduct_computation_cost(&mut self, cost: &ComputationCost) -> Result<(), ExecutionError> {
+        self.gas_status.deduct_gas(cost.0).map_err(|e| {
+            debug_assert_eq!(e.major_status(), StatusCode::OUT_OF_GAS);
+            ExecutionErrorKind::InsufficientGas.into()
+        })
     }
 
-    fn deduct_storage_cost(&mut self, cost: &StorageCost) -> SuiResult<GasCarrier> {
+    fn deduct_storage_cost(&mut self, cost: &StorageCost) -> Result<GasCarrier, ExecutionError> {
         if self.is_unmetered() {
             return Ok(0);
         }
@@ -287,9 +292,7 @@ impl<'a> SuiGasStatus<'a> {
             // so that at the end, we could still use it to accurately derive the
             // computation cost.
             self.storage_cost = self.storage_cost.add(remaining_gas);
-            Err(SuiError::InsufficientGas {
-                error: "Ran out of gas while deducting storage cost".to_owned(),
-            })
+            Err(ExecutionErrorKind::InsufficientGas.into())
         } else {
             self.storage_cost = self.storage_cost.add(ext_cost);
             Ok(ext_cost.mul(self.storage_gas_unit_price).get())

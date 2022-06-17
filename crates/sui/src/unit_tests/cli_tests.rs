@@ -173,7 +173,7 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     match result {
         WalletCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
             assert_eq!(obj.owner, address);
-            assert_eq!(obj.data.type_().unwrap(), "0x2::DevNetNFT::DevNetNFT");
+            assert_eq!(obj.data.type_().unwrap(), "0x2::devnet_nft::DevNetNFT");
             Ok(obj)
         }
         _ => Err(anyhow!(
@@ -432,7 +432,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     // Test case with no gas specified
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "create".to_string(),
         type_args: vec![],
         args,
@@ -472,7 +472,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "create".to_string(),
         type_args: vec![],
         args: args.to_vec(),
@@ -500,7 +500,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
@@ -513,7 +513,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     assert!(resp.is_err());
 
     let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Expected argument of type 0x2::ObjectBasics::Object, but found type 0x2::Coin::Coin<0x2::SUI::SUI>"));
+    assert!(err_string.contains("Expected argument of type 0x2::object_basics::Object, but found type 0x2::coin::Coin<0x2::sui::SUI>"));
 
     // Try a proper transfer
     let obj_str = format!("0x{:02x}", created_obj);
@@ -527,7 +527,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
-        module: "ObjectBasics".to_string(),
+        module: "object_basics".to_string(),
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
