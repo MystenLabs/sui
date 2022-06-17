@@ -60,6 +60,6 @@ pub enum DagError {
     #[error("Message {0} (round {1}) too old")]
     TooOld(Digest, Round),
 
-    #[error("Invalid epoch (expected {received}, received {received})")]
+    #[error("Invalid epoch (expected {expected}, received {received})")]
     InvalidEpoch { expected: Epoch, received: Epoch },
 }
