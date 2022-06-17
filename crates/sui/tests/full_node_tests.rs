@@ -60,7 +60,6 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
 }
 
 async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
-
     let mut wait_digests: HashSet<_> = wait_digests.iter().collect();
 
     let mut timeout = Box::pin(sleep(Duration::from_millis(5000)));
@@ -145,10 +144,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn publish_basics_package(
-    context: &WalletContext,
-    sender: SuiAddress,
-) -> ObjectRef {
+async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
     info!(?sender, "publish_basics_package");
 
     let transaction = {
@@ -291,8 +287,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
     let sender = context.config.accounts.get(0).cloned().unwrap();
 
-    let (package_ref, counter_id) =
-        publish_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_id) = publish_package_and_make_counter(&context, sender).await;
 
     let digest = increment_counter(&context, sender, None, package_ref, counter_id).await;
 
@@ -389,8 +384,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let mut futures = Vec::new();
 
     let sender = context.config.accounts.get(0).cloned().unwrap();
-    let (package_ref, counter_id) =
-        publish_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_id) = publish_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -447,16 +441,20 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };
 
-                shared_tx_digest = Some(increment_counter(&&context.lock().await, sender, gas_object, package_ref, counter_id).await);
-
+                let context = &context.lock().await;
+                shared_tx_digest = Some(
+                    increment_counter(context, sender, gas_object, package_ref, counter_id).await,
+                );
             }
-            tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap())).unwrap();
+            tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
+                .unwrap();
         });
         futures.push(rx);
     }
 
     // make sure the node syncs up to the last digest sent by each task.
-    let digests = future::join_all(futures).await
+    let digests = future::join_all(futures)
+        .await
         .iter()
         .map(|r| r.clone().unwrap())
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
