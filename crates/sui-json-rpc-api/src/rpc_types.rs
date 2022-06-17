@@ -338,25 +338,30 @@ impl SuiMoveObject for SuiParsedMoveObject {
         object: MoveObject,
         layout: MoveStructLayout,
     ) -> Result<Self, anyhow::Error> {
-        let move_struct = object.to_move_struct(&layout)?.into();
-
-        Ok(
-            if let SuiMoveStruct::WithTypes { type_, fields } = move_struct {
-                SuiParsedMoveObject {
-                    type_,
-                    fields: SuiMoveStruct::WithFields(fields),
-                }
-            } else {
-                SuiParsedMoveObject {
-                    type_: object.type_.to_string(),
-                    fields: move_struct,
-                }
-            },
-        )
+        let move_struct = object.to_move_struct(&layout)?;
+        Self::try_from_move_struct(&object.type_, move_struct)
     }
 
     fn type_(&self) -> &str {
         &self.type_
+    }
+}
+
+impl SuiParsedMoveObject {
+    fn try_from_move_struct(
+        type_: &StructTag,
+        move_struct: MoveStruct,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(match move_struct.into() {
+            SuiMoveStruct::WithTypes { type_, fields } => SuiParsedMoveObject {
+                type_,
+                fields: SuiMoveStruct::WithFields(fields),
+            },
+            fields => SuiParsedMoveObject {
+                type_: type_.to_string(),
+                fields,
+            },
+        })
     }
 }
 
@@ -1224,9 +1229,10 @@ pub enum SuiEvent {
 impl SuiEvent {
     pub fn try_from(event: Event, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match event {
-            Event::MoveEvent(event) => {
-                let bcs = event.contents().to_vec();
-                let move_obj: SuiParsedMoveObject = SuiMoveObject::try_from(event, resolver)?;
+            Event::MoveEvent { type_, contents } => {
+                let bcs = contents.to_vec();
+                let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
+                let move_obj = SuiParsedMoveObject::try_from_move_struct(&type_, move_struct)?;
                 SuiEvent::MoveEvent {
                     type_: move_obj.type_,
                     fields: move_obj.fields,

@@ -7,7 +7,6 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use tokio_stream::Stream;
 use tracing::{debug, error};
 
-use sui_types::object::ObjectFormatOptions;
 use sui_types::{
     error::{SuiError, SuiResult},
     event::{Event, EventEnvelope},
@@ -45,12 +44,10 @@ impl EventHandler {
 
     pub async fn process_event(&self, event: &Event, timestamp_ms: u64) -> SuiResult {
         let json_value = match event {
-            Event::MoveEvent(event_obj) => {
+            Event::MoveEvent { type_, contents } => {
                 debug!(event =? event, "Process MoveEvent.");
-                let move_struct = event_obj.to_move_struct_with_resolver(
-                    ObjectFormatOptions::default(),
-                    &self.module_cache,
-                )?;
+                let move_struct =
+                    Event::move_event_to_move_struct(&type_, &contents, &self.module_cache)?;
                 Some(serde_json::to_value(&move_struct).map_err(|e| {
                     SuiError::ObjectSerializationError {
                         error: e.to_string(),

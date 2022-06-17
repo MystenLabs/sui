@@ -25,7 +25,7 @@ impl EventFilter {
     fn try_matches(&self, item: &EventEnvelope) -> Result<bool, anyhow::Error> {
         Ok(match self {
             EventFilter::ByMoveEventType(event_type) => match &item.event {
-                Event::MoveEvent(event_obj) => &event_obj.type_ == event_type,
+                Event::MoveEvent { type_, .. } => type_ == event_type,
                 // TODO: impl for non-move event
                 _ => false,
             },

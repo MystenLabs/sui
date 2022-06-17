@@ -1,18 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::language_storage::StructTag;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::{language_storage::StructTag, value::MoveStruct};
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 
-use crate::object::MoveObject;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
     committee::EpochId,
+    error::SuiError,
     messages_checkpoint::CheckpointSequenceNumber,
+    object::{MoveObject, ObjectFormatOptions},
 };
 use schemars::JsonSchema;
 use serde_with::serde_as;
@@ -77,7 +79,7 @@ pub enum TransferType {
 // Developer note: PLEASE only append new entries, do not modify existing entries (binary compat)
 pub enum Event {
     /// Move-specific event
-    MoveEvent(MoveObject),
+    MoveEvent { type_: StructTag, contents: Vec<u8> },
     /// Module published
     Publish { package_id: ObjectID },
     /// Transfer objects to new address / wrap in another object / coin
@@ -99,7 +101,7 @@ pub enum Event {
 
 impl Event {
     pub fn move_event(type_: StructTag, contents: Vec<u8>) -> Self {
-        Event::MoveEvent(MoveObject::new(type_, contents))
+        Event::MoveEvent { type_, contents }
     }
 
     pub fn name_from_ordinal(ordinal: usize) -> &'static str {
@@ -126,7 +128,7 @@ impl Event {
     /// Extracts the Move package ID associated with the event, or the package published.
     pub fn package_id(&self) -> Option<ObjectID> {
         match self {
-            Event::MoveEvent(event_obj) => Some(event_obj.type_.address.into()),
+            Event::MoveEvent { type_, .. } => Some(type_.address.into()),
             Event::Publish { package_id } => Some(*package_id),
             _ => None,
         }
@@ -136,7 +138,7 @@ impl Event {
     // TODO: should we switch to IdentStr or &str?  These are more complicated to make work due to lifetimes
     pub fn module_name(&self) -> Option<&str> {
         match self {
-            Event::MoveEvent(event) => Some(event.type_.module.as_ident_str().as_str()),
+            Event::MoveEvent { type_, .. } => Some(type_.module.as_ident_str().as_str()),
             _ => None,
         }
     }
@@ -144,8 +146,25 @@ impl Event {
     /// Extracts the function name from a SuiEvent, if available
     pub fn function_name(&self) -> Option<String> {
         match self {
-            Event::MoveEvent(event_obj) => Some(event_obj.type_.name.to_string()),
+            Event::MoveEvent { type_, .. } => Some(type_.name.to_string()),
             _ => None,
         }
+    }
+
+    pub fn move_event_to_move_struct(
+        type_: &StructTag,
+        contents: &[u8],
+        resolver: &impl GetModule,
+    ) -> Result<MoveStruct, SuiError> {
+        let layout = MoveObject::get_layout_from_struct_tag(
+            type_.clone(),
+            ObjectFormatOptions::default(),
+            resolver,
+        )?;
+        MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
+            SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            }
+        })
     }
 }

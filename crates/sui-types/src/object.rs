@@ -137,7 +137,15 @@ impl MoveObject {
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
-        let type_ = TypeTag::Struct(self.type_.clone());
+        Self::get_layout_from_struct_tag(self.type_.clone(), format, resolver)
+    }
+
+    pub fn get_layout_from_struct_tag(
+        struct_tag: StructTag,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<MoveStructLayout, SuiError> {
+        let type_ = TypeTag::Struct(struct_tag);
         let layout = if format.include_types {
             TypeLayoutBuilder::build_with_types(&type_, resolver)
         } else {
