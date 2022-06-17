@@ -169,7 +169,8 @@ function formatByTransactionKind(
                 },
                 {
                     label: 'Arguments',
-                    value: JSON.stringify(moveCall.arguments),
+                    value: moveCall.arguments,
+                    list:true,
                 },
             ];
         case 'Publish':
