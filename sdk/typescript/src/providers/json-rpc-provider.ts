@@ -90,28 +90,6 @@ export class JsonRpcProvider extends Provider {
       throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
     }
   }
-  async getTransactionsForObject(objectID: string): Promise<GetTxnDigestsResponse> {
-    const requests = [
-      {
-        method: 'sui_getTransactionsByInputObject',
-        args: [objectID]
-      },
-      {
-        method: 'sui_getTransactionsByMutatedObject',
-        args: [objectID]
-      }
-    ]
-
-    try {
-      const results = await this.client.batchRequestWithType(
-        requests,
-        isGetTxnDigestsResponse
-      )
-        return [...results[0], ...results[1]];
-    } catch (err) {
-      throw new Error(`Error getting transactions for object: ${err} for id ${objectID}`)
-    }
-  }
 
   // Transactions
 
