@@ -344,16 +344,18 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // just be a race.
         match transaction_option {
             Some(tx_digest) => {
-                let retry_strategy = ExponentialBackoff::from_millis(20).map(jitter).take(3);
-                let mut tx_option = None;
-                for duration in retry_strategy {
-                    tx_option = self.transactions.get(&tx_digest)?;
-                    if tx_option.is_some() {
+                let mut retry_strategy = ExponentialBackoff::from_millis(20).map(jitter).take(3);
+                let mut tx_option = self.transactions.get(&tx_digest)?;
+                while tx_option.is_none() {
+                    if let Some(duration) = retry_strategy.next() {
+                        // Wait to retry
+                        tokio::time::sleep(duration).await;
+                        trace!(?tx_digest, "Retrying getting pending transaction");
+                    } else {
+                        // No more retries, just quit
                         break;
                     }
-                    // Wait to retry
-                    tokio::time::sleep(duration).await;
-                    trace!(?tx_digest, "Retrying getting pending transaction");
+                    tx_option = self.transactions.get(&tx_digest)?;
                 }
                 Ok(tx_option)
             }
