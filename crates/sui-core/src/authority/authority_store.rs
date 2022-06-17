@@ -207,7 +207,7 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
         let wal_path = path.as_ref().join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
-        
+
         // Get the last sequence item
         let pending_seq = pending_execution
             .iter()
