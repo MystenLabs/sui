@@ -36,7 +36,7 @@ fn make_transfer_transaction(
             function: ident_str!("transfer").to_owned(),
             type_arguments: Vec::new(),
             arguments: vec![
-                CallArg::ImmOrOwnedObject(object_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(recipient)).unwrap()),
             ],
         })

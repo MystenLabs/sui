@@ -12,7 +12,9 @@ use sui_types::{
     base_types::{ObjectID, TransactionDigest},
     crypto::Signature,
     gas_coin::GasCoin,
-    messages::{CallArg, CertifiedTransaction, SignatureAggregator, Transaction, TransactionData},
+    messages::{
+        CallArg, CertifiedTransaction, ObjectArg, SignatureAggregator, Transaction, TransactionData,
+    },
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
 use test_utils::test_keys;
@@ -60,7 +62,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             gas_object.compute_object_reference(),
             /* args */
             vec![
-                CallArg::SharedObject(shared_object_id),
+                CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],

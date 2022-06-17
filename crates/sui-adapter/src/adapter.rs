@@ -18,7 +18,7 @@ use sui_types::{
     event::{Event, TransferType},
     gas::SuiGasStatus,
     id::VersionedID,
-    messages::{CallArg, InputObjectKind},
+    messages::{CallArg, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
 };
@@ -72,7 +72,8 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         .iter()
         .filter_map(|arg| match arg {
             CallArg::Pure(_) => None,
-            CallArg::ImmOrOwnedObject((id, _, _)) | CallArg::SharedObject(id) => {
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
+            | CallArg::Object(ObjectArg::SharedObject(id)) => {
                 Some((*id, state_view.read_object(id)?))
             }
         })
@@ -746,8 +747,12 @@ pub fn resolve_and_type_check(
                     }
                     return Ok(arg);
                 }
-                CallArg::ImmOrOwnedObject(ref_) => InputObjectKind::ImmOrOwnedMoveObject(ref_),
-                CallArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
+                    InputObjectKind::ImmOrOwnedMoveObject(ref_)
+                }
+                CallArg::Object(ObjectArg::SharedObject(id)) => {
+                    InputObjectKind::SharedMoveObject(id)
+                }
             };
 
             let id = object_kind.object_id();
