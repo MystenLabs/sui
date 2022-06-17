@@ -6,6 +6,8 @@ This page links to key Move resources and compares the Move and Solidity program
 
 ## Move resources
 
+This section aggregates links to external resources on the Move programming language. See also our [Smart Contracts with Move](../build/move.md) page and [Move Programming with Objects](../build/programming-with-objects/index.md) tutorial series for key Move resources in this site.
+
 * [Move & Sui podcast](https://zeroknowledge.fm/228-2/) on Zero Knowledge where programmable objects are described in detail.
 * Original [Move Book](https://move-book.com/index.html) written by a member of the Sui team.
 * [Core Move](https://github.com/move-language/move/tree/main/language/documentation) documentation, including:
