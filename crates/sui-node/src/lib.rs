@@ -20,7 +20,7 @@ use sui_core::{
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
-use sui_storage::{follower_store::FollowerStore, IndexStore};
+use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore, IndexStore};
 
 use sui_json_rpc::event_api::EventApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
@@ -83,7 +83,13 @@ impl SuiNode {
             .await,
         );
 
-        let gossip_handle = if config.enable_gossip {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let is_validator = config.consensus_config().is_some();
+        let is_node = !is_validator;
+
+        let should_start_follower = is_node || config.enable_gossip;
+
+        let gossip_handle = if should_start_follower {
             let mut net_config = mysten_network::config::Config::new();
             net_config.connect_timeout = Some(Duration::from_secs(5));
             net_config.request_timeout = Some(Duration::from_secs(5));
@@ -101,15 +107,18 @@ impl SuiNode {
             let active_authority =
                 ActiveAuthority::new(state.clone(), follower_store, authority_clients)?;
 
-            let degree = active_authority.state.committee.load().voting_rights.len();
-            // Start following validators
-            let handle = active_authority
-                .spawn_gossip_process(
-                    // listen to all authorities (note that gossip_process caps this to total minus 1.)
-                    degree,
-                )
-                .await;
-            Some(handle)
+            Some(if is_validator {
+                // TODO: get degree from config file.
+                let degree = 4;
+                active_authority.spawn_gossip_process(degree).await
+            } else {
+                let pending_store =
+                    Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
+
+                active_authority
+                    .spawn_node_sync_process(pending_store)
+                    .await
+            })
         } else {
             None
         };

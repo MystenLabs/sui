@@ -1,10 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::StreamExt;
+use futures::{future, StreamExt};
 use std::sync::Arc;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::rpc_types::SplitCoinResponse;
 use sui_node::SuiNode;
 
 use sui_types::{
@@ -13,6 +14,7 @@ use sui_types::{
     messages::{BatchInfoRequest, BatchInfoResponseItem},
 };
 use test_utils::network::setup_network_and_wallet;
+use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
@@ -201,6 +203,85 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
     let txes = node.state().get_transactions_from_addr(sender).await?;
     assert_eq!(txes.last().unwrap().1, digest);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
+    let (swarm, context, _) = setup_network_and_wallet().await?;
+    let context = Arc::new(Mutex::new(context));
+
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config).await?;
+
+    let mut futures = Vec::new();
+
+    // Start up 5 different tasks that all spam txs at the authorities.
+    for i in 0..5 {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let context = context.clone();
+        tokio::task::spawn(async move {
+            let (gas_object, object_to_split) = {
+                let context = &mut context.lock().await;
+                let address = context.config.accounts[i];
+                WalletCommands::SyncClientState {
+                    address: Some(address),
+                }
+                .execute(context)
+                .await
+                .unwrap();
+
+                let sender = context.config.accounts.get(0).cloned().unwrap();
+
+                let object_refs = context
+                    .gateway
+                    .get_objects_owned_by_address(sender)
+                    .await
+                    .unwrap();
+                let gas_object = object_refs.get(0).unwrap().object_id;
+                let object_to_split = object_refs.get(1).unwrap().object_id;
+                (gas_object, object_to_split)
+            };
+
+            let mut tx_digest = None;
+            for _ in 0..10 {
+                let res = {
+                    let context = &mut context.lock().await;
+                    WalletCommands::SplitCoin {
+                        amounts: vec![1],
+                        coin_id: object_to_split,
+                        gas: Some(gas_object),
+                        gas_budget: 50000,
+                    }
+                    .execute(context)
+                    .await
+                    .unwrap()
+                };
+
+                tx_digest = if let WalletCommandResult::SplitCoin(SplitCoinResponse {
+                    certificate,
+                    ..
+                }) = res
+                {
+                    Some(certificate.transaction_digest)
+                } else {
+                    panic!("transfer command did not return WalletCommandResult::Transfer");
+                };
+            }
+            tx.send(tx_digest.unwrap()).unwrap();
+        });
+        futures.push(rx);
+    }
+
+    // make sure the node syncs up to the last digest sent by each task.
+    let mut digests = future::join_all(futures).await;
+    while let Some(digest) = digests.pop() {
+        let digest = digest.unwrap();
+        wait_for_tx(digest, node.state().clone()).await;
+    }
 
     Ok(())
 }

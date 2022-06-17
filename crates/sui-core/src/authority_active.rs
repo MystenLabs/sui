@@ -36,7 +36,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui_storage::follower_store::FollowerStore;
+use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -244,7 +244,10 @@ where
         })
     }
 
-    pub async fn spawn_node_sync_process(self) -> JoinHandle<()> {
+    pub async fn spawn_node_sync_process(
+        self,
+        node_sync_store: Arc<NodeSyncStore>,
+    ) -> JoinHandle<()> {
         let active = Arc::new(self);
         let committee = active.state.committee.load().deref().clone();
         // nodes follow all validators to ensure they can eventually determine
@@ -253,7 +256,7 @@ where
         let target_num_tasks = committee.voting_rights.len();
 
         tokio::task::spawn(async move {
-            node_sync_process(&active, target_num_tasks).await;
+            node_sync_process(&active, target_num_tasks, node_sync_store).await;
         })
     }
 }
