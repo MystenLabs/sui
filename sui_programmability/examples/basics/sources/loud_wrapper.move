@@ -4,7 +4,7 @@
 /// An example of data + Event wrapping. Allows attaching `Event` to a wrapper
 /// so whenever an Wrapper is destroyed, a user-defined event is emitted
 module basics::loud_wrapper {
-    use sui::event::{Self, Event};
+    use sui::event::{Self};
     use sui::id::{Self, VersionedID};
     use sui::tx_context::{new_id, TxContext};
 
@@ -13,7 +13,7 @@ module basics::loud_wrapper {
     struct LoudWrapper<T: store, EVT: copy + drop + store> has key {
         id: VersionedID,
         t: T,
-        evt: Event<EVT>
+        evt: EVT
     }
 
     /// Wrap some T with an event EVT into a LoudWrapper.
@@ -23,7 +23,7 @@ module basics::loud_wrapper {
         LoudWrapper {
             id: new_id(ctx),
             t,
-            evt: event::create(evt)
+            evt
         }
     }
 
@@ -32,7 +32,7 @@ module basics::loud_wrapper {
         let LoudWrapper { id, t, evt } = wrapper;
 
         id::delete(id);
-        event::emit_event(evt);
+        event::emit(evt);
         t
     }
 }
@@ -77,4 +77,3 @@ module basics::gift {
         transfer::transfer(wrapper, to)
     }
 }
-
