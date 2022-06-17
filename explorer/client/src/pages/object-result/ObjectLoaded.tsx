@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useState, useCallback } from 'react';
+import ReactJson from 'react-json-view';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
@@ -49,7 +50,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const clickSetShowTx = useCallback(() => setShowTx(!showTx), [showTx]);
     const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
-        ['number', 'string'].includes(typeof value);
+        ['number', 'string',].includes(typeof value);
 
     const stdLibRe = /0x2::/;
     const prepObjTypeValue = (typeString: string) =>
@@ -71,6 +72,11 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const properties = Object.entries(viewedData.data?.contents)
         .filter(([key, _]) => key !== 'name')
         .filter(([_, value]) => checkIsPropertyType(value));
+
+    const structProperties = Object.entries(viewedData.data?.contents)
+        .filter(([_, value]) => typeof value == 'object')
+        .filter(([key, _]) => key !== 'id');
+
 
     const descriptionTitle =
         data.objType === 'Move Package' ? 'Package Description' : 'Description';
@@ -255,6 +261,19 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         </>
                     )}
                     {}
+                    {structProperties.length > 0 && (
+                        <div className={styles.jsondata}>
+                            <div>
+                      
+                                <ReactJson
+                                    src={structProperties[0]}
+                                  
+                                    collapsed={3}
+                                    name={false}
+                                />
+                            </div>
+                        </div>
+                    )}
                     {data.objType !== 'Move Package' ? (
                         <h2
                             className={styles.clickableheader}
