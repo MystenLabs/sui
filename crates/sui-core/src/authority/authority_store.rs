@@ -344,7 +344,10 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         // just be a race.
         match transaction_option {
             Some(tx_digest) => {
-                let mut retry_strategy = ExponentialBackoff::from_millis(20).map(jitter).take(3);
+                let mut retry_strategy = ExponentialBackoff::from_millis(2)
+                    .factor(10)
+                    .map(jitter)
+                    .take(3);
                 let mut tx_option = self.transactions.get(&tx_digest)?;
                 while tx_option.is_none() {
                     if let Some(duration) = retry_strategy.next() {
