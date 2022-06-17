@@ -52,16 +52,4 @@ Navigate and search this site however you see fit. Here is the order we recommen
 1. [Build](../build/index.md) smart contracts, wallets, validators, transactions, and more.
 1. [Explore](../explore/index.md) prototypes and examples.
 1. [Contribute](../contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
-
-## Use supporting sites
-
-Take note of these related repositories of information to make best use of the knowledge here:
-
-* [Move & Sui podcast](https://zeroknowledge.fm/228-2/) on Zero Knowledge where programmable objects are described in detail.
-* Original [Move Book](https://move-book.com/index.html) written by a member of the Sui team.
-* [Core Move](https://github.com/move-language/move/tree/main/language/documentation) documentation, including:
-  * [Tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md) - A step-by-step guide through writing a Move module.
-  * [Book](https://github.com/move-language/move/blob/main/language/documentation/book/src/introduction.md) - A summary with pages on [various topics](https://github.com/move-language/move/tree/main/language/documentation/book/src).
-  * [Examples](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/coin-swap).
-* [Awesome Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) - A summary of resources related to Move, from blockchains through code samples.
-* [Sui API Reference](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false) - The reference files for the [Sui JSON-RPC API](../build/json-rpc.md).
+1. [Sui API Reference](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false) - The reference files for the [Sui JSON-RPC API](../build/json-rpc.md).
