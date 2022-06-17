@@ -14,7 +14,7 @@ use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     committee::{Committee, StakeUnit},
     error::{SuiError, SuiResult},
-    messages::{CertifiedTransaction, ConfirmationTransaction, SignedTransactionEffects},
+    messages::{CertifiedTransaction, SignedTransactionEffects},
 };
 
 use std::ops::Deref;
@@ -257,7 +257,7 @@ where
         // TODO: support shared object TXes via something like:
         // self.state.sequence_shared_locks_from_effects(effects).await
         self.state
-            .handle_confirmation_transaction(ConfirmationTransaction { certificate: cert })
+            .handle_node_sync_transaction(cert, effects)
             .await?;
 
         // Garbage collect data for this tx.

@@ -907,6 +907,29 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         Ok(())
     }
 
+    /// Lock a sequence number for the shared objects of the input transaction based on the effects
+    /// of that transaction. Used by the nodes, which don't listen to consensus.
+    pub fn acquire_shared_locks_from_effects(
+        &self,
+        certificate: &CertifiedTransaction,
+        effects: &TransactionEffects,
+    ) -> SuiResult {
+        let digest = *certificate.digest();
+
+        let sequenced: Vec<_> = effects
+            .shared_objects
+            .iter()
+            .map(|(id, version, _)| ((digest, *id), *version))
+            .collect();
+        info!(?sequenced, "locking");
+
+        let mut write_batch = self.sequenced.batch();
+        write_batch = write_batch.insert_batch(&self.sequenced, sequenced)?;
+        write_batch.write()?;
+
+        Ok(())
+    }
+
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
     /// last consensus index.
     pub fn persist_certificate_and_lock_shared_objects(
