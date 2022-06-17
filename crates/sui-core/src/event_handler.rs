@@ -47,7 +47,7 @@ impl EventHandler {
             Event::MoveEvent { type_, contents } => {
                 debug!(event =? event, "Process MoveEvent.");
                 let move_struct =
-                    Event::move_event_to_move_struct(&type_, &contents, &self.module_cache)?;
+                    Event::move_event_to_move_struct(type_, contents, &self.module_cache)?;
                 Some(serde_json::to_value(&move_struct).map_err(|e| {
                     SuiError::ObjectSerializationError {
                         error: e.to_string(),
