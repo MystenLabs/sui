@@ -360,6 +360,39 @@ impl AuthorityState {
         }
     }
 
+    pub async fn handle_node_sync_transaction(
+        &self,
+        certificate: CertifiedTransaction,
+        // Signed effects is signed by only one validator, it is not a
+        // CertifiedTransactionEffects. The caller of this (node_sync) must promise to
+        // wait until it has seen at least f+1 identifical effects digests matching this
+        // SignedTransactionEffects before calling this function, in order to prevent a
+        // byzantine validator from giving us incorrect effects.
+        signed_effects: SignedTransactionEffects,
+    ) -> SuiResult {
+        let transaction_digest = *certificate.digest();
+        fp_ensure!(
+            signed_effects.effects.transaction_digest == transaction_digest,
+            // NOTE: the error message here will say 'Error acquiring lock' but what it means is
+            // 'error checking lock'.
+            SuiError::ErrorWhileProcessingConfirmationTransaction {
+                err: "effects/tx digest mismatch".to_string()
+            }
+        );
+
+        let tx_guard = self
+            .acquire_tx_guard(&transaction_digest, &certificate)
+            .await?;
+
+        if certificate.contains_shared_object() {
+            self.database
+                .acquire_shared_locks_from_effects(&certificate, &signed_effects.effects)?;
+        }
+
+        self.process_certificate(tx_guard, certificate).await?;
+        Ok(())
+    }
+
     /// Confirm a transfer.
     pub async fn handle_confirmation_transaction(
         &self,

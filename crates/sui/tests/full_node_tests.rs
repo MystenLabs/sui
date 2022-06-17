@@ -2,16 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::{future, StreamExt};
+use serde_json::json;
+use std::path::PathBuf;
 use std::sync::Arc;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_api::rpc_types::SplitCoinResponse;
+use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{SplitCoinResponse, TransactionResponse};
 use sui_node::SuiNode;
 
+use move_package::BuildConfig;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
     batch::UpdateItem,
-    messages::{BatchInfoRequest, BatchInfoResponseItem},
+    messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction},
 };
 use test_utils::network::setup_network_and_wallet;
 use tokio::sync::Mutex;
@@ -131,6 +135,172 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+async fn publish_basics_package(
+    context: &WalletContext,
+    gas_object_id: ObjectID,
+    sender: SuiAddress,
+) -> ObjectRef {
+    info!(?gas_object_id, ?sender, "publish_basics_package");
+
+    let transaction = {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("../../sui_programmability/examples/basics");
+
+        let build_config = BuildConfig::default();
+        let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+
+        let all_module_bytes = modules
+            .iter()
+            .map(|m| {
+                let mut module_bytes = Vec::new();
+                m.serialize(&mut module_bytes).unwrap();
+                module_bytes
+            })
+            .collect();
+
+        let data = context
+            .gateway
+            .publish(sender, all_module_bytes, Some(gas_object_id), 50000)
+            .await
+            .unwrap();
+
+        let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+        Transaction::new(data, signature)
+    };
+
+    let resp = context
+        .gateway
+        .execute_transaction(transaction)
+        .await
+        .unwrap();
+
+    if let TransactionResponse::PublishResponse(resp) = resp {
+        let package_ref = resp.package.to_object_ref();
+        info!(?package_ref, "package created");
+        package_ref
+    } else {
+        panic!()
+    }
+}
+
+async fn move_transaction(
+    context: &WalletContext,
+    gas_object_id: ObjectID,
+    module: &'static str,
+    function: &'static str,
+    package_ref: ObjectRef,
+    arguments: Vec<SuiJsonValue>,
+    sender: SuiAddress,
+) -> TransactionResponse {
+    info!(?gas_object_id, ?package_ref, ?arguments, "move_transaction");
+
+    let data = context
+        .gateway
+        .move_call(
+            sender,
+            package_ref.0,
+            module.into(),
+            function.into(),
+            vec![], // type_args
+            arguments,
+            Some(gas_object_id),
+            50000,
+        )
+        .await
+        .unwrap();
+
+    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    let tx = Transaction::new(data, signature);
+
+    context.gateway.execute_transaction(tx).await.unwrap()
+}
+
+async fn publish_package_and_make_counter(
+    context: &WalletContext,
+    gas_object_id: ObjectID,
+    sender: SuiAddress,
+) -> (ObjectRef, ObjectID) {
+    let package_ref = publish_basics_package(context, gas_object_id, sender).await;
+
+    info!(?package_ref);
+
+    let create_shared_obj_resp = move_transaction(
+        context,
+        gas_object_id,
+        "counter",
+        "create",
+        package_ref,
+        vec![],
+        sender,
+    )
+    .await;
+
+    let counter_id = if let TransactionResponse::EffectResponse(effects) = create_shared_obj_resp {
+        effects.effects.created[0].clone().reference.object_id
+    } else {
+        panic!()
+    };
+    info!(?counter_id);
+    (package_ref, counter_id)
+}
+
+async fn increment_counter(
+    context: &WalletContext,
+    gas_object_id: ObjectID,
+    sender: SuiAddress,
+    package_ref: ObjectRef,
+    counter_id: ObjectID,
+) -> TransactionDigest {
+    let resp = move_transaction(
+        context,
+        gas_object_id,
+        "counter",
+        "increment",
+        package_ref,
+        vec![SuiJsonValue::new(json!(counter_id.to_hex_literal())).unwrap()],
+        sender,
+    )
+    .await;
+
+    let digest = if let TransactionResponse::EffectResponse(effects) = resp {
+        effects.certificate.transaction_digest
+    } else {
+        panic!()
+    };
+
+    info!(?digest);
+    digest
+}
+
+async fn get_gas_object_id(context: &WalletContext, owner: &SuiAddress) -> ObjectID {
+    let object_refs = context.gateway.get_objects_owned_by_address(*owner).await.unwrap();
+    let gas_object_info = object_refs.get(0).unwrap();
+    gas_object_info.object_id
+}
+
+#[tokio::test]
+async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
+    let (swarm, context, _) = setup_network_and_wallet().await?;
+
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config).await?;
+
+    let sender = context.config.accounts.get(0).cloned().unwrap();
+
+    let gas_object_id = get_gas_object_id(&context, &sender).await;
+
+    let (package_ref, counter_id) =
+        publish_package_and_make_counter(&context, gas_object_id, sender).await;
+
+    let digest = increment_counter(&context, gas_object_id, sender, package_ref, counter_id).await;
+
+    wait_for_tx(digest, node.state().clone()).await;
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
@@ -212,19 +382,25 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
 
     let (swarm, context, _) = setup_network_and_wallet().await?;
-    let context = Arc::new(Mutex::new(context));
 
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
 
     let mut futures = Vec::new();
 
+    let sender = context.config.accounts.get(0).cloned().unwrap();
+    let gas_object_id = get_gas_object_id(&context, &sender).await;
+    let (package_ref, counter_id) =
+        publish_package_and_make_counter(&context, gas_object_id, sender).await;
+
+    let context = Arc::new(Mutex::new(context));
+
     // Start up 5 different tasks that all spam txs at the authorities.
     for i in 0..5 {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let context = context.clone();
         tokio::task::spawn(async move {
-            let (gas_object, object_to_split) = {
+            let (sender, gas_object, object_to_split) = {
                 let context = &mut context.lock().await;
                 let address = context.config.accounts[i];
                 WalletCommands::SyncClientState {
@@ -243,10 +419,11 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     .unwrap();
                 let gas_object = object_refs.get(0).unwrap().object_id;
                 let object_to_split = object_refs.get(1).unwrap().object_id;
-                (gas_object, object_to_split)
+                (sender, gas_object, object_to_split)
             };
 
-            let mut tx_digest = None;
+            let mut owned_tx_digest = None;
+            let mut shared_tx_digest = None;
             for _ in 0..10 {
                 let res = {
                     let context = &mut context.lock().await;
@@ -261,7 +438,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     .unwrap()
                 };
 
-                tx_digest = if let WalletCommandResult::SplitCoin(SplitCoinResponse {
+                owned_tx_digest = if let WalletCommandResult::SplitCoin(SplitCoinResponse {
                     certificate,
                     ..
                 }) = res
@@ -270,8 +447,11 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 } else {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };
+
+                shared_tx_digest = Some(increment_counter(&&context.lock().await, gas_object_id, sender, package_ref, counter_id).await);
+
             }
-            tx.send(tx_digest.unwrap()).unwrap();
+            tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap())).unwrap();
         });
         futures.push(rx);
     }
@@ -279,8 +459,9 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     // make sure the node syncs up to the last digest sent by each task.
     let mut digests = future::join_all(futures).await;
     while let Some(digest) = digests.pop() {
-        let digest = digest.unwrap();
-        wait_for_tx(digest, node.state().clone()).await;
+        let (owned_tx_digest, shared_tx_digest) = digest.unwrap();
+        wait_for_tx(owned_tx_digest, node.state().clone()).await;
+        wait_for_tx(shared_tx_digest, node.state().clone()).await;
     }
 
     Ok(())
