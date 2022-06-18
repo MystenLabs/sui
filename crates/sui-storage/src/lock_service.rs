@@ -30,6 +30,7 @@ use sui_types::batch::TxSequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
 
 use crate::default_db_options;
+const EPOCH_CHANGE_SINGLETON_KEY: u64 = 1;
 
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
@@ -54,6 +55,10 @@ enum LockServiceCommands {
     },
     CreateLocksForGenesisObjects {
         objects: Vec<ObjectRef>,
+        resp: oneshot::Sender<SuiResult>,
+    },
+    SetGlobalLockForEpochChange {
+        lock: bool,
         resp: oneshot::Sender<SuiResult>,
     },
 }
@@ -90,6 +95,11 @@ struct LockServiceImpl {
     /// records a total ordering among all processed certificates (which is naturally local
     /// to this authority).
     tx_sequence: DBMap<TransactionDigest, TxSequenceNumber>,
+
+    /// This is a singleton used to pause all new transactions when the epoch change
+    /// is in progress. If the lock is set, the value will be true, and any new transactions
+    /// or certificates will not be processed until the lock is set to false.
+    epoch_change_lock: DBMap<u64, bool>,
 }
 
 // TODO: Create method needs to make sure only one instance or thread of this is running per authority
@@ -105,18 +115,20 @@ impl LockServiceImpl {
             let opt_cfs: &[(&str, &rocksdb::Options)] = &[
                 ("transaction_lock", &point_lookup),
                 ("tx_sequence", &point_lookup),
+                ("epoch_change_lock", &point_lookup),
             ];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
         }
         .map_err(SuiError::StorageError)?;
 
-        let (transaction_lock, tx_sequence) = reopen!(&db, "transaction_lock";<ObjectRef, Option<TransactionDigest>>,
-                "tx_sequence";<TransactionDigest, TxSequenceNumber>
+        let (transaction_lock, tx_sequence, epoch_change_lock) = reopen!(&db, "transaction_lock";<ObjectRef, Option<TransactionDigest>>,
+                "tx_sequence";<TransactionDigest, TxSequenceNumber>, "epoch_change_lock";<u64, bool>
         );
 
         Ok(Self {
             transaction_lock,
             tx_sequence,
+            epoch_change_lock,
         })
     }
 
@@ -155,6 +167,29 @@ impl LockServiceImpl {
         let write_batch = self.initialize_locks_impl(write_batch, objects, false)?;
         write_batch.write()?;
         Ok(())
+    }
+
+    fn set_global_lock_for_epoch_change(&self, lock: bool) -> SuiResult {
+        let write_batch = self.epoch_change_lock.batch();
+        let write_batch = write_batch.insert_batch(
+            &self.epoch_change_lock,
+            std::iter::once((EPOCH_CHANGE_SINGLETON_KEY, lock)),
+        )?;
+        write_batch.write()?;
+        Ok(())
+    }
+
+    fn get_global_lock_for_epoch_change(&self) -> Result<bool, SuiError> {
+        self.epoch_change_lock
+            .get(&EPOCH_CHANGE_SINGLETON_KEY)
+            .map(|res| {
+                res.unwrap_or_else(|| {
+                    debug!("global lock for epoch change does not exist");
+                    self.set_global_lock_for_epoch_change(false);
+                    false
+                })
+            })
+            .map_err(SuiError::StorageError)
     }
 
     fn sequence_transaction_impl(
@@ -381,11 +416,15 @@ impl LockServiceImpl {
                         warn!("Could not respond to sender!");
                     }
                 }
+                LockServiceCommands::SetGlobalLockForEpochChange { lock, resp } => {
+                    if let Err(_e) = resp.send(self.set_global_lock_for_epoch_change(lock)) {
+                        warn!("Could not respond to sender!");
+                    }
+                }
             }
         }
         info!("LockService command loop stopped, the sender on other end hung up/dropped");
     }
-
     /// Loop to continuously process queries in a single thread
     fn run_queries_loop(&self, mut receiver: Receiver<LockServiceQueries>) {
         info!("LockService queries processing loop started");
