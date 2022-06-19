@@ -28,6 +28,8 @@ impl PendCertificateForExecution for AuthorityState {
     }
 }
 
+/// A no-op PendCertificateForExecution that we use for testing, when
+/// we do not care about certificates actually being executed.
 pub struct PendCertificateForExecutionNoop;
 impl PendCertificateForExecution for PendCertificateForExecutionNoop {
     fn pending_execution(
@@ -71,7 +73,7 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     let _committee = active_authority.state.committee.load().clone();
-    let _net = active_authority.net.load().clone();
+    let net = active_authority.net.load().clone();
 
     // Get the pending transactions
     let pending_transactions = active_authority.state.database.get_pending_certificates()?;
@@ -106,7 +108,7 @@ where
         debug!(digest=?d, "Pending execution for certificate.");
 
         // Sync and Execute with local authority state
-        _net.sync_certificate_to_authority_with_timeout_inner(
+        net.sync_certificate_to_authority_with_timeout_inner(
             sui_types::messages::ConfirmationTransaction::new(c.clone()),
             active_authority.state.name,
             &local_handler,
