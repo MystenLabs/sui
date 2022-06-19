@@ -1511,7 +1511,7 @@ impl ExecutionState for AuthorityState {
                 if let Some(checkpoint) = &self.checkpoints {
                     checkpoint
                         .lock()
-                        .handle_internal_fragment(seq, *fragment, &self.committee.load())
+                        .handle_internal_fragment(seq, *fragment, &self.committee.load(), self)
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
