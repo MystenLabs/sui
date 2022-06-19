@@ -100,7 +100,7 @@ fn crash_recovery() {
     let t5 = ExecutionDigests::random();
     let t6 = ExecutionDigests::random();
 
-    cps.handle_internal_batch(4, &[(1, t1), (2, t2), (3, t3)])
+    cps.handle_internal_batch(4, &[(1, t1), (2, t2), (3, t3)], &committee)
         .unwrap();
 
     // --- TEST 1 ---
@@ -112,7 +112,7 @@ fn crash_recovery() {
     let proposal = cps.set_proposal(committee.epoch).unwrap();
     assert_eq!(*proposal.sequence_number(), 0);
 
-    cps.handle_internal_batch(7, &[(4, t4), (5, t5), (6, t6)])
+    cps.handle_internal_batch(7, &[(4, t4), (5, t5), (6, t6)], &committee)
         .unwrap();
 
     // Delete and re-open DB
@@ -161,16 +161,16 @@ fn make_checkpoint_db() {
         .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 0);
     assert_eq!(cps.extra_transactions.iter().count(), 3);
-    assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
+    // assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
 
     assert_eq!(cps.next_checkpoint(), 0);
 
     cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
-    assert_eq!(cps.unprocessed_transactions.iter().count(), 2);
+    // assert_eq!(cps.unprocessed_transactions.iter().count(), 2);
 
-    assert_eq!(cps.lowest_unprocessed_checkpoint(), 0);
+    // assert_eq!(cps.lowest_unprocessed_checkpoint(), 0);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert!(tx_seq >= u64::MAX / 2);
@@ -181,9 +181,9 @@ fn make_checkpoint_db() {
         .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
-    assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
+    // assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
 
-    assert_eq!(cps.lowest_unprocessed_checkpoint(), 1);
+    // assert_eq!(cps.lowest_unprocessed_checkpoint(), 1);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert_eq!(tx_seq, 4);
@@ -232,10 +232,10 @@ fn make_proposals() {
     cps3.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps4.update_new_checkpoint(0, &ckp_items[..]).unwrap();
 
-    assert_eq!(
-        cps4.unprocessed_transactions.keys().collect::<HashSet<_>>(),
-        [t1, t2, t3].into_iter().collect::<HashSet<_>>()
-    );
+    // assert_eq!(
+    //     cps4.unprocessed_transactions.keys().collect::<HashSet<_>>(),
+    //     [t1, t2, t3].into_iter().collect::<HashSet<_>>()
+    // );
 
     assert_eq!(
         cps4.extra_transactions.keys().collect::<HashSet<_>>(),
@@ -406,6 +406,18 @@ fn latest_proposal() {
     let transactions = CheckpointContents::new(ckp_items.clone().into_iter());
     let summary = CheckpointSummary::new(committee.epoch, 0, &transactions, None);
 
+    // Fail to set if transactions not processed.
+    assert!(cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+        .is_err());
+    
+    // Set the transactions as executed.
+    let batch : Vec<_> = transactions.transactions.iter().enumerate().map(|(u,c)| (u as u64, *c)).collect();
+    cps1.handle_internal_batch(0, &batch , &committee).unwrap();
+    cps2.handle_internal_batch(0, &batch , &committee).unwrap();
+    cps3.handle_internal_batch(0, &batch , &committee).unwrap();
+    cps4.handle_internal_batch(0, &batch , &committee).unwrap();
+
+    // Try to get checkpoint
     cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
     cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
@@ -440,14 +452,12 @@ fn latest_proposal() {
 
     // When details are needed, then return unexecuted transactions if there is no proposal
     let request = CheckpointRequest::latest(true);
-    let response = cps1
-        .handle_latest_proposal(committee.epoch, &request)
-        .expect("no errors");
-    assert!(response.detail.is_some());
-    use typed_store::traits::Map;
-    let txs = response.detail.unwrap();
-    let unprocessed = CheckpointContents::new(cps1.unprocessed_transactions.keys());
-    assert_eq!(txs.transactions, unprocessed.transactions);
+    let response = cps1.handle_latest_proposal(committee.epoch, &request).expect("no errors");
+    assert!(response.detail.is_none());
+    // use typed_store::traits::Map;
+    // let txs = response.detail.unwrap();
+    // let unprocessed = CheckpointContents::new(cps1.unprocessed_transactions.keys());
+    // assert_eq!(txs.transactions, unprocessed.transactions);
 
     assert!(matches!(
         response.info,
@@ -551,6 +561,14 @@ fn set_get_checkpoint() {
     let transactions = CheckpointContents::new(ckp_items);
     let summary = CheckpointSummary::new(committee.epoch, 0, &transactions, None);
 
+    // Need to load the transactions as processed, before getting a checkpoint.
+    assert!(cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions).is_err());
+    let batch : Vec<_> = transactions.transactions.iter().enumerate().map(|(u,c)| (u as u64, *c)).collect();
+    cps1.handle_internal_batch(0, &batch , &committee).unwrap();
+    cps2.handle_internal_batch(0, &batch , &committee).unwrap();
+    cps3.handle_internal_batch(0, &batch , &committee).unwrap();
+
+
     cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
     cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
@@ -614,7 +632,12 @@ fn set_get_checkpoint() {
     let response_ckp = cps4.handle_checkpoint_certificate(&checkpoint_cert, &None, &committee);
     assert!(response_ckp.is_err());
 
-    // Setting with contents succeeds
+    // Setting with contents succeeds BUT has not processed transactions
+    let response_ckp = cps4.handle_checkpoint_certificate(&checkpoint_cert, &Some(transactions.clone()), &committee);
+    assert!(response_ckp.is_err());
+    
+    // Process transactions and then ask for checkpoint.
+    cps4.handle_internal_batch(0, &batch , &committee).unwrap();
     let response_ckp = cps4
         .handle_checkpoint_certificate(&checkpoint_cert, &Some(transactions), &committee)
         .unwrap();
@@ -657,6 +680,7 @@ fn checkpoint_integration() {
 
     let mut next_tx_num: TxSequenceNumber = 0;
     let mut unprocessed = Vec::new();
+    let mut checkpoint_opt = None;
     while cps.get_locals().next_checkpoint < 10 {
         let old_checkpoint = cps.get_locals().next_checkpoint;
 
@@ -674,11 +698,20 @@ fn checkpoint_integration() {
             + 1;
 
         // Step 0. Add transactions to checkpoint
-        cps.handle_internal_batch(next_tx_num, &some_fresh_transactions[..])
+        cps.handle_internal_batch(next_tx_num, &some_fresh_transactions[..], &committee)
             .unwrap();
 
+        // If we have a previous checkpoint, now lets try to process again?
+        if let Some((summary, transactions)) = checkpoint_opt.take() {
+            assert!(cps.handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
+            .is_ok());
+
+            // Loop invariant to ensure termination or error
+            assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
+        }
+
         // Step 1. Make a proposal
-        let _proposal = cps.set_proposal(committee.epoch).unwrap();
+        let initial_proposal = cps.set_proposal(committee.epoch).unwrap();
 
         // Step 2. Continue to process transactions while a proposal is out.
         let some_fresh_transactions: Vec<_> = (0..7)
@@ -709,13 +742,17 @@ fn checkpoint_integration() {
                 .expect("previous checkpoint should exist"),
         );
 
-        cps.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
-            .unwrap();
+        // Cannot register the checkpoint while there are no-executed transactions.
+        assert!(cps.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+            .is_err());
+
+        checkpoint_opt = Some((summary, transactions));
 
         // Cannot make a checkpoint proposal before adding the unprocessed transactions
-        assert!(cps.set_proposal(committee.epoch).is_err());
-        // Loop invariant to ensure termination or error
-        assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
+        // This returns the old proposal.
+        let latest_proposal = cps.set_proposal(committee.epoch).unwrap();
+        assert_eq!(*latest_proposal.sequence_number(), next_checkpoint);
+        assert_eq!(latest_proposal.sequence_number(), initial_proposal.sequence_number());
     }
 }
 

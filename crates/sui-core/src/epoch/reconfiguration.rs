@@ -34,11 +34,11 @@ where
                 Self::is_second_last_checkpoint_epoch(next_cp),
                 "start_epoch_change called at the wrong checkpoint",
             );
-            assert_eq!(
-                checkpoints.lowest_unprocessed_checkpoint(),
-                next_cp,
-                "start_epoch_change called when there are still unprocessed transactions",
-            );
+            //assert_eq!(
+            //    checkpoints.lowest_unprocessed_checkpoint(),
+            //    next_cp,
+            //    "start_epoch_change called when there are still unprocessed transactions",
+            //);
             // drop checkpoints lock
         } else {
             unreachable!();
@@ -66,17 +66,19 @@ where
                 Self::is_last_checkpoint_epoch(next_cp),
                 "finish_epoch_change called at the wrong checkpoint",
             );
-            assert_eq!(
-                checkpoints.lowest_unprocessed_checkpoint(),
-                next_cp,
-                "finish_epoch_change called when there are still unprocessed transactions",
-            );
+
             for (tx_digest, _) in checkpoints.extra_transactions.iter() {
                 self.state
                     .database
                     .revert_state_update(&tx_digest.transaction)?;
+
             }
+
+            // Delete any extra certificates now unprocessed.
             checkpoints.extra_transactions.clear()?;
+
+            // TODO: Delete certificates from the pending store.
+
             // drop checkpoints lock
         } else {
             unreachable!();

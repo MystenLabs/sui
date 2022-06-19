@@ -58,6 +58,7 @@ async fn checkpoint_active_flow_happy_path() {
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());
+            println!("Effects: {:?}",  effects.effects.digest());
 
             // Add some delay between transactions
             tokio::time::sleep(Duration::from_secs(27)).await;
@@ -97,7 +98,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();
 
-    let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;
+    let setup = checkpoint_tests_setup(20, Duration::from_millis(500)).await;
 
     let TestSetup {
         committee: _committee,
@@ -110,6 +111,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
+
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
@@ -118,6 +120,13 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
                 )
                 .unwrap(),
             );
+
+            
+            println!("Start active execution process.");
+            active_state.clone()
+                .spawn_execute_process().await;
+
+
             // Spin the gossip service.
             active_state
                 .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
@@ -160,7 +169,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
     // Wait for a batch to go through
     // (We do not really wait, we jump there since real-time is not running).
-    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+    tokio::time::sleep(Duration::from_secs(180 * 60)).await;
 
     let mut value_set = BTreeSet::new();
     for a in authorities {
