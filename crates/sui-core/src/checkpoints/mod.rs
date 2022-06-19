@@ -338,12 +338,12 @@ impl CheckpointStore {
                 .as_ref()
                 // If the checkpoint exist return its contents.
                 .map(|proposal| proposal.transactions.clone())
-                // If the checkpoint does not exist return the unprocessed transactions
-                //.or_else(|| {
-                //    Some(CheckpointContents::new(
-                //        self.unprocessed_transactions.keys(),
-                //    ))
-                // })
+            // If the checkpoint does not exist return the unprocessed transactions
+            //.or_else(|| {
+            //    Some(CheckpointContents::new(
+            //        self.unprocessed_transactions.keys(),
+            //    ))
+            // })
         } else {
             None
         };
@@ -420,7 +420,9 @@ impl CheckpointStore {
 
         // Ensure we have processed all transactions contained in this checkpoint.
         if !self.all_checkpoint_transactions_executed(contents)? {
-            return Err(SuiError::from("Checkpoint contains unexecuted transactions."))
+            return Err(SuiError::from(
+                "Checkpoint contains unexecuted transactions.",
+            ));
         }
 
         // Sign the new checkpoint
@@ -479,7 +481,6 @@ impl CheckpointStore {
         self.set_locals(locals, new_locals)?;
 
         // Attempt to move forward, as many times as we can
-        println!("Attempt to construct in batch?");
         while self
             .attempt_to_construct_checkpoint(committee)
             .unwrap_or(false)
@@ -640,7 +641,10 @@ impl CheckpointStore {
         }
 
         // Attempt to move forward, as many times as we can
-        while self.attempt_to_construct_checkpoint(committee).unwrap_or(false) {}
+        while self
+            .attempt_to_construct_checkpoint(committee)
+            .unwrap_or(false)
+        {}
         Ok(())
     }
 
@@ -650,17 +654,15 @@ impl CheckpointStore {
         &mut self,
         committee: &Committee,
     ) -> Result<bool, FragmentInternalError> {
-
         // We only attempt to reconstruct if we have a local proposal.
-        // By limiting reconstruction to when we have proposals we are 
+        // By limiting reconstruction to when we have proposals we are
         // sure that we delay doing work to when it is needed.
-        if self.get_locals().current_proposal.is_none(){
+        if self.get_locals().current_proposal.is_none() {
             return Ok(false);
         }
 
         // We have a proposal so lets try to re-construct the checkpoint.
         let next_sequence_number = self.next_checkpoint();
-        println!("Attempt to constuct checkpoint.");
 
         if let Ok(Some(contents)) = self.reconstruct_contents(committee) {
             // Here we check, and ensure, all transactions are processed before we
@@ -976,8 +978,7 @@ impl CheckpointStore {
     pub fn all_checkpoint_transactions_executed(
         &self,
         transactions: &CheckpointContents,
-    ) -> SuiResult<bool>
-    {
+    ) -> SuiResult<bool> {
         let new_transactions = self
             .extra_transactions
             .multi_get(transactions.transactions.iter())?
@@ -994,14 +995,6 @@ impl CheckpointStore {
             )
             .count();
 
-
-        println!("Unexecuted Tx: {}", new_transactions);
-        let tx: Vec<_> = transactions.transactions.iter().map(|e| format!("{:?}", e.transaction)).collect();
-        println!("Checkpoint Txs: {:?}", tx);
-        let tx: Vec<_> = self
-        .extra_transactions.iter().map(|(e, _)| format!("{:?}", e.transaction)).collect();
-        println!("Executed Txs: {:?}", tx);
-        
         Ok(new_transactions == 0)
     }
 

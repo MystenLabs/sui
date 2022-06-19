@@ -68,7 +68,7 @@ async fn sequence_fragments() {
             let checkpoints_store = handle.state().checkpoints().unwrap();
             checkpoints_store
                 .lock()
-                .handle_internal_batch(next_sequence_number, &transactions, &committee)
+                .handle_internal_batch(next_sequence_number, &transactions, committee)
                 .unwrap();
             let proposal = checkpoints_store
                 .lock()
