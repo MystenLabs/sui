@@ -4,6 +4,7 @@
 use super::*;
 use crate::{
     authority::{AuthorityState, AuthorityStore},
+    authority_active::execution_driver::PendCertificateForExecutionNoop,
     authority_aggregator::{
         authority_aggregator_tests::transfer_coin_transaction, AuthorityAggregator,
     },
@@ -1211,7 +1212,12 @@ fn test_fragment_full_flow() {
     while let Ok(fragment) = rx.try_recv() {
         all_fragments.push(fragment.clone());
         assert!(cps0
-            .handle_internal_fragment(seq.clone(), fragment, &committee)
+            .handle_internal_fragment(
+                seq.clone(),
+                fragment,
+                &committee,
+                &PendCertificateForExecutionNoop
+            )
             .is_ok());
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
@@ -1235,7 +1241,12 @@ fn test_fragment_full_flow() {
     let mut seq = ExecutionIndices::default();
     let cps6 = &mut test_objects[6].1;
     for fragment in &all_fragments {
-        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone(), &committee);
+        let _ = cps6.handle_internal_fragment(
+            seq.clone(),
+            fragment.clone(),
+            &committee,
+            &PendCertificateForExecutionNoop,
+        );
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
         );
@@ -1251,7 +1262,12 @@ fn test_fragment_full_flow() {
     // and no more fragments are recorded.
 
     for fragment in &all_fragments {
-        let _ = cps6.handle_internal_fragment(seq.clone(), fragment.clone(), &committee);
+        let _ = cps6.handle_internal_fragment(
+            seq.clone(),
+            fragment.clone(),
+            &committee,
+            &PendCertificateForExecutionNoop,
+        );
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
         );
@@ -1423,10 +1439,12 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
         while let Some(msg) = _rx.recv().await {
             println!("Deliver fragment seq={:?}", seq);
             for cps in &checkpoint_stores {
-                if let Err(err) = cps
-                    .lock()
-                    .handle_internal_fragment(seq.clone(), msg.clone(), &c)
-                {
+                if let Err(err) = cps.lock().handle_internal_fragment(
+                    seq.clone(),
+                    msg.clone(),
+                    &c,
+                    &PendCertificateForExecutionNoop,
+                ) {
                     println!("Error: {:?}", err);
                 }
             }
