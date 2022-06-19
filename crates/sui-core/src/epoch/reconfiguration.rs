@@ -71,9 +71,12 @@ where
                 next_cp,
                 "finish_epoch_change called when there are still unprocessed transactions",
             );
-            if checkpoints.extra_transactions.iter().next().is_some() {
-                // TODO: Revert any tx that's executed but not in the checkpoint.
+            for (tx_digest, _) in checkpoints.extra_transactions.iter() {
+                self.state
+                    .database
+                    .revert_state_update(&tx_digest.transaction)?;
             }
+            checkpoints.extra_transactions.clear()?;
             // drop checkpoints lock
         } else {
             unreachable!();
