@@ -299,11 +299,11 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
 
     /// Add a number of certificates to the pending transactions as well as the
     /// certificates structure if they are not already executed.
-    /// 
+    ///
     /// This function may be run concurrently: it increases atomically an internal index
     /// by the number of certificates passed, and then records the certificates and their
     /// index. If two instanced run concurrently, the indexes are guaranteed to not overlap
-    /// although some certificates may be included twice in the `pending_execution`, and 
+    /// although some certificates may be included twice in the `pending_execution`, and
     /// the same certificate may be written twice (but that is OK since it is valid.)
     pub fn add_pending_certificates(
         &self,
