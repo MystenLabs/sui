@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 const stdToN = (original: number, length: number) =>
     String(original).padStart(length, '0');
 
