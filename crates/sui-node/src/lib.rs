@@ -104,8 +104,11 @@ impl SuiNode {
                 authority_clients.insert(validator.public_key(), client);
             }
 
-            let active_authority =
-                ActiveAuthority::new(state.clone(), follower_store, authority_clients)?;
+            let active_authority = Arc::new(ActiveAuthority::new(
+                state.clone(),
+                follower_store,
+                authority_clients,
+            )?);
 
             Some(if is_validator {
                 // TODO: get degree from config file.
