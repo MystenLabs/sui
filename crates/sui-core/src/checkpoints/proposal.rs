@@ -52,7 +52,7 @@ impl CheckpointProposal {
 
     // Get the authority name
     pub fn name(&self) -> &AuthorityName {
-        &self.proposal.0.authority
+        &self.proposal.0.auth_signature.authority
     }
 
     /// Construct a Diff structure between this proposal and another

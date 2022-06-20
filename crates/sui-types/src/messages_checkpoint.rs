@@ -1,11 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
-use crate::crypto::Signable;
+use crate::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, Signable};
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
@@ -224,13 +224,13 @@ impl CheckpointSummary {
 
 impl BcsSignable for CheckpointSummary {}
 
-// TODO: Rename SignedCheckpoint to SignedCheckpointSummary
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SignedCheckpoint {
+pub struct CheckpointSummaryEnvelope<S> {
     pub checkpoint: CheckpointSummary,
-    pub authority: AuthorityName,
-    signature: AuthoritySignature,
+    pub auth_signature: S,
 }
+
+pub type SignedCheckpoint = CheckpointSummaryEnvelope<AuthoritySignInfo>;
 
 impl SignedCheckpoint {
     /// Create a new signed checkpoint proposal for this authority
@@ -254,16 +254,26 @@ impl SignedCheckpoint {
     ) -> SignedCheckpoint {
         let signature = AuthoritySignature::new(&checkpoint, signer);
 
+        let epoch = checkpoint.epoch;
         SignedCheckpoint {
             checkpoint,
-            authority,
-            signature,
+            auth_signature: AuthoritySignInfo {
+                epoch,
+                authority,
+                signature,
+            },
         }
     }
 
     /// Checks that the signature on the digest is correct
     pub fn verify(&self) -> Result<(), SuiError> {
-        self.signature.verify(&self.checkpoint, self.authority)?;
+        fp_ensure!(
+            self.checkpoint.epoch == self.auth_signature.epoch,
+            SuiError::from("Epoch in the summary doesn't match with the signature")
+        );
+        self.auth_signature
+            .signature
+            .verify(&self.checkpoint, self.auth_signature.authority)?;
         Ok(())
     }
 
@@ -293,11 +303,9 @@ impl SignedCheckpoint {
 // or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CertifiedCheckpoint {
-    pub checkpoint: CheckpointSummary,
-    signatures: Vec<(AuthorityName, AuthoritySignature)>,
-}
+// TODO: Make sure CertifiedCheckpoint uses f+1 instead of 2f+1 for quorum threshold.
+// https://github.com/MystenLabs/sui/pull/2671
+pub type CertifiedCheckpoint = CheckpointSummaryEnvelope<AuthorityQuorumSignInfo>;
 
 impl CertifiedCheckpoint {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
@@ -309,13 +317,20 @@ impl CertifiedCheckpoint {
             !signed_checkpoints.is_empty(),
             SuiError::from("Need at least one signed checkpoint to aggregate")
         );
+        fp_ensure!(
+            signed_checkpoints.iter().all(|c| c.checkpoint.epoch == committee.epoch),
+            SuiError::from("SignedCheckpoint is from different epoch as committee")
+        );
 
         let certified_checkpoint = CertifiedCheckpoint {
             checkpoint: signed_checkpoints[0].checkpoint.clone(),
-            signatures: signed_checkpoints
-                .into_iter()
-                .map(|v| (v.authority, v.signature))
-                .collect(),
+            auth_signature: AuthorityQuorumSignInfo {
+                epoch: committee.epoch,
+                signatures: signed_checkpoints
+                    .into_iter()
+                    .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
+                    .collect(),
+            },
         };
 
         certified_checkpoint.verify(committee)?;
@@ -323,63 +338,22 @@ impl CertifiedCheckpoint {
     }
 
     pub fn signatory_authorities(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.signatures.iter().map(|(name, _)| name)
+        self.auth_signature.signatures.iter().map(|(name, _)| name)
     }
 
     /// Check that a certificate is valid, and signed by a quorum of authorities
     pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
-        // Note: this code is nearly the same as the code that checks
-        // transaction certificates. There is an opportunity to unify this
-        // logic.
-
-        let mut weight = 0;
-        let mut used_authorities = HashSet::new();
-        for (authority, _) in self.signatures.iter() {
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
-            // Update weight.
-            let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-            weight += voting_rights;
-        }
         fp_ensure!(
-            // NOTE: here we only require f+1 weight to accept it, since
-            //       we only need to ensure one honest node signs it, and
-            //       do not require quorum intersection properties between
-            //       any two sets of signers. Further f+1 is the most honest
-            //       nodes we can be sure is in the set of 2f+1 that were
-            //       used to create the checkpoint from fragments.
-            weight >= committee.validity_threshold(),
-            SuiError::CertificateRequiresQuorum
+            self.checkpoint.epoch == committee.epoch,
+            SuiError::from("Epoch in the summary doesn't match with the committee")
         );
-
         let mut obligation = VerificationObligation::default();
-
-        // We verify the same message, so that ensures all signatures are
-        // one a single and same message.
         let mut message = Vec::new();
         self.checkpoint.write(&mut message);
-
         let idx = obligation.add_message(message);
-
-        for tuple in self.signatures.iter() {
-            let (authority, signature) = tuple;
-            obligation
-                .public_keys
-                .push(committee.public_key(authority)?);
-
-            // build a signature
-            obligation.signatures.push(signature.0);
-
-            // collect the message
-            obligation.message_index.push(idx);
-        }
-
-        obligation.verify_all().map(|_| ())?;
+        self.auth_signature
+            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+        obligation.verify_all()?;
         Ok(())
     }
 
@@ -437,8 +411,8 @@ impl CheckpointFragment {
 
         // Check the proposers are authorities
         fp_ensure!(
-            _committee.weight(&self.proposer.0.authority) > 0
-                && _committee.weight(&self.other.0.authority) > 0,
+            _committee.weight(&self.proposer.0.auth_signature.authority) > 0
+                && _committee.weight(&self.other.0.auth_signature.authority) > 0,
             SuiError::from("Authorities not in the committee")
         );
 
@@ -446,8 +420,8 @@ impl CheckpointFragment {
         fp_ensure!(
             self.diff.first.waypoint == *self.proposer.0.checkpoint.waypoint
                 && self.diff.second.waypoint == *self.other.0.checkpoint.waypoint
-                && self.diff.first.key == self.proposer.0.authority
-                && self.diff.second.key == self.other.0.authority,
+                && self.diff.first.key == self.proposer.0.auth_signature.authority
+                && self.diff.second.key == self.other.0.auth_signature.authority,
             SuiError::from("Waypoint diff and checkpoint summary inconsistent")
         );
 

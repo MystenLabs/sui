@@ -50,7 +50,7 @@ impl FragmentReconstruction {
 
             // Check the checkpoint summary of the proposal is the same as the previous one.
             // Otherwise ignore the link.
-            let n1 = &frag.proposer.0.authority;
+            let n1 = &frag.proposer.0.auth_signature.authority;
             if *proposals
                 .entry(*n1)
                 .or_insert_with(|| frag.proposer.0.checkpoint.clone())
@@ -59,7 +59,7 @@ impl FragmentReconstruction {
                 continue;
             }
 
-            let n2 = &frag.other.0.authority;
+            let n2 = &frag.other.0.auth_signature.authority;
             if *proposals
                 .entry(*n2)
                 .or_insert_with(|| frag.other.0.checkpoint.clone())
@@ -79,7 +79,9 @@ impl FragmentReconstruction {
                 // Get all links that are part of this component
                 let mut active_links: VecDeque<_> = fragments_used
                     .into_iter()
-                    .filter(|frag| span.top_node(&frag.proposer.0.authority).0 == top)
+                    .filter(|frag| {
+                        span.top_node(&frag.proposer.0.auth_signature.authority).0 == top
+                    })
                     .collect();
 
                 let mut global = GlobalCheckpoint::new();

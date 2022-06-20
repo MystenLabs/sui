@@ -506,15 +506,16 @@ impl CheckpointStore {
         // Only a fragment that involves ourselves to be sequenced through
         // this node.
         fp_ensure!(
-            fragment.proposer.0.authority == self.name || fragment.other.0.authority == self.name,
+            fragment.proposer.0.auth_signature.authority == self.name
+                || fragment.other.0.auth_signature.authority == self.name,
             SuiError::from("Fragment does not involve this node")
         );
 
         // Save in the list of local fragments for this sequence.
-        let other_name = if fragment.proposer.0.authority == self.name {
-            fragment.other.0.authority
+        let other_name = if fragment.proposer.0.auth_signature.authority == self.name {
+            fragment.other.0.auth_signature.authority
         } else {
-            fragment.proposer.0.authority
+            fragment.proposer.0.auth_signature.authority
         };
         if !self.local_fragments.contains_key(&other_name)? {
             self.local_fragments.insert(&other_name, fragment)?;
@@ -609,18 +610,18 @@ impl CheckpointStore {
         // If the fragment contains us also save it in the list of local fragments
         let next_sequence_number = self.next_checkpoint();
         if *_fragment.proposer.0.checkpoint.sequence_number() == next_sequence_number {
-            if _fragment.proposer.0.authority == self.name {
+            if _fragment.proposer.0.auth_signature.authority == self.name {
                 self.local_fragments
-                    .insert(&_fragment.other.0.authority, &_fragment)
+                    .insert(&_fragment.other.0.auth_signature.authority, &_fragment)
                     .map_err(|_err| {
                         // There is a possibility this was not stored!
                         let fragment = _fragment.clone();
                         FragmentInternalError::Retry(Box::new(fragment))
                     })?;
             }
-            if _fragment.other.0.authority == self.name {
+            if _fragment.other.0.auth_signature.authority == self.name {
                 self.local_fragments
-                    .insert(&_fragment.proposer.0.authority, &_fragment)
+                    .insert(&_fragment.proposer.0.auth_signature.authority, &_fragment)
                     .map_err(|_err| {
                         // There is a possibility this was not stored!
                         let fragment = _fragment.clone();
@@ -721,7 +722,7 @@ impl CheckpointStore {
                         .unwrap();
 
                     // Extract the diff
-                    let diff = if fragment.proposer.0.authority == self.name {
+                    let diff = if fragment.proposer.0.auth_signature.authority == self.name {
                         fragment.diff
                     } else {
                         fragment.diff.swap()

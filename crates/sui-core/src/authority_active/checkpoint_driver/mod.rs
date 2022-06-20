@@ -652,8 +652,8 @@ pub async fn diff_proposals<A>(
                     {
                         Ok(fragment) => {
                             // On success send the fragment to consensus
-                            let proposer = &fragment.proposer.0.authority;
-                            let other = &fragment.other.0.authority;
+                            let proposer = &fragment.proposer.0.auth_signature.authority;
+                            let other = &fragment.other.0.auth_signature.authority;
                             debug!("Send fragment: {proposer:?} -- {other:?}");
                             let _ = checkpoint_db.lock().handle_receive_fragment(
                                 &fragment,
@@ -712,7 +712,7 @@ where
     let client = active_authority
         .net
         .load()
-        .clone_client(&fragment.other.0.authority);
+        .clone_client(&fragment.other.0.auth_signature.authority);
     for tx_digest in &fragment.diff.first.items {
         let response = client
             .handle_transaction_info_request(TransactionInfoRequest::from(tx_digest.transaction))
