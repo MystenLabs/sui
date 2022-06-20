@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::ident_str;
+use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::authority::AuthorityTemporaryStore;
@@ -125,7 +127,7 @@ fn execute_transaction<S: BackingPackageStore>(
                         .get(&object_ref.0)
                         .unwrap()
                         .clone();
-                    transfer_coin(temporary_store, object, recipient)
+                    transfer_coin(temporary_store, object, tx_ctx.sender(), recipient)
                 }
                 SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
                     let gas_object = temporary_store
@@ -242,10 +244,16 @@ fn execute_transaction<S: BackingPackageStore>(
 fn transfer_coin<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut object: Object,
+    sender: SuiAddress,
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     object.transfer_and_increment_version(recipient)?;
     temporary_store.log_event(Event::TransferObject {
+        package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+        module: Identifier::from(ident_str!("native")),
+        function: Identifier::from(ident_str!("transfer_coin")),
+        instigator: sender,
+        recipient: Owner::AddressOwner(recipient),
         object_id: object.id(),
         version: object.version(),
         destination_addr: recipient,

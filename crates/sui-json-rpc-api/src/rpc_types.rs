@@ -1192,7 +1192,7 @@ pub struct OwnedObjectRef {
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "Event")]
+#[serde(rename = "Event", rename_all = "camelCase")]
 pub enum SuiEvent {
     /// Move-specific event
     #[serde(rename_all = "camelCase")]
@@ -1200,7 +1200,7 @@ pub enum SuiEvent {
         package_id: ObjectID,
         module: String,
         function: String,
-        sender: SuiAddress,
+        instigator: SuiAddress,
         type_: String,
         fields: SuiMoveStruct,
         #[serde_as(as = "Base64")]
@@ -1210,31 +1210,38 @@ pub enum SuiEvent {
     /// Module published
     #[serde(rename_all = "camelCase")]
     Publish {
-        sender: SuiAddress,
+        instigator: SuiAddress,
         package_id: ObjectID,
     },
     /// Transfer objects to new address / wrap in another object / coin
     #[serde(rename_all = "camelCase")]
     TransferObject {
+        package_id: ObjectID,
+        module: String,
+        function: String,
+        instigator: SuiAddress,
+        recipient: Owner,
         object_id: ObjectID,
         version: SequenceNumber,
         destination_addr: SuiAddress,
         type_: TransferType,
     },
     /// Delete object
+    #[serde(rename_all = "camelCase")]
     DeleteObject {
         package_id: ObjectID,
         module: String,
         function: String,
-        sender: SuiAddress,
+        instigator: SuiAddress,
         object_id: ObjectID,
     },
     /// New object creation
+    #[serde(rename_all = "camelCase")]
     NewObject {
         package_id: ObjectID,
         module: String,
         function: String,
-        sender: SuiAddress,
+        instigator: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
     },
@@ -1251,7 +1258,7 @@ impl SuiEvent {
                 package_id,
                 module,
                 function,
-                sender,
+                instigator,
                 type_,
                 contents,
             } => {
@@ -1262,19 +1269,35 @@ impl SuiEvent {
                     package_id,
                     module: module.to_string(),
                     function: function.to_string(),
-                    sender,
+                    instigator,
                     type_: move_obj.type_,
                     fields: move_obj.fields,
                     bcs,
                 }
             }
-            Event::Publish { sender, package_id } => SuiEvent::Publish { sender, package_id },
+            Event::Publish {
+                instigator,
+                package_id,
+            } => SuiEvent::Publish {
+                instigator,
+                package_id,
+            },
             Event::TransferObject {
+                package_id,
+                module,
+                function,
+                instigator,
+                recipient,
                 object_id,
                 version,
                 destination_addr,
                 type_,
             } => SuiEvent::TransferObject {
+                package_id,
+                module: module.to_string(),
+                function: function.to_string(),
+                instigator,
+                recipient,
                 object_id,
                 version,
                 destination_addr,
@@ -1284,27 +1307,27 @@ impl SuiEvent {
                 package_id,
                 module,
                 function,
-                sender,
+                instigator,
                 object_id,
             } => SuiEvent::DeleteObject {
                 package_id,
                 module: module.to_string(),
                 function: function.to_string(),
-                sender,
+                instigator,
                 object_id,
             },
             Event::NewObject {
                 package_id,
                 module,
                 function,
-                sender,
+                instigator,
                 recipient,
                 object_id,
             } => SuiEvent::NewObject {
                 package_id,
                 module: module.to_string(),
                 function: function.to_string(),
-                sender,
+                instigator,
                 recipient,
                 object_id,
             },
@@ -1443,9 +1466,10 @@ pub enum SuiEventFilter {
         path: String,
         value: Value,
     },
-    SenderAddress(SuiAddress),
+    InstigatorAddress(SuiAddress),
     EventType(EventType),
     ObjectId(ObjectID),
+    TransferType(TransferType),
     All(Vec<SuiEventFilter>),
     Any(Vec<SuiEventFilter>),
     And(Box<SuiEventFilter>, Box<SuiEventFilter>),
@@ -1466,7 +1490,7 @@ impl TryInto<EventFilter> for SuiEventFilter {
                 EventFilter::MoveEventType(parse_struct_tag(&event_type)?)
             }
             MoveEventField { path, value } => EventFilter::MoveEventField { path, value },
-            SenderAddress(address) => EventFilter::SenderAddress(address),
+            InstigatorAddress(address) => EventFilter::InstigatorAddress(address),
             ObjectId(id) => EventFilter::ObjectId(id),
             All(filters) => EventFilter::MatchAll(
                 filters
@@ -1483,6 +1507,7 @@ impl TryInto<EventFilter> for SuiEventFilter {
             And(filter_a, filter_b) => All(vec![*filter_a, *filter_b]).try_into()?,
             Or(filter_a, filter_b) => Any(vec![*filter_a, *filter_b]).try_into()?,
             EventType(type_) => EventFilter::EventType(type_),
+            TransferType(type_) => EventFilter::TransferType(type_),
         })
     }
 }
