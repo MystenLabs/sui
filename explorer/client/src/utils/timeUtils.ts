@@ -1,5 +1,8 @@
-export const convertNumberToDate = (epochTime: number) => {
-    const date = new Date(epochTime);
+const stdToTwo = (value: number) => (value < 10 ? `0${value}` : `${value}`);
+
+export const convertNumberToDate = (epochTimeSecs: number) => {
+    //API returns epoch time in seconds, Date expects milliseconds:
+    const date = new Date(epochTimeSecs * 1000);
 
     const MONTHS = [
         'Jan',
@@ -18,5 +21,7 @@ export const convertNumberToDate = (epochTime: number) => {
 
     return `${date.getUTCDate()} ${
         MONTHS[date.getUTCMonth()]
-    } ${date.getUTCFullYear()} ${date.getUTCHours()}:${date.getUTCMinutes()}:${date.getSeconds()} (UTC)`;
+    } ${date.getUTCFullYear()} ${stdToTwo(date.getUTCHours())}:${stdToTwo(
+        date.getUTCMinutes()
+    )}:${stdToTwo(date.getSeconds())} (UTC)`;
 };

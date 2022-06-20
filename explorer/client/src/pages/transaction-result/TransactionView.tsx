@@ -15,8 +15,8 @@ import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
 import codestyle from '../../styles/bytecode.module.css';
+import { convertNumberToDate } from '../../utils/timeUtils';
 import { type DataType } from './TransactionResultType';
-// import { convertNumberToDate } from '../../utils/timeUtils';
 
 import type {
     CertifiedTransaction,
@@ -205,14 +205,16 @@ function formatByTransactionKind(
     }
 }
 
-function ItemView({ itm, text }: { itm: any; text: string }) {
+function ItemView({ itm, text }: { itm: any; text: string | number }) {
     switch (true) {
         case itm.label === 'Modules':
             return <div className={codestyle.code}>{itm.value}</div>;
+        case itm.label === 'Timestamp':
+            return <>{convertNumberToDate(text as number)}</>;
         case itm.link:
             return (
                 <Longtext
-                    text={text}
+                    text={text as string}
                     category={itm.category ? itm.category : 'unknown'}
                     isLink={true}
                 />
