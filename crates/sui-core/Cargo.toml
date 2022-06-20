@@ -41,6 +41,7 @@ colored = "2.0.0"
 curve25519-dalek = { version = "3", default-features = false }
 thiserror = "1.0.30"
 arc-swap = "1.5.0"
+tokio-retry = "0.3"
 
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }

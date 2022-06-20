@@ -172,7 +172,7 @@ getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-f
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 gimli = { version = "0.26", default-features = false, features = ["read", "read-core"] }
 glob = { version = "0.3", default-features = false }
-globset = { version = "0.4", default-features = false }
+globset = { version = "0.4", features = ["log"] }
 globwalk = { version = "0.8", default-features = false }
 gloo-net = { version = "0.2", default-features = false, features = ["futures-channel", "futures-core", "futures-sink", "json", "pin-project", "serde", "serde_json", "websocket"] }
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
@@ -431,7 +431,7 @@ target-spec = { version = "1", default-features = false, features = ["serde", "s
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
-tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug"] }
+tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
@@ -450,6 +450,7 @@ tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
+tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-3c51e837cfc5589a = { package = "tokio-rustls", version = "0.22", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
@@ -703,7 +704,7 @@ getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-f
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 gimli = { version = "0.26", default-features = false, features = ["read", "read-core"] }
 glob = { version = "0.3", default-features = false }
-globset = { version = "0.4", default-features = false }
+globset = { version = "0.4", features = ["log"] }
 globwalk = { version = "0.8", default-features = false }
 gloo-net = { version = "0.2", default-features = false, features = ["futures-channel", "futures-core", "futures-sink", "json", "pin-project", "serde", "serde_json", "websocket"] }
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
@@ -1010,7 +1011,7 @@ target-spec = { version = "1", default-features = false, features = ["serde", "s
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
-tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug"] }
+tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
@@ -1033,6 +1034,7 @@ tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "1", default-features = false }
+tokio-retry = { version = "0.3", default-features = false }
 tokio-rustls-3c51e837cfc5589a = { package = "tokio-rustls", version = "0.22", default-features = false }
 tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
