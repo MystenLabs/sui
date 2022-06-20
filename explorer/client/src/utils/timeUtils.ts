@@ -20,9 +20,9 @@ export const convertNumberToDate = (epochTimeSecs: number | null): string => {
         'Dec',
     ];
 
-    return `${date.getUTCDate()} ${
+    return `${stdToTwo(date.getUTCDate())} ${
         MONTHS[date.getUTCMonth()]
     } ${date.getUTCFullYear()} ${stdToTwo(date.getUTCHours())}:${stdToTwo(
         date.getUTCMinutes()
-    )}:${stdToTwo(date.getSeconds())} (UTC)`;
+    )}:${stdToTwo(date.getUTCSeconds())} (UTC)`;
 };
