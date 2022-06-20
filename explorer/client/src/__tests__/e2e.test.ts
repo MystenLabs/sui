@@ -173,6 +173,13 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(value.trim()).toBe(successID);
         });
+        it('correctly renders summer time', async () => {
+            await page.goto(`${BASE_URL}/transactions/${successID}`);
+            const value = await cssInteract(page)
+                .with('#timestamp')
+                .get.textContent();
+            expect(value.trim()).toBe('20 June 2022 00:00:00 (UTC)');
+        });
         //     it('can go to object and back', async () => {
         //         const objectID = '7bc832ec31709638cd8d9323e90edf332gff4389';
         //         await page.goto(`${BASE_URL}/transactions/${successID}`);
