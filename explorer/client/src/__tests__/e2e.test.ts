@@ -178,7 +178,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#timestamp')
                 .get.textContent();
-            expect(value.trim()).toBe('20 June 2022 00:00:00 (UTC)');
+            expect(value.trim()).toBe('20 Jun 2022 00:00:00 (UTC)');
         });
         //     it('can go to object and back', async () => {
         //         const objectID = '7bc832ec31709638cd8d9323e90edf332gff4389';
