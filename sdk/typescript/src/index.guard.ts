@@ -434,7 +434,6 @@ export function isExecutionStatus(obj: any, _argumentName?: string): obj is Exec
             typeof obj === "object" ||
             typeof obj === "function") &&
         isExecutionStatusType(obj.status) as boolean &&
-        isGasCostSummary(obj.gas_cost) as boolean &&
         (typeof obj.error === "undefined" ||
             isTransactionDigest(obj.error) as boolean)
     )
@@ -456,6 +455,7 @@ export function isTransactionEffects(obj: any, _argumentName?: string): obj is T
             typeof obj === "object" ||
             typeof obj === "function") &&
         isExecutionStatus(obj.status) as boolean &&
+        isGasCostSummary(obj.gasUsed) as boolean &&
         (typeof obj.sharedObjects === "undefined" ||
             Array.isArray(obj.sharedObjects) &&
             obj.sharedObjects.every((e: any) =>
