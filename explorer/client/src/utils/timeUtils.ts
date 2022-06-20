@@ -1,6 +1,7 @@
 const stdToTwo = (value: number) => (value < 10 ? `0${value}` : `${value}`);
 
-export const convertNumberToDate = (epochTimeSecs: number) => {
+export const convertNumberToDate = (epochTimeSecs: number | null): string => {
+    if (!epochTimeSecs) return 'Not Available';
     //API returns epoch time in seconds, Date expects milliseconds:
     const date = new Date(epochTimeSecs * 1000);
 
