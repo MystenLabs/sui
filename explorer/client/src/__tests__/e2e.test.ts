@@ -180,6 +180,15 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(value.trim()).toBe('20 Jun 2022 00:00:00 (UTC)');
         });
+        it('correctly renders a time on the cusp of a year', async () => {
+            const otherID = 'GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=';
+            await page.goto(`${BASE_URL}/transactions/${otherID}`);
+            const value = await cssInteract(page)
+                .with('#timestamp')
+                .get.textContent();
+            expect(value.trim()).toBe('1 Jan 2025 01:12:07 (UTC)');
+        });
+
         //     it('can go to object and back', async () => {
         //         const objectID = '7bc832ec31709638cd8d9323e90edf332gff4389';
         //         await page.goto(`${BASE_URL}/transactions/${successID}`);
