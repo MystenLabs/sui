@@ -83,18 +83,23 @@ pub enum Event {
         package_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        sender: SuiAddress,
+        instigator: SuiAddress,
         type_: StructTag,
         #[serde_as(as = "Bytes")]
         contents: Vec<u8>,
     },
     /// Module published
     Publish {
-        sender: SuiAddress,
+        instigator: SuiAddress,
         package_id: ObjectID,
     },
     /// Transfer objects to new address / wrap in another object / coin
     TransferObject {
+        package_id: ObjectID,
+        module: Identifier,
+        function: Identifier,
+        instigator: SuiAddress,
+        recipient: Owner,
         object_id: ObjectID,
         version: SequenceNumber,
         destination_addr: SuiAddress,
@@ -105,7 +110,7 @@ pub enum Event {
         package_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        sender: SuiAddress,
+        instigator: SuiAddress,
         object_id: ObjectID,
     },
     /// New object creation
@@ -113,7 +118,7 @@ pub enum Event {
         package_id: ObjectID,
         module: Identifier,
         function: Identifier,
-        sender: SuiAddress,
+        instigator: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
     },
@@ -136,7 +141,7 @@ impl Event {
             package_id,
             module,
             function,
-            sender,
+            instigator: sender,
             type_,
             contents,
         }
@@ -153,7 +158,7 @@ impl Event {
             package_id,
             module,
             function,
-            sender,
+            instigator: sender,
             object_id,
         }
     }
@@ -170,7 +175,7 @@ impl Event {
             package_id,
             module,
             function,
-            sender,
+            instigator: sender,
             recipient,
             object_id,
         }
@@ -200,9 +205,11 @@ impl Event {
     /// Extracts the Move package ID associated with the event, or the package published.
     pub fn package_id(&self) -> Option<ObjectID> {
         match self {
-            Event::MoveEvent { package_id, .. } => Some(*package_id),
-            Event::Publish { package_id, .. } => Some(*package_id),
-            Event::NewObject { package_id, .. } => Some(*package_id),
+            Event::MoveEvent { package_id, .. }
+            | Event::NewObject { package_id, .. }
+            | Event::DeleteObject { package_id, .. }
+            | Event::TransferObject { package_id, .. }
+            | Event::Publish { package_id, .. } => Some(*package_id),
             _ => None,
         }
     }
@@ -210,10 +217,21 @@ impl Event {
     /// Extracts the Sender address associated with the event.
     pub fn sender(&self) -> Option<SuiAddress> {
         match self {
-            Event::MoveEvent { sender, .. } => Some(*sender),
-            Event::DeleteObject { sender, .. } => Some(*sender),
-            Event::Publish { sender, .. } => Some(*sender),
-            Event::NewObject { sender, .. } => Some(*sender),
+            Event::MoveEvent {
+                instigator: sender, ..
+            }
+            | Event::TransferObject {
+                instigator: sender, ..
+            }
+            | Event::NewObject {
+                instigator: sender, ..
+            }
+            | Event::Publish {
+                instigator: sender, ..
+            }
+            | Event::DeleteObject {
+                instigator: sender, ..
+            } => Some(*sender),
             _ => None,
         }
     }
@@ -222,8 +240,10 @@ impl Event {
     // TODO: should we switch to IdentStr or &str?  These are more complicated to make work due to lifetimes
     pub fn module_name(&self) -> Option<&str> {
         match self {
-            Event::MoveEvent { module, .. } => Some(module.as_ident_str().as_str()),
-            Event::NewObject { module, .. } => Some(module.as_ident_str().as_str()),
+            Event::MoveEvent { module, .. }
+            | Event::NewObject { module, .. }
+            | Event::DeleteObject { module, .. }
+            | Event::TransferObject { module, .. } => Some(module.as_str()),
             _ => None,
         }
     }
@@ -231,8 +251,28 @@ impl Event {
     /// Extracts the function name from a SuiEvent, if available
     pub fn function_name(&self) -> Option<&str> {
         match self {
-            Event::MoveEvent { function, .. } => Some(function.as_ident_str().as_str()),
-            Event::NewObject { function, .. } => Some(function.as_ident_str().as_str()),
+            Event::MoveEvent { function, .. }
+            | Event::NewObject { function, .. }
+            | Event::DeleteObject { function, .. }
+            | Event::TransferObject { function, .. } => Some(function.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Extracts the transfer type from a SuiEvent, if available
+    pub fn transfer_type(&self) -> Option<&TransferType> {
+        match self {
+            Event::TransferObject { type_, .. } => Some(type_),
+            _ => None,
+        }
+    }
+
+    /// Extracts the recipient from a SuiEvent, if available
+    pub fn recipient(&self) -> Option<&Owner> {
+        match self {
+            Event::TransferObject { recipient, .. } | Event::NewObject { recipient, .. } => {
+                Some(recipient)
+            }
             _ => None,
         }
     }

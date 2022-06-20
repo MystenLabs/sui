@@ -367,6 +367,7 @@ async fn test_object_owning_another_object() {
         version: _,
         destination_addr,
         type_,
+        ..
     } = event1
     {
         assert_eq!(type_, TransferType::ToObject);

@@ -6,9 +6,14 @@ use move_core_types::language_storage::StructTag;
 use serde_json::Value;
 
 use crate::base_types::SuiAddress;
-use crate::event::EventType;
 use crate::event::{Event, EventEnvelope};
+use crate::event::{EventType, TransferType};
+use crate::object::Owner;
 use crate::ObjectID;
+
+#[cfg(test)]
+#[path = "unit_tests/event_filter_tests.rs"]
+mod event_filter_tests;
 
 #[derive(Clone, Debug)]
 pub enum EventFilter {
@@ -18,8 +23,10 @@ pub enum EventFilter {
     MoveEventType(StructTag),
     EventType(EventType),
     MoveEventField { path: String, value: Value },
-    SenderAddress(SuiAddress),
+    InstigatorAddress(SuiAddress),
+    Recipient(Owner),
     ObjectId(ObjectID),
+    TransferType(TransferType),
     MatchAll(Vec<EventFilter>),
     MatchAny(Vec<EventFilter>),
 }
@@ -36,7 +43,7 @@ impl EventFilter {
                 }
                 _ => false,
             },
-            EventFilter::SenderAddress(sender) => {
+            EventFilter::InstigatorAddress(sender) => {
                 matches!(&item.event.sender(), Some(addr) if addr == sender)
             }
             EventFilter::Package(obj_id) => {
@@ -49,11 +56,17 @@ impl EventFilter {
                 matches!(item.event.function_name(), Some(name) if name == function.as_str())
             }
             EventFilter::ObjectId(object_id) => {
-                matches!(item.event.object_id(), Some(id) if &id ==object_id)
+                matches!(item.event.object_id(), Some(id) if &id == object_id)
             }
             EventFilter::EventType(type_) => &item.event.event_type() == type_,
             EventFilter::MatchAll(filters) => filters.iter().all(|f| f.matches(item)),
             EventFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(item)),
+            EventFilter::TransferType(type_) => {
+                matches!(item.event.transfer_type(), Some(transfer_type) if transfer_type == type_)
+            }
+            EventFilter::Recipient(recipient) => {
+                matches!(item.event.recipient(), Some(event_recipient) if event_recipient == recipient)
+            }
         })
     }
 

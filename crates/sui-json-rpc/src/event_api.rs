@@ -8,12 +8,13 @@ use futures::{StreamExt, TryStream};
 use jsonrpsee_core::error::SubscriptionClosed;
 use jsonrpsee_core::server::rpc_module::{PendingSubscription, SubscriptionSink};
 use serde::Serialize;
-use tracing::{info, warn};
+use tracing::warn;
 
 use sui_core::authority::AuthorityState;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_api::rpc_types::{SuiEvent, SuiEventFilter};
 use sui_json_rpc_api::EventApiServer;
+
 pub struct EventApiImpl {
     state: Arc<AuthorityState>,
     event_handler: Arc<EventHandler>,
@@ -30,7 +31,6 @@ impl EventApiImpl {
 
 impl EventApiServer for EventApiImpl {
     fn subscribe_event(&self, pending: PendingSubscription, filter: SuiEventFilter) {
-        info!(filter = ?filter, "Called");
         let filter = match filter.try_into() {
             Ok(filter) => filter,
             Err(e) => {
