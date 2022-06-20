@@ -244,6 +244,17 @@ function SubListView({ itm, list }: { itm: any; list: any }) {
     );
 }
 
+const TestIDMatcher = (label: string) => {
+    switch (label) {
+        case 'Transaction ID':
+            return 'transactionID';
+        case 'Timestamp':
+            return 'timestamp';
+        default:
+            return '';
+    }
+};
+
 function TransactionView({ txdata }: { txdata: DataType }) {
     return (
         <>
@@ -269,11 +280,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                 ? styles[itm.classAttr]
                                                 : ''
                                         )}
-                                        id={
-                                            itm.label === 'Transaction ID'
-                                                ? 'transactionID'
-                                                : ''
-                                        }
+                                        id={TestIDMatcher(itm.label)}
                                     >
                                         {itm.list ? (
                                             <ul className={styles.listitems}>
