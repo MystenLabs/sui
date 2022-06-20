@@ -186,7 +186,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#timestamp')
                 .get.textContent();
-            expect(value.trim()).toBe('1 Jan 2025 01:12:07 (UTC)');
+            expect(value.trim()).toBe('01 Jan 2025 01:12:07 (UTC)');
         });
 
         //     it('can go to object and back', async () => {
