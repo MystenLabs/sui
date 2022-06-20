@@ -178,7 +178,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#timestamp')
                 .get.textContent();
-            expect(value.trim()).toBe('20 Jun 2022 00:00:00 (UTC)');
+            expect(value.trim()).toBe('20 Jun 2022 23:07:13 (UTC)');
         });
         it('correctly renders a time on the cusp of a year', async () => {
             const otherID = 'GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=';
