@@ -23,6 +23,7 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::{Owner, OBJECT_START_VERSION};
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
@@ -240,6 +241,8 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         }
     }
 
+    // TODO: Async retry method, using tokio-retry crate.
+
     /// Await a new pending certificate to be added
     pub async fn wait_for_new_pending(&self) {
         self.pending_notifier.notified().await
@@ -427,17 +430,35 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
     pub async fn get_transaction_envelope(
         &self,
         object_ref: &ObjectRef,
-    ) -> Result<Option<TransactionEnvelope<S>>, SuiError> {
+    ) -> SuiResult<Option<TransactionEnvelope<S>>> {
         let transaction_option = self
             .lock_service
             .get_lock(*object_ref)
             .await?
             .ok_or(SuiError::TransactionLockDoesNotExist)?;
 
+        // Returns None if either no TX with the lock, or TX present but no entry in transactions table.
+        // However we retry a couple times because the TX is written after the lock is acquired, so it might
+        // just be a race.
         match transaction_option {
             Some(tx_digest) => {
-                return Ok(self.transactions.get(&tx_digest)?);
-                // .expect("Stored a lock without storing transaction?"),
+                let mut retry_strategy = ExponentialBackoff::from_millis(2)
+                    .factor(10)
+                    .map(jitter)
+                    .take(3);
+                let mut tx_option = self.transactions.get(&tx_digest)?;
+                while tx_option.is_none() {
+                    if let Some(duration) = retry_strategy.next() {
+                        // Wait to retry
+                        tokio::time::sleep(duration).await;
+                        trace!(?tx_digest, "Retrying getting pending transaction");
+                    } else {
+                        // No more retries, just quit
+                        break;
+                    }
+                    tx_option = self.transactions.get(&tx_digest)?;
+                }
+                Ok(tx_option)
             }
             None => Ok(None),
         }
@@ -716,12 +737,6 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
-        // Once a transaction is done processing and effects committed, we no longer
-        // need it in the transactions table. This also allows us to track pending
-        // transactions.
-        write_batch =
-            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
-
         self.sequence_tx(
             write_batch,
             temporary_store,
@@ -850,6 +865,12 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
                 )
             }),
         )?;
+
+        // Once a transaction is done processing and effects committed, we no longer
+        // need it in the transactions table. This also allows us to track pending
+        // transactions.
+        write_batch =
+            write_batch.delete_batch(&self.transactions, std::iter::once(transaction_digest))?;
 
         if ALL_OBJ_VER {
             // Keep all versions of every object if ALL_OBJ_VER is true.
