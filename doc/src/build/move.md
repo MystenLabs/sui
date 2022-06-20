@@ -180,7 +180,7 @@ In particular, one type of custom coin already defined in Sui is
 `Coin<SUI>`, which represents a token used to pay for Sui
 computations (more generally known as _gas_) - in this case, the concrete type used to parameterize the
 `Coin` struct is the `SUI` struct in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move):
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move):
 
 ``` rust
 struct SUI has drop {}
@@ -237,7 +237,7 @@ One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move)
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move)
 to implement gas object transfer:
 
 ```rust
@@ -256,7 +256,7 @@ In general, an entry function, must satisfy the following properties:
   - Note: The visibility does not matter. The function can be `public`, `public(friend)`, or internal.
 - have no return value
 - (optional) have a mutable reference to an instance of the `TxContext` struct
-  defined in the [TxContext module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TxContext.move) as the last parameter
+  defined in the [TxContext module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/tx_context.move) as the last parameter
 
 More concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -282,7 +282,7 @@ this package, first [install Sui binaries](install.md#binaries) and
 you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move) file.
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move) file.
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
@@ -311,7 +311,7 @@ So from the same directory containing the `sui` repository, run:
 
 ``` shell
 $ mkdir -p my_move_package/sources
-touch my_move_package/sources/M1.move
+touch my_move_package/sources/m1.move
 touch my_move_package/Move.toml
 ```
 
@@ -323,7 +323,7 @@ current_directory
 ├── my_move_package
     ├── Move.toml
     ├── sources
-        ├── M1.move
+        ├── m1.move
 ```
 
 
@@ -339,7 +339,7 @@ is a `Coin` struct type.
 
 
 Let us put the following module and struct
-definitions in the `M1.move` file:
+definitions in the `m1.move` file:
 
 ``` rust
 module MyFirstPackage::M1 {
@@ -449,7 +449,7 @@ Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
 
-Let us write a simple test function and insert it into the `M1.move`
+Let us write a simple test function and insert it into the `m1.move`
 file:
 
 ``` rust
@@ -492,7 +492,7 @@ get a compilation error:
 
 ``` shell
 error[E06001]: unused value without 'drop'
-   ┌─ ./sources/M1.move:34:65
+   ┌─ ./sources/m1.move:34:65
    │
  4 │       struct Sword has key, store {
    │              ----- To satisfy the constraint, the 'drop' ability would need to be added here
@@ -533,7 +533,7 @@ problem is to transfer ownership of the sword.
 
 In order to get our test to work, we then add the following line to
 the beginning of our testing function to import the
-[Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move):
+[Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 
 ``` rust
         use sui::transfer;
@@ -615,7 +615,7 @@ Let us extend our running example with a multi-transaction test that
 uses the `test_scenario` to test sword creation and transfer from the
 point of view of a Sui developer. First, let us create
 [entry functions](#entry-functions) callable from Sui that implement
-sword creation and transfer and put them into the `M1.move` file:
+sword creation and transfer and put them into the `m1.move` file:
 
 ``` rust
     public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
@@ -802,7 +802,7 @@ Continuing our fantasy game example, let's introduce a
 concept of a forge that will be involved in the process of creating
 swords - for starters let it keep track of how many swords have been
 created. Let us define the `Forge` struct and a function returning the
-number of created swords as follows and put into the `M1.move` file:
+number of created swords as follows and put into the `m1.move` file:
 
 ``` rust
     struct Forge has key, store {
@@ -886,7 +886,7 @@ encounter compilation errors in the existing tests due to the
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move).
+[m1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move).
 
 ## Sui Move library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
@@ -899,7 +899,7 @@ Objects in Sui can have different ownership types. Specifically, they are:
 - Shared and mutable (work-in-progress).
 
 #### Transfer to address
-The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
+The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
@@ -948,7 +948,7 @@ This call also requires to have the `child_ref` as proof of original ownership.
 After this transfer, the object will be owned by `recipient`.
 
 More examples of how objects can be transferred and owned can be found in
-[ObjectOwner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
+[object_owner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/object_owner.move).
 
 #### Freeze an object
 To make an object `obj` shared and immutable, one can call:

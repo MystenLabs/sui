@@ -34,7 +34,10 @@ use typed_store::{
 
 use arc_swap::ArcSwapOption;
 
-use crate::authority::StableSyncAuthoritySigner;
+use crate::{
+    authority::StableSyncAuthoritySigner,
+    authority_active::execution_driver::PendCertificateForExecution,
+};
 
 use self::proposal::CheckpointProposal;
 use self::reconstruction::FragmentReconstruction;
@@ -556,11 +559,12 @@ impl CheckpointStore {
     /// This function should be called by the consensus output, it is idempotent,
     /// and if called again with the same sequence number will do nothing. However,
     /// fragments should be provided in seq increasing order.
-    pub fn handle_internal_fragment(
+    pub fn handle_internal_fragment<P: PendCertificateForExecution>(
         &mut self,
         _seq: ExecutionIndices,
         _fragment: CheckpointFragment,
         committee: &Committee,
+        handle_pending_cert: &P,
     ) -> Result<(), FragmentInternalError> {
         // Ensure we have not already processed this fragment.
         if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
@@ -574,6 +578,21 @@ impl CheckpointStore {
         _fragment
             .verify(committee)
             .map_err(FragmentInternalError::Error)?;
+
+        // Schedule for execution all the certificates that are included here.
+        handle_pending_cert
+            .pending_execution(
+                _fragment
+                    .certs
+                    .iter()
+                    .map(|(digest, cert)| (digest.transaction, cert.clone()))
+                    .collect(),
+            )
+            .map_err(|_err| {
+                // There is a possibility this was not stored!
+                let fragment = _fragment.clone();
+                FragmentInternalError::Retry(Box::new(fragment))
+            })?;
 
         // Save the new fragment in the DB
         self.fragments.insert(&_seq, &_fragment).map_err(|_err| {

@@ -159,7 +159,7 @@ where
         &self,
         cert: ConfirmationTransaction,
         source_authority: AuthorityName,
-        cert_handler: CertHandler,
+        cert_handler: &CertHandler,
     ) -> Result<(), SuiError> {
         // TODO(panic): this panics
         let source_client = self.authority_clients[&source_authority].clone();
@@ -296,6 +296,30 @@ where
         .await
     }
 
+    pub async fn sync_certificate_to_authority_with_timeout(
+        &self,
+        cert: ConfirmationTransaction,
+        destination_authority: AuthorityName,
+        timeout_period: Duration,
+        retries: usize,
+    ) -> Result<(), SuiError> {
+        let cert_handler = RemoteConfirmationTransactionHandler {
+            destination_authority,
+            destination_client: self.authority_clients[&destination_authority].clone(),
+        };
+        debug!(cert =? cert.certificate.digest(),
+               dest_authority =? destination_authority,
+               "Syncing certificate to dest authority");
+        self.sync_certificate_to_authority_with_timeout_inner(
+            cert,
+            destination_authority,
+            &cert_handler,
+            timeout_period,
+            retries,
+        )
+        .await
+    }
+
     /// Sync a certificate to an authority.
     ///
     /// This function infers which authorities have the history related to
@@ -303,10 +327,13 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    pub async fn sync_certificate_to_authority_with_timeout(
+    pub async fn sync_certificate_to_authority_with_timeout_inner<
+        CertHandler: ConfirmationTransactionHandler,
+    >(
         &self,
         cert: ConfirmationTransaction,
         destination_authority: AuthorityName,
+        cert_handler: &CertHandler,
         timeout_period: Duration,
         retries: usize,
     ) -> Result<(), SuiError> {
@@ -333,9 +360,6 @@ where
                 source_authorities.push(*sample_authority);
             }
         }
-        debug!(cert =? cert.certificate.digest(),
-               dest_authority =? destination_authority,
-               ?source_authorities, "Syncing certificate to dest authority");
 
         // Now try to update the destination authority sequentially using
         // the source authorities we have sampled.
@@ -347,10 +371,7 @@ where
             let sync_fut = self.sync_authority_source_to_destination(
                 cert.clone(),
                 source_authority,
-                RemoteConfirmationTransactionHandler {
-                    destination_authority,
-                    destination_client: self.authority_clients[&destination_authority].clone(),
-                },
+                cert_handler,
             );
 
             // Be careful.  timeout() returning OK just means the Future completed.
