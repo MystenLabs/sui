@@ -40,6 +40,7 @@ type TxnState = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    timestamp_ms: number;
 };
 // TODO: update state to include Call types
 // TODO: clean up duplicate fields
@@ -61,6 +62,7 @@ const initState: TxnState = {
     status: 'success',
     gasFee: 0,
     txError: '',
+    timestamp_ms: 0,
     mutated: [],
     created: [],
 };
@@ -114,6 +116,7 @@ const transformTransactionResponse = (
         loadState: 'loaded',
         mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
         created: getCreatedOrMutatedData(txObj.effects, 'created'),
+        timestamp_ms: txObj.timestamp_ms,
     };
 };
 
