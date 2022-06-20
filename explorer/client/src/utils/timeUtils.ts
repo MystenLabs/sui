@@ -1,9 +1,10 @@
-const stdToTwo = (value: number) => (value < 10 ? `0${value}` : `${value}`);
+const stdToN = (original: number, length: number) =>
+    String(original).padStart(length, '0');
 
 export const convertNumberToDate = (epochTimeSecs: number | null): string => {
     if (!epochTimeSecs) return 'Not Available';
     //API returns epoch time in seconds, Date expects milliseconds:
-    const date = new Date(epochTimeSecs * 1000);
+    const date = new Date(epochTimeSecs);
 
     const MONTHS = [
         'Jan',
@@ -20,9 +21,13 @@ export const convertNumberToDate = (epochTimeSecs: number | null): string => {
         'Dec',
     ];
 
-    return `${stdToTwo(date.getUTCDate())} ${
+    return `${stdToN(date.getUTCDate(), 2)} ${
         MONTHS[date.getUTCMonth()]
-    } ${date.getUTCFullYear()} ${stdToTwo(date.getUTCHours())}:${stdToTwo(
-        date.getUTCMinutes()
-    )}:${stdToTwo(date.getUTCSeconds())} (UTC)`;
+    } ${date.getUTCFullYear()} ${stdToN(date.getUTCHours(), 2)}:${stdToN(
+        date.getUTCMinutes(),
+        2
+    )}:${stdToN(date.getUTCSeconds(), 2)}.${stdToN(
+        date.getUTCMilliseconds(),
+        3
+    )} (UTC)`;
 };
