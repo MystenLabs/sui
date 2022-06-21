@@ -3,6 +3,7 @@
 
 use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
+use std::sync::Arc;
 use std::time::Duration;
 use sui_types::messages::ExecutionStatus;
 
@@ -28,11 +29,13 @@ async fn pending_exec_storage_notify() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
-                inner_state.authority.clone(),
-                clients,
-            )
-            .unwrap();
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state.authority.clone(),
+                    clients,
+                )
+                .unwrap(),
+            );
             active_state.spawn_checkpoint_process().await
         });
     }
@@ -106,11 +109,13 @@ async fn pending_exec_full() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
-                inner_state.authority.clone(),
-                clients,
-            )
-            .unwrap();
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state.authority.clone(),
+                    clients,
+                )
+                .unwrap(),
+            );
 
             active_state.clone().spawn_execute_process().await;
             active_state.spawn_checkpoint_process().await;
