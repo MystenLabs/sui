@@ -400,6 +400,7 @@ async fn shared_object_on_gateway() {
     // to only filter "timeout" errors, but the game way simply returns `anyhow::Error`, this
     // will be fixed by issue #1717. Note that the gateway has an internal retry mechanism but
     // it is not an infinite loop.
+    let mut retry = 10;
     loop {
         let futures: Vec<_> = gas_objects
             .iter()
@@ -426,6 +427,10 @@ async fn shared_object_on_gateway() {
         if replies.iter().all(|result| result.is_ok()) {
             break;
         }
+        if retry == 0 {
+            unreachable!("Failed after 10 retries. Latest replies: {:?}", replies);
+        }
+        retry -= 1;
     }
 
     let assert_value_transaction = move_transaction(
