@@ -30,7 +30,7 @@ img.imageboxblur {
     filter: blur(8px);
     opacity: 0.72;
     transition: filter opacity ease-in 0.14s;
-    animation-duration: 1s;
+    animation-duration: 2s;
     animation-name: changeblur;
     animation-iteration-count: infinite;
     animation-direction: alternate;
