@@ -2,7 +2,7 @@
 title: Why Move?
 ---
 
-This page links to key Move resources and compares the Move and Solidity programming languages For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
+This page links to key Move resources and compares the Move and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
 
 ## Move resources
 
