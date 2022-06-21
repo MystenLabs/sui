@@ -1,7 +1,7 @@
 import { IS_LOCAL_ENV, IS_STATIC_ENV } from './envUtil';
 
 const ENV_STUBS_IMG_CHECK = IS_STATIC_ENV || IS_LOCAL_ENV;
-const HOST = 'https://imgmod.sui.io'
+const HOST = 'https://imgmod.sui.io';
 
 export type ImageCheckResponse = { ok: boolean };
 
