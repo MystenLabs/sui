@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # fast fail.
-set -eo pipefail
+set -e
 
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
