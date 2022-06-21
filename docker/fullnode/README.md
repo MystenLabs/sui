@@ -60,10 +60,10 @@ curl --location --request POST 'http://127.0.0.1:9000/' \
 ## Use your fullnode with Explorer 
 
 To use the Sui Explorer with your fullnode, follow these steps:
-- Open https://explorer.devnet.sui.io
-- Click the green **Devnet** button in the top right
-- Select 'Custom RPC URL'
-- Set it to http://127.0.0.1:9000
+1. Open a browser and go to: https://explorer.devnet.sui.io/
+1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
+   the *Local* network from the drop-down menu.
+1. Close the *Choose a Network* menu to see the latest transactions. 
 
 TODO: Confirm this shouldn't be Local as in the existing fullnode doc.
 
