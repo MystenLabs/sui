@@ -8,7 +8,7 @@ use crate::{
     safe_client::SafeClient,
 };
 
-use std::{collections::BTreeSet, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use sui_types::messages::{ConfirmationTransaction, ExecutionStatus};
 
 use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
@@ -31,11 +31,13 @@ async fn checkpoint_active_flow_happy_path() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
-                inner_state.authority.clone(),
-                clients,
-            )
-            .unwrap();
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state.authority.clone(),
+                    clients,
+                )
+                .unwrap(),
+            );
             active_state.spawn_checkpoint_process().await
         });
     }
@@ -106,11 +108,13 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
-                inner_state.authority.clone(),
-                clients,
-            )
-            .unwrap();
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state.authority.clone(),
+                    clients,
+                )
+                .unwrap(),
+            );
             // Spin the gossip service.
             active_state
                 .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
@@ -194,11 +198,13 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-            let active_state = ActiveAuthority::new_with_ephemeral_follower_store(
-                inner_state.authority.clone(),
-                clients,
-            )
-            .unwrap();
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state.authority.clone(),
+                    clients,
+                )
+                .unwrap(),
+            );
             // Spin the gossip service.
             active_state
                 .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
+use std::sync::Arc;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
@@ -142,8 +143,9 @@ async fn end_to_end() {
         let state = authority.state().clone();
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
-            let active_state =
-                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap();
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap(),
+            );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
                 ..CheckpointProcessControl::default()
@@ -226,8 +228,9 @@ async fn checkpoint_with_shared_objects() {
         let state = authority.state().clone();
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
-            let active_state =
-                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap();
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap(),
+            );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
                 ..CheckpointProcessControl::default()

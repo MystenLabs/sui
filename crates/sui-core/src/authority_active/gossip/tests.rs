@@ -25,9 +25,10 @@ pub async fn test_gossip_plain() {
         let inner_clients = clients.clone();
 
         let handle = tokio::task::spawn(async move {
-            let active_state =
+            let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
-                    .unwrap();
+                    .unwrap(),
+            );
             active_state.spawn_gossip_process(3).await;
         });
 
@@ -67,9 +68,10 @@ pub async fn test_gossip_error() {
         let inner_clients = clients.clone();
 
         let handle = tokio::task::spawn(async move {
-            let active_state =
+            let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
-                    .unwrap();
+                    .unwrap(),
+            );
             active_state.spawn_gossip_process(3).await;
         });
         active_authorities.push(handle);
