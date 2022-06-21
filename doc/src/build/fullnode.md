@@ -150,7 +150,7 @@ to run a Sui fullnode using Docker.
     ```shell
     $ git checkout --track upstream/devnet
     ```
-1. Make a copy of the fullnode configuration template:
+1. Make a copy of the [fullnode configuration template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
@@ -205,6 +205,8 @@ The Explorer will now use your local fullnode to explore the state of the chain.
 
 Monitor your fullnode using the instructions at [Logging, Tracing, Metrics, and
 Observability](https://docs.sui.io/contribute/observability).
+
+Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` file.
 
 ## Updating your fullnode with new releases
 
