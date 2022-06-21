@@ -178,7 +178,9 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#timestamp')
                 .get.textContent();
-            expect(value.trim()).toBe('20 Jun 2022 23:07:13.010 (UTC)');
+            expect(value.trim()).toBe(
+                '925 days ago (20 Jun 2022 23:07:13 UTC)'
+            );
         });
         it('correctly renders a time on the cusp of a year', async () => {
             const otherID = 'GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=';
@@ -186,7 +188,15 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#timestamp')
                 .get.textContent();
-            expect(value.trim()).toBe('01 Jan 2025 01:12:07.001 (UTC)');
+            expect(value.trim()).toBe('1 min ago (01 Jan 2025 01:12:07 UTC)');
+        });
+        it('correctly renders a time diff of less than 1 sec', async () => {
+            const otherID = 'XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=';
+            await page.goto(`${BASE_URL}/transactions/${otherID}`);
+            const value = await cssInteract(page)
+                .with('#timestamp')
+                .get.textContent();
+            expect(value.trim()).toBe('< 1 sec ago (01 Jan 2025 01:13:09 UTC)');
         });
     });
 
