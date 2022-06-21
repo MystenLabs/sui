@@ -115,9 +115,14 @@ If you are using Linux, install these extra dependencies. For example, in Ubuntu
 
 ## Configuring your fullnode
 
-Currently, the only supported way of running a fullnode requires building from
-source. In the future, we will provide Docker images for more flexibility
-in how a fullnode is run.
+You may run a fullnode either by employing Docker or by building from
+source.
+
+### Using Docker Compose
+
+Follow the instructions in the
+[Fullnode Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme)
+to run a Sui fullnode using Docker.
 
 ### Building from source
 
