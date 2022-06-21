@@ -179,7 +179,7 @@ describe('End-to-end Tests', () => {
                 .with('#timestamp')
                 .get.textContent();
             expect(value.trim()).toBe(
-                '925 days ago (20 Jun 2022 23:07:13 UTC)'
+                '925 days 2 hours ago (20 Jun 2022 23:07:13 UTC)'
             );
         });
         it('correctly renders a time on the cusp of a year', async () => {
@@ -188,7 +188,9 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#timestamp')
                 .get.textContent();
-            expect(value.trim()).toBe('1 min ago (01 Jan 2025 01:12:07 UTC)');
+            expect(value.trim()).toBe(
+                '1 min 3 secs ago (01 Jan 2025 01:12:07 UTC)'
+            );
         });
         it('correctly renders a time diff of less than 1 sec', async () => {
             const otherID = 'XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=';

@@ -34,20 +34,34 @@ export const convertNumberToDate = (epochMilliSecs: number | null): string => {
     )}:${stdToN(date.getUTCSeconds(), 2)} UTC`;
 };
 
-export const timeAgo = (epochMilliSecs: number | null): string => {
+export const timeAgo = (
+    epochMilliSecs: number | null,
+    timeNow?: number
+): string => {
     if (!epochMilliSecs) return '';
 
     //In static mode the time is fixed at 1 Jan 2025 01:13:10 UTC for testing purposes
-    const timeNow = IS_STATIC_ENV ? 1735693990000 : Date.now();
+    timeNow = timeNow ? timeNow : IS_STATIC_ENV ? 1735693990000 : Date.now();
 
-    const timeDiff = timeNow - epochMilliSecs;
+    let timeUnit: [string, number][];
+    let timeCol = timeNow - epochMilliSecs;
 
-    const timeUnit: [string, number][] = [
-        ['day', 1000 * 60 * 60 * 24],
-        ['hour', 1000 * 60 * 60],
-        ['min', 1000 * 60],
-        ['sec', 1000],
-    ];
+    if (timeCol >= 1000 * 60 * 60 * 24) {
+        timeUnit = [
+            ['day', 1000 * 60 * 60 * 24],
+            ['hour', 1000 * 60 * 60],
+        ];
+    } else if (timeCol >= 1000 * 60 * 60) {
+        timeUnit = [
+            ['hour', 1000 * 60 * 60],
+            ['min', 1000 * 60],
+        ];
+    } else {
+        timeUnit = [
+            ['min', 1000 * 60],
+            ['sec', 1000],
+        ];
+    }
 
     const convertAmount = (amount: number, label: string) => {
         if (amount > 1) return `${amount} ${label}s`;
@@ -55,15 +69,11 @@ export const timeAgo = (epochMilliSecs: number | null): string => {
         return '';
     };
 
-    let resultArr = [];
-    let timeCol = timeDiff;
-
-    for (const [label, denom] of timeUnit) {
-        let whole = Math.floor(timeCol / denom);
-        resultArr.push(convertAmount(whole, label));
-
+    const resultArr = timeUnit.map(([label, denom]) => {
+        const whole = Math.floor(timeCol / denom);
         timeCol = timeCol - whole * denom;
-    }
+        return convertAmount(whole, label);
+    });
 
     const result = resultArr.join(' ').trim();
 
