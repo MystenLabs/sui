@@ -22,8 +22,6 @@ Download the latest version of the fullnode config [fullnode-template.yaml](http
 wget https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml
 ```
 
-TODO: Don't they need to rename this file to `fullnode.yaml` too?
-
 ### sui devnet genesis
 
 Get the latest version of the Sui DevNet genesis [genesis.blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) file over the web or:
@@ -112,7 +110,7 @@ Update the `json-rpc-address` in the fullnode config to listen on all addresses:
 
 ### Install wget and curl
 
-Download each package. For examp,e, on macOS use [homebrew](https://brew.sh/):
+Download each package. For example, on macOS use [homebrew](https://brew.sh/):
 
 ```brew install wget curl```
 
