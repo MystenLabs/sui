@@ -150,7 +150,7 @@ to run a Sui fullnode using Docker.
     ```shell
     $ git checkout --track upstream/devnet
     ```
-1. Make a copy of the fullnode configuration template:
+1. Make a copy of the [fullnode configuration template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
