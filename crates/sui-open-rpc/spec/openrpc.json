@@ -1389,6 +1389,31 @@
           }
         ]
       },
+      "GasCostSummary": {
+        "type": "object",
+        "required": [
+          "computationCost",
+          "storageCost",
+          "storageRebate"
+        ],
+        "properties": {
+          "computationCost": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageCost": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageRebate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "Hex": {
         "type": "string"
       },
@@ -2089,6 +2114,7 @@
         "type": "object",
         "required": [
           "gasObject",
+          "gasUsed",
           "status",
           "transactionDigest"
         ],
@@ -2121,6 +2147,9 @@
           },
           "gasObject": {
             "$ref": "#/components/schemas/ObjectRef"
+          },
+          "gasUsed": {
+            "$ref": "#/components/schemas/GasCostSummary"
           },
           "mutated": {
             "type": "array",
