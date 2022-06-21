@@ -35,28 +35,26 @@ export const convertNumberToDate = (epochMilliSecs: number | null): string => {
 };
 
 export const timeAgo = (epochMilliSecs: number | null): string => {
-    if (!epochMilliSecs) return 'Not Available';
+    if (!epochMilliSecs) return '';
 
     //In static mode the time is fixed at 1 Jan 2025 01:13:10 UTC for testing purposes
     const timeNow = IS_STATIC_ENV ? 1735693990000 : Date.now();
 
     const timeDiff = timeNow - epochMilliSecs;
 
-    const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+    const timeUnit: [string, number][] = [
+        ['day', 1000 * 60 * 60 * 24],
+        ['hour', 1000 * 60 * 60],
+        ['min', 1000 * 60],
+        ['sec', 1000],
+    ];
 
-    if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`;
+    for (const [label, denom] of timeUnit) {
+        const amount = Math.floor(timeDiff / denom);
 
-    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-
-    if (hours >= 1) return `${hours} hour${hours === 1 ? '' : 's'}`;
-
-    const mins = Math.floor(timeDiff / (1000 * 60));
-
-    if (mins >= 1) return `${mins} min${mins === 1 ? '' : 's'}`;
-
-    const secs = Math.floor(timeDiff / 1000);
-
-    if (secs >= 1) return `${secs} sec${secs === 1 ? '' : 's'}`;
+        if (amount > 1) return `${amount} ${label}s`;
+        if (amount === 1) return `${amount} ${label}`;
+    }
 
     return `< 1 sec`;
 };
