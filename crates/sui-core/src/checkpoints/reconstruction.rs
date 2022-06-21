@@ -46,15 +46,15 @@ impl FragmentReconstruction {
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
-            debug_assert!(*frag.proposer.checkpoint.sequence_number() == seq);
+            debug_assert!(*frag.proposer.summary.sequence_number() == seq);
 
             // Check the checkpoint summary of the proposal is the same as the previous one.
             // Otherwise ignore the link.
             let n1 = frag.proposer.authority();
             if *proposals
                 .entry(*n1)
-                .or_insert_with(|| frag.proposer.checkpoint.clone())
-                != frag.proposer.checkpoint
+                .or_insert_with(|| frag.proposer.summary.clone())
+                != frag.proposer.summary
             {
                 continue;
             }
@@ -62,8 +62,8 @@ impl FragmentReconstruction {
             let n2 = frag.other.authority();
             if *proposals
                 .entry(*n2)
-                .or_insert_with(|| frag.other.checkpoint.clone())
-                != frag.other.checkpoint
+                .or_insert_with(|| frag.other.summary.clone())
+                != frag.other.summary
             {
                 continue;
             }

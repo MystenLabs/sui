@@ -135,13 +135,13 @@ fn crash_recovery() {
     assert_eq!(locals.next_transaction_sequence, 7);
 
     assert_eq!(
-        &proposal.proposal.checkpoint,
+        &proposal.signed_summary.summary,
         &locals
             .current_proposal
             .as_ref()
             .unwrap()
-            .proposal
-            .checkpoint
+            .signed_summary
+            .summary
     );
 }
 
@@ -368,7 +368,7 @@ fn latest_proposal() {
 
         let current_proposal = current.unwrap();
         current_proposal.verify().expect("no signature error");
-        assert_eq!(*current_proposal.checkpoint.sequence_number(), 0);
+        assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
 
     // --- TEST 2 ---
@@ -391,7 +391,7 @@ fn latest_proposal() {
         current_proposal
             .verify_with_transactions(response.detail.as_ref().unwrap())
             .expect("no signature error");
-        assert_eq!(*current_proposal.checkpoint.sequence_number(), 0);
+        assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
 
     // ---
@@ -487,7 +487,7 @@ fn latest_proposal() {
 
         let current_proposal = current.unwrap();
         current_proposal.verify().expect("no signature error");
-        assert_eq!(current_proposal.checkpoint.sequence_number, 1);
+        assert_eq!(current_proposal.summary.sequence_number, 1);
     }
 }
 

@@ -219,7 +219,7 @@ impl BcsSignable for CheckpointSummary {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointSummaryEnvelope<S> {
-    pub checkpoint: CheckpointSummary,
+    pub summary: CheckpointSummary,
     pub auth_signature: S,
 }
 
@@ -249,7 +249,7 @@ impl SignedCheckpointSummary {
 
         let epoch = checkpoint.epoch;
         SignedCheckpointSummary {
-            checkpoint,
+            summary: checkpoint,
             auth_signature: AuthoritySignInfo {
                 epoch,
                 authority,
@@ -265,12 +265,12 @@ impl SignedCheckpointSummary {
     /// Checks that the signature on the digest is correct
     pub fn verify(&self) -> Result<(), SuiError> {
         fp_ensure!(
-            self.checkpoint.epoch == self.auth_signature.epoch,
+            self.summary.epoch == self.auth_signature.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
         self.auth_signature
             .signature
-            .verify(&self.checkpoint, self.auth_signature.authority)?;
+            .verify(&self.summary, self.auth_signature.authority)?;
         Ok(())
     }
 
@@ -278,14 +278,14 @@ impl SignedCheckpointSummary {
     pub fn verify_with_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
         self.verify()?;
         let recomputed = CheckpointSummary::new(
-            self.checkpoint.epoch,
-            *self.checkpoint.sequence_number(),
+            self.summary.epoch,
+            *self.summary.sequence_number(),
             contents,
-            self.checkpoint.previous_digest,
+            self.summary.previous_digest,
         );
 
         fp_ensure!(
-            recomputed == self.checkpoint,
+            recomputed == self.summary,
             SuiError::from("Transaction digest mismatch")
         );
         Ok(())
@@ -315,12 +315,14 @@ impl CertifiedCheckpointSummary {
             SuiError::from("Need at least one signed checkpoint to aggregate")
         );
         fp_ensure!(
-            signed_checkpoints.iter().all(|c| c.checkpoint.epoch == committee.epoch),
+            signed_checkpoints
+                .iter()
+                .all(|c| c.summary.epoch == committee.epoch),
             SuiError::from("SignedCheckpoint is from different epoch as committee")
         );
 
         let certified_checkpoint = CertifiedCheckpointSummary {
-            checkpoint: signed_checkpoints[0].checkpoint.clone(),
+            summary: signed_checkpoints[0].summary.clone(),
             auth_signature: AuthorityQuorumSignInfo {
                 epoch: committee.epoch,
                 signatures: signed_checkpoints
@@ -341,12 +343,12 @@ impl CertifiedCheckpointSummary {
     /// Check that a certificate is valid, and signed by a quorum of authorities
     pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
         fp_ensure!(
-            self.checkpoint.epoch == committee.epoch,
+            self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
         let mut obligation = VerificationObligation::default();
         let mut message = Vec::new();
-        self.checkpoint.write(&mut message);
+        self.summary.write(&mut message);
         let idx = obligation.add_message(message);
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
@@ -362,7 +364,7 @@ impl CertifiedCheckpointSummary {
     ) -> Result<(), SuiError> {
         self.verify(committee)?;
         fp_ensure!(
-            contents.digest() == self.checkpoint.content_digest,
+            contents.digest() == self.summary.content_digest,
             SuiError::from("Transaction digest mismatch")
         );
         Ok(())
@@ -415,8 +417,8 @@ impl CheckpointFragment {
 
         // Check consistency between checkpoint summary and waypoints.
         fp_ensure!(
-            self.diff.first.waypoint == *self.proposer.checkpoint.waypoint
-                && self.diff.second.waypoint == *self.other.checkpoint.waypoint
+            self.diff.first.waypoint == *self.proposer.summary.waypoint
+                && self.diff.second.waypoint == *self.other.summary.waypoint
                 && &self.diff.first.key == self.proposer.authority()
                 && &self.diff.second.key == self.other.authority(),
             SuiError::from("Waypoint diff and checkpoint summary inconsistent")
@@ -435,7 +437,7 @@ impl CheckpointFragment {
     }
 
     pub fn proposer_sequence_number(&self) -> &CheckpointSequenceNumber {
-        self.proposer.checkpoint.sequence_number()
+        self.proposer.summary.sequence_number()
     }
 }
 
@@ -462,7 +464,8 @@ mod tests {
         let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
 
-        let mut proposal = SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
+        let mut proposal =
+            SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.verify().is_ok());
@@ -475,7 +478,7 @@ mod tests {
         assert!(proposal.verify_with_transactions(&contents).is_err());
 
         // Modify the proposal, and observe the signature fail
-        proposal.checkpoint.sequence_number = 2;
+        proposal.summary.sequence_number = 2;
         assert!(proposal.verify().is_err());
     }
 
