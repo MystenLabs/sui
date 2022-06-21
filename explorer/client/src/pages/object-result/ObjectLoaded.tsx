@@ -20,7 +20,6 @@ import { type DataType } from './ObjectResultType';
 import styles from './ObjectResult.module.css';
 
 function ObjectLoaded({ data }: { data: DataType }) {
-    console.log(data);
     // TODO - restore or remove this functionality
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
