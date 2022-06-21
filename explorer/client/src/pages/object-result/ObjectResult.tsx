@@ -19,7 +19,7 @@ import {
 const DATATYPE_DEFAULT: DataType = {
     id: '',
     category: '',
-    owner: '',
+    owner: 'Immutable',
     version: '',
     objType: '',
     data: {
