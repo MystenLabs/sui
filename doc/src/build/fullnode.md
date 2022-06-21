@@ -206,6 +206,8 @@ The Explorer will now use your local fullnode to explore the state of the chain.
 Monitor your fullnode using the instructions at [Logging, Tracing, Metrics, and
 Observability](https://docs.sui.io/contribute/observability).
 
+Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` file.
+
 ## Updating your fullnode with new releases
 
 Whenever a new release is deployed to `devnet`, the blockchain state is
