@@ -49,12 +49,23 @@ export const timeAgo = (epochMilliSecs: number | null): string => {
         ['sec', 1000],
     ];
 
-    for (const [label, denom] of timeUnit) {
-        const amount = Math.floor(timeDiff / denom);
-
+    const convertAmount = (amount: number, label: string) => {
         if (amount > 1) return `${amount} ${label}s`;
         if (amount === 1) return `${amount} ${label}`;
+        return '';
+    };
+
+    let resultArr = [];
+    let timeCol = timeDiff;
+
+    for (const [label, denom] of timeUnit) {
+        let whole = Math.floor(timeCol / denom);
+        resultArr.push(convertAmount(whole, label));
+
+        timeCol = timeCol - whole * denom;
     }
 
-    return `< 1 sec`;
+    const result = resultArr.join(' ').trim();
+
+    return result ? result : `< 1 sec`;
 };
