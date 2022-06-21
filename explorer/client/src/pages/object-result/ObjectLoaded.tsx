@@ -26,6 +26,7 @@ import { type DataType } from './ObjectResultType';
 import styles from './ObjectResult.module.css';
 
 function ObjectLoaded({ data }: { data: DataType }) {
+    console.log(data);
     // TODO - restore or remove this functionality
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
@@ -85,6 +86,14 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const structProperties = Object.entries(viewedData.data?.contents)
         .filter(([_, value]) => typeof value == 'object')
         .filter(([key, _]) => key !== 'id');
+    let structPropertiesTitle;
+    let structPropertiesContent;
+
+    if (structProperties.length > 0) {
+        const structPropertiesData = Object.values(structProperties);
+        structPropertiesTitle = structPropertiesData[0][0];
+        structPropertiesContent = structPropertiesData[0][1];
+    }
 
     const descriptionTitle =
         data.objType === 'Move Package' ? 'Package Description' : 'Description';
@@ -270,15 +279,22 @@ function ObjectLoaded({ data }: { data: DataType }) {
                     )}
                     {}
                     {structProperties.length > 0 && (
-                        <div className={styles.jsondata}>
-                            <div>
-                                <ReactJson
-                                    src={structProperties[0]}
-                                    collapsed={2}
-                                    name={false}
-                                />
+                        <>
+                            <div className={styles.propertybox}>
+                                <div>
+                                    <p>{structPropertiesTitle}</p>
+                                </div>
                             </div>
-                        </div>
+                            <div className={styles.jsondata}>
+                                <div>
+                                    <ReactJson
+                                        src={structPropertiesContent}
+                                        collapsed={2}
+                                        name={false}
+                                    />
+                                </div>
+                            </div>
+                        </>
                     )}
                     {data.objType !== 'Move Package' ? (
                         <h2
