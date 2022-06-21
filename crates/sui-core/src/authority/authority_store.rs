@@ -1,3 +1,4 @@
+use std::iter;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
@@ -964,6 +965,82 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         };
 
         Ok(assigned_seq)
+    }
+
+    /// This function is called at the end of epoch for each transaction that's
+    /// executed locally on the validator but didn't make to the last checkpoint.
+    /// The effects of the execution is reverted here.
+    /// The following things are reverted:
+    /// 1. Certificate and effects are deleted.
+    /// 2. Latest parent_sync entries for each mutated object are deleted.
+    /// 3. All new object states are deleted.
+    /// 4. owner_index table change is reverted.
+    pub fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
+        let effects = self.get_effects(tx_digest)?;
+        let mut write_batch = self.certificates.batch();
+        write_batch = write_batch.delete_batch(&self.certificates, iter::once(tx_digest))?;
+        write_batch = write_batch.delete_batch(&self.effects, iter::once(tx_digest))?;
+
+        let all_new_refs = effects
+            .mutated
+            .iter()
+            .chain(effects.created.iter())
+            .chain(effects.unwrapped.iter())
+            .map(|(r, _)| r)
+            .chain(effects.deleted.iter())
+            .chain(effects.wrapped.iter());
+        write_batch = write_batch.delete_batch(&self.parent_sync, all_new_refs)?;
+
+        let all_new_object_keys = effects
+            .mutated
+            .iter()
+            .chain(effects.created.iter())
+            .chain(effects.unwrapped.iter())
+            .map(|((id, version, _), _)| ObjectKey(*id, *version));
+        write_batch = write_batch.delete_batch(&self.objects, all_new_object_keys)?;
+
+        // Reverting the change to the owner_index table is most complex.
+        // For each newly created (i.e. created and unwrapped) object, the entry in owner_index
+        // needs to be deleted; for each mutated object, we need to query the object state of
+        // the older version, and then rewrite the entry with the old object info.
+        // TODO: Validators should not need to maintain owner_index.
+        // This is dependent on https://github.com/MystenLabs/sui/issues/2629.
+        let owners_to_delete = effects
+            .created
+            .iter()
+            .chain(effects.unwrapped.iter())
+            .chain(effects.mutated.iter())
+            .map(|((id, _, _), owner)| (*owner, *id));
+        write_batch = write_batch.delete_batch(&self.owner_index, owners_to_delete)?;
+        let mutated_objects = effects
+            .mutated
+            .iter()
+            .map(|(r, _)| r)
+            .chain(effects.deleted.iter())
+            .chain(effects.wrapped.iter())
+            .map(|(id, version, _)| {
+                ObjectKey(
+                    *id,
+                    version
+                        .decrement()
+                        .expect("version revert should never fail"),
+                )
+            });
+        let old_objects = self
+            .objects
+            .multi_get(mutated_objects)?
+            .into_iter()
+            .map(|obj_opt| {
+                let obj = obj_opt.expect("Older object version not found");
+                (
+                    (obj.owner, obj.id()),
+                    ObjectInfo::new(&obj.compute_object_reference(), &obj),
+                )
+            });
+        write_batch = write_batch.insert_batch(&self.owner_index, old_objects)?;
+
+        write_batch.write()?;
+        Ok(())
     }
 
     /// Returns the last entry we have for this object in the parents_sync index used

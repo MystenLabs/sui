@@ -1491,6 +1491,75 @@ async fn test_transfer_sui_with_amount() {
     );
 }
 
+#[tokio::test]
+async fn test_store_revert_state_update() {
+    // This test checks the correctness of revert_state_update in SuiDataStore.
+    let (sender, sender_key) = get_key_pair();
+    let (recipient, _sender_key) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&tx_data, &sender_key);
+    let transaction = Transaction::new(tx_data, signature);
+
+    let certificate = init_certified_transaction(transaction, &authority_state);
+    let tx_digest = *certificate.digest();
+    authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .await
+        .unwrap();
+
+    authority_state
+        .database
+        .revert_state_update(&tx_digest)
+        .unwrap();
+    assert_eq!(
+        authority_state
+            .database
+            .get_object(&gas_object_id)
+            .unwrap()
+            .unwrap()
+            .owner,
+        Owner::AddressOwner(sender),
+    );
+    assert_eq!(
+        authority_state
+            .database
+            .get_latest_parent_entry(gas_object_id)
+            .unwrap()
+            .unwrap(),
+        (gas_object_ref, TransactionDigest::genesis()),
+    );
+    assert!(authority_state
+        .database
+        .get_owner_objects(Owner::AddressOwner(recipient))
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        authority_state
+            .database
+            .get_owner_objects(Owner::AddressOwner(sender))
+            .unwrap()
+            .len(),
+        1,
+    );
+    assert!(authority_state
+        .database
+        .get_certified_transaction(&tx_digest)
+        .unwrap()
+        .is_none());
+    assert!(authority_state.database.get_effects(&tx_digest).is_err());
+}
+
 // helpers
 
 #[cfg(test)]
