@@ -46,7 +46,6 @@ export type GasCostSummary = {
 export type ExecutionStatusType = 'success' | 'failure';
 export type ExecutionStatus = {
   status: ExecutionStatusType;
-  gas_cost: GasCostSummary;
   error?: string;
 };
 
@@ -59,6 +58,7 @@ export type OwnedObjectRef = {
 export type TransactionEffects = {
   /** The status of the execution */
   status: ExecutionStatus;
+  gasUsed: GasCostSummary;
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects?: SuiObjectRef[];
   /** The transaction digest */
@@ -241,7 +241,7 @@ export function getExecutionStatusError(
 export function getExecutionStatusGasSummary(
   data: TransactionEffectsResponse
 ): GasCostSummary {
-  return getExecutionStatus(data).gas_cost;
+  return data.effects.gasUsed;
 }
 
 export function getTotalGasUsed(data: TransactionEffectsResponse): number {
