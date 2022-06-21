@@ -1,5 +1,5 @@
 ---
-title: Quickstart Smart Contracts with Move
+title: Write Smart Contracts with Sui Move
 ---
 
 Welcome to the Sui tutorial for building smart contracts with
@@ -7,6 +7,11 @@ the [Move](https://github.com/MystenLabs/awesome-move) language.
 This tutorial provides a brief explanation of the Move language and
 includes concrete examples to demonstrate how Move can be used in Sui.
 
+## Quick links
+
+* [Why Move?](../../learn/why-move.md) - Quick links to external Move resources and a comparison with Solidity
+* [How Sui Move differs from Core Move](../../learn/sui-move-diffs.md) - Highlights the differences between the core Move language and the Move we use in Sui
+* [Programming Objects Tutorial Series](../../build/programming-with-objects/index.md) - Tutorial series that walks through all the powerful ways to interact with objects in Sui Move.
 
 ## Move
 
