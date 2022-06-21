@@ -1,41 +1,47 @@
-# run a sui devnet fullnode locally
+# Run a Sui DevNet Fullnode Locally with Docker
 
-Run a Sui DevNet fullnode locally for testing/experimenting by following the instructions below. This has been tested and should work for:
+Run a Sui DevNet [fullnode](../../doc/src/build/fullnode.md) locally for testing/experimenting by following the instructions below. This has been tested and should work for:
 
 - linux/amd64
 - darwin/amd64 
 - darwin/arm64
 
-# prerequisites
+## Prerequisites
 
-Install docker / docker compose:
+Install Docker / Docker Compose:
 - https://docs.docker.com/get-docker/
 - https://docs.docker.com/compose/install/
 
-# run
+## Running
 
-## fullnode config
+### Fullnode config
 
-Get the latest version of the fullnode config [here](https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml), or:
+Download the latest version of the fullnode config [fullnode-template.yaml](https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml) over the web or by using `curl` or `wget`, for example:
 
-```wget https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml```
+```shell
+wget https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml
+```
 
-## sui devnet genesis
+### sui devnet genesis
 
-Get the latest version of the Sui DevNet genesis blob [here](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob), or:
+Get the latest version of the Sui DevNet genesis [genesis.blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) file over the web or:
 
 ```wget https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob```
 
 
-## start the fullnode
+## Start the fullnode
 
-```docker-compose up```
+To start the fullnode using Docker, run:
 
-# test
+```shell
+docker-compose up
+```
 
-Once the fullnode is up and running, test some of the jsonrpc interfaces.
+## Test
 
-- get the five most recent transactions:
+Once the fullnode is up and running, test some of the JSON-RPC interfaces.
+
+- Get the five most recent transactions:
 
 ```
 curl --location --request POST 'http://127.0.0.1:9000/' \
@@ -43,7 +49,7 @@ curl --location --request POST 'http://127.0.0.1:9000/' \
     --data-raw '{ "jsonrpc":"2.0", "id":1, "method":"sui_getRecentTransactions", "params":[5] }'
 ```
 
-- get details about a specific transaction:
+- Get details about a specific transaction:
 
 ```
 curl --location --request POST 'http://127.0.0.1:9000/' \
@@ -51,33 +57,33 @@ curl --location --request POST 'http://127.0.0.1:9000/' \
     --data-raw '{ "jsonrpc":"2.0", "id":1, "method":"sui_getTransaction", "params":["$RECENT_TXN_FROM_ABOVE"] }'
 ```
 
-# use your fullnode with explorer 
+## Use your fullnode with Explorer 
 
-To use the DevNet explorer with your fullnode follow these steps:
-- Open https://explorer.devnet.sui.io
-- Click the green Devnet button in the top right
-- Select 'Custom RPC URL'
-- Set it to http://127.0.0.1:9000
+To use the Sui Explorer with your fullnode, follow these steps:
+1. Open a browser and go to: https://explorer.devnet.sui.io/
+1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
+   the *Local* network from the drop-down menu.
+1. Close the *Choose a Network* menu to see the latest transactions. 
 
-# troubleshoot / tips / documentation
+## Troubleshoot / tips / documentation
 
-## start the fullnode in detached mode
+### Start the fullnode in detached mode
 
 ```docker-compose up -d```
 
-## stop the fullnode:
+### Stop the fullnode
 
 ```docker-compose stop```
 
-## reset the environment
+### Reset the environment
 
 Take everything down, removing the container and volume. Use this to start completely fresh (image, config, or genesis updates):
 
 ```docker-compose down --volumes```
 
-## inspect the state of a running fullnode
+### Inspect the state of a running fullnode
 
-Get the running container id:
+Get the running container ID:
 
 ```docker ps```
 
@@ -89,9 +95,9 @@ Inspect the database:
 
 ```ls -la suidb/```
 
-## local rpc connectivity issues
+### Investigate local RPC connectivity issues
 
-Update the json-rpc-address in the fullnode config to listen on all addresses:
+Update the `json-rpc-address` in the fullnode config to listen on all addresses:
 
 ```sed -i 's/127.0.0.1/0.0.0.0/' fullnode-template.yaml```
 
@@ -100,17 +106,17 @@ Update the json-rpc-address in the fullnode config to listen on all addresses:
 +json-rpc-address: "0.0.0.0:9000"
 ```
 
-## install wget and curl
+### Install wget and curl
 
-On MacOS using [homebrew](https://brew.sh/):
+Download each package. For example, on macOS use [homebrew](https://brew.sh/):
 
 ```brew install wget curl```
 
-## learn more about sui
+### Learn more about Sui
 - https://docs.sui.io/learn
 
-## learn more about building and running a fullnode natively
+### Learn more about building and running a fullnode natively
 - https://docs.sui.io/build/fullnode
 
-## learn more about docker-compose
+### Learn more about docker-compose
 - https://docs.docker.com/compose/gettingstarted/
