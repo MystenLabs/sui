@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y cmake clang
 #   3. Update the lockfile in order to reflect the changes to the
 #      root Cargo.toml file.
 FROM chef AS planner
-COPY Cargo.toml Cargo.lock .
+COPY Cargo.toml Cargo.lock ./
 COPY crates/workspace-hack crates/workspace-hack
 RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
     && cargo metadata -q >/dev/null
@@ -32,7 +32,7 @@ RUN cargo build --release
 # Copy in the rest of the crates (and an unmodified Cargo.toml and Cargo.lock)
 # and build the application. At this point no dependencies should need to be
 # built as they were built and cached by the previous layer.
-COPY Cargo.toml Cargo.lock .
+COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 RUN cargo build --release \
     --bin sui-node \
