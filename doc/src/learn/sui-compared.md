@@ -28,7 +28,7 @@ This doesn't mean that Sui as a platform never orders transactions with respect 
 
 ## A collaborative approach to transaction submission
 
-Sui validates transactions individually, rather than batching them in the traditional blocks. The key advantage of this approach low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone that the transaction will be processed by the Sui network.
+Sui validates transactions individually, rather than batching them in the traditional blocks. The key advantage of this approach is low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone that the transaction will be processed by the Sui network.
 
 But the process of submitting a transaction is a bit more involved. That little more work occurs on the network. (With bandwidth getting cheaper, this is less of a concern.) Whereas a usual blockchain can accept a bunch of transactions from the same author in a fire-and-forget mode, Sui transaction submission follows these steps:
 
