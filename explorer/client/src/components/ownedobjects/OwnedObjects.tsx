@@ -23,7 +23,7 @@ import {
 } from '../../utils/static/searchUtil';
 import {
     handleCoinType,
-    processDisplayValue,
+    transformURL,
     trimStdLibPrefix,
 } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
@@ -137,7 +137,7 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
                                         Type: objType,
                                         _isCoin: Coin.isCoin(resp),
                                         display: url
-                                            ? processDisplayValue(url)
+                                            ? transformURL(url)
                                             : undefined,
                                         balance: balanceValue,
                                     };

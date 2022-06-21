@@ -171,6 +171,10 @@ export function isObjectOwner(obj: any, _argumentName?: string): obj is ObjectOw
                 typeof obj === "object" ||
                 typeof obj === "function") &&
             isTransactionDigest(obj.ObjectOwner) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.SingleOwner) as boolean ||
             obj === "Shared" ||
             obj === "Immutable")
     )

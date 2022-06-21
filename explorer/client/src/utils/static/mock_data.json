@@ -2,7 +2,7 @@
     "data": [
         {
             "id": "player1",
-            "owner": "SingleOwner(k#receiverAddress)",
+            "owner": { "SingleOwner": "receiverAddress" },
             "category": "object",
             "version": "6",
             "readonly": "false",
@@ -26,7 +26,7 @@
         },
         {
             "id": "player2",
-            "owner": "SingleOwner(k#receiverAddress)",
+            "owner": { "SingleOwner": "receiverAddress" },
             "category": "object",
             "version": "5",
             "readonly": "false",
@@ -58,7 +58,7 @@
         },
         {
             "id": "player0",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -80,7 +80,7 @@
         },
         {
             "id": "player3",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -102,7 +102,7 @@
         },
         {
             "id": "player4",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -124,7 +124,7 @@
         },
         {
             "id": "player5",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -146,7 +146,7 @@
         },
         {
             "id": "player6",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -168,7 +168,7 @@
         },
         {
             "id": "player7",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -190,7 +190,7 @@
         },
         {
             "id": "player8",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -212,7 +212,7 @@
         },
         {
             "id": "player9",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -234,7 +234,7 @@
         },
         {
             "id": "playerA1",
-            "owner": "SingleOwner(k#)",
+            "owner": { "SingleOwner": "" },
             "category": "object",
             "version": "100",
             "readonly": "false",
@@ -258,7 +258,7 @@
         {
             "id": "Image1",
             "category": "object",
-            "owner": "SingleOwner(k#player2)",
+            "owner": { "SingleOwner": "player2" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -278,7 +278,7 @@
         {
             "id": "Image2",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -298,7 +298,7 @@
         {
             "id": "Image3",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -318,7 +318,7 @@
         {
             "id": "Image4",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -338,7 +338,7 @@
         {
             "id": "Image5",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -358,7 +358,7 @@
         {
             "id": "Image6",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -378,7 +378,7 @@
         {
             "id": "Image7",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -398,7 +398,7 @@
         {
             "id": "Image8",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -419,7 +419,7 @@
         {
             "id": "standaloneObject",
             "category": "object",
-            "owner": "SingleOwner(k#player2)",
+            "owner": { "SingleOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::USD::USD>",
@@ -434,7 +434,7 @@
         {
             "id": "standaloneObject2",
             "category": "object",
-            "owner": "SingleOwner(k#player2)",
+            "owner": { "SingleOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::USD::USD>",
@@ -448,7 +448,7 @@
         {
             "id": "standaloneObjectSUI50",
             "category": "object",
-            "owner": "SingleOwner(k#player2)",
+            "owner": { "SingleOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::sui::SUI>",
@@ -462,7 +462,7 @@
         {
             "id": "standaloneObjectSUI150",
             "category": "object",
-            "owner": "SingleOwner(k#player2)",
+            "owner": { "SingleOwner": "player2" },
             "version": "87",
             "readonly": "true",
             "objType": "0x2::coin::Coin<0x2::sui::SUI>",
@@ -481,7 +481,7 @@
         {
             "id": "CollectionObject",
             "category": "object",
-            "owner": "SingleOwner(k#player2)",
+            "owner": { "SingleOwner": "player2" },
             "version": "2",
             "readonly": "false",
             "objType": "0x2::MystenUniverse::Collection",
@@ -503,7 +503,7 @@
         {
             "id": "ComponentObject",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -523,7 +523,7 @@
         {
             "id": "ObjectThatOwns",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -549,7 +549,7 @@
         {
             "id": "ObjectWBrokenChild",
             "category": "object",
-            "owner": "SingleOwner(k#CollectionObject)",
+            "owner": { "SingleOwner": "CollectionObject" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -576,7 +576,7 @@
         {
             "id": "ChildObjectWImage",
             "category": "object",
-            "owner": "SingleOwner(k#ObjectWBrokenChild)",
+            "owner": { "SingleOwner": "ObjectWBrokenChild" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -592,7 +592,7 @@
         {
             "id": "ChildObjectWBrokenImage",
             "category": "object",
-            "owner": "SingleOwner(k#ObjectWBrokenChild)",
+            "owner": { "SingleOwner": "ObjectWBrokenChild" },
             "version": "1",
             "readonly": "true",
             "objType": "0x2::Cosmetic::Plant",
@@ -608,7 +608,9 @@
         {
             "id": "7bc832ec31709638cd8d9323e90edf332gff4389",
             "category": "object",
-            "owner": "SingleOwner(k#0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e)",
+            "owner": {
+                "SingleOwner": "0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e"
+            },
             "version": "1",
             "objType": "0x2::SuiDrop::NFT",
             "name": "Bored Ape Yacht Club #8937",
@@ -671,7 +673,9 @@
         },
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v1",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "5",
             "readonly": "false",
@@ -694,7 +698,9 @@
         },
         {
             "id": "8cd943fd42810749de9e0434f01feg443hgg54v2",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "6",
             "readonly": "false",
@@ -725,7 +731,9 @@
         },
         {
             "id": "3a4e674ce2810749de9e0434f01feg443hgg54v2",
-            "owner": "SingleOwner(k#8cd943fd42810749de9e0434f01feg443hgg54v2)",
+            "owner": {
+                "SingleOwner": "8cd943fd42810749de9e0434f01feg443hgg54v2"
+            },
             "category": "object",
             "version": "1",
             "readonly": "true",
@@ -741,7 +749,9 @@
 
         {
             "id": "9de054ge53921850ef0f1545g12gfh554ihh65v1",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "4",
             "readonly": "false",
@@ -764,7 +774,9 @@
         },
         {
             "id": "9de054ge53921850ef0f1545g12gfh554ihh65v2",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "5",
             "readonly": "false",
@@ -794,7 +806,9 @@
         },
         {
             "id": "f4a5535e53921850ef0f1545g12gfh554ihh65v2",
-            "owner": "SingleOwner(k#9de054ge53921850ef0f1545g12gfh554ihh65v2)",
+            "owner": {
+                "SingleOwner": "9de054ge53921850ef0f1545g12gfh554ihh65v2"
+            },
             "category": "object",
             "version": "1",
             "readonly": "true",
@@ -810,7 +824,9 @@
 
         {
             "id": "0ef165hf64032961fg1g2656h23hgi665jii7690",
-            "owner": "SingleOwner(k#0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f)",
+            "owner": {
+                "SingleOwner": "0xb6f7ecdg44841bdf7fd9c511gg5899d2g261gg8f"
+            },
             "category": "object",
             "version": "7",
             "readonly": "false",
@@ -841,7 +857,9 @@
         },
         {
             "id": "f14e489364032961fg1g2656h23hgi665jii7690",
-            "owner": "SingleOwner(k#0ef165hf64032961fg1g2656h23hgi665jii7690)",
+            "owner": {
+                "SingleOwner": "0ef165hf64032961fg1g2656h23hgi665jii7690"
+            },
             "category": "object",
             "version": "1",
             "readonly": "true",
