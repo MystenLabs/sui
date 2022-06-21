@@ -65,8 +65,6 @@ To use the Sui Explorer with your fullnode, follow these steps:
    the *Local* network from the drop-down menu.
 1. Close the *Choose a Network* menu to see the latest transactions. 
 
-TODO: Confirm this shouldn't be Local as in the existing fullnode doc.
-
 ## Troubleshoot / tips / documentation
 
 ### Start the fullnode in detached mode
