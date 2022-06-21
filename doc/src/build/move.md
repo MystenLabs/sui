@@ -307,7 +307,8 @@ empty manifest file and an empty module source file following the
 [Move code organization](#move-code-organization)
 described earlier.
 
-So from the same directory containing the `sui` repository, run:
+So from the same directory containing the `sui` repository create a
+parallel directory to it by running:
 
 ``` shell
 $ mkdir -p my_move_package/sources
@@ -392,7 +393,7 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../crates/sui-framework" }
+Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
 MyFirstPackage = "0x0"
