@@ -58,7 +58,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
         .with_env()
         .init();
 
-    if let Some(git_rev) = std::option_env!("GIT_REV") {
+    if let Some(git_rev) = std::option_env!("GIT_REVISION") {
         debug!("Wallet built at git revision {git_rev}");
     }
 
@@ -134,7 +134,7 @@ async fn try_main() -> Result<(), anyhow::Error> {
             .get_long_version()
             .unwrap_or_else(|| app.get_version().unwrap_or("unknown"))
             .to_owned();
-        if let Some(git_rev) = std::option_env!("GIT_REV") {
+        if let Some(git_rev) = std::option_env!("GIT_REVISION") {
             version.push('-');
             version.push_str(git_rev);
         }
