@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use prometheus_exporter::prometheus::IntCounter;
+use prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::TransactionDigest;
 use sui_types::{

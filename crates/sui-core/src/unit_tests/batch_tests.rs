@@ -58,6 +58,7 @@ pub(crate) async fn init_state(
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         false,
+        &prometheus::Registry::new(),
     )
     .await
 }
@@ -772,6 +773,7 @@ async fn test_safe_batch_stream() {
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         false,
+        &prometheus::Registry::new(),
     )
     .await;
 
@@ -818,6 +820,7 @@ async fn test_safe_batch_stream() {
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         false,
+        &prometheus::Registry::new(),
     )
     .await;
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
