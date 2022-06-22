@@ -36,7 +36,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -273,6 +273,8 @@ pub struct AuthorityState {
     pub consensus_guardrail: AtomicUsize,
 
     pub metrics: &'static AuthorityMetrics,
+
+    latest_checkpoint_num: AtomicU64,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -695,8 +697,9 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
+            let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
             event_handler
-                .process_events(&effects.effects, timestamp_ms)
+                .process_events(&effects.effects, timestamp_ms, checkpoint_num)
                 .await?;
         }
 
@@ -1060,6 +1063,7 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics: &METRICS,
+            latest_checkpoint_num: AtomicU64::new(0),
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1512,14 +1516,18 @@ impl ExecutionState for AuthorityState {
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
                 if let Some(checkpoint) = &self.checkpoints {
+                    let mut checkpoint = checkpoint.lock();
                     checkpoint
-                        .lock()
                         .handle_internal_fragment(seq, *fragment, &self.committee.load(), self)
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                     // to persist the consensus index. If the validator crashes, this transaction
                     // may be resent to the checkpoint logic that will simply ignore it.
+
+                    // Cache the next checkpoint number if it changes
+                    self.latest_checkpoint_num
+                        .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
                 }
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment

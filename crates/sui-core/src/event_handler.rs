@@ -42,6 +42,7 @@ impl<ES: EventStore> EventHandler<ES> {
         &self,
         effects: &TransactionEffects,
         timestamp_ms: u64,
+        checkpoint_num: u64,
     ) -> SuiResult {
         // serially dispatch event processing to honor events' orders.
         let res: Result<Vec<_>, _> = effects
@@ -54,7 +55,9 @@ impl<ES: EventStore> EventHandler<ES> {
         // Ingest all envelopes together at once (for efficiency) into Event Store
         // It's good to ingest into store first before sending so that any failures in sending could
         // use the store as a backing for reliability
-        self.event_store.add_events(&envelopes, 0).await?;
+        self.event_store
+            .add_events(&envelopes, checkpoint_num)
+            .await?;
 
         for envelope in envelopes {
             if let Err(e) = self.event_streamer.send(envelope).await {
