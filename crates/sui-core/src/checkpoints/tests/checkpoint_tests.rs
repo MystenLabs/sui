@@ -161,16 +161,12 @@ fn make_checkpoint_db() {
         .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 0);
     assert_eq!(cps.extra_transactions.iter().count(), 3);
-    // assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
 
     assert_eq!(cps.next_checkpoint(), 0);
 
     cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
-    // assert_eq!(cps.unprocessed_transactions.iter().count(), 2);
-
-    // assert_eq!(cps.lowest_unprocessed_checkpoint(), 0);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert!(tx_seq >= u64::MAX / 2);
@@ -181,9 +177,6 @@ fn make_checkpoint_db() {
         .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
-                                                          // assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
-
-    // assert_eq!(cps.lowest_unprocessed_checkpoint(), 1);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert_eq!(tx_seq, 4);
@@ -231,11 +224,6 @@ fn make_proposals() {
     cps2.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps3.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps4.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-
-    // assert_eq!(
-    //     cps4.unprocessed_transactions.keys().collect::<HashSet<_>>(),
-    //     [t1, t2, t3].into_iter().collect::<HashSet<_>>()
-    // );
 
     assert_eq!(
         cps4.extra_transactions.keys().collect::<HashSet<_>>(),
@@ -460,10 +448,6 @@ fn latest_proposal() {
     let request = CheckpointRequest::latest(true);
     let response = cps1.handle_latest_proposal(committee.epoch, &request).expect("no errors");
     assert!(response.detail.is_none());
-    // use typed_store::traits::Map;
-    // let txs = response.detail.unwrap();
-    // let unprocessed = CheckpointContents::new(cps1.unprocessed_transactions.keys());
-    // assert_eq!(txs.transactions, unprocessed.transactions);
 
     assert!(matches!(
         response.info,
@@ -1173,7 +1157,6 @@ fn set_fragment_reconstruct_two_mutual() {
 
     let t2 = ExecutionDigests::random();
     let t3 = ExecutionDigests::random();
-    // let t6 = TransactionDigest::random();
 
     for (_, cps) in &mut test_objects {
         cps.update_processed_transactions(&[(1, t2), (2, t3)])

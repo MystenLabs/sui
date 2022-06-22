@@ -95,14 +95,6 @@ pub struct CheckpointStore {
     /// of transactions in the checkpoint is global but not the order.)
     pub checkpoint_contents: DBMap<(CheckpointSequenceNumber, TxSequenceNumber), ExecutionDigests>,
 
-    /// The set of pending transaction/effects that were included in the last checkpoint
-    /// but that this authority has not yet processed.
-    // pub unprocessed_transactions: DBMap<ExecutionDigests, CheckpointSequenceNumber>,
-    /// The content of transaction/effects we have received through the checkpoint creation process,
-    /// that we should process before we move on to make a new proposal. This may be a only
-    /// a subset of the digests contained in `unprocessed_transactions.`
-    // pub unprocessed_contents: DBMap<ExecutionDigests, CertifiedTransaction>,
-
     /// The set of transaction/effects this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
     /// of this authority.
@@ -245,8 +237,6 @@ impl CheckpointStore {
             &[
                 ("transactions_to_checkpoint", &point_lookup),
                 ("checkpoint_contents", &options),
-                // ("unprocessed_transactions", &point_lookup),
-                // ("unprocessed_contents", &point_lookup),
                 ("extra_transactions", &point_lookup),
                 ("checkpoints", &point_lookup),
                 ("local_fragments", &point_lookup),
@@ -259,8 +249,6 @@ impl CheckpointStore {
         let (
             transactions_to_checkpoint,
             checkpoint_contents,
-            // unprocessed_transactions,
-            // unprocessed_contents,
             extra_transactions,
             checkpoints,
             local_fragments,
@@ -270,8 +258,6 @@ impl CheckpointStore {
             &db,
             "transactions_to_checkpoint";<ExecutionDigests,(CheckpointSequenceNumber, TxSequenceNumber)>,
             "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),ExecutionDigests>,
-            // "unprocessed_transactions";<ExecutionDigests,CheckpointSequenceNumber>,
-            // "unprocessed_contents";<ExecutionDigests, CertifiedTransaction>,
             "extra_transactions";<ExecutionDigests,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
             "local_fragments";<AuthorityName, CheckpointFragment>,
@@ -284,8 +270,6 @@ impl CheckpointStore {
             secret,
             transactions_to_checkpoint,
             checkpoint_contents,
-            // unprocessed_transactions,
-            // unprocessed_contents,
             extra_transactions,
             checkpoints,
             local_fragments,
@@ -338,12 +322,6 @@ impl CheckpointStore {
                 .as_ref()
                 // If the checkpoint exist return its contents.
                 .map(|proposal| proposal.transactions.clone())
-            // If the checkpoint does not exist return the unprocessed transactions
-            //.or_else(|| {
-            //    Some(CheckpointContents::new(
-            //        self.unprocessed_transactions.keys(),
-            //    ))
-            // })
         } else {
             None
         };
@@ -674,7 +652,6 @@ impl CheckpointStore {
                 return Ok(false);
             }
 
-            // let contents = CheckpointContents::new(contents.into_iter());
             let previous_digest = self
                 .get_prev_checkpoint_digest(next_sequence_number)
                 .map_err(FragmentInternalError::Error)?;
@@ -873,16 +850,6 @@ impl CheckpointStore {
         self.get_locals().next_checkpoint
     }
 
-    /// Returns the lowest checkpoint sequence number with unprocessed transactions
-    /// if any, otherwise the next checkpoint (not seen).
-    //pub fn lowest_unprocessed_checkpoint(&mut self) -> CheckpointSequenceNumber {
-    //    self.unprocessed_transactions
-    //        .iter()
-    //        .map(|(_, chk_seq)| chk_seq)
-    //        .min()
-    //        .unwrap_or_else(|| self.next_checkpoint())
-    //}
-
     /// Returns the next transactions sequence number expected.
     pub fn next_transaction_sequence_expected(&mut self) -> TxSequenceNumber {
         self.get_locals().next_transaction_sequence
@@ -934,12 +901,6 @@ impl CheckpointStore {
         if let Some(proposal) = &locals.current_proposal {
             return Ok(proposal.clone());
         }
-
-        //if self.unprocessed_transactions.iter().count() > 0 {
-        //    return Err(SuiError::from(
-        //        "Cannot propose with unprocessed transactions from the previous checkpoint.",
-        //    ));
-        //}
 
         if self.extra_transactions.iter().count() == 0 {
             return Err(SuiError::from("Cannot propose an empty set."));
@@ -1027,8 +988,6 @@ impl CheckpointStore {
             });
         }
 
-        // debug_assert!(self.all_checkpoint_transactions_executed(transactions)?);
-
         // Process transactions not already in a checkpoint
         let new_transactions = self
             .transactions_to_checkpoint
@@ -1048,23 +1007,6 @@ impl CheckpointStore {
 
         let high_seq = u64::MAX / 2;
         let transactions_with_seq = self.extra_transactions.multi_get(new_transactions.iter())?;
-
-        // Update the unprocessed transactions
-        //let batch = batch.insert_batch(
-        //    &self.unprocessed_transactions,
-        //    transactions_with_seq
-        //        .iter()
-        //        .zip(new_transactions.iter())
-        //        .filter_map(
-        //            |(opt, tx)| {
-        //                if opt.is_none() {
-        //                    Some((tx, seq))
-        //                } else {
-        //                    None
-        //                }
-        //            },
-        //        ),
-        //)?;
 
         // Delete the extra transactions now used
         let batch = batch.delete_batch(
@@ -1139,13 +1081,6 @@ impl CheckpointStore {
                         }
                     },
                 );
-
-        // If the transactions were in a checkpoint but we had not processed them yet, then
-        // we delete them from the unprocessed transaction set.
-        //let batch = batch.delete_batch(
-        //    &self.unprocessed_transactions,
-        //    already_in_checkpoint_tx.clone(),
-        //)?;
 
         // Delete the entries with the old sequence numbers.
         // They will be updated with the new sequence numbers latter.

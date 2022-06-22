@@ -34,11 +34,7 @@ where
                 Self::is_second_last_checkpoint_epoch(next_cp),
                 "start_epoch_change called at the wrong checkpoint",
             );
-            //assert_eq!(
-            //    checkpoints.lowest_unprocessed_checkpoint(),
-            //    next_cp,
-            //    "start_epoch_change called when there are still unprocessed transactions",
-            //);
+
             // drop checkpoints lock
         } else {
             unreachable!();
