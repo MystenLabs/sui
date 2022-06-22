@@ -19,10 +19,7 @@ div.txcardgrid > div:first-child {
 }
 
 .txlatestesults {
-    @apply w-11/12 md:w-10/12  mx-auto mb-28 mt-10 m-auto;
-
-    max-width: 1200px;
-    margin-bottom: 2rem;
+    @apply w-11/12 md:w-10/12 max-w-[1200px] mx-auto mb-[2rem] mt-10 m-auto;
 }
 
 div.txadd {
@@ -43,6 +40,10 @@ div.txadd {
 
 .txstatus {
     @apply md:w-1/12 max-w-sm;
+}
+
+.txage {
+    @apply md:w-3/12 max-w-sm;
 }
 
 .txsearch {

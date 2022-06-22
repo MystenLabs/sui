@@ -16,6 +16,7 @@ import {
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
+import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
 
@@ -42,6 +43,7 @@ type TxnData = {
     txGas: number;
     kind: TransactionKindName | undefined;
     From: string;
+    timestamp_ms?: number;
 };
 
 function generateStartEndRange(
@@ -116,6 +118,7 @@ function LatestTxView({
                         )}
                     >
                         <div className={styles.txcardgridlarge}>TxId</div>
+                        <div className={styles.txage}>Age</div>
                         <div className={styles.txtype}>TxType</div>
                         <div className={styles.txstatus}>Status</div>
                         <div className={styles.txgas}>Gas</div>
@@ -134,6 +137,9 @@ function LatestTxView({
                                     alttext={truncate(tx.txId, TRUNCATE_LENGTH)}
                                 />
                             </div>
+                            <div className={styles.txage}>{`${timeAgo(
+                                tx.timestamp_ms
+                            )} ago`}</div>
                             <div className={styles.txtype}> {tx.kind}</div>
                             <div
                                 className={cl(
