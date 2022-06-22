@@ -28,6 +28,6 @@ sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 sui-types = { path = "../sui-types" }
 
-telemetry-subscribers = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f" }
-mysten-network = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "c9e66a5b0325084104155cc6590f33cc7b006d72" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "c9e66a5b0325084104155cc6590f33cc7b006d72" }
 

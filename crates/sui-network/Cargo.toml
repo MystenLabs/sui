@@ -17,7 +17,7 @@ bincode = "1.3.3"
 serde = "1.0.136"
 sui-types = { path = "../sui-types" }
 
-mysten-network = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra", rev = "c9e66a5b0325084104155cc6590f33cc7b006d72" }
 
 
 [build-dependencies]

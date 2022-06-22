@@ -64,6 +64,7 @@ pub fn build_move_package(
     is_framework: bool,
 ) -> SuiResult<Vec<CompiledModule>> {
     println!("build_move_package");
+    return Ok(vec![]);
     match build_config.compile_package_no_exit(path, &mut Vec::new()) {
         Err(error) => {
             println!("Error");
