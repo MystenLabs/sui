@@ -21,8 +21,8 @@ fn test_move_event_filter() {
     // Create a test move event, borrowing GasCoin as the MoveEvent object.
     let move_event = Event::MoveEvent {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-        module: Identifier::from(ident_str!("test_module")),
-        function: Identifier::from(ident_str!("test_function")),
+        transaction_module: Identifier::from(ident_str!("test_module")),
+        transaction_function: Identifier::from(ident_str!("test_function")),
         instigator: SuiAddress::random_for_testing_only(),
         type_: GasCoin::type_(),
         contents: GasCoin::new(event_coin_id, SequenceNumber::new(), 10000).to_bcs_bytes(),
@@ -75,8 +75,8 @@ fn test_transfer_filter() {
     // Create a test transfer event.
     let move_event = Event::TransferObject {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-        module: Identifier::from(ident_str!("test_module")),
-        function: Identifier::from(ident_str!("test_function")),
+        transaction_module: Identifier::from(ident_str!("test_module")),
+        transaction_function: Identifier::from(ident_str!("test_function")),
         instigator,
         recipient,
         object_id,
@@ -154,8 +154,8 @@ fn test_delete_object_filter() {
     // Create a test delete object event.
     let move_event = Event::DeleteObject {
         package_id,
-        module: Identifier::from(ident_str!("test_module")),
-        function: Identifier::from(ident_str!("test_function")),
+        transaction_module: Identifier::from(ident_str!("test_module")),
+        transaction_function: Identifier::from(ident_str!("test_function")),
         instigator,
         object_id,
     };
@@ -195,8 +195,8 @@ fn test_new_object_filter() {
     // Create a test new object event.
     let move_event = Event::NewObject {
         package_id,
-        module: Identifier::from(ident_str!("test_module")),
-        function: Identifier::from(ident_str!("test_function")),
+        transaction_module: Identifier::from(ident_str!("test_module")),
+        transaction_function: Identifier::from(ident_str!("test_function")),
         instigator,
         recipient,
         object_id,

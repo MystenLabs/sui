@@ -411,8 +411,8 @@ mod tests {
     fn new_test_newobj_event() -> Event {
         Event::NewObject {
             package_id: ObjectID::random(),
-            module: Identifier::new("module").unwrap(),
-            function: Identifier::new("function").unwrap(),
+            transaction_module: Identifier::new("module").unwrap(),
+            transaction_function: Identifier::new("function").unwrap(),
             instigator: SuiAddress::random_for_testing_only(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
@@ -422,8 +422,8 @@ mod tests {
     fn new_test_deleteobj_event() -> Event {
         Event::DeleteObject {
             package_id: ObjectID::random(),
-            module: Identifier::new("module").unwrap(),
-            function: Identifier::new("function").unwrap(),
+            transaction_module: Identifier::new("module").unwrap(),
+            transaction_function: Identifier::new("function").unwrap(),
             instigator: SuiAddress::random_for_testing_only(),
             object_id: ObjectID::random(),
         }
@@ -432,8 +432,8 @@ mod tests {
     fn new_test_transfer_event(typ: TransferType) -> Event {
         Event::TransferObject {
             package_id: ObjectID::random(),
-            module: Identifier::new("module").unwrap(),
-            function: Identifier::new("function").unwrap(),
+            transaction_module: Identifier::new("module").unwrap(),
+            transaction_function: Identifier::new("function").unwrap(),
             instigator: SuiAddress::random_for_testing_only(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
@@ -452,8 +452,8 @@ mod tests {
         (
             Event::MoveEvent {
                 package_id: ObjectID::random(),
-                module: Identifier::new("module").unwrap(),
-                function: Identifier::new("function").unwrap(),
+                transaction_module: Identifier::new("module").unwrap(),
+                transaction_function: Identifier::new("function").unwrap(),
                 instigator: SuiAddress::random_for_testing_only(),
                 type_: TestEvent::struct_tag(),
                 contents: event_bytes,

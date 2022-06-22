@@ -81,8 +81,8 @@ pub enum Event {
     /// Move-specific event
     MoveEvent {
         package_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        transaction_module: Identifier,
+        transaction_function: Identifier,
         instigator: SuiAddress,
         type_: StructTag,
         #[serde_as(as = "Bytes")]
@@ -96,8 +96,8 @@ pub enum Event {
     /// Transfer objects to new address / wrap in another object / coin
     TransferObject {
         package_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        transaction_module: Identifier,
+        transaction_function: Identifier,
         instigator: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -108,16 +108,16 @@ pub enum Event {
     /// Delete object
     DeleteObject {
         package_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        transaction_module: Identifier,
+        transaction_function: Identifier,
         instigator: SuiAddress,
         object_id: ObjectID,
     },
     /// New object creation
     NewObject {
         package_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        transaction_module: Identifier,
+        transaction_function: Identifier,
         instigator: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -139,8 +139,8 @@ impl Event {
     ) -> Self {
         Event::MoveEvent {
             package_id,
-            module,
-            function,
+            transaction_module: module,
+            transaction_function: function,
             instigator: sender,
             type_,
             contents,
@@ -156,8 +156,8 @@ impl Event {
     ) -> Self {
         Event::DeleteObject {
             package_id,
-            module,
-            function,
+            transaction_module: module,
+            transaction_function: function,
             instigator: sender,
             object_id,
         }
@@ -173,8 +173,8 @@ impl Event {
     ) -> Self {
         Event::NewObject {
             package_id,
-            module,
-            function,
+            transaction_module: module,
+            transaction_function: function,
             instigator: sender,
             recipient,
             object_id,
@@ -240,10 +240,22 @@ impl Event {
     // TODO: should we switch to IdentStr or &str?  These are more complicated to make work due to lifetimes
     pub fn module_name(&self) -> Option<&str> {
         match self {
-            Event::MoveEvent { module, .. }
-            | Event::NewObject { module, .. }
-            | Event::DeleteObject { module, .. }
-            | Event::TransferObject { module, .. } => Some(module.as_str()),
+            Event::MoveEvent {
+                transaction_module: module,
+                ..
+            }
+            | Event::NewObject {
+                transaction_module: module,
+                ..
+            }
+            | Event::DeleteObject {
+                transaction_module: module,
+                ..
+            }
+            | Event::TransferObject {
+                transaction_module: module,
+                ..
+            } => Some(module.as_str()),
             _ => None,
         }
     }
@@ -251,10 +263,22 @@ impl Event {
     /// Extracts the function name from a SuiEvent, if available
     pub fn function_name(&self) -> Option<&str> {
         match self {
-            Event::MoveEvent { function, .. }
-            | Event::NewObject { function, .. }
-            | Event::DeleteObject { function, .. }
-            | Event::TransferObject { function, .. } => Some(function.as_str()),
+            Event::MoveEvent {
+                transaction_function: function,
+                ..
+            }
+            | Event::NewObject {
+                transaction_function: function,
+                ..
+            }
+            | Event::DeleteObject {
+                transaction_function: function,
+                ..
+            }
+            | Event::TransferObject {
+                transaction_function: function,
+                ..
+            } => Some(function.as_str()),
             _ => None,
         }
     }
