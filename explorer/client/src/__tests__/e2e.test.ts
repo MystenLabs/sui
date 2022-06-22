@@ -173,13 +173,13 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(value.trim()).toBe(successID);
         });
-        it('correctly renders summer time', async () => {
+        it('correctly renders days and hours', async () => {
             await page.goto(`${BASE_URL}/transactions/${successID}`);
             const value = await cssInteract(page)
                 .with('#timestamp')
                 .get.textContent();
             expect(value.trim()).toBe(
-                '925 days 2 hours ago (20 Jun 2022 23:07:13 UTC)'
+                '17 days 1 hour ago (15 Dec 2024 00:00:00 UTC)'
             );
         });
         it('correctly renders a time on the cusp of a year', async () => {
@@ -411,7 +411,7 @@ describe('End-to-end Tests', () => {
     });
     describe('Transactions for ID', () => {
         const txResults =
-            'TxIdAgeTxTypeStatusAddressesDa4vHc9IwbvO...+xnJ7Zx5E4=925days2hoursagoTransfer\u2714From:senderAddressTo:receiv...dressGHTP9gcFmF5K...KFhdqfpdK8=1min3secsagoTransfer\u2716From:senderAddressTo:receiv...dressXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer\u2714From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dress';
+            'TxIdAgeTxTypeStatusAddressesXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZPTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressGHTP9gcFmF5K...KFhdqfpdK8=1min3secsagoTransfer✖From:senderAddressTo:receiv...dress';
 
         it('are displayed deduplicated from and to address', async () => {
             const address = 'ownsAllAddress';
