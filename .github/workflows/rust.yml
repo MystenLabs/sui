@@ -30,7 +30,7 @@ env:
 
 jobs:
   diff:
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-latest, windows-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
@@ -74,7 +74,9 @@ jobs:
         run: |
           cargo test --doc --all-features
       # Ensure there are no uncommitted changes in the repo after running tests
-      - run: scripts/changed-files.sh
+      - name: Changed Files
+        if: ${{ runner.os == 'Linux'}}
+        run: scripts/changed-files.sh
 
   clippy:
     needs: diff
