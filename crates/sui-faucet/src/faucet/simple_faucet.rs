@@ -44,6 +44,7 @@ impl SimpleFaucet {
             // Ok to unwrap() since `get_gas_objects` guarantees gas
             .map(|q| GasCoin::try_from(&q.1).unwrap())
             .collect::<Vec<GasCoin>>();
+        info!("Coins held: {:?}", coins);
         coins.sort_by_key(|a| a.value());
 
         if coins.len() < 2 {

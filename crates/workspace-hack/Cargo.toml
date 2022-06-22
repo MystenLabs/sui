@@ -460,7 +460,7 @@ toml_edit = { version = "0.13" }
 tonic = { version = "0.7", features = ["async-trait", "axum", "channel", "codegen", "h2", "hyper", "hyper-timeout", "prost", "prost-derive", "prost1", "rustls-pemfile", "tls", "tokio", "tokio-rustls", "tower", "tracing-futures", "transport"] }
 tonic-health = { version = "0.6", features = ["transport"] }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
-tower-http = { version = "0.3", features = ["map-response-body", "tower", "util"] }
+tower-http = { version = "0.3", features = ["cors", "map-response-body", "tower", "util"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["attributes", "log", "std", "tracing-attributes"] }
@@ -1047,7 +1047,7 @@ tonic-build-ca01ad9e24f5d932 = { package = "tonic-build", version = "0.7", featu
 tonic-health = { version = "0.6", features = ["transport"] }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["__common", "balance", "buffer", "discover", "filter", "full", "futures-core", "futures-util", "hdrhistogram", "hedge", "indexmap", "limit", "load", "load-shed", "log", "make", "pin-project", "pin-project-lite", "rand", "ready-cache", "reconnect", "retry", "slab", "spawn-ready", "steer", "timeout", "tokio", "tokio-util", "tracing", "util"] }
-tower-http = { version = "0.3", features = ["map-response-body", "tower", "util"] }
+tower-http = { version = "0.3", features = ["cors", "map-response-body", "tower", "util"] }
 tower-layer = { version = "0.3", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["attributes", "log", "std", "tracing-attributes"] }
