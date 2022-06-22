@@ -71,7 +71,6 @@ where
                 self.state
                     .database
                     .revert_state_update(&tx_digest.transaction)?;
-
             }
 
             // Delete any extra certificates now unprocessed.

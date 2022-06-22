@@ -111,7 +111,6 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
@@ -121,10 +120,8 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
                 .unwrap(),
             );
 
-            
             println!("Start active execution process.");
             active_state.clone().spawn_execute_process().await;
-
 
             // Spin the gossip service.
             active_state
@@ -209,7 +206,6 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
     for inner_state in authorities.clone() {
         let clients = aggregator.clone_inner_clients();
         let _active_handle = tokio::task::spawn(async move {
-
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
