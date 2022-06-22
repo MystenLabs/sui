@@ -79,6 +79,8 @@ const commonConfig: () => Promise<Configuration> = async () => {
         entry: {
             background: './background',
             ui: './ui',
+            'content-script': './content-script',
+            'dapp-interface': './dapp-interface',
         },
         output: {
             path: OUTPUT_ROOT,
