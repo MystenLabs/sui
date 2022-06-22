@@ -27,6 +27,8 @@ use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc_api::EventApiServer;
 
+mod metrics;
+
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<jsonrpsee::http_server::HttpServerHandle>,
@@ -39,6 +41,15 @@ pub struct SuiNode {
 
 impl SuiNode {
     pub async fn start(config: &NodeConfig) -> Result<SuiNode> {
+        //
+        // Start metrics server
+        //
+        info!(
+            "Starting Prometheus HTTP endpoint at {}",
+            config.metrics_address
+        );
+        let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
+
         info!(node =? config.public_key(),
             "Initializing sui-node listening on {}", config.network_address
         );
@@ -79,6 +90,7 @@ impl SuiNode {
                 checkpoint_store,
                 genesis,
                 config.enable_event_processing,
+                &prometheus_registry,
             )
             .await,
         );
