@@ -1594,6 +1594,7 @@ pub async fn init_state() -> AuthorityState {
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         false,
+        &prometheus::Registry::new(),
     )
     .await
 }
