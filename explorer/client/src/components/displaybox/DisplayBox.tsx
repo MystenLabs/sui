@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useCallback, useEffect, useContext } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
-import { transformURL } from '../../utils/stringUtils';
 import { ImageModClient } from '../../utils/imageModeratorClient';
+import { transformURL } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
