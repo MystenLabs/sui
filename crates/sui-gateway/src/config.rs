@@ -21,7 +21,7 @@ use sui_types::{
     committee::{Committee, EpochId},
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum GatewayType {
     Embedded(GatewayConfig),
@@ -73,7 +73,7 @@ impl GatewayType {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GatewayConfig {
     pub epoch: EpochId,
     pub validator_set: Vec<ValidatorInfo>,

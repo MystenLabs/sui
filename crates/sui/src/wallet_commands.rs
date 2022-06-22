@@ -6,7 +6,7 @@ use std::{
     collections::BTreeSet,
     fmt::{Debug, Display, Formatter, Write},
     path::Path,
-    time::Instant,
+    time::Instant, f32::consts::E,
 };
 
 use anyhow::anyhow;
@@ -541,6 +541,7 @@ impl WalletContext {
         })?;
         let config = config.persisted(config_path);
         let keystore = config.keystore.init()?;
+        info!("Using gateway {:?}", config.gateway);
         let gateway = config.gateway.init()?;
         let context = Self {
             config,
@@ -573,16 +574,22 @@ impl WalletContext {
         address: SuiAddress,
     ) -> Result<Vec<(u64, SuiParsedObject)>, anyhow::Error> {
         let object_refs = self.gateway.get_objects_owned_by_address(address).await?;
-
+        // fIXME
+        info!("object ref: {:?}", object_refs);
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
         for oref in object_refs {
             match self.gateway.get_object(oref.object_id).await? {
                 GetObjectDataResponse::Exists(o) => {
-                    if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
+                    // FIXME!!!!!!
+                    if matches!( o.data.type_(), Some(v)  if &(*v.to_lowercase()) == &(GasCoin::type_().to_string()).to_lowercase()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
                         values_objects.push((gas_coin.value(), o));
+                    } else {
+                        // FIXME
+                        info!("Other gas: {:?}",  o.data.type_());
+                        info!("gas type: {:?}",  GasCoin::type_().to_string());
                     }
                 }
                 _ => continue,

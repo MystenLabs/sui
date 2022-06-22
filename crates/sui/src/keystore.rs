@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-
+use tracing::info;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{get_key_pair, KeyPair, Signature};
 
@@ -57,6 +57,7 @@ pub struct SuiKeystore {
 
 impl Keystore for SuiKeystore {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        info!("@@@@@@@ my keys: {:?}", self.keys);
         Ok(self
             .keys
             .get(address)
