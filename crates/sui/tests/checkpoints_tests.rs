@@ -249,6 +249,10 @@ async fn checkpoint_with_shared_objects() {
                 long_pause_between_checkpoints: Duration::from_millis(10),
                 ..CheckpointProcessControl::default()
             };
+
+            println!("Start active execution process.");
+            active_state.clone().spawn_execute_process().await;
+
             active_state
                 .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
                 .await
