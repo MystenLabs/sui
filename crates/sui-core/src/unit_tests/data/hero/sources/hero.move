@@ -315,7 +315,7 @@ module examples::hero {
         {
             let treasury_cap = test_scenario::take_owned<TreasuryCap<EXAMPLE>>(scenario);
             let ctx = test_scenario::ctx(scenario);
-            let coins = coin::mint(500, &mut treasury_cap, ctx);
+            let coins = coin::mint(&mut treasury_cap, 500, ctx);
             coin::transfer(coins, copy player);
             test_scenario::return_owned(scenario, treasury_cap);
         };

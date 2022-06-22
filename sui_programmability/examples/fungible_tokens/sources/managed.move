@@ -24,7 +24,7 @@ module fungible_tokens::managed {
 
     /// Manager can mint new coins
     public fun mint(treasury_cap: &mut TreasuryCap<MANAGED>, amount: u64, ctx: &mut TxContext): Coin<MANAGED> {
-        coin::mint<MANAGED>(amount, treasury_cap, ctx)
+        coin::mint<MANAGED>(treasury_cap, amount, ctx)
     }
 
     /// Manager can burn coins
