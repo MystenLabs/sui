@@ -62,7 +62,7 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// Output all certificates to the consensus layer.
     tx_consensus: Sender<Certificate<PublicKey>>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    tx_proposer: Sender<(Vec<CertificateDigest>, Round)>,
+    tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round)>,
 
     /// The last garbage collected round.
     gc_round: Round,
@@ -97,7 +97,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         rx_certificate_waiter: Receiver<Certificate<PublicKey>>,
         rx_proposer: Receiver<Header<PublicKey>>,
         tx_consensus: Sender<Certificate<PublicKey>>,
-        tx_proposer: Sender<(Vec<CertificateDigest>, Round)>,
+        tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round)>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {

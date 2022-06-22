@@ -1,4 +1,4 @@
-// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
@@ -17,7 +17,7 @@ async fn propose_empty() {
     let (tx_headers, mut rx_headers) = channel(1);
 
     // Spawn the proposer.
-    Proposer::spawn(
+    PartiallySyncProposer::spawn(
         name,
         committee(None),
         signature_service,
@@ -46,7 +46,7 @@ async fn propose_payload() {
     let (tx_headers, mut rx_headers) = channel(1);
 
     // Spawn the proposer.
-    Proposer::spawn(
+    PartiallySyncProposer::spawn(
         name.clone(),
         committee(None),
         signature_service,

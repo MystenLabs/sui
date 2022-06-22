@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::{
-    tusk::consensus_tests::*, Consensus, ConsensusOutput, ConsensusSyncRequest, SubscriberHandler,
+    tusk::{tusk_tests::*, Tusk},
+    Consensus, ConsensusOutput, ConsensusSyncRequest, SubscriberHandler,
 };
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair, Hash};
 use std::collections::{BTreeSet, VecDeque};
@@ -59,13 +60,18 @@ pub async fn spawn_node(
     // Spawn the consensus engine and sink the primary channel.
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, rx_output) = channel(1);
+    let tusk = Tusk {
+        committee: committee.clone(),
+        store: consensus_store.clone(),
+        gc_depth: 50,
+    };
     Consensus::spawn(
         committee,
         consensus_store.clone(),
-        /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
         tx_output,
+        tusk,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 

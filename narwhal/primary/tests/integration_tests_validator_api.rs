@@ -9,7 +9,7 @@ use crypto::{
     Hash,
 };
 use node::NodeStorage;
-use primary::{PayloadToken, Primary, CHANNEL_CAPACITY};
+use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
@@ -112,6 +112,7 @@ async fn test_get_collections() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
+        NetworkModel::Asynchronous,
     );
 
     // Spawn a `Worker` instance.
@@ -276,6 +277,7 @@ async fn test_remove_collections() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
+        NetworkModel::Asynchronous,
     );
 
     // Wait for tasks to start
@@ -471,6 +473,7 @@ async fn test_read_causal_signed_certificates() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
+        NetworkModel::Asynchronous,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
@@ -496,6 +499,7 @@ async fn test_read_causal_signed_certificates() {
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
+        NetworkModel::Asynchronous,
     );
 
     // Wait for tasks to start
@@ -653,6 +657,7 @@ async fn test_read_causal_unsigned_certificates() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
+        NetworkModel::Asynchronous,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
@@ -671,6 +676,7 @@ async fn test_read_causal_unsigned_certificates() {
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
+        NetworkModel::Asynchronous,
     );
 
     // Wait for tasks to start
@@ -802,6 +808,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* rx_consensus */ rx_feedback_1,
         /* external_consensus */
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_1).1)),
+        NetworkModel::Asynchronous,
     );
 
     // Spawn a `Worker` instance for primary 1.
@@ -829,6 +836,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
         None,
+        NetworkModel::Asynchronous,
     );
 
     // Spawn a `Worker` instance for primary 2.

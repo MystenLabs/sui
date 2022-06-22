@@ -344,8 +344,7 @@ async fn process_certificates() {
 
     // Ensure the core sends the parents of the certificates to the proposer.
     let received = rx_parents.recv().await.unwrap();
-    let parents = certificates.iter().map(|x| x.digest()).collect();
-    assert_eq!(received, (parents, 1));
+    assert_eq!(received, (certificates.clone(), 1));
 
     // Ensure the core sends the certificates to the consensus.
     for x in certificates.clone() {

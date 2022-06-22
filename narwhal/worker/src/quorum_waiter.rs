@@ -54,7 +54,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
 
     /// Helper function. It waits for a future to complete and then delivers a value.
     async fn waiter(wait_for: CancelHandler<()>, deliver: Stake) -> Stake {
-        let _ = wait_for.await;
+        wait_for.await;
         deliver
     }
 

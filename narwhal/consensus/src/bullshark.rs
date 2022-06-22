@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
-    utils, ConsensusOutput, SequenceNumber,
+    utils, ConsensusOutput,
 };
 use config::{Committee, SharedCommittee, Stake};
 use crypto::{
@@ -12,13 +12,13 @@ use crypto::{
 };
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
-use types::{Certificate, CertificateDigest, ConsensusStore, Round, StoreResult};
+use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
-#[cfg(any(test))]
-#[path = "tests/tusk_tests.rs"]
-pub mod tusk_tests;
+#[cfg(test)]
+#[path = "tests/bullshark_tests.rs"]
+pub mod bullshark_tests;
 
-pub struct Tusk<PublicKey: VerifyingKey> {
+pub struct Bullshark<PublicKey: VerifyingKey> {
     /// The committee information.
     pub committee: SharedCommittee<PublicKey>,
     /// Persistent storage to safe ensure crash-recovery.
@@ -27,7 +27,7 @@ pub struct Tusk<PublicKey: VerifyingKey> {
     pub gc_depth: Round,
 }
 
-impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
+impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Bullshark<PublicKey> {
     fn process_certificate(
         &mut self,
         state: &mut ConsensusState<PublicKey>,
@@ -46,17 +46,17 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
             .insert(certificate.origin(), (certificate.digest(), certificate));
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
-        // 2f+1 certificates. This is because we need them to reveal the common coin.
+        // f+1 certificates. This is because we need them to reveal the common coin.
         let r = round - 1;
 
         // We only elect leaders for even round numbers.
-        if r % 2 != 0 || r < 4 {
+        if r % 2 != 0 || r < 2 {
             return Ok(Vec::new());
         }
 
-        // Get the certificate's digest of the leader of round r-2. If we already ordered this leader,
+        // Get the certificate's digest of the leader. If we already ordered this leader,
         // there is nothing to do.
-        let leader_round = r - 2;
+        let leader_round = r;
         if leader_round <= state.last_committed_round {
             return Ok(Vec::new());
         }
@@ -69,7 +69,7 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
         // Check if the leader has f+1 support from its children (ie. round r-1).
         let stake: Stake = state
             .dag
-            .get(&(r - 1))
+            .get(&round)
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
@@ -128,7 +128,7 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> Tusk<PublicKey> {
+impl<PublicKey: VerifyingKey> Bullshark<PublicKey> {
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
     fn leader<'a>(
@@ -136,116 +136,15 @@ impl<PublicKey: VerifyingKey> Tusk<PublicKey> {
         round: Round,
         dag: &'a Dag<PublicKey>,
     ) -> Option<&'a (CertificateDigest, Certificate<PublicKey>)> {
-        // TODO: We should elect the leader of round r-2 using the common coin revealed at round r.
-        // At this stage, we are guaranteed to have 2f+1 certificates from round r (which is enough to
-        // compute the coin). We currently just use round-robin.
         #[cfg(test)]
-        let coin = 0;
+        let seed = 0;
         #[cfg(not(test))]
-        let coin = round as usize;
+        let seed = round;
 
-        // Elect the leader.
-        let leader = committee.leader(coin);
+        // Elect the leader in a round-robin fashion.
+        let leader = committee.leader(seed as usize);
 
         // Return its certificate and the certificate's digest.
         dag.get(&round).and_then(|x| x.get(&leader))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crypto::traits::KeyPair;
-    use rand::Rng;
-    use std::collections::BTreeSet;
-    use test_utils::{make_consensus_store, mock_committee};
-    use types::Certificate;
-
-    #[test]
-    fn state_limits_test() {
-        let gc_depth = 12;
-        let rounds: Round = rand::thread_rng().gen_range(10, 100);
-
-        // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = test_utils::keys(None)
-            .into_iter()
-            .map(|kp| kp.public().clone())
-            .collect();
-
-        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
-            .iter()
-            .map(|x| x.digest())
-            .collect::<BTreeSet<_>>();
-        let (certificates, _next_parents) =
-            test_utils::make_optimal_certificates(1..=rounds, &genesis, &keys);
-        let committee = mock_committee(&keys);
-
-        let store_path = test_utils::temp_dir();
-        let store = make_consensus_store(&store_path);
-
-        let consensus_index = 0;
-        let mut state = ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])));
-        let mut tusk = Tusk {
-            committee,
-            store,
-            gc_depth,
-        };
-        for certificate in certificates {
-            tusk.process_certificate(&mut state, consensus_index, certificate)
-                .unwrap();
-        }
-        // with "optimal" certificates (see `make_optimal_certificates`), and a round-robin between leaders,
-        // we need at most 6 rounds lookbehind: we elect a leader at most at round r-2, and its round is
-        // preceded by one round of history for each prior leader, which contains their latest commit at least.
-        //
-        // -- L1's latest
-        // -- L2's latest
-        // -- L3's latest
-        // -- L4's latest
-        // -- support level 1 (for L4)
-        // -- support level 2 (for L4)
-        //
-        let n = state.dag.len();
-        assert!(n <= 6, "DAG size: {}", n);
-    }
-
-    #[test]
-    fn imperfect_state_limits_test() {
-        let gc_depth = 12;
-        let rounds: Round = rand::thread_rng().gen_range(10, 100);
-
-        // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = test_utils::keys(None)
-            .into_iter()
-            .map(|kp| kp.public().clone())
-            .collect();
-
-        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
-            .iter()
-            .map(|x| x.digest())
-            .collect::<BTreeSet<_>>();
-        // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
-        let (certificates, _next_parents) =
-            test_utils::make_certificates(1..=rounds, &genesis, &keys, 0.333);
-        let committee = mock_committee(&keys);
-
-        let store_path = test_utils::temp_dir();
-        let store = make_consensus_store(&store_path);
-
-        let mut state = ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])));
-        let consensus_index = 0;
-        let mut tusk = Tusk {
-            committee,
-            store,
-            gc_depth,
-        };
-        for certificate in certificates {
-            tusk.process_certificate(&mut state, consensus_index, certificate)
-                .unwrap();
-        }
-
-        // with "less optimal" certificates (see `make_certificates`), we should keep at most gc_depth rounds lookbehind
-        let n = state.dag.len();
-        assert!(n <= gc_depth as usize, "DAG size: {}", n);
     }
 }

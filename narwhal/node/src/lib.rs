@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, SharedCommittee, WorkerId};
-use consensus::{dag::Dag, Consensus, SubscriberHandler};
+use consensus::{bullshark::Bullshark, dag::Dag, Consensus, SubscriberHandler};
 use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
-use primary::{PayloadToken, Primary};
+use primary::{NetworkModel, PayloadToken, Primary};
 use std::sync::Arc;
 use store::{
     reopen,
@@ -120,10 +120,10 @@ impl Node {
         // Compute the public key of this authority.
         let name = keypair.public().clone();
 
-        let dag = if !internal_consensus {
+        let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Tusk");
             let (_handle, dag) = Dag::new(&committee, rx_new_certificates);
-            Some(Arc::new(dag))
+            (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
             Self::spawn_consensus(
                 name.clone(),
@@ -136,7 +136,7 @@ impl Node {
                 tx_confirmation,
             )
             .await?;
-            None
+            (None, NetworkModel::PartiallySynchronous)
         };
 
         // Spawn the primary.
@@ -151,6 +151,7 @@ impl Node {
             /* tx_consensus */ tx_new_certificates,
             /* rx_consensus */ rx_feedback,
             /* dag */ dag,
+            network_model,
         );
 
         Ok(primary_handle)
@@ -176,13 +177,18 @@ impl Node {
         let (tx_client_to_consensus, rx_client_to_consensus) = channel(Self::CHANNEL_CAPACITY);
 
         // Spawn the consensus core who only sequences transactions.
+        let ordering_engine = Bullshark {
+            committee: committee.clone(),
+            store: store.consensus_store.clone(),
+            gc_depth: parameters.gc_depth,
+        };
         Consensus::spawn(
             committee.clone(),
             store.consensus_store.clone(),
-            parameters.gc_depth,
             /* rx_primary */ rx_new_certificates,
             /* tx_primary */ tx_feedback,
             /* tx_output */ tx_sequence,
+            ordering_engine,
         );
 
         // The subscriber handler receives the ordered sequence from consensus and feed them

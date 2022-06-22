@@ -7,12 +7,14 @@
     rust_2021_compatibility
 )]
 
+pub mod bullshark;
+pub mod consensus;
 pub mod dag;
 pub mod subscriber;
 pub mod tusk;
+mod utils;
 
-pub use crate::{subscriber::SubscriberHandler, tusk::Consensus};
-
+pub use crate::{consensus::Consensus, subscriber::SubscriberHandler};
 use crypto::traits::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use std::ops::RangeInclusive;

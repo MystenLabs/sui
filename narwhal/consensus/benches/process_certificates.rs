@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use consensus::tusk::*;
+use consensus::{
+    bullshark::Bullshark,
+    consensus::{ConsensusProtocol, ConsensusState},
+};
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
@@ -35,8 +38,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let store_path = temp_dir();
         let store = make_consensus_store(&store_path);
 
-        let mut state =
-            consensus::tusk::State::new(Certificate::genesis(&mock_committee(&keys[..])));
+        let mut state = ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])));
 
         let data_size: usize = certificates
             .iter()
@@ -44,16 +46,18 @@ pub fn process_certificates(c: &mut Criterion) {
             .sum();
         consensus_group.throughput(Throughput::Bytes(data_size as u64));
 
+        let mut ordering_engine = Bullshark {
+            committee,
+            store,
+            gc_depth,
+        };
         consensus_group.bench_with_input(
             BenchmarkId::new("batched", certificates.len()),
             &certificates,
             |b, i| {
                 b.iter(|| {
                     for cert in i {
-                        let _ = Consensus::process_certificate(
-                            &committee,
-                            &store,
-                            gc_depth,
+                        let _ = ordering_engine.process_certificate(
                             &mut state,
                             /* consensus_index */ 0,
                             cert.clone(),

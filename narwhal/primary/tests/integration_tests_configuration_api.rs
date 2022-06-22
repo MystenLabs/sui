@@ -5,7 +5,7 @@ use config::Parameters;
 use consensus::dag::Dag;
 use crypto::traits::KeyPair;
 use node::NodeStorage;
-use primary::{Primary, CHANNEL_CAPACITY};
+use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use std::{sync::Arc, time::Duration};
 use test_utils::{committee, keys, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -43,6 +43,7 @@ async fn test_new_epoch() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
+        NetworkModel::Asynchronous,
     );
 
     // Wait for tasks to start
@@ -102,6 +103,7 @@ async fn test_new_network_info() {
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
+        NetworkModel::Asynchronous,
     );
 
     // Wait for tasks to start

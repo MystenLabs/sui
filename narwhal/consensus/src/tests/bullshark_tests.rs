@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use crate::Consensus;
 use crypto::ed25519::Ed25519PublicKey;
 #[allow(unused_imports)]
 use crypto::traits::KeyPair;
@@ -19,7 +20,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore<
     const SEQUENCE_CF: &str = "sequence";
 
     let rocksdb = rocks::open_cf(store_path, None, &[LAST_COMMITTED_CF, SEQUENCE_CF])
-        .expect("Failed creating database");
+        .expect("Failed to create database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
         LAST_COMMITTED_CF;<Ed25519PublicKey, Round>,
@@ -48,7 +49,7 @@ pub fn make_certificate_store(
 // the leader of round 2.
 #[tokio::test]
 async fn commit_one() {
-    // Make certificates for rounds 1 to 4.
+    // Make certificates for rounds 1 and 2.
     let keys: Vec<_> = test_utils::keys(None)
         .into_iter()
         .map(|kp| kp.public().clone())
@@ -58,10 +59,12 @@ async fn commit_one() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) =
-        test_utils::make_optimal_certificates(1..=4, &genesis, &keys);
+        test_utils::make_optimal_certificates(1..=2, &genesis, &keys);
 
-    // Make one certificate with round 5 to trigger the commits.
-    let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 5, next_parents);
+    // Make two certificate (f+1) with round 3 to trigger the commits.
+    let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 3, next_parents.clone());
+    certificates.push_back(certificate);
+    let (_, certificate) = test_utils::mock_certificate(keys[1].clone(), 3, next_parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -69,13 +72,19 @@ async fn commit_one() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     let store_path = test_utils::temp_dir();
+    let store = make_consensus_store(&store_path);
+    let tusk = Bullshark {
+        committee: mock_committee(&keys[..]),
+        store: store.clone(),
+        gc_depth: 50,
+    };
     Consensus::spawn(
         mock_committee(&keys[..]),
-        make_consensus_store(&store_path),
-        /* gc_depth */ 50,
+        store,
         rx_waiter,
         tx_primary,
         tx_output,
+        tusk,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -119,13 +128,19 @@ async fn dead_node() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     let store_path = test_utils::temp_dir();
+    let store = make_consensus_store(&store_path);
+    let tusk = Bullshark {
+        committee: mock_committee(&keys[..]),
+        store: store.clone(),
+        gc_depth: 50,
+    };
     Consensus::spawn(
         mock_committee(&keys[..]),
-        make_consensus_store(&store_path),
-        /* gc_depth */ 50,
+        store,
         rx_waiter,
         tx_primary,
         tx_output,
+        tusk,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -136,18 +151,18 @@ async fn dead_node() {
         }
     });
 
-    // We should commit 3 leaders (rounds 2, 4, and 6).
-    for i in 1..=15 {
+    // We should commit 4 leaders (rounds 2, 4, 6, and 8).
+    for i in 1..=21 {
         let output = rx_output.recv().await.unwrap();
         let expected = ((i - 1) / keys.len() as u64) + 1;
         assert_eq!(output.certificate.round(), expected);
     }
     let output = rx_output.recv().await.unwrap();
-    assert_eq!(output.certificate.round(), 6);
+    assert_eq!(output.certificate.round(), 8);
 }
 
-// Run for 6 dag rounds. The leaders of round 2 does not have enough support, but the leader of
-// round 4 does. The leader of rounds 2 and 4 should thus be committed upon entering round 6.
+// Run for 5 dag rounds. The leader of round 2 does not have enough support, but the leader of
+// round 4 does. The leader of rounds 2 and 4 should thus be committed (because they are linked).
 #[tokio::test]
 async fn not_enough_support() {
     let mut keys: Vec<_> = test_utils::keys(None)
@@ -199,13 +214,15 @@ async fn not_enough_support() {
 
     parents = next_parents.clone();
 
-    // Rounds 4, 5, and 6: Fully connected graph.
-    let nodes: Vec<_> = keys.iter().take(3).cloned().collect();
-    let (out, parents) = test_utils::make_optimal_certificates(4..=6, &parents, &nodes);
+    // Rounds 4: Fully connected graph. This is the where we "boost" the leader.
+    let nodes: Vec<_> = keys.to_vec();
+    let (out, parents) = test_utils::make_optimal_certificates(4..=4, &parents, &nodes);
     certificates.extend(out);
 
-    // Round 7: Send a single certificate to trigger the commits.
-    let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 7, parents);
+    // Round 5: Send f+1 certificates to trigger the commit of leader 4.
+    let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 5, parents.clone());
+    certificates.push_back(certificate);
+    let (_, certificate) = test_utils::mock_certificate(keys[1].clone(), 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -213,13 +230,19 @@ async fn not_enough_support() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     let store_path = test_utils::temp_dir();
+    let store = make_consensus_store(&store_path);
+    let tusk = Bullshark {
+        committee: mock_committee(&keys[..]),
+        store: store.clone(),
+        gc_depth: 50,
+    };
     Consensus::spawn(
         mock_committee(&keys[..]),
-        make_consensus_store(&store_path),
-        /* gc_depth */ 50,
+        store,
         rx_waiter,
         tx_primary,
         tx_output,
+        tusk,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -246,8 +269,8 @@ async fn not_enough_support() {
     assert_eq!(output.certificate.round(), 4);
 }
 
-// Run for 6 dag rounds. Node 0 (the leader of round 2) is missing for rounds 1 and 2,
-// and reapers from round 3.
+// Run for 7 dag rounds. Node 0 (the leader of round 2) is missing for rounds 1 and 2,
+// and reappears from round 3.
 #[tokio::test]
 async fn missing_leader() {
     let mut keys: Vec<_> = test_utils::keys(None)
@@ -268,12 +291,14 @@ async fn missing_leader() {
     let (out, parents) = test_utils::make_optimal_certificates(1..=2, &genesis, &nodes);
     certificates.extend(out);
 
-    // Add back the leader for rounds 3, 4, 5 and 6.
-    let (out, parents) = test_utils::make_optimal_certificates(3..=6, &parents, &keys);
+    // Add back the leader for rounds 3 and 4.
+    let (out, parents) = test_utils::make_optimal_certificates(3..=4, &parents, &keys);
     certificates.extend(out);
 
-    // Add a certificate of round 7 to commit the leader of round 4.
-    let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 7, parents.clone());
+    // Add f+1 certificates of round 5 to commit the leader of round 4.
+    let (_, certificate) = test_utils::mock_certificate(keys[0].clone(), 5, parents.clone());
+    certificates.push_back(certificate);
+    let (_, certificate) = test_utils::mock_certificate(keys[1].clone(), 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -281,13 +306,19 @@ async fn missing_leader() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     let store_path = test_utils::temp_dir();
+    let store = make_consensus_store(&store_path);
+    let tusk = Bullshark {
+        committee: mock_committee(&keys[..]),
+        store: store.clone(),
+        gc_depth: 50,
+    };
     Consensus::spawn(
         mock_committee(&keys[..]),
-        make_consensus_store(&store_path),
-        /* gc_depth */ 50,
+        store,
         rx_waiter,
         tx_primary,
         tx_output,
+        tusk,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 

@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    async_proposer::AsyncProposer,
     block_remover::DeleteBatchResult,
     block_synchronizer::BlockSynchronizer,
     block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
@@ -11,8 +12,8 @@ use crate::{
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     helper::Helper,
+    part_sync_proposer::PartiallySyncProposer,
     payload_receiver::PayloadReceiver,
-    proposer::Proposer,
     synchronizer::Synchronizer,
     BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
 };
@@ -78,6 +79,12 @@ pub enum WorkerPrimaryError {
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
 pub type PayloadToken = u8;
 
+/// The network model in which the primary operates.
+pub enum NetworkModel {
+    PartiallySynchronous,
+    Asynchronous,
+}
+
 pub struct Primary;
 
 impl Primary {
@@ -94,6 +101,7 @@ impl Primary {
         tx_consensus: Sender<Certificate<PublicKey>>,
         rx_consensus: Receiver<Certificate<PublicKey>>,
         dag: Option<Arc<Dag<PublicKey>>>,
+        network_model: NetworkModel,
     ) -> JoinHandle<()> {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -280,17 +288,29 @@ impl Primary {
         );
 
         // When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
-        // digests from our workers and it back to the `Core`.
-        Proposer::spawn(
-            name.clone(),
-            committee.clone(),
-            signature_service,
-            parameters.header_size,
-            parameters.max_header_delay,
-            /* rx_core */ rx_parents,
-            /* rx_workers */ rx_our_digests,
-            /* tx_core */ tx_headers,
-        );
+        // digests from our workers and sends it back to the `Core`.
+        match network_model {
+            NetworkModel::PartiallySynchronous => PartiallySyncProposer::spawn(
+                name.clone(),
+                committee.clone(),
+                signature_service,
+                parameters.header_size,
+                parameters.max_header_delay,
+                /* rx_core */ rx_parents,
+                /* rx_workers */ rx_our_digests,
+                /* tx_core */ tx_headers,
+            ),
+            NetworkModel::Asynchronous => AsyncProposer::spawn(
+                name.clone(),
+                committee.clone(),
+                signature_service,
+                parameters.header_size,
+                parameters.max_header_delay,
+                /* rx_core */ rx_parents,
+                /* rx_workers */ rx_our_digests,
+                /* tx_core */ tx_headers,
+            ),
+        }
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests
         // from other primaries.

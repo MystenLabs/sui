@@ -13,11 +13,11 @@ use tracing::info;
 use types::{BatchDigest, Certificate, CertificateDigest, Header, Round};
 
 #[cfg(test)]
-#[path = "tests/proposer_tests.rs"]
-pub mod proposer_tests;
+#[path = "tests/async_proposer_tests.rs"]
+pub mod async_proposer_tests;
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
-pub struct Proposer<PublicKey: VerifyingKey> {
+pub struct AsyncProposer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
@@ -30,7 +30,7 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     max_header_delay: Duration,
 
     /// Receives the parents to include in the next header (along with their round number).
-    rx_core: Receiver<(Vec<CertificateDigest>, Round)>,
+    rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round)>,
     /// Receives the batches' digests from our workers.
     rx_workers: Receiver<(BatchDigest, WorkerId)>,
     /// Sends newly created headers to the `Core`.
@@ -46,14 +46,14 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     payload_size: usize,
 }
 
-impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
+impl<PublicKey: VerifyingKey> AsyncProposer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         committee: SharedCommittee<PublicKey>,
         signature_service: SignatureService<PublicKey::Sig>,
         header_size: usize,
         max_header_delay: Duration,
-        rx_core: Receiver<(Vec<CertificateDigest>, Round)>,
+        rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
     ) {
@@ -145,7 +145,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                     debug!("Dag moved to round {}", self.round);
 
                     // Signal that we have enough parent certificates to propose a new header.
-                    self.last_parents = parents;
+                    self.last_parents = parents.iter().map(|x| x.digest()).collect();
                 }
                 Some((digest, worker_id)) = self.rx_workers.recv() => {
                     self.payload_size += Digest::from(digest).size();

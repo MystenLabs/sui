@@ -345,6 +345,13 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
         (total_votes + 2) / 3
     }
 
+    /// Returns a leader node in a round-robin fashion.
+    pub fn leader(&self, seed: usize) -> PublicKey {
+        let mut keys: Vec<_> = self.authorities.load().keys().cloned().collect();
+        keys.sort();
+        keys[seed % self.size()].clone()
+    }
+
     /// Returns the primary addresses of the target primary.
     pub fn primary(&self, to: &PublicKey) -> Result<PrimaryAddresses, ConfigError> {
         self.authorities
