@@ -15,15 +15,15 @@ List of events emitted by the Sui node.
 
 ### Move event
 
-**Attributes** : packageId, module, function, instigator, type, fields, bcs  
+**Attributes** : packageId, transactionModule, transactionFunction, instigator, type, fields, bcs  
 **Example** :
 
 ```json
 {
   "moveEvent": {
     "packageId": "0x0000000000000000000000000000000000000002",
-    "module": "devnet_nft",
-    "function": "mint",
+    "transactionModule": "devnet_nft",
+    "transactionFunction": "mint",
     "instigator": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "type": "0x2::devnet_nft::MintNFTEvent",
     "fields": {
@@ -52,15 +52,15 @@ List of events emitted by the Sui node.
 
 ### Transfer object
 
-**Attributes**: packageId, module, function, instigator, recipient, objectId, version, destinationAddr, type  
+**Attributes**: packageId, transactionModule, transactionFunction, instigator, recipient, objectId, version, destinationAddr, type  
 **Example**:
 
 ```json
 {
   "transferObject": {
     "packageId": "0x0000000000000000000000000000000000000002",
-    "module": "native",
-    "function": "transfer_coin",
+    "transactionModule": "native",
+    "transactionFunction": "transfer_coin",
     "instigator": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "recipient": {
       "AddressOwner": "0x741a9a7ea380aed286341fcf16176c8653feb667"
@@ -75,15 +75,15 @@ List of events emitted by the Sui node.
 
 ### Delete object
 
-**Attributes**: packageId, module, function, instigator, objectId  
+**Attributes**: packageId, transactionModule, transactionFunction, instigator, objectId  
 **Example**:
 
 ```json
 {
   "deleteObject": {
     "packageId": "0x2d052c9de3dd02f28ec0f8e4dfdee175a5c597c3",
-    "module": "discount_coupon",
-    "function": "burn",
+    "transactionModule": "discount_coupon",
+    "transactionFunction": "burn",
     "instigator": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "objectId": "0xe3a6bc7bf1dba4d17a91724009c461bd69870719"
   }
@@ -92,15 +92,15 @@ List of events emitted by the Sui node.
 
 ### New object
 
-**Attributes**: packageId, module, function, instigator, recipient, objectId    
+**Attributes**: packageId, transactionModule, transactionFunction, instigator, recipient, objectId    
 **Example**:
 
 ```json
 {
   "newObject": {
     "packageId": "0x0000000000000000000000000000000000000002",
-    "module": "devnet_nft",
-    "function": "mint",
+    "transactionModule": "devnet_nft",
+    "transactionFunction": "mint",
     "instigator": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "recipient": {
       "AddressOwner": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"
@@ -140,17 +140,17 @@ relevant to the client.
 
 ### List of filterable attributes
 
-| Filter            | Description                                                   |                                         Applicable to Event Type                                         |                                Example                                 |
-|-------------------|---------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------:|
-| Package           | Move package ID                                               |                 MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject                  |                          `{"Package":"0x2"}`                           |
-| Module            | Move module name                                              |                       MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject                        |                       `{"Module":"devnet_nft"}`                        |
-| Function          | Move function name                                            |                       MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject                        |                         `{"Function":"mint"}`                          |
-| MoveEventType     | Move event type defined in the move code                      |                                                MoveEvent                                                 |          `{"MoveEventType":"0x2::devnet_nft::MintNFTEvent"}`           |
-| MoveEventField    | Filter using the data fields in the move event object         |                                                MoveEvent                                                 |     `{"MoveEventField":{ "path":"/name", "value":"Example NFT"}}`      |
-| InstigatorAddress | Address that started the transaction                               |                 MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject                  | `{"InstigatorAddress": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}`  |
-| EventType         | Type of event described in the [Events](#events) section       |  MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject<br/>EpochChange<br/>Checkpoint  |                       `"{EventType":"Publish"}`                        |
-| ObjectId          | Object ID                                                     |                              TransferObject<br/>DeleteObject<br/>NewObject                               |      `{"ObjectId":"0xe3a6bc7bf1dba4d17a91724009c461bd69870719"}`       |
-| TransferType      | Transfer type, possible values: `Coin`,`ToAddress`,`ToObject` |                                              TransferObject                                              |                       `{"TransferType":"Coin"}`                        |
+| Filter            | Description                                                   |                                        Applicable to Event Type                                        |                                Example                                |
+|-------------------|---------------------------------------------------------------|:------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------:|
+| Package           | Move package ID                                               |                MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject                 |                          `{"Package":"0x2"}`                          |
+| Module            | Move module name                                              |                      MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject                       |                       `{"Module":"devnet_nft"}`                       |
+| Function          | Move function name                                            |                      MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject                       |                         `{"Function":"mint"}`                         |
+| MoveEventType     | Move event type defined in the move code                      |                                               MoveEvent                                                |          `{"MoveEventType":"0x2::devnet_nft::MintNFTEvent"}`          |
+| MoveEventField    | Filter using the data fields in the move event object         |                                               MoveEvent                                                |     `{"MoveEventField":{ "path":"/name", "value":"Example NFT"}}`     |
+| InstigatorAddress | Address that started the transaction                          |                MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject                 | `{"InstigatorAddress": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}` |
+| EventType         | Type of event described in the [Events](#events) section      | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject<br/>EpochChange<br/>Checkpoint |                       `"{EventType":"Publish"}`                       |
+| ObjectId          | Object ID                                                     |                             TransferObject<br/>DeleteObject<br/>NewObject                              |      `{"ObjectId":"0xe3a6bc7bf1dba4d17a91724009c461bd69870719"}`      |
+| TransferType      | Transfer type, possible values: `Coin`,`ToAddress`,`ToObject` |                                             TransferObject                                             |                       `{"TransferType":"Coin"}`                       |
 
 ### Combining filters
 
@@ -158,8 +158,8 @@ We provide a few operators for combining filters:
 
 | Operator | Description                                                             |                                               Example                                               |
 |----------|-------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------:|
-| And      | Combine two filters; behaves the same as boolean And operator               |                       `{"And":[{"Package":"0x2"}, {"Module":"devnet_nft"}]}`                        |
-| Or       | Combine two filters; behave the same as boolean Or operator                |                           `{"Or":[{"Package":"0x2"}, {"Package":"0x1"}]}`                           |
+| And      | Combine two filters; behaves the same as boolean And operator           |                       `{"And":[{"Package":"0x2"}, {"Module":"devnet_nft"}]}`                        |
+| Or       | Combine two filters; behave the same as boolean Or operator             |                           `{"Or":[{"Package":"0x2"}, {"Package":"0x1"}]}`                           |
 | All      | Combine a list of filters; return true if all filters matches the event |          `{"All":[{"EventType":"MoveEvent"}, {"Package":"0x2"}, {"Module":"devnet_nft"}]}`          |
 | Any      | Combine a list of filters; return true if any filter matches the event  | `{"Any":[{"EventType":"MoveEvent"}, {"EventType":"TransferObject"}, {"EventType":"DeleteObject"}]}` |
 

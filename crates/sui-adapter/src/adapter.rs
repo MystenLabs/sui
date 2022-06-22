@@ -612,8 +612,8 @@ fn handle_transfer<
                 match recipient {
                     Owner::AddressOwner(addr) => state_view.log_event(Event::TransferObject {
                         package_id: ObjectID::from(*module_id.address()),
-                        module: Identifier::from(module_id.name()),
-                        function: Identifier::from(function.as_ident_str()),
+                        transaction_module: Identifier::from(module_id.name()),
+                        transaction_function: Identifier::from(function.as_ident_str()),
                         instigator: sender,
                         recipient,
                         object_id: obj_id,
@@ -623,8 +623,8 @@ fn handle_transfer<
                     }),
                     Owner::ObjectOwner(new_owner) => state_view.log_event(Event::TransferObject {
                         package_id: ObjectID::from(*module_id.address()),
-                        module: Identifier::from(module_id.name()),
-                        function: Identifier::from(function.as_ident_str()),
+                        transaction_module: Identifier::from(module_id.name()),
+                        transaction_function: Identifier::from(function.as_ident_str()),
                         instigator: sender,
                         recipient,
                         object_id: obj_id,

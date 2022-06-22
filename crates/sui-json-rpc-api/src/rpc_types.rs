@@ -1198,8 +1198,8 @@ pub enum SuiEvent {
     #[serde(rename_all = "camelCase")]
     MoveEvent {
         package_id: ObjectID,
-        module: String,
-        function: String,
+        transaction_module: String,
+        transaction_function: String,
         instigator: SuiAddress,
         type_: String,
         fields: SuiMoveStruct,
@@ -1217,8 +1217,8 @@ pub enum SuiEvent {
     #[serde(rename_all = "camelCase")]
     TransferObject {
         package_id: ObjectID,
-        module: String,
-        function: String,
+        transaction_module: String,
+        transaction_function: String,
         instigator: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -1230,8 +1230,8 @@ pub enum SuiEvent {
     #[serde(rename_all = "camelCase")]
     DeleteObject {
         package_id: ObjectID,
-        module: String,
-        function: String,
+        transaction_module: String,
+        transaction_function: String,
         instigator: SuiAddress,
         object_id: ObjectID,
     },
@@ -1239,8 +1239,8 @@ pub enum SuiEvent {
     #[serde(rename_all = "camelCase")]
     NewObject {
         package_id: ObjectID,
-        module: String,
-        function: String,
+        transaction_module: String,
+        transaction_function: String,
         instigator: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -1256,8 +1256,8 @@ impl SuiEvent {
         Ok(match event {
             Event::MoveEvent {
                 package_id,
-                module,
-                function,
+                transaction_module,
+                transaction_function,
                 instigator,
                 type_,
                 contents,
@@ -1267,8 +1267,8 @@ impl SuiEvent {
                     SuiMoveObject::try_from(MoveObject::new(type_, contents), resolver)?;
                 SuiEvent::MoveEvent {
                     package_id,
-                    module: module.to_string(),
-                    function: function.to_string(),
+                    transaction_module: transaction_module.to_string(),
+                    transaction_function: transaction_function.to_string(),
                     instigator,
                     type_: move_obj.type_,
                     fields: move_obj.fields,
@@ -1284,8 +1284,8 @@ impl SuiEvent {
             },
             Event::TransferObject {
                 package_id,
-                module,
-                function,
+                transaction_module,
+                transaction_function,
                 instigator,
                 recipient,
                 object_id,
@@ -1294,8 +1294,8 @@ impl SuiEvent {
                 type_,
             } => SuiEvent::TransferObject {
                 package_id,
-                module: module.to_string(),
-                function: function.to_string(),
+                transaction_module: transaction_module.to_string(),
+                transaction_function: transaction_function.to_string(),
                 instigator,
                 recipient,
                 object_id,
@@ -1305,28 +1305,28 @@ impl SuiEvent {
             },
             Event::DeleteObject {
                 package_id,
-                module,
-                function,
+                transaction_module,
+                transaction_function,
                 instigator,
                 object_id,
             } => SuiEvent::DeleteObject {
                 package_id,
-                module: module.to_string(),
-                function: function.to_string(),
+                transaction_module: transaction_module.to_string(),
+                transaction_function: transaction_function.to_string(),
                 instigator,
                 object_id,
             },
             Event::NewObject {
                 package_id,
-                module,
-                function,
+                transaction_module,
+                transaction_function,
                 instigator,
                 recipient,
                 object_id,
             } => SuiEvent::NewObject {
                 package_id,
-                module: module.to_string(),
-                function: function.to_string(),
+                transaction_module: transaction_module.to_string(),
+                transaction_function: transaction_function.to_string(),
                 instigator,
                 recipient,
                 object_id,

@@ -23,7 +23,7 @@ created: object(108)
 written: object(107)
 
 task 6 'run'. lines 18-18:
-events: MoveEvent { package_id: sui, module: Identifier("object_basics"), function: Identifier("update"), instigator: B, type_: StructTag { address: sui, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
+events: MoveEvent { package_id: sui, transaction_module: Identifier("object_basics"), transaction_function: Identifier("update"), instigator: B, type_: StructTag { address: sui, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
 written: object(105), object(108), object(109)
 
 task 7 'run'. lines 20-20:
