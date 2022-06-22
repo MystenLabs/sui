@@ -8,7 +8,7 @@ export enum Network {
 
 const ENDPOINTS = {
     [Network.Local]: 'http://127.0.0.1:9000',
-    [Network.Devnet]: 'https://gateway.devnet.sui.io:443',
+    [Network.Devnet]: 'https://fullnode.devnet.sui.io:443',
 };
 
 export function getEndpoint(network: Network | string): string {
