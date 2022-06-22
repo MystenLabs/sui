@@ -6,7 +6,11 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{balance::{Balance, Supply}, id::VersionedID, SUI_FRAMEWORK_ADDRESS};
+use crate::{
+    balance::{Balance, Supply},
+    id::VersionedID,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
