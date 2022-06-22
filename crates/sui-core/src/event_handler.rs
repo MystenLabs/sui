@@ -7,6 +7,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use tokio_stream::Stream;
 use tracing::{debug, error};
 
+use sui_storage::event_store::EventStore;
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -20,30 +21,51 @@ use crate::streamer::Streamer;
 
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
-pub struct EventHandler {
+pub struct EventHandler<ES: EventStore> {
     module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     event_streamer: Streamer<EventEnvelope, EventFilter>,
+    event_store: Arc<ES>,
 }
 
-impl EventHandler {
-    pub fn new(validator_store: Arc<AuthorityStore>) -> Self {
+impl<ES: EventStore> EventHandler<ES> {
+    pub fn new(validator_store: Arc<AuthorityStore>, event_store: Arc<ES>) -> Self {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
             module_cache: SyncModuleCache::new(ResolverWrapper(validator_store)),
             event_streamer: streamer,
+            event_store,
         }
     }
 
-    pub async fn process_events(&self, effects: &TransactionEffects, timestamp_ms: u64) {
+    // TODO: feed in current checkpoint number
+    pub async fn process_events(
+        &self,
+        effects: &TransactionEffects,
+        timestamp_ms: u64,
+    ) -> SuiResult {
         // serially dispatch event processing to honor events' orders.
-        for event in &effects.events {
-            if let Err(e) = self.process_event(event, timestamp_ms).await {
+        let res: Result<Vec<_>, _> = effects
+            .events
+            .iter()
+            .map(|e| self.create_envelope(e, timestamp_ms))
+            .collect();
+        let envelopes = res?;
+
+        // Ingest all envelopes together at once (for efficiency) into Event Store
+        // It's good to ingest into store first before sending so that any failures in sending could
+        // use the store as a backing for reliability
+        self.event_store.add_events(&envelopes, 0).await?;
+
+        for envelope in envelopes {
+            if let Err(e) = self.event_streamer.send(envelope).await {
                 error!(error =? e, "Failed to send EventEnvelope to dispatch");
             }
         }
+
+        Ok(())
     }
 
-    pub async fn process_event(&self, event: &Event, timestamp_ms: u64) -> SuiResult {
+    fn create_envelope(&self, event: &Event, timestamp_ms: u64) -> Result<EventEnvelope, SuiError> {
         let json_value = match event {
             Event::MoveEvent(event_obj) => {
                 debug!(event =? event, "Process MoveEvent.");
@@ -59,9 +81,13 @@ impl EventHandler {
             }
             _ => None,
         };
-        let envelope = EventEnvelope::new(timestamp_ms, None, event.clone(), json_value);
-        // TODO store events here
-        self.event_streamer.send(envelope).await
+
+        Ok(EventEnvelope::new(
+            timestamp_ms,
+            None,
+            event.clone(),
+            json_value,
+        ))
     }
 
     pub fn subscribe(&self, filter: EventFilter) -> impl Stream<Item = EventEnvelope> {

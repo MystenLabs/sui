@@ -18,13 +18,15 @@ use sui_core::event_filter::EventFilter;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_api::rpc_types::SuiEvent;
 use sui_json_rpc_api::EventApiServer;
-pub struct EventApiImpl {
+use sui_storage::event_store::EventStore;
+
+pub struct EventApiImpl<ES: EventStore> {
     state: Arc<AuthorityState>,
-    event_handler: Arc<EventHandler>,
+    event_handler: Arc<EventHandler<ES>>,
 }
 
-impl EventApiImpl {
-    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
+impl<ES: EventStore> EventApiImpl<ES> {
+    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler<ES>>) -> Self {
         Self {
             state,
             event_handler,
@@ -32,7 +34,10 @@ impl EventApiImpl {
     }
 }
 
-impl EventApiServer for EventApiImpl {
+impl<ES> EventApiServer for EventApiImpl<ES>
+where
+    ES: 'static + EventStore + std::marker::Sync + std::marker::Send,
+{
     fn subscribe_move_event_by_type(
         &self,
         pending: PendingSubscription,

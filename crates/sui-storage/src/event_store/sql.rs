@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use strum::{EnumMessage, IntoEnumIterator};
 
 use sqlx::{sqlite::SqliteRow, Executor, Row, SqlitePool};
+use sui_types::error::SuiError;
 use sui_types::event::Event;
 use tracing::{info, warn};
 
@@ -64,15 +65,17 @@ const INDEXED_COLUMNS: &[&str] = &[
 impl SqlEventStore {
     /// Creates a new SQLite database for event storage
     /// db_path may be a regular path starting with "/" or ":memory:" for in-memory database.
-    pub async fn new_sqlite(db_path: &str) -> Result<Self, EventStoreError> {
-        let pool = SqlitePool::connect(format!("sqlite:{}", db_path).as_str()).await?;
+    pub async fn new_sqlite(db_path: &str) -> Result<Self, SuiError> {
+        let pool = SqlitePool::connect(format!("sqlite:{}", db_path).as_str())
+            .await
+            .map_err(convert_sqlx_err)?;
         info!(db_path, "Created new SQLite EventStore");
         Ok(Self { pool })
     }
 
     /// Initializes the database, creating tables and indexes as needed
     /// It should be safe to call this every time after new_sqlite() as IF NOT EXISTS are used.
-    pub async fn initialize(&self) -> Result<(), EventStoreError> {
+    pub async fn initialize(&self) -> Result<(), SuiError> {
         // First create the table if needed... make the create out of the enum for consistency
         // NOTE: If the below line errors, docstring might be missing for a field
         let table_columns: Vec<_> = EventsTableColumns::iter()
@@ -82,7 +85,10 @@ impl SqlEventStore {
             "CREATE TABLE IF NOT EXISTS events({});",
             table_columns.join(", ")
         );
-        self.pool.execute(create_sql.as_str()).await?;
+        self.pool
+            .execute(create_sql.as_str())
+            .await
+            .map_err(convert_sqlx_err)?;
         info!("SQLite events table is initialized");
 
         // Then, create indexes
@@ -97,7 +103,8 @@ impl SqlEventStore {
                     )
                     .as_str(),
                 )
-                .await?;
+                .await
+                .map_err(convert_sqlx_err)?;
             info!(column, "Index is ready");
         }
 
@@ -106,21 +113,27 @@ impl SqlEventStore {
 
     /// Returns total size of table.  Should really only be used for testing.
     #[allow(unused)]
-    async fn total_event_count(&self) -> Result<usize, EventStoreError> {
+    async fn total_event_count(&self) -> Result<usize, SuiError> {
         let result = sqlx::query("SELECT COUNT(*) FROM events")
             .fetch_one(&self.pool)
-            .await?;
+            .await
+            .map_err(convert_sqlx_err)?;
         let num_rows: i64 = result.get(0);
         Ok(num_rows as usize)
     }
 }
 
-fn try_extract_object_id(row: &SqliteRow, col: usize) -> Result<Option<ObjectID>, EventStoreError> {
+fn try_extract_object_id(row: &SqliteRow, col: usize) -> Result<Option<ObjectID>, SuiError> {
     let raw_bytes: Option<Vec<u8>> = row.get(col);
     match raw_bytes {
-        Some(bytes) => Ok(Some(
-            ObjectID::try_from(bytes).map_err(|e| EventStoreError::GenericError(e.into()))?,
-        )),
+        Some(bytes) => {
+            let num_bytes = bytes.len();
+            Ok(Some(ObjectID::try_from(bytes).map_err(|_e| {
+                SuiError::BadObjectType {
+                    error: format!("Could not parse {} bytes into ObjectID", num_bytes),
+                }
+            })?))
+        }
         None => Ok(None),
     }
 }
@@ -214,11 +227,11 @@ const QUERY_BY_MODULE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
 const QUERY_BY_CHECKPOINT: &str =
     "SELECT * FROM events WHERE checkpoint >= ? AND checkpoint <= ? LIMIT ?";
 
-fn check_limit(limit: usize) -> Result<(), EventStoreError> {
+fn check_limit(limit: usize) -> Result<(), SuiError> {
     if limit <= MAX_LIMIT {
         Ok(())
     } else {
-        Err(EventStoreError::LimitTooHigh(limit))
+        Err(SuiError::TooMuchDataRequested(limit))
     }
 }
 
@@ -230,7 +243,7 @@ impl EventStore for SqlEventStore {
         &self,
         events: &[EventEnvelope],
         checkpoint_num: u64,
-    ) -> Result<(), EventStoreError> {
+    ) -> Result<(), SuiError> {
         // TODO: benchmark
         // TODO: use techniques in https://docs.rs/sqlx-core/0.5.13/sqlx_core/query_builder/struct.QueryBuilder.html#method.push_values
         // to execute all inserts in a single statement?
@@ -251,7 +264,8 @@ impl EventStore for SqlEventStore {
                 .bind(event.event.object_id().map(|id| id.to_vec()))
                 .bind(event_to_json(event))
                 .execute(&self.pool)
-                .await?;
+                .await
+                .map_err(convert_sqlx_err)?;
         }
         Ok(())
     }
@@ -259,13 +273,14 @@ impl EventStore for SqlEventStore {
     async fn events_for_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Self::EventIt, EventStoreError> {
+    ) -> Result<Self::EventIt, SuiError> {
         let rows = sqlx::query(TX_QUERY)
             .persistent(true)
             .bind(digest.to_bytes())
             .map(sql_row_to_event)
             .fetch_all(&self.pool)
-            .await?;
+            .await
+            .map_err(convert_sqlx_err)?;
         Ok(rows.into_iter())
     }
 
@@ -275,7 +290,7 @@ impl EventStore for SqlEventStore {
         end_time: u64,
         event_type: EventType,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError> {
+    ) -> Result<Self::EventIt, SuiError> {
         check_limit(limit)?;
         let rows = sqlx::query(QUERY_BY_TYPE)
             .persistent(true)
@@ -285,7 +300,8 @@ impl EventStore for SqlEventStore {
             .bind(limit as i64)
             .map(sql_row_to_event)
             .fetch_all(&self.pool)
-            .await?;
+            .await
+            .map_err(convert_sqlx_err)?;
         Ok(rows.into_iter())
     }
 
@@ -294,7 +310,7 @@ impl EventStore for SqlEventStore {
         start_time: u64,
         end_time: u64,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError> {
+    ) -> Result<Self::EventIt, SuiError> {
         check_limit(limit)?;
         let rows = sqlx::query(TS_QUERY)
             .bind(start_time as i64)
@@ -302,7 +318,8 @@ impl EventStore for SqlEventStore {
             .bind(limit as i64)
             .map(sql_row_to_event)
             .fetch_all(&self.pool)
-            .await?;
+            .await
+            .map_err(convert_sqlx_err)?;
         Ok(rows.into_iter())
     }
 
@@ -311,7 +328,7 @@ impl EventStore for SqlEventStore {
         start_checkpoint: u64,
         end_checkpoint: u64,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError> {
+    ) -> Result<Self::EventIt, SuiError> {
         // TODO: a limit maybe doesn't make sense here.  May change to unbounded iterator?
         check_limit(limit)?;
         let rows = sqlx::query(QUERY_BY_CHECKPOINT)
@@ -320,7 +337,8 @@ impl EventStore for SqlEventStore {
             .bind(limit as i64)
             .map(sql_row_to_event)
             .fetch_all(&self.pool)
-            .await?;
+            .await
+            .map_err(convert_sqlx_err)?;
         Ok(rows.into_iter())
     }
 
@@ -330,7 +348,7 @@ impl EventStore for SqlEventStore {
         end_time: u64,
         module: ModuleId,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError> {
+    ) -> Result<Self::EventIt, SuiError> {
         check_limit(limit)?;
         let rows = sqlx::query(QUERY_BY_MODULE)
             .persistent(true)
@@ -341,9 +359,14 @@ impl EventStore for SqlEventStore {
             .bind(limit as i64)
             .map(sql_row_to_event)
             .fetch_all(&self.pool)
-            .await?;
+            .await
+            .map_err(convert_sqlx_err)?;
         Ok(rows.into_iter())
     }
+}
+
+fn convert_sqlx_err(err: sqlx::Error) -> SuiError {
+    SuiError::GenericStorageError(err.to_string())
 }
 
 #[cfg(test)]
@@ -493,7 +516,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_eventstore_basic_insert_read() -> Result<(), EventStoreError> {
+    async fn test_eventstore_basic_insert_read() -> Result<(), SuiError> {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
@@ -521,7 +544,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_eventstore_transfers_tx_read() -> Result<(), EventStoreError> {
+    async fn test_eventstore_transfers_tx_read() -> Result<(), SuiError> {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
@@ -564,7 +587,7 @@ mod tests {
 
     // Test for reads by event type, plus returning events in desc timestamp and limit
     #[tokio::test]
-    async fn test_eventstore_query_by_type() -> Result<(), EventStoreError> {
+    async fn test_eventstore_query_by_type() -> Result<(), SuiError> {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
@@ -600,7 +623,7 @@ mod tests {
 
     // Test for reads by move event
     #[tokio::test]
-    async fn test_eventstore_move_events() -> Result<(), EventStoreError> {
+    async fn test_eventstore_move_events() -> Result<(), SuiError> {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
@@ -641,7 +664,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_eventstore_max_limit() -> Result<(), EventStoreError> {
+    async fn test_eventstore_max_limit() -> Result<(), SuiError> {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
@@ -649,7 +672,7 @@ mod tests {
         db.initialize().await?;
 
         let res = db.event_iterator(1_000_000, 1_002_000, 100_000).await;
-        assert!(matches!(res, Err(EventStoreError::LimitTooHigh(100_000))));
+        assert!(matches!(res, Err(SuiError::TooMuchDataRequested(100_000))));
 
         Ok(())
     }

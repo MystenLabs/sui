@@ -16,9 +16,12 @@ use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
 use serde_json::Value;
 use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::error::SuiError;
 use sui_types::event::{EventEnvelope, EventType};
+use thiserror::Error;
 
 pub mod sql;
+pub use sql::SqlEventStore;
 
 use flexstr::SharedStr;
 
@@ -72,7 +75,7 @@ pub enum EventValue {
 /// Thus, all different kinds of events fit on a timeline, and one should be able to query for
 /// different types of events that happen over that timeline.
 #[async_trait]
-trait EventStore {
+pub trait EventStore {
     type EventIt: IntoIterator<Item = StoredEvent>;
 
     /// Adds events to the EventStore.
@@ -81,14 +84,14 @@ trait EventStore {
         &self,
         events: &[EventEnvelope],
         checkpoint_num: u64,
-    ) -> Result<(), EventStoreError>;
+    ) -> Result<(), SuiError>;
 
     /// Queries for events emitted by a given transaction, returned in order emitted
     /// NOTE: Not all events come from transactions
     async fn events_for_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Self::EventIt, SuiError>;
 
     /// Queries for all events of a certain EventType within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in descending time.
@@ -98,7 +101,7 @@ trait EventStore {
         end_time: u64,
         event_type: EventType,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Self::EventIt, SuiError>;
 
     /// Generic event iteration bounded by time.  Return in ingestion order.
     /// start_time is inclusive and end_time is exclusive.
@@ -107,7 +110,7 @@ trait EventStore {
         start_time: u64,
         end_time: u64,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Self::EventIt, SuiError>;
 
     /// Generic event iteration bounded by checkpoint number.  Return in ingestion order.
     /// Checkpoint numbers are inclusive on both ends.
@@ -116,7 +119,7 @@ trait EventStore {
         start_checkpoint: u64,
         end_checkpoint: u64,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Self::EventIt, SuiError>;
 
     /// Queries all Move events belonging to a certain Module ID within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in descending time.
@@ -126,13 +129,16 @@ trait EventStore {
         end_time: u64,
         module: ModuleId,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Self::EventIt, SuiError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum EventStoreError {
+    #[error("Generic EventStoreError: {0:?}")]
     GenericError(Box<dyn std::error::Error>),
+    #[error("sqlx error: {0:?}")]
     SqlError(sqlx::Error),
+    #[error("Specified limit is too high: {0}")]
     LimitTooHigh(usize),
 }
 

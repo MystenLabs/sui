@@ -350,9 +350,9 @@ impl LocalAuthorityClient {
             secret.clone(),
             store,
             None,
+            None,
             Some(Arc::new(Mutex::new(checkpoints))),
             genesis,
-            false,
         )
         .await;
         Self {

@@ -43,9 +43,11 @@ use std::{
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_storage::{
+    event_store::SqlEventStore,
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -216,6 +218,10 @@ impl Default for AuthorityMetrics {
 // for cases such as local tests or "sui start" which starts multiple authorities in one process.
 pub static METRICS: Lazy<AuthorityMetrics> = Lazy::new(AuthorityMetrics::new);
 
+// Defines EventHandler for a specific EventStore implementation.  This keeps many other types simple
+// throughout the Sui code base.
+pub type AuthorityEventHandler = EventHandler<SqlEventStore>;
+
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
 /// - Sync, i.e. can be safely shared between threads.
@@ -249,7 +255,7 @@ pub struct AuthorityState {
 
     pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
-    pub event_handler: Option<Arc<EventHandler>>,
+    pub event_handler: Option<Arc<AuthorityEventHandler>>,
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -691,7 +697,7 @@ impl AuthorityState {
         if let Some(event_handler) = &self.event_handler {
             event_handler
                 .process_events(&effects.effects, timestamp_ms)
-                .await;
+                .await?;
         }
 
         Ok(())
@@ -984,9 +990,9 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         indexes: Option<Arc<IndexStore>>,
+        event_store: Option<Arc<SqlEventStore>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
-        enable_event_processing: bool,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1031,11 +1037,8 @@ impl AuthorityState {
             .get_last_epoch_info()
             .expect("Fail to load the current epoch info");
 
-        let event_handler = if enable_event_processing {
-            Some(Arc::new(EventHandler::new(store.clone())))
-        } else {
-            None
-        };
+        let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
+
         let mut state = AuthorityState {
             name,
             secret,

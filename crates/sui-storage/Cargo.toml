@@ -21,6 +21,7 @@ tracing = "0.1.34"
 sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "sqlite" ] }
 strum = "^0.24"
 strum_macros = "^0.24"
+thiserror = "1.0.30"
 
 sui-types = { path = "../sui-types" }
 
