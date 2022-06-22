@@ -16,7 +16,7 @@
 }
 
 .txid {
-    @apply col-span-5;
+    @apply col-span-3;
 }
 
 .txadd {
@@ -24,7 +24,8 @@
 }
 
 .txtype,
-.txstatus {
+.txstatus,
+.txage {
     @apply col-span-2;
 }
 
