@@ -10,6 +10,7 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
+    gateway_state::GatewayMetrics,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -1471,6 +1472,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
                 )
             })
             .collect(),
+        GatewayMetrics::new_for_tests(),
     );
 
     TestSetup {

@@ -35,7 +35,6 @@ ark-std = { version = "0.3", features = ["parallel", "rayon", "std"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
-ascii = { version = "1", features = ["std"] }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 atoi = { version = "0.4", default-features = false }
@@ -76,7 +75,6 @@ cfg-if-c65f7effa3be6d31 = { package = "cfg-if", version = "0.1", default-feature
 cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "libc", "oldtime", "std", "time", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
-chunked_transfer = { version = "1", default-features = false }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_term", "atty", "color", "strsim", "suggestions", "vec_map"] }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
 clap_lex = { version = "0.2", default-features = false }
@@ -340,10 +338,10 @@ pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 primary = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
 proc-macro2 = { version = "1", features = ["proc-macro", "span-locations"] }
-prometheus = { version = "0.13", default-features = false }
-prometheus_exporter = { version = "0.8", features = ["internal_metrics", "lazy_static", "log", "logging"] }
+prometheus = { version = "0.13", features = ["protobuf"] }
 prost = { version = "0.10", features = ["prost-derive", "std"] }
 prost-types = { version = "0.10", features = ["std"] }
+protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quote = { version = "1", features = ["proc-macro"] }
 radix_trie = { version = "0.2", default-features = false }
@@ -443,9 +441,8 @@ thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
 thrift = { version = "0.15", default-features = false }
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
-time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
+time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "std"] }
 tint = { version = "1", default-features = false }
-tiny_http = { version = "0.10", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
@@ -542,7 +539,6 @@ ark-std = { version = "0.3", features = ["parallel", "rayon", "std"] }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = ["array-sizes-33-128", "std"] }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
-ascii = { version = "1", features = ["std"] }
 async-lock = { version = "2", default-features = false }
 async-recursion = { version = "1", default-features = false }
 async-stream = { version = "0.3", default-features = false }
@@ -593,7 +589,6 @@ cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features 
 chrono = { version = "0.4", features = ["clock", "libc", "oldtime", "std", "time", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
 chrono-tz-build = { version = "0.0.2", default-features = false }
-chunked_transfer = { version = "1", default-features = false }
 clang-sys = { version = "1", default-features = false, features = ["clang_3_5", "clang_3_6", "clang_3_7", "clang_3_8", "clang_3_9", "clang_4_0", "clang_5_0", "clang_6_0", "libloading", "runtime"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_term", "atty", "color", "strsim", "suggestions", "vec_map"] }
 clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
@@ -901,12 +896,12 @@ proc-macro-crate = { version = "1", default-features = false }
 proc-macro-error = { version = "1", features = ["syn", "syn-error"] }
 proc-macro-error-attr = { version = "1", default-features = false }
 proc-macro2 = { version = "1", features = ["proc-macro", "span-locations"] }
-prometheus = { version = "0.13", default-features = false }
-prometheus_exporter = { version = "0.8", features = ["internal_metrics", "lazy_static", "log", "logging"] }
+prometheus = { version = "0.13", features = ["protobuf"] }
 prost = { version = "0.10", features = ["prost-derive", "std"] }
 prost-build = { version = "0.10" }
 prost-derive = { version = "0.10", default-features = false }
 prost-types = { version = "0.10", features = ["std"] }
+protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quote = { version = "1", features = ["proc-macro"] }
 radix_trie = { version = "0.2", default-features = false }
@@ -1025,10 +1020,8 @@ thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
 thrift = { version = "0.15", default-features = false }
 time-c65f7effa3be6d31 = { package = "time", version = "0.1", default-features = false }
-time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "macros", "parsing", "std", "time-macros"] }
-time-macros = { version = "0.2", default-features = false }
+time-468e82937335b1c9 = { package = "time", version = "0.3", features = ["alloc", "formatting", "itoa", "std"] }
 tint = { version = "1", default-features = false }
-tiny_http = { version = "0.10", default-features = false }
 tinyvec = { version = "1", features = ["alloc", "tinyvec_macros"] }
 tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }

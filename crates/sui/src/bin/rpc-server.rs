@@ -8,6 +8,7 @@ use std::{
 };
 use sui_config::sui_config_dir;
 use sui_config::SUI_GATEWAY_CONFIG;
+use sui_core::gateway_state::GatewayMetrics;
 use sui_gateway::create_client;
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::gateway_api::RpcGatewayImpl;
@@ -53,13 +54,14 @@ async fn main() -> anyhow::Result<()> {
     info!(?config_path, "Gateway config file path");
 
     let prom_binding = PROM_PORT_ADDR.parse().unwrap();
-    info!("Starting Prometheus HTTP endpoint at {}", PROM_PORT_ADDR);
-    prometheus_exporter::start(prom_binding).expect("Failed to start Prometheus exporter");
+    info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
+    let prometheus_registry = sui_node::metrics::start_prometheus_server(prom_binding);
 
-    let client = create_client(&config_path)?;
+    let metrics = GatewayMetrics::new(&prometheus_registry);
+    let client = create_client(&config_path, metrics)?;
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
-    let mut server = JsonRpcServerBuilder::new(prometheus::default_registry())?;
+    let mut server = JsonRpcServerBuilder::new(&prometheus_registry)?;
     server.register_module(RpcGatewayImpl::new(client.clone()))?;
     server.register_module(GatewayReadApiImpl::new(client.clone()))?;
     server.register_module(TransactionBuilderImpl::new(client.clone()))?;

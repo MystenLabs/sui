@@ -34,7 +34,6 @@ serde-name = "0.2.1"
 dirs = "4.0.0"
 clap = { version = "3.1.17", features = ["derive"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
-prometheus_exporter = "0.8.4"
 prometheus = "0.13.1"
 multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
