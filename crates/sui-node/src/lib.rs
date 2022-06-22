@@ -185,7 +185,7 @@ impl SuiNode {
         let json_rpc_service = if config.consensus_config().is_some() {
             None
         } else {
-            let mut server = JsonRpcServerBuilder::new()?;
+            let mut server = JsonRpcServerBuilder::new(&prometheus_registry)?;
             server.register_module(ReadApi::new(state.clone()))?;
             server.register_module(FullNodeApi::new(state.clone()))?;
             server.register_module(BcsApiImpl::new(state.clone()))?;

@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     let client = create_client(&config_path)?;
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
-    let mut server = JsonRpcServerBuilder::new()?;
+    let mut server = JsonRpcServerBuilder::new(prometheus::default_registry())?;
     server.register_module(RpcGatewayImpl::new(client.clone()))?;
     server.register_module(GatewayReadApiImpl::new(client.clone()))?;
     server.register_module(TransactionBuilderImpl::new(client.clone()))?;

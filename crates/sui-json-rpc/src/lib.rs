@@ -5,9 +5,9 @@ use jsonrpsee::http_server::{AccessControlBuilder, HttpServerBuilder, HttpServer
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 
-use once_cell::sync::Lazy;
-use prometheus_exporter::prometheus::{
-    register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec,
+use prometheus::{
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
+    IntCounterVec,
 };
 use std::env;
 use std::net::SocketAddr;
@@ -39,7 +39,7 @@ pub fn sui_rpc_doc() -> Project {
 }
 
 impl JsonRpcServerBuilder {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new(prometheus_registry: &prometheus::Registry) -> anyhow::Result<Self> {
         let mut ac_builder = AccessControlBuilder::default();
 
         if let Ok(value) = env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
@@ -53,7 +53,7 @@ impl JsonRpcServerBuilder {
 
         let server_builder = HttpServerBuilder::default()
             .set_access_control(acl)
-            .set_middleware(JsonRpcMetrics::new());
+            .set_middleware(JsonRpcMetrics::new(prometheus_registry));
 
         let module = RpcModule::new(());
 
@@ -100,29 +100,30 @@ struct JsonRpcMetrics {
 }
 
 impl JsonRpcMetrics {
-    pub fn new() -> Self {
-        static METRICS: Lazy<JsonRpcMetrics> = Lazy::new(|| JsonRpcMetrics {
-            requests_by_route: register_int_counter_vec!(
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            requests_by_route: register_int_counter_vec_with_registry!(
                 "rpc_requests_by_route",
                 "Number of requests by route",
-                &["route"]
+                &["route"],
+                registry,
             )
             .unwrap(),
-            req_latency_by_route: register_histogram_vec!(
+            req_latency_by_route: register_histogram_vec_with_registry!(
                 "req_latency_by_route",
                 "Latency of a request by route",
-                &["route"]
+                &["route"],
+                registry,
             )
             .unwrap(),
-            errors_by_route: register_int_counter_vec!(
+            errors_by_route: register_int_counter_vec_with_registry!(
                 "errors_by_route",
                 "Number of errors by route",
-                &["route"]
+                &["route"],
+                registry,
             )
             .unwrap(),
-        });
-
-        Lazy::force(&METRICS).clone()
+        }
     }
 }
 
