@@ -29,7 +29,7 @@ module fungible_tokens::managed {
 
     /// Manager can burn coins
     public entry fun burn(treasury_cap: &mut TreasuryCap<MANAGED>, coin: Coin<MANAGED>) {
-        coin::burn(coin, treasury_cap)
+        coin::burn(treasury_cap, coin)
     }
 
     /// Manager can transfer the treasury capability to a new manager
