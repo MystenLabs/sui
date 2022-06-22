@@ -38,7 +38,9 @@ RUN cargo build --release \
     --bin sui-node \
     --bin sui \
     --bin wallet \
-    --bin sui-move
+    --bin sui-move \
+    --bin rpc-server \
+    --bin sui-faucet
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -47,6 +49,8 @@ COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/wallet /usr/local/bin
 COPY --from=builder /sui/target/release/sui-move /usr/local/bin
+COPY --from=builder /sui/target/release/rpc-server /usr/local/bin
+COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REVISION
