@@ -3,14 +3,14 @@
 
 use crate::{
     config::Config,
-    multiaddr::{parse_dns, parse_ip4, parse_ip6, parse_unix},
+    multiaddr::{parse_dns, parse_ip4, parse_ip6},
 };
 use anyhow::{anyhow, Result};
 use futures::FutureExt;
 use multiaddr::{Multiaddr, Protocol};
 use std::{convert::Infallible, net::SocketAddr};
-use tokio::net::{TcpListener, ToSocketAddrs, UnixListener};
-use tokio_stream::wrappers::{TcpListenerStream, UnixListenerStream};
+use tokio::net::{TcpListener, ToSocketAddrs};
+use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{
     body::BoxBody,
     codegen::{
@@ -147,9 +147,9 @@ impl ServerBuilder {
                 // Protocol::Memory(_) => todo!(),
                 #[cfg(unix)]
                 Protocol::Unix(_) => {
-                    let (path, _http_or_https) = parse_unix(addr)?;
-                    let uds = UnixListener::bind(path.as_ref())?;
-                    let uds_stream = UnixListenerStream::new(uds);
+                    let (path, _http_or_https) = crate::multiaddr::parse_unix(addr)?;
+                    let uds = tokio::net::UnixListener::bind(path.as_ref())?;
+                    let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
                     let local_addr = addr.to_owned();
                     let server = Box::pin(
                         self.router
