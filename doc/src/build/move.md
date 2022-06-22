@@ -393,7 +393,7 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../sui/crates/sui-framework" }
+sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
 MyFirstPackage = "0x0"
