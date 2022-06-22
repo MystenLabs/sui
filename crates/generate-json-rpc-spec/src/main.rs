@@ -19,7 +19,7 @@ use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_WALLET_CONFIG;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_json_rpc::gateway_api::{RpcGatewayImpl, TransactionBuilderImpl};
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
@@ -79,7 +79,6 @@ async fn main() {
     let mut open_rpc = sui_rpc_doc();
     open_rpc.add_module(TransactionBuilderImpl::rpc_doc_module());
     open_rpc.add_module(RpcGatewayImpl::rpc_doc_module());
-    open_rpc.add_module(GatewayReadApiImpl::rpc_doc_module());
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
