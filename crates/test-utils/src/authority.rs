@@ -81,7 +81,8 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    AuthorityAggregator::new(committee, clients)
+    let metrics = sui_core::gateway_state::GatewayMetrics::new(&prometheus::Registry::new());
+    AuthorityAggregator::new(committee, clients, metrics)
 }
 
 /// Get a network client to communicate with the consensus.

@@ -14,6 +14,7 @@ use sui::{
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::PersistedConfig;
 use sui_config::{Config, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui_core::gateway_state::GatewayMetrics;
 use sui_gateway::create_client;
 use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
 use sui_json_rpc_api::QuorumDriverApiServer;
@@ -107,7 +108,8 @@ async fn start_rpc_gateway(
 ) -> Result<(SocketAddr, HttpServerHandle), anyhow::Error> {
     let server = HttpServerBuilder::default().build("127.0.0.1:0").await?;
     let addr = server.local_addr()?;
-    let client = create_client(config_path)?;
+    let metrics = GatewayMetrics::new(&prometheus::Registry::new());
+    let client = create_client(config_path, metrics)?;
     let mut module = RpcModule::new(());
     module.merge(RpcGatewayImpl::new(client.clone()).into_rpc())?;
     module.merge(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
