@@ -1,46 +1,35 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-<<<<<<< HEAD
 use futures::{future, StreamExt};
 use serde_json::json;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Arc;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{SplitCoinResponse, TransactionResponse};
 use sui_node::SuiNode;
 
-use move_package::BuildConfig;
-=======
-use futures::StreamExt;
 use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
+use move_package::BuildConfig;
 use serde_json::Value;
 use std::net::SocketAddr;
 use std::{collections::BTreeMap, sync::Arc};
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::rpc_types::{
     SuiEvent, SuiMoveStruct, SuiMoveValue, SuiObjectInfo, SuiObjectRead,
 };
-use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
->>>>>>> 53cc57a3 (add ws socket in config and e2e test)
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction},
 };
 use test_utils::network::setup_network_and_wallet;
-<<<<<<< HEAD
 use tokio::sync::Mutex;
-=======
 use tokio::time::timeout;
->>>>>>> 53cc57a3 (add ws socket in config and e2e test)
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
@@ -404,31 +393,6 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// Test for syncing a node to an authority that already has many txes.
-#[tokio::test]
-async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
-    telemetry_subscribers::init_for_testing();
-
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
-
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_transfered_object, sender, _receiver, digest) = transfer_coin(&mut context).await?;
-
-    sleep(Duration::from_millis(1000)).await;
-
-    let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
-
-    wait_for_tx(digest, node.state().clone()).await;
-
-    let txes = node.state().get_transactions_from_addr(sender).await?;
-    assert_eq!(txes.last().unwrap().1, digest);
-
-    Ok(())
-}
-
 #[tokio::test]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
@@ -517,6 +481,10 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
     wait_for_all_txes(digests, node.state().clone()).await;
+
+    Ok(())
+}
+
 /// Call this function to set up a network and a fullnode with subscription enabled.
 /// Pass in an unique port for each test case otherwise they may interfere with one another.
 async fn set_up_subscription(port: u16, swarm: &Swarm) -> Result<(SuiNode, Client), anyhow::Error> {
@@ -545,8 +513,7 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
         .subscribe(
             "sui_subscribeMoveEventsByType",
             rpc_params!["0x2::devnet_nft::MintNFTEvent", params],
-            // TODO: update unsub function when it's added
-            "foo",
+            "sui_unsubscribeMoveEventsByType",
         )
         .await
         .unwrap();
