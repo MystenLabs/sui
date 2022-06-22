@@ -7,9 +7,13 @@ use super::*;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::path::Path;
 use strum::{EnumMessage, IntoEnumIterator};
 
-use sqlx::{sqlite::SqliteRow, Executor, Row, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteRow},
+    Executor, Row, SqlitePool,
+};
 use sui_types::error::SuiError;
 use sui_types::event::Event;
 use tracing::{info, warn};
@@ -63,13 +67,25 @@ const INDEXED_COLUMNS: &[&str] = &[
 ];
 
 impl SqlEventStore {
-    /// Creates a new SQLite database for event storage
-    /// db_path may be a regular path starting with "/" or ":memory:" for in-memory database.
-    pub async fn new_sqlite(db_path: &str) -> Result<Self, SuiError> {
-        let pool = SqlitePool::connect(format!("sqlite:{}", db_path).as_str())
+    /// Creates a new SQLite in-memory database, mostly for testing
+    pub async fn new_memory_only_not_prod() -> Result<Self, SuiError> {
+        let pool = SqlitePool::connect("sqlite::memory:")
             .await
             .map_err(convert_sqlx_err)?;
-        info!(db_path, "Created new SQLite EventStore");
+        info!("Created new in-memory SQLite EventStore for testing");
+        Ok(Self { pool })
+    }
+
+    /// Creates or opens a new SQLite database at a specific path
+    pub async fn new_from_file(db_path: &Path) -> Result<Self, SuiError> {
+        // TODO: configure other SQLite options
+        let options = SqliteConnectOptions::new()
+            .filename(db_path)
+            .create_if_missing(true);
+        let pool = SqlitePool::connect_with(options)
+            .await
+            .map_err(convert_sqlx_err)?;
+        info!(?db_path, "Created/opened SQLite EventStore on disk");
         Ok(Self { pool })
     }
 
@@ -520,7 +536,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
-        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        let db = SqlEventStore::new_memory_only_not_prod().await?;
         db.initialize().await?;
 
         // Insert some records
@@ -548,7 +564,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
-        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        let db = SqlEventStore::new_memory_only_not_prod().await?;
         db.initialize().await?;
 
         // Insert some records
@@ -591,7 +607,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
-        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        let db = SqlEventStore::new_memory_only_not_prod().await?;
         db.initialize().await?;
 
         // Insert some records
@@ -627,7 +643,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
-        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        let db = SqlEventStore::new_memory_only_not_prod().await?;
         db.initialize().await?;
 
         // Insert some records
@@ -663,12 +679,14 @@ mod tests {
         Ok(())
     }
 
+    // Test creating and opening file-based database
     #[tokio::test]
     async fn test_eventstore_max_limit() -> Result<(), SuiError> {
         telemetry_subscribers::init_for_testing();
 
         // Initialize store
-        let db = SqlEventStore::new_sqlite(":memory:").await?;
+        let dir = tempfile::TempDir::new().unwrap();
+        let db = SqlEventStore::new_from_file(&dir.path().join("events.db")).await?;
         db.initialize().await?;
 
         let res = db.event_iterator(1_000_000, 1_002_000, 100_000).await;

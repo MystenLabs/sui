@@ -73,9 +73,10 @@ impl SuiNode {
         let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
 
         let event_store = if config.enable_event_processing {
-            let path = config.db_path().join("events.sqlite").canonicalize()?;
-            let es_path = path.to_str().expect("Cannot form path for event DB");
-            Some(Arc::new(SqlEventStore::new_sqlite(es_path).await?))
+            let path = config.db_path().join("events.db");
+            let db = SqlEventStore::new_from_file(&path).await?;
+            db.initialize().await?;
+            Some(Arc::new(db))
         } else {
             None
         };
