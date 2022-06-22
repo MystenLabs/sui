@@ -21,7 +21,7 @@ module examples::trusted_coin {
     }
 
     public entry fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {
-        let coin = coin::mint<EXAMPLE>(amount, treasury_cap, ctx);
+        let coin = coin::mint<EXAMPLE>(treasury_cap, amount, ctx);
         coin::transfer(coin, tx_context::sender(ctx));
     }
 
