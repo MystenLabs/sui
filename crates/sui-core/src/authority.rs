@@ -965,7 +965,7 @@ impl AuthorityState {
             .lock();
         match &request.request_type {
             CheckpointRequestType::LatestCheckpointProposal => {
-                checkpoint_store.handle_latest_proposal(request)
+                checkpoint_store.handle_latest_proposal(self.committee.load().epoch, request)
             }
             CheckpointRequestType::PastCheckpoint(seq) => {
                 checkpoint_store.handle_past_checkpoint(request.detail, *seq)
@@ -978,6 +978,8 @@ impl AuthorityState {
         }
     }
 
+    // TODO: This function takes both committee and genesis as parameter.
+    // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
         committee: Committee,
         name: AuthorityName,

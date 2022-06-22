@@ -46,11 +46,13 @@ impl SuiNode {
         let genesis = config.genesis()?;
 
         let secret = Arc::pin(config.key_pair().copy());
+        let committee = genesis.committee();
         let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
         let checkpoint_store = if config.consensus_config().is_some() {
             Some(Arc::new(Mutex::new(CheckpointStore::open(
                 config.db_path().join("checkpoints"),
                 None,
+                committee.epoch,
                 config.public_key(),
                 secret.clone(),
             )?)))
@@ -71,7 +73,7 @@ impl SuiNode {
 
         let state = Arc::new(
             AuthorityState::new(
-                genesis.committee(),
+                committee,
                 config.public_key(),
                 secret,
                 store,
