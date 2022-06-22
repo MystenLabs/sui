@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
+use move_core_types::identifier::Identifier;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
@@ -135,6 +136,22 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         Ok(self
             .state
             .get_transactions_by_mutated_object(object)
+            .await?)
+    }
+
+    async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: String,
+        function: String,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self
+            .state
+            .get_transactions_by_move_function(
+                package,
+                module.parse::<Identifier>()?,
+                function.parse::<Identifier>()?,
+            )
             .await?)
     }
 

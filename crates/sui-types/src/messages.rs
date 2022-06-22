@@ -75,6 +75,13 @@ pub struct MoveCall {
     pub arguments: Vec<CallArg>,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct MoveFunction {
+    pub package: ObjectID,
+    pub module: Identifier,
+    pub function: Identifier,
+}
+
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
@@ -134,6 +141,13 @@ impl SingleTransactionKind {
                 }))
             }
             _ => Either::Right(std::iter::empty()),
+        }
+    }
+
+    pub fn move_call(&self) -> Option<&MoveCall> {
+        match &self {
+            Self::Call(call @ MoveCall { .. }) => Some(call),
+            _ => None,
         }
     }
 
@@ -435,6 +449,37 @@ where
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
         &self.gas_payment
+    }
+
+    pub fn move_calls(&self) -> SuiResult<Vec<&MoveCall>> {
+        let move_calls = match &self.kind {
+            TransactionKind::Single(s) => {
+                let mut result = vec![];
+                let sub = s.move_call();
+                if sub.is_some() {
+                    result.push(sub.unwrap());
+                }
+                result
+            }
+            TransactionKind::Batch(b) => {
+                let mut result = vec![];
+                for kind in b {
+                    fp_ensure!(
+                        !matches!(kind, &SingleTransactionKind::Publish(..)),
+                        SuiError::InvalidBatchTransaction {
+                            error: "Publish transaction is not allowed in Batch Transaction"
+                                .to_owned(),
+                        }
+                    );
+                    let sub = kind.move_call();
+                    if sub.is_some() {
+                        result.push(sub.unwrap());
+                    }
+                }
+                result
+            }
+        };
+        Ok(move_calls)
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {

@@ -12,6 +12,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{SplitCoinResponse, TransactionResponse};
 use sui_node::SuiNode;
 
+use move_core_types::identifier::Identifier;
 use move_package::BuildConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
@@ -293,6 +294,31 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config).await?;
+    let sender = context.config.accounts.get(0).cloned().unwrap();
+    let (package_ref, counter_id) = publish_package_and_make_counter(&mut context, sender).await;
+    let digest = increment_counter(&context, sender, None, package_ref, counter_id).await;
+
+    wait_for_tx(digest, node.state().clone()).await;
+    let txes = node
+        .state()
+        .get_transactions_by_move_function(
+            package_ref.0,
+            "counter".parse::<Identifier>()?,
+            "increment".parse::<Identifier>()?,
+        )
+        .await?;
+
+    assert_eq!(txes.len(), 1);
+    assert_eq!(txes[0].1, digest);
     Ok(())
 }
 
