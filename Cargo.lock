@@ -6371,6 +6371,7 @@ dependencies = [
  "jsonrpsee-core",
  "move-core-types",
  "once_cell",
+ "prometheus",
  "prometheus_exporter",
  "serde 1.0.137",
  "serde_json",
