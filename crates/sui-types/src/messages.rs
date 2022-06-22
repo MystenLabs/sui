@@ -446,14 +446,7 @@ where
 
     pub fn move_calls(&self) -> SuiResult<Vec<&MoveCall>> {
         let move_calls = match &self.kind {
-            TransactionKind::Single(s) => {
-                let mut result = vec![];
-                let sub = s.move_call();
-                if sub.is_some() {
-                    result.push(sub.unwrap());
-                }
-                result
-            }
+            TransactionKind::Single(s) => s.move_call().into_iter().collect(),
             TransactionKind::Batch(b) => {
                 let mut result = vec![];
                 for kind in b {
@@ -464,10 +457,7 @@ where
                                 .to_owned(),
                         }
                     );
-                    let sub = kind.move_call();
-                    if sub.is_some() {
-                        result.push(sub.unwrap());
-                    }
+                    result.extend(kind.move_call().into_iter());
                 }
                 result
             }

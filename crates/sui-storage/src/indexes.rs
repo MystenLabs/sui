@@ -35,7 +35,7 @@ pub struct IndexStore {
 
     /// Index from package id, module and function identifier to transactions that used that moce function call as input.
     transactions_by_move_function:
-        DBMap<(ObjectID, Identifier, Identifier, TxSequenceNumber), TransactionDigest>,
+        DBMap<(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
 
     /// This is a map between the transaction digest and its timestamp (UTC timestamp in
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
@@ -76,7 +76,7 @@ impl IndexStore {
             "transactions_to_addr"; <(SuiAddress, TxSequenceNumber), TransactionDigest>,
             "transactions_by_input_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
             "transactions_by_mutated_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
-            "transactions_by_move_function"; <(ObjectID, Identifier, Identifier, TxSequenceNumber), TransactionDigest>,
+            "transactions_by_move_function"; <(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
             "timestamps";<TransactionDigest, u64>
         );
 
@@ -113,9 +113,20 @@ impl IndexStore {
         )?;
 
         let batch = batch.insert_batch(
+            &self.transactions_by_mutated_object_id,
+            mutated_objects
+                .clone()
+                .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
+        )?;
+
+        let batch = batch.insert_batch(
             &self.transactions_by_move_function,
-            move_functions
-                .map(|(obj_id, module, function)| ((obj_id, module, function, sequence), *digest)),
+            move_functions.map(|(obj_id, module, function)| {
+                (
+                    (obj_id, module.to_string(), function.to_string(), sequence),
+                    *digest,
+                )
+            }),
         )?;
 
         let batch = batch.insert_batch(
@@ -191,11 +202,13 @@ impl IndexStore {
             .iter()
             .skip_to(&(
                 package.clone(),
-                module.clone(),
-                function.clone(),
+                module.clone().to_string(),
+                function.clone().to_string(),
                 TxSequenceNumber::MIN,
             ))?
-            .take_while(|((id, m, f, _), _)| *id == package && *m == module && *f == function)
+            .take_while(|((id, m, f, _), _)| {
+                *id == package && *m == module.to_string() && *f == function.to_string()
+            })
             .map(|((_, _, _, seq), digest)| (seq, digest))
             .collect())
     }
