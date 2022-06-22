@@ -35,7 +35,7 @@ export const convertNumberToDate = (epochMilliSecs: number | null): string => {
 };
 
 export const timeAgo = (
-    epochMilliSecs: number | null,
+    epochMilliSecs: number | null | undefined,
     timeNow?: number
 ): string => {
     if (!epochMilliSecs) return '';
