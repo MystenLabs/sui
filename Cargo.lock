@@ -960,7 +960,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "crypto",
  "multiaddr",
@@ -989,7 +989,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "bincode",
  "blake2",
@@ -1005,7 +1005,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
  "types",
 ]
 
@@ -1252,7 +1252,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -1359,7 +1359,7 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "arc-swap",
  "crypto",
@@ -1805,7 +1805,7 @@ checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1816,7 +1816,7 @@ dependencies = [
  "crypto",
  "futures",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "mysten-network",
  "primary",
  "rocksdb",
  "serde 1.0.137",
@@ -1825,7 +1825,7 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
  "types",
  "worker",
 ]
@@ -2097,7 +2097,6 @@ dependencies = [
  "tempfile",
  "test-utils",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -3897,25 +3896,7 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 [[package]]
 name = "mysten-network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe#7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"
-dependencies = [
- "anyhow",
- "bincode",
- "bytes",
- "futures",
- "multiaddr",
- "serde 1.0.137",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-health",
- "tower",
-]
-
-[[package]]
-name = "mysten-network"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
+source = "git+https://github.com/bmwill/mysten-infra?rev=52b97c56bed64535cda99b8d21a802e1e7c5a67f#52b97c56bed64535cda99b8d21a802e1e7c5a67f"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3933,7 +3914,7 @@ dependencies = [
 [[package]]
 name = "name-variant"
 version = "1.0.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
+source = "git+https://github.com/bmwill/mysten-infra?rev=52b97c56bed64535cda99b8d21a802e1e7c5a67f#52b97c56bed64535cda99b8d21a802e1e7c5a67f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3981,7 +3962,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "async-trait",
  "backoff",
@@ -3989,7 +3970,7 @@ dependencies = [
  "crypto",
  "futures",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "mysten-network",
  "rand 0.7.3",
  "thiserror",
  "tokio",
@@ -4055,7 +4036,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4077,7 +4058,7 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber 0.3.11",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
  "types",
  "url",
  "worker",
@@ -4706,7 +4687,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -4722,7 +4703,7 @@ dependencies = [
  "futures",
  "itertools",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "mysten-network",
  "network",
  "prost",
  "rand 0.7.3",
@@ -4733,7 +4714,7 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
  "types",
 ]
 
@@ -6030,7 +6011,7 @@ dependencies = [
  "move-package",
  "move-unit-test",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "mysten-network",
  "node",
  "num_cpus",
  "once_cell",
@@ -6076,9 +6057,8 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber 0.3.11",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "typed-store",
  "unescape",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6100,7 +6080,6 @@ dependencies = [
  "sui-framework",
  "sui-types",
  "sui-verifier",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6109,7 +6088,6 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6132,7 +6110,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6158,7 +6135,6 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6189,7 +6165,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-types",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "mysten-network",
  "node",
  "once_cell",
  "parking_lot 0.12.1",
@@ -6224,9 +6200,8 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "typed-store",
  "types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6252,7 +6227,6 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber 0.3.11",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6276,7 +6250,6 @@ dependencies = [
  "smallvec",
  "sui-framework-build",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6290,7 +6263,6 @@ dependencies = [
  "move-package",
  "sui-types",
  "sui-verifier",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6306,7 +6278,7 @@ dependencies = [
  "jsonrpsee-proc-macros",
  "move-bytecode-utils",
  "move-core-types",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "mysten-network",
  "once_cell",
  "prometheus_exporter",
  "schemars",
@@ -6324,7 +6296,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6344,7 +6315,6 @@ dependencies = [
  "sui-types",
  "sui-verifier",
  "test-fuzz",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6370,7 +6340,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6397,7 +6366,6 @@ dependencies = [
  "sui-open-rpc-macros",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6407,7 +6375,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bytes",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "mysten-network",
  "prost",
  "serde 1.0.137",
  "sui-types",
@@ -6415,7 +6383,6 @@ dependencies = [
  "tonic",
  "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6429,7 +6396,7 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-core",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "mysten-network",
  "parking_lot 0.12.1",
  "prometheus_exporter",
  "sui-config",
@@ -6443,7 +6410,6 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6452,7 +6418,6 @@ version = "0.1.0"
 dependencies = [
  "schemars",
  "serde 1.0.137",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6464,7 +6429,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6476,7 +6440,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6504,8 +6467,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
- "workspace-hack",
+ "typed-store",
 ]
 
 [[package]]
@@ -6514,7 +6476,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "futures",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
+ "mysten-network",
  "rand 0.7.3",
  "serde 1.0.137",
  "sui-config",
@@ -6527,7 +6489,6 @@ dependencies = [
  "tokio",
  "tonic-health",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6562,7 +6523,6 @@ dependencies = [
  "sui-types",
  "sui-verifier",
  "tempfile",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6606,8 +6566,7 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
- "workspace-hack",
+ "typed-store",
  "zeroize",
 ]
 
@@ -6621,7 +6580,6 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6630,7 +6588,6 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6699,7 +6656,7 @@ dependencies = [
 [[package]]
 name = "telemetry-subscribers"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
+source = "git+https://github.com/bmwill/mysten-infra?rev=52b97c56bed64535cda99b8d21a802e1e7c5a67f#52b97c56bed64535cda99b8d21a802e1e7c5a67f"
 dependencies = [
  "console-subscriber",
  "once_cell",
@@ -6854,8 +6811,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
- "workspace-hack",
+ "typed-store",
 ]
 
 [[package]]
@@ -7435,22 +7391,7 @@ checksum = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
 [[package]]
 name = "typed-store"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe#7c247967e5a5abd59ecaa75bc62b05bcdf4503fe"
-dependencies = [
- "bincode",
- "collectable",
- "eyre",
- "rocksdb",
- "serde 1.0.137",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "typed-store"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223#ff5c1d69057fe93be658377462ca2875a57a0223"
+source = "git+https://github.com/bmwill/mysten-infra?rev=52b97c56bed64535cda99b8d21a802e1e7c5a67f#52b97c56bed64535cda99b8d21a802e1e7c5a67f"
 dependencies = [
  "bincode",
  "collectable",
@@ -7471,7 +7412,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "base64",
  "bincode",
@@ -7489,7 +7430,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
 ]
 
 [[package]]
@@ -8014,7 +7955,7 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9#2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9"
+source = "git+https://github.com/patrickkuo/narwhal?rev=81ea67c1993f6a01f814b9477480398ca5cb021b#81ea67c1993f6a01f814b9477480398ca5cb021b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8026,7 +7967,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "mysten-network",
  "network",
  "primary",
  "serde 1.0.137",
@@ -8036,612 +7977,8 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
+ "typed-store",
  "types",
-]
-
-[[package]]
-name = "workspace-hack"
-version = "0.1.0"
-dependencies = [
- "Inflector",
- "addr2line",
- "adler",
- "ahash",
- "aho-corasick",
- "ansi_term",
- "anyhow",
- "arc-swap",
- "ark-bls12-377",
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ed-on-bw6-761",
- "ark-ed-on-cp6-782",
- "ark-ff",
- "ark-ff-asm",
- "ark-ff-macros",
- "ark-relations",
- "ark-serialize",
- "ark-serialize-derive",
- "ark-snark",
- "ark-std",
- "arrayref",
- "arrayvec 0.5.2",
- "arrayvec 0.7.2",
- "ascii",
- "async-lock",
- "async-recursion",
- "async-stream",
- "async-stream-impl",
- "async-trait",
- "atoi",
- "atomicwrites",
- "atty",
- "autocfg",
- "axum",
- "axum-core",
- "backoff",
- "backtrace",
- "base64",
- "base64ct",
- "bcs",
- "beef",
- "better_any",
- "better_typeid_derive",
- "bimap",
- "bincode",
- "bindgen",
- "bitflags",
- "bitmaps",
- "blake2",
- "blake2s_simd",
- "block-buffer 0.10.2",
- "block-buffer 0.9.0",
- "block-padding 0.2.1",
- "bls-crypto",
- "blst",
- "bs58",
- "bstr",
- "bumpalo",
- "bytecode-interpreter-crypto",
- "byteorder",
- "bytes",
- "bzip2-sys",
- "camino",
- "cargo-platform",
- "cargo_metadata",
- "cassowary",
- "cc",
- "cexpr",
- "cfg-expr",
- "cfg-if 0.1.10",
- "cfg-if 1.0.0",
- "chrono",
- "chrono-tz",
- "chrono-tz-build",
- "chunked_transfer",
- "clang-sys",
- "clap 2.34.0",
- "clap 3.1.18",
- "clap_derive",
- "clap_lex",
- "cmake",
- "codespan",
- "codespan-reporting",
- "collectable",
- "colored",
- "colored-diff",
- "combine",
- "config 0.1.0",
- "config 0.11.0",
- "consensus",
- "console-api",
- "console-subscriber",
- "constant_time_eq",
- "core2",
- "crc",
- "crc-catalog",
- "crc32fast",
- "crossbeam",
- "crossbeam-channel 0.4.4",
- "crossbeam-channel 0.5.4",
- "crossbeam-deque",
- "crossbeam-epoch",
- "crossbeam-queue",
- "crossbeam-utils 0.7.2",
- "crossbeam-utils 0.8.8",
- "crossterm 0.21.0",
- "crossterm 0.22.1",
- "crypto",
- "crypto-common",
- "crypto-mac",
- "csv",
- "csv-core",
- "curve25519-dalek",
- "curve25519-dalek-fiat",
- "dag",
- "darling 0.13.4",
- "darling 0.14.1",
- "darling_core 0.13.4",
- "darling_core 0.14.1",
- "darling_macro 0.13.4",
- "darling_macro 0.14.1",
- "dashmap",
- "data-encoding",
- "datatest-stable",
- "debug-ignore",
- "derivative",
- "derive-syn-parse",
- "derive_builder",
- "derive_builder_core",
- "derive_builder_macro",
- "determinator",
- "deunicode",
- "diff",
- "difference",
- "diffus",
- "diffy",
- "digest 0.10.3",
- "digest 0.9.0",
- "directories",
- "dirs",
- "dirs-next",
- "dirs-sys",
- "dirs-sys-next",
- "dissimilar",
- "dotenv",
- "dyn-clone",
- "ed25519",
- "ed25519-dalek",
- "ed25519-dalek-fiat",
- "either",
- "endian-type",
- "env_logger",
- "ethnum",
- "event-listener",
- "executor",
- "eyre",
- "fail",
- "fastrand",
- "fd-lock",
- "fdlimit",
- "fiat-crypto",
- "fixedbitset 0.2.0",
- "fixedbitset 0.4.1",
- "flate2",
- "flexstr",
- "flume",
- "fnv",
- "form_urlencoded",
- "futures",
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-intrusive",
- "futures-io",
- "futures-macro",
- "futures-sink",
- "futures-task",
- "futures-timer",
- "futures-util",
- "generic-array 0.14.5",
- "gethostname",
- "getrandom 0.1.16",
- "getrandom 0.2.6",
- "gimli",
- "glob",
- "globset",
- "globwalk",
- "gloo-net",
- "gloo-timers",
- "gloo-utils",
- "guppy",
- "guppy-summaries",
- "guppy-workspace-hack",
- "h2",
- "hakari",
- "hashbrown 0.11.2",
- "hashbrown 0.12.1",
- "hashlink",
- "hdrhistogram",
- "heck 0.3.3",
- "heck 0.4.0",
- "hex",
- "hkdf",
- "hmac",
- "home",
- "http",
- "http-body",
- "http-range-header",
- "httparse",
- "httpdate",
- "humansize",
- "humantime",
- "hyper",
- "hyper-rustls",
- "hyper-timeout",
- "ident_case",
- "idna",
- "if_chain",
- "ignore",
- "im",
- "include_dir",
- "include_dir_macros",
- "indenter",
- "indexmap",
- "instant",
- "integer-encoding",
- "internment",
- "itertools",
- "itoa 0.4.8",
- "itoa 1.0.2",
- "jobserver",
- "js-sys",
- "json",
- "jsonrpsee",
- "jsonrpsee-client-transport",
- "jsonrpsee-core",
- "jsonrpsee-http-client",
- "jsonrpsee-http-server",
- "jsonrpsee-proc-macros",
- "jsonrpsee-types",
- "jsonrpsee-wasm-client",
- "jsonrpsee-ws-client",
- "jsonrpsee-ws-server",
- "keccak",
- "kstring",
- "lazy_static 0.2.11",
- "lazy_static 1.4.0",
- "lazycell",
- "lexical-core",
- "libc",
- "libloading",
- "librocksdb-sys",
- "libsqlite3-sys",
- "libtest-mimic",
- "libz-sys",
- "linked-hash-map",
- "lock_api 0.3.4",
- "lock_api 0.4.7",
- "log",
- "lru",
- "maplit",
- "match_opt",
- "matchers",
- "matches",
- "matchit",
- "maybe-uninit",
- "memchr",
- "memoffset",
- "merlin",
- "mime",
- "minimal-lexical",
- "miniz_oxide",
- "mio 0.8.3",
- "move-abigen",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-bytecode-verifier",
- "move-bytecode-viewer",
- "move-cli",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-coverage",
- "move-disassembler",
- "move-docgen",
- "move-errmapgen",
- "move-ir-compiler",
- "move-ir-to-bytecode",
- "move-ir-to-bytecode-syntax",
- "move-ir-types",
- "move-model",
- "move-package",
- "move-prover",
- "move-prover-boogie-backend",
- "move-read-write-set-types",
- "move-resource-viewer",
- "move-stackless-bytecode",
- "move-stackless-bytecode-interpreter",
- "move-stdlib",
- "move-symbol-pool",
- "move-table-extension",
- "move-transactional-test-runner",
- "move-unit-test",
- "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
- "multiaddr",
- "multihash",
- "multihash-derive",
- "multimap",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
- "name-variant",
- "named-lock",
- "nested",
- "network",
- "nexlint",
- "nexlint-lints",
- "nibble_vec",
- "node",
- "nom 5.1.2",
- "nom 7.1.1",
- "num",
- "num-bigint",
- "num-complex",
- "num-integer",
- "num-iter",
- "num-rational",
- "num-traits 0.1.43",
- "num-traits 0.2.15",
- "num_cpus",
- "num_enum",
- "num_enum_derive",
- "object",
- "once_cell",
- "opaque-debug 0.3.0",
- "opentelemetry",
- "opentelemetry-jaeger",
- "opentelemetry-semantic-conventions",
- "ordered-float 1.1.1",
- "ordered-float 2.10.0",
- "os_str_bytes",
- "ouroboros",
- "ouroboros_macro",
- "owo-colors",
- "parking_lot 0.10.2",
- "parking_lot 0.11.2",
- "parking_lot 0.12.1",
- "parking_lot_core 0.7.2",
- "parking_lot_core 0.8.5",
- "parking_lot_core 0.9.3",
- "parse-zoneinfo",
- "paste",
- "pathdiff",
- "peeking_take_while",
- "percent-encoding",
- "pest",
- "pest_derive",
- "pest_generator",
- "pest_meta",
- "petgraph 0.5.1",
- "petgraph 0.6.2",
- "phf",
- "phf_codegen",
- "phf_generator",
- "phf_shared",
- "pin-project",
- "pin-project-internal",
- "pin-project-lite",
- "pin-utils",
- "pkg-config",
- "ppv-lite86",
- "pretty",
- "pretty_assertions",
- "prettyplease",
- "primary",
- "proc-macro-crate",
- "proc-macro-error",
- "proc-macro-error-attr",
- "proc-macro2",
- "prometheus",
- "prometheus_exporter",
- "prost",
- "prost-build",
- "prost-derive",
- "prost-types",
- "ptree",
- "quote",
- "radix_trie",
- "rand 0.7.3",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rand_core 0.5.1",
- "rand_core 0.6.3",
- "rand_pcg",
- "rand_xoshiro",
- "rayon",
- "rayon-core",
- "read-write-set",
- "read-write-set-dynamic",
- "readonly",
- "ref-cast",
- "ref-cast-impl",
- "regex",
- "regex-automata",
- "regex-syntax",
- "remove_dir_all",
- "reqwest",
- "ring",
- "rocksdb",
- "rust-ini",
- "rustc-demangle",
- "rustc-hash",
- "rustc_version",
- "rustls 0.19.1",
- "rustls 0.20.6",
- "rustls-native-certs",
- "rustls-pemfile",
- "rustversion",
- "rustyline",
- "rustyline-derive",
- "ryu",
- "same-file",
- "schemars",
- "schemars_derive",
- "scopeguard",
- "sct 0.6.1",
- "sct 0.7.0",
- "semver 0.11.0",
- "semver 1.0.9",
- "semver-parser",
- "send_wrapper",
- "serde 0.8.23",
- "serde 1.0.137",
- "serde-hjson",
- "serde-name",
- "serde-reflection",
- "serde-value",
- "serde_bytes",
- "serde_derive",
- "serde_derive_internals",
- "serde_json",
- "serde_urlencoded",
- "serde_with",
- "serde_with_macros",
- "serde_yaml",
- "sha-1 0.10.0",
- "sha-1 0.9.8",
- "sha2 0.10.2",
- "sha2 0.9.9",
- "sha3 0.10.1",
- "sha3 0.9.1",
- "sharded-slab",
- "shell-words",
- "shlex",
- "signature",
- "simplelog",
- "siphasher",
- "sized-chunks",
- "slab",
- "slug",
- "smallvec",
- "socket2",
- "soketto",
- "spin 0.9.3",
- "sqlformat",
- "sqlx",
- "sqlx-core",
- "sqlx-macros",
- "sqlx-rt",
- "stable_deref_trait",
- "static_assertions",
- "stringprep",
- "strip-ansi-escapes",
- "strsim 0.10.0",
- "strsim 0.8.0",
- "strum",
- "strum_macros",
- "subprocess",
- "subtle",
- "syn",
- "sync_wrapper",
- "synstructure",
- "tabular",
- "tap",
- "target-lexicon",
- "target-spec",
- "telemetry-subscribers",
- "temp_testdir",
- "tempfile",
- "tera",
- "termcolor",
- "test-fuzz",
- "test-fuzz-internal",
- "test-fuzz-macro",
- "test-fuzz-runtime",
- "textwrap 0.11.0",
- "textwrap 0.15.0",
- "thiserror",
- "thiserror-impl",
- "thread_local",
- "threadpool",
- "thrift",
- "time 0.1.43",
- "time 0.3.9",
- "time-macros",
- "tint",
- "tiny_http",
- "tinyvec",
- "tinyvec_macros",
- "tokio",
- "tokio-io-timeout",
- "tokio-macros",
- "tokio-retry",
- "tokio-rustls 0.22.0",
- "tokio-rustls 0.23.4",
- "tokio-stream",
- "tokio-util",
- "toml",
- "toml_edit",
- "tonic",
- "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "tonic-build 0.7.2 (git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560)",
- "tonic-health",
- "toolchain_find",
- "tower",
- "tower-http",
- "tower-layer",
- "tower-service",
- "tracing",
- "tracing-appender",
- "tracing-attributes",
- "tracing-bunyan-formatter",
- "tracing-chrome",
- "tracing-core",
- "tracing-futures",
- "tracing-log",
- "tracing-opentelemetry",
- "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.11",
- "try-lock",
- "tui",
- "twox-hash",
- "typed-arena",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7c247967e5a5abd59ecaa75bc62b05bcdf4503fe)",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
- "typenum",
- "types",
- "ucd-trie",
- "uncased",
- "unescape",
- "unic-char-property",
- "unic-char-range",
- "unic-common",
- "unic-segment",
- "unic-ucd-segment",
- "unic-ucd-version",
- "unicase",
- "unicode-bidi",
- "unicode-ident",
- "unicode-normalization",
- "unicode-segmentation",
- "unicode-width",
- "unicode-xid",
- "unicode_categories",
- "unsigned-varint",
- "untrusted",
- "unzip-n",
- "url",
- "utf8parse",
- "variant_count",
- "vcpkg",
- "vec_map",
- "version_check",
- "vte",
- "vte_generate_state_changes",
- "walkdir",
- "want",
- "wasm-bindgen",
- "wasm-bindgen-backend",
- "wasm-bindgen-futures",
- "wasm-bindgen-macro",
- "wasm-bindgen-macro-support",
- "wasm-bindgen-shared",
- "web-sys",
- "webpki 0.21.4",
- "webpki 0.22.0",
- "webpki-roots 0.21.1",
- "webpki-roots 0.22.3",
- "which",
- "worker",
- "yaml-rust",
- "zeroize",
- "zeroize_derive",
- "zstd-sys",
 ]
 
 [[package]]

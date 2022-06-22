@@ -25,7 +25,7 @@ sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
-workspace-hack = { path = "../workspace-hack"}
+
 
 [dev-dependencies]
 tempfile = "3.3.0"

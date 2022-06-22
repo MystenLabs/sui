@@ -10,7 +10,9 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_verifier::verifier as sui_bytecode_verifier;
 
 pub fn build_sui_framework_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
+    println!("building");
     let modules = build_framework(lib_dir)?;
+    println!("module {:?}", modules);
     verify_modules(&modules)?;
     Ok(modules)
 }
@@ -49,6 +51,7 @@ pub fn build_framework(framework_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
         dev_mode: false,
         ..Default::default()
     };
+    println!("build_framework");
     build_move_package(framework_dir, build_config, true)
 }
 
@@ -60,11 +63,16 @@ pub fn build_move_package(
     build_config: BuildConfig,
     is_framework: bool,
 ) -> SuiResult<Vec<CompiledModule>> {
+    println!("build_move_package");
     match build_config.compile_package_no_exit(path, &mut Vec::new()) {
-        Err(error) => Err(SuiError::ModuleBuildFailure {
-            error: error.to_string(),
-        }),
+        Err(error) => {
+            println!("Error");
+            Err(SuiError::ModuleBuildFailure {
+                error: error.to_string(),
+            })
+        },
         Ok(package) => {
+            println!("OK");
             let compiled_modules = package.root_modules_map();
             if !is_framework {
                 if let Some(m) = compiled_modules

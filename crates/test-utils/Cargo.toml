@@ -26,8 +26,8 @@ sui-framework = { path = "../sui-framework" }
 sui-gateway = { path = "../sui-gateway" }
 move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="ff5c1d69057fe93be658377462ca2875a57a0223"}
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "config" }
+typed-store = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f" }
+narwhal-config = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", package = "config" }
 
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
@@ -38,4 +38,4 @@ sui-swarm = { path = "../sui-swarm" }
 sui = { path = "../sui" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-api = { path = "../sui-json-rpc-api" }
-workspace-hack = { path = "../workspace-hack"}
+

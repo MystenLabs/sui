@@ -86,9 +86,9 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-a25acd0b92ef6c21 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+config-eb09ec5e6df42c3a = { package = "config", git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", features = ["benchmark", "rand"] }
+consensus = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", features = ["benchmark", "rand"] }
 console-api = { version = "0.3", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 constant_time_eq = { version = "0.1", default-features = false }
@@ -106,14 +106,14 @@ crossbeam-utils-ca01ad9e24f5d932 = { package = "crossbeam-utils", version = "0.7
 crossbeam-utils-c38e5c1d305a1b54 = { package = "crossbeam-utils", version = "0.8", features = ["lazy_static", "std"] }
 crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", features = ["ark-bls12-377", "ark-ec", "ark-ff", "ark-serialize", "ark-std", "celo", "celo-bls", "serde_with"] }
+crypto = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", features = ["ark-bls12-377", "ark-ec", "ark-ff", "ark-serialize", "ark-std", "celo", "celo-bls", "serde_with"] }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 curve25519-dalek = { version = "3", default-features = false, features = ["alloc", "serde", "std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+dag = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 datatest-stable = { version = "0.1", default-features = false }
@@ -142,7 +142,7 @@ endian-type = { version = "0.1", default-features = false }
 env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+executor = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastrand = { version = "1", default-features = false }
@@ -287,15 +287,14 @@ move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "ae6
 move-vm-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
-mysten-network-9da6af2c8f03eecf = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
-mysten-network-3a0625ec1f927a79 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", default-features = false }
+mysten-network = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
-network = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+network = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "a10989ee09bedfc8690135e118243d19dd004fd0", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "a10989ee09bedfc8690135e118243d19dd004fd0", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
+node = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false, features = ["benchmark"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7", features = ["alloc", "std"] }
 num = { version = "0.4", features = ["num-bigint", "std"] }
@@ -338,7 +337,7 @@ pin-utils = { version = "0.1", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
+primary = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false, features = ["benchmark"] }
 proc-macro2 = { version = "1", features = ["proc-macro", "span-locations"] }
 prometheus = { version = "0.13", default-features = false }
 prometheus_exporter = { version = "0.8", features = ["internal_metrics", "lazy_static", "log", "logging"] }
@@ -428,7 +427,7 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
@@ -477,10 +476,9 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store-9da6af2c8f03eecf = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
-typed-store-3a0625ec1f927a79 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", default-features = false }
+typed-store = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f", default-features = false }
 typenum = { version = "1", default-features = false }
-types = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9" }
+types = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b" }
 ucd-trie = { version = "0.1", features = ["std"] }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
@@ -512,7 +510,7 @@ webpki-647d43efb71741da = { package = "webpki", version = "0.21", features = ["s
 webpki-3c51e837cfc5589a = { package = "webpki", version = "0.22", default-features = false, features = ["alloc", "std"] }
 webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", default-features = false }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
+worker = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false, features = ["benchmark"] }
 yaml-rust = { version = "0.4", default-features = false }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zstd-sys = { version = "1", default-features = false }
@@ -606,9 +604,9 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-a25acd0b92ef6c21 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+config-eb09ec5e6df42c3a = { package = "config", git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", features = ["benchmark", "rand"] }
+consensus = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", features = ["benchmark", "rand"] }
 console-api = { version = "0.3", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 constant_time_eq = { version = "0.1", default-features = false }
@@ -626,14 +624,14 @@ crossbeam-utils-ca01ad9e24f5d932 = { package = "crossbeam-utils", version = "0.7
 crossbeam-utils-c38e5c1d305a1b54 = { package = "crossbeam-utils", version = "0.8", features = ["lazy_static", "std"] }
 crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", features = ["ark-bls12-377", "ark-ec", "ark-ff", "ark-serialize", "ark-std", "celo", "celo-bls", "serde_with"] }
+crypto = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", features = ["ark-bls12-377", "ark-ec", "ark-ff", "ark-serialize", "ark-std", "celo", "celo-bls", "serde_with"] }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 curve25519-dalek = { version = "3", default-features = false, features = ["alloc", "serde", "std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+dag = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 darling-594e8ee84c453af0 = { package = "darling", version = "0.13", features = ["suggestions"] }
 darling-582f2526e08bb6a0 = { package = "darling", version = "0.14", features = ["suggestions"] }
 darling_core-594e8ee84c453af0 = { package = "darling_core", version = "0.13", default-features = false, features = ["strsim", "suggestions"] }
@@ -673,7 +671,7 @@ endian-type = { version = "0.1", default-features = false }
 env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+executor = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastrand = { version = "1", default-features = false }
@@ -831,16 +829,15 @@ multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
-mysten-network-9da6af2c8f03eecf = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
-mysten-network-3a0625ec1f927a79 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", default-features = false }
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", default-features = false }
+mysten-network = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f", default-features = false }
+name-variant = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
-network = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false }
+network = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "a10989ee09bedfc8690135e118243d19dd004fd0", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "a10989ee09bedfc8690135e118243d19dd004fd0", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
+node = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false, features = ["benchmark"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7", features = ["alloc", "std"] }
 num = { version = "0.4", features = ["num-bigint", "std"] }
@@ -896,7 +893,7 @@ ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "s
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
+primary = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false, features = ["benchmark"] }
 proc-macro-crate = { version = "1", default-features = false }
 proc-macro-error = { version = "1", features = ["syn", "syn-error"] }
 proc-macro-error-attr = { version = "1", default-features = false }
@@ -1008,7 +1005,7 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
 temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
@@ -1065,10 +1062,9 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store-9da6af2c8f03eecf = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "7c247967e5a5abd59ecaa75bc62b05bcdf4503fe", default-features = false }
-typed-store-3a0625ec1f927a79 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223", default-features = false }
+typed-store = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f", default-features = false }
 typenum = { version = "1", default-features = false }
-types = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9" }
+types = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b" }
 ucd-trie = { version = "0.1", features = ["std"] }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
@@ -1111,7 +1107,7 @@ webpki-3c51e837cfc5589a = { package = "webpki", version = "0.22", default-featur
 webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", default-features = false }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", default-features = false, features = ["benchmark"] }
+worker = { git = "https://github.com/patrickkuo/narwhal", rev = "81ea67c1993f6a01f814b9477480398ca5cb021b", default-features = false, features = ["benchmark"] }
 yaml-rust = { version = "0.4", default-features = false }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }

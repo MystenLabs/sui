@@ -10,14 +10,21 @@ use std::{
 
 /// Save revision info to environment variable
 fn main() {
+    println!("started 1");
+
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let sui_framwork_path = Path::new(env!("CARGO_MANIFEST_DIR"));
     let move_stdlib_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("deps/move-stdlib");
+    println!("move_stdlib_path = {:?}", move_stdlib_path);
+    println!("sui_framwork_path = {:?}", sui_framwork_path);
 
     let sui_framework =
         sui_framework_build::build_sui_framework_modules(sui_framwork_path).unwrap();
+    println!("sui_framework done");
+
     let move_stdlib = sui_framework_build::build_move_stdlib_modules(&move_stdlib_path).unwrap();
+    println!("move_stdlib done");
 
     serialize_modules_to_file(sui_framework, &out_dir.join("sui-framework")).unwrap();
     serialize_modules_to_file(move_stdlib, &out_dir.join("move-stdlib")).unwrap();

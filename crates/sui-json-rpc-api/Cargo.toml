@@ -29,4 +29,4 @@ sui-json = { path = "../sui-json" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 
-workspace-hack = { path = "../workspace-hack"}
+

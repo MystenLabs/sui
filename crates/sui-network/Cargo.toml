@@ -17,8 +17,8 @@ bincode = "1.3.3"
 serde = "1.0.136"
 sui-types = { path = "../sui-types" }
 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
-workspace-hack = { path = "../workspace-hack"}
+mysten-network = { git = "https://github.com/bmwill/mysten-infra", rev = "52b97c56bed64535cda99b8d21a802e1e7c5a67f" }
+
 
 [build-dependencies]
 tonic-build = { git = "https://github.com/hyperium/tonic.git", rev = "de2e4ac077c076736dc451f3415ea7da1a61a560", default-features = false, features = [ "transport" ] }
