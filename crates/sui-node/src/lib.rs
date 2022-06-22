@@ -27,7 +27,7 @@ use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc_api::EventApiServer;
 
-mod metrics;
+pub mod metrics;
 
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
@@ -116,10 +116,13 @@ impl SuiNode {
                 authority_clients.insert(validator.public_key(), client);
             }
 
+            let gateway_metrics =
+                sui_core::gateway_state::GatewayMetrics::new(&prometheus_registry);
             let active_authority = Arc::new(ActiveAuthority::new(
                 state.clone(),
                 follower_store,
                 authority_clients,
+                gateway_metrics,
             )?);
 
             Some(if is_validator {

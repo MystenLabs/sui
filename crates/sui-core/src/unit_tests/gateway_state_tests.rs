@@ -33,7 +33,9 @@ async fn create_gateway_state(
         .collect();
     let (authorities, _) = init_local_authorities(genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway = GatewayState::new_with_authorities(path, authorities).unwrap();
+    let gateway =
+        GatewayState::new_with_authorities(path, authorities, GatewayMetrics::new_for_tests())
+            .unwrap();
     for owner in all_owners {
         gateway.sync_account_state(owner).await.unwrap();
     }
@@ -658,7 +660,12 @@ async fn test_multiple_gateways() {
     let gateway1 = create_gateway_state(genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
     // gateway2 shares the same set of authorities as gateway1.
-    let gateway2 = GatewayState::new_with_authorities(path, gateway1.authorities.clone()).unwrap();
+    let gateway2 = GatewayState::new_with_authorities(
+        path,
+        gateway1.authorities.clone(),
+        GatewayMetrics::new_for_tests(),
+    )
+    .unwrap();
     let response = transfer_coin(
         &gateway1,
         addr1,
