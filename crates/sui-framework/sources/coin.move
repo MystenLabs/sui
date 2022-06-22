@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::coin {
-    use sui::balance::{Self, Balance};
+    use sui::balance::{Self, Balance, Supply};
     use sui::id::{Self, VersionedID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -18,10 +18,15 @@ module sui::coin {
     /// coins of type `T`. Transferable
     struct TreasuryCap<phantom T> has key, store {
         id: VersionedID,
-        total_supply: u64
+        total_supply: Supply<T>
     }
 
     // === Balance accessors and type morphing methods ===
+
+    /// Get mutable reference to the treasury's `Supply`.
+    public fun supply_mut<T>(treasury: &mut TreasuryCap<T>): &mut Supply<T> {
+        &mut treasury.total_supply
+    }
 
     /// Get immutable reference to the balance of a coin.
     public fun balance<T>(coin: &Coin<T>): &Balance<T> {
@@ -45,10 +50,9 @@ module sui::coin {
         balance
     }
 
-    /// Subtract `value` from `Balance` and create a new coin
-    /// worth `value` with ID `id`.
+    /// Take a `Coin` worth of `value` from `Balance`.
     /// Aborts if `value > balance.value`
-    public fun withdraw<T>(
+    public fun take<T>(
         balance: &mut Balance<T>, value: u64, ctx: &mut TxContext,
     ): Coin<T> {
         Coin {
@@ -57,8 +61,8 @@ module sui::coin {
         }
     }
 
-    /// Deposit a `Coin` to the `Balance`
-    public fun deposit<T>(balance: &mut Balance<T>, coin: Coin<T>) {
+    /// Put a `Coin<T>` to the `Balance<T>`.
+    public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
         balance::join(balance, into_balance(coin));
     }
 
@@ -122,10 +126,13 @@ module sui::coin {
     /// module initializer with a `witness` object that can only be created
     /// in the initializer).
     public fun create_currency<T: drop>(
-        _witness: T,
+        witness: T,
         ctx: &mut TxContext
     ): TreasuryCap<T> {
-        TreasuryCap { id: tx_context::new_id(ctx), total_supply: 0 }
+        TreasuryCap {
+            id: tx_context::new_id(ctx),
+            total_supply: balance::create_supply(witness)
+        }
     }
 
     /// Create a coin worth `value`. and increase the total supply
@@ -135,7 +142,7 @@ module sui::coin {
     ): Coin<T> {
         Coin {
             id: tx_context::new_id(ctx),
-            balance: mint_balance(cap, value)
+            balance: balance::increase_supply(&mut cap.total_supply, value)
         }
     }
 
@@ -145,22 +152,20 @@ module sui::coin {
     public fun mint_balance<T>(
         cap: &mut TreasuryCap<T>, value: u64
     ): Balance<T> {
-        cap.total_supply = cap.total_supply + value;
-        balance::create_with_value(value)
+        balance::increase_supply(&mut cap.total_supply, value)
     }
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
-    public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>) {
+    public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
-        let value = balance::destroy<T>(balance);
         id::delete(id);
-        cap.total_supply = cap.total_supply - value
+        balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
     /// Return the total number of `T`'s in circulation
     public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
-        cap.total_supply
+        balance::supply(&cap.total_supply)
     }
 
     /// Give away the treasury cap to `recipient`
@@ -179,7 +184,7 @@ module sui::coin {
 
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
-        burn(c, coin)
+        burn(c, coin);
     }
 
     /// Send `amount` units of `c` to `recipient
@@ -187,14 +192,16 @@ module sui::coin {
     public entry fun split_and_transfer<T>(
         c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
+        transfer::transfer(take(&mut c.balance, amount, ctx), recipient)
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
     public entry fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
-        let new_coin = withdraw(&mut self.balance, split_amount, ctx);
-        transfer::transfer(new_coin, tx_context::sender(ctx));
+        transfer::transfer(
+            take(&mut self.balance, split_amount, ctx),
+            tx_context::sender(ctx)
+        )
     }
 
     /// Split coin `self` into multiple coins, each with balance specified
@@ -213,7 +220,7 @@ module sui::coin {
     #[test_only]
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
-        Coin { id: tx_context::new_id(ctx), balance: balance::create_with_value(value) }
+        Coin { id: tx_context::new_id(ctx), balance: balance::create_for_testing(value) }
     }
 
     #[test_only]

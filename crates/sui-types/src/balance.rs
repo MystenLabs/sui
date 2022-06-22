@@ -13,6 +13,11 @@ use serde::Serialize;
 pub const BALANCE_MODULE_NAME: &IdentStr = ident_str!("balance");
 pub const BALANCE_STRUCT_NAME: &IdentStr = ident_str!("Balance");
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Supply {
+    pub value: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
 pub struct Balance {
     value: u64,

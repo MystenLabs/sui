@@ -6,13 +6,17 @@
 /// `Balance` eliminating the need to create new IDs for each application
 /// that needs to hold coins.
 module sui::balance {
-    friend sui::coin;
-    friend sui::sui_system;
 
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 0;
+
+    /// A Supply of T. Used for minting and burning.
+    /// Wrapped into a TreasuryCap in Coin module.
+    struct Supply<phantom T> has store {
+        value: u64
+    }
 
     /// Storable balance - an inner struct of a Coin type.
     /// Can be used to store coins which don't need to have the
@@ -25,6 +29,29 @@ module sui::balance {
     /// Get the amount stored in a `Balance`.
     public fun value<T>(self: &Balance<T>): u64 {
         self.value
+    }
+
+    /// Get the `Supply` value.
+    public fun supply<T>(supply: &Supply<T>): u64 {
+        supply.value
+    }
+
+    /// Create a new supply for type T.
+    public fun create_supply<T: drop>(_witness: T): Supply<T> {
+        Supply { value: 0 }
+    }
+
+    /// Increase supply by `value` and create a new `Balance<T>` with this value.
+    public fun increase_supply<T>(supply: &mut Supply<T>, value: u64): Balance<T> {
+        supply.value = supply.value + value;
+        Balance { value }
+    }
+
+    /// Burn a Balance<T> and decrease Supply<T>.
+    public fun decrease_supply<T>(supply: &mut Supply<T>, balance: Balance<T>): u64 {
+        let Balance { value } = balance;
+        supply.value = supply.value - value;
+        value
     }
 
     /// Create a zero `Balance` for type `T`.
@@ -51,29 +78,17 @@ module sui::balance {
         let Balance { value: _ } = balance;
     }
 
-    /// Can only be called by sui::coin.
-    /// Create a `Balance` with a predefined value; required for minting new `Coin`s.
-    public(friend) fun create_with_value<T>(value: u64): Balance<T> {
-        Balance { value }
-    }
-
-    /// Can only be called by sui::coin.
-    /// Destroy a `Balance` returning its value. Required for burning `Coin`s
-    public(friend) fun destroy<T>(self: Balance<T>): u64 {
-        let Balance { value } = self;
-        value
-    }
-
     #[test_only]
     /// Create a `Balance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): Balance<T> {
-        create_with_value(value)
+        Balance { value }
     }
 
     #[test_only]
     /// Destroy a `Balance` with any value in it for testing purposes.
     public fun destroy_for_testing<T>(self: Balance<T>): u64 {
-        destroy(self)
+        let Balance { value } = self;
+        value
     }
 }
 

@@ -103,7 +103,7 @@ module basics::sandwich {
         assert!(amount > 0, ENoProfits);
 
         // Take a transferable `Coin` from a `Balance`
-        let coin = coin::withdraw(&mut grocery.profits, amount, ctx);
+        let coin = coin::take(&mut grocery.profits, amount, ctx);
 
         transfer::transfer(coin, tx_context::sender(ctx));
     }

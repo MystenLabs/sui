@@ -94,7 +94,7 @@ module defi::flash_lender {
     ): (Coin<T>, Receipt<T>) {
         let to_lend = &mut self.to_lend;
         assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
-        let loan = coin::withdraw(to_lend, amount, ctx);
+        let loan = coin::take(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
         let receipt = Receipt { flash_lender_id: *id::id(self), repay_amount };
         (loan, receipt)
@@ -108,7 +108,7 @@ module defi::flash_lender {
         assert!(id::id(self) == &flash_lender_id, ERepayToWrongLender);
         assert!(coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
 
-        coin::deposit(&mut self.to_lend, payment)
+        coin::put(&mut self.to_lend, payment)
     }
 
     // === Admin-only functionality ===
@@ -125,7 +125,7 @@ module defi::flash_lender {
 
         let to_lend = &mut self.to_lend;
         assert!(balance::value(to_lend) >= amount, EWithdrawTooLarge);
-        coin::withdraw(to_lend, amount, ctx)
+        coin::take(to_lend, amount, ctx)
     }
 
     /// Allow admin to add more funds to `self`
@@ -134,7 +134,7 @@ module defi::flash_lender {
     ) {
         // only the holder of the `AdminCap` for `self` can deposit funds
         check_admin(self, admin_cap);
-        coin::deposit(&mut self.to_lend, coin);
+        coin::put(&mut self.to_lend, coin);
     }
 
     /// Allow admin to update the fee for `self`

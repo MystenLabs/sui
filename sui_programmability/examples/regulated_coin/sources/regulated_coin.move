@@ -168,7 +168,7 @@ module abc::abc {
     ///
     /// TODO: Make TreasuryCap a part of Balance module instead of Coin.
     public entry fun burn(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
-        coin::burn(treasury, coin::withdraw(borrow_mut(owned), value, ctx));
+        coin::burn(treasury, coin::take(borrow_mut(owned), value, ctx));
     }
 
     /// Ban some address and forbid making any transactions from or to this address.
@@ -229,7 +229,7 @@ module abc::abc {
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
 
-        transfer::transfer(coin::withdraw(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
+        transfer::transfer(coin::take(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
     }
 
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
