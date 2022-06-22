@@ -170,14 +170,14 @@ module sui::coin {
 
     // === Entrypoints ===
 
-    /// Mint a Coin and send it to someone. Invokes `burn()`.
+    /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
     public entry fun mint_<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
         transfer::transfer(mint(c, amount, ctx), recipient)
     }
 
-    /// Burn a Coin and reduce the total_supply. Invokes `mint()`.
+    /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
         burn(c, coin)
     }
