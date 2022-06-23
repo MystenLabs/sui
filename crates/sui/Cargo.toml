@@ -68,7 +68,7 @@ move-binary-format = { git = "https://github.com/move-language/move", rev = "ae6
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-unit-test = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "node" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "node" }
 
 once_cell = "1.11.0"
 
