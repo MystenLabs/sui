@@ -6,14 +6,14 @@
 /// `Balance` eliminating the need to create new IDs for each application
 /// that needs to hold coins.
 module sui::balance {
-
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
+
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 0;
 
     /// A Supply of T. Used for minting and burning.
-    /// Wrapped into a TreasuryCap in Coin module.
+    /// Wrapped into a `TreasuryCap` in the `Coin` module.
     struct Supply<phantom T> has store {
         value: u64
     }
@@ -32,7 +32,7 @@ module sui::balance {
     }
 
     /// Get the `Supply` value.
-    public fun supply<T>(supply: &Supply<T>): u64 {
+    public fun supply_value<T>(supply: &Supply<T>): u64 {
         supply.value
     }
 
@@ -60,9 +60,10 @@ module sui::balance {
     }
 
     /// Join two balances together.
-    public fun join<T>(self: &mut Balance<T>, balance: Balance<T>) {
+    public fun join<T>(self: &mut Balance<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
         self.value = self.value + value;
+        value
     }
 
     /// Split a `Balance` and take a sub balance from it.

@@ -21,11 +21,40 @@ module sui::coin {
         total_supply: Supply<T>
     }
 
-    // === Balance accessors and type morphing methods ===
+    // === Supply <-> TreasuryCap morphing and accessors  ===
+
+    /// Return the total number of `T`'s in circulation.
+    public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
+        balance::supply_value(&cap.total_supply)
+    }
+
+    /// Wrap a `Supply` into a transferable `TreasuryCap`.
+    public fun treasury_from_supply<T>(supply: Supply<T>, ctx: &mut TxContext): TreasuryCap<T> {
+        TreasuryCap { id: tx_context::new_id(ctx), supply }
+    }
+
+    /// Unwrap `TreasuryCap` getting the `Supply`.
+    public fun treasury_into_supply<T>(treasury: TreasuryCap<T>): Supply<T> {
+        let TreasuryCap { id, supply } = treasury;
+        id::delete(id);
+        supply
+    }
+
+    /// Get immutable reference to the treasury's `Supply`.
+    public fun supply<T>(treasury: &mut TreasuryCap<T>): &Supply<T> {
+        &treasury.total_supply
+    }
 
     /// Get mutable reference to the treasury's `Supply`.
     public fun supply_mut<T>(treasury: &mut TreasuryCap<T>): &mut Supply<T> {
         &mut treasury.total_supply
+    }
+
+    // === Balance <-> Coin accessors and type morphing ===
+
+    /// Public getter for the coin's value
+    public fun value<T>(self: &Coin<T>): u64 {
+        balance::value(&self.balance)
     }
 
     /// Get immutable reference to the balance of a coin.
@@ -99,16 +128,11 @@ module sui::coin {
         vector::destroy_empty(coins)
     }
 
-    /// Public getter for the coin's value
-    public fun value<T>(self: &Coin<T>): u64 {
-        balance::value(&self.balance)
-    }
-
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
         let Coin { id, balance } = c;
         id::delete(id);
-        balance::destroy_zero(balance);
+        balance::destroy_zero(balance)
     }
 
     // === Registering new coin types and managing the coin supply ===
@@ -161,11 +185,6 @@ module sui::coin {
         let Coin { id, balance } = c;
         id::delete(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
-    }
-
-    /// Return the total number of `T`'s in circulation
-    public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
-        balance::supply(&cap.total_supply)
     }
 
     /// Give away the treasury cap to `recipient`
