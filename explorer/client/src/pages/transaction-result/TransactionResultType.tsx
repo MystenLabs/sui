@@ -15,5 +15,6 @@ export type DataType = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    published?: string;
     timestamp_ms: number;
 };

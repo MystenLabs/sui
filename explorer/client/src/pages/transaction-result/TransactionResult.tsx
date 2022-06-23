@@ -40,6 +40,7 @@ type TxnState = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    published?: string;
     timestamp_ms: number;
 };
 // TODO: update state to include Call types
@@ -107,6 +108,10 @@ const transformTransactionResponse = (
     txObj: TransactionEffectsResponse,
     id: string
 ): TxnState => {
+    const getPublishedPackageId = (
+        txObj: TransactionEffectsResponse
+    ): string | undefined =>
+        txObj.effects.events?.find((x) => 'publish' in x)?.publish?.packageId;
     return {
         ...txObj.certificate,
         status: getExecutionStatusType(txObj),
@@ -117,6 +122,7 @@ const transformTransactionResponse = (
         mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
         created: getCreatedOrMutatedData(txObj.effects, 'created'),
         timestamp_ms: txObj.timestamp_ms,
+        published: getPublishedPackageId(txObj),
     };
 };
 
