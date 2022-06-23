@@ -31,8 +31,10 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 bincode = "1.3.3"
 criterion = "0.3.5"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
-pprof = { version = "0.9.1", features = ["criterion", "flamegraph"] }
 test_utils = { path = "../test_utils"}
+
+[target.'cfg(unix)'.dev-dependencies]
+pprof = { version = "0.9.1", features = ["criterion", "flamegraph"] }
 
 [features]
 default = ["rand"]
@@ -44,4 +46,4 @@ bench = false
 [[bench]]
 name = "process_certificates"
 harness = false
-required-features = ["benchmark"]
+required-features = ["benchmark", "pprof"]
