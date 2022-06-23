@@ -64,7 +64,6 @@ jobs:
     strategy:
       matrix:
         os:
-          - self-hosted
           - self-hosted-ubuntu
           - windows-latest
       fail-fast: false
