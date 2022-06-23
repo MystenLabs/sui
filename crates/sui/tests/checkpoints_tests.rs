@@ -70,7 +70,10 @@ async fn sequence_fragments() {
                 .lock()
                 .handle_internal_batch(next_sequence_number, &transactions)
                 .unwrap();
-            let proposal = checkpoints_store.lock().set_proposal().unwrap();
+            let proposal = checkpoints_store
+                .lock()
+                .set_proposal(committee.epoch)
+                .unwrap();
             proposal
         })
         .collect();

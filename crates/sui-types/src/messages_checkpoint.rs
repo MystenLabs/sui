@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::base_types::ExecutionDigests;
+use crate::committee::EpochId;
 use crate::crypto::Signable;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
@@ -181,6 +182,7 @@ pub type CheckpointDigest = [u8; 32];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
+    pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
     pub waypoint: Box<Waypoint>, // Bigger structure, can live on heap.
     pub content_digest: CheckpointDigest,
@@ -190,6 +192,7 @@ pub struct CheckpointSummary {
 
 impl CheckpointSummary {
     pub fn new(
+        epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
@@ -202,6 +205,7 @@ impl CheckpointSummary {
         let content_digest = transactions.digest();
 
         Self {
+            epoch,
             sequence_number,
             waypoint,
             content_digest,
@@ -231,13 +235,15 @@ pub struct SignedCheckpoint {
 impl SignedCheckpoint {
     /// Create a new signed checkpoint proposal for this authority
     pub fn new(
+        epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
     ) -> SignedCheckpoint {
-        let checkpoint = CheckpointSummary::new(sequence_number, transactions, previous_digest);
+        let checkpoint =
+            CheckpointSummary::new(epoch, sequence_number, transactions, previous_digest);
         SignedCheckpoint::new_from_summary(checkpoint, authority, signer)
     }
 
@@ -265,6 +271,7 @@ impl SignedCheckpoint {
     pub fn verify_with_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
         self.verify()?;
         let recomputed = CheckpointSummary::new(
+            self.checkpoint.epoch,
             *self.checkpoint.sequence_number(),
             contents,
             self.checkpoint.previous_digest,
@@ -478,13 +485,14 @@ mod tests {
     #[test]
     fn test_signed_proposal() {
         let mut rng = StdRng::from_seed(RNG_SEED);
-        let (authority_key, _committee) = make_committee_key(&mut rng);
+        let (authority_key, committee) = make_committee_key(&mut rng);
         let name = authority_key[0].public_key_bytes();
 
         let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
 
-        let mut proposal = SignedCheckpoint::new(1, *name, &authority_key[0], &set, None);
+        let mut proposal =
+            SignedCheckpoint::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.verify().is_ok());
@@ -514,7 +522,7 @@ mod tests {
             .map(|k| {
                 let name = k.public_key_bytes();
 
-                SignedCheckpoint::new(1, *name, k, &set, None)
+                SignedCheckpoint::new(committee.epoch, 1, *name, k, &set, None)
             })
             .collect();
 
@@ -534,7 +542,7 @@ mod tests {
                 let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 
-                SignedCheckpoint::new(1, *name, k, &set, None)
+                SignedCheckpoint::new(committee.epoch, 1, *name, k, &set, None)
             })
             .collect();
 

@@ -33,6 +33,7 @@ use typed_store::{
 };
 
 use arc_swap::ArcSwapOption;
+use sui_types::committee::EpochId;
 
 use crate::{
     authority::StableSyncAuthoritySigner,
@@ -164,7 +165,7 @@ impl CheckpointStore {
     // Manage persistent local variables
 
     /// Loads the locals from the store -- do this at init
-    fn load_locals(&mut self) -> Result<CheckpointLocals, SuiError> {
+    fn load_locals(&mut self, epoch: EpochId) -> Result<CheckpointLocals, SuiError> {
         // Loads locals from disk, or inserts initial locals
         let mut locals = match self.locals.get(&LOCALS)? {
             Some(locals) => locals,
@@ -186,6 +187,7 @@ impl CheckpointStore {
             let transactions = CheckpointContents::new(transactions);
             let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
             let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
+                epoch,
                 checkpoint_sequence,
                 self.name,
                 &*self.secret,
@@ -234,6 +236,7 @@ impl CheckpointStore {
     pub fn open<P: AsRef<Path>>(
         path: P,
         db_options: Option<Options>,
+        current_epoch: EpochId,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
     ) -> Result<CheckpointStore, SuiError> {
@@ -296,7 +299,7 @@ impl CheckpointStore {
         };
 
         // Initialize the locals
-        checkpoint_db.load_locals()?;
+        checkpoint_db.load_locals(current_epoch)?;
 
         Ok(checkpoint_db)
     }
@@ -305,12 +308,13 @@ impl CheckpointStore {
 
     pub fn handle_latest_proposal(
         &mut self,
+        epoch: EpochId,
         request: &CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
         // Set a proposal if there is not one, and one could be set
         // TODO: check some minimum time passed since the last one
         //       and only set after that time.
-        let _ = self.new_proposal();
+        let _ = self.new_proposal(epoch);
 
         // Try to load any latest proposal
         let locals = self.get_locals();
@@ -395,6 +399,7 @@ impl CheckpointStore {
     /// registered as processed or unprocessed.
     pub fn handle_internal_set_checkpoint(
         &mut self,
+        epoch: EpochId,
         checkpoint: CheckpointSummary,
         contents: &CheckpointContents,
     ) -> Result<(), SuiError> {
@@ -449,7 +454,7 @@ impl CheckpointStore {
         self.update_new_checkpoint_inner(checkpoint_sequence_number, &transactions, batch)?;
 
         // Try to set a fresh proposal, and ignore errors if this fails.
-        let _ = self.new_proposal();
+        let _ = self.new_proposal(epoch);
 
         Ok(())
     }
@@ -687,9 +692,13 @@ impl CheckpointStore {
                     let previous_digest = self
                         .get_prev_checkpoint_digest(next_sequence_number)
                         .map_err(FragmentInternalError::Error)?;
-                    let summary =
-                        CheckpointSummary::new(next_sequence_number, &contents, previous_digest);
-                    self.handle_internal_set_checkpoint(summary, &contents)
+                    let summary = CheckpointSummary::new(
+                        committee.epoch,
+                        next_sequence_number,
+                        &contents,
+                        previous_digest,
+                    );
+                    self.handle_internal_set_checkpoint(committee.epoch, summary, &contents)
                         .map_err(FragmentInternalError::Error)?;
                     return Ok(true);
                 }
@@ -741,11 +750,12 @@ impl CheckpointStore {
                             .get_prev_checkpoint_digest(next_sequence_number)
                             .map_err(FragmentInternalError::Error)?;
                         let summary = CheckpointSummary::new(
+                            committee.epoch,
                             next_sequence_number,
                             &contents,
                             previous_digest,
                         );
-                        self.handle_internal_set_checkpoint(summary, &contents)
+                        self.handle_internal_set_checkpoint(committee.epoch, summary, &contents)
                             .map_err(FragmentInternalError::Error)?;
                         return Ok(true);
                     }
@@ -807,7 +817,11 @@ impl CheckpointStore {
                 if let &Some(contents) = &contents {
                     // Check and process contents
                     checkpoint.verify_with_transactions(committee, contents)?;
-                    self.handle_internal_set_checkpoint(checkpoint.checkpoint.clone(), contents)?;
+                    self.handle_internal_set_checkpoint(
+                        committee.epoch,
+                        checkpoint.checkpoint.clone(),
+                        contents,
+                    )?;
                     // Then insert it
                     self.checkpoints.insert(
                         checkpoint.checkpoint.sequence_number(),
@@ -875,7 +889,7 @@ impl CheckpointStore {
     /// Creates a new proposal, but only if the previous checkpoint certificate
     /// is known and stored. This ensures that any validator in checkpoint round
     /// X can serve certificates for all rounds < X.
-    pub fn new_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    pub fn new_proposal(&mut self, epoch: EpochId) -> Result<CheckpointProposal, SuiError> {
         let sequence_number = self.next_checkpoint();
 
         // Only move to propose when we have the full checkpoint certificate
@@ -889,7 +903,7 @@ impl CheckpointStore {
             }
         }
 
-        self.set_proposal()
+        self.set_proposal(epoch)
     }
 
     /// Get the latest stored checkpoint if there is one
@@ -907,7 +921,7 @@ impl CheckpointStore {
     // Helper write functions
 
     /// Set the next checkpoint proposal.
-    pub fn set_proposal(&mut self) -> Result<CheckpointProposal, SuiError> {
+    pub fn set_proposal(&mut self, epoch: EpochId) -> Result<CheckpointProposal, SuiError> {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
@@ -939,6 +953,7 @@ impl CheckpointStore {
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
         let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
+            epoch,
             checkpoint_sequence,
             self.name,
             &*self.secret,
