@@ -7,7 +7,6 @@ use crypto::{
     Digest, Hash,
 };
 
-use pretty_assertions::assert_str_eq;
 use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
 use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
 
@@ -176,8 +175,8 @@ fn main() {
         }
         Action::Test => {
             let reference = std::fs::read_to_string(FILE_PATH).unwrap();
-            let content = serde_yaml::to_string(&registry).unwrap() + "\n";
-            assert_str_eq!(&reference, &content);
+            let reference: Registry = serde_yaml::from_str(&reference).unwrap();
+            pretty_assertions::assert_eq!(reference, registry);
         }
     }
 }
