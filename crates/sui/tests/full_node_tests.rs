@@ -405,6 +405,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     let (_, _, _, _) = transfer_coin(&mut context).await?;
     let (_transfered_object, _sender, _receiver, digest) = transfer_coin(&mut context).await?;
 
+    // Make sure the validators are quiescent before bringing up the node.
     sleep(Duration::from_millis(1000)).await;
 
     let config = swarm.config().generate_fullnode_config();
