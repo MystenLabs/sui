@@ -146,7 +146,7 @@ function formatByTransactionKind(
                     className: 'Receiver',
                 },
                 {
-                    label: 'To',
+                    label: 'Receiver',
                     value: transfer.recipient,
                     category: 'addresses',
                     link: true,
@@ -156,13 +156,13 @@ function formatByTransactionKind(
             const moveCall = getMoveCallTransaction(data)!;
             return [
                 {
-                    label: 'From',
+                    label: 'Caller',
                     value: sender,
                     link: true,
                     category: 'addresses',
                 },
                 {
-                    label: 'Package',
+                    label: 'Package Called',
                     category: 'objects',
                     value: getObjectId(moveCall.package),
                     link: true,
@@ -192,7 +192,7 @@ function formatByTransactionKind(
                 ...(sender
                     ? [
                           {
-                              label: 'Sender ',
+                              label: 'Publisher',
                               value: sender,
                               link: true,
                               category: 'addresses',
