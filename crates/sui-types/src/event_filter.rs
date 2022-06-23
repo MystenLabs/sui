@@ -23,7 +23,7 @@ pub enum EventFilter {
     MoveEventType(StructTag),
     EventType(EventType),
     MoveEventField { path: String, value: Value },
-    InstigatorAddress(SuiAddress),
+    SenderAddress(SuiAddress),
     Recipient(Owner),
     ObjectId(ObjectID),
     TransferType(TransferType),
@@ -43,7 +43,7 @@ impl EventFilter {
                 }
                 _ => false,
             },
-            EventFilter::InstigatorAddress(sender) => {
+            EventFilter::SenderAddress(sender) => {
                 matches!(&item.event.sender(), Some(addr) if addr == sender)
             }
             EventFilter::Package(obj_id) => {

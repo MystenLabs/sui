@@ -23,7 +23,7 @@ fn test_move_event_filter() {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("test_module")),
         transaction_function: Identifier::from(ident_str!("test_function")),
-        instigator: SuiAddress::random_for_testing_only(),
+        sender: SuiAddress::random_for_testing_only(),
         type_: GasCoin::type_(),
         contents: GasCoin::new(event_coin_id, SequenceNumber::new(), 10000).to_bcs_bytes(),
     };
@@ -70,14 +70,14 @@ fn test_move_event_filter() {
 #[test]
 fn test_transfer_filter() {
     let object_id = ObjectID::random();
-    let instigator = SuiAddress::random_for_testing_only();
+    let sender = SuiAddress::random_for_testing_only();
     let recipient = Owner::AddressOwner(SuiAddress::random_for_testing_only());
     // Create a test transfer event.
     let move_event = Event::TransferObject {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("test_module")),
         transaction_function: Identifier::from(ident_str!("test_function")),
-        instigator,
+        sender,
         recipient,
         object_id,
         version: Default::default(),
@@ -97,7 +97,7 @@ fn test_transfer_filter() {
         EventFilter::Module(Identifier::from(ident_str!("test_module"))),
         EventFilter::Function(Identifier::from(ident_str!("test_function"))),
         EventFilter::ObjectId(object_id),
-        EventFilter::InstigatorAddress(instigator),
+        EventFilter::SenderAddress(sender),
         EventFilter::TransferType(TransferType::Coin),
         EventFilter::Recipient(recipient),
     ];
@@ -116,12 +116,9 @@ fn test_transfer_filter() {
 #[test]
 fn test_publish_filter() {
     let package_id = ObjectID::random();
-    let instigator = SuiAddress::random_for_testing_only();
+    let sender = SuiAddress::random_for_testing_only();
     // Create a test publish event.
-    let move_event = Event::Publish {
-        instigator,
-        package_id,
-    };
+    let move_event = Event::Publish { sender, package_id };
     let envelope = EventEnvelope {
         timestamp: 0,
         tx_digest: Some(TransactionDigest::random()),
@@ -132,7 +129,7 @@ fn test_publish_filter() {
     let filters = vec![
         EventFilter::EventType(EventType::Publish),
         EventFilter::Package(package_id),
-        EventFilter::InstigatorAddress(instigator),
+        EventFilter::SenderAddress(sender),
     ];
 
     // All filter should return true.
@@ -150,13 +147,13 @@ fn test_publish_filter() {
 fn test_delete_object_filter() {
     let package_id = ObjectID::random();
     let object_id = ObjectID::random();
-    let instigator = SuiAddress::random_for_testing_only();
+    let sender = SuiAddress::random_for_testing_only();
     // Create a test delete object event.
     let move_event = Event::DeleteObject {
         package_id,
         transaction_module: Identifier::from(ident_str!("test_module")),
         transaction_function: Identifier::from(ident_str!("test_function")),
-        instigator,
+        sender,
         object_id,
     };
     let envelope = EventEnvelope {
@@ -172,7 +169,7 @@ fn test_delete_object_filter() {
         EventFilter::Module(Identifier::from(ident_str!("test_module"))),
         EventFilter::Function(Identifier::from(ident_str!("test_function"))),
         EventFilter::ObjectId(object_id),
-        EventFilter::InstigatorAddress(instigator),
+        EventFilter::SenderAddress(sender),
     ];
 
     // All filter should return true.
@@ -190,14 +187,14 @@ fn test_delete_object_filter() {
 fn test_new_object_filter() {
     let package_id = ObjectID::random();
     let object_id = ObjectID::random();
-    let instigator = SuiAddress::random_for_testing_only();
+    let sender = SuiAddress::random_for_testing_only();
     let recipient = Owner::AddressOwner(SuiAddress::random_for_testing_only());
     // Create a test new object event.
     let move_event = Event::NewObject {
         package_id,
         transaction_module: Identifier::from(ident_str!("test_module")),
         transaction_function: Identifier::from(ident_str!("test_function")),
-        instigator,
+        sender,
         recipient,
         object_id,
     };
@@ -214,7 +211,7 @@ fn test_new_object_filter() {
         EventFilter::Module(Identifier::from(ident_str!("test_module"))),
         EventFilter::Function(Identifier::from(ident_str!("test_function"))),
         EventFilter::ObjectId(object_id),
-        EventFilter::InstigatorAddress(instigator),
+        EventFilter::SenderAddress(sender),
         EventFilter::Recipient(recipient),
     ];
 
