@@ -11,12 +11,18 @@ export enum API_ENV {
     staging = 'staging',
 }
 
+// fallback default to devNet if not set
+const defaultRPCEnv = {
+    gateway: 'http://127.0.0.1:5001/',
+    fullNode: 'http://127.0.0.1:9000/',
+};
+
 type EnvInfo = {
     name: string;
     color: string;
 };
 
-type EnvToApi = {
+type ApiEndpoints = {
     gateway: string;
     fullNode: string;
 };
@@ -26,18 +32,21 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.staging]: { name: 'Staging', color: '#ff4a8d' },
 };
 
-export const ENV_TO_API: Record<API_ENV, object | undefined> = {
+export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.local]: {
-        gateway: process.env.API_ENDPOINT_LOCAL,
-        fullNode: process.env.API_ENDPOINT_LOCAL_FULLNODE,
+        gateway: process.env.API_ENDPOINT_LOCAL || defaultRPCEnv.gateway,
+        fullNode:
+            process.env.API_ENDPOINT_LOCAL_FULLNODE || defaultRPCEnv.fullNode,
     },
     [API_ENV.devNet]: {
-        gateway: process.env.API_ENDPOINT_DEV_NET,
-        fullNode: process.env.API_ENDPOINT_FULLNODE,
+        gateway: process.env.API_ENDPOINT_DEV_NET || defaultRPCEnv.gateway,
+        fullNode:
+            process.env.API_ENDPOINT_DEV_NET_FULLNODE || defaultRPCEnv.fullNode,
     },
     [API_ENV.staging]: {
-        gateway: process.env.API_ENDPOINT_STAGING,
-        fullNode: process.env.API_ENDPOINT_FULLNODE,
+        gateway: process.env.API_ENDPOINT_STAGING || defaultRPCEnv.gateway,
+        fullNode:
+            process.env.API_ENDPOINT_STAGING_FULLNODE || defaultRPCEnv.fullNode,
     },
 };
 
@@ -54,7 +63,7 @@ function getDefaultAPI(env: API_ENV) {
     if (!apiEndpoint) {
         throw new Error(`API endpoint not found for API_ENV ${env}`);
     }
-    return apiEndpoint as EnvToApi;
+    return apiEndpoint;
 }
 
 export const DEFAULT_API_ENV = getDefaultApiEnv();
