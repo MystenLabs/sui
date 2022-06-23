@@ -366,6 +366,9 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
     wait_for_tx(digest, node.state().clone()).await;
 
+    // Somehow extra sleep is needed here
+    sleep(Duration::from_millis(1000)).await;
+
     let txes = node.state().get_transactions_from_addr(sender).await?;
     assert_eq!(txes.last().unwrap().1, digest);
 

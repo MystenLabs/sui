@@ -58,6 +58,10 @@ impl<ES: EventStore> EventHandler<ES> {
         self.event_store
             .add_events(&envelopes, checkpoint_num)
             .await?;
+        debug!(
+            num_events = envelopes.len(),
+            checkpoint_num, "Finished writing events to event store"
+        );
 
         for envelope in envelopes {
             if let Err(e) = self.event_streamer.send(envelope).await {
