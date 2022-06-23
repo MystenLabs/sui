@@ -152,7 +152,7 @@ function LatestTxView({
                             <div className={styles.txgas}>{tx.txGas}</div>
                             <div className={styles.txadd}>
                                 <div>
-                                    From:
+                                    By:
                                     <Link
                                         className={styles.txlink}
                                         to={'addresses/' + tx.From}
@@ -162,7 +162,7 @@ function LatestTxView({
                                 </div>
                                 {tx.To && (
                                     <div>
-                                        To :
+                                        To:
                                         <Link
                                             className={styles.txlink}
                                             to={'addresses/' + tx.To}
