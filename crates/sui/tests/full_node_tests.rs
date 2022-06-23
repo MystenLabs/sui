@@ -25,7 +25,7 @@ use sui_swarm::memory::Swarm;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
     batch::UpdateItem,
-    messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction},
+    messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionInfoRequest},
 };
 use test_utils::network::setup_network_and_wallet;
 use tokio::sync::Mutex;
@@ -389,6 +389,36 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // timestamp is recorded
     let ts = node.state().get_timestamp_ms(&digest).await?;
     assert!(ts.is_some());
+
+    Ok(())
+}
+
+// Test for syncing a node to an authority that already has many txes.
+#[tokio::test]
+async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
+
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_transfered_object, _sender, _receiver, digest) = transfer_coin(&mut context).await?;
+
+    sleep(Duration::from_millis(1000)).await;
+
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config).await?;
+
+    wait_for_tx(digest, node.state().clone()).await;
+
+    let info = node
+        .state()
+        .handle_transaction_info_request(TransactionInfoRequest {
+            transaction_digest: digest,
+        })
+        .await?;
+    assert!(info.signed_effects.is_some());
 
     Ok(())
 }
