@@ -30,7 +30,7 @@ env:
 
 jobs:
   diff:
-    runs-on: [ubuntu-latest, windows-latest]
+    runs-on: [ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
