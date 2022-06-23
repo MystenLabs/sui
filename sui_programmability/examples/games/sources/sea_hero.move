@@ -109,7 +109,7 @@ module games::sea_hero {
 
         let monster = SeaMonster {
             id: tx_context::new_id(ctx),
-            reward: coin::mint_balance(reward_amount, &mut admin.treasury_cap)
+            reward: coin::mint_balance(&mut admin.treasury_cap, reward_amount)
         };
         admin.monsters_created = admin.monsters_created + 1;
         transfer::transfer(monster, recipient);

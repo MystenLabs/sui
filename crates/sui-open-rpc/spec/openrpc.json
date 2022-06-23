@@ -129,31 +129,6 @@
       }
     },
     {
-      "name": "sui_getObject",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return the object information for a specified object",
-      "params": [
-        {
-          "name": "object_id",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        }
-      ],
-      "result": {
-        "name": "GetObjectDataResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
-        }
-      }
-    },
-    {
       "name": "sui_getObjectsOwnedByAddress",
       "tags": [
         {
@@ -167,61 +142,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiObjectInfo>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/ObjectInfo"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getObjectsOwnedByAddress",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return the list of objects owned by an address.",
-      "params": [
-        {
-          "name": "address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiObjectInfo>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/ObjectInfo"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getObjectsOwnedByObject",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "object_id",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
           }
         }
       ],
@@ -330,47 +250,6 @@
       }
     },
     {
-      "name": "sui_getRecentTransactions",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "count",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
       "name": "sui_getTotalTransactionNumber",
       "tags": [
         {
@@ -385,48 +264,6 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
-        }
-      }
-    },
-    {
-      "name": "sui_getTotalTransactionNumber",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [],
-      "result": {
-        "name": "u64",
-        "required": true,
-        "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        }
-      }
-    },
-    {
-      "name": "sui_getTransaction",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "digest",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionEffectsResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionEffectsResponse"
         }
       }
     },
@@ -545,56 +382,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getTransactionsInRange",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "start",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           }
         }
       ],

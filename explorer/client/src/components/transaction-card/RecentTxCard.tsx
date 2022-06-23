@@ -220,6 +220,10 @@ function LatestTxCardAPI({ count }: { count: number }) {
                     loadState: 'fail',
                 });
                 setIsLoaded(false);
+                console.error(
+                    'Encountered error when fetching recent transactions',
+                    err
+                );
             });
 
         return () => {

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use sui_core::authority_client::AuthorityAPI;
-use sui_core::gateway_state::{GatewayAPI, GatewayState};
+use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
     CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
 };
@@ -369,7 +369,9 @@ async fn shared_object_on_gateway() {
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
     let clients = test_authority_aggregator(&configs);
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway = Arc::new(GatewayState::new_with_authorities(path, clients).unwrap());
+    let gateway = Arc::new(
+        GatewayState::new_with_authorities(path, clients, GatewayMetrics::new_for_tests()).unwrap(),
+    );
 
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;

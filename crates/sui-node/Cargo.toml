@@ -7,10 +7,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
+axum = "0.5.9"
 anyhow = { version = "1.0.57", features = ["backtrace"] }
 clap = { version = "3.1.17", features = ["derive"] }
 multiaddr = "0.14.0"
-prometheus_exporter = "0.8.4"
+prometheus = "0.13.1"
 tokio = { version = "1.18.2", features = ["full"] }
 tracing = "0.1.34"
 parking_lot = "0.12.1"

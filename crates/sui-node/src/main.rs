@@ -6,7 +6,6 @@ use clap::Parser;
 use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use sui_config::{Config, NodeConfig};
-use tracing::info;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -28,14 +27,6 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     let mut config = NodeConfig::load(&args.config_path)?;
-
-    // TODO: Switch from prometheus exporter. See https://github.com/MystenLabs/sui/issues/1907
-    info!(
-        "Starting Prometheus HTTP endpoint at {}",
-        config.metrics_address
-    );
-    prometheus_exporter::start(config.metrics_address)
-        .expect("Failed to start Prometheus exporter");
 
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;

@@ -26,10 +26,9 @@ use move_core_types::{
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use prometheus_exporter::prometheus::{
-    register_histogram, register_int_counter, Histogram, IntCounter,
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
 };
 use std::ops::Deref;
 use std::{
@@ -131,92 +130,99 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 impl AuthorityMetrics {
-    pub fn new() -> AuthorityMetrics {
+    pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
         Self {
-            tx_orders: register_int_counter!(
+            tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
-                "Total number of transaction orders"
+                "Total number of transaction orders",
+                registry,
             )
             .unwrap(),
-            total_certs: register_int_counter!(
+            total_certs: register_int_counter_with_registry!(
                 "total_transaction_certificates",
-                "Total number of transaction certificates handled"
+                "Total number of transaction certificates handled",
+                registry,
             )
             .unwrap(),
             // total_effects == total transactions finished
-            total_effects: register_int_counter!(
+            total_effects: register_int_counter_with_registry!(
                 "total_transaction_effects",
-                "Total number of transaction effects produced"
+                "Total number of transaction effects produced",
+                registry,
             )
             .unwrap(),
-            total_events: register_int_counter!("total_events", "Total number of events produced")
-                .unwrap(),
-            signature_errors: register_int_counter!(
+            total_events: register_int_counter_with_registry!(
+                "total_events",
+                "Total number of events produced",
+                registry,
+            )
+            .unwrap(),
+            signature_errors: register_int_counter_with_registry!(
                 "total_signature_errors",
-                "Number of transaction signature errors"
+                "Number of transaction signature errors",
+                registry,
             )
             .unwrap(),
-            shared_obj_tx: register_int_counter!(
+            shared_obj_tx: register_int_counter_with_registry!(
                 "num_shared_obj_tx",
-                "Number of transactions involving shared objects"
+                "Number of transactions involving shared objects",
+                registry,
             )
             .unwrap(),
-            tx_already_processed: register_int_counter!(
+            tx_already_processed: register_int_counter_with_registry!(
                 "num_tx_already_processed",
-                "Number of transaction orders already processed previously"
+                "Number of transaction orders already processed previously",
+                registry,
             )
             .unwrap(),
-            num_input_objs: register_histogram!(
+            num_input_objs: register_histogram_with_registry!(
                 "num_input_objects",
                 "Distribution of number of input TX objects per TX",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            num_shared_objects: register_histogram!(
+            num_shared_objects: register_histogram_with_registry!(
                 "num_shared_objects",
                 "Number of shared input objects per TX",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            batch_size: register_histogram!(
+            batch_size: register_histogram_with_registry!(
                 "batch_size",
                 "Distribution of size of transaction batch",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            gossip_queued_count: register_int_counter!(
+            gossip_queued_count: register_int_counter_with_registry!(
                 "gossip_queued_count",
                 "Number of digests queued from gossip peers",
+                registry,
             )
             .unwrap(),
-            gossip_sync_count: register_int_counter!(
+            gossip_sync_count: register_int_counter_with_registry!(
                 "gossip_sync_count",
-                "Number of certificates downloaded from gossip peers"
+                "Number of certificates downloaded from gossip peers",
+                registry,
             )
             .unwrap(),
-            gossip_task_success_count: register_int_counter!(
+            gossip_task_success_count: register_int_counter_with_registry!(
                 "gossip_task_success_count",
-                "Number of gossip tasks that completed successfully"
+                "Number of gossip tasks that completed successfully",
+                registry,
             )
             .unwrap(),
-            gossip_task_error_count: register_int_counter!(
+            gossip_task_error_count: register_int_counter_with_registry!(
                 "gossip_task_error_count",
-                "Number of gossip tasks that completed with errors"
+                "Number of gossip tasks that completed with errors",
+                registry,
             )
             .unwrap(),
         }
     }
 }
-
-impl Default for AuthorityMetrics {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// One cannot register a metric multiple times.  We protect initialization with lazy_static
-// for cases such as local tests or "sui start" which starts multiple authorities in one process.
-pub static METRICS: Lazy<AuthorityMetrics> = Lazy::new(AuthorityMetrics::new);
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -273,7 +279,7 @@ pub struct TypedAuthorityState<ES: EventStore> {
     /// Ensures there can only be a single consensus client is updating the state.
     pub consensus_guardrail: AtomicUsize,
 
-    pub metrics: &'static AuthorityMetrics,
+    pub metrics: AuthorityMetrics,
 
     latest_checkpoint_num: AtomicU64,
 }
@@ -975,7 +981,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
             .lock();
         match &request.request_type {
             CheckpointRequestType::LatestCheckpointProposal => {
-                checkpoint_store.handle_latest_proposal(request)
+                checkpoint_store.handle_latest_proposal(self.committee.load().epoch, request)
             }
             CheckpointRequestType::PastCheckpoint(seq) => {
                 checkpoint_store.handle_past_checkpoint(request.detail, *seq)
@@ -988,6 +994,8 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
         }
     }
 
+    // TODO: This function takes both committee and genesis as parameter.
+    // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
         committee: Committee,
         name: AuthorityName,
@@ -997,6 +1005,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
         event_store: Option<Arc<ES>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
+        prometheus_registry: &prometheus::Registry,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1063,7 +1072,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),
-            metrics: &METRICS,
+            metrics: AuthorityMetrics::new(prometheus_registry),
             latest_checkpoint_num: AtomicU64::new(0),
         };
 
