@@ -55,7 +55,7 @@ module fungible_tokens::basket {
 
         coin::deposit(&mut reserve.sui, sui);
         coin::deposit(&mut reserve.managed, managed);
-        coin::mint(num_sui, &mut reserve.treasury_cap, ctx)
+        coin::mint(&mut reserve.treasury_cap, num_sui, ctx)
     }
 
     /// Burn BASKET coins and return the underlying reserve assets
@@ -63,7 +63,7 @@ module fungible_tokens::basket {
         reserve: &mut Reserve, basket: Coin<BASKET>, ctx: &mut TxContext
     ): (Coin<SUI>, Coin<MANAGED>) {
         let num_basket = coin::value(&basket);
-        coin::burn(basket, &mut reserve.treasury_cap);
+        coin::burn(&mut reserve.treasury_cap, basket);
         let sui = coin::withdraw(&mut reserve.sui, num_basket, ctx);
         let managed = coin::withdraw(&mut reserve.managed, num_basket, ctx);
         (sui, managed)
