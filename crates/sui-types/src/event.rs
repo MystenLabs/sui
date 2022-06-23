@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::identifier::Identifier;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::StructTag;
 use name_variant::NamedVariant;
 use schemars::JsonSchema;
@@ -147,15 +148,15 @@ impl Event {
     }
 
     pub fn delete_object(
-        package_id: ObjectID,
-        module: Identifier,
+        package_id: &AccountAddress,
+        module: &IdentStr,
         function: Identifier,
         sender: SuiAddress,
         object_id: ObjectID,
     ) -> Self {
         Event::DeleteObject {
-            package_id,
-            transaction_module: module,
+            package_id: ObjectID::from(*package_id),
+            transaction_module: Identifier::from(module),
             transaction_function: function,
             sender,
             object_id,
