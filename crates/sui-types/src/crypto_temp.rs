@@ -9,11 +9,13 @@ use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
+use ed25519_dalek as dalek;
+use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
 use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use schemars::JsonSchema;
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
@@ -22,26 +24,21 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
-use blst::min_pk::{SecretKey as BLSSecretKey, PublicKey as BLSPublicKey, AggregatePublicKey, AggregateSignature};
-use blst::{min_pk as bls, BLST_ERROR};
-use rand::{RngCore};
-
+use blst::min_pk::{SecretKey};
+use rand::{RngCore, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
 pub struct KeyPair {
-    public_key: BLSPublicKey,
-    secret_key: BLSSecretKey,
+    key_pair: DalekKeypair,
     public_key_cell: OnceCell<PublicKeyBytes>,
 }
-
-const BLST_PK_SIZE: usize = 48;
-const BLST_SIG_SIZE: usize = 96;
 
 impl KeyPair {
     pub fn public_key_bytes(&self) -> &PublicKeyBytes {
         self.public_key_cell.get_or_init(|| {
-            let pk_arr: [u8; BLST_PK_SIZE] = self.public_key.to_bytes();
+            let pk_arr: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] = self.key_pair.public.to_bytes();
             PublicKeyBytes(pk_arr)
         })
     }
@@ -51,41 +48,39 @@ impl KeyPair {
     #[must_use]
     pub fn copy(&self) -> KeyPair {
         KeyPair {
-            public_key: BLSPublicKey::from_bytes(&self.public_key.to_bytes()).unwrap(),
-            secret_key: BLSSecretKey::from_bytes(&self.secret_key.to_bytes()).unwrap(),
+            key_pair: DalekKeypair {
+                secret: dalek::SecretKey::from_bytes(self.key_pair.secret.as_bytes()).unwrap(),
+                public: dalek::PublicKey::from_bytes(self.public_key_bytes().as_ref()).unwrap(),
+            },
             public_key_cell: OnceCell::new(),
         }
     }
 
-    // /// Make a Narwhal-compatible key pair from a Sui keypair.
-    // pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
-    //     let key = self.copy();
-    //     Ed25519KeyPair {
-    //         name: Ed25519PublicKey(key.key_pair.public),
-    //         secret: Ed25519PrivateKey(key.key_pair.secret),
-    //     }
-    // }
+    /// Make a Narwhal-compatible key pair from a Sui keypair.
+    pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
+        let key = self.copy();
+        Ed25519KeyPair {
+            name: Ed25519PublicKey(key.key_pair.public),
+            secret: Ed25519PrivateKey(key.key_pair.secret),
+        }
+    }
 }
 
-// impl From<DalekKeypair> for KeyPair {
-//     fn from(dalek_keypair: DalekKeypair) -> Self {
-//         Self {
-//             key_pair: dalek_keypair,
-//             public_key_cell: OnceCell::new(),
-//         }
-//     }
-// }
+impl From<DalekKeypair> for KeyPair {
+    fn from(dalek_keypair: DalekKeypair) -> Self {
+        Self {
+            key_pair: dalek_keypair,
+            public_key_cell: OnceCell::new(),
+        }
+    }
+}
 
 impl Serialize for KeyPair {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
-        let key_concat: Vec<u8> = self.public_key.to_bytes()
-            .iter().cloned()
-            .chain(self.secret_key.to_bytes().iter().cloned())
-            .collect();
-        serializer.serialize_str(&base64ct::Base64::encode_string(&key_concat[..]))
+        serializer.serialize_str(&base64ct::Base64::encode_string(&self.key_pair.to_bytes()))
     }
 }
 
@@ -97,47 +92,42 @@ impl<'de> Deserialize<'de> for KeyPair {
         let s = String::deserialize(deserializer)?;
         let value = base64ct::Base64::decode_vec(&s)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        let public_key = BLSPublicKey::from_bytes(&value[..BLST_PK_SIZE])
-            .map_err(|err| serde::de::Error::custom("BLST FAILURE"))?;
-        let secret_key = BLSSecretKey::from_bytes(&value[BLST_PK_SIZE..])
-            .map_err(|err| serde::de::Error::custom("BLST FAILURE"))?;
+        let key = DalekKeypair::from_bytes(&value)
+            .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(KeyPair {
-            public_key: public_key,
-            secret_key: secret_key,
+            key_pair: key,
             public_key_cell: OnceCell::new(),
         })
     }
 }
 
-// impl FromStr for KeyPair {
-//     type Err = anyhow::Error;
+impl FromStr for KeyPair {
+    type Err = anyhow::Error;
 
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         let value = base64ct::Base64::decode_vec(s).map_err(|e| anyhow!("{}", e.to_string()))?;
-//         let key = dalek::Keypair::from_bytes(&value).map_err(|e| anyhow!("{}", e.to_string()))?;
-//         Ok(KeyPair {
-//             key_pair: key,
-//             public_key_cell: OnceCell::new(),
-//         })
-//     }
-// }
-
-const dst: &'static [u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_";
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = base64ct::Base64::decode_vec(s).map_err(|e| anyhow!("{}", e.to_string()))?;
+        let key = dalek::Keypair::from_bytes(&value).map_err(|e| anyhow!("{}", e.to_string()))?;
+        Ok(KeyPair {
+            key_pair: key,
+            public_key_cell: OnceCell::new(),
+        })
+    }
+}
 
 impl signature::Signer<Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        let signature_bytes = self.secret_key.sign(msg, dst, &[]).to_bytes();
+        let signature_bytes = self.key_pair.try_sign(msg)?;
         let public_key_bytes = self.public_key_bytes().as_ref();
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
-        result_bytes[..BLST_SIG_SIZE].copy_from_slice(&signature_bytes);
-        result_bytes[BLST_SIG_SIZE..].copy_from_slice(public_key_bytes);
+        result_bytes[..ed25519_dalek::SIGNATURE_LENGTH].copy_from_slice(signature_bytes.as_ref());
+        result_bytes[ed25519_dalek::SIGNATURE_LENGTH..].copy_from_slice(public_key_bytes);
         Ok(Signature(result_bytes))
     }
 }
 
 impl signature::Signer<AuthoritySignature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<AuthoritySignature, signature::Error> {
-        let sig = self.secret_key.sign(msg, dst, &[]);
+        let sig = self.key_pair.try_sign(msg)?;
         Ok(AuthoritySignature(sig))
     }
 }
@@ -149,18 +139,18 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
 pub struct PublicKeyBytes(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
-    [u8; BLST_PK_SIZE],
+    [u8; dalek::PUBLIC_KEY_LENGTH],
 );
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
-    // /// Make a Narwhal-compatible public key from a Sui pub.
-    // pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
-    //     let pub_key = dalek::PublicKey::from_bytes(&self.0)?;
-    //    /watch Ok(Ed25519PublicKey(pub_key))
-    // }
+    /// Make a Narwhal-compatible public key from a Sui pub.
+    pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
+        let pub_key = dalek::PublicKey::from_bytes(&self.0)?;
+        Ok(Ed25519PublicKey(pub_key))
+    }
 }
 
 impl AsRef<[u8]> for PublicKeyBytes {
@@ -169,13 +159,13 @@ impl AsRef<[u8]> for PublicKeyBytes {
     }
 }
 
-impl TryInto<BLSPublicKey> for PublicKeyBytes {
+impl TryInto<dalek::PublicKey> for PublicKeyBytes {
     type Error = SuiError;
 
-    fn try_into(self) -> Result<BLSPublicKey, Self::Error> {
+    fn try_into(self) -> Result<dalek::PublicKey, Self::Error> {
         // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
-        BLSPublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
+        dalek::PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
     }
 }
 
@@ -184,7 +174,7 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
     type Error = SuiError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
-        let arr: [u8; BLST_PK_SIZE] = bytes
+        let arr: [u8; dalek::PUBLIC_KEY_LENGTH] = bytes
             .try_into()
             .map_err(|_| SuiError::InvalidAuthenticator)?;
         Ok(Self(arr))
@@ -221,7 +211,6 @@ pub fn random_key_pairs(num: usize) -> Vec<KeyPair> {
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
 // TODO: rename to random_key_pair
 pub fn get_key_pair() -> (SuiAddress, KeyPair) {
-
     get_key_pair_from_rng(&mut OsRng)
 }
 
@@ -230,15 +219,9 @@ pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, KeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let seed = [0u8; 32];
-    OsRng.fill_bytes(&mut seed);
-
-    let sk = BLSSecretKey::key_gen(&seed, &[]).unwrap();
-    let pk = sk.sk_to_pk();
-
+    let kp = DalekKeypair::generate(csprng);
     let keypair = KeyPair {
-        public_key: pk,
-        secret_key: sk,
+        key_pair: kp,
         public_key_cell: OnceCell::new(),
     };
     (SuiAddress::from(keypair.public_key_bytes()), keypair)
@@ -247,8 +230,7 @@ where
 // TODO: C-GETTER
 pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
     let keypair = KeyPair {
-        public_key: BLSPublicKey::from_bytes(&bytes[..BLST_PK_SIZE]).unwrap(),
-        secret_key: BLSSecretKey::from_bytes(&bytes[BLST_PK_SIZE..]).unwrap(), 
+        key_pair: DalekKeypair::from_bytes(bytes).unwrap(),
         public_key_cell: OnceCell::new(),
     };
     (SuiAddress::from(keypair.public_key_bytes()), keypair)
@@ -260,7 +242,7 @@ pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
 
 // TODO: replace this with a byte interpretation based on multicodec
 pub const SUI_SIGNATURE_LENGTH: usize =
-    BLST_PK_SIZE + BLST_SIG_SIZE;
+    ed25519_dalek::PUBLIC_KEY_LENGTH + ed25519_dalek::SIGNATURE_LENGTH;
 
 #[serde_as]
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
@@ -308,11 +290,11 @@ impl Signature {
     }
 
     pub fn signature_bytes(&self) -> &[u8] {
-        &self.0[..BLST_SIG_SIZE]
+        &self.0[..ed25519_dalek::SIGNATURE_LENGTH]
     }
 
     pub fn public_key_bytes(&self) -> &[u8] {
-        &self.0[BLST_SIG_SIZE..]
+        &self.0[ed25519_dalek::SIGNATURE_LENGTH..]
     }
 
     /// This performs signature verification on the passed-in signature, additionally checking
@@ -326,33 +308,30 @@ impl Signature {
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
         let public_key =
-            &BLSPublicKey::from_bytes(public_key_bytes.as_ref()).map_err(|err| {
+            dalek::PublicKey::from_bytes(public_key_bytes.as_ref()).map_err(|err| {
                 SuiError::InvalidSignature {
-                    error: "Error".to_string(),
+                    error: err.to_string(),
                 }
             })?;
 
         // perform cryptographic signature check
-        let err = signature
-            .verify(true,&message, dst, &[], public_key, false);
-        match err {
-            BLST_ERROR::BLST_SUCCESS => Ok(()),
-            _ => Err(SuiError::InvalidSignature {
-                error: "Invalid signature".to_string()
+        public_key
+            .verify(&message, &signature)
+            .map_err(|error| SuiError::InvalidSignature {
+                error: error.to_string(),
             })
-        }
     }
 
     pub fn get_verification_inputs<T>(
         &self,
         value: &T,
         author: SuiAddress,
-    ) -> Result<(Vec<u8>, bls::Signature, PublicKeyBytes), SuiError>
+    ) -> Result<(Vec<u8>, ed25519_dalek::Signature, PublicKeyBytes), SuiError>
     where
         T: Signable<Vec<u8>>,
     {
         // Is this signature emitted by the expected author?
-        let public_key_bytes: [u8; BLST_PK_SIZE] = self
+        let public_key_bytes: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] = self
             .public_key_bytes()
             .try_into()
             .expect("byte lengths match");
@@ -365,9 +344,9 @@ impl Signature {
 
         // deserialize the signature
         let signature =
-            bls::Signature::from_bytes(self.signature_bytes()).map_err(|err| {
+            ed25519_dalek::Signature::from_bytes(self.signature_bytes()).map_err(|err| {
                 SuiError::InvalidSignature {
-                    error: "Error".to_string(),
+                    error: err.to_string(),
                 }
             })?;
 
@@ -382,46 +361,21 @@ impl Signature {
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
 #[serde_as]
-#[derive(Debug, Eq, PartialEq, Copy, Clone, JsonSchema)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AuthoritySignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, _>")]
-    pub bls::Signature,
+    pub dalek::Signature,
 );
-
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-// There is a strong requirement for this specific impl. in Fab benchmarks
-impl Serialize for AuthoritySignature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let str = self.encode_base64();
-        serializer.serialize_newtype_struct("Ed25519PublicKey", &str)
-    }
-}
-
-// There is a strong requirement for this specific impl. in Fab benchmarks
-impl<'de> Deserialize<'de> for AuthoritySignature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let value = Self::decode_base64(&s).map_err(|e| de::Error::custom(e.to_string()))?;
-        Ok(value)
+        self.0.as_ref()
     }
 }
 
 impl signature::Signature for AuthoritySignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let sig = bls::Signature::from_bytes(bytes)
-            .map_err(|x| signature::Error::new()).unwrap();
+        let sig = dalek::Signature::from_bytes(bytes)?;
         Ok(AuthoritySignature(sig))
     }
 }
@@ -444,7 +398,7 @@ impl AuthoritySignature {
         T: Signable<Vec<u8>>,
     {
         // is this a cryptographically valid public Key?
-        let public_key: BLSPublicKey = author.try_into()?;
+        let public_key: dalek::PublicKey = author.try_into()?;
 
         // access the signature
         let signature = self.0;
@@ -454,14 +408,11 @@ impl AuthoritySignature {
         value.write(&mut message);
 
         // perform cryptographic signature check
-        let err = signature
-            .verify(true, &message, dst, &[], &public_key, true);
-        match err {
-            BLST_ERROR::BLST_SUCCESS => Ok(()),
-            _ => Err(SuiError::InvalidSignature {
-                error: "Invalid signature".to_string()
+        public_key
+            .verify(&message, &signature)
+            .map_err(|error| SuiError::InvalidSignature {
+                error: error.to_string(),
             })
-        }
     }
 
     /// This performs signature verification for a batch of signatures, equipped with a trusted cache of deserialized Public Keys that
@@ -471,7 +422,7 @@ impl AuthoritySignature {
     pub fn verify_batch<T, I, K>(
         value: &T,
         votes: I,
-        key_cache: &HashMap<PublicKeyBytes, BLSPublicKey>,
+        key_cache: &HashMap<PublicKeyBytes, dalek::PublicKey>,
     ) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
@@ -481,35 +432,30 @@ impl AuthoritySignature {
         let mut msg = Vec::new();
         value.write(&mut msg);
         let mut messages: Vec<&[u8]> = Vec::new();
-        let mut signatures: Vec<&bls::Signature> = Vec::new();
-        let mut public_keys: Vec<&BLSPublicKey> = Vec::new();
+        let mut signatures: Vec<dalek::Signature> = Vec::new();
+        let mut public_keys: Vec<dalek::PublicKey> = Vec::new();
         for tuple in votes.into_iter() {
             let (authority, signature) = tuple.borrow();
             // do we know, or can we build a valid public key?
             match key_cache.get(authority) {
-                Some(v) => public_keys.push(v),
+                Some(v) => public_keys.push(*v),
                 None => {
                     let public_key = (*authority).try_into()?;
-                    public_keys.push(&public_key);
+                    public_keys.push(public_key);
                 }
             }
 
             // build a signature
-            signatures.push(&signature.0);
+            signatures.push(signature.0);
 
             // collect the message
             messages.push(&msg);
         }
-
-        let aggregated_signature = AggregateSignature::aggregate(&signatures[..], true)?.to_signature();
-        let verify = aggregated_signature.aggregate_verify(true, &messages[..], dst, &public_keys[..], true);
-
-        match (verify) {
-            BLST_ERROR::BLST_SUCCESS => Ok(()),
-            _ => Err(SuiError::InvalidSignature {
-                error: format!("ERROR"),
-            })
-        }
+        dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..]).map_err(|error| {
+            SuiError::InvalidSignature {
+                error: format!("{error}"),
+            }
+        })
     }
 }
 
@@ -677,7 +623,7 @@ where
     }
 }
 
-pub type PubKeyLookup = HashMap<PublicKeyBytes, BLSPublicKey>;
+pub type PubKeyLookup = HashMap<PublicKeyBytes, dalek::PublicKey>;
 
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
@@ -691,8 +637,8 @@ pub struct VerificationObligation {
     lookup: PubKeyLookup,
     messages: Vec<Vec<u8>>,
     pub message_index: Vec<usize>,
-    pub signatures: Vec<bls::Signature>,
-    pub public_keys: Vec<BLSPublicKey>,
+    pub signatures: Vec<dalek::Signature>,
+    pub public_keys: Vec<dalek::PublicKey>,
 }
 
 impl VerificationObligation {
@@ -706,7 +652,7 @@ impl VerificationObligation {
     pub fn lookup_public_key(
         &mut self,
         key_bytes: &PublicKeyBytes,
-    ) -> Result<BLSPublicKey, SuiError> {
+    ) -> Result<dalek::PublicKey, SuiError> {
         match self.lookup.get(key_bytes) {
             Some(v) => Ok(*v),
             None => {
@@ -731,22 +677,14 @@ impl VerificationObligation {
             .iter()
             .map(|idx| &self.messages[*idx][..])
             .collect();
-
-        let aggregated_signature = AggregateSignature::aggregate(&self.signatures[..], true)?.to_signature();
-        let verify = aggregated_signature.aggregate_verify(
-            true,
+        dalek::verify_batch(
             &messages_inner[..],
-            dst,
+            &self.signatures[..],
             &self.public_keys[..],
-            true
-        );
-
-        match (verify) {
-            BLST_ERROR::BLST_SUCCESS => Ok(()),
-            _ => Err(SuiError::InvalidSignature {
-                error: format!("ERROR"),
-            })
-        }
+        )
+        .map_err(|error| SuiError::InvalidSignature {
+            error: format!("{error}"),
+        })?;
 
         Ok(self.lookup)
     }
