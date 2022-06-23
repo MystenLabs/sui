@@ -73,6 +73,7 @@ module defi::flash_lender {
         let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
         transfer::share_object(flash_lender);
+
         // give the creator admin permissions
         AdminCap { id: tx_context::new_id(ctx), flash_lender_id }
     }
@@ -81,6 +82,7 @@ module defi::flash_lender {
     public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
         let balance = coin::into_balance(to_lend);
         let withdraw_cap = new(balance, fee, ctx);
+
         transfer::transfer(withdraw_cap, tx_context::sender(ctx))
     }
 
@@ -97,6 +99,7 @@ module defi::flash_lender {
         let loan = coin::take(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
         let receipt = Receipt { flash_lender_id: *id::id(self), repay_amount };
+
         (loan, receipt)
     }
 

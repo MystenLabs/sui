@@ -195,7 +195,7 @@ module sui::coin {
     // === Entrypoints ===
 
     /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
-    public entry fun mint_<T>(
+    public entry fun mint_and_transfer<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
         transfer::transfer(mint(c, amount, ctx), recipient)
