@@ -16,6 +16,8 @@ import {
     type DataType,
 } from './ObjectResultType';
 
+import type {TransactionEffectsResponse} from '@mysten/sui.js';
+
 const DATATYPE_DEFAULT: DataType = {
     id: '',
     category: '',
@@ -38,6 +40,30 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
         />
     );
 };
+
+function getObjectData(objID: string, network: string) {
+    return rpc(network)
+        .getObject(objID as string)
+        .then((objState) => {
+            const resp: DataType = translate(objState) as DataType;
+            console.log(objState);
+            if (resp.objType === 'Move Package' && resp.data.tx_digest) {
+                console.log(resp, 'as');
+                console.log(resp.data.tx_digest, 'tx');
+                return rpc(network)
+                    .getTransactionWithEffects(resp.data.tx_digest)
+                    .then((txEff: TransactionEffectsResponse) => ({
+                        txData: txEff,
+                        objState: resp,
+                    }))
+                    .catch((err) => {
+                        console.log(err.message);
+                        return { objState: resp };
+                    });
+            }
+            return { objState: resp };
+        });
+}
 
 const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
