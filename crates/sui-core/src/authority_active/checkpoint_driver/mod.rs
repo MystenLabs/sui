@@ -202,7 +202,10 @@ pub async fn checkpoint_process<A>(
 
         let _start_checkpoint_making = weight > committee.quorum_threshold();
 
-        let proposal = state_checkpoints.lock().new_proposal().clone();
+        let proposal = state_checkpoints
+            .lock()
+            .new_proposal(committee.epoch)
+            .clone();
         if let Ok(my_proposal) = proposal {
             diff_proposals(
                 active_authority,

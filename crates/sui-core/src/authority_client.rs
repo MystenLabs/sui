@@ -341,8 +341,14 @@ impl LocalAuthorityClient {
         let store = Arc::new(AuthorityStore::open(&store_path, None));
         let mut checkpoints_path = path.clone();
         checkpoints_path.push("checkpoints");
-        let checkpoints = CheckpointStore::open(&checkpoints_path, None, address, secret.clone())
-            .expect("Should not fail to open local checkpoint DB");
+        let checkpoints = CheckpointStore::open(
+            &checkpoints_path,
+            None,
+            committee.epoch,
+            address,
+            secret.clone(),
+        )
+        .expect("Should not fail to open local checkpoint DB");
 
         let state = AuthorityState::new(
             committee.clone(),

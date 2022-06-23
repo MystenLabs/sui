@@ -48,6 +48,7 @@ fn random_ckpoint_store_num(
             let cps = CheckpointStore::open(
                 path.clone(),
                 None,
+                committee.epoch,
                 *k.public_key_bytes(),
                 Arc::pin(k.copy()),
             )
@@ -61,7 +62,7 @@ fn random_ckpoint_store_num(
 #[test]
 fn crash_recovery() {
     let mut rng = StdRng::from_seed(RNG_SEED);
-    let (keys, _committee) = make_committee_key(&mut rng);
+    let (keys, committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
 
     // Setup
@@ -76,6 +77,7 @@ fn crash_recovery() {
     let mut cps = CheckpointStore::open(
         path.clone(),
         None,
+        committee.epoch,
         *k.public_key_bytes(),
         Arc::pin(k.copy()),
     )
@@ -107,7 +109,7 @@ fn crash_recovery() {
     let locals = cps.get_locals();
     assert_eq!(locals.next_transaction_sequence, 4);
 
-    let proposal = cps.set_proposal().unwrap();
+    let proposal = cps.set_proposal(committee.epoch).unwrap();
     assert_eq!(*proposal.sequence_number(), 0);
 
     cps.handle_internal_batch(7, &[(4, t4), (5, t5), (6, t6)])
@@ -116,8 +118,14 @@ fn crash_recovery() {
     // Delete and re-open DB
     drop(cps);
 
-    let mut cps_new =
-        CheckpointStore::open(path, None, *k.public_key_bytes(), Arc::pin(k.copy())).unwrap();
+    let mut cps_new = CheckpointStore::open(
+        path,
+        None,
+        committee.epoch,
+        *k.public_key_bytes(),
+        Arc::pin(k.copy()),
+    )
+    .unwrap();
 
     // TEST 3 -- the current proposal is correctly recreated.
 
@@ -184,7 +192,7 @@ fn make_checkpoint_db() {
 
 #[test]
 fn make_proposals() {
-    let (_committee, _keys, mut stores) = random_ckpoint_store();
+    let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
     let (_, mut cps3) = stores.pop().unwrap();
@@ -209,9 +217,9 @@ fn make_proposals() {
     cps4.update_processed_transactions(&[(1, t4), (2, t5)])
         .unwrap();
 
-    let p1 = cps1.set_proposal().unwrap();
-    let p2 = cps2.set_proposal().unwrap();
-    let p3 = cps3.set_proposal().unwrap();
+    let p1 = cps1.set_proposal(committee.epoch).unwrap();
+    let p2 = cps2.set_proposal(committee.epoch).unwrap();
+    let p3 = cps3.set_proposal(committee.epoch).unwrap();
 
     let ckp_items: Vec<_> = p1
         .transactions()
@@ -238,7 +246,7 @@ fn make_proposals() {
 
 #[test]
 fn make_diffs() {
-    let (_committee, _keys, mut stores) = random_ckpoint_store();
+    let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
     let (_, mut cps3) = stores.pop().unwrap();
@@ -263,10 +271,10 @@ fn make_diffs() {
     cps4.update_processed_transactions(&[(1, t4), (2, t5)])
         .unwrap();
 
-    let p1 = cps1.set_proposal().unwrap();
-    let p2 = cps2.set_proposal().unwrap();
-    let p3 = cps3.set_proposal().unwrap();
-    let p4 = cps4.set_proposal().unwrap();
+    let p1 = cps1.set_proposal(committee.epoch).unwrap();
+    let p2 = cps2.set_proposal(committee.epoch).unwrap();
+    let p3 = cps3.set_proposal(committee.epoch).unwrap();
+    let p4 = cps4.set_proposal(committee.epoch).unwrap();
 
     let diff12 = p1.fragment_with(&p2);
     let diff23 = p2.fragment_with(&p3);
@@ -292,7 +300,7 @@ fn make_diffs() {
 
 #[test]
 fn latest_proposal() {
-    let (_committee, _keys, mut stores) = random_ckpoint_store();
+    let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
     let (_, mut cps3) = stores.pop().unwrap();
@@ -322,7 +330,9 @@ fn latest_proposal() {
     // No checkpoint no proposal
 
     let request = CheckpointRequest::latest(false);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1
+        .handle_latest_proposal(committee.epoch, &request)
+        .expect("no errors");
     assert!(response.detail.is_none());
     assert!(matches!(
         response.info,
@@ -335,9 +345,9 @@ fn latest_proposal() {
 
     // ---
 
-    let p1 = cps1.set_proposal().unwrap();
-    let p2 = cps2.set_proposal().unwrap();
-    let p3 = cps3.set_proposal().unwrap();
+    let p1 = cps1.set_proposal(committee.epoch).unwrap();
+    let p2 = cps2.set_proposal(committee.epoch).unwrap();
+    let p3 = cps3.set_proposal(committee.epoch).unwrap();
 
     // --- TEST 1 ---
 
@@ -345,7 +355,9 @@ fn latest_proposal() {
 
     // Check the latest checkpoint with no detail
     let request = CheckpointRequest::latest(false);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1
+        .handle_latest_proposal(committee.epoch, &request)
+        .expect("no errors");
     assert!(response.detail.is_none());
     assert!(matches!(
         response.info,
@@ -364,7 +376,9 @@ fn latest_proposal() {
 
     // Check the latest checkpoint with detail
     let request = CheckpointRequest::latest(true);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1
+        .handle_latest_proposal(committee.epoch, &request)
+        .expect("no errors");
     assert!(response.detail.is_some());
     assert!(matches!(
         response.info,
@@ -392,15 +406,15 @@ fn latest_proposal() {
         .collect();
 
     let transactions = CheckpointContents::new(ckp_items.clone().into_iter());
-    let summary = CheckpointSummary::new(0, &transactions, None);
+    let summary = CheckpointSummary::new(committee.epoch, 0, &transactions, None);
 
-    cps1.handle_internal_set_checkpoint(summary.clone(), &transactions)
+    cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
-    cps2.handle_internal_set_checkpoint(summary.clone(), &transactions)
+    cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
-    cps3.handle_internal_set_checkpoint(summary.clone(), &transactions)
+    cps3.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
-    cps4.handle_internal_set_checkpoint(summary, &transactions)
+    cps4.handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
         .unwrap();
 
     // --- TEST3 ---
@@ -408,10 +422,12 @@ fn latest_proposal() {
     // No valid checkpoint proposal condition...
     assert!(cps1.get_locals().current_proposal.is_none());
     // ... because a valid checkpoint cannot be generated.
-    assert!(cps1.set_proposal().is_err());
+    assert!(cps1.set_proposal(committee.epoch).is_err());
 
     let request = CheckpointRequest::latest(false);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1
+        .handle_latest_proposal(committee.epoch, &request)
+        .expect("no errors");
     assert!(response.detail.is_none());
     assert!(matches!(
         response.info,
@@ -426,7 +442,9 @@ fn latest_proposal() {
 
     // When details are needed, then return unexecuted transactions if there is no proposal
     let request = CheckpointRequest::latest(true);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1
+        .handle_latest_proposal(committee.epoch, &request)
+        .expect("no errors");
     assert!(response.detail.is_some());
     use typed_store::traits::Map;
     let txs = response.detail.unwrap();
@@ -452,13 +470,15 @@ fn latest_proposal() {
         .collect();
     cps1.update_processed_transactions(&batch[..]).unwrap();
 
-    let _p1 = cps1.set_proposal().unwrap();
+    let _p1 = cps1.set_proposal(committee.epoch).unwrap();
 
     // --- TEST 5 ---
 
     // Get the full proposal with previous proposal
     let request = CheckpointRequest::latest(true);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1
+        .handle_latest_proposal(committee.epoch, &request)
+        .expect("no errors");
     assert!(matches!(
         response.info,
         AuthorityCheckpointInfo::Proposal { .. }
@@ -500,9 +520,9 @@ fn set_get_checkpoint() {
     cps4.update_processed_transactions(&[(1, t4), (2, t5)])
         .unwrap();
 
-    let p1 = cps1.set_proposal().unwrap();
-    let p2 = cps2.set_proposal().unwrap();
-    let p3 = cps3.set_proposal().unwrap();
+    let p1 = cps1.set_proposal(committee.epoch).unwrap();
+    let p2 = cps2.set_proposal(committee.epoch).unwrap();
+    let p3 = cps3.set_proposal(committee.epoch).unwrap();
 
     // --- TEST 0 ---
 
@@ -531,13 +551,13 @@ fn set_get_checkpoint() {
         .cloned();
 
     let transactions = CheckpointContents::new(ckp_items);
-    let summary = CheckpointSummary::new(0, &transactions, None);
+    let summary = CheckpointSummary::new(committee.epoch, 0, &transactions, None);
 
-    cps1.handle_internal_set_checkpoint(summary.clone(), &transactions)
+    cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
-    cps2.handle_internal_set_checkpoint(summary.clone(), &transactions)
+    cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
-    cps3.handle_internal_set_checkpoint(summary, &transactions)
+    cps3.handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
         .unwrap();
     // cps4.handle_internal_set_checkpoint(summary, &transactions)
     //     .unwrap();
@@ -615,7 +635,7 @@ fn set_get_checkpoint() {
 #[test]
 fn checkpoint_integration() {
     let mut rng = StdRng::from_seed(RNG_SEED);
-    let (keys, _committee) = make_committee_key(&mut rng);
+    let (keys, committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
 
     // Setup
@@ -627,8 +647,14 @@ fn checkpoint_integration() {
     // Create an authority
     // Make a checkpoint store:
 
-    let mut cps =
-        CheckpointStore::open(path, None, *k.public_key_bytes(), Arc::pin(k.copy())).unwrap();
+    let mut cps = CheckpointStore::open(
+        path,
+        None,
+        committee.epoch,
+        *k.public_key_bytes(),
+        Arc::pin(k.copy()),
+    )
+    .unwrap();
 
     let mut next_tx_num: TxSequenceNumber = 0;
     let mut unprocessed = Vec::new();
@@ -653,7 +679,7 @@ fn checkpoint_integration() {
             .unwrap();
 
         // Step 1. Make a proposal
-        let _proposal = cps.set_proposal().unwrap();
+        let _proposal = cps.set_proposal(committee.epoch).unwrap();
 
         // Step 2. Continue to process transactions while a proposal is out.
         let some_fresh_transactions: Vec<_> = (0..7)
@@ -677,17 +703,18 @@ fn checkpoint_integration() {
         let transactions = CheckpointContents::new(unprocessed.clone().into_iter());
         let next_checkpoint = cps.get_locals().next_checkpoint;
         let summary = CheckpointSummary::new(
+            committee.epoch,
             next_checkpoint,
             &transactions,
             cps.get_prev_checkpoint_digest(next_checkpoint)
                 .expect("previous checkpoint should exist"),
         );
 
-        cps.handle_internal_set_checkpoint(summary.clone(), &transactions)
+        cps.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
             .unwrap();
 
         // Cannot make a checkpoint proposal before adding the unprocessed transactions
-        assert!(cps.set_proposal().is_err());
+        assert!(cps.set_proposal(committee.epoch).is_err());
         // Loop invariant to ensure termination or error
         assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
     }
@@ -720,6 +747,7 @@ async fn test_batch_to_checkpointing() {
         CheckpointStore::open(
             &checkpoints_path,
             None,
+            committee.epoch,
             *secret.public_key_bytes(),
             secret.clone(),
         )
@@ -889,6 +917,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             CheckpointStore::open(
                 &checkpoints_path,
                 None,
+                committee.epoch,
                 *secret.public_key_bytes(),
                 secret.clone(),
             )
@@ -957,9 +986,9 @@ fn set_fragment_external() {
     cps4.update_processed_transactions(&[(1, t4), (2, t5)])
         .unwrap();
 
-    let p1 = cps1.set_proposal().unwrap();
-    let p2 = cps2.set_proposal().unwrap();
-    let _p3 = cps3.set_proposal().unwrap();
+    let p1 = cps1.set_proposal(committee.epoch).unwrap();
+    let p2 = cps2.set_proposal(committee.epoch).unwrap();
+    let _p3 = cps3.set_proposal(committee.epoch).unwrap();
 
     let fragment12 = p1.fragment_with(&p2);
     // let fragment13 = p1.diff_with(&p3);
@@ -1005,10 +1034,10 @@ fn set_fragment_reconstruct() {
     cps4.update_processed_transactions(&[(1, t4), (2, t5)])
         .unwrap();
 
-    let p1 = cps1.set_proposal().unwrap();
-    let p2 = cps2.set_proposal().unwrap();
-    let p3 = cps3.set_proposal().unwrap();
-    let p4 = cps4.set_proposal().unwrap();
+    let p1 = cps1.set_proposal(committee.epoch).unwrap();
+    let p2 = cps2.set_proposal(committee.epoch).unwrap();
+    let p3 = cps3.set_proposal(committee.epoch).unwrap();
+    let p4 = cps4.set_proposal(committee.epoch).unwrap();
 
     let fragment12 = p1.fragment_with(&p2);
     let fragment34 = p3.fragment_with(&p4);
@@ -1044,7 +1073,7 @@ fn set_fragment_reconstruct_two_components() {
 
     let mut proposals: Vec<_> = test_objects
         .iter_mut()
-        .map(|(_, cps)| cps.set_proposal().unwrap())
+        .map(|(_, cps)| cps.set_proposal(committee.epoch).unwrap())
         .collect();
 
     // Get out the last two
@@ -1096,7 +1125,7 @@ fn set_fragment_reconstruct_two_mutual() {
 
     let mut proposals: Vec<_> = test_objects
         .iter_mut()
-        .map(|(_, cps)| cps.set_proposal().unwrap())
+        .map(|(_, cps)| cps.set_proposal(committee.epoch).unwrap())
         .collect();
 
     // Get out the last two
@@ -1157,7 +1186,7 @@ fn test_fragment_full_flow() {
 
     let mut proposals: Vec<_> = test_objects
         .iter_mut()
-        .map(|(_, cps)| cps.set_proposal().unwrap())
+        .map(|(_, cps)| cps.set_proposal(committee.epoch).unwrap())
         .collect();
 
     // Get out the last two
@@ -1394,6 +1423,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
         let mut checkpoint = CheckpointStore::open(
             &checkpoints_path,
             None,
+            committee.epoch,
             *secret.public_key_bytes(),
             secret.clone(),
         )
