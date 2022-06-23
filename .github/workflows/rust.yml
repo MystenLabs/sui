@@ -79,8 +79,7 @@ jobs:
         run: |
           cargo test --doc --all-features
       # Ensure there are no uncommitted changes in the repo after running tests
-      - name: Changed Files
-        run: scripts/changed-files.sh
+      - run: scripts/changed-files.sh
 
   clippy:
     needs: diff
