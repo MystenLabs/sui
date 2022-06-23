@@ -72,23 +72,13 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
         ...(formatByTransactionKind(
             txKindName,
             txData,
-            getTransactionSender(tx)
+            getTransactionSender(tx),
+            tx.published
         ) ?? []),
         {
             label: 'Transaction Signature',
             value: tx.txSignature,
         },
-        ...(tx.published
-            ? [
-                  {
-                      label: 'Package Published',
-                      category: 'objects',
-                      value: tx.published,
-                      list: false,
-                      link: true,
-                  },
-              ]
-            : []),
         ...(tx.mutated?.length
             ? [
                   {
@@ -138,7 +128,8 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
 function formatByTransactionKind(
     kind: TransactionKindName | undefined,
     data: SuiTransactionKind,
-    sender: string
+    sender: string,
+    publishedId: string | undefined
 ) {
     switch (kind) {
         case 'TransferCoin':
@@ -195,12 +186,6 @@ function formatByTransactionKind(
         case 'Publish':
             const publish = getPublishTransaction(data)!;
             return [
-                {
-                    label: 'Modules',
-                    // TODO: render modules correctly
-                    value: Object.entries(getMovePackageContent(publish)!),
-                    list: true,
-                },
                 ...(sender
                     ? [
                           {
@@ -211,6 +196,23 @@ function formatByTransactionKind(
                           },
                       ]
                     : []),
+                ...(publishedId
+                    ? [
+                          {
+                              label: 'Package Published',
+                              category: 'objects',
+                              value: publishedId,
+                              list: false,
+                              link: true,
+                          },
+                      ]
+                    : []),
+                {
+                    label: 'Modules',
+                    // TODO: render modules correctly
+                    value: Object.entries(getMovePackageContent(publish)!),
+                    list: true,
+                },
             ];
         default:
             return [];
