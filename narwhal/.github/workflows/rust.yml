@@ -48,9 +48,15 @@ jobs:
           cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
       fail-fast: false
+    env:
+      RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
