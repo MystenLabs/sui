@@ -44,7 +44,7 @@ use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority_client::AuthorityAPI, gateway_state::GatewayMetrics,
 };
 use tokio::time::Instant;
 
@@ -110,6 +110,7 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
+    pub gateway_metrics: GatewayMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -117,6 +118,7 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         follower_store: Arc<FollowerStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
+        gateway_metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -133,17 +135,25 @@ impl<A> ActiveAuthority<A> {
             net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
                 committee,
                 authority_clients,
+                gateway_metrics.clone(),
             ))),
+            gateway_metrics,
         })
     }
 
     pub fn new_with_ephemeral_follower_store(
         authority: Arc<AuthorityState>,
         authority_clients: BTreeMap<AuthorityName, A>,
+        gateway_metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
         let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
-        Self::new(authority, follower_store, authority_clients)
+        Self::new(
+            authority,
+            follower_store,
+            authority_clients,
+            gateway_metrics,
+        )
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -199,6 +209,7 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
+            gateway_metrics: self.gateway_metrics.clone(),
         }
     }
 }

@@ -248,12 +248,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
-name = "ascii"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbf56136a5198c7b01a49e3afcbef6cf84597273d298f54432926024107b0109"
-
-[[package]]
 name = "async-lock"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -343,9 +337,9 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "axum"
-version = "0.5.6"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2504b827a8bef941ba3dd64bdffe9cf56ca182908a147edd6189c95fbcae7d"
+checksum = "33d590cacd53140ff87cc2e192eb22fc3dc23c5b3f93b0d4f020677f98e8c629"
 dependencies = [
  "async-trait",
  "axum-core",
@@ -374,9 +368,9 @@ dependencies = [
 
 [[package]]
 name = "axum-core"
-version = "0.2.4"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da31c0ed7b4690e2c78fe4b880d21cd7db04a346ebc658b4270251b695437f17"
+checksum = "cf4d047478b986f14a13edad31a009e2e05cb241f9805d0d75e4cba4e129ad4d"
 dependencies = [
  "async-trait",
  "bytes",
@@ -797,12 +791,6 @@ dependencies = [
  "phf",
  "phf_codegen",
 ]
-
-[[package]]
-name = "chunked_transfer"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fff857943da45f546682664a79488be82e69e43c1a7a2307679ab9afb3a66d2e"
 
 [[package]]
 name = "clang-sys"
@@ -2430,9 +2418,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff8670570af52249509a86f5e3e18a08c60b177071826898fde8997cf5f6bfbb"
+checksum = "75f43d41e26995c17e71ee126451dd3941010b0514a81a9d11f3b341debc2399"
 dependencies = [
  "bytes",
  "fnv",
@@ -4791,21 +4779,8 @@ dependencies = [
  "lazy_static 1.4.0",
  "memchr",
  "parking_lot 0.12.1",
+ "protobuf",
  "thiserror",
-]
-
-[[package]]
-name = "prometheus_exporter"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "019a192344efa197e8edfb2b864a5369ba8a837578d1bee469f21d98a8ed1233"
-dependencies = [
- "ascii",
- "lazy_static 1.4.0",
- "log",
- "prometheus",
- "thiserror",
- "tiny_http",
 ]
 
 [[package]]
@@ -4862,6 +4837,12 @@ dependencies = [
  "bytes",
  "prost",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
 
 [[package]]
 name = "ptree"
@@ -6036,7 +6017,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
- "prometheus_exporter",
+ "prometheus",
  "rand 0.7.3",
  "rayon",
  "rocksdb",
@@ -6194,7 +6175,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
- "prometheus_exporter",
+ "prometheus",
  "rand 0.7.3",
  "rocksdb",
  "schemars",
@@ -6238,6 +6219,7 @@ dependencies = [
  "axum",
  "clap 3.1.18",
  "futures",
+ "http",
  "serde 1.0.137",
  "serde_json",
  "sui",
@@ -6245,11 +6227,13 @@ dependencies = [
  "sui-core",
  "sui-json-rpc-api",
  "sui-types",
+ "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "thiserror",
  "tokio",
  "tower",
+ "tower-http",
  "tracing",
  "tracing-subscriber 0.3.11",
  "workspace-hack",
@@ -6308,7 +6292,7 @@ dependencies = [
  "move-core-types",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "once_cell",
- "prometheus_exporter",
+ "prometheus",
  "schemars",
  "serde 1.0.137",
  "serde_json",
@@ -6359,7 +6343,7 @@ dependencies = [
  "jsonrpsee-core",
  "move-core-types",
  "once_cell",
- "prometheus_exporter",
+ "prometheus",
  "serde 1.0.137",
  "serde_json",
  "sui-core",
@@ -6424,6 +6408,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum",
  "clap 3.1.18",
  "futures",
  "jsonrpsee",
@@ -6431,7 +6416,7 @@ dependencies = [
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=ff5c1d69057fe93be658377462ca2875a57a0223)",
  "parking_lot 0.12.1",
- "prometheus_exporter",
+ "prometheus",
  "sui-config",
  "sui-core",
  "sui-json-rpc",
@@ -6836,6 +6821,7 @@ dependencies = [
  "jsonrpsee-http-server",
  "move-core-types",
  "move-package",
+ "prometheus",
  "rand 0.7.3",
  "rocksdb",
  "sui",
@@ -6943,14 +6929,7 @@ dependencies = [
  "itoa 1.0.2",
  "libc",
  "num_threads",
- "time-macros",
 ]
-
-[[package]]
-name = "time-macros"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 
 [[package]]
 name = "tint"
@@ -6959,19 +6938,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7af24570664a3074673dbbf69a65bdae0ae0b72f2949b1adfbacb736ee4d6896"
 dependencies = [
  "lazy_static 0.2.11",
-]
-
-[[package]]
-name = "tiny_http"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f8734c6d6943ad6df6b588d228a87b4af184998bcffa268ceddf05c2055a8c"
-dependencies = [
- "ascii",
- "chunked_transfer",
- "log",
- "time 0.3.9",
- "url",
 ]
 
 [[package]]
@@ -7232,9 +7198,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d342c6d58709c0a6d48d48dabbb62d4ef955cf5f0f3bbfd845838e7ae88dbae"
+checksum = "3c530c8675c1dbf98facee631536fa116b5fb6382d7dd6dc1b118d970eafe3ba"
 dependencies = [
  "bitflags",
  "bytes",
@@ -8068,7 +8034,6 @@ dependencies = [
  "arrayref",
  "arrayvec 0.5.2",
  "arrayvec 0.7.2",
- "ascii",
  "async-lock",
  "async-recursion",
  "async-stream",
@@ -8119,7 +8084,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "chrono-tz-build",
- "chunked_transfer",
  "clang-sys",
  "clap 2.34.0",
  "clap 3.1.18",
@@ -8428,11 +8392,11 @@ dependencies = [
  "proc-macro-error-attr",
  "proc-macro2",
  "prometheus",
- "prometheus_exporter",
  "prost",
  "prost-build",
  "prost-derive",
  "prost-types",
+ "protobuf",
  "ptree",
  "quote",
  "radix_trie",
@@ -8552,9 +8516,7 @@ dependencies = [
  "thrift",
  "time 0.1.43",
  "time 0.3.9",
- "time-macros",
  "tint",
- "tiny_http",
  "tinyvec",
  "tinyvec_macros",
  "tokio",

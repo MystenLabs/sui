@@ -6,6 +6,7 @@ use crate::authority_active::gossip::configurable_batch_action_client::{
     init_configurable_authorities, BatchAction,
 };
 use crate::authority_active::MAX_RETRY_DELAY_MS;
+use crate::gateway_state::GatewayMetrics;
 use std::time::Duration;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -26,8 +27,12 @@ pub async fn test_gossip_plain() {
 
         let handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
-                    .unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state,
+                    inner_clients,
+                    GatewayMetrics::new_for_tests(),
+                )
+                .unwrap(),
             );
             active_state.spawn_gossip_process(3).await;
         });
@@ -69,8 +74,12 @@ pub async fn test_gossip_error() {
 
         let handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(inner_state, inner_clients)
-                    .unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state,
+                    inner_clients,
+                    GatewayMetrics::new_for_tests(),
+                )
+                .unwrap(),
             );
             active_state.spawn_gossip_process(3).await;
         });

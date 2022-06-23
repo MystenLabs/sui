@@ -27,6 +27,8 @@ use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc_api::EventApiServer;
 
+pub mod metrics;
+
 pub struct SuiNode {
     grpc_server: tokio::task::JoinHandle<Result<()>>,
     _json_rpc_service: Option<jsonrpsee::http_server::HttpServerHandle>,
@@ -39,6 +41,15 @@ pub struct SuiNode {
 
 impl SuiNode {
     pub async fn start(config: &NodeConfig) -> Result<SuiNode> {
+        //
+        // Start metrics server
+        //
+        info!(
+            "Starting Prometheus HTTP endpoint at {}",
+            config.metrics_address
+        );
+        let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
+
         info!(node =? config.public_key(),
             "Initializing sui-node listening on {}", config.network_address
         );
@@ -79,6 +90,7 @@ impl SuiNode {
                 checkpoint_store,
                 genesis,
                 config.enable_event_processing,
+                &prometheus_registry,
             )
             .await,
         );
@@ -104,10 +116,13 @@ impl SuiNode {
                 authority_clients.insert(validator.public_key(), client);
             }
 
+            let gateway_metrics =
+                sui_core::gateway_state::GatewayMetrics::new(&prometheus_registry);
             let active_authority = Arc::new(ActiveAuthority::new(
                 state.clone(),
                 follower_store,
                 authority_clients,
+                gateway_metrics,
             )?);
 
             Some(if is_validator {
@@ -170,28 +185,31 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let (json_rpc_service, ws_subscription_service) = if config.consensus_config().is_some() {
-            (None, None)
+        let json_rpc_service = if config.consensus_config().is_some() {
+            None
         } else {
-            let mut server = JsonRpcServerBuilder::new()?;
+            let mut server = JsonRpcServerBuilder::new(&prometheus_registry)?;
             server.register_module(ReadApi::new(state.clone()))?;
             server.register_module(FullNodeApi::new(state.clone()))?;
             server.register_module(BcsApiImpl::new(state.clone()))?;
 
             let server_handle = server.start(config.json_rpc_address).await?;
+            Some(server_handle)
+        };
 
-            let ws_handle = if let Some(event_handler) = state.event_handler.clone() {
-                let ws_server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+        // TODO: we will change the conditions soon when we introduce txn subs
+        let ws_subscription_service = match (config.websocket_address, state.event_handler.clone())
+        {
+            (Some(ws_addr), Some(event_handler)) => {
+                let ws_server = WsServerBuilder::default().build(ws_addr).await?;
                 let server_addr = ws_server.local_addr()?;
                 let ws_handle =
                     ws_server.start(EventApiImpl::new(state.clone(), event_handler).into_rpc())?;
 
                 info!("Starting WS endpoint at ws://{}", server_addr);
                 Some(ws_handle)
-            } else {
-                None
-            };
-            (Some(server_handle), ws_handle)
+            }
+            _ => None,
         };
 
         let node = Self {

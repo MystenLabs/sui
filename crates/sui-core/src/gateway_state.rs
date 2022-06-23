@@ -13,9 +13,8 @@ use async_trait::async_trait;
 use futures::future;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
-use once_cell::sync::Lazy;
-use prometheus_exporter::prometheus::{
-    register_histogram, register_int_counter, Histogram, IntCounter,
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
 };
 use tracing::{debug, error, Instrument};
 
@@ -63,6 +62,7 @@ pub type GatewayTxSeqNumber = u64;
 const MAX_NUM_TX_RETRIES: usize = 5;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+#[derive(Clone)]
 pub struct GatewayMetrics {
     total_tx_processed: IntCounter,
     total_tx_errored: IntCounter,
@@ -85,92 +85,100 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 impl GatewayMetrics {
-    pub fn new() -> GatewayMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
-            total_tx_processed: register_int_counter!(
+            total_tx_processed: register_int_counter_with_registry!(
                 "total_tx_processed",
-                "Total number of transaction certificates processed in Gateway"
+                "Total number of transaction certificates processed in Gateway",
+                registry,
             )
             .unwrap(),
-            total_tx_errored: register_int_counter!(
+            total_tx_errored: register_int_counter_with_registry!(
                 "total_tx_errored",
-                "Total number of transactions which errored out"
+                "Total number of transactions which errored out",
+                registry,
             )
             .unwrap(),
             // total_effects == total transactions finished
-            num_tx_publish: register_int_counter!(
+            num_tx_publish: register_int_counter_with_registry!(
                 "num_tx_publish",
                 "Number of publish transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_movecall: register_int_counter!(
+            num_tx_movecall: register_int_counter_with_registry!(
                 "num_tx_movecall",
                 "Number of MOVE call transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_splitcoin: register_int_counter!(
+            num_tx_splitcoin: register_int_counter_with_registry!(
                 "num_tx_splitcoin",
                 "Number of split coin transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_mergecoin: register_int_counter!(
+            num_tx_mergecoin: register_int_counter_with_registry!(
                 "num_tx_mergecoin",
                 "Number of merge coin transactions",
+                registry,
             )
             .unwrap(),
-            total_tx_certificates: register_int_counter!(
+            total_tx_certificates: register_int_counter_with_registry!(
                 "total_tx_certificates",
                 "Total number of certificates made from validators",
+                registry,
             )
             .unwrap(),
-            total_tx_retries: register_int_counter!(
+            total_tx_retries: register_int_counter_with_registry!(
                 "total_tx_retries",
                 "Total number of retries for transactions",
+                registry,
             )
             .unwrap(),
-            shared_obj_tx: register_int_counter!(
+            shared_obj_tx: register_int_counter_with_registry!(
                 "gateway_shared_obj_tx",
-                "Number of transactions involving shared objects"
+                "Number of transactions involving shared objects",
+                registry,
             )
             .unwrap(),
             // It's really important to use the right histogram buckets for accurate histogram collection.
             // Otherwise values get clipped
-            num_signatures: register_histogram!(
+            num_signatures: register_histogram_with_registry!(
                 "num_signatures_per_tx",
                 "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            num_good_stake: register_histogram!(
+            num_good_stake: register_histogram_with_registry!(
                 "num_good_stake_per_tx",
                 "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            num_bad_stake: register_histogram!(
+            num_bad_stake: register_histogram_with_registry!(
                 "num_bad_stake_per_tx",
                 "Amount of bad stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            transaction_latency: register_histogram!(
+            transaction_latency: register_histogram_with_registry!(
                 "transaction_latency",
-                "Latency of execute_transaction_impl"
+                "Latency of execute_transaction_impl",
+                registry,
             )
             .unwrap(),
         }
     }
-}
 
-impl Default for GatewayMetrics {
-    fn default() -> Self {
-        Self::new()
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
     }
 }
-
-// One cannot register a metric multiple times.  We protect initialization with lazy_static
-// for cases such as local tests or "sui start" which starts multiple authorities in one process.
-pub static METRICS: Lazy<GatewayMetrics> = Lazy::new(GatewayMetrics::new);
 
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
@@ -181,7 +189,7 @@ pub struct GatewayState<A> {
     /// It's useful if we need some kind of ordering for transactions
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
-    metrics: &'static GatewayMetrics,
+    metrics: GatewayMetrics,
     module_cache: SyncModuleCache<ResolverWrapper<GatewayStore>>,
 }
 
@@ -191,13 +199,19 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
+        metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
-        Self::new_with_authorities(path, AuthorityAggregator::new(committee, authority_clients))
+        Self::new_with_authorities(
+            path,
+            AuthorityAggregator::new(committee, authority_clients, metrics.clone()),
+            metrics,
+        )
     }
 
     pub fn new_with_authorities(
         path: PathBuf,
         authorities: AuthorityAggregator<A>,
+        metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let store = Arc::new(GatewayStore::open(path, None));
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
@@ -205,7 +219,7 @@ impl<A> GatewayState<A> {
             store: store.clone(),
             authorities,
             next_tx_seq_number,
-            metrics: &METRICS,
+            metrics,
             module_cache: SyncModuleCache::new(ResolverWrapper(store)),
         })
     }

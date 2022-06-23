@@ -29,6 +29,8 @@ pub struct NodeConfig {
     pub metrics_address: SocketAddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
+    #[serde(default = "default_websocket_address")]
+    pub websocket_address: Option<SocketAddr>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
@@ -59,6 +61,11 @@ fn default_metrics_address() -> SocketAddr {
 pub fn default_json_rpc_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
+}
+
+pub fn default_websocket_address() -> Option<SocketAddr> {
+    use std::net::{IpAddr, Ipv4Addr};
+    Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
 }
 
 impl Config for NodeConfig {}

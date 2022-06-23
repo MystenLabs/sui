@@ -10,6 +10,7 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
+    gateway_state::GatewayMetrics,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -734,6 +735,7 @@ async fn test_batch_to_checkpointing() {
         Some(checkpoints.clone()),
         &sui_config::genesis::Genesis::get_default_genesis(),
         false,
+        &prometheus::Registry::new(),
     )
     .await;
     let authority_state = Arc::new(state);
@@ -823,6 +825,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             None,
             &sui_config::genesis::Genesis::get_default_genesis(),
             false,
+            &prometheus::Registry::new(),
         )
         .await;
         let authority_state = Arc::new(state);
@@ -904,6 +907,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             Some(checkpoints.clone()),
             &sui_config::genesis::Genesis::get_default_genesis(),
             false,
+            &prometheus::Registry::new(),
         )
         .await;
         let authority_state = Arc::new(state);
@@ -1408,6 +1412,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
             Some(checkpoint.clone()),
             &genesis,
             false,
+            &prometheus::Registry::new(),
         )
         .await;
 
@@ -1467,6 +1472,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
                 )
             })
             .collect(),
+        GatewayMetrics::new_for_tests(),
     );
 
     TestSetup {

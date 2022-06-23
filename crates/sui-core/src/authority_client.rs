@@ -353,6 +353,7 @@ impl LocalAuthorityClient {
             Some(Arc::new(Mutex::new(checkpoints))),
             genesis,
             false,
+            &prometheus::Registry::new(),
         )
         .await;
         Self {

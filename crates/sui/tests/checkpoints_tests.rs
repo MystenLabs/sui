@@ -6,6 +6,7 @@ use std::sync::Arc;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    gateway_state::GatewayMetrics,
 };
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
@@ -144,7 +145,12 @@ async fn end_to_end() {
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    state,
+                    clients,
+                    GatewayMetrics::new_for_tests(),
+                )
+                .unwrap(),
             );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
@@ -229,7 +235,12 @@ async fn checkpoint_with_shared_objects() {
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    state,
+                    clients,
+                    GatewayMetrics::new_for_tests(),
+                )
+                .unwrap(),
             );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
