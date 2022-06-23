@@ -311,6 +311,8 @@ pub enum SuiError {
     ObjectSerializationError { error: String },
     #[error("Too much data requested in a query")]
     TooMuchDataRequested(usize),
+    #[error("Event store component is not active on this node")]
+    NoEventStore,
 
     // Client side error
     #[error("Client state has a different pending transaction.")]

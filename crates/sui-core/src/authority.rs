@@ -43,7 +43,7 @@ use std::{
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_storage::{
-    event_store::SqlEventStore,
+    event_store::{EventStore, SqlEventStore, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
@@ -218,10 +218,6 @@ impl Default for AuthorityMetrics {
 // for cases such as local tests or "sui start" which starts multiple authorities in one process.
 pub static METRICS: Lazy<AuthorityMetrics> = Lazy::new(AuthorityMetrics::new);
 
-// Defines EventHandler for a specific EventStore implementation.  This keeps many other types simple
-// throughout the Sui code base.
-pub type AuthorityEventHandler = EventHandler<SqlEventStore>;
-
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
 /// - Sync, i.e. can be safely shared between threads.
@@ -231,7 +227,12 @@ pub type AuthorityEventHandler = EventHandler<SqlEventStore>;
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
-pub struct AuthorityState {
+/// Default store choices for AuthorityState to keep types simple for now
+pub type AuthorityState = TypedAuthorityState<SqlEventStore>;
+
+const DEFAULT_QUERY_LIMIT: usize = 1000;
+
+pub struct TypedAuthorityState<ES: EventStore> {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
     pub name: AuthorityName,
@@ -255,7 +256,7 @@ pub struct AuthorityState {
 
     pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
-    pub event_handler: Option<Arc<AuthorityEventHandler>>,
+    pub event_handler: Option<Arc<EventHandler<ES>>>,
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -283,7 +284,7 @@ pub struct AuthorityState {
 /// require &mut. Internally a database is synchronized through a mutex lock.
 ///
 /// Repeating valid commands should produce no changes and return no error.
-impl AuthorityState {
+impl<ES: EventStore> TypedAuthorityState<ES> {
     /// Get a broadcast receiver for updates
     pub fn subscribe_batch(&self) -> BroadcastReceiver {
         self.batch_channels.subscribe()
@@ -993,7 +994,7 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         indexes: Option<Arc<IndexStore>>,
-        event_store: Option<Arc<SqlEventStore>>,
+        event_store: Option<Arc<ES>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
     ) -> Self {
@@ -1042,7 +1043,7 @@ impl AuthorityState {
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
 
-        let mut state = AuthorityState {
+        let mut state = TypedAuthorityState {
             name,
             secret,
             committee: ArcSwap::from(Arc::new(current_epoch_info.committee)),
@@ -1321,6 +1322,34 @@ impl AuthorityState {
         Ok(self.get_indexes()?.get_transactions_to_addr(address)?)
     }
 
+    /// Returns a full handle to the event store, including inserts... so be careful!
+    fn get_event_store(&self) -> Option<Arc<ES>> {
+        self.event_handler
+            .as_ref()
+            .map(|handler| handler.event_store.clone())
+    }
+
+    /// Returns a set of events corresponding to a given transaction, in order events were emitted
+    pub async fn get_events_for_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<impl IntoIterator<Item = StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.events_for_transaction(digest).await
+    }
+
+    /// Returns a whole set of events for a range of time
+    pub async fn get_events_for_timerange(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        limit: Option<usize>,
+    ) -> Result<impl IntoIterator<Item = StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
+            .await
+    }
+
     pub async fn insert_genesis_object(&self, object: Object) {
         self.database
             .insert_genesis_object(object)
@@ -1461,7 +1490,10 @@ impl AuthorityState {
 }
 
 #[async_trait]
-impl ExecutionState for AuthorityState {
+impl<ES> ExecutionState for TypedAuthorityState<ES>
+where
+    ES: EventStore + Sync + Send,
+{
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
 

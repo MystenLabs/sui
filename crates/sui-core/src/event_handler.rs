@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use sui_types::base_types::TransactionDigest;
 use tokio_stream::Stream;
 use tracing::{debug, error};
 
@@ -24,7 +25,7 @@ pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 pub struct EventHandler<ES: EventStore> {
     module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     event_streamer: Streamer<EventEnvelope, EventFilter>,
-    event_store: Arc<ES>,
+    pub(crate) event_store: Arc<ES>,
 }
 
 impl<ES: EventStore> EventHandler<ES> {
@@ -48,7 +49,7 @@ impl<ES: EventStore> EventHandler<ES> {
         let res: Result<Vec<_>, _> = effects
             .events
             .iter()
-            .map(|e| self.create_envelope(e, timestamp_ms))
+            .map(|e| self.create_envelope(e, effects.transaction_digest, timestamp_ms))
             .collect();
         let envelopes = res?;
 
@@ -72,7 +73,12 @@ impl<ES: EventStore> EventHandler<ES> {
         Ok(())
     }
 
-    fn create_envelope(&self, event: &Event, timestamp_ms: u64) -> Result<EventEnvelope, SuiError> {
+    fn create_envelope(
+        &self,
+        event: &Event,
+        digest: TransactionDigest,
+        timestamp_ms: u64,
+    ) -> Result<EventEnvelope, SuiError> {
         let json_value = match event {
             Event::MoveEvent(event_obj) => {
                 debug!(event =? event, "Process MoveEvent.");
@@ -91,7 +97,7 @@ impl<ES: EventStore> EventHandler<ES> {
 
         Ok(EventEnvelope::new(
             timestamp_ms,
-            None,
+            Some(digest),
             event.clone(),
             json_value,
         ))
