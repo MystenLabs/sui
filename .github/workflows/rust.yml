@@ -63,7 +63,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [[self-hosted, self-hosted-ubuntu], windows-latest]
+        os:
+          - [self-hosted, self-hosted-ubuntu]
+          - windows-latest
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
