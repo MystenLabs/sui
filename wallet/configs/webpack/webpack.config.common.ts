@@ -109,6 +109,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
                     options: {
                         configFile: TS_CONFIG_FILE,
                     },
+                    exclude: /node_modules/,
                 },
                 {
                     test: /\.(s)?css$/i,
