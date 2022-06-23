@@ -478,8 +478,8 @@ fn process_successful_execution<
                         }
                         Some(_) => {
                             state_view.log_event(Event::delete_object(
-                                ObjectID::from(*module_id.address()),
-                                Identifier::from(module_id.name()),
+                                module_id.address(),
+                                module_id.name(),
                                 function.clone(),
                                 ctx.sender(),
                                 *obj_id,
@@ -495,8 +495,8 @@ fn process_successful_execution<
                             // object_id and version pair must be unique. Hence for any object that's just unwrapped,
                             // we force incrementing its version number again to make it `v+2` before writing to the store.
                             state_view.log_event(Event::delete_object(
-                                ObjectID::from(*module_id.address()),
-                                Identifier::from(module_id.name()),
+                                module_id.address(),
+                                module_id.name(),
                                 function.clone(),
                                 ctx.sender(),
                                 *obj_id,
@@ -608,16 +608,23 @@ fn handle_transfer<
             } else if let Some((_, old_obj_ver)) = old_object {
                 // Some kind of transfer since there's an old object
                 // Add an event for the transfer
-                state_view.log_event(Event::TransferObject {
-                    package_id: ObjectID::from(*module_id.address()),
-                    transaction_module: Identifier::from(module_id.name()),
-                    transaction_function: Identifier::from(function.as_ident_str()),
-                    sender,
-                    recipient,
-                    object_id: obj_id,
-                    version: old_obj_ver,
-                    type_: TransferType::ToAddress,
-                })
+                let transfer_type = match recipient {
+                    Owner::AddressOwner(_) => Some(TransferType::ToAddress),
+                    Owner::ObjectOwner(_) => Some(TransferType::ToObject),
+                    _ => None,
+                };
+                if let Some(type_) = transfer_type {
+                    state_view.log_event(Event::TransferObject {
+                        package_id: ObjectID::from(*module_id.address()),
+                        transaction_module: Identifier::from(module_id.name()),
+                        transaction_function: Identifier::from(function.as_ident_str()),
+                        sender,
+                        recipient,
+                        object_id: obj_id,
+                        version: old_obj_ver,
+                        type_,
+                    })
+                }
             }
             let obj = Object::new_move(move_obj, recipient, tx_digest);
             if old_object.is_none() {

@@ -30,6 +30,7 @@ pub enum EventFilter {
     MatchAll(Vec<EventFilter>),
     MatchAny(Vec<EventFilter>),
 }
+
 impl EventFilter {
     fn try_matches(&self, item: &EventEnvelope) -> Result<bool, anyhow::Error> {
         Ok(match self {
