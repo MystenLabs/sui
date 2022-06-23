@@ -164,17 +164,19 @@ fn make_checkpoint_db() {
 
     assert_eq!(cps.next_checkpoint(), 0);
 
+    // You cannot make a checkpoint without processing all transactions
+    assert!(cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).is_err());
+
+    // Now process the extra transactions in the checkpoint
+    cps.update_processed_transactions(&[(4, t4), (5, t5)])
+        .unwrap();
+
     cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
-
-    let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
-    assert!(tx_seq >= u64::MAX / 2);
-
     assert_eq!(cps.next_checkpoint(), 1);
 
-    cps.update_processed_transactions(&[(4, t4), (5, t5), (6, t6)])
-        .unwrap();
+    cps.update_processed_transactions(&[(6, t6)]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
 
@@ -219,6 +221,21 @@ fn make_proposals() {
         .chain(p3.transactions())
         .cloned()
         .collect();
+
+    // if not all transactions are processed we fail
+    assert!(cps1.update_new_checkpoint(0, &ckp_items[..]).is_err());
+
+    cps1.update_processed_transactions(&[(3, t1), (4, t4)])
+        .unwrap();
+
+    cps2.update_processed_transactions(&[(3, t3), (4, t4)])
+        .unwrap();
+
+    cps3.update_processed_transactions(&[(3, t1), (4, t2)])
+        .unwrap();
+
+    cps4.update_processed_transactions(&[(3, t1), (4, t2), (5, t3)])
+        .unwrap();
 
     cps1.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps2.update_new_checkpoint(0, &ckp_items[..]).unwrap();
@@ -384,14 +401,13 @@ fn latest_proposal() {
 
     // ---
 
-    let ckp_items: Vec<_> = p1
+    let ckp_items = p1
         .transactions()
         .chain(p2.transactions())
         .chain(p3.transactions())
-        .cloned()
-        .collect();
+        .cloned();
 
-    let transactions = CheckpointContents::new(ckp_items.clone().into_iter());
+    let transactions = CheckpointContents::new(ckp_items);
     let summary = CheckpointSummary::new(committee.epoch, 0, &transactions, None);
 
     // Fail to set if transactions not processed.
@@ -459,14 +475,7 @@ fn latest_proposal() {
     }
 
     // ---
-    use std::iter;
-    let batch: Vec<_> = ckp_items
-        .into_iter()
-        .chain(iter::once(t6))
-        .enumerate()
-        .map(|(seq, item)| (seq as u64 + 2, item))
-        .collect();
-    cps1.update_processed_transactions(&batch[..]).unwrap();
+    cps1.update_processed_transactions(&[(6, t6)]).unwrap();
 
     let _p1 = cps1.set_proposal(committee.epoch).unwrap();
 

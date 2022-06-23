@@ -965,6 +965,15 @@ impl CheckpointStore {
         seq: CheckpointSequenceNumber,
         transactions: &[ExecutionDigests],
     ) -> Result<(), SuiError> {
+        // Ensure we have processed all transactions contained in this checkpoint.
+        if !self.all_checkpoint_transactions_executed(&CheckpointContents::new(
+            transactions.iter().cloned(),
+        ))? {
+            return Err(SuiError::from(
+                "Checkpoint contains unexecuted transactions.",
+            ));
+        }
+
         let batch = self.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
         Ok(())
@@ -989,6 +998,11 @@ impl CheckpointStore {
         }
 
         // Process transactions not already in a checkpoint
+        // A malicious validator could include in the proposal some transactions
+        // that are already checkpointed. Since we do not check fragments for
+        // such a condition, we filter them here.
+        // TODO: consider whether we should check this condition and reject
+        //       fragments that contain transactions already checkpointed.
         let new_transactions = self
             .transactions_to_checkpoint
             .multi_get(transactions.iter())?
@@ -1005,8 +1019,11 @@ impl CheckpointStore {
             )
             .collect::<Vec<_>>();
 
-        let high_seq = u64::MAX / 2;
         let transactions_with_seq = self.extra_transactions.multi_get(new_transactions.iter())?;
+
+        // Debug check that we only make a checkpoint if we have processed all the checkpointed
+        // transactions and their history.
+        debug_assert!(transactions_with_seq.iter().all(|item| item.is_some()));
 
         // Delete the extra transactions now used
         let batch = batch.delete_batch(
@@ -1018,19 +1035,23 @@ impl CheckpointStore {
         )?;
 
         // Now write the checkpoint data to the database
-        //
-        // All unknown sequence numbers are replaced with high sequence number
-        // of u64::max / 2 and greater.
 
         let checkpoint_data: Vec<_> = new_transactions
             .iter()
             .zip(transactions_with_seq.iter())
-            .enumerate()
-            .map(|(i, (tx, opt))| {
-                let iseq = opt.unwrap_or(i as u64 + high_seq);
-                ((seq, iseq), *tx)
+            .map(|(tx, opt)| {
+                // Unwrap safe since we have checked all transactions are processed
+                // to get to this point.
+                let iseq = opt.as_ref().unwrap();
+                ((seq, *iseq), *tx)
             })
             .collect();
+
+        // TODO: here we need to:
+        //    - Include any transactions that are not in a checkpoint but causally
+        //      preceed transactions in this checkpoint are included.
+        //    - We need to causally order the transactions, in a cannonical cross
+        //      authority sequence.
 
         let batch = batch.insert_batch(
             &self.transactions_to_checkpoint,
@@ -1068,38 +1089,28 @@ impl CheckpointStore {
 
         let batch = self.transactions_to_checkpoint.batch();
 
-        let already_in_checkpoint_tx =
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(
-                    |((_seq, tx), in_chk)| {
-                        if in_chk.is_some() {
-                            Some(tx)
-                        } else {
-                            None
-                        }
-                    },
-                );
-
-        // Delete the entries with the old sequence numbers.
-        // They will be updated with the new sequence numbers latter.
-        let batch =
-            batch.delete_batch(&self.transactions_to_checkpoint, already_in_checkpoint_tx)?;
-
-        let batch = batch.delete_batch(
-            &self.checkpoint_contents,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((_seq, _tx), in_chk)| {
+        // Check we are not re-proposing the same transactions that are already in a
+        // final checkpoint. This should not be possible since we only accept (sign /
+        // record) a checkpoint if we have already processed all transactions within.
+        let already_in_checkpoint_tx = transactions
+            .iter()
+            .zip(&in_checkpoint)
+            .filter_map(
+                |((_seq, tx), in_chk)| {
                     if in_chk.is_some() {
-                        Some(in_chk.unwrap())
+                        Some(tx)
                     } else {
                         None
                     }
-                }),
-        )?;
+                },
+            )
+            .count();
+
+        if already_in_checkpoint_tx != 0 {
+            return Err(SuiError::CheckpointingError {
+                error: "Processing transactions already in a checkpoint.".to_string(),
+            });
+        }
 
         // Update the entry to the transactions_to_checkpoint
 
