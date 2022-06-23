@@ -12,6 +12,7 @@ use move_binary_format::file_format;
 use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
+    // crypto_bls,
     gas_coin::GasCoin,
     object::Object,
     SUI_FRAMEWORK_ADDRESS,
@@ -44,6 +45,22 @@ fn test_signatures() {
     assert!(s.verify(&foox, addr1).is_err());
     assert!(s.verify(&bar, addr1).is_err());
 }
+
+// #[test]
+// fn test_signatres_bls() {
+//     let (addr1, sec1) = crypto_bls::get_key_pair();
+//     let (addr2, _sec2) = crypto_bls::get_key_pair();
+
+//     let foo = Foo("hello".into());
+//     let foox = Foo("hellox".into());
+//     let bar = Bar("hello".into());
+
+//     let s = Signature::new(&foo, &sec1);
+//     assert!(s.verify(&foo, addr1).is_ok());
+//     assert!(s.verify(&foo, addr2).is_err());
+//     assert!(s.verify(&foox, addr1).is_err());
+//     assert!(s.verify(&bar, addr1).is_err());
+// }
 
 #[test]
 fn test_max_sequence_number() {

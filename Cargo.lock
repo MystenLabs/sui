@@ -611,13 +611,14 @@ dependencies = [
 
 [[package]]
 name = "blst"
-version = "0.3.6"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f073f59a150a1dca74aab43d794ae5a7578d52bb1e73121e559f3ee3e6a837e"
+checksum = "c521c26a784d5c4bcd98d483a7d3518376e9ff1efbcfa9e2d456ab8183752303"
 dependencies = [
  "cc",
  "glob",
  "threadpool",
+ "which",
  "zeroize",
 ]
 
@@ -6573,6 +6574,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "bincode",
+ "blst",
  "crypto",
  "curve25519-dalek",
  "digest 0.10.3",
@@ -6592,6 +6594,8 @@ dependencies = [
  "opentelemetry",
  "parking_lot 0.12.1",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rand_core 0.5.1",
  "schemars",
  "serde 1.0.137",
  "serde-name",

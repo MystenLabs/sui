@@ -4,7 +4,7 @@
 
 use super::base_types::*;
 use crate::error::SuiResult;
-use blst::min_pk::PublicKey;
+use ed25519_dalek::PublicKey;
 use itertools::Itertools;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::OsRng;
