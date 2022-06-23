@@ -81,7 +81,6 @@ fn test_transfer_filter() {
         recipient,
         object_id,
         version: Default::default(),
-        destination_addr: Default::default(),
         type_: TransferType::Coin,
     };
     let envelope = EventEnvelope {

@@ -1223,7 +1223,6 @@ pub enum SuiEvent {
         recipient: Owner,
         object_id: ObjectID,
         version: SequenceNumber,
-        destination_addr: SuiAddress,
         type_: TransferType,
     },
     /// Delete object
@@ -1284,7 +1283,6 @@ impl SuiEvent {
                 recipient,
                 object_id,
                 version,
-                destination_addr,
                 type_,
             } => SuiEvent::TransferObject {
                 package_id,
@@ -1294,7 +1292,6 @@ impl SuiEvent {
                 recipient,
                 object_id,
                 version,
-                destination_addr,
                 type_,
             },
             Event::DeleteObject {

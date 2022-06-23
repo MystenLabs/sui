@@ -185,10 +185,10 @@ fn event_to_json(event: &EventEnvelope) -> String {
         let maybe_json = match &event.event {
             Event::TransferObject {
                 version,
-                destination_addr,
+                recipient,
                 type_,
                 ..
-            } => Some(json!({"destination": destination_addr.to_string(),
+            } => Some(json!({"destination": recipient.to_string(),
                        "version": version.value(),
                        "type": type_.to_string() })),
             // TODO: for other event types eg EpochChange
@@ -438,7 +438,6 @@ mod tests {
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
             version: 1.into(),
-            destination_addr: SuiAddress::random_for_testing_only(),
             type_: typ,
         }
     }

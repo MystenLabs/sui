@@ -608,32 +608,16 @@ fn handle_transfer<
             } else if let Some((_, old_obj_ver)) = old_object {
                 // Some kind of transfer since there's an old object
                 // Add an event for the transfer
-
-                match recipient {
-                    Owner::AddressOwner(addr) => state_view.log_event(Event::TransferObject {
-                        package_id: ObjectID::from(*module_id.address()),
-                        transaction_module: Identifier::from(module_id.name()),
-                        transaction_function: Identifier::from(function.as_ident_str()),
-                        sender,
-                        recipient,
-                        object_id: obj_id,
-                        version: old_obj_ver,
-                        destination_addr: addr,
-                        type_: TransferType::ToAddress,
-                    }),
-                    Owner::ObjectOwner(new_owner) => state_view.log_event(Event::TransferObject {
-                        package_id: ObjectID::from(*module_id.address()),
-                        transaction_module: Identifier::from(module_id.name()),
-                        transaction_function: Identifier::from(function.as_ident_str()),
-                        sender,
-                        recipient,
-                        object_id: obj_id,
-                        version: old_obj_ver,
-                        destination_addr: new_owner,
-                        type_: TransferType::ToObject,
-                    }),
-                    _ => {}
-                }
+                state_view.log_event(Event::TransferObject {
+                    package_id: ObjectID::from(*module_id.address()),
+                    transaction_module: Identifier::from(module_id.name()),
+                    transaction_function: Identifier::from(function.as_ident_str()),
+                    sender,
+                    recipient,
+                    object_id: obj_id,
+                    version: old_obj_ver,
+                    type_: TransferType::ToAddress,
+                })
             }
             let obj = Object::new_move(move_obj, recipient, tx_digest);
             if old_object.is_none() {
