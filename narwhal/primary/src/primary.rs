@@ -51,7 +51,7 @@ use crate::block_synchronizer::handler::BlockSynchronizerHandler;
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 /// The messages sent by the workers to their primary.
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum WorkerPrimaryMessage {
     /// The worker indicates it sealed a new batch.
     OurBatch(BatchDigest, WorkerId),
@@ -66,7 +66,7 @@ pub enum WorkerPrimaryMessage {
     Error(WorkerPrimaryError),
 }
 
-#[derive(Debug, Serialize, Deserialize, Error, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Error, Clone, Eq, PartialEq)]
 pub enum WorkerPrimaryError {
     #[error("Batch with id {0} has not been found")]
     RequestedBatchNotFound(BatchDigest),

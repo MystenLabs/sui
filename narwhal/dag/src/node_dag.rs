@@ -49,7 +49,7 @@ pub struct NodeDag<T: Affiliated> {
     node_table: DashMap<T::TypedDigest, Either<WeakNodeRef<T>, NodeRef<T>>>,
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum NodeDagError {
     #[error("No vertex known by these digests: {0:?}")]
     UnknownDigests(Vec<Digest>),

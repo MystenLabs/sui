@@ -52,7 +52,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use std::time::Duration;
 
-    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
     struct MockProperties {
         #[serde(with = "duration_format")]
         property_1: Duration,

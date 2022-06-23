@@ -55,14 +55,14 @@ pub enum BlockCommand {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GetBlockResponse {
     pub id: CertificateDigest,
     #[allow(dead_code)]
     pub batches: Vec<BatchMessage>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GetBlocksResponse {
     pub blocks: Vec<BlockResult<GetBlockResponse>>,
 }
@@ -85,7 +85,7 @@ pub struct BlocksError {
     error: BlocksErrorType,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BlocksErrorType {
     Error,
 }
