@@ -41,6 +41,9 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_gossip: bool,
 
+    #[serde(default)]
+    pub enable_reconfig: bool,
+
     pub genesis: Genesis,
 }
 

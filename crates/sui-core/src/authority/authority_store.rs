@@ -1511,7 +1511,7 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
-            // TODO: below is netaddress, for now just use names as we don't yet want to expose them.
+            // TODO Laura: below is netaddress, for now just use names as we don't yet want to expose them.
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
         ],
