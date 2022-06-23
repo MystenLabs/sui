@@ -22,8 +22,8 @@ sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
 sui-types = { path = "../sui-types" }
 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }

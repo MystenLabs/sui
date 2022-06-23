@@ -24,7 +24,7 @@ strum_macros = "^0.24"
 
 sui-types = { path = "../sui-types" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf"}
 workspace-hack = { path = "../workspace-hack"}
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
@@ -34,7 +34,7 @@ bcs = "0.1.3"
 tempfile = "3.3.0"
 num_cpus = "1.13.1"
 pretty_assertions = "1.2.0"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
 
 [[bench]]
 name = "write_ahead_log"
