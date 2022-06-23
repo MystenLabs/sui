@@ -264,7 +264,7 @@ module sui::sui_system {
         );
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `computation_reward`. All of these go to the storage fund.
-        balance::join(&mut self.storage_fund, computation_reward)
+        balance::join(&mut self.storage_fund, computation_reward);
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,

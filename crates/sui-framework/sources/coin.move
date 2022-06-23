@@ -29,15 +29,15 @@ module sui::coin {
     }
 
     /// Wrap a `Supply` into a transferable `TreasuryCap`.
-    public fun treasury_from_supply<T>(supply: Supply<T>, ctx: &mut TxContext): TreasuryCap<T> {
-        TreasuryCap { id: tx_context::new_id(ctx), supply }
+    public fun treasury_from_supply<T>(total_supply: Supply<T>, ctx: &mut TxContext): TreasuryCap<T> {
+        TreasuryCap { id: tx_context::new_id(ctx), total_supply }
     }
 
     /// Unwrap `TreasuryCap` getting the `Supply`.
     public fun treasury_into_supply<T>(treasury: TreasuryCap<T>): Supply<T> {
-        let TreasuryCap { id, supply } = treasury;
+        let TreasuryCap { id, total_supply } = treasury;
         id::delete(id);
-        supply
+        total_supply
     }
 
     /// Get immutable reference to the treasury's `Supply`.
