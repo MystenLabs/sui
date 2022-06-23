@@ -7,12 +7,12 @@ use crate::{
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
+use arc_swap::ArcSwap;
 use debug_ignore::DebugIgnore;
-use narwhal_config::{
-    Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
-};
+use narwhal_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
 use rand::rngs::OsRng;
 use std::{
+    collections::BTreeMap,
     num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
@@ -157,10 +157,11 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
                 (name, authority)
             })
-            .collect();
-        let narwhal_committee = DebugIgnore(ConsensusCommittee {
-            authorities: narwhal_committee,
-        });
+            .collect::<BTreeMap<_, _>>();
+        let narwhal_committee = DebugIgnore(Arc::new(narwhal_config::Committee {
+            authorities: ArcSwap::new(Arc::new(narwhal_committee)),
+            epoch: genesis.epoch(),
+        }));
 
         let validator_configs = validators
             .into_iter()
