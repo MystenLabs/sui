@@ -151,11 +151,12 @@ module sui::coin {
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
-    public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>) {
+    public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
         let value = balance::destroy<T>(balance);
         id::delete(id);
-        cap.total_supply = cap.total_supply - value
+        cap.total_supply = cap.total_supply - value;
+        value
     }
 
     /// Return the total number of `T`'s in circulation
@@ -171,7 +172,7 @@ module sui::coin {
     // === Entrypoints ===
 
     /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
-    public entry fun mint_<T>(
+    public entry fun mint_and_transfer<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
         transfer::transfer(mint(c, amount, ctx), recipient)
@@ -179,7 +180,7 @@ module sui::coin {
 
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
     public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
-        burn(c, coin)
+        burn(c, coin);
     }
 
     /// Send `amount` units of `c` to `recipient
