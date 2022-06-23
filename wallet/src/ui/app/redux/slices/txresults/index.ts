@@ -65,14 +65,14 @@ export const getTransactionsByAddress = createAsyncThunk<
         }
         // Get all transactions txId for address
         const transactions: GetTxnDigestsResponse = (
-            await api.instance.getTransactionsForAddress(address)
+            await api.instance.fullNode.getTransactionsForAddress(address)
         ).filter((tx) => tx);
 
         if (!transactions || !transactions.length) {
             return [];
         }
         //getTransactionWithEffectsBatch
-        const resp = await api.instance
+        const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
             .then((txEffs: TransactionEffectsResponse[]) => {
                 return (
