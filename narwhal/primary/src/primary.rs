@@ -2,7 +2,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    async_proposer::AsyncProposer,
     block_remover::DeleteBatchResult,
     block_synchronizer::BlockSynchronizer,
     block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
@@ -12,8 +11,8 @@ use crate::{
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     helper::Helper,
-    part_sync_proposer::PartiallySyncProposer,
     payload_receiver::PayloadReceiver,
+    proposer::Proposer,
     synchronizer::Synchronizer,
     BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
 };
@@ -289,28 +288,17 @@ impl Primary {
 
         // When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
         // digests from our workers and sends it back to the `Core`.
-        match network_model {
-            NetworkModel::PartiallySynchronous => PartiallySyncProposer::spawn(
-                name.clone(),
-                committee.clone(),
-                signature_service,
-                parameters.header_size,
-                parameters.max_header_delay,
-                /* rx_core */ rx_parents,
-                /* rx_workers */ rx_our_digests,
-                /* tx_core */ tx_headers,
-            ),
-            NetworkModel::Asynchronous => AsyncProposer::spawn(
-                name.clone(),
-                committee.clone(),
-                signature_service,
-                parameters.header_size,
-                parameters.max_header_delay,
-                /* rx_core */ rx_parents,
-                /* rx_workers */ rx_our_digests,
-                /* tx_core */ tx_headers,
-            ),
-        }
+        Proposer::spawn(
+            name.clone(),
+            committee.clone(),
+            signature_service,
+            parameters.header_size,
+            parameters.max_header_delay,
+            network_model,
+            /* rx_core */ rx_parents,
+            /* rx_workers */ rx_our_digests,
+            /* tx_core */ tx_headers,
+        );
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests
         // from other primaries.

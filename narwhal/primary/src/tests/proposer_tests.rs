@@ -17,12 +17,13 @@ async fn propose_empty() {
     let (tx_headers, mut rx_headers) = channel(1);
 
     // Spawn the proposer.
-    PartiallySyncProposer::spawn(
+    Proposer::spawn(
         name,
         committee(None),
         signature_service,
         /* header_size */ 1_000,
         /* max_header_delay */ Duration::from_millis(20),
+        NetworkModel::PartiallySynchronous,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
@@ -46,13 +47,14 @@ async fn propose_payload() {
     let (tx_headers, mut rx_headers) = channel(1);
 
     // Spawn the proposer.
-    PartiallySyncProposer::spawn(
+    Proposer::spawn(
         name.clone(),
         committee(None),
         signature_service,
         /* header_size */ 32,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
+        NetworkModel::PartiallySynchronous,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,

@@ -1,6 +1,7 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::NetworkModel;
 use config::{SharedCommittee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
 use std::cmp::Ordering;
@@ -8,17 +9,15 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{sleep, Duration, Instant},
 };
-#[cfg(feature = "benchmark")]
-use tracing::info;
 use tracing::{debug, warn};
 use types::{BatchDigest, Certificate, Header, Round};
 
 #[cfg(test)]
-#[path = "tests/part_sync_proposer_tests.rs"]
-pub mod part_sync_proposer_tests;
+#[path = "tests/proposer_tests.rs"]
+pub mod proposer_tests;
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
-pub struct PartiallySyncProposer<PublicKey: VerifyingKey> {
+pub struct Proposer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
@@ -29,6 +28,8 @@ pub struct PartiallySyncProposer<PublicKey: VerifyingKey> {
     header_size: usize,
     /// The maximum delay to wait for batches' digests.
     max_header_delay: Duration,
+    /// The network model in which the node operates.
+    network_model: NetworkModel,
 
     /// Receives the parents to include in the next header (along with their round number).
     rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round)>,
@@ -49,7 +50,7 @@ pub struct PartiallySyncProposer<PublicKey: VerifyingKey> {
     payload_size: usize,
 }
 
-impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
+impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
@@ -57,6 +58,7 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
         signature_service: SignatureService<PublicKey::Sig>,
         header_size: usize,
         max_header_delay: Duration,
+        network_model: NetworkModel,
         rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
@@ -69,6 +71,7 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
                 signature_service,
                 header_size,
                 max_header_delay,
+                network_model,
                 rx_core,
                 rx_workers,
                 tx_core,
@@ -99,7 +102,7 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
         #[cfg(feature = "benchmark")]
         for digest in header.payload.keys() {
             // NOTE: This log entry is used to compute performance.
-            info!("Created {} -> {:?}", header, digest);
+            tracing::info!("Created {} -> {:?}", header, digest);
         }
 
         // Send the new header to the `Core` that will broadcast and process it.
@@ -109,7 +112,7 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
             .expect("Failed to send header");
     }
 
-    /// Update the last leader certificate.
+    /// Update the last leader certificate. This is only relevant in partial synchrony.
     fn update_leader(&mut self) -> bool {
         let leader_name = self.committee.leader(self.round as usize);
         self.last_leader = self
@@ -126,7 +129,7 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
     }
 
     /// Check whether if we have (i) 2f+1 votes for the leader, (ii) f+1 nodes not voting for the leader,
-    /// or (iii) there is no leader to vote for.
+    /// or (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
         let leader = match &self.last_leader {
             Some(x) => x.digest(),
@@ -158,6 +161,21 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
         enough_votes
     }
 
+    /// Whether we can advance the DAG or need to wait for the leader/more votes. This is only relevant in
+    /// partial synchrony. Note that if we timeout, we ignore this check and advance anyway.
+    fn ready(&mut self) -> bool {
+        match self.network_model {
+            // In asynchrony we advance immediately.
+            NetworkModel::Asynchronous => true,
+
+            // In partial synchrony, we need to wait for the leader or for enough votes.
+            NetworkModel::PartiallySynchronous => match self.round % 2 {
+                0 => self.update_leader(),
+                _ => self.enough_votes(),
+            },
+        }
+    }
+
     /// Main loop listening to incoming messages.
     pub async fn run(&mut self) {
         debug!("Dag starting at round {}", self.round);
@@ -171,13 +189,15 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
             // and one of the following conditions is met:
             // (i) the timer expired (we timed out on the leader or gave up gather votes for the leader),
             // (ii) we have enough digests (minimum header size) and we are on the happy path (we can vote for
-            // the leader or the leader has enough votes to enable a commit).
+            // the leader or the leader has enough votes to enable a commit). The latter condition only matters
+            // in partially synchrony.
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.payload_size >= self.header_size;
             let timer_expired = timer.is_elapsed();
 
             if (timer_expired || (enough_digests && advance)) && enough_parents {
-                if timer_expired {
+                if timer_expired && matches!(self.network_model, NetworkModel::PartiallySynchronous)
+                {
                     warn!("Timer expired for round {}", self.round);
                 }
 
@@ -216,10 +236,7 @@ impl<PublicKey: VerifyingKey> PartiallySyncProposer<PublicKey> {
 
                     // Check whether we can advance to the next round. Note that if we timeout,
                     // we ignore this check and advance anyway.
-                    advance = match self.round % 2 {
-                        0 => self.update_leader(),
-                        _ => self.enough_votes(),
-                    }
+                    advance = self.ready();
                 }
                 Some((digest, worker_id)) = self.rx_workers.recv() => {
                     self.payload_size += Digest::from(digest).size();

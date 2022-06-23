@@ -85,7 +85,10 @@ impl<PublicKey: VerifyingKey> CertificatesAggregator<PublicKey> {
         self.certificates.push(certificate);
         self.weight += committee.stake(&origin);
         if self.weight >= committee.quorum_threshold() {
-            self.weight = 0; // Ensures quorum is only reached once.
+            // Note that we do not reset the weight here. If this function is called again and
+            // the proposer didn't yet advance round, we can add extra certificates as parents.
+            // This is required when running Bullshark as consensus and does not harm when running
+            // Tusk or an external consensus protocol.
             return Some(self.certificates.drain(..).collect());
         }
         None
