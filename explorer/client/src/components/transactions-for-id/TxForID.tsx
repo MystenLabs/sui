@@ -90,7 +90,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                     </div>
                     <div className={styles.txadd}>
                         <div>
-                            From:
+                            By:
                             <Link
                                 className={styles.txlink}
                                 to={'addresses/' + x.From}
@@ -100,7 +100,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                         </div>
                         {x.To && (
                             <div>
-                                To :
+                                To:
                                 <Link
                                     className={styles.txlink}
                                     to={'addresses/' + x.To}
