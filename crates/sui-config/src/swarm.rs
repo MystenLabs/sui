@@ -72,6 +72,7 @@ impl NetworkConfig {
             consensus_config: None,
             enable_event_processing: true,
             enable_gossip: true,
+            enable_reconfig: false,
             genesis: validator_config.genesis.clone(),
         }
     }
