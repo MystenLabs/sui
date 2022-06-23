@@ -64,7 +64,7 @@ more module files are located:
 my_move_package
 ├── Move.toml
 ├── sources
-    ├── M1.move
+    ├── m1.move
 ```
 
 See
@@ -101,6 +101,12 @@ module sui::coin {
 read more about
 [modules](https://github.com/move-language/move/blob/main/language/documentation/book/src/modules-and-scripts.md#modules)
 in the Move book later.)
+
+> **Important:** In Sui Move, package names are always in CamelCase, which
+> the address alias is lowercase, for examples `sui = 0x2` and `std = 0x1`.
+> So: Sui = name of the imported package (Sui = sui framework), sui = address
+> alias of 0x2, sui::sui = module sui under the address 0x2, and
+> sui::sui::SUI = type in the module above.
 
 As we can see, when defining a module we specify the module name
 (`Coin`), preceded by the name of the package where this module resides
@@ -282,7 +288,7 @@ this package, first [install Sui binaries](install.md#binaries) and
 you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move) file.
+[m1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move) file.
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
@@ -300,6 +306,8 @@ this tutorial, is part of your system path:
 ```
 $ which sui-move
 ```
+
+### Creating the directory structure
 
 Now proceed to creating a package directory structure in the current
 directory, parallel to the `sui` repository. It will contain an
@@ -327,6 +335,7 @@ current_directory
         ├── m1.move
 ```
 
+### Defining the package
 
 Let us assume that our module is part of an implementation of a
 fantasy game set in medieval times, where heroes roam the land slaying
@@ -343,8 +352,9 @@ Let us put the following module and struct
 definitions in the `m1.move` file:
 
 ``` rust
-module MyFirstPackage::M1 {
+module my_first_package::m1 {
     use sui::id::VersionedID;
+    use sui::tx_context::TxContext;
 
     struct Sword has key, store {
         id: VersionedID,
@@ -396,11 +406,13 @@ version = "0.0.1"
 Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
-MyFirstPackage = "0x0"
+my_first_package = "0x0"
 ```
 
 See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/Move.toml)
 file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
+
+## Building the package
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
