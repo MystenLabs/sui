@@ -7,7 +7,6 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use multiaddr::{Multiaddr, Protocol};
-use std::path::PathBuf;
 use tonic::transport::{Channel, Endpoint, Uri};
 
 pub async fn connect(address: &Multiaddr) -> Result<Channel> {
@@ -70,7 +69,7 @@ fn endpoint_from_multiaddr(addr: &Multiaddr) -> Result<MyEndpoint> {
 struct MyEndpoint {
     endpoint: Endpoint,
     #[cfg(unix)]
-    uds_connector: Option<PathBuf>,
+    uds_connector: Option<std::path::PathBuf>,
 }
 
 impl MyEndpoint {
@@ -83,7 +82,7 @@ impl MyEndpoint {
     }
 
     fn try_from_uri(uri: String) -> Result<Self> {
-        let uri: tonic::transport::Uri = uri
+        let uri: Uri = uri
             .parse()
             .with_context(|| format!("unable to create Uri from '{uri}'"))?;
         let endpoint = Endpoint::from(uri);
@@ -91,7 +90,7 @@ impl MyEndpoint {
     }
 
     #[cfg(unix)]
-    fn with_uds_connector(self, path: PathBuf) -> Self {
+    fn with_uds_connector(self, path: std::path::PathBuf) -> Self {
         Self {
             endpoint: self.endpoint,
             uds_connector: Some(path),
