@@ -100,7 +100,7 @@ where
             self.gateway_metrics.clone(),
         ));
         self.net.store(new_net.clone());
-        // TODO: Also reconnect network if changed.
+        // TODO Laura: Also reconnect network if changed.
         // This is blocked for now since we are not storing network info on-chain yet.
 
         // TODO: Update all committee in all components safely,
