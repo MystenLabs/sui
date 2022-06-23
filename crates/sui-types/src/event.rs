@@ -102,7 +102,6 @@ pub enum Event {
         recipient: Owner,
         object_id: ObjectID,
         version: SequenceNumber,
-        destination_addr: SuiAddress,
         type_: TransferType,
     },
     /// Delete object

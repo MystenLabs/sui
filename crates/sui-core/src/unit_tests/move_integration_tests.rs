@@ -363,15 +363,11 @@ async fn test_object_owning_another_object() {
     assert_eq!(event1.event_type(), EventType::TransferObject);
     assert_eq!(event1.object_id(), Some(child.0));
     if let Event::TransferObject {
-        object_id: _,
-        version: _,
-        destination_addr,
-        type_,
-        ..
+        recipient, type_, ..
     } = event1
     {
         assert_eq!(type_, TransferType::ToObject);
-        assert_eq!(destination_addr, new_parent.0.into());
+        assert_eq!(recipient, Owner::ObjectOwner(new_parent.0.into()));
     } else {
         panic!("Unexpected event type: {:?}", event1);
     }

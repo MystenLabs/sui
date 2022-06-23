@@ -52,7 +52,7 @@ List of events emitted by the Sui node.
 
 ### Transfer object
 
-**Attributes**: packageId, transactionModule, transactionFunction, sender, recipient, objectId, version, destinationAddr, type  
+**Attributes**: packageId, transactionModule, transactionFunction, sender, recipient, objectId, version, type  
 **Example**:
 
 ```json
@@ -67,7 +67,6 @@ List of events emitted by the Sui node.
     },
     "objectId": "0x591fbb00a6c9676186cb44402040a8350520cbe9",
     "version": 1,
-    "destinationAddr": "0x741a9a7ea380aed286341fcf16176c8653feb667",
     "type": "Coin"
   }
 }

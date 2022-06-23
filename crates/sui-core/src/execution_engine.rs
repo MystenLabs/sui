@@ -256,7 +256,6 @@ fn transfer_coin<S>(
         recipient: Owner::AddressOwner(recipient),
         object_id: object.id(),
         version: object.version(),
-        destination_addr: recipient,
         type_: TransferType::Coin,
     });
     temporary_store.write_object(object);
