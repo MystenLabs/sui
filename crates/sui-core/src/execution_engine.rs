@@ -252,7 +252,7 @@ fn transfer_coin<S>(
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("native")),
         transaction_function: Identifier::from(ident_str!("transfer_coin")),
-        instigator: sender,
+        sender,
         recipient: Owner::AddressOwner(recipient),
         object_id: object.id(),
         version: object.version(),

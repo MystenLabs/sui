@@ -1028,8 +1028,8 @@
                 "required": [
                   "bcs",
                   "fields",
-                  "instigator",
                   "packageId",
+                  "sender",
                   "transactionFunction",
                   "transactionModule",
                   "type"
@@ -1041,11 +1041,11 @@
                   "fields": {
                     "$ref": "#/components/schemas/MoveStruct"
                   },
-                  "instigator": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   },
                   "transactionFunction": {
                     "type": "string"
@@ -1071,15 +1071,15 @@
               "publish": {
                 "type": "object",
                 "required": [
-                  "instigator",
-                  "packageId"
+                  "packageId",
+                  "sender"
                 ],
                 "properties": {
-                  "instigator": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   }
                 }
               }
@@ -1097,10 +1097,10 @@
                 "type": "object",
                 "required": [
                   "destinationAddr",
-                  "instigator",
                   "objectId",
                   "packageId",
                   "recipient",
+                  "sender",
                   "transactionFunction",
                   "transactionModule",
                   "type",
@@ -1108,9 +1108,6 @@
                 ],
                 "properties": {
                   "destinationAddr": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "instigator": {
                     "$ref": "#/components/schemas/SuiAddress"
                   },
                   "objectId": {
@@ -1121,6 +1118,9 @@
                   },
                   "recipient": {
                     "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   },
                   "transactionFunction": {
                     "type": "string"
@@ -1149,21 +1149,21 @@
               "deleteObject": {
                 "type": "object",
                 "required": [
-                  "instigator",
                   "objectId",
                   "packageId",
+                  "sender",
                   "transactionFunction",
                   "transactionModule"
                 ],
                 "properties": {
-                  "instigator": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
                   "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
                   },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   },
                   "transactionFunction": {
                     "type": "string"
@@ -1186,17 +1186,14 @@
               "newObject": {
                 "type": "object",
                 "required": [
-                  "instigator",
                   "objectId",
                   "packageId",
                   "recipient",
+                  "sender",
                   "transactionFunction",
                   "transactionModule"
                 ],
                 "properties": {
-                  "instigator": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
                   "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
                   },
@@ -1205,6 +1202,9 @@
                   },
                   "recipient": {
                     "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   },
                   "transactionFunction": {
                     "type": "string"
@@ -1325,10 +1325,10 @@
           {
             "type": "object",
             "required": [
-              "InstigatorAddress"
+              "SenderAddress"
             ],
             "properties": {
-              "InstigatorAddress": {
+              "SenderAddress": {
                 "$ref": "#/components/schemas/SuiAddress"
               }
             },

@@ -230,7 +230,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
     state_view.log_event(Event::Publish {
-        instigator: ctx.sender(),
+        sender: ctx.sender(),
         package_id,
     });
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
@@ -614,7 +614,7 @@ fn handle_transfer<
                         package_id: ObjectID::from(*module_id.address()),
                         transaction_module: Identifier::from(module_id.name()),
                         transaction_function: Identifier::from(function.as_ident_str()),
-                        instigator: sender,
+                        sender,
                         recipient,
                         object_id: obj_id,
                         version: old_obj_ver,
@@ -625,7 +625,7 @@ fn handle_transfer<
                         package_id: ObjectID::from(*module_id.address()),
                         transaction_module: Identifier::from(module_id.name()),
                         transaction_function: Identifier::from(function.as_ident_str()),
-                        instigator: sender,
+                        sender,
                         recipient,
                         object_id: obj_id,
                         version: old_obj_ver,

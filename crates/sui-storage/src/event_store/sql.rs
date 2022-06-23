@@ -403,7 +403,7 @@ mod tests {
 
     fn new_test_publish_event() -> Event {
         Event::Publish {
-            instigator: SuiAddress::random_for_testing_only(),
+            sender: SuiAddress::random_for_testing_only(),
             package_id: ObjectID::random(),
         }
     }
@@ -413,7 +413,7 @@ mod tests {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
             transaction_function: Identifier::new("function").unwrap(),
-            instigator: SuiAddress::random_for_testing_only(),
+            sender: SuiAddress::random_for_testing_only(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
         }
@@ -424,7 +424,7 @@ mod tests {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
             transaction_function: Identifier::new("function").unwrap(),
-            instigator: SuiAddress::random_for_testing_only(),
+            sender: SuiAddress::random_for_testing_only(),
             object_id: ObjectID::random(),
         }
     }
@@ -434,7 +434,7 @@ mod tests {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
             transaction_function: Identifier::new("function").unwrap(),
-            instigator: SuiAddress::random_for_testing_only(),
+            sender: SuiAddress::random_for_testing_only(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
             version: 1.into(),
@@ -454,7 +454,7 @@ mod tests {
                 package_id: ObjectID::random(),
                 transaction_module: Identifier::new("module").unwrap(),
                 transaction_function: Identifier::new("function").unwrap(),
-                instigator: SuiAddress::random_for_testing_only(),
+                sender: SuiAddress::random_for_testing_only(),
                 type_: TestEvent::struct_tag(),
                 contents: event_bytes,
             },

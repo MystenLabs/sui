@@ -1200,7 +1200,7 @@ pub enum SuiEvent {
         package_id: ObjectID,
         transaction_module: String,
         transaction_function: String,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         type_: String,
         fields: SuiMoveStruct,
         #[serde_as(as = "Base64")]
@@ -1210,7 +1210,7 @@ pub enum SuiEvent {
     /// Module published
     #[serde(rename_all = "camelCase")]
     Publish {
-        instigator: SuiAddress,
+        sender: SuiAddress,
         package_id: ObjectID,
     },
     /// Transfer objects to new address / wrap in another object / coin
@@ -1219,7 +1219,7 @@ pub enum SuiEvent {
         package_id: ObjectID,
         transaction_module: String,
         transaction_function: String,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -1232,7 +1232,7 @@ pub enum SuiEvent {
         package_id: ObjectID,
         transaction_module: String,
         transaction_function: String,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         object_id: ObjectID,
     },
     /// New object creation
@@ -1241,7 +1241,7 @@ pub enum SuiEvent {
         package_id: ObjectID,
         transaction_module: String,
         transaction_function: String,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
     },
@@ -1258,7 +1258,7 @@ impl SuiEvent {
                 package_id,
                 transaction_module,
                 transaction_function,
-                instigator,
+                sender,
                 type_,
                 contents,
             } => {
@@ -1269,24 +1269,18 @@ impl SuiEvent {
                     package_id,
                     transaction_module: transaction_module.to_string(),
                     transaction_function: transaction_function.to_string(),
-                    instigator,
+                    sender,
                     type_: move_obj.type_,
                     fields: move_obj.fields,
                     bcs,
                 }
             }
-            Event::Publish {
-                instigator,
-                package_id,
-            } => SuiEvent::Publish {
-                instigator,
-                package_id,
-            },
+            Event::Publish { sender, package_id } => SuiEvent::Publish { sender, package_id },
             Event::TransferObject {
                 package_id,
                 transaction_module,
                 transaction_function,
-                instigator,
+                sender,
                 recipient,
                 object_id,
                 version,
@@ -1296,7 +1290,7 @@ impl SuiEvent {
                 package_id,
                 transaction_module: transaction_module.to_string(),
                 transaction_function: transaction_function.to_string(),
-                instigator,
+                sender,
                 recipient,
                 object_id,
                 version,
@@ -1307,27 +1301,27 @@ impl SuiEvent {
                 package_id,
                 transaction_module,
                 transaction_function,
-                instigator,
+                sender,
                 object_id,
             } => SuiEvent::DeleteObject {
                 package_id,
                 transaction_module: transaction_module.to_string(),
                 transaction_function: transaction_function.to_string(),
-                instigator,
+                sender,
                 object_id,
             },
             Event::NewObject {
                 package_id,
                 transaction_module,
                 transaction_function,
-                instigator,
+                sender,
                 recipient,
                 object_id,
             } => SuiEvent::NewObject {
                 package_id,
                 transaction_module: transaction_module.to_string(),
                 transaction_function: transaction_function.to_string(),
-                instigator,
+                sender,
                 recipient,
                 object_id,
             },
@@ -1466,7 +1460,7 @@ pub enum SuiEventFilter {
         path: String,
         value: Value,
     },
-    InstigatorAddress(SuiAddress),
+    SenderAddress(SuiAddress),
     EventType(EventType),
     ObjectId(ObjectID),
     TransferType(TransferType),
@@ -1490,7 +1484,7 @@ impl TryInto<EventFilter> for SuiEventFilter {
                 EventFilter::MoveEventType(parse_struct_tag(&event_type)?)
             }
             MoveEventField { path, value } => EventFilter::MoveEventField { path, value },
-            InstigatorAddress(address) => EventFilter::InstigatorAddress(address),
+            SenderAddress(address) => EventFilter::SenderAddress(address),
             ObjectId(id) => EventFilter::ObjectId(id),
             All(filters) => EventFilter::MatchAll(
                 filters

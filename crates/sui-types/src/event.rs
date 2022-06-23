@@ -83,14 +83,14 @@ pub enum Event {
         package_id: ObjectID,
         transaction_module: Identifier,
         transaction_function: Identifier,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         type_: StructTag,
         #[serde_as(as = "Bytes")]
         contents: Vec<u8>,
     },
     /// Module published
     Publish {
-        instigator: SuiAddress,
+        sender: SuiAddress,
         package_id: ObjectID,
     },
     /// Transfer objects to new address / wrap in another object / coin
@@ -98,7 +98,7 @@ pub enum Event {
         package_id: ObjectID,
         transaction_module: Identifier,
         transaction_function: Identifier,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -110,7 +110,7 @@ pub enum Event {
         package_id: ObjectID,
         transaction_module: Identifier,
         transaction_function: Identifier,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         object_id: ObjectID,
     },
     /// New object creation
@@ -118,7 +118,7 @@ pub enum Event {
         package_id: ObjectID,
         transaction_module: Identifier,
         transaction_function: Identifier,
-        instigator: SuiAddress,
+        sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
     },
@@ -141,7 +141,7 @@ impl Event {
             package_id,
             transaction_module: module,
             transaction_function: function,
-            instigator: sender,
+            sender,
             type_,
             contents,
         }
@@ -158,7 +158,7 @@ impl Event {
             package_id,
             transaction_module: module,
             transaction_function: function,
-            instigator: sender,
+            sender,
             object_id,
         }
     }
@@ -175,7 +175,7 @@ impl Event {
             package_id,
             transaction_module: module,
             transaction_function: function,
-            instigator: sender,
+            sender,
             recipient,
             object_id,
         }
@@ -217,21 +217,11 @@ impl Event {
     /// Extracts the Sender address associated with the event.
     pub fn sender(&self) -> Option<SuiAddress> {
         match self {
-            Event::MoveEvent {
-                instigator: sender, ..
-            }
-            | Event::TransferObject {
-                instigator: sender, ..
-            }
-            | Event::NewObject {
-                instigator: sender, ..
-            }
-            | Event::Publish {
-                instigator: sender, ..
-            }
-            | Event::DeleteObject {
-                instigator: sender, ..
-            } => Some(*sender),
+            Event::MoveEvent { sender, .. }
+            | Event::TransferObject { sender, .. }
+            | Event::NewObject { sender, .. }
+            | Event::Publish { sender, .. }
+            | Event::DeleteObject { sender, .. } => Some(*sender),
             _ => None,
         }
     }
@@ -241,21 +231,17 @@ impl Event {
     pub fn module_name(&self) -> Option<&str> {
         match self {
             Event::MoveEvent {
-                transaction_module: module,
-                ..
+                transaction_module, ..
             }
             | Event::NewObject {
-                transaction_module: module,
-                ..
+                transaction_module, ..
             }
             | Event::DeleteObject {
-                transaction_module: module,
-                ..
+                transaction_module, ..
             }
             | Event::TransferObject {
-                transaction_module: module,
-                ..
-            } => Some(module.as_str()),
+                transaction_module, ..
+            } => Some(transaction_module.as_str()),
             _ => None,
         }
     }
@@ -264,21 +250,21 @@ impl Event {
     pub fn function_name(&self) -> Option<&str> {
         match self {
             Event::MoveEvent {
-                transaction_function: function,
+                transaction_function,
                 ..
             }
             | Event::NewObject {
-                transaction_function: function,
+                transaction_function,
                 ..
             }
             | Event::DeleteObject {
-                transaction_function: function,
+                transaction_function,
                 ..
             }
             | Event::TransferObject {
-                transaction_function: function,
+                transaction_function,
                 ..
-            } => Some(function.as_str()),
+            } => Some(transaction_function.as_str()),
             _ => None,
         }
     }
