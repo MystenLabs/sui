@@ -499,9 +499,9 @@ impl AuthoritySignInfo {
 
 /// Represents at least a quorum (could be more) of authority signatures.
 /// STRONG_THRESHOLD indicates whether to use the quorum threshold for quorum check.
-/// When StrongThreshold is true, the quorum is valid when the total stake is
-/// at least the quorum threshold of the committee; when STRONG_THRESHOLD is false,
-/// the quorum is valid when the total stake is at least the validity threshold of
+/// When STRONG_THRESHOLD is true, the quorum is valid when the total stake is
+/// at least the quorum threshold (2f+1) of the committee; when STRONG_THRESHOLD is false,
+/// the quorum is valid when the total stake is at least the validity threshold (f+1) of
 /// the committee.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
