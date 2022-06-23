@@ -12,9 +12,9 @@ export enum API_ENV {
 }
 
 // fallback default to devNet if not set
-const defaultRPCEnv = {
-    gateway: 'http://127.0.0.1:5001/',
-    fullNode: 'http://127.0.0.1:9000/',
+const defaultRPCENV = {
+    gateway: 'https://gateway.devnet.sui.io/',
+    fullNode: 'https://fullnode.devnet.sui.io:443/',
 };
 
 type EnvInfo = {
@@ -34,19 +34,19 @@ export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
 
 export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.local]: {
-        gateway: process.env.API_ENDPOINT_LOCAL || defaultRPCEnv.gateway,
+        gateway: process.env.API_ENDPOINT_LOCAL || defaultRPCENV.gateway,
         fullNode:
-            process.env.API_ENDPOINT_LOCAL_FULLNODE || defaultRPCEnv.fullNode,
+            process.env.API_ENDPOINT_LOCAL_FULLNODE || defaultRPCENV.fullNode,
     },
     [API_ENV.devNet]: {
-        gateway: process.env.API_ENDPOINT_DEV_NET || defaultRPCEnv.gateway,
+        gateway: process.env.API_ENDPOINT_DEV_NET || defaultRPCENV.gateway,
         fullNode:
-            process.env.API_ENDPOINT_DEV_NET_FULLNODE || defaultRPCEnv.fullNode,
+            process.env.API_ENDPOINT_DEV_NET_FULLNODE || defaultRPCENV.fullNode,
     },
     [API_ENV.staging]: {
-        gateway: process.env.API_ENDPOINT_STAGING || defaultRPCEnv.gateway,
+        gateway: process.env.API_ENDPOINT_STAGING || defaultRPCENV.gateway,
         fullNode:
-            process.env.API_ENDPOINT_STAGING_FULLNODE || defaultRPCEnv.fullNode,
+            process.env.API_ENDPOINT_STAGING_FULLNODE || defaultRPCENV.fullNode,
     },
 };
 
