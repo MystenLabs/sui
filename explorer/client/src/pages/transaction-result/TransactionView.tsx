@@ -35,6 +35,7 @@ type TxDataProps = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    published?: string;
 };
 
 // Generate an Arr of Obj with Label and Value
@@ -77,6 +78,17 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             label: 'Transaction Signature',
             value: tx.txSignature,
         },
+        ...(tx.published
+            ? [
+                  {
+                      label: 'Package Published',
+                      category: 'objects',
+                      value: tx.published,
+                      list: false,
+                      link: true,
+                  },
+              ]
+            : []),
         ...(tx.mutated?.length
             ? [
                   {
