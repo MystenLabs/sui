@@ -1030,7 +1030,6 @@
                   "fields",
                   "packageId",
                   "sender",
-                  "transactionFunction",
                   "transactionModule",
                   "type"
                 ],
@@ -1046,9 +1045,6 @@
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionFunction": {
-                    "type": "string"
                   },
                   "transactionModule": {
                     "type": "string"
@@ -1100,7 +1096,6 @@
                   "packageId",
                   "recipient",
                   "sender",
-                  "transactionFunction",
                   "transactionModule",
                   "type",
                   "version"
@@ -1117,9 +1112,6 @@
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionFunction": {
-                    "type": "string"
                   },
                   "transactionModule": {
                     "type": "string"
@@ -1148,7 +1140,6 @@
                   "objectId",
                   "packageId",
                   "sender",
-                  "transactionFunction",
                   "transactionModule"
                 ],
                 "properties": {
@@ -1160,9 +1151,6 @@
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionFunction": {
-                    "type": "string"
                   },
                   "transactionModule": {
                     "type": "string"
@@ -1186,7 +1174,6 @@
                   "packageId",
                   "recipient",
                   "sender",
-                  "transactionFunction",
                   "transactionModule"
                 ],
                 "properties": {
@@ -1201,9 +1188,6 @@
                   },
                   "sender": {
                     "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "transactionFunction": {
-                    "type": "string"
                   },
                   "transactionModule": {
                     "type": "string"
@@ -1272,19 +1256,7 @@
             "additionalProperties": false
           },
           {
-            "type": "object",
-            "required": [
-              "Function"
-            ],
-            "properties": {
-              "Function": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Move StructTag string value of the event type e.g. `0x2::DevNetNFT::MintNFTEvent`",
+            "description": "Move StructTag string value of the event type e.g. `0x2::devnet_nft::MintNFTEvent`",
             "type": "object",
             "required": [
               "MoveEventType"
@@ -1350,18 +1322,6 @@
             "properties": {
               "ObjectId": {
                 "$ref": "#/components/schemas/ObjectID"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "TransferType"
-            ],
-            "properties": {
-              "TransferType": {
-                "$ref": "#/components/schemas/TransferType"
               }
             },
             "additionalProperties": false

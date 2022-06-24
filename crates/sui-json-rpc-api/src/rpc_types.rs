@@ -1199,7 +1199,6 @@ pub enum SuiEvent {
     MoveEvent {
         package_id: ObjectID,
         transaction_module: String,
-        transaction_function: String,
         sender: SuiAddress,
         type_: String,
         fields: SuiMoveStruct,
@@ -1218,7 +1217,6 @@ pub enum SuiEvent {
     TransferObject {
         package_id: ObjectID,
         transaction_module: String,
-        transaction_function: String,
         sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -1230,7 +1228,6 @@ pub enum SuiEvent {
     DeleteObject {
         package_id: ObjectID,
         transaction_module: String,
-        transaction_function: String,
         sender: SuiAddress,
         object_id: ObjectID,
     },
@@ -1239,7 +1236,6 @@ pub enum SuiEvent {
     NewObject {
         package_id: ObjectID,
         transaction_module: String,
-        transaction_function: String,
         sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -1256,7 +1252,6 @@ impl SuiEvent {
             Event::MoveEvent {
                 package_id,
                 transaction_module,
-                transaction_function,
                 sender,
                 type_,
                 contents,
@@ -1267,7 +1262,6 @@ impl SuiEvent {
                 SuiEvent::MoveEvent {
                     package_id,
                     transaction_module: transaction_module.to_string(),
-                    transaction_function: transaction_function.to_string(),
                     sender,
                     type_: move_obj.type_,
                     fields: move_obj.fields,
@@ -1278,7 +1272,6 @@ impl SuiEvent {
             Event::TransferObject {
                 package_id,
                 transaction_module,
-                transaction_function,
                 sender,
                 recipient,
                 object_id,
@@ -1287,7 +1280,6 @@ impl SuiEvent {
             } => SuiEvent::TransferObject {
                 package_id,
                 transaction_module: transaction_module.to_string(),
-                transaction_function: transaction_function.to_string(),
                 sender,
                 recipient,
                 object_id,
@@ -1297,27 +1289,23 @@ impl SuiEvent {
             Event::DeleteObject {
                 package_id,
                 transaction_module,
-                transaction_function,
                 sender,
                 object_id,
             } => SuiEvent::DeleteObject {
                 package_id,
                 transaction_module: transaction_module.to_string(),
-                transaction_function: transaction_function.to_string(),
                 sender,
                 object_id,
             },
             Event::NewObject {
                 package_id,
                 transaction_module,
-                transaction_function,
                 sender,
                 recipient,
                 object_id,
             } => SuiEvent::NewObject {
                 package_id,
                 transaction_module: transaction_module.to_string(),
-                transaction_function: transaction_function.to_string(),
                 sender,
                 recipient,
                 object_id,
@@ -1450,8 +1438,7 @@ pub struct MoveCallParams {
 pub enum SuiEventFilter {
     Package(ObjectID),
     Module(String),
-    Function(String),
-    /// Move StructTag string value of the event type e.g. `0x2::DevNetNFT::MintNFTEvent`
+    /// Move StructTag string value of the event type e.g. `0x2::devnet_nft::MintNFTEvent`
     MoveEventType(String),
     MoveEventField {
         path: String,
@@ -1460,7 +1447,6 @@ pub enum SuiEventFilter {
     SenderAddress(SuiAddress),
     EventType(EventType),
     ObjectId(ObjectID),
-    TransferType(TransferType),
     All(Vec<SuiEventFilter>),
     Any(Vec<SuiEventFilter>),
     And(Box<SuiEventFilter>, Box<SuiEventFilter>),
@@ -1475,9 +1461,8 @@ impl TryInto<EventFilter> for SuiEventFilter {
         Ok(match self {
             Package(id) => EventFilter::Package(id),
             Module(module) => EventFilter::Module(Identifier::new(module)?),
-            Function(function) => EventFilter::Function(Identifier::new(function)?),
             MoveEventType(event_type) => {
-                // parse_struct_tag converts StructTag string e.g. `0x2::DevNetNFT::MintNFTEvent` to StructTag object
+                // parse_struct_tag converts StructTag string e.g. `0x2::devnet_nft::MintNFTEvent` to StructTag object
                 EventFilter::MoveEventType(parse_struct_tag(&event_type)?)
             }
             MoveEventField { path, value } => EventFilter::MoveEventField { path, value },
@@ -1498,7 +1483,6 @@ impl TryInto<EventFilter> for SuiEventFilter {
             And(filter_a, filter_b) => All(vec![*filter_a, *filter_b]).try_into()?,
             Or(filter_a, filter_b) => Any(vec![*filter_a, *filter_b]).try_into()?,
             EventType(type_) => EventFilter::EventType(type_),
-            TransferType(type_) => EventFilter::TransferType(type_),
         })
     }
 }

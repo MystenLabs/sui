@@ -83,7 +83,6 @@ pub enum Event {
     MoveEvent {
         package_id: ObjectID,
         transaction_module: Identifier,
-        transaction_function: Identifier,
         sender: SuiAddress,
         type_: StructTag,
         #[serde_as(as = "Bytes")]
@@ -98,7 +97,6 @@ pub enum Event {
     TransferObject {
         package_id: ObjectID,
         transaction_module: Identifier,
-        transaction_function: Identifier,
         sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -109,7 +107,6 @@ pub enum Event {
     DeleteObject {
         package_id: ObjectID,
         transaction_module: Identifier,
-        transaction_function: Identifier,
         sender: SuiAddress,
         object_id: ObjectID,
     },
@@ -117,7 +114,6 @@ pub enum Event {
     NewObject {
         package_id: ObjectID,
         transaction_module: Identifier,
-        transaction_function: Identifier,
         sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
@@ -130,17 +126,15 @@ pub enum Event {
 
 impl Event {
     pub fn move_event(
-        package_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        package_id: &AccountAddress,
+        module: &IdentStr,
         sender: SuiAddress,
         type_: StructTag,
         contents: Vec<u8>,
     ) -> Self {
         Event::MoveEvent {
-            package_id,
-            transaction_module: module,
-            transaction_function: function,
+            package_id: ObjectID::from(*package_id),
+            transaction_module: Identifier::from(module),
             sender,
             type_,
             contents,
@@ -150,31 +144,27 @@ impl Event {
     pub fn delete_object(
         package_id: &AccountAddress,
         module: &IdentStr,
-        function: Identifier,
         sender: SuiAddress,
         object_id: ObjectID,
     ) -> Self {
         Event::DeleteObject {
             package_id: ObjectID::from(*package_id),
             transaction_module: Identifier::from(module),
-            transaction_function: function,
             sender,
             object_id,
         }
     }
 
     pub fn new_object(
-        package_id: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        package_id: &AccountAddress,
+        module: &IdentStr,
         sender: SuiAddress,
         recipient: Owner,
         object_id: ObjectID,
     ) -> Self {
         Event::NewObject {
-            package_id,
-            transaction_module: module,
-            transaction_function: function,
+            package_id: ObjectID::from(*package_id),
+            transaction_module: Identifier::from(module),
             sender,
             recipient,
             object_id,
@@ -242,37 +232,6 @@ impl Event {
             | Event::TransferObject {
                 transaction_module, ..
             } => Some(transaction_module.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Extracts the function name from a SuiEvent, if available
-    pub fn function_name(&self) -> Option<&str> {
-        match self {
-            Event::MoveEvent {
-                transaction_function,
-                ..
-            }
-            | Event::NewObject {
-                transaction_function,
-                ..
-            }
-            | Event::DeleteObject {
-                transaction_function,
-                ..
-            }
-            | Event::TransferObject {
-                transaction_function,
-                ..
-            } => Some(transaction_function.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Extracts the transfer type from a SuiEvent, if available
-    pub fn transfer_type(&self) -> Option<&TransferType> {
-        match self {
-            Event::TransferObject { type_, .. } => Some(type_),
             _ => None,
         }
     }

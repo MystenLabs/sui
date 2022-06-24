@@ -15,7 +15,7 @@ List of events emitted by the Sui node.
 
 ### Move event
 
-**Attributes** : packageId, transactionModule, transactionFunction, sender, type, fields, bcs  
+**Attributes** : packageId, transactionModule, sender, type, fields, bcs  
 **Example** :
 
 ```json
@@ -23,7 +23,6 @@ List of events emitted by the Sui node.
   "moveEvent": {
     "packageId": "0x0000000000000000000000000000000000000002",
     "transactionModule": "devnet_nft",
-    "transactionFunction": "mint",
     "sender": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "type": "0x2::devnet_nft::MintNFTEvent",
     "fields": {
@@ -52,7 +51,7 @@ List of events emitted by the Sui node.
 
 ### Transfer object
 
-**Attributes**: packageId, transactionModule, transactionFunction, sender, recipient, objectId, version, type  
+**Attributes**: packageId, transactionModule, sender, recipient, objectId, version, type  
 **Example**:
 
 ```json
@@ -60,7 +59,6 @@ List of events emitted by the Sui node.
   "transferObject": {
     "packageId": "0x0000000000000000000000000000000000000002",
     "transactionModule": "native",
-    "transactionFunction": "transfer_coin",
     "sender": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "recipient": {
       "AddressOwner": "0x741a9a7ea380aed286341fcf16176c8653feb667"
@@ -74,7 +72,7 @@ List of events emitted by the Sui node.
 
 ### Delete object
 
-**Attributes**: packageId, transactionModule, transactionFunction, sender, objectId  
+**Attributes**: packageId, transactionModule, sender, objectId  
 **Example**:
 
 ```json
@@ -82,7 +80,6 @@ List of events emitted by the Sui node.
   "deleteObject": {
     "packageId": "0x2d052c9de3dd02f28ec0f8e4dfdee175a5c597c3",
     "transactionModule": "discount_coupon",
-    "transactionFunction": "burn",
     "sender": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "objectId": "0xe3a6bc7bf1dba4d17a91724009c461bd69870719"
   }
@@ -91,7 +88,7 @@ List of events emitted by the Sui node.
 
 ### New object
 
-**Attributes**: packageId, transactionModule, transactionFunction, sender, recipient, objectId    
+**Attributes**: packageId, transactionModule, sender, recipient, objectId    
 **Example**:
 
 ```json
@@ -99,7 +96,6 @@ List of events emitted by the Sui node.
   "newObject": {
     "packageId": "0x0000000000000000000000000000000000000002",
     "transactionModule": "devnet_nft",
-    "transactionFunction": "mint",
     "sender": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1",
     "recipient": {
       "AddressOwner": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"
@@ -143,13 +139,11 @@ relevant to the client.
 |----------------|---------------------------------------------------------------|:------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------:|
 | Package        | Move package ID                                               |                MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject                 |                        `{"Package":"0x2"}`                        |
 | Module         | Move module name                                              |                      MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject                       |                     `{"Module":"devnet_nft"}`                     |
-| Function       | Move function name                                            |                      MoveEvent<br/>TransferObject<br/>DeleteObject<br/>NewObject                       |                       `{"Function":"mint"}`                       |
 | MoveEventType  | Move event type defined in the move code                      |                                               MoveEvent                                                |        `{"MoveEventType":"0x2::devnet_nft::MintNFTEvent"}`        |
 | MoveEventField | Filter using the data fields in the move event object         |                                               MoveEvent                                                |   `{"MoveEventField":{ "path":"/name", "value":"Example NFT"}}`   |
 | SenderAddress  | Address that started the transaction                          |                MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject                 | `{"SenderAddress": "0x70613f4f17ae1363f7a7e7251daab5c5b06f68c1"}` |
 | EventType      | Type of event described in the [Events](#events) section      | MoveEvent<br/>Publish<br/>TransferObject<br/>DeleteObject<br/>NewObject<br/>EpochChange<br/>Checkpoint |                     `"{EventType":"Publish"}`                     |
 | ObjectId       | Object ID                                                     |                             TransferObject<br/>DeleteObject<br/>NewObject                              |    `{"ObjectId":"0xe3a6bc7bf1dba4d17a91724009c461bd69870719"}`    |
-| TransferType   | Transfer type, possible values: `Coin`,`ToAddress`,`ToObject` |                                             TransferObject                                             |                     `{"TransferType":"Coin"}`                     |
 
 ### Combining filters
 
