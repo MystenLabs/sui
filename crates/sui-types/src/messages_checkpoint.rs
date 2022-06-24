@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
-use crate::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, Signable};
+use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable};
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
@@ -300,9 +300,7 @@ impl SignedCheckpointSummary {
 // or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
-// TODO: Make sure CertifiedCheckpoint uses f+1 instead of 2f+1 for quorum threshold.
-// https://github.com/MystenLabs/sui/pull/2671
-pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityQuorumSignInfo>;
+pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
 
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
@@ -323,7 +321,7 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityQuorumSignInfo {
+            auth_signature: AuthorityWeakQuorumSignInfo {
                 epoch: committee.epoch,
                 signatures: signed_checkpoints
                     .into_iter()
