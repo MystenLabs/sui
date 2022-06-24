@@ -281,7 +281,6 @@ impl AuthorityState {
         self.batch_channels.subscribe()
     }
 
-    // Sign Received Transaction
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
@@ -338,16 +337,12 @@ impl AuthorityState {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         self.metrics.tx_orders.inc();
-
-        /// IMPORTANT
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;
         let transaction_digest = *transaction.digest();
-        
-        // IMPORTANT
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
