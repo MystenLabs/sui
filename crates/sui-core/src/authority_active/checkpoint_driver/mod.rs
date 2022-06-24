@@ -28,7 +28,6 @@ use crate::{
 };
 use sui_types::committee::StakeUnit;
 use tracing::{debug, info, warn};
-// use typed_store::Map;
 
 #[cfg(test)]
 pub(crate) mod tests;

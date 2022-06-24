@@ -13,7 +13,6 @@ use sui_types::{
     messages_checkpoint::{CheckpointFragment, CheckpointSummary},
     waypoint::{GlobalCheckpoint, WaypointError},
 };
-use tracing::error;
 
 pub struct FragmentReconstruction {
     pub committee: Committee,
@@ -97,8 +96,8 @@ impl FragmentReconstruction {
                             // This is bad news, we did not intend to fail here.
                             // We should have checked all conditions to avoid being
                             // in this situation. TODO: audit this.
-                            error!("Unexpected result: {:?}", other);
-                            unreachable!();
+                            panic!("Unexpected result: {:?}", other);
+                            // Or: unreachable!();
                         }
                     }
                 }
