@@ -199,7 +199,7 @@ fn event_to_json(event: &EventEnvelope) -> String {
 }
 
 const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, checkpoint, tx_digest, event_type, \
-    package_id, module_name, function, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    package_id, module_name, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
 const TS_QUERY: &str = "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? LIMIT ?";
 
@@ -247,7 +247,6 @@ impl EventStore for SqlEventStore {
                 .bind(event_type as u16)
                 .bind(event.event.package_id().map(|pid| pid.to_vec()))
                 .bind(event.event.module_name())
-                .bind(event.event.function_name())
                 .bind(event.event.object_id().map(|id| id.to_vec()))
                 .bind(event_to_json(event))
                 .execute(&self.pool)
@@ -412,7 +411,6 @@ mod tests {
         Event::NewObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
-            transaction_function: Identifier::new("function").unwrap(),
             sender: SuiAddress::random_for_testing_only(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
@@ -423,7 +421,6 @@ mod tests {
         Event::DeleteObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
-            transaction_function: Identifier::new("function").unwrap(),
             sender: SuiAddress::random_for_testing_only(),
             object_id: ObjectID::random(),
         }
@@ -433,7 +430,6 @@ mod tests {
         Event::TransferObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
-            transaction_function: Identifier::new("function").unwrap(),
             sender: SuiAddress::random_for_testing_only(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
@@ -452,7 +448,6 @@ mod tests {
             Event::MoveEvent {
                 package_id: ObjectID::random(),
                 transaction_module: Identifier::new("module").unwrap(),
-                transaction_function: Identifier::new("function").unwrap(),
                 sender: SuiAddress::random_for_testing_only(),
                 type_: TestEvent::struct_tag(),
                 contents: event_bytes,
@@ -509,10 +504,6 @@ mod tests {
         assert_eq!(
             queried.module_name,
             orig.event.module_name().map(SharedStr::from)
-        );
-        assert_eq!(
-            queried.function_name,
-            orig.event.function_name().map(SharedStr::from)
         );
         assert_eq!(queried.object_id, orig.event.object_id());
     }

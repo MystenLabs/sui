@@ -22,7 +22,6 @@ fn test_move_event_filter() {
     let move_event = Event::MoveEvent {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("test_module")),
-        transaction_function: Identifier::from(ident_str!("test_function")),
         sender: SuiAddress::random_for_testing_only(),
         type_: GasCoin::type_(),
         contents: GasCoin::new(event_coin_id, SequenceNumber::new(), 10000).to_bcs_bytes(),
@@ -39,7 +38,6 @@ fn test_move_event_filter() {
         EventFilter::EventType(EventType::MoveEvent),
         EventFilter::Module(Identifier::from(ident_str!("test_module"))),
         EventFilter::Package(ObjectID::from(SUI_FRAMEWORK_ADDRESS)),
-        EventFilter::Function(Identifier::from(ident_str!("test_function"))),
         EventFilter::MoveEventField {
             path: "/balance".to_string(),
             value: json!(10000),
@@ -76,7 +74,6 @@ fn test_transfer_filter() {
     let move_event = Event::TransferObject {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("test_module")),
-        transaction_function: Identifier::from(ident_str!("test_function")),
         sender,
         recipient,
         object_id,
@@ -94,10 +91,8 @@ fn test_transfer_filter() {
         EventFilter::EventType(EventType::TransferObject),
         EventFilter::Package(ObjectID::from(SUI_FRAMEWORK_ADDRESS)),
         EventFilter::Module(Identifier::from(ident_str!("test_module"))),
-        EventFilter::Function(Identifier::from(ident_str!("test_function"))),
         EventFilter::ObjectId(object_id),
         EventFilter::SenderAddress(sender),
-        EventFilter::TransferType(TransferType::Coin),
         EventFilter::Recipient(recipient),
     ];
 
@@ -151,7 +146,6 @@ fn test_delete_object_filter() {
     let move_event = Event::DeleteObject {
         package_id,
         transaction_module: Identifier::from(ident_str!("test_module")),
-        transaction_function: Identifier::from(ident_str!("test_function")),
         sender,
         object_id,
     };
@@ -166,7 +160,6 @@ fn test_delete_object_filter() {
         EventFilter::EventType(EventType::DeleteObject),
         EventFilter::Package(package_id),
         EventFilter::Module(Identifier::from(ident_str!("test_module"))),
-        EventFilter::Function(Identifier::from(ident_str!("test_function"))),
         EventFilter::ObjectId(object_id),
         EventFilter::SenderAddress(sender),
     ];
@@ -192,7 +185,6 @@ fn test_new_object_filter() {
     let move_event = Event::NewObject {
         package_id,
         transaction_module: Identifier::from(ident_str!("test_module")),
-        transaction_function: Identifier::from(ident_str!("test_function")),
         sender,
         recipient,
         object_id,
@@ -208,7 +200,6 @@ fn test_new_object_filter() {
         EventFilter::EventType(EventType::NewObject),
         EventFilter::Package(package_id),
         EventFilter::Module(Identifier::from(ident_str!("test_module"))),
-        EventFilter::Function(Identifier::from(ident_str!("test_function"))),
         EventFilter::ObjectId(object_id),
         EventFilter::SenderAddress(sender),
         EventFilter::Recipient(recipient),

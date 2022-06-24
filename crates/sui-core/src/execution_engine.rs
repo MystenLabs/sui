@@ -251,7 +251,6 @@ fn transfer_coin<S>(
     temporary_store.log_event(Event::TransferObject {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("native")),
-        transaction_function: Identifier::from(ident_str!("transfer_coin")),
         sender,
         recipient: Owner::AddressOwner(recipient),
         object_id: object.id(),

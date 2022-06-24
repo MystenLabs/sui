@@ -198,7 +198,6 @@ fn execute_internal<
     process_successful_execution(
         state_view,
         module_id,
-        function,
         by_value_object_map,
         mutable_refs,
         events,
@@ -400,7 +399,6 @@ fn process_successful_execution<
 >(
     state_view: &mut S,
     module_id: &ModuleId,
-    function: &Identifier,
     mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     events: Vec<MoveEvent>,
@@ -453,7 +451,6 @@ fn process_successful_execution<
                     &mut by_value_objects,
                     state_view,
                     module_id,
-                    function,
                     &mut object_owner_map,
                     &newly_generated_ids,
                 )
@@ -480,7 +477,6 @@ fn process_successful_execution<
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
-                                function.clone(),
                                 ctx.sender(),
                                 *obj_id,
                             ));
@@ -497,7 +493,6 @@ fn process_successful_execution<
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
-                                function.clone(),
                                 ctx.sender(),
                                 *obj_id,
                             ));
@@ -523,9 +518,8 @@ fn process_successful_execution<
             EventType::User => {
                 match type_ {
                     TypeTag::Struct(s) => state_view.log_event(Event::move_event(
-                        ObjectID::from(*module_id.address()),
-                        Identifier::from(module_id.name()),
-                        function.clone(),
+                        module_id.address(),
+                        module_id.name(),
                         ctx.sender(),
                         s,
                         event_bytes,
@@ -562,7 +556,6 @@ fn handle_transfer<
     by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     state_view: &mut S,
     module_id: &ModuleId,
-    function: &Identifier,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
 ) -> Result<(), ExecutionError> {
@@ -590,9 +583,8 @@ fn handle_transfer<
                 // Newly created object
                 if newly_generated_ids.contains(&obj_id) {
                     state_view.log_event(Event::new_object(
-                        ObjectID::from(*module_id.address()),
-                        Identifier::from(module_id.name()),
-                        function.clone(),
+                        module_id.address(),
+                        module_id.name(),
                         sender,
                         recipient,
                         obj_id,
@@ -617,7 +609,6 @@ fn handle_transfer<
                     state_view.log_event(Event::TransferObject {
                         package_id: ObjectID::from(*module_id.address()),
                         transaction_module: Identifier::from(module_id.name()),
-                        transaction_function: Identifier::from(function.as_ident_str()),
                         sender,
                         recipient,
                         object_id: obj_id,

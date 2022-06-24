@@ -6,8 +6,8 @@ use move_core_types::language_storage::StructTag;
 use serde_json::Value;
 
 use crate::base_types::SuiAddress;
+use crate::event::EventType;
 use crate::event::{Event, EventEnvelope};
-use crate::event::{EventType, TransferType};
 use crate::object::Owner;
 use crate::ObjectID;
 
@@ -19,14 +19,12 @@ mod event_filter_tests;
 pub enum EventFilter {
     Package(ObjectID),
     Module(Identifier),
-    Function(Identifier),
     MoveEventType(StructTag),
     EventType(EventType),
     MoveEventField { path: String, value: Value },
     SenderAddress(SuiAddress),
     Recipient(Owner),
     ObjectId(ObjectID),
-    TransferType(TransferType),
     MatchAll(Vec<EventFilter>),
     MatchAny(Vec<EventFilter>),
 }
@@ -47,14 +45,11 @@ impl EventFilter {
             EventFilter::SenderAddress(sender) => {
                 matches!(&item.event.sender(), Some(addr) if addr == sender)
             }
-            EventFilter::Package(obj_id) => {
-                matches!(&item.event.package_id(), Some(id) if id == obj_id)
+            EventFilter::Package(object_id) => {
+                matches!(&item.event.package_id(), Some(id) if id == object_id)
             }
             EventFilter::Module(module) => {
                 matches!(item.event.module_name(), Some(name) if name == module.as_str())
-            }
-            EventFilter::Function(function) => {
-                matches!(item.event.function_name(), Some(name) if name == function.as_str())
             }
             EventFilter::ObjectId(object_id) => {
                 matches!(item.event.object_id(), Some(id) if &id == object_id)
@@ -62,9 +57,6 @@ impl EventFilter {
             EventFilter::EventType(type_) => &item.event.event_type() == type_,
             EventFilter::MatchAll(filters) => filters.iter().all(|f| f.matches(item)),
             EventFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(item)),
-            EventFilter::TransferType(type_) => {
-                matches!(item.event.transfer_type(), Some(transfer_type) if transfer_type == type_)
-            }
             EventFilter::Recipient(recipient) => {
                 matches!(item.event.recipient(), Some(event_recipient) if event_recipient == recipient)
             }
