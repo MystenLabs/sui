@@ -463,32 +463,37 @@ mod tests {
         vec![
             EventEnvelope::new(
                 1_000_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_newobj_event(),
                 None,
             ),
-            EventEnvelope::new(1_001_000, None, new_test_publish_event(), None),
+            EventEnvelope::new(
+                1_001_000,
+                TransactionDigest::random(),
+                new_test_publish_event(),
+                None,
+            ),
             EventEnvelope::new(
                 1_002_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_transfer_event(TransferType::Coin),
                 None,
             ),
             EventEnvelope::new(
                 1_003_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_deleteobj_event(),
                 None,
             ),
             EventEnvelope::new(
                 1_004_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_transfer_event(TransferType::ToAddress),
                 None,
             ),
             EventEnvelope::new(
                 1_005_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 move_event,
                 Some(json),
             ),
