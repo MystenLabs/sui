@@ -136,6 +136,18 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 <div>Version</div>
                                 <div>{data.version}</div>
                             </div>
+                            {data?.publisherAddress && (
+                                <div>
+                                    <div>publisher Address</div>
+                                    <div id="lasttxID">
+                                        <Longtext
+                                            text={data?.publisherAddress}
+                                            category="addresses"
+                                            isLink={true}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             {data.readonly && (
                                 <div>
                                     <div>Read Only?</div>

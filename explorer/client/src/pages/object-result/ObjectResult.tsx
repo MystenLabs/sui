@@ -1,6 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type TransactionEffectsResponse,
+    getTransactionSender,
+} from '@mysten/sui.js';
 import React, { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -16,7 +20,6 @@ import {
     type DataType,
 } from './ObjectResultType';
 
-import type {TransactionEffectsResponse} from '@mysten/sui.js';
 
 const DATATYPE_DEFAULT: DataType = {
     id: '',
@@ -46,22 +49,20 @@ function getObjectData(objID: string, network: string) {
         .getObject(objID as string)
         .then((objState) => {
             const resp: DataType = translate(objState) as DataType;
-            console.log(objState);
             if (resp.objType === 'Move Package' && resp.data.tx_digest) {
-                console.log(resp, 'as');
-                console.log(resp.data.tx_digest, 'tx');
                 return rpc(network)
                     .getTransactionWithEffects(resp.data.tx_digest)
                     .then((txEff: TransactionEffectsResponse) => ({
-                        txData: txEff,
-                        objState: resp,
+                        ...resp,
+                        publisherAddress: getTransactionSender(txEff.certificate),
                     }))
                     .catch((err) => {
-                        console.log(err.message);
-                        return { objState: resp };
+                        console.log(err)
+                        // TODO: Not sure if I should show Genesis as Package Publisher or ignore it
+                        return  { ...(resp.owner === 'Immutable' ? {publisherAddress: 'Genesis'} :  {}), ...resp };
                     });
             }
-            return { objState: resp };
+            return resp;
         });
 }
 
@@ -69,11 +70,10 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
-        rpc(network)
-            .getObject(objID as string)
+        getObjectData(objID, network)
             .then((objState) => {
                 setObjectState({
-                    ...(translate(objState) as DataType),
+                    ...(objState as DataType),
                     loadState: 'loaded',
                 });
             })
