@@ -80,8 +80,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
             ? 'Disassembled Bytecode'
             : 'Properties';
 
-    const isPublisherGenesis = data.objType === 'Move Package' &&  data?.publisherAddress === 'Genesis';
-            
+    const isPublisherGenesis =
+        data.objType === 'Move Package' && data?.publisherAddress === 'Genesis';
+
     return (
         <>
             <div className={styles.resultbox}>
