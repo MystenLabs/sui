@@ -135,14 +135,13 @@ fn crash_recovery() {
     assert_eq!(locals.next_transaction_sequence, 7);
 
     assert_eq!(
-        &proposal.proposal.0.checkpoint,
+        &proposal.signed_summary.summary,
         &locals
             .current_proposal
             .as_ref()
             .unwrap()
-            .proposal
-            .0
-            .checkpoint
+            .signed_summary
+            .summary
     );
 }
 
@@ -368,8 +367,8 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::None));
 
         let current_proposal = current.unwrap();
-        current_proposal.0.verify().expect("no signature error");
-        assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 0);
+        current_proposal.verify().expect("no signature error");
+        assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
 
     // --- TEST 2 ---
@@ -390,10 +389,9 @@ fn latest_proposal() {
 
         let current_proposal = current.unwrap();
         current_proposal
-            .0
             .verify_with_transactions(response.detail.as_ref().unwrap())
             .expect("no signature error");
-        assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 0);
+        assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
 
     // ---
@@ -488,8 +486,8 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
 
         let current_proposal = current.unwrap();
-        current_proposal.0.verify().expect("no signature error");
-        assert_eq!(*current_proposal.0.checkpoint.sequence_number(), 1);
+        current_proposal.verify().expect("no signature error");
+        assert_eq!(current_proposal.summary.sequence_number, 1);
     }
 }
 
@@ -577,7 +575,7 @@ fn set_get_checkpoint() {
     }
 
     // Make a certificate
-    let mut signed_checkpoint: Vec<SignedCheckpoint> = Vec::new();
+    let mut signed_checkpoint: Vec<SignedCheckpointSummary> = Vec::new();
     for x in [&mut cps1, &mut cps2, &mut cps3] {
         match x.handle_past_checkpoint(true, 0).unwrap().info {
             AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) => {
@@ -591,7 +589,8 @@ fn set_get_checkpoint() {
 
     // We can set the checkpoint cert to those that have it
 
-    let checkpoint_cert = CertifiedCheckpoint::aggregate(signed_checkpoint, &committee).unwrap();
+    let checkpoint_cert =
+        CertifiedCheckpointSummary::aggregate(signed_checkpoint, &committee).unwrap();
 
     // Send the certificate to a party that has the data
     let response_ckp = cps1
@@ -1626,7 +1625,7 @@ async fn checkpoint_messaging_flow() {
     // We need at least f+1 signatures
     assert!(signed_checkpoint.len() > 1);
     let checkpoint_cert =
-        CertifiedCheckpoint::aggregate(signed_checkpoint, &setup.committee.clone())
+        CertifiedCheckpointSummary::aggregate(signed_checkpoint, &setup.committee.clone())
             .expect("all ok");
 
     // Step 4 -- Upload the certificate back up.

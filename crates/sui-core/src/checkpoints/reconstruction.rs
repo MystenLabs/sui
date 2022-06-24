@@ -46,24 +46,24 @@ impl FragmentReconstruction {
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
-            debug_assert!(*frag.proposer.0.checkpoint.sequence_number() == seq);
+            debug_assert!(*frag.proposer.summary.sequence_number() == seq);
 
             // Check the checkpoint summary of the proposal is the same as the previous one.
             // Otherwise ignore the link.
-            let n1 = &frag.proposer.0.authority;
+            let n1 = frag.proposer.authority();
             if *proposals
                 .entry(*n1)
-                .or_insert_with(|| frag.proposer.0.checkpoint.clone())
-                != frag.proposer.0.checkpoint
+                .or_insert_with(|| frag.proposer.summary.clone())
+                != frag.proposer.summary
             {
                 continue;
             }
 
-            let n2 = &frag.other.0.authority;
+            let n2 = frag.other.authority();
             if *proposals
                 .entry(*n2)
-                .or_insert_with(|| frag.other.0.checkpoint.clone())
-                != frag.other.0.checkpoint
+                .or_insert_with(|| frag.other.summary.clone())
+                != frag.other.summary
             {
                 continue;
             }
@@ -79,7 +79,7 @@ impl FragmentReconstruction {
                 // Get all links that are part of this component
                 let mut active_links: VecDeque<_> = fragments_used
                     .into_iter()
-                    .filter(|frag| span.top_node(&frag.proposer.0.authority).0 == top)
+                    .filter(|frag| span.top_node(frag.proposer.authority()).0 == top)
                     .collect();
 
                 let mut global = GlobalCheckpoint::new();
