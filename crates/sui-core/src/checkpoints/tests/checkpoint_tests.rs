@@ -462,7 +462,9 @@ fn latest_proposal() {
 
     // When details are needed, then return unexecuted transactions if there is no proposal
     let request = CheckpointRequest::latest(true);
-    let response = cps1.handle_latest_proposal(committee.epoch, &request).expect("no errors");
+    let response = cps1
+        .handle_latest_proposal(committee.epoch, &request)
+        .expect("no errors");
     assert!(response.detail.is_none());
 
     assert!(matches!(

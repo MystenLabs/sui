@@ -403,6 +403,14 @@ impl CheckpointStore {
             ));
         }
 
+        // TODO: ISSUE #2039
+        // - check the new checkpoint contents do not include already checkpointed transactions.
+        // - check that the sequence is complete, ie no missing dependencies in the checkpoint or
+        //   previous checkpoint for all transactions included.
+        // - create a cannonical causal order that is deterministic accross authorities and store
+        //   contents as such a list instead of a set.
+        // Probably we need access to the effects to do the above.
+
         // Sign the new checkpoint
         let signed_checkpoint = AuthenticatedCheckpoint::Signed(
             SignedCheckpointSummary::new_from_summary(checkpoint, self.name, &*self.secret),
@@ -655,7 +663,12 @@ impl CheckpointStore {
             let previous_digest = self
                 .get_prev_checkpoint_digest(next_sequence_number)
                 .map_err(FragmentInternalError::Error)?;
-            let summary = CheckpointSummary::new(committee.epoch, next_sequence_number, &contents, previous_digest);
+            let summary = CheckpointSummary::new(
+                committee.epoch,
+                next_sequence_number,
+                &contents,
+                previous_digest,
+            );
             self.handle_internal_set_checkpoint(committee.epoch, summary, &contents)
                 .map_err(FragmentInternalError::Error)?;
 
@@ -1019,6 +1032,13 @@ impl CheckpointStore {
             )
             .collect::<Vec<_>>();
 
+        // TODO: Issue #2039
+        // After we have performed all checks to ensure that there are no duplicate
+        // transactions in checkpoints, the checkpoint is complere and causally
+        // ordered we can refactor the code below, as all transactions are
+        // new transactions.
+        debug_assert!(new_transactions.len() == transactions.len());
+
         let transactions_with_seq = self.extra_transactions.multi_get(new_transactions.iter())?;
 
         // Debug check that we only make a checkpoint if we have processed all the checkpointed
@@ -1046,12 +1066,6 @@ impl CheckpointStore {
                 ((seq, *iseq), *tx)
             })
             .collect();
-
-        // TODO: here we need to:
-        //    - Include any transactions that are not in a checkpoint but causally
-        //      preceed transactions in this checkpoint are included.
-        //    - We need to causally order the transactions, in a cannonical cross
-        //      authority sequence.
 
         let batch = batch.insert_batch(
             &self.transactions_to_checkpoint,
