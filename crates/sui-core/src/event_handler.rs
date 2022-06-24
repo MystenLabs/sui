@@ -42,15 +42,13 @@ impl EventHandler {
         }
     }
 
-    pub async fn process_events(
-        &self,
-        effects: &TransactionEffects,
-        timestamp_ms: u64,
-        digest: TransactionDigest,
-    ) {
+    pub async fn process_events(&self, effects: &TransactionEffects, timestamp_ms: u64) {
         // serially dispatch event processing to honor events' orders.
         for event in &effects.events {
-            if let Err(e) = self.process_event(event, timestamp_ms, digest).await {
+            if let Err(e) = self
+                .process_event(event, timestamp_ms, effects.transaction_digest)
+                .await
+            {
                 error!(error =? e, "Failed to send EventEnvelope to dispatch");
             }
         }
