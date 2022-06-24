@@ -43,7 +43,8 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     );
 };
 
-function getObjectData(objID: string, network: string) {
+// Get the data for the object and address that publishes a Package 
+function getObjectDataWithPackageAddress(objID: string, network: string) {
     return rpc(network)
         .getObject(objID as string)
         .then((objState) => {
@@ -76,7 +77,7 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
-        getObjectData(objID, network)
+        getObjectDataWithPackageAddress(objID, network)
             .then((objState) => {
                 setObjectState({
                     ...(objState as DataType),
