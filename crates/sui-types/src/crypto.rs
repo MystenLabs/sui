@@ -5,11 +5,11 @@ use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
-use anyhow::anyhow;
+// use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
-use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
+// use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use schemars::JsonSchema;
@@ -20,7 +20,8 @@ use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::str::FromStr;
+use std::slice;
+// use std::str::FromStr;
 
 use blst::min_pk::{SecretKey as BLSSecretKey, PublicKey as BLSPublicKey, AggregatePublicKey, AggregateSignature};
 use blst::{min_pk as bls, BLST_ERROR};
@@ -144,13 +145,19 @@ impl signature::Signer<AuthoritySignature> for KeyPair {
 
 #[serde_as]
 #[derive(
-    Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
 pub struct PublicKeyBytes(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; BLST_PK_SIZE],
 );
+
+impl Default for PublicKeyBytes {
+    fn default() -> Self {
+        PublicKeyBytes([0; BLST_PK_SIZE])
+    }
+}
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -381,40 +388,17 @@ impl Signature {
 
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
-#[serde_as]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, JsonSchema)]
 pub struct AuthoritySignature(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, _>")]
     pub bls::Signature,
 );
 
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-// There is a strong requirement for this specific impl. in Fab benchmarks
-impl Serialize for AuthoritySignature {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let str = self.encode_base64();
-        serializer.serialize_newtype_struct("Ed25519PublicKey", &str)
-    }
-}
-
-// There is a strong requirement for this specific impl. in Fab benchmarks
-impl<'de> Deserialize<'de> for AuthoritySignature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let value = Self::decode_base64(&s).map_err(|e| de::Error::custom(e.to_string()))?;
-        Ok(value)
+        unsafe {
+            slice::from_raw_parts(&self.0 as *const _ as  *const u8, BLST_SIG_SIZE)
+        }
     }
 }
 
@@ -501,15 +485,43 @@ impl AuthoritySignature {
             messages.push(&msg);
         }
 
-        let aggregated_signature = AggregateSignature::aggregate(&signatures[..], true)?.to_signature();
-        let verify = aggregated_signature.aggregate_verify(true, &messages[..], dst, &public_keys[..], true);
+        let aggregated_signature = AggregateSignature::aggregate(&signatures[..], true)
+            .map_err(|err| SuiError::InvalidSignature {
+                error: format!("Invalid signature aggregation")
+            })?
+        .to_signature();
 
-        match (verify) {
+        let verify = aggregated_signature.aggregate_verify(true, &messages[..], dst, &public_keys[..], true);
+        match(verify) {
             BLST_ERROR::BLST_SUCCESS => Ok(()),
             _ => Err(SuiError::InvalidSignature {
                 error: format!("ERROR"),
             })
         }
+    }
+}
+
+// There is a strong requirement for this specific impl. in Fab benchmarks
+impl Serialize for AuthoritySignature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&base64ct::Base64::encode_string(&self.0.to_bytes()))
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthoritySignature {
+    fn deserialize<D>(deserializer: D) -> Result<AuthoritySignature, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let value = base64ct::Base64::decode_vec(&s)
+            .map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let sig = bls::Signature::from_bytes(&value)
+            .map_err(|err| serde::de::Error::custom("error".to_string()))?;
+        Ok(AuthoritySignature(sig))
     }
 }
 
@@ -743,10 +755,10 @@ impl VerificationObligation {
 
         match (verify) {
             BLST_ERROR::BLST_SUCCESS => Ok(()),
-            _ => Err(SuiError::InvalidSignature {
+            _ => return Err(SuiError::InvalidSignature {
                 error: format!("ERROR"),
             })
-        }
+        };
 
         Ok(self.lookup)
     }
