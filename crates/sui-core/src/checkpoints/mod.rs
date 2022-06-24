@@ -756,24 +756,24 @@ impl CheckpointStore {
                         return Ok(Some(contents));
                     }
                 }
-            }
-        } else {
-            // Sets the reconstruction to false, we have all fragments we need, but
-            // just cannot reconstruct the contents.
-            let locals = self.get_locals();
-            let mut new_locals = locals.as_ref().clone();
-            new_locals.no_more_fragments = true;
-            self.set_locals(locals, new_locals)
-                .map_err(FragmentInternalError::Error)?;
+            } else {
+                // A little argument about how the fragment -> checkpoint process is live
+                //
+                // A global checkpoint candidate must contain at least 2f+1 stake. And as
+                // a result of this f+1 stake will be from honest nodes that by definition
+                // must have submitted a proposal (because it is included!).
+                // So f+1 honest authorities will be able to reconstruct and sign the
+                // checkpoint. And all other authorities by asking all authorities will be
+                // able to get f+1 signatures and construct a checkpoint certificate.
 
-            // A little argument about how the fragment -> checkpoint process is live
-            //
-            // A global checkpoint candidate must contain at least 2f+1 stake. And as
-            // a result of this f+1 stake will be from honest nodes that by definition
-            // must have submitted a proposal (because it is included!).
-            // So f+1 honest authorities will be able to reconstruct and sign the
-            // checkpoint. And all other authorities by asking all authorities will be
-            // able to get f+1 signatures and construct a checkpoint certificate.
+                // Sets the reconstruction to false, we have all fragments we need, but
+                // just cannot reconstruct the contents.
+                let locals = self.get_locals();
+                let mut new_locals = locals.as_ref().clone();
+                new_locals.no_more_fragments = true;
+                self.set_locals(locals, new_locals)
+                    .map_err(FragmentInternalError::Error)?;
+            }
 
             return Err(FragmentInternalError::Error(SuiError::from(
                 "Missing info to construct known checkpoint.",
