@@ -100,7 +100,7 @@ fn crash_recovery() {
     let t5 = ExecutionDigests::random();
     let t6 = ExecutionDigests::random();
 
-    cps.handle_internal_batch(4, &[(1, t1), (2, t2), (3, t3)])
+    cps.handle_internal_batch(4, &[(1, t1), (2, t2), (3, t3)], &committee)
         .unwrap();
 
     // --- TEST 1 ---
@@ -112,7 +112,7 @@ fn crash_recovery() {
     let proposal = cps.set_proposal(committee.epoch).unwrap();
     assert_eq!(*proposal.sequence_number(), 0);
 
-    cps.handle_internal_batch(7, &[(4, t4), (5, t5), (6, t6)])
+    cps.handle_internal_batch(7, &[(4, t4), (5, t5), (6, t6)], &committee)
         .unwrap();
 
     // Delete and re-open DB
@@ -161,29 +161,24 @@ fn make_checkpoint_db() {
         .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 0);
     assert_eq!(cps.extra_transactions.iter().count(), 3);
-    assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
 
     assert_eq!(cps.next_checkpoint(), 0);
+
+    // You cannot make a checkpoint without processing all transactions
+    assert!(cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).is_err());
+
+    // Now process the extra transactions in the checkpoint
+    cps.update_processed_transactions(&[(4, t4), (5, t5)])
+        .unwrap();
 
     cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
-    assert_eq!(cps.unprocessed_transactions.iter().count(), 2);
-
-    assert_eq!(cps.lowest_unprocessed_checkpoint(), 0);
-
-    let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
-    assert!(tx_seq >= u64::MAX / 2);
-
     assert_eq!(cps.next_checkpoint(), 1);
 
-    cps.update_processed_transactions(&[(4, t4), (5, t5), (6, t6)])
-        .unwrap();
+    cps.update_processed_transactions(&[(6, t6)]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
-    assert_eq!(cps.unprocessed_transactions.iter().count(), 0);
-
-    assert_eq!(cps.lowest_unprocessed_checkpoint(), 1);
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
     assert_eq!(tx_seq, 4);
@@ -227,15 +222,25 @@ fn make_proposals() {
         .cloned()
         .collect();
 
+    // if not all transactions are processed we fail
+    assert!(cps1.update_new_checkpoint(0, &ckp_items[..]).is_err());
+
+    cps1.update_processed_transactions(&[(3, t1), (4, t4)])
+        .unwrap();
+
+    cps2.update_processed_transactions(&[(3, t3), (4, t4)])
+        .unwrap();
+
+    cps3.update_processed_transactions(&[(3, t1), (4, t2)])
+        .unwrap();
+
+    cps4.update_processed_transactions(&[(3, t1), (4, t2), (5, t3)])
+        .unwrap();
+
     cps1.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps2.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps3.update_new_checkpoint(0, &ckp_items[..]).unwrap();
     cps4.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-
-    assert_eq!(
-        cps4.unprocessed_transactions.keys().collect::<HashSet<_>>(),
-        [t1, t2, t3].into_iter().collect::<HashSet<_>>()
-    );
 
     assert_eq!(
         cps4.extra_transactions.keys().collect::<HashSet<_>>(),
@@ -396,16 +401,33 @@ fn latest_proposal() {
 
     // ---
 
-    let ckp_items: Vec<_> = p1
+    let ckp_items = p1
         .transactions()
         .chain(p2.transactions())
         .chain(p3.transactions())
-        .cloned()
-        .collect();
+        .cloned();
 
-    let transactions = CheckpointContents::new(ckp_items.clone().into_iter());
+    let transactions = CheckpointContents::new(ckp_items);
     let summary = CheckpointSummary::new(committee.epoch, 0, &transactions, None);
 
+    // Fail to set if transactions not processed.
+    assert!(cps1
+        .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+        .is_err());
+
+    // Set the transactions as executed.
+    let batch: Vec<_> = transactions
+        .transactions
+        .iter()
+        .enumerate()
+        .map(|(u, c)| (u as u64, *c))
+        .collect();
+    cps1.handle_internal_batch(0, &batch, &committee).unwrap();
+    cps2.handle_internal_batch(0, &batch, &committee).unwrap();
+    cps3.handle_internal_batch(0, &batch, &committee).unwrap();
+    cps4.handle_internal_batch(0, &batch, &committee).unwrap();
+
+    // Try to get checkpoint
     cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
     cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
@@ -443,11 +465,7 @@ fn latest_proposal() {
     let response = cps1
         .handle_latest_proposal(committee.epoch, &request)
         .expect("no errors");
-    assert!(response.detail.is_some());
-    use typed_store::traits::Map;
-    let txs = response.detail.unwrap();
-    let unprocessed = CheckpointContents::new(cps1.unprocessed_transactions.keys());
-    assert_eq!(txs.transactions, unprocessed.transactions);
+    assert!(response.detail.is_none());
 
     assert!(matches!(
         response.info,
@@ -459,14 +477,7 @@ fn latest_proposal() {
     }
 
     // ---
-    use std::iter;
-    let batch: Vec<_> = ckp_items
-        .into_iter()
-        .chain(iter::once(t6))
-        .enumerate()
-        .map(|(seq, item)| (seq as u64 + 2, item))
-        .collect();
-    cps1.update_processed_transactions(&batch[..]).unwrap();
+    cps1.update_processed_transactions(&[(6, t6)]).unwrap();
 
     let _p1 = cps1.set_proposal(committee.epoch).unwrap();
 
@@ -551,6 +562,20 @@ fn set_get_checkpoint() {
     let transactions = CheckpointContents::new(ckp_items);
     let summary = CheckpointSummary::new(committee.epoch, 0, &transactions, None);
 
+    // Need to load the transactions as processed, before getting a checkpoint.
+    assert!(cps1
+        .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+        .is_err());
+    let batch: Vec<_> = transactions
+        .transactions
+        .iter()
+        .enumerate()
+        .map(|(u, c)| (u as u64, *c))
+        .collect();
+    cps1.handle_internal_batch(0, &batch, &committee).unwrap();
+    cps2.handle_internal_batch(0, &batch, &committee).unwrap();
+    cps3.handle_internal_batch(0, &batch, &committee).unwrap();
+
     cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
         .unwrap();
     cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
@@ -614,7 +639,16 @@ fn set_get_checkpoint() {
     let response_ckp = cps4.handle_checkpoint_certificate(&checkpoint_cert, &None, &committee);
     assert!(response_ckp.is_err());
 
-    // Setting with contents succeeds
+    // Setting with contents succeeds BUT has not processed transactions
+    let response_ckp = cps4.handle_checkpoint_certificate(
+        &checkpoint_cert,
+        &Some(transactions.clone()),
+        &committee,
+    );
+    assert!(response_ckp.is_err());
+
+    // Process transactions and then ask for checkpoint.
+    cps4.handle_internal_batch(0, &batch, &committee).unwrap();
     let response_ckp = cps4
         .handle_checkpoint_certificate(&checkpoint_cert, &Some(transactions), &committee)
         .unwrap();
@@ -657,6 +691,7 @@ fn checkpoint_integration() {
 
     let mut next_tx_num: TxSequenceNumber = 0;
     let mut unprocessed = Vec::new();
+    let mut checkpoint_opt = None;
     while cps.get_locals().next_checkpoint < 10 {
         let old_checkpoint = cps.get_locals().next_checkpoint;
 
@@ -674,11 +709,21 @@ fn checkpoint_integration() {
             + 1;
 
         // Step 0. Add transactions to checkpoint
-        cps.handle_internal_batch(next_tx_num, &some_fresh_transactions[..])
+        cps.handle_internal_batch(next_tx_num, &some_fresh_transactions[..], &committee)
             .unwrap();
 
+        // If we have a previous checkpoint, now lets try to process again?
+        if let Some((summary, transactions)) = checkpoint_opt.take() {
+            assert!(cps
+                .handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
+                .is_ok());
+
+            // Loop invariant to ensure termination or error
+            assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
+        }
+
         // Step 1. Make a proposal
-        let _proposal = cps.set_proposal(committee.epoch).unwrap();
+        let initial_proposal = cps.set_proposal(committee.epoch).unwrap();
 
         // Step 2. Continue to process transactions while a proposal is out.
         let some_fresh_transactions: Vec<_> = (0..7)
@@ -709,13 +754,21 @@ fn checkpoint_integration() {
                 .expect("previous checkpoint should exist"),
         );
 
-        cps.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
-            .unwrap();
+        // Cannot register the checkpoint while there are no-executed transactions.
+        assert!(cps
+            .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+            .is_err());
+
+        checkpoint_opt = Some((summary, transactions));
 
         // Cannot make a checkpoint proposal before adding the unprocessed transactions
-        assert!(cps.set_proposal(committee.epoch).is_err());
-        // Loop invariant to ensure termination or error
-        assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
+        // This returns the old proposal.
+        let latest_proposal = cps.set_proposal(committee.epoch).unwrap();
+        assert_eq!(*latest_proposal.sequence_number(), next_checkpoint);
+        assert_eq!(
+            latest_proposal.sequence_number(),
+            initial_proposal.sequence_number()
+        );
     }
 }
 
@@ -1115,7 +1168,6 @@ fn set_fragment_reconstruct_two_mutual() {
 
     let t2 = ExecutionDigests::random();
     let t3 = ExecutionDigests::random();
-    // let t6 = TransactionDigest::random();
 
     for (_, cps) in &mut test_objects {
         cps.update_processed_transactions(&[(1, t2), (2, t3)])
@@ -1366,7 +1418,11 @@ const RNG_SEED: [u8; 32] = [
     179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
 ];
 
-pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration) -> TestSetup {
+pub async fn checkpoint_tests_setup(
+    num_objects: usize,
+    batch_interval: Duration,
+    notify_noop: bool,
+) -> TestSetup {
     let mut rng = StdRng::from_seed(RNG_SEED);
     let (keys, committee) = make_committee_key(&mut rng);
 
@@ -1466,18 +1522,30 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
     }
 
     // The fake consensus channel for testing
-    let checkpoint_stores: Vec<_> = authorities.iter().map(|a| a.checkpoint.clone()).collect();
+    let checkpoint_stores: Vec<_> = authorities
+        .iter()
+        .map(|a| (a.authority.clone(), a.checkpoint.clone()))
+        .collect();
     let c = committee.clone();
     let _join = tokio::task::spawn(async move {
         let mut seq = ExecutionIndices::default();
         while let Some(msg) = _rx.recv().await {
             println!("Deliver fragment seq={:?}", seq);
-            for cps in &checkpoint_stores {
-                if let Err(err) = cps.lock().handle_internal_fragment(
+            for (authority, cps) in &checkpoint_stores {
+                if notify_noop {
+                    if let Err(err) = cps.lock().handle_internal_fragment(
+                        seq.clone(),
+                        msg.clone(),
+                        &c,
+                        &PendCertificateForExecutionNoop,
+                    ) {
+                        println!("Error: {:?}", err);
+                    }
+                } else if let Err(err) = cps.lock().handle_internal_fragment(
                     seq.clone(),
                     msg.clone(),
                     &c,
-                    &PendCertificateForExecutionNoop,
+                    authority.as_ref(),
                 ) {
                     println!("Error: {:?}", err);
                 }
@@ -1514,7 +1582,7 @@ pub async fn checkpoint_tests_setup(num_objects: usize, batch_interval: Duration
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow_bug() {
-    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500)).await;
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
 
     // Check that the system is running.
     let t = setup.transactions.pop().unwrap();
@@ -1527,7 +1595,7 @@ async fn checkpoint_messaging_flow_bug() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow() {
-    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500)).await;
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
 
     // Check that the system is running.
     let t = setup.transactions.pop().unwrap();
