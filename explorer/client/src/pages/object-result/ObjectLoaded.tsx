@@ -141,9 +141,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <div>Publisher</div>
                                     <div id="lasttxID">
                                         <Longtext
-                                            text={data?.publisherAddress}
+                                            text={data.publisherAddress}
                                             category="addresses"
-                                            isLink={true}
+                                            isLink={data.publisherAddress !== 'Genesis'}
                                         />
                                     </div>
                                 </div>
