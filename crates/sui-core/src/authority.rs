@@ -696,7 +696,7 @@ impl AuthorityState {
         // Emit events
         if let Some(event_handler) = &self.event_handler {
             event_handler
-                .process_events(&effects.effects, timestamp_ms, *digest)
+                .process_events(&effects.effects, timestamp_ms)
                 .await;
         }
 
