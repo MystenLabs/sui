@@ -20,7 +20,6 @@ import {
     type DataType,
 } from './ObjectResultType';
 
-
 const DATATYPE_DEFAULT: DataType = {
     id: '',
     category: '',
@@ -54,12 +53,19 @@ function getObjectData(objID: string, network: string) {
                     .getTransactionWithEffects(resp.data.tx_digest)
                     .then((txEff: TransactionEffectsResponse) => ({
                         ...resp,
-                        publisherAddress: getTransactionSender(txEff.certificate),
+                        publisherAddress: getTransactionSender(
+                            txEff.certificate
+                        ),
                     }))
                     .catch((err) => {
-                        console.log(err)
+                        console.log(err);
                         // TODO: Not sure if I should show Genesis as Package Publisher or ignore it
-                        return  { ...(resp.owner === 'Immutable' ? {publisherAddress: 'Genesis'} :  {}), ...resp };
+                        return {
+                            ...(resp.owner === 'Immutable'
+                                ? { publisherAddress: 'Genesis' }
+                                : {}),
+                            ...resp,
+                        };
                     });
             }
             return resp;
