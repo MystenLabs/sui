@@ -10,6 +10,7 @@ use sui_json_rpc_api::rpc_types::{SuiMoveStruct, SuiMoveValue};
 use tokio_stream::Stream;
 use tracing::{debug, error};
 
+use sui_types::base_types::TransactionDigest;
 use sui_types::object::{MoveObject, ObjectFormatOptions};
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -41,16 +42,26 @@ impl EventHandler {
         }
     }
 
-    pub async fn process_events(&self, effects: &TransactionEffects, timestamp_ms: u64) {
+    pub async fn process_events(
+        &self,
+        effects: &TransactionEffects,
+        timestamp_ms: u64,
+        digest: TransactionDigest,
+    ) {
         // serially dispatch event processing to honor events' orders.
         for event in &effects.events {
-            if let Err(e) = self.process_event(event, timestamp_ms).await {
+            if let Err(e) = self.process_event(event, timestamp_ms, digest).await {
                 error!(error =? e, "Failed to send EventEnvelope to dispatch");
             }
         }
     }
 
-    pub async fn process_event(&self, event: &Event, timestamp_ms: u64) -> SuiResult {
+    pub async fn process_event(
+        &self,
+        event: &Event,
+        timestamp_ms: u64,
+        digest: TransactionDigest,
+    ) -> SuiResult {
         let json_value = match event {
             Event::MoveEvent {
                 type_, contents, ..
@@ -70,7 +81,7 @@ impl EventHandler {
             }
             _ => None,
         };
-        let envelope = EventEnvelope::new(timestamp_ms, None, event.clone(), json_value);
+        let envelope = EventEnvelope::new(timestamp_ms, digest, event.clone(), json_value);
         // TODO store events here
         self.event_streamer.send(envelope).await
     }

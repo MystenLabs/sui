@@ -36,13 +36,13 @@ pub struct EventEnvelope {
 impl EventEnvelope {
     pub fn new(
         timestamp: u64,
-        tx_digest: Option<TransactionDigest>,
+        tx_digest: TransactionDigest,
         event: Event,
         move_struct_json_value: Option<Value>,
     ) -> Self {
         Self {
             timestamp,
-            tx_digest,
+            tx_digest: Some(tx_digest),
             event,
             move_struct_json_value,
         }
