@@ -8,6 +8,7 @@ use super::*;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use strum::{EnumMessage, IntoEnumIterator};
 
 use sqlx::{
@@ -16,7 +17,7 @@ use sqlx::{
 };
 use sui_types::error::SuiError;
 use sui_types::event::Event;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// Maximum number of events one can ask for right now
 const MAX_LIMIT: usize = 5000;
@@ -30,6 +31,8 @@ const MAX_LIMIT: usize = 5000;
 /// - fields is JSON for now (for easy JSON filtering) and contains all fields not in main columns
 pub struct SqlEventStore {
     pool: SqlitePool,
+    // Sequence number is used to prevent previously ingested events from being ingested again
+    seq_num: AtomicU64,
 }
 
 // OK this is some strum macros magic so we can programmatically get the column number / position,
@@ -40,6 +43,8 @@ pub struct SqlEventStore {
 enum EventsTableColumns {
     /// timestamp INTEGER NOT NULL
     Timestamp = 0,
+    /// seq_num INTEGER
+    SeqNum,
     /// checkpoint INTEGER
     Checkpoint,
     /// tx_digest BLOB
@@ -73,7 +78,10 @@ impl SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         info!("Created new in-memory SQLite EventStore for testing");
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            seq_num: AtomicU64::new(0),
+        })
     }
 
     /// Creates or opens a new SQLite database at a specific path
@@ -86,7 +94,10 @@ impl SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         info!(?db_path, "Created/opened SQLite EventStore on disk");
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            seq_num: AtomicU64::new(0),
+        })
     }
 
     /// Initializes the database, creating tables and indexes as needed
@@ -124,6 +135,14 @@ impl SqlEventStore {
             info!(column, "Index is ready");
         }
 
+        // Setting last sequence number
+        let last_seq_num = self.last_seq_num().await?;
+        self.seq_num.store(last_seq_num, Ordering::Relaxed);
+        info!(
+            last_seq_num,
+            "Recovered last sequence number from event store"
+        );
+
         Ok(())
     }
 
@@ -136,6 +155,15 @@ impl SqlEventStore {
             .map_err(convert_sqlx_err)?;
         let num_rows: i64 = result.get(0);
         Ok(num_rows as usize)
+    }
+
+    async fn last_seq_num(&self) -> Result<u64, SuiError> {
+        let result = sqlx::query("SELECT MAX(seq_num) FROM events")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(convert_sqlx_err)?;
+        let num_rows: i64 = result.get(0);
+        Ok(num_rows as u64)
     }
 }
 
@@ -227,8 +255,9 @@ fn event_to_json(event: &EventEnvelope) -> String {
     }
 }
 
-const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, checkpoint, tx_digest, event_type, \
-    package_id, module_name, function, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+const SQL_INSERT_TX: &str =
+    "INSERT INTO events (timestamp, seq_num, checkpoint, tx_digest, event_type, \
+    package_id, module_name, function, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 const TS_QUERY: &str = "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? LIMIT ?";
 
@@ -260,17 +289,28 @@ impl EventStore for SqlEventStore {
         events: &[EventEnvelope],
         checkpoint_num: u64,
     ) -> Result<(), SuiError> {
+        let mut cur_seq = self.seq_num.load(Ordering::Acquire);
+        let initial_seq = cur_seq;
+
         // TODO: benchmark
         // TODO: use techniques in https://docs.rs/sqlx-core/0.5.13/sqlx_core/query_builder/struct.QueryBuilder.html#method.push_values
         // to execute all inserts in a single statement?
         // TODO: See https://kerkour.com/high-performance-rust-with-sqlite
         for event in events {
+            // Skip events that have a lower sequence number... which must be same or increasing
+            if event.seq_num < cur_seq {
+                debug!(tx_digest =? event.tx_digest, seq_num = event.seq_num, cur_seq, "Skipping event with lower sequence number than current");
+                continue;
+            }
+            cur_seq = event.seq_num;
+
             // If batching, turn off persistent to avoid caching as we may fill up the prepared statement cache
             let insert_tx_q = sqlx::query(SQL_INSERT_TX).persistent(true);
             let event_type = EventType::from(&event.event);
             // TODO: use batched API?
             insert_tx_q
                 .bind(event.timestamp as i64)
+                .bind(event.seq_num as i64)
                 .bind(checkpoint_num as i64)
                 .bind(event.tx_digest.map(|txd| txd.to_bytes()))
                 .bind(event_type as u16)
@@ -283,6 +323,16 @@ impl EventStore for SqlEventStore {
                 .await
                 .map_err(convert_sqlx_err)?;
         }
+
+        // CAS is used to detect any concurrency glitches.  Note that we assume a single writer
+        // append model, which is currently true.  In single writer the CAS should never fail.
+        // We also do this after writing all events, for efficiency.
+        if cur_seq > initial_seq {
+            self.seq_num
+                .compare_exchange(initial_seq, cur_seq, Ordering::Acquire, Ordering::Relaxed)
+                .expect("CAS Failure - event writes are not single threaded");
+        }
+
         Ok(())
     }
 
@@ -483,31 +533,36 @@ mod tests {
             EventEnvelope::new(
                 1_000_000,
                 Some(TransactionDigest::random()),
+                1,
                 new_test_newobj_event(),
                 None,
             ),
-            EventEnvelope::new(1_001_000, None, new_test_publish_event(), None),
+            EventEnvelope::new(1_001_000, None, 2, new_test_publish_event(), None),
             EventEnvelope::new(
                 1_002_000,
                 Some(TransactionDigest::random()),
+                3,
                 new_test_transfer_event(TransferType::Coin),
                 None,
             ),
             EventEnvelope::new(
                 1_003_000,
                 Some(TransactionDigest::random()),
+                3,
                 new_test_deleteobj_event(),
                 None,
             ),
             EventEnvelope::new(
                 1_004_000,
                 Some(TransactionDigest::random()),
+                4,
                 new_test_transfer_event(TransferType::ToAddress),
                 None,
             ),
             EventEnvelope::new(
                 1_005_000,
                 Some(TransactionDigest::random()),
+                5,
                 move_event,
                 Some(json),
             ),
@@ -691,6 +746,44 @@ mod tests {
 
         let res = db.event_iterator(1_000_000, 1_002_000, 100_000).await;
         assert!(matches!(res, Err(SuiError::TooMuchDataRequested(100_000))));
+
+        Ok(())
+    }
+
+    // Test Idempotency / Sequence Numbering
+    #[tokio::test]
+    async fn test_eventstore_seq_num() -> Result<(), SuiError> {
+        telemetry_subscribers::init_for_testing();
+
+        // Initialize store
+        let dir = tempfile::TempDir::new().unwrap(); // NOTE this must be its own line so dir isn't dropped
+        let db_file = dir.path().join("events.db");
+        let db = SqlEventStore::new_from_file(&db_file).await?;
+        db.initialize().await?;
+
+        // Write in some events, all should succeed
+        let to_insert = test_events();
+        db.add_events(&to_insert[..4], 1).await?;
+        assert_eq!(db.total_event_count().await?, 4);
+
+        // Write in an older event with older sequence number, should be skipped
+        db.add_events(&to_insert[1..2], 1).await?;
+        assert_eq!(db.total_event_count().await?, 4);
+
+        // Drop and reload DB from the same file, test that sequence number was recovered
+        drop(db);
+        let db = SqlEventStore::new_from_file(&db_file).await?;
+        db.initialize().await?;
+        assert_eq!(db.last_seq_num().await?, 3);
+        assert_eq!(db.total_event_count().await?, 4);
+
+        // Try ingesting older event, check still skipped
+        db.add_events(&to_insert[1..2], 1).await?;
+        assert_eq!(db.total_event_count().await?, 4);
+
+        // Check writing new events still succeeds
+        db.add_events(&to_insert[4..], 1).await?;
+        assert_eq!(db.total_event_count().await?, 6);
 
         Ok(())
     }

@@ -38,18 +38,18 @@ impl<ES: EventStore> EventHandler<ES> {
         }
     }
 
-    // TODO: feed in current checkpoint number
     pub async fn process_events(
         &self,
         effects: &TransactionEffects,
         timestamp_ms: u64,
+        seq_num: u64,
         checkpoint_num: u64,
     ) -> SuiResult {
         // serially dispatch event processing to honor events' orders.
         let res: Result<Vec<_>, _> = effects
             .events
             .iter()
-            .map(|e| self.create_envelope(e, effects.transaction_digest, timestamp_ms))
+            .map(|e| self.create_envelope(e, effects.transaction_digest, seq_num, timestamp_ms))
             .collect();
         let envelopes = res?;
 
@@ -77,6 +77,7 @@ impl<ES: EventStore> EventHandler<ES> {
         &self,
         event: &Event,
         digest: TransactionDigest,
+        seq_num: u64,
         timestamp_ms: u64,
     ) -> Result<EventEnvelope, SuiError> {
         let json_value = match event {
@@ -98,6 +99,7 @@ impl<ES: EventStore> EventHandler<ES> {
         Ok(EventEnvelope::new(
             timestamp_ms,
             Some(digest),
+            seq_num,
             event.clone(),
             json_value,
         ))
