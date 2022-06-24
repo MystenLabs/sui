@@ -29,7 +29,7 @@ use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityQuorumSignInfo, Signature};
+use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferType};
 use sui_types::gas::GasCostSummary;
@@ -961,7 +961,7 @@ pub struct SuiCertifiedTransaction {
     /// tx_signature is signed by the transaction sender, applied on `data`.
     pub tx_signature: Signature,
     /// authority signature information, if available, is signed by an authority, applied on `data`.
-    pub auth_sign_info: AuthorityQuorumSignInfo,
+    pub auth_sign_info: AuthorityStrongQuorumSignInfo,
 }
 
 impl Display for SuiCertifiedTransaction {
