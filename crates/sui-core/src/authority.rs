@@ -1105,7 +1105,11 @@ impl AuthorityState {
                     // Update the checkpointing mechanism
                     checkpoint
                         .lock()
-                        .handle_internal_batch(batch.batch.next_sequence_number, &transactions)
+                        .handle_internal_batch(
+                            batch.batch.next_sequence_number,
+                            &transactions,
+                            &state.committee.load(),
+                        )
                         .expect("Should see no errors updating the checkpointing mechanism.");
                 }
             }

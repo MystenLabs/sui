@@ -108,7 +108,7 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
 async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
     let mut wait_digests: HashSet<_> = wait_digests.iter().collect();
 
-    let mut timeout = Box::pin(sleep(Duration::from_millis(5000)));
+    let mut timeout = Box::pin(sleep(Duration::from_millis(15_000)));
 
     let mut max_seq = Some(0);
 
