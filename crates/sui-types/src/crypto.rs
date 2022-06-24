@@ -13,7 +13,7 @@ use digest::Digest;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use schemars::JsonSchema;
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
@@ -23,7 +23,7 @@ use std::hash::{Hash, Hasher};
 use std::slice;
 // use std::str::FromStr;
 
-use blst::min_pk::{SecretKey as BLSSecretKey, PublicKey as BLSPublicKey, AggregatePublicKey, AggregateSignature};
+use blst::min_pk::{SecretKey as BLSSecretKey, PublicKey as BLSPublicKey, AggregateSignature};
 use blst::{min_pk as bls, BLST_ERROR};
 use rand::{RngCore};
 
@@ -31,13 +31,14 @@ use rand::{RngCore};
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
 pub struct KeyPair {
-    public_key: BLSPublicKey,
-    secret_key: BLSSecretKey,
-    public_key_cell: OnceCell<PublicKeyBytes>,
+    pub public_key: BLSPublicKey,
+    pub secret_key: BLSSecretKey,
+    pub public_key_cell: OnceCell<PublicKeyBytes>,
 }
 
-const BLST_PK_SIZE: usize = 48;
-const BLST_SIG_SIZE: usize = 96;
+pub const BLST_SK_SIZE: usize = 32;
+pub const BLST_PK_SIZE: usize = 48;
+pub const BLST_SIG_SIZE: usize = 96;
 
 impl KeyPair {
     pub fn public_key_bytes(&self) -> &PublicKeyBytes {
@@ -237,7 +238,7 @@ pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, KeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let seed = [0u8; 32];
+    let mut seed = [0u8; 32];
     OsRng.fill_bytes(&mut seed);
 
     let sk = BLSSecretKey::key_gen(&seed, &[]).unwrap();
@@ -388,9 +389,11 @@ impl Signature {
 
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
+#[serde_as]
 #[derive(Debug, Eq, PartialEq, Copy, Clone, JsonSchema)]
 pub struct AuthoritySignature(
     #[schemars(with = "Base64")]
+    #[serde_as(as = "Readable<Base64, _>")]
     pub bls::Signature,
 );
 
@@ -465,34 +468,40 @@ impl AuthoritySignature {
         let mut msg = Vec::new();
         value.write(&mut msg);
         let mut messages: Vec<&[u8]> = Vec::new();
-        let mut signatures: Vec<&bls::Signature> = Vec::new();
-        let mut public_keys: Vec<&BLSPublicKey> = Vec::new();
+        let mut signatures: Vec<bls::Signature> = Vec::new();
+        let mut public_keys: Vec<BLSPublicKey> = Vec::new();
         for tuple in votes.into_iter() {
             let (authority, signature) = tuple.borrow();
             // do we know, or can we build a valid public key?
             match key_cache.get(authority) {
-                Some(v) => public_keys.push(v),
+                Some(v) => public_keys.push(*v),
                 None => {
                     let public_key = (*authority).try_into()?;
-                    public_keys.push(&public_key);
+                    public_keys.push(public_key);
                 }
             }
 
             // build a signature
-            signatures.push(&signature.0);
+            signatures.push(signature.0);
 
             // collect the message
             messages.push(&msg);
         }
 
-        let aggregated_signature = AggregateSignature::aggregate(&signatures[..], true)
+        let aggregated_signature = AggregateSignature::aggregate(&signatures.iter().map(|x| x).collect::<Vec<_>>()[..], true)
             .map_err(|err| SuiError::InvalidSignature {
                 error: format!("Invalid signature aggregation")
             })?
         .to_signature();
 
-        let verify = aggregated_signature.aggregate_verify(true, &messages[..], dst, &public_keys[..], true);
-        match(verify) {
+        let verify = aggregated_signature.aggregate_verify(
+            true, 
+            &messages[..],
+            dst, 
+            &public_keys.iter().map(|x| x).collect::<Vec<_>>()[..],
+            true
+        );
+        match verify {
             BLST_ERROR::BLST_SUCCESS => Ok(()),
             _ => Err(SuiError::InvalidSignature {
                 error: format!("ERROR"),
@@ -507,6 +516,7 @@ impl Serialize for AuthoritySignature {
     where
         S: serde::Serializer,
     {
+        // serializer.serialize_bytes(&self.0.to_bytes())
         serializer.serialize_str(&base64ct::Base64::encode_string(&self.0.to_bytes()))
     }
 }
@@ -744,22 +754,27 @@ impl VerificationObligation {
             .map(|idx| &self.messages[*idx][..])
             .collect();
 
-        let aggregated_signature = AggregateSignature::aggregate(&self.signatures[..], true)?.to_signature();
+        let aggregated_signature = AggregateSignature::aggregate(
+            &self.signatures.iter()
+            .map(|x| x).collect::<Vec<_>>()[..], true)
+            .map_err(|err| SuiError::InvalidSignature {
+                error: format!("Invalid signature")
+            })?
+            .to_signature();
+
         let verify = aggregated_signature.aggregate_verify(
             true,
             &messages_inner[..],
             dst,
-            &self.public_keys[..],
+            &self.public_keys.iter().map(|x| x).collect::<Vec<_>>()[..],
             true
         );
 
-        match (verify) {
-            BLST_ERROR::BLST_SUCCESS => Ok(()),
-            _ => return Err(SuiError::InvalidSignature {
+        match verify {
+            BLST_ERROR::BLST_SUCCESS => Ok(self.lookup),
+            _ => Err(SuiError::InvalidSignature {
                 error: format!("ERROR"),
             })
-        };
-
-        Ok(self.lookup)
+        }
     }
 }
