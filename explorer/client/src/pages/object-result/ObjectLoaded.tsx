@@ -143,7 +143,10 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                         <Longtext
                                             text={data.publisherAddress}
                                             category="addresses"
-                                            isLink={data.publisherAddress !== 'Genesis'}
+                                            isLink={
+                                                data.publisherAddress !==
+                                                'Genesis'
+                                            }
                                         />
                                     </div>
                                 </div>
