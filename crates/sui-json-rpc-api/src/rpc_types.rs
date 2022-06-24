@@ -1192,6 +1192,18 @@ pub struct OwnedObjectRef {
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "EventEnvelope", rename_all = "camelCase")]
+pub struct SuiEventEnvelope {
+    /// UTC timestamp in milliseconds since epoch (1/1/1970)
+    pub timestamp: u64,
+    /// Transaction digest of associated transaction, if any
+    pub tx_digest: Option<TransactionDigest>,
+    /// Specific event type
+    pub event: SuiEvent,
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "Event", rename_all = "camelCase")]
 pub enum SuiEvent {
     /// Move-specific event

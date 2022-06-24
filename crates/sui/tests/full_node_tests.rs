@@ -20,7 +20,9 @@ use tracing::info;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::rpc_types::{SplitCoinResponse, SuiEventFilter, TransactionResponse};
+use sui_json_rpc_api::rpc_types::{
+    SplitCoinResponse, SuiEventEnvelope, SuiEventFilter, TransactionResponse,
+};
 use sui_json_rpc_api::rpc_types::{
     SuiEvent, SuiMoveStruct, SuiMoveValue, SuiObjectInfo, SuiObjectRead,
 };
@@ -539,7 +541,7 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     // Pass in an unique port for each test case otherwise they may interfere with one another.
     let (node, ws_client) = set_up_subscription(6666, &swarm).await?;
 
-    let mut sub: Subscription<SuiEvent> = ws_client
+    let mut sub: Subscription<SuiEventEnvelope> = ws_client
         .subscribe(
             "sui_subscribeEvent",
             rpc_params![SuiEventFilter::MoveEventType(
@@ -554,7 +556,10 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     match timeout(Duration::from_secs(5), sub.next()).await {
-        Ok(Some(Ok(SuiEvent::MoveEvent { type_, fields, .. }))) => {
+        Ok(Some(Ok(SuiEventEnvelope {
+            event: SuiEvent::MoveEvent { type_, fields, .. },
+            ..
+        }))) => {
             assert_eq!(type_, "0x2::devnet_nft::MintNFTEvent");
             assert_eq!(
                 fields,

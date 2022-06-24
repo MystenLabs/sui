@@ -12,7 +12,7 @@ use tracing::warn;
 
 use sui_core::authority::AuthorityState;
 use sui_core::event_handler::EventHandler;
-use sui_json_rpc_api::rpc_types::{SuiEvent, SuiEventFilter};
+use sui_json_rpc_api::rpc_types::{SuiEvent, SuiEventEnvelope, SuiEventFilter};
 use sui_json_rpc_api::EventApiServer;
 
 pub struct EventApiImpl {
@@ -45,7 +45,14 @@ impl EventApiServer for EventApiImpl {
         if let Some(sink) = pending.accept() {
             let state = self.state.clone();
             let stream = self.event_handler.subscribe(filter);
-            let stream = stream.map(move |e| SuiEvent::try_from(e.event, &state.module_cache));
+            let stream = stream.map(move |e| {
+                let event = SuiEvent::try_from(e.event, &state.module_cache);
+                event.map(|event| SuiEventEnvelope {
+                    timestamp: e.timestamp,
+                    tx_digest: e.tx_digest,
+                    event,
+                })
+            });
             spawn_subscript(sink, stream);
         }
     }
