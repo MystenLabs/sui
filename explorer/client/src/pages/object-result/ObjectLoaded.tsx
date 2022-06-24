@@ -138,7 +138,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             </div>
                             {data?.publisherAddress && (
                                 <div>
-                                    <div>Address</div>
+                                    <div>Publisher</div>
                                     <div id="lasttxID">
                                         <Longtext
                                             text={data?.publisherAddress}
