@@ -21,8 +21,10 @@ use sui_types::{
     object::Object,
 };
 
+use crate::epoch::reconfiguration::Reconfigurable;
 #[cfg(test)]
 use sui_config::genesis::Genesis;
+use sui_network::tonic::transport::Channel;
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -99,6 +101,17 @@ impl NetworkAuthorityClient {
 
     fn client(&self) -> ValidatorClient<tonic::transport::Channel> {
         self.client.clone()
+    }
+}
+
+#[async_trait]
+impl Reconfigurable for NetworkAuthorityClient {
+    fn needs_network_recreation() -> bool {
+        true
+    }
+
+    fn recreate(channel: tonic::transport::Channel) -> Self {
+        NetworkAuthorityClient::new(channel)
     }
 }
 
@@ -219,6 +232,16 @@ impl LocalAuthorityClientFaultConfig {
 pub struct LocalAuthorityClient {
     pub state: Arc<AuthorityState>,
     pub fault_config: LocalAuthorityClientFaultConfig,
+}
+
+impl Reconfigurable for LocalAuthorityClient {
+    fn needs_network_recreation() -> bool {
+        false
+    }
+
+    fn recreate(_channel: Channel) -> Self {
+        unreachable!(); // this function should not get called because the above function returns false
+    }
 }
 
 #[async_trait]
