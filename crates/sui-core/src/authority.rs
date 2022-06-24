@@ -971,15 +971,10 @@ impl AuthorityState {
             .lock();
         match &request.request_type {
             CheckpointRequestType::LatestCheckpointProposal => {
-                checkpoint_store.handle_latest_proposal(self.committee.load().epoch, request)
+                checkpoint_store.handle_latest_proposal(request)
             }
             CheckpointRequestType::PastCheckpoint(seq) => {
                 checkpoint_store.handle_past_checkpoint(request.detail, *seq)
-            }
-            CheckpointRequestType::SetCertificate(cert, opt_contents) => checkpoint_store
-                .handle_checkpoint_certificate(cert, opt_contents, &self.committee.load()),
-            CheckpointRequestType::SetFragment(fragment) => {
-                checkpoint_store.handle_receive_fragment(fragment, &self.committee.load())
             }
         }
     }
@@ -1105,11 +1100,7 @@ impl AuthorityState {
                     // Update the checkpointing mechanism
                     checkpoint
                         .lock()
-                        .handle_internal_batch(
-                            batch.batch.next_sequence_number,
-                            &transactions,
-                            &state.committee.load(),
-                        )
+                        .handle_internal_batch(batch.batch.next_sequence_number, &transactions)
                         .expect("Should see no errors updating the checkpointing mechanism.");
                 }
             }
