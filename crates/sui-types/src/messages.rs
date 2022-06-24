@@ -744,14 +744,10 @@ impl PartialEq for SignedTransaction {
 
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityQuorumSignInfo>;
 
-/// Important
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmationTransaction {
     pub certificate: CertifiedTransaction,
 }
-
-// Important
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
