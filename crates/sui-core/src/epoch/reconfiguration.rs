@@ -72,7 +72,7 @@ where
             // Delete any extra certificates now unprocessed.
             checkpoints.extra_transactions.clear()?;
 
-            // TODO(issue #2708): Delete certificates from the pending store.
+            self.state.database.remove_all_pending_certificates()?;
 
             // drop checkpoints lock
         } else {
