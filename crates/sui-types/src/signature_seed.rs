@@ -6,7 +6,7 @@
 use crate::base_types::SuiAddress;
 use crate::crypto;
 use crate::crypto::{KeyPair, Signable, Signature};
-use blst::{min_pk as bls};
+use blst::{min_sig as bls};
 use crate::error::SuiError;
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};

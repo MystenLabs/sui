@@ -1,16 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::base_types::{AuthorityName, SuiAddress};
-use crate::committee::{Committee, EpochId};
+use crate::committee_bls::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
-use crate::sui_serde::BlsSignature;
 use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
-use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
 use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
@@ -22,30 +20,24 @@ use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::slice;
 use std::str::FromStr;
-use std::{
-    fmt::{self, Display},
-    mem::MaybeUninit,
-};
 
-use blst::min_sig::{SecretKey as BLSSecretKey, PublicKey as BLSPublicKey, AggregateSignature};
+use blst::min_sig::{SecretKey as BLSSecretKey, PublicKey as BLSPublicKey, AggregatePublicKey, AggregateSignature};
 use blst::{min_sig as bls, BLST_ERROR};
-use ::blst::{blst_scalar, blst_scalar_from_uint64};
 use rand::{RngCore};
 
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
 pub struct KeyPair {
-    pub public_key: BLSPublicKey,
-    pub secret_key: BLSSecretKey,
-    pub public_key_cell: OnceCell<PublicKeyBytes>,
+    public_key: BLSPublicKey,
+    secret_key: BLSSecretKey,
+    public_key_cell: OnceCell<PublicKeyBytes>,
 }
 
-pub const BLST_SK_SIZE: usize = 32;
-pub const BLST_PK_SIZE: usize = 96;
-pub const BLST_SIG_SIZE: usize = 48;
+
+const BLST_PK_SIZE: usize = 48;
+const BLST_SIG_SIZE: usize = 96;
 
 impl KeyPair {
     pub fn public_key_bytes(&self) -> &PublicKeyBytes {
@@ -66,14 +58,14 @@ impl KeyPair {
         }
     }
 
-    /// Make a Narwhal-compatible key pair from a Sui keypair.
-    pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
-        let kp = DalekKeypair::generate(&mut OsRng);
-        Ed25519KeyPair {
-            name: Ed25519PublicKey(kp.public),
-            secret: Ed25519PrivateKey(kp.secret),
-        }
-    }
+    // /// Make a Narwhal-compatible key pair from a Sui keypair.
+    // pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
+    //     let key = self.copy();
+    //     Ed25519KeyPair {
+    //         name: Ed25519PublicKey(key.key_pair.public),
+    //         secret: Ed25519PrivateKey(key.key_pair.secret),
+    //     }
+    // }
 }
 
 // impl From<DalekKeypair> for KeyPair {
@@ -118,45 +110,42 @@ impl<'de> Deserialize<'de> for KeyPair {
     }
 }
 
-impl FromStr for KeyPair {
-    type Err = anyhow::Error;
+// impl FromStr for KeyPair {
+//     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = base64ct::Base64::decode_vec(s).map_err(|e| anyhow!("{}", e.to_string()))?;
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         let value = base64ct::Base64::decode_vec(s).map_err(|e| anyhow!("{}", e.to_string()))?;
+//         let key = dalek::Keypair::from_bytes(&value).map_err(|e| anyhow!("{}", e.to_string()))?;
+//         Ok(KeyPair {
+//             key_pair: key,
+//             public_key_cell: OnceCell::new(),
+//         })
+//     }
+// }
 
-        Ok(KeyPair {
-            secret_key: BLSSecretKey::from_bytes(&value[..BLST_SK_SIZE]).map_err(|e| anyhow!("{}", "temp"))?,
-            public_key: BLSPublicKey::from_bytes(&value[BLST_SK_SIZE..]).map_err(|e| anyhow!("{}", "temp"))?,
-            public_key_cell: OnceCell::new(),
-        })
-    }
-}
-
-pub const DST: &[u8] = b"BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_";
+const dst: &'static [u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_";
 
 impl signature::Signer<Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        let signature_bytes = &self.secret_key.sign(msg, DST, &[]).to_bytes();
+        let signature_bytes = self.secret_key.sign(msg, dst, &[]).to_bytes();
         let public_key_bytes = self.public_key_bytes().as_ref();
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
-        result_bytes[..BLST_SIG_SIZE].copy_from_slice(signature_bytes);
+        result_bytes[..BLST_SIG_SIZE].copy_from_slice(&signature_bytes);
         result_bytes[BLST_SIG_SIZE..].copy_from_slice(public_key_bytes);
-        println!("{:?}", signature_bytes);
         Ok(Signature(result_bytes))
     }
 }
 
 impl signature::Signer<AuthoritySignature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<AuthoritySignature, signature::Error> {
-        let sig = self.secret_key.sign(msg, DST, &[]);
-        println!("{:?}", sig.to_bytes());
+        let sig = self.secret_key.sign(msg, dst, &[]);
         Ok(AuthoritySignature(sig))
     }
 }
 
 #[serde_as]
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
+    Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema,
 )]
 pub struct PublicKeyBytes(
     #[schemars(with = "Base64")]
@@ -164,21 +153,15 @@ pub struct PublicKeyBytes(
     [u8; BLST_PK_SIZE],
 );
 
-impl Default for PublicKeyBytes {
-    fn default() -> Self {
-        PublicKeyBytes([0; BLST_PK_SIZE])
-    }
-}
-
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
     // /// Make a Narwhal-compatible public key from a Sui pub.
-    pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
-        let kp = DalekKeypair::generate(&mut OsRng);
-        Ok(Ed25519PublicKey(kp.public))
-    }
+    // pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
+    //     let pub_key = dalek::PublicKey::from_bytes(&self.0)?;
+    //    /watch Ok(Ed25519PublicKey(pub_key))
+    // }
 }
 
 impl AsRef<[u8]> for PublicKeyBytes {
@@ -248,7 +231,7 @@ pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, KeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let mut seed = [0u8; 32];
+    let seed = [0u8; 32];
     OsRng.fill_bytes(&mut seed);
 
     let sk = BLSSecretKey::key_gen(&seed, &[]).unwrap();
@@ -351,14 +334,11 @@ impl Signature {
             })?;
 
         // perform cryptographic signature check
-        let err = signature
-            .verify(true,&message, DST, &[], public_key, false);
-        match err {
-            BLST_ERROR::BLST_SUCCESS => Ok(()),
-            _ => Err(SuiError::InvalidSignature {
-                error: "Invalid signature 1".to_string()
+        signature
+            .verify(true,&message, dst, &[], public_key, false)
+            .map_err(|error| SuiError::InvalidSignature {
+                error: error.to_string(),
             })
-        }
     }
 
     pub fn get_verification_inputs<T>(
@@ -403,15 +383,12 @@ impl Signature {
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AuthoritySignature(
     #[schemars(with = "Base64")]
-    #[serde_as(as = "BlsSignature")]
+    #[serde_as(as = "Readable<Base64, _>")]
     pub bls::Signature,
 );
-
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(&self.0 as *const _ as  *const u8, BLST_SIG_SIZE)
-        }
+        &self.0
     }
 }
 
@@ -452,11 +429,12 @@ impl AuthoritySignature {
 
         // perform cryptographic signature check
         let err = signature
-            .verify(true, &message, DST, &[], &public_key, true);
+            .verify(true, &message, dst, &[], &public_key, true);
+
         match err {
             BLST_ERROR::BLST_SUCCESS => Ok(()),
             _ => Err(SuiError::InvalidSignature {
-                error: "Invalid signature 2".to_string()
+                error: "Invalid signature".to_string()
             })
         }
     }
@@ -478,46 +456,33 @@ impl AuthoritySignature {
         let mut msg = Vec::new();
         value.write(&mut msg);
         let mut messages: Vec<&[u8]> = Vec::new();
-        let mut signatures: Vec<bls::Signature> = Vec::new();
-        let mut public_keys: Vec<BLSPublicKey> = Vec::new();
+        let mut signatures: Vec<&bls::Signature> = Vec::new();
+        let mut public_keys: Vec<&BLSPublicKey> = Vec::new();
         for tuple in votes.into_iter() {
             let (authority, signature) = tuple.borrow();
             // do we know, or can we build a valid public key?
             match key_cache.get(authority) {
-                Some(v) => public_keys.push(*v),
+                Some(v) => public_keys.push(v),
                 None => {
                     let public_key = (*authority).try_into()?;
-                    public_keys.push(public_key);
+                    public_keys.push(&public_key);
                 }
             }
 
             // build a signature
-            signatures.push(signature.0);
+            signatures.push(&signature.0);
 
             // collect the message
             messages.push(&msg);
         }
 
-        let aggregated_signature = AggregateSignature::aggregate(&signatures.iter().map(|x| x).collect::<Vec<_>>()[..], true)
-            .map_err(|err| SuiError::InvalidSignature {
-                error: format!("Invalid signature aggregation 3")
-            })?
-        .to_signature();
+        let aggregated_signature = AggregateSignature::aggregate(&signatures[..], true)?.to_signature();
+        let verify = aggregated_signature.aggregate_verify(true, &messages[..], dst, &public_keys[..], true);
 
-        let verify = aggregated_signature.aggregate_verify(
-            true, 
-            &messages[..],
-            DST, 
-            &public_keys.iter().map(|x| x).collect::<Vec<_>>()[..],
-            true
-        );
-        match verify {
-            BLST_ERROR::BLST_SUCCESS => {
-                println!("Verification success");
-                Ok(())
-            },
+        match (verify) {
+            BLST_ERROR::BLST_SUCCESS => Ok(()),
             _ => Err(SuiError::InvalidSignature {
-                error: format!("ERROR 4"),
+                error: format!("ERROR"),
             })
         }
     }
@@ -742,41 +707,22 @@ impl VerificationObligation {
             .map(|idx| &self.messages[*idx][..])
             .collect();
 
-        let sigs = &self.signatures.iter().map(|x| x).collect::<Vec<_>>()[..];
-        for sig in sigs {
-            println!("{:?}", (*sig).to_bytes());
-        }
-        
-        if sigs.len() == 0 {
-            println!("No Signature");
-            return Err(SuiError::InvalidSignature {
-                error: format!("No signature"),
-            });
-        }
-
-        let signature = AggregateSignature::aggregate(
-            &self.signatures.iter().map(|sig| sig).collect::<Vec<_>>()[..],
-            true
-        ).map_err(|e| SuiError::InvalidSignature {
-            error: format!("{:?}", e)
-        })?.to_signature();
-
-        let result = signature.aggregate_verify(
+        let aggregated_signature = AggregateSignature::aggregate(&self.signatures[..], true)?.to_signature();
+        let verify = aggregated_signature.aggregate_verify(
             true,
             &messages_inner[..],
-            DST,
-            &self.public_keys.iter().map(|pk| pk).collect::<Vec<_>>()[..],
+            dst,
+            &self.public_keys[..],
             true
         );
 
-        match result{
-            BLST_ERROR::BLST_SUCCESS => {
-                println!("Verification Success");
-                Ok(self.lookup)
-            },
+        match (verify) {
+            BLST_ERROR::BLST_SUCCESS => Ok(()),
             _ => Err(SuiError::InvalidSignature {
-                error: format!("ERROR {:?}", result),
+                error: format!("ERROR"),
             })
         }
+
+        Ok(self.lookup)
     }
 }
