@@ -141,7 +141,6 @@ impl signature::Signer<Signature> for KeyPair {
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
         result_bytes[..BLST_SIG_SIZE].copy_from_slice(signature_bytes);
         result_bytes[BLST_SIG_SIZE..].copy_from_slice(public_key_bytes);
-        println!("{:?}", signature_bytes);
         Ok(Signature(result_bytes))
     }
 }
@@ -149,7 +148,6 @@ impl signature::Signer<Signature> for KeyPair {
 impl signature::Signer<AuthoritySignature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<AuthoritySignature, signature::Error> {
         let sig = self.secret_key.sign(msg, DST, &[]);
-        println!("{:?}", sig.to_bytes());
         Ok(AuthoritySignature(sig))
     }
 }
@@ -513,7 +511,6 @@ impl AuthoritySignature {
         );
         match verify {
             BLST_ERROR::BLST_SUCCESS => {
-                println!("Verification success");
                 Ok(())
             },
             _ => Err(SuiError::InvalidSignature {
@@ -567,7 +564,15 @@ impl AuthoritySignInfo {
         obligation
             .public_keys
             .push(committee.public_key(&self.authority)?);
-        obligation.signatures.push(self.signature.0);
+        obligation.aggregated_signature = match obligation.aggregated_signature {
+            Some(signature) => {
+                let mut aggr_sig = AggregateSignature::from_signature(&signature);
+                aggr_sig.add_signature(&self.signature.0, true)
+                .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
+                Some(aggr_sig.to_signature())
+            },
+            None => Some(self.signature.0)
+        };
         obligation.message_index.push(message_index);
         Ok(())
     }
@@ -577,7 +582,8 @@ impl AuthoritySignInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthorityQuorumSignInfo {
     pub epoch: EpochId,
-    pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    pub authorities: Vec<AuthorityName>,
+    pub aggregated_signature: Option<AuthoritySignature>,
 }
 // Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
 // or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
@@ -612,7 +618,7 @@ impl AuthorityQuorumSignInfo {
         let mut used_authorities = HashSet::new();
 
         // Create obligations for the committee signatures
-        for (authority, signature) in self.signatures.iter() {
+        for authority in self.authorities.iter() {
             // Check that each authority only appears once.
             fp_ensure!(
                 !used_authorities.contains(authority),
@@ -627,9 +633,30 @@ impl AuthorityQuorumSignInfo {
             obligation
                 .public_keys
                 .push(committee.public_key(authority)?);
-            obligation.signatures.push(signature.0);
             obligation.message_index.push(message_index);
         }
+
+        obligation.aggregated_signature = 
+            match obligation.aggregated_signature {
+                Some(prev_sig) => {
+                    match self.aggregated_signature {
+                        Some(prev_aggr_sig) => {
+                            let mut aggr_sig = AggregateSignature::from_signature(&prev_sig);
+                            aggr_sig.add_signature(&prev_aggr_sig.0, true)
+                            .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
+                            Some(aggr_sig.to_signature())
+                        }
+                        None => Some(prev_sig)
+                    }
+                }
+                None => {
+                    match self.aggregated_signature {
+                        Some(sig) => Some(sig.0),
+                        None => None
+                    }
+                }
+            };
+
 
         fp_ensure!(
             weight >= committee.quorum_threshold(),
@@ -696,13 +723,42 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     hash.into()
 }
 
-#[derive(Default)]
 pub struct VerificationObligation {
     lookup: PubKeyLookup,
     messages: Vec<Vec<u8>>,
     pub message_index: Vec<usize>,
-    pub signatures: Vec<bls::Signature>,
+    pub aggregated_signature: Option<bls::Signature>,
     pub public_keys: Vec<BLSPublicKey>,
+}
+
+pub fn aggregate_authority_signatures(
+    authority_signatures: &[&AuthoritySignature]
+) -> Result<AuthoritySignature, SuiError> {
+    Ok(AuthoritySignature(aggregate_bls_signature(
+        &authority_signatures.iter().map(|s| s.0).collect::<Vec<_>>()[..]
+    )?))
+}
+
+pub fn aggregate_bls_signature(signatures: &[bls::Signature]) -> Result<bls::Signature, SuiError> {
+    let aggregated_signature = AggregateSignature::aggregate(
+        &signatures.iter().map(|sig| sig).collect::<Vec<_>>()[..],
+        true
+    ).map_err(|e| SuiError::InvalidSignature {
+        error: format!("{:?}", e)
+    })?;
+    Ok(aggregated_signature.to_signature())
+}
+
+impl Default for VerificationObligation {
+    fn default() -> Self {
+        VerificationObligation {
+            lookup: PubKeyLookup::default(),
+            messages: Vec::default(),
+            message_index: Vec::default(),
+            aggregated_signature: None,
+            public_keys: Vec::default()
+        }
+    }
 }
 
 impl VerificationObligation {
@@ -742,39 +798,46 @@ impl VerificationObligation {
             .map(|idx| &self.messages[*idx][..])
             .collect();
 
-        let sigs = &self.signatures.iter().map(|x| x).collect::<Vec<_>>()[..];
-        for sig in sigs {
-            println!("{:?}", (*sig).to_bytes());
-        }
+        // let sigs = &self.signatures.iter().map(|x| x).collect::<Vec<_>>()[..];
+        // for sig in sigs {
+            // println!("{:?}", (*sig).to_bytes());
+        // }
         
-        if sigs.len() == 0 {
-            println!("No Signature");
-            return Err(SuiError::InvalidSignature {
-                error: format!("No signature"),
-            });
-        }
+        // if sigs.len() == 0 {
+        //     println!("No Signature");
+        //     return Err(SuiError::InvalidSignature {
+        //         error: format!("No signature"),
+        //     });
+        // }
 
-        let signature = AggregateSignature::aggregate(
-            &self.signatures.iter().map(|sig| sig).collect::<Vec<_>>()[..],
-            true
-        ).map_err(|e| SuiError::InvalidSignature {
-            error: format!("{:?}", e)
-        })?.to_signature();
+        // let signature = AggregateSignature::aggregate(
+        //     &self.signatures.iter().map(|sig| sig).collect::<Vec<_>>()[..],
+        //     true
+        // ).map_err(|e| SuiError::InvalidSignature {
+        //     error: format!("{:?}", e)
+        // })?.to_signature();
 
-        let result = signature.aggregate_verify(
-            true,
-            &messages_inner[..],
-            DST,
-            &self.public_keys.iter().map(|pk| pk).collect::<Vec<_>>()[..],
-            true
-        );
+        let result = match self.aggregated_signature {
+            Some(signature) => {
+                signature.aggregate_verify(
+                    true,
+                    &messages_inner[..],
+                    DST,
+                    &self.public_keys.iter().map(|pk| pk).collect::<Vec<_>>()[..],
+                    true
+                )
+            }
+            None => {
+                return Err(SuiError::InvalidSignature {
+                    error: format!("Empty Signature")
+                })
+            }
+        };
 
-        match result{
-            BLST_ERROR::BLST_SUCCESS => {
-                println!("Verification Success");
-                Ok(self.lookup)
-            },
-            _ => Err(SuiError::InvalidSignature {
+        if result == BLST_ERROR::BLST_SUCCESS {
+            Ok(self.lookup)
+        } else {
+            Err(SuiError::InvalidSignature {
                 error: format!("ERROR {:?}", result),
             })
         }
