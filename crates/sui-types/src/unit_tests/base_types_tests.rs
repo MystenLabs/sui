@@ -294,8 +294,8 @@ fn test_signature_serde_not_human_readable() {
     let serialized = bincode::serialize(&sig).unwrap();
     let bcs_serialized = bcs::to_bytes(&sig).unwrap();
 
-    // assert_eq!(serialized, bcs_serialized);
-    // assert_eq!(sig.0.to_bytes(), serialized[..]);
+    assert_eq!(serialized, bcs_serialized);
+    assert_eq!(sig.0.to_bytes(), serialized[..]);
     let deserialized: AuthoritySignature = bincode::deserialize(&serialized).unwrap();
     assert_eq!(deserialized, sig);
 }
