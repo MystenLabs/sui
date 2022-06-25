@@ -14,7 +14,7 @@ publish = false
 # are managed by hakari.
 
 ### BEGIN HAKARI SECTION
-[dependencies]
+[target.'cfg(not(windows))'.dependencies]
 addr2line = { version = "0.17", default-features = false }
 adler = { version = "1", default-features = false }
 ahash = { version = "0.7", features = ["std"] }
@@ -550,7 +550,7 @@ yaml-rust = { version = "0.4", default-features = false }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zstd-sys = { version = "1", default-features = false }
 
-[build-dependencies]
+[target.'cfg(not(windows))'.build-dependencies]
 Inflector = { version = "0.11", default-features = false }
 addr2line = { version = "0.17", default-features = false }
 adler = { version = "1", default-features = false }
