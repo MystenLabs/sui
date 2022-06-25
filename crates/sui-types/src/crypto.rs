@@ -141,7 +141,7 @@ impl signature::Signer<Signature> for KeyPair {
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
         result_bytes[..BLST_SIG_SIZE].copy_from_slice(signature_bytes);
         result_bytes[BLST_SIG_SIZE..].copy_from_slice(public_key_bytes);
-        println!("{:?}", signature_bytes);
+        // println!("{:?}", signature_bytes);
         Ok(Signature(result_bytes))
     }
 }
@@ -149,7 +149,7 @@ impl signature::Signer<Signature> for KeyPair {
 impl signature::Signer<AuthoritySignature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<AuthoritySignature, signature::Error> {
         let sig = self.secret_key.sign(msg, DST, &[]);
-        println!("{:?}", sig.to_bytes());
+        // println!("{:?}", sig.to_bytes());
         Ok(AuthoritySignature(sig))
     }
 }
@@ -513,7 +513,7 @@ impl AuthoritySignature {
         );
         match verify {
             BLST_ERROR::BLST_SUCCESS => {
-                println!("Verification success");
+                // println!("Verification success");
                 Ok(())
             },
             _ => Err(SuiError::InvalidSignature {
@@ -744,11 +744,11 @@ impl VerificationObligation {
 
         let sigs = &self.signatures.iter().map(|x| x).collect::<Vec<_>>()[..];
         for sig in sigs {
-            println!("{:?}", (*sig).to_bytes());
+            // println!("{:?}", (*sig).to_bytes());
         }
         
         if sigs.len() == 0 {
-            println!("No Signature");
+            // println!("No Signature");
             return Err(SuiError::InvalidSignature {
                 error: format!("No signature"),
             });
@@ -771,7 +771,7 @@ impl VerificationObligation {
 
         match result{
             BLST_ERROR::BLST_SUCCESS => {
-                println!("Verification Success");
+                // println!("Verification Success");
                 Ok(self.lookup)
             },
             _ => Err(SuiError::InvalidSignature {
