@@ -513,7 +513,17 @@ impl<S> TransactionEnvelope<S> {
         let idx = obligation.add_message(message);
         let key = obligation.lookup_public_key(&public_key)?;
         obligation.public_keys.push(key);
-        obligation.signatures.push(signature);
+        obligation.aggregated_signature = match obligation.aggregated_signature {
+            Some(prev_sig) => {
+                let mut aggr_sig = blst::min_sig::AggregateSignature::from_signature(&prev_sig);
+                aggr_sig.add_signature(&signature, true)
+                .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
+                Some(aggr_sig.to_signature())
+            }
+            None => {
+                Some(signature)
+            }
+        };
         obligation.message_index.push(idx);
         Ok(())
     }
@@ -1126,11 +1136,12 @@ impl CertifiedTransactionEffects {
     pub fn new(
         epoch: EpochId,
         effects: TransactionEffects,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        authorities: Vec<AuthorityName>,
+        aggregated_signature: Option<AuthoritySignature>,
     ) -> Self {
         Self {
             effects,
-            auth_signature: AuthorityQuorumSignInfo { epoch, signatures },
+            auth_signature: AuthorityQuorumSignInfo { epoch, authorities, aggregated_signature},
         }
     }
 
@@ -1221,11 +1232,21 @@ impl<'a> SignatureAggregator<'a> {
         fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
         self.weight += voting_rights;
         // Update certificate.
-        self.partial
-            .auth_sign_info
-            .signatures
-            .push((authority, signature));
-
+        self.partial.auth_sign_info.authorities.push(authority);
+        self.partial.auth_sign_info.aggregated_signature
+            = match self.partial.auth_sign_info.aggregated_signature {
+                Some(prev_sig) => {
+                    println!("2 pass");
+                    let mut aggr_sig = blst::min_sig::AggregateSignature::from_signature(&prev_sig.0);
+                    aggr_sig.add_signature(&signature.0, true)
+                    .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
+                    Some(AuthoritySignature(aggr_sig.to_signature()))
+                }
+                None => {
+                    println!("1 pass");
+                    Some(signature)
+                }
+            };
         if self.weight >= self.committee.quorum_threshold() {
             Ok(Some(self.partial.clone()))
         } else {
@@ -1236,20 +1257,21 @@ impl<'a> SignatureAggregator<'a> {
 
 impl CertifiedTransaction {
     pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
-        Self::new_with_signatures(epoch, transaction, vec![])
+        Self::new_with_aggregate_signatures(epoch, transaction, vec![], None)
     }
 
-    pub fn new_with_signatures(
+    pub fn new_with_aggregate_signatures(
         epoch: EpochId,
         transaction: Transaction,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        authorities: Vec<AuthorityName>,
+        aggregated_signature: Option<AuthoritySignature>,
     ) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityQuorumSignInfo { epoch, signatures },
+            auth_sign_info: AuthorityQuorumSignInfo { epoch, authorities, aggregated_signature},
         }
     }
 
@@ -1298,9 +1320,9 @@ impl Display for CertifiedTransaction {
             writer,
             "Signed Authorities : {:?}",
             self.auth_sign_info
-                .signatures
+                .authorities
                 .iter()
-                .map(|(name, _)| name)
+                .map(|name| name)
                 .collect::<Vec<_>>()
         )?;
         write!(writer, "{}", &self.data.kind)?;

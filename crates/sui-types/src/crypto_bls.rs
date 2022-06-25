@@ -666,7 +666,7 @@ pub struct VerificationObligation {
     lookup: PubKeyLookup,
     messages: Vec<Vec<u8>>,
     pub message_index: Vec<usize>,
-    pub signatures: Vec<bls::Signature>,
+    pub aggregated_signature: bls::Signature,
     pub public_keys: Vec<BLSPublicKey>,
 }
 
@@ -707,8 +707,8 @@ impl VerificationObligation {
             .map(|idx| &self.messages[*idx][..])
             .collect();
 
-        let aggregated_signature = AggregateSignature::aggregate(&self.signatures[..], true)?.to_signature();
-        let verify = aggregated_signature.aggregate_verify(
+        // let aggregated_signature = AggregateSignature::aggregate(&self.signatures[..], true)?.to_signature();
+        let verify = self.aggregated_signature.aggregate_verify(
             true,
             &messages_inner[..],
             dst,

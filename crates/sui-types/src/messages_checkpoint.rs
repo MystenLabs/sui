@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::base_types::ExecutionDigests;
-use crate::crypto::Signable;
+use crate::crypto::{Signable, aggregate_authority_signatures};
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
@@ -289,7 +289,8 @@ impl SignedCheckpoint {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedCheckpoint {
     pub checkpoint: CheckpointSummary,
-    signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    authorities: Vec<AuthorityName>,
+    signature: AuthoritySignature
 }
 
 impl CertifiedCheckpoint {
@@ -305,10 +306,16 @@ impl CertifiedCheckpoint {
 
         let certified_checkpoint = CertifiedCheckpoint {
             checkpoint: signed_checkpoints[0].checkpoint.clone(),
-            signatures: signed_checkpoints
-                .into_iter()
-                .map(|v| (v.authority, v.signature))
+            authorities: signed_checkpoints
+                .iter()
+                .map(|v| v.authority)
                 .collect(),
+            signature: aggregate_authority_signatures(
+                &signed_checkpoints
+                    .iter()
+                    .map(|c| &c.signature)
+                    .collect::<Vec<_>>()[..]
+            )?
         };
 
         certified_checkpoint.verify(committee)?;
@@ -316,7 +323,7 @@ impl CertifiedCheckpoint {
     }
 
     pub fn signatory_authorities(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.signatures.iter().map(|(name, _)| name)
+        self.authorities.iter()
     }
 
     /// Check that a certificate is valid, and signed by a quorum of authorities
@@ -327,7 +334,7 @@ impl CertifiedCheckpoint {
 
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
-        for (authority, _) in self.signatures.iter() {
+        for authority in self.authorities.iter() {
             // Check that each authority only appears once.
             fp_ensure!(
                 !used_authorities.contains(authority),
@@ -359,18 +366,15 @@ impl CertifiedCheckpoint {
 
         let idx = obligation.add_message(message);
 
-        for tuple in self.signatures.iter() {
-            let (authority, signature) = tuple;
+        for authority in self.authorities.iter() {
             obligation
                 .public_keys
                 .push(committee.public_key(authority)?);
 
-            // build a signature
-            obligation.signatures.push(signature.0);
-
             // collect the message
             obligation.message_index.push(idx);
         }
+        obligation.aggregated_signature = Some(self.signature.0);
 
         obligation.verify_all().map(|_| ())?;
         Ok(())
