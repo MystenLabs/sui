@@ -60,8 +60,12 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, self-hosted-ubuntu]
+    runs-on: ${{ matrix.os }}
     strategy:
+      matrix:
+        os:
+          - [self-hosted, self-hosted-ubuntu]
+          - windows-latest
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
