@@ -97,7 +97,6 @@ module std::vector {
         pragma intrinsic = true;
     }
 
-
     /// Return `true` if the vector `v` has no elements and `false` otherwise.
     public fun is_empty<Element>(v: &vector<Element>): bool {
         length(v) == 0

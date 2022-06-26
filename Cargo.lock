@@ -7755,7 +7755,11 @@ dependencies = [
  "tokio-util",
  "tonic",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+<<<<<<< HEAD
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+=======
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+>>>>>>> 945fa9d4 ([sui framework] use vec_map in validator_set)
 ]
 
 [[package]]

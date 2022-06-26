@@ -17,6 +17,9 @@ module sui::vec_map {
     /// Trying to access an element of the map at an invalid index
     const EIndexOutOfBounds: u64 = 3;
 
+    /// Trying to union two maps with overlapping keys
+    const EKeySetOverlap: u64 = 4;
+
     /// A map data structure backed by a vector. The map is guaranteed not to contain duplicate keys, but entries
     /// are *not* sorted by key--entries are included in insertion order.
     /// All operations are O(N) in the size of the map--the intention of this data structure is only to provide
@@ -38,6 +41,11 @@ module sui::vec_map {
         VecMap { contents: vector::empty() }
     }
 
+    /// Create a `VecMap` containing the single binding `key -> value`
+    public fun singleton<K: copy, V>(key : K, value: V): VecMap<K, V> {
+        VecMap { contents: vector[Entry { key, value }] }
+    }
+
     /// Insert the entry `key` |-> `value` into self.
     /// Aborts if `key` is already bound in `self`.
     public fun insert<K: copy, V>(self: &mut VecMap<K,V>, key: K, value: V) {
@@ -50,6 +58,12 @@ module sui::vec_map {
         let idx = get_idx(self, key);
         let Entry { key, value } = vector::remove(&mut self.contents, idx);
         (key, value)
+    }
+
+    /// Remove the entry `key` |-> `value` from self. Aborts if `key` is not bound in `self`.
+    public fun remove_value<K: copy + drop, V>(self: &mut VecMap<K,V>, key: &K): V {
+        let (_key, value) = remove(self, key);
+        value
     }
 
     /// Get a mutable reference to the value bound to `key` in `self`.
@@ -66,6 +80,36 @@ module sui::vec_map {
         let idx = get_idx(self, key);
         let entry = vector::borrow(&self.contents, idx);
         &entry.value
+    }
+
+    /// Return true if there is no overlap between the key sets of `self` and `other`.
+    public fun is_disjoint<K: copy, V>(self: &VecMap<K, V>, other: &VecMap<K, V>): bool {
+        let contents = &other.contents;
+        let i = 0;
+        let length = vector::length(contents);
+        while (i < length) {
+            let elem = vector::borrow(contents, i);
+            if (contains(self, &elem.key)) {
+                return false
+            };
+            i = i + 1
+        };
+        true
+    }
+
+    /// Merge the entries of `self` and `other`. Aborts if `self` and `other` have overlapping keys.
+    /// Afterward, `other` will be empty and can safely be destroyed.
+    public fun disjoint_union<K: copy, V>(self: &mut VecMap<K, V>, other: &mut VecMap<K, V>) {
+        assert!(is_disjoint(self, other), EKeySetOverlap);
+        drain(&mut self.contents, &mut other.contents)
+    }
+
+    /// Drain the contents of `other` into `lhs`. `lhs` will be empty afterward.
+    fun drain<Element>(lhs: &mut vector<Element>, other: &mut vector<Element>) {
+        vector::reverse(other);
+        while (!vector::is_empty(other)) {
+            vector::push_back(lhs, vector::pop_back(other))
+        }
     }
 
     /// Return true if `self` contains an entry for `key`, false otherwise

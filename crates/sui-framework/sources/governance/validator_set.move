@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::validator_set {
-    use std::option::{Self, Option};
     use std::vector;
 
     use sui::balance::{Self, Balance};
@@ -10,6 +9,7 @@ module sui::validator_set {
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator, ValidatorMetadata};
+    use sui::vec_map::{Self, VecMap};
 
     friend sui::sui_system;
 
@@ -30,40 +30,41 @@ module sui::validator_set {
         quorum_stake_threshold: u64,
 
         /// The current list of active validators.
-        active_validators: vector<Validator>,
+        active_validators: VecMap<address, Validator>,
 
         /// List of new validator candidates added during the current epoch.
         /// They will be processed at the end of the epoch.
-        pending_validators: vector<Validator>,
+        pending_validators: VecMap<address, Validator>,
 
-        /// Removal requests from the validators. Each element is an index
-        /// pointing to `active_validators`.
-        pending_removals: vector<u64>,
+        /// Removal requests from the validators. Each element is the address of a validator in
+        /// `active_validators`. There are no duplicates
+        pending_removals: vector<address>,
 
-        /// The metadata of the validator set for the next epoch. This is kept up-to-dated.
-        /// Everytime a change request is received, this set is updated.
-        next_epoch_validators: vector<ValidatorMetadata>,
+        /// The metadata of the validator set for the next epoch.
+        // TODO: this should be kept up-to-date--every time a change request is received,
+        // this set should be updated. For now, it only gets updated at epoch boundaries.
+        next_epoch_validators: VecMap<address, ValidatorMetadata>,
     }
 
-    public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
+    public(friend) fun new(init_active_validators: VecMap<address,Validator>): ValidatorSet {
         let (validator_stake, delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&init_active_validators);
         let validators = ValidatorSet {
             validator_stake,
             delegation_stake,
             quorum_stake_threshold,
             active_validators: init_active_validators,
-            pending_validators: vector::empty(),
+            pending_validators: vec_map::empty(),
             pending_removals: vector::empty(),
-            next_epoch_validators: vector::empty(),
+            next_epoch_validators: vec_map::empty(),
         };
-        validators.next_epoch_validators = derive_next_epoch_validators(&validators);
+        derive_next_epoch_validators_(&mut validators);
         validators
     }
 
     /// Get the total number of candidates that might become validators in the next epoch.
     public(friend) fun total_validator_candidate_count(self: &ValidatorSet): u64 {
-        vector::length(&self.active_validators)
-            + vector::length(&self.pending_validators)
+        vec_map::size(&self.active_validators)
+            + vec_map::size(&self.pending_validators)
             - vector::length(&self.pending_removals)
     }
 
@@ -75,8 +76,7 @@ module sui::validator_set {
                 && !contains_duplicate_validator(&self.pending_validators, &validator),
             0
         );
-        vector::push_back(&mut self.pending_validators, validator);
-        self.next_epoch_validators = derive_next_epoch_validators(self);
+        vec_map::insert(&mut self.pending_validators, validator::sui_address(&validator), validator);
     }
 
     /// Called by `SuiSystem`, to remove a validator.
@@ -88,15 +88,12 @@ module sui::validator_set {
         ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
-        let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
-        let validator_index = option::extract(&mut validator_index_opt);
+        assert!(is_active_validator(self, &validator_address), 0);
         assert!(
-            !vector::contains(&self.pending_removals, &validator_index),
+            !vector::contains(&self.pending_removals, &validator_address),
             0
         );
-        vector::push_back(&mut self.pending_removals, validator_index);
-        self.next_epoch_validators = derive_next_epoch_validators(self);
+        vector::push_back(&mut self.pending_removals, validator_address);
     }
 
     /// Called by `SuiSystem`, to add more stake to a validator.
@@ -109,9 +106,10 @@ module sui::validator_set {
         ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
-        let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        validator::request_add_stake(validator, new_stake);
-        self.next_epoch_validators = derive_next_epoch_validators(self);
+        let current_validator = vec_map::get_mut(&mut self.active_validators, &validator_address);
+        let next_epoch_metadata = vec_map::get_mut(&mut self.next_epoch_validators, &validator_address);
+
+        validator::request_add_stake(current_validator, next_epoch_metadata, new_stake)
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
@@ -124,46 +122,51 @@ module sui::validator_set {
         ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
-        let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
-        self.next_epoch_validators = derive_next_epoch_validators(self);
+        let current_validator = vec_map::get_mut(&mut self.active_validators, &validator_address);
+        let next_epoch_metadata = vec_map::get_mut(&mut self.next_epoch_validators, &validator_address);
+
+        validator::request_withdraw_stake(
+            current_validator, 
+            next_epoch_metadata, 
+            withdraw_amount,
+            min_validator_stake
+        )
     }
 
     public(friend) fun is_active_validator(
         self: &ValidatorSet,
-        validator_address: address,
+        validator_address: &address,
     ): bool {
-        option::is_some(&find_validator(&self.active_validators, validator_address))
+        vec_map::contains(&self.active_validators, validator_address)
     }
 
     public(friend) fun request_add_delegation(
         self: &mut ValidatorSet,
-        validator_address: address,
+        validator_address: &address,
         delegate_amount: u64,
     ) {
-        let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        validator::request_add_delegation(validator, delegate_amount);
-        self.next_epoch_validators = derive_next_epoch_validators(self);
+        let validator = vec_map::get_mut(&mut self.active_validators, validator_address);
+        let next_epoch_metadata = vec_map::get_mut(&mut self.next_epoch_validators, validator_address);
+        validator::request_add_delegation(validator, next_epoch_metadata, delegate_amount)
     }
 
     public(friend) fun request_remove_delegation(
         self: &mut ValidatorSet,
-        validator_address: address,
+        validator_address: &address,
         delegate_amount: u64,
     ) {
-        let validator_index_opt = find_validator(&self.active_validators, validator_address);
         // It's OK to not be able to find the validator. This can happen if the delegated
         // validator is no longer active.
-        if (option::is_some(&validator_index_opt)) {
-            let validator_index = option::extract(&mut validator_index_opt);
-            let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-            validator::request_remove_delegation(validator, delegate_amount);
+        let validators = &mut self.active_validators;
+        if (vec_map::contains(validators, validator_address)) {
+            let validator = vec_map::get_mut(validators, validator_address);
+            let next_epoch_metadata = vec_map::get_mut(&mut self.next_epoch_validators, validator_address);
+            validator::request_remove_delegation(validator, next_epoch_metadata, delegate_amount);
         } else {
             // TODO: How do we deal with undelegating from inactive validators?
             // https://github.com/MystenLabs/sui/issues/2837
             abort 0
-        };
-        self.next_epoch_validators = derive_next_epoch_validators(self);
+        }
     }
 
     public(friend) fun create_epoch_records(
@@ -173,16 +176,16 @@ module sui::validator_set {
         total_stake: u64,
         ctx: &mut TxContext,
     ) {
-        let length = vector::length(&self.active_validators);
+        let length = vec_map::size(&self.active_validators);
         let i = 0;
         while (i < length) {
-            let v = vector::borrow(&self.active_validators, i);
+            let (addr, v) = vec_map::get_entry_by_idx(&self.active_validators, i);
             epoch_reward_record::create(
                 epoch,
                 computation_charge,
                 total_stake,
                 validator::delegator_count(v),
-                validator::sui_address(v),
+                *addr,
                 ctx,
             );
             i = i + 1;
@@ -214,11 +217,8 @@ module sui::validator_set {
 
         distribute_reward(&mut self.active_validators, &rewards, computation_reward);
 
-        process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
-
-        process_pending_removals(&mut self.active_validators, &mut self.pending_removals, ctx);
-
-        self.next_epoch_validators = derive_next_epoch_validators(self);
+        derive_next_epoch_validators(self, ctx);
+        // pending_validators and pending_removals are now empty and should not be read anymore
 
         let (validator_stake, delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&self.active_validators);
         self.validator_stake = validator_stake;
@@ -236,11 +236,11 @@ module sui::validator_set {
 
     /// Checks whether a duplicate of `new_validator` is already in `validators`.
     /// Two validators duplicate if they share the same sui_address or same IP or same name.
-    fun contains_duplicate_validator(validators: &vector<Validator>, new_validator: &Validator): bool {
-        let len = vector::length(validators);
+    fun contains_duplicate_validator(validators: &VecMap<address,Validator>, new_validator: &Validator): bool {
+        let len = vec_map::size(validators);
         let i = 0;
         while (i < len) {
-            let v = vector::borrow(validators, i);
+            let (_k, v) = vec_map::get_entry_by_idx(validators, i);
             if (validator::is_duplicate(v, new_validator)) {
                 return true
             };
@@ -249,82 +249,45 @@ module sui::validator_set {
         false
     }
 
-    /// Find validator by `validator_address`, in `validators`.
-    /// Returns (true, index) if the validator is found, and the index is its index in the list.
-    /// If not found, returns (false, 0).
-    fun find_validator(validators: &vector<Validator>, validator_address: address): Option<u64> {
-        let length = vector::length(validators);
-        let i = 0;
-        while (i < length) {
-            let v = vector::borrow(validators, i);
-            if (validator::sui_address(v) == validator_address) {
-                return option::some(i)
-            };
-            i = i + 1;
-        };
-        option::none()
-    }
-
-    fun get_validator_mut(
-        validators: &mut vector<Validator>,
-        validator_address: address,
-    ): &mut Validator {
-        let validator_index_opt = find_validator(validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
-        let validator_index = option::extract(&mut validator_index_opt);
-        vector::borrow_mut(validators, validator_index)
-    }
-
-    /// Process the pending withdraw requests. For each pending request, the validator
-    /// is removed from `validators` and sent back to the address of the validator.
-    fun process_pending_removals(
-        validators: &mut vector<Validator>, withdraw_list: &mut vector<u64>, ctx: &mut TxContext
-    ) {
-        sort_removal_list(withdraw_list);
-        while (!vector::is_empty(withdraw_list)) {
-            let index = vector::pop_back(withdraw_list);
-            let validator = vector::remove(validators, index);
+    /// Upon any change to the validator set, derive and update the metadata of the validators for the new epoch.
+    /// `to_add` and `to_remove` will both be empty after this function.
+    /// TODO: If we want to enforce a % on stake threshold, this is the function to do it.
+    fun derive_next_epoch_validators(self: &mut ValidatorSet, ctx: &mut TxContext) {
+        let validators = &mut self.active_validators;
+        // process the add requests
+        vec_map::disjoint_union(validators, &mut self.pending_validators);
+        // Process the pending withdraw requests. For each pending request, the `Validator` object
+        // is removed from `validators` and sent back to the address of the validator.
+        let to_remove = &mut self.pending_removals;
+        while (!vector::is_empty(to_remove)) {
+            let addr = vector::pop_back(to_remove);
+            let validator = vec_map::remove_value(validators, &addr);
             validator::destroy(validator, ctx);
-        }
-    }
-
-    /// Process the pending new validators. They are simply inserted into `validators`.
-    fun process_pending_validators(
-        validators: &mut vector<Validator>, pending_validators: &mut vector<Validator>
-    ) {
-        while (!vector::is_empty(pending_validators)) {
-            let v = vector::pop_back(pending_validators);
-            vector::push_back(validators, v);
-        }
-    }
-
-    /// Sort all the pending removal indexes.
-    fun sort_removal_list(withdraw_list: &mut vector<u64>) {
-        let length = vector::length(withdraw_list);
-        let i = 1;
-        while (i < length) {
-            let cur = *vector::borrow(withdraw_list, i);
-            let j = i;
-            while (j > 0) {
-                j = j - 1;
-                if (*vector::borrow(withdraw_list, j) > cur) {
-                    vector::swap(withdraw_list, j, j + 1);
-                } else {
-                    break
-                };
-            };
-            i = i + 1;
         };
+        // copy over leftovers after removal into `result`
+        derive_next_epoch_validators_(self)
+    }
+
+    // copy the active validator set into `next_epoch_validators`
+    fun derive_next_epoch_validators_(self: &mut ValidatorSet) {
+        self.next_epoch_validators = vec_map::empty();
+        let i = 0;
+        let len = vec_map::size(&self.active_validators);
+        while (i < len) {
+            let (addr, validator) = vec_map::get_entry_by_idx(&self.active_validators, i);
+            vec_map::insert(&mut self.next_epoch_validators, *addr, *validator::metadata(validator));
+            i = i + 1;
+        }
     }
 
     /// Calculate the total active stake, and the amount of stake to reach quorum.
-    fun calculate_total_stake_and_quorum_threshold(validators: &vector<Validator>): (u64, u64, u64) {
+    fun calculate_total_stake_and_quorum_threshold(validators: &VecMap<address,Validator>): (u64, u64, u64) {
         let validator_state = 0;
         let delegate_stake = 0;
-        let length = vector::length(validators);
+        let length = vec_map::size(validators);
         let i = 0;
         while (i < length) {
-            let v = vector::borrow(validators, i);
+            let (_addr, v) = vec_map::get_entry_by_idx(validators, i);
             validator_state = validator_state + validator::stake_amount(v);
             delegate_stake = delegate_stake + validator::delegate_amount(v);
             i = i + 1;
@@ -343,11 +306,11 @@ module sui::validator_set {
     }
 
     /// Process the pending stake changes for each validator.
-    fun adjust_stake(validators: &mut vector<Validator>, ctx: &mut TxContext) {
-        let length = vector::length(validators);
+    fun adjust_stake(validators: &mut VecMap<address, Validator>, ctx: &mut TxContext) {
+        let length = vec_map::size(validators);
         let i = 0;
         while (i < length) {
-            let validator = vector::borrow_mut(validators, i);
+            let (_addr, validator) = vec_map::get_entry_by_idx_mut(validators, i);
             validator::adjust_stake(validator, ctx);
             i = i + 1;
         }
@@ -358,15 +321,15 @@ module sui::validator_set {
     /// Returns the amount of reward for each validator, as well as a remaining reward
     /// due to integer division loss.
     fun compute_reward_distribution(
-        validators: &vector<Validator>,
+        validators: &VecMap<address,Validator>,
         total_stake: u64,
         total_reward: u64,
     ): vector<u64> {
         let results = vector::empty();
-        let length = vector::length(validators);
+        let length = vec_map::size(validators);
         let i = 0;
         while (i < length) {
-            let validator = vector::borrow(validators, i);
+            let (_addr, validator) = vec_map::get_entry_by_idx(validators, i);
             // Integer divisions will truncate the results. Because of this, we expect that at the end
             // there will be some reward remaining in `total_reward`.
             // Use u128 to avoid multiplication overflow.
@@ -379,42 +342,18 @@ module sui::validator_set {
     }
 
     // TODO: Allow reward compunding for delegators.
-    fun distribute_reward(validators: &mut vector<Validator>, rewards: &vector<u64>, reward: &mut Balance<SUI>) {
-        let length = vector::length(validators);
+    fun distribute_reward(validators: &mut VecMap<address,Validator>, rewards: &vector<u64>, reward: &mut Balance<SUI>) {
+        let length = vec_map::size(validators);
         let i = 0;
         while (i < length) {
-            let validator = vector::borrow_mut(validators, i);
+            let (_addr, validator) = vec_map::get_entry_by_idx_mut(validators, i);
             let reward_amount = *vector::borrow(rewards, i);
             let reward = balance::split(reward, reward_amount);
-            // Because reward goes to pending stake, it's the same as calling `request_add_stake`.
-            validator::request_add_stake(validator, reward);
+            // Because reward goes to pending stake, it's the same as calling `add_stake`.
+            // TODO: do we want to add this to the epoch metadata?
+            validator::add_stake(validator, reward);
             i = i + 1;
         }
-    }
-
-    /// Upon any change to the validator set, derive and update the metadata of the validators for the new epoch.
-    /// TODO: If we want to enforce a % on stake threshold, this is the function to do it.
-    fun derive_next_epoch_validators(self: &ValidatorSet): vector<ValidatorMetadata> {
-        let active_count = vector::length(&self.active_validators);
-        let removal_count = vector::length(&self.pending_removals);
-        let result = vector::empty();
-        while (active_count > 0) {
-            if (removal_count > 0) {
-                let removal_index = *vector::borrow(&self.pending_removals, removal_count - 1);
-                if (removal_index == active_count - 1) {
-                    // This validator will be removed, and hence we won't add it to the new validator set.
-                    removal_count = removal_count - 1;
-                    active_count = active_count - 1;
-                    continue
-                };
-            };
-            let metadata = validator::metadata(
-                vector::borrow(&self.active_validators, active_count - 1),
-            );
-            vector::push_back(&mut result, *metadata);
-            active_count = active_count - 1;
-        };
-        result
     }
 
     #[test_only]
@@ -431,11 +370,12 @@ module sui::validator_set {
             pending_removals: _,
             next_epoch_validators: _,
         } = self;
-        while (!vector::is_empty(&active_validators)) {
-            let v = vector::pop_back(&mut active_validators);
+        let (_addresses, validators) = vec_map::into_keys_values(active_validators);
+        while (!vector::is_empty(&validators)) {
+            let v = vector::pop_back(&mut validators);
             validator::destroy(v, ctx);
         };
-        vector::destroy_empty(active_validators);
-        vector::destroy_empty(pending_validators);
+        vector::destroy_empty(validators);
+        vec_map::destroy_empty(pending_validators)
     }
 }

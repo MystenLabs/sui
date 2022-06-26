@@ -9,6 +9,7 @@ module sui::genesis {
     use sui::sui_system;
     use sui::tx_context::TxContext;
     use sui::validator;
+    use sui::vec_map;
 
     /// The initial amount of SUI locked in the storage fund.
     /// 10^14, an arbitrary number.
@@ -36,7 +37,7 @@ module sui::genesis {
     ) {
         let sui_supply = sui::new();
         let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
-        let validators = vector::empty();
+        let validators = vec_map::empty();
         let count = vector::length(&validator_pubkeys);
         assert!(
             vector::length(&validator_sui_addresses) == count
@@ -52,7 +53,7 @@ module sui::genesis {
             let name = *vector::borrow(&validator_names, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
-            vector::push_back(&mut validators, validator::new(
+            vec_map::insert(&mut validators, sui_address, validator::new(
                 sui_address,
                 pubkey,
                 name,
@@ -62,8 +63,8 @@ module sui::genesis {
             i = i + 1;
         };
         sui_system::create(
-            validators,
             sui_supply,
+            validators,
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
