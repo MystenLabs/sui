@@ -16,6 +16,7 @@ use sui_types::crypto::PublicKeyBytes;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{ConfirmationTransaction, SignedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_system_state::SuiSystemState;
 use typed_store::Map;
 
 #[async_trait]
@@ -108,55 +109,7 @@ where
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
         if A::needs_network_recreation() {
-            let mut new_clients = BTreeMap::new();
-            let sui_system_state = self
-                .state
-                .get_sui_system_state_object()
-                .await
-                .map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
-            let next_epoch_validators = sui_system_state.validators.next_epoch_validators;
-
-            let mut net_config = mysten_network::config::Config::new();
-            net_config.connect_timeout = Some(Duration::from_secs(5));
-            net_config.request_timeout = Some(Duration::from_secs(5));
-            net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
-
-            for validator in next_epoch_validators {
-                let net_addr: &[u8] = &validator.net_address.clone();
-                let str_addr =
-                    std::str::from_utf8(net_addr).map_err(|e| SuiError::GenericAuthorityError {
-                        error: e.to_string(),
-                    });
-                let address: Multiaddr = str_addr
-                    .unwrap()
-                    .parse()
-                    .map_err(|e: multiaddr::Error| SuiError::GenericAuthorityError {
-                        error: e.to_string(),
-                    })
-                    .unwrap();
-
-                let channel = net_config
-                    .connect_lazy(&address)
-                    .map_err(|e| SuiError::GenericAuthorityError {
-                        error: e.to_string(),
-                    })
-                    .unwrap();
-                let client: A = A::recreate(channel);
-                let name: &[u8] = &validator.name;
-                let public_key_bytes = PublicKeyBytes::try_from(name)?;
-                new_clients.insert(public_key_bytes, client);
-            }
-
-            // Replace the clients in the authority aggregator with new clients.
-            let new_net = Arc::new(AuthorityAggregator::new(
-                new_committee,
-                new_clients,
-                self.gateway_metrics.clone(),
-            ));
-            self.net.store(new_net);
+            self.recreate_network(sui_system_state, new_committee)?;
         } else {
             // update the authorities with the new committee
             let new_net = Arc::new(AuthorityAggregator::new(
@@ -164,7 +117,7 @@ where
                 self.net.load().clone_inner_clients(),
                 self.gateway_metrics.clone(),
             ));
-            self.net.store(new_net.clone());
+            self.net.store(new_net);
         }
         // TODO: Update all committee in all components safely,
         // potentially restart narwhal committee/consensus adapter,
@@ -213,5 +166,56 @@ where
 
     pub fn is_second_last_checkpoint_epoch(checkpoint: CheckpointSequenceNumber) -> bool {
         (checkpoint + 1) % CHECKPOINT_COUNT_PER_EPOCH == 0
+    }
+
+    /// Recreates the network if the client is a type of client that has a network, and swap the new
+    /// clients onto the authority aggregator with the new committee.
+    pub fn recreate_network(
+        &self,
+        sui_system_state: SuiSystemState,
+        new_committee: Committee,
+    ) -> SuiResult {
+        let mut new_clients = BTreeMap::new();
+        let next_epoch_validators = sui_system_state.validators.next_epoch_validators;
+
+        let mut net_config = mysten_network::config::Config::new();
+        net_config.connect_timeout = Some(Duration::from_secs(5));
+        net_config.request_timeout = Some(Duration::from_secs(5));
+        net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+
+        for validator in next_epoch_validators {
+            let net_addr: &[u8] = &validator.net_address.clone();
+            let str_addr =
+                std::str::from_utf8(net_addr).map_err(|e| SuiError::GenericAuthorityError {
+                    error: e.to_string(),
+                });
+            let address: Multiaddr = str_addr
+                .unwrap()
+                .parse()
+                .map_err(|e: multiaddr::Error| SuiError::GenericAuthorityError {
+                    error: e.to_string(),
+                })
+                .unwrap();
+
+            let channel = net_config
+                .connect_lazy(&address)
+                .map_err(|e| SuiError::GenericAuthorityError {
+                    error: e.to_string(),
+                })
+                .unwrap();
+            let client: A = A::recreate(channel);
+            let name: &[u8] = &validator.name;
+            let public_key_bytes = PublicKeyBytes::try_from(name)?;
+            new_clients.insert(public_key_bytes, client);
+        }
+
+        // Replace the clients in the authority aggregator with new clients.
+        let new_net = Arc::new(AuthorityAggregator::new(
+            new_committee,
+            new_clients,
+            self.gateway_metrics.clone(),
+        ));
+        self.net.store(new_net);
+        Ok(())
     }
 }
