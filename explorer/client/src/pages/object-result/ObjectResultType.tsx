@@ -24,6 +24,7 @@ export type DataType = {
     name?: string;
     ethAddress?: string;
     ethTokenId?: string;
+    publisherAddress?: string;
     contract_id?: { bytes: string };
     data: {
         contents: {
