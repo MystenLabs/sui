@@ -4,6 +4,7 @@
 import React, { useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ReactComponent as SearchIcon } from '../../assets/search.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 
@@ -49,21 +50,26 @@ function Search() {
             <input
                 className={styles.searchtext}
                 id="searchText"
-                placeholder="Search by ID"
+                placeholder="Search by Addresses / Objects / Transactions / Epochs"
                 value={input}
                 onChange={handleTextChange}
                 type="text"
             />
 
-            <input
-                type="submit"
+            <button
                 id="searchBtn"
-                value={pleaseWaitMode ? 'Please Wait' : 'Search'}
+                type="submit"
                 disabled={pleaseWaitMode}
                 className={`${styles.searchbtn} ${
                     pleaseWaitMode && styles.disabled
                 }`}
-            />
+            >
+                {pleaseWaitMode ? (
+                    'Please Wait'
+                ) : (
+                    <SearchIcon className={styles.searchicon} />
+                )}
+            </button>
         </form>
     );
 }
