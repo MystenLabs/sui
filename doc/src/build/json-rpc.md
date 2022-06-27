@@ -24,7 +24,7 @@ You will see output resembling:
 ```
 2022-04-25T11:06:40.147259Z  INFO rpc_server: Gateway config file path: ".sui/sui_config/gateway.conf"
 2022-04-25T11:06:40.147277Z  INFO rpc_server: AccessControl { allowed_hosts: Any, allowed_origins: None, allowed_headers: Any, continue_on_invalid_cors: false }
-2022-04-25T11:06:40.163568Z  INFO rpc_server: Available JSON-RPC methods : ["sui_moveCall", "sui_getTransaction", "sui_getObjectTypedInfo", "sui_getTotalTransactionNumber", "sui_getOwnedObjects", "sui_getObjectInfoRaw", "sui_transferCoin", "sui_executeTransaction", "sui_mergeCoins", "sui_getRecentTransactions", "sui_getTransactionsInRange", "rpc.discover", "sui_splitCoin", "sui_publish", "sui_syncAccountState"]
+2022-04-25T11:06:40.163568Z  INFO rpc_server: Available JSON-RPC methods : ["sui_moveCall", "sui_getTransaction", "sui_getObjectTypedInfo", "sui_getTotalTransactionNumber", "sui_getOwnedObjects", "sui_getObjectInfoRaw", "sui_publicTransferObject", "sui_executeTransaction", "sui_mergeCoins", "sui_getRecentTransactions", "sui_getTransactionsInRange", "rpc.discover", "sui_splitCoin", "sui_publish", "sui_syncAccountState"]
 2022-04-25T11:06:40.163590Z  INFO rpc_server: Sui RPC Gateway listening on local_addr:127.0.0.1:5001
 ```
 
@@ -120,13 +120,13 @@ curl --location --request POST $SUI_RPC_HOST \
 Replace `{{object_id}}` in the command above with an
 actual object ID, for example one obtained from [`sui_getOwnedObjects`](#sui_getownedobjects) (without quotes).
 
-### sui_transferCoin
+### sui_publicTransferObject
 #### 1, Create a transaction to transfer a Sui coin from one address to another:
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
 --data-raw '{ "jsonrpc":"2.0",
-              "method":"sui_transferCoin",
+              "method":"sui_publicTransferObject",
               "params":["{{owner_address}}",
                         "{{coin_object_id}}",
                         "{{gas_object_id}}",
@@ -171,7 +171,7 @@ curl --location --request POST $SUI_RPC_HOST \
               "id":1}' | json_pp
 ```
 
-Native transfer by `sui_transferCoin` is supported for coin
+Native transfer by `sui_publicTransferObject` is supported for coin
 objects only (including gas objects). Refer to
 [transactions](transactions.md#native-transaction) documentation for
 more information about a native transfer. Non-coin objects cannot be
@@ -224,12 +224,12 @@ function is described in more detail in
 the [Sui Wallet](wallet.md#calling-move-code) documentation.
 
 Calling the `transfer` function in the `Coin` module serves the same
-purpose as the native coin transfer ([`sui_transferCoin`](#sui_transfercoin)), and is mostly used for illustration
+purpose as the native coin transfer ([`sui_publicTransferObject`](#sui_PublicTransferObject)), and is mostly used for illustration
 purposes as native transfer is more efficient when it's applicable
 (i.e., we are transferring coins rather than non-coin
 objects). Consequently, you should fill out argument placeholders
 (`{{owner_address}}`, `{{coin_object_id}`, etc.) the same way you
-would for [`sui_transferCoin`](#sui_transfercoin) - please note additional
+would for [`sui_publicTransferObject`](#sui_PublicTransferObject) - please note additional
 `0x` prepended to function arguments.
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.

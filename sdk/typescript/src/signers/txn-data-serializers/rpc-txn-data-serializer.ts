@@ -9,7 +9,7 @@ import {
   MoveCallTransaction,
   MergeCoinTransaction,
   SplitCoinTransaction,
-  TransferCoinTransaction,
+  PublicTransferObjectTransaction,
   TxnDataSerializer,
 } from './txn-data-serializer';
 
@@ -32,13 +32,13 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     this.client = new JsonRpcClient(endpoint);
   }
 
-  async newTransferCoin(
+  async newPublicTransferObject(
     signerAddress: SuiAddress,
-    t: TransferCoinTransaction
+    t: PublicTransferObjectTransaction
   ): Promise<Base64DataBuffer> {
     try {
       const resp = await this.client.requestWithType(
-        'sui_transferCoin',
+        'sui_publicTransferObject',
         [signerAddress, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
         isTransactionBytes
       );

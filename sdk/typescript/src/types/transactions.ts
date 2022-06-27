@@ -188,7 +188,7 @@ export function getTransactionGasBudget(tx: CertifiedTransaction): number {
   return tx.data.gasBudget;
 }
 
-export function getTransferCoinTransaction(
+export function getPublicTransferObjectTransaction(
   data: SuiTransactionKind
 ): PublicTransferObject | undefined {
   return 'PublicTransferObject' in data ? data.PublicTransferObject : undefined;
