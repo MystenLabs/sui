@@ -352,6 +352,20 @@ impl<const ALL_OBJ_VER: bool, S: Eq + Serialize + for<'de> Deserialize<'de>>
         Ok(())
     }
 
+    // Empty the pending_execution table, and remove the certs from the certificates table.
+    pub fn remove_all_pending_certificates(&self) -> SuiResult {
+        let all_pending_tx = self.get_pending_certificates()?;
+        let mut batch = self.pending_execution.batch();
+        batch = batch.delete_batch(
+            &self.certificates,
+            all_pending_tx.iter().map(|(_, digest)| digest),
+        )?;
+        batch.write()?;
+        self.pending_execution.clear()?;
+
+        Ok(())
+    }
+
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
     async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard<'a>> {
         self.mutex_table
