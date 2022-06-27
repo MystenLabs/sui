@@ -87,6 +87,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const structProperties = Object.entries(viewedData.data?.contents)
         .filter(([_, value]) => typeof value == 'object')
         .filter(([key, _]) => key !== 'id');
+    
     let structPropertiesTitle;
     let structPropertiesContent;
 
