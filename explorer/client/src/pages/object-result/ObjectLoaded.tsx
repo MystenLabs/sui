@@ -10,8 +10,17 @@ import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
 import codestyle from '../../styles/bytecode.module.css';
 import theme from '../../styles/theme.module.css';
+<<<<<<< HEAD
 import { getOwnerStr, parseImageURL } from '../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../utils/stringUtils';
+=======
+import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
+import { parseImageURL } from '../../utils/objectUtils';
+import {
+    asciiFromNumberBytes,
+    trimStdLibPrefix,
+} from '../../utils/stringUtils';
+>>>>>>> cb33e7b7 (lint)
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
@@ -50,7 +59,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const clickSetShowTx = useCallback(() => setShowTx(!showTx), [showTx]);
     const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
-        ['number', 'string',].includes(typeof value);
+        ['number', 'string'].includes(typeof value);
 
     const stdLibRe = /0x2::/;
     const prepObjTypeValue = (typeString: string) =>
@@ -76,7 +85,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const structProperties = Object.entries(viewedData.data?.contents)
         .filter(([_, value]) => typeof value == 'object')
         .filter(([key, _]) => key !== 'id');
-
 
     const descriptionTitle =
         data.objType === 'Move Package' ? 'Package Description' : 'Description';
@@ -264,11 +272,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
                     {structProperties.length > 0 && (
                         <div className={styles.jsondata}>
                             <div>
-                      
                                 <ReactJson
                                     src={structProperties[0]}
-                                  
-                                    collapsed={3}
+                                    collapsed={2}
                                     name={false}
                                 />
                             </div>

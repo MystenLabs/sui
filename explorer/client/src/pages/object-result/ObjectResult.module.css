@@ -93,5 +93,5 @@ div.bytecodebox > div > div:nth-child(2) {
 }
 
 div.jsondata {
-    @apply border-solid border-stone-300 mt-[2vh] mb-[5vh] p-5 bg-white whitespace-pre text-lg font-mono ;
+    @apply border-solid border-stone-300 mt-[2vh] mb-[5vh] p-5 bg-white whitespace-pre text-lg font-mono;
 }
