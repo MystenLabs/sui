@@ -177,7 +177,23 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         &mut self,
         origin: PublicKey,
     ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError<PublicKey>> {
+        // Our garbage collection is a mark-and-sweep algorithm, where the mark part is in `make_compressible` and
+        // `read_causal` triggers a sweep.
+        // To make sure we don't return rounds as live when wouldn't be seen as such from a subsequent `read_causal`
+        // we need to trigger the sweep in the first place.
+
+        // Look for the heads of the graph, then trigger the sweep
+        for digest in self.dag.head_digests() {
+            let _res = self.read_causal(digest).map(|iter| iter.last());
+        }
+        // TODO: this may become a big source of latency if the sweep has a lot of work to do! Make sure read_causal
+        // calls are triggered from heads of the DAG in a background thread, and scheduled after calling remove.
+        // - Subsequent `read_causal` calls will be cheaper,
+        // - those background read_causals should flip a dirty bit here, so we maintain the invariant of at most one graph sweep
+        //   between a remove_collections and a `rounds` call
+
         let (earliest, latest) = {
+            // Perform the actual round probe
             let vertices = self.vertices.read().unwrap();
             let range = vertices.range((origin.clone(), Round::MIN)..(origin.clone(), Round::MAX));
 
@@ -185,7 +201,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
             // yet this can't be a take_while because the DAG removal may be non-contiguous.
             //
             // Hence we rely on removals cleaning the secondary index.
-            let mut strong_references = range.flat_map(|((_key, round), val)| {
+            let mut strong_reference_rounds = range.flat_map(|((_key, round), val)| {
                 if self.contains(*val) {
                     Some(round)
                 } else {
@@ -193,8 +209,8 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
                 }
             });
 
-            let earliest = strong_references.next().cloned();
-            let latest = strong_references.last().cloned().or(earliest);
+            let earliest = strong_reference_rounds.next().cloned();
+            let latest = strong_reference_rounds.last().cloned().or(earliest);
             (earliest, latest)
         };
         match (earliest, latest) {

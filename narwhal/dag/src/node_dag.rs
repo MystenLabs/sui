@@ -109,6 +109,13 @@ impl<T: Affiliated> NodeDag<T> {
         self.get(digest).is_ok()
     }
 
+    /// Returns an iterator over the digests of the heads of the graph, i.e. the nodes which do not have a child.
+    pub fn head_digests(&self) -> impl Iterator<Item = T::TypedDigest> + '_ {
+        self.node_table
+            .iter()
+            .flat_map(|node_ref| node_ref.as_ref().right().map(|node| node.value().digest()))
+    }
+
     /// Returns whether the vertex pointed to by the hash passed as an argument is a
     /// head of the DAG (nodes not pointed to by any other). Heads carry strong references
     /// to many downward nodes and dropping them might GC large spans of the graph.
@@ -428,6 +435,31 @@ mod tests {
             // check heads have nothing pointing to them
             for node in dag.into_iter() {
                 assert!(node.parents().iter().all(|parent| !heads.contains(parent)))
+            }
+        }
+
+        #[test]
+        fn test_dag_head_digests(
+            dag in arb_dag_complete(10, 10)
+        ) {
+            let mut node_dag = NodeDag::new();
+            let mut digests = Vec::new();
+            for node in dag.iter() {
+                digests.push(node.digest());
+                // the elements are generated in order & with no missing parents => no suprises
+                assert!(node_dag.try_insert(node.clone()).is_ok());
+            }
+            let mut heads = HashSet::new();
+            for hash in digests {
+                // all insertions are reflected
+                assert!(node_dag.contains(hash));
+                if node_dag.has_head(hash).unwrap() {
+                    heads.insert(hash);
+                }
+            }
+            // check this matches head_digests
+            for head_digest in node_dag.head_digests() {
+                assert!(heads.contains(&head_digest));
             }
         }
 

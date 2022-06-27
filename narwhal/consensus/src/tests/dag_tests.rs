@@ -40,7 +40,6 @@ async fn inner_dag_insert_one() {
 
 #[tokio::test]
 async fn test_dag_new_has_genesis_and_its_not_live() {
-    // Make certificates for rounds 1 to 4.
     let keys: Vec<_> = test_utils::keys(None)
         .into_iter()
         .map(|kp| kp.public().clone())
@@ -91,7 +90,6 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
 // check the invariants are the same
 #[tokio::test]
 async fn test_dag_compresses_empty_blocks() {
-    // Make certificates for rounds 1 to 4.
     let keys: Vec<_> = test_utils::keys(None)
         .into_iter()
         .map(|kp| kp.public().clone())
@@ -158,6 +156,53 @@ async fn test_dag_compresses_empty_blocks() {
 }
 
 #[tokio::test]
+async fn test_dag_rounds_after_compression() {
+    let keys: Vec<_> = test_utils::keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
+    let committee = mock_committee(&keys.clone()[..]);
+    let genesis_certs = Certificate::genesis(&committee);
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    // set up a Dag
+    let (_tx_cert, rx_cert) = channel(1);
+    let (_, dag) = Dag::new(&committee, rx_cert);
+
+    // insert one round of empty certificates
+    let (mut certificates, next_parents) =
+        make_optimal_certificates(1..=1, &genesis.clone(), &keys);
+    // make those empty
+    for mut cert in certificates.iter_mut() {
+        cert.header.payload = std::collections::BTreeMap::new();
+    }
+
+    // Feed the certificates to the Dag
+    let mut certs_to_insert = certificates.clone();
+    while let Some(certificate) = certs_to_insert.pop_front() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // Add one round of non-empty certificates
+    let (additional_certificates, _next_parents) =
+        make_optimal_certificates(2..=2, &next_parents, &keys);
+    // Feed the additional certificates to the Dag
+    let mut additional_certs_to_insert = additional_certificates.clone();
+    while let Some(certificate) = additional_certs_to_insert.pop_front() {
+        dag.insert(certificate).await.unwrap();
+    }
+
+    // Do not trigger read_causal on all the newly inserted certs
+    // Test rounds: they reflect that the round of compressible certificates is gone
+    for pub_key in keys {
+        assert_eq!(dag.rounds(pub_key).await.unwrap(), 2..=2)
+    }
+}
+
+#[tokio::test]
 async fn dag_mutation_failures() {
     // Make certificates for rounds 1 to 4.
     let keys: Vec<_> = test_utils::keys(None)
@@ -211,9 +256,9 @@ async fn dag_mutation_failures() {
         dag.insert(certificate).await.unwrap();
     }
 
-    // Check all authorities have live vertexes 0..=4
+    // Check all authorities have live vertexes 1..=4 (genesis is compressible)
     for authority in keys.clone() {
-        assert_eq!(dag.rounds(authority.clone()).await.unwrap(), 0..=4)
+        assert_eq!(dag.rounds(authority.clone()).await.unwrap(), 1..=4)
     }
 
     // We have only inserted from round 0 to 4 => round 5 queries should fail
@@ -250,9 +295,9 @@ async fn dag_insert_one_and_rounds_node_read() {
         dag.insert(certificate).await.unwrap();
     }
 
-    // we fed 4 complete rounds => rounds(pk) = 0..=4
+    // we fed 4 complete rounds, and genesis is compressible => rounds(pk) = 1..=4
     for authority in keys.clone() {
-        assert_eq!(0..=4, dag.rounds(authority.clone()).await.unwrap());
+        assert_eq!(1..=4, dag.rounds(authority.clone()).await.unwrap());
     }
 
     // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices:

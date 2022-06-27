@@ -363,7 +363,7 @@ mod tests {
         ) {
             let first = dag.first().unwrap();
             let iter = bfs(first.clone());
-            // The first nodemay end up compressible as a result of our random DAG
+            // The first node may end up compressible as a result of our random DAG
             let mut is_first = true;
             for node in iter {
                 if !is_first {

@@ -211,7 +211,7 @@ async fn test_rounds_return_successful_response() {
     // THEN
     let r = response.ok().unwrap().into_inner();
 
-    assert_eq!(0, r.oldest_round);
+    assert_eq!(1, r.oldest_round); // genesis compressed
     assert_eq!(4, r.newest_round);
 }
 
