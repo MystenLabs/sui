@@ -29,6 +29,6 @@ sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 sui-types = { path = "../sui-types" }
 
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 workspace-hack = { path = "../workspace-hack"}
