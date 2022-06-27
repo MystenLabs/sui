@@ -53,6 +53,7 @@ function Search() {
                 placeholder="Search by Addresses / Objects / Transactions / Epochs"
                 value={input}
                 onChange={handleTextChange}
+                autoFocus
                 type="text"
             />
 
