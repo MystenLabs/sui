@@ -22,7 +22,7 @@ use sui_types::crypto::{KeyPair, PublicKeyBytes};
 )]
 pub struct Benchmark {
     /// Size of the Sui committee.
-    #[clap(long, default_value = "30", global = true)]
+    #[clap(long, default_value = "50", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
     #[clap(long, default_value = "400000000", global = true)]
