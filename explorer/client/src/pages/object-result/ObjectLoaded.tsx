@@ -89,13 +89,16 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([key, _]) => key !== 'id');
 
     // Add struct properties to the properties list
-    let structPropertiesTitle;
-    let structPropertiesContent;
+    /*const structPropertiesTitle: string[] = [];
+    const structPropertiesContent: any[] = [];
     if (structProperties.length > 0) {
         const structPropertiesData = Object.values(structProperties);
-        structPropertiesTitle = structPropertiesData[0][0];
-        structPropertiesContent = structPropertiesData[0][1];
-    }
+        structPropertiesData.forEach((item) => {
+            structPropertiesTitle.push(item[0]);
+            structPropertiesContent.push(item[1]);
+        });
+
+    }*/
 
     return (
         <>
@@ -269,24 +272,25 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         </>
                     )}
                     {}
-                    {structProperties.length > 0 && (
-                        <>
-                            <div className={styles.propertybox}>
-                                <div>
-                                    <p>{structPropertiesTitle}</p>
+                    {structProperties.length > 0 &&
+                        Object.values(structProperties).map((itm, index) => (
+                            <div key={index}>
+                                <div className={styles.propertybox}>
+                                    <div>
+                                        <p>{itm[0]}</p>
+                                    </div>
+                                </div>
+                                <div className={styles.jsondata}>
+                                    <div>
+                                        <ReactJson
+                                            src={itm[1]}
+                                            collapsed={2}
+                                            name={false}
+                                        />
+                                    </div>
                                 </div>
                             </div>
-                            <div className={styles.jsondata}>
-                                <div>
-                                    <ReactJson
-                                        src={structPropertiesContent}
-                                        collapsed={2}
-                                        name={false}
-                                    />
-                                </div>
-                            </div>
-                        </>
-                    )}
+                        ))}
                     {data.objType !== 'Move Package' ? (
                         <h2
                             className={styles.clickableheader}
