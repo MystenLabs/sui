@@ -8,11 +8,7 @@ import { useIntl } from 'react-intl';
 import AddressInput from '_components/address-input';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import NumberInput from '_components/number-input';
-import {
-    DEFAULT_GAS_BUDGET_FOR_TRANSFER,
-    GAS_SYMBOL,
-} from '_redux/slices/sui-objects/Coin';
+import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
 import type { FormValues } from '.';
@@ -26,7 +22,7 @@ export type TransferCoinFormProps = {
     onClearSubmitError: () => void;
 };
 
-function TransferCoinForm({
+function TransferNFTForm({
     submitError,
     coinBalance,
     coinSymbol,
@@ -57,13 +53,6 @@ function TransferCoinForm({
             </div>
             <div className={st.group}>
                 <label className={st.label}>Amount:</label>
-                <Field
-                    component={NumberInput}
-                    allowNegative={false}
-                    name="amount"
-                    placeholder={`Total ${coinSymbol.toLocaleUpperCase()} to send`}
-                    className={st.input}
-                />
                 <div className={st.muted}>
                     Available balance:{' '}
                     {intl.formatNumber(
@@ -79,8 +68,7 @@ function TransferCoinForm({
                 />
             </div>
             <div className={st.group}>
-                * Total transaction fee estimate (gas cost):{' '}
-                {DEFAULT_GAS_BUDGET_FOR_TRANSFER} {GAS_SYMBOL}
+                * Total transaction fee estimate (gas cost): {1000} {GAS_SYMBOL}
             </div>
             {submitError ? (
                 <div className={st.group}>
@@ -103,4 +91,4 @@ function TransferCoinForm({
     );
 }
 
-export default memo(TransferCoinForm);
+export default memo(TransferNFTForm);
