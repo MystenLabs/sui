@@ -115,7 +115,7 @@ impl Node {
         State: ExecutionState + Send + Sync + 'static,
     {
         let (tx_new_certificates, rx_new_certificates) = channel(Self::CHANNEL_CAPACITY);
-        let (tx_feedback, rx_feedback) = channel(Self::CHANNEL_CAPACITY);
+        let (tx_consensus, rx_consensus) = channel(Self::CHANNEL_CAPACITY);
 
         // Compute the public key of this authority.
         let name = keypair.public().clone();
@@ -132,7 +132,7 @@ impl Node {
                 parameters.clone(),
                 execution_state,
                 rx_new_certificates,
-                tx_feedback,
+                tx_consensus.clone(),
                 tx_confirmation,
             )
             .await?;
@@ -149,9 +149,10 @@ impl Node {
             store.certificate_store.clone(),
             store.payload_store.clone(),
             /* tx_consensus */ tx_new_certificates,
-            /* rx_consensus */ rx_feedback,
+            /* rx_consensus */ rx_consensus,
             /* dag */ dag,
             network_model,
+            tx_consensus,
         );
 
         Ok(primary_handle)

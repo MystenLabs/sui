@@ -101,6 +101,7 @@ impl Primary {
         rx_consensus: Receiver<Certificate<PublicKey>>,
         dag: Option<Arc<Dag<PublicKey>>>,
         network_model: NetworkModel,
+        tx_committed_certificates: Sender<Certificate<PublicKey>>,
     ) -> JoinHandle<()> {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -244,6 +245,7 @@ impl Primary {
             PrimaryToWorkerNetwork::default(),
             rx_block_removal_commands,
             rx_batch_removal,
+            tx_committed_certificates,
         );
 
         // Responsible for finding missing blocks (certificates) and fetching

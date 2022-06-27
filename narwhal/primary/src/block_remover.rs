@@ -117,6 +117,7 @@ pub struct DeleteBatchMessage {
 ///
 ///     let (tx_commands, rx_commands) = channel(1);
 ///     let (tx_delete_batches, rx_delete_batches) = channel(1);
+///     let (tx_removed_certificates, _rx_removed_certificates) = channel(1);
 ///     let (tx_delete_block_result, mut rx_delete_block_result) = channel(1);
 ///
 ///     let name = Ed25519PublicKey::default();
@@ -142,6 +143,7 @@ pub struct DeleteBatchMessage {
 ///         PrimaryToWorkerNetwork::default(),
 ///         rx_commands,
 ///         rx_delete_batches,
+///         tx_removed_certificates,
 ///     );
 ///
 ///     // A dummy certificate
@@ -211,6 +213,9 @@ pub struct BlockRemover<PublicKey: VerifyingKey> {
     // TODO: Change to a oneshot channel instead of an mpsc channel
     /// Receives all the responses to the requests to delete a batch.
     rx_delete_batches: Receiver<DeleteBatchResult>,
+
+    /// Outputs all the successfully deleted certificates
+    tx_removed_certificates: Sender<Certificate<PublicKey>>,
 }
 
 impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
@@ -224,6 +229,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
         worker_network: PrimaryToWorkerNetwork,
         rx_commands: Receiver<BlockRemoverCommand>,
         rx_delete_batches: Receiver<DeleteBatchResult>,
+        removed_certificates: Sender<Certificate<PublicKey>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -239,6 +245,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                 map_tx_removal_results: HashMap::new(),
                 map_tx_worker_removal_results: HashMap::new(),
                 rx_delete_batches,
+                tx_removed_certificates: removed_certificates,
             }
             .run()
             .await;
@@ -375,10 +382,19 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
         if let Some(dag) = &self.dag {
             dag.remove(&certificate_ids).await.map_err(Either::Right)?
         }
+
         self.certificate_store
             .remove_all(certificate_ids)
             .await
             .map_err(Either::Left)?;
+
+        // Now output all the removed certificates
+        for certificate in certificates.clone() {
+            self.tx_removed_certificates
+                .send(certificate)
+                .await
+                .expect("Couldn't forward removed certificates to channel");
+        }
 
         debug!("Successfully cleaned up certificates: {:?}", certificates);
 

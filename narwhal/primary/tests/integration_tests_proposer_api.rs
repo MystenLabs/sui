@@ -69,7 +69,7 @@ async fn test_rounds_errors() {
 
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
@@ -108,6 +108,7 @@ async fn test_rounds_errors() {
             Dag::new(&no_name_committee, rx_new_certificates).1,
         )),
         NetworkModel::Asynchronous,
+        tx_feedback,
     );
 
     // AND Wait for tasks to start
@@ -156,7 +157,7 @@ async fn test_rounds_return_successful_response() {
 
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     // AND setup the DAG
     let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
@@ -173,6 +174,7 @@ async fn test_rounds_return_successful_response() {
         /* rx_consensus */ rx_feedback,
         /* external_consensus */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_feedback,
     );
 
     // AND Wait for tasks to start
@@ -286,7 +288,7 @@ async fn test_node_read_causal_signed_certificates() {
         .await
         .unwrap();
 
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -308,10 +310,11 @@ async fn test_node_read_causal_signed_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_feedback,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -334,6 +337,7 @@ async fn test_node_read_causal_signed_certificates() {
         /* external_consensus */
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
         NetworkModel::Asynchronous,
+        tx_feedback_2,
     );
 
     // Wait for tasks to start

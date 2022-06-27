@@ -99,7 +99,7 @@ async fn test_get_collections() {
     }
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
         name.clone(),
@@ -113,6 +113,7 @@ async fn test_get_collections() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
         NetworkModel::Asynchronous,
+        tx_feedback,
     );
 
     // Spawn a `Worker` instance.
@@ -264,7 +265,7 @@ async fn test_remove_collections() {
         }
     }
 
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
         name.clone(),
@@ -278,6 +279,7 @@ async fn test_remove_collections() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_feedback,
     );
 
     // Wait for tasks to start
@@ -452,7 +454,7 @@ async fn test_read_causal_signed_certificates() {
         .await
         .unwrap();
 
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -474,10 +476,11 @@ async fn test_read_causal_signed_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_feedback,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -500,6 +503,7 @@ async fn test_read_causal_signed_certificates() {
         /* external_consensus */
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
         NetworkModel::Asynchronous,
+        tx_feedback_2,
     );
 
     // Wait for tasks to start
@@ -643,7 +647,7 @@ async fn test_read_causal_unsigned_certificates() {
         .await
         .unwrap();
 
-    let (_tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
@@ -658,10 +662,11 @@ async fn test_read_causal_unsigned_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_feedback,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
     // Spawn Primary 2
     Primary::spawn(
@@ -677,6 +682,7 @@ async fn test_read_causal_unsigned_certificates() {
         /* external_consensus */
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
         NetworkModel::Asynchronous,
+        tx_feedback_2,
     );
 
     // Wait for tasks to start
@@ -794,7 +800,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     // Spawn the primary 1 (which will be the one that we'll interact with)
     let (tx_new_certificates_1, rx_new_certificates_1) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback_1, rx_feedback_1) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback_1, rx_feedback_1) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
         name_1.clone(),
@@ -809,6 +815,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* external_consensus */
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_1).1)),
         NetworkModel::Asynchronous,
+        tx_feedback_1,
     );
 
     // Spawn a `Worker` instance for primary 1.
@@ -822,7 +829,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
     let (tx_new_certificates_2, _) = channel(CHANNEL_CAPACITY);
-    let (_tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+    let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
     Primary::spawn(
         name_2.clone(),
@@ -837,6 +844,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,
+        tx_feedback_2,
     );
 
     // Spawn a `Worker` instance for primary 2.
