@@ -121,18 +121,19 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         #[cfg(feature = "benchmark")]
         {
             // NOTE: This is one extra hash that is only needed to print the following log entries.
-            let digest = serialized_batch_digest(&serialized);
-            for id in tx_ids {
-                // NOTE: This log entry is used to compute performance.
-                info!(
-                    "Batch {:?} contains sample tx {}",
-                    digest,
-                    u64::from_be_bytes(id)
-                );
-            }
+            if let Ok(digest) = serialized_batch_digest(&serialized) {
+                for id in tx_ids {
+                    // NOTE: This log entry is used to compute performance.
+                    info!(
+                        "Batch {:?} contains sample tx {}",
+                        digest,
+                        u64::from_be_bytes(id)
+                    );
+                }
 
-            // NOTE: This log entry is used to compute performance.
-            info!("Batch {:?} contains {} B", digest, size);
+                // NOTE: This log entry is used to compute performance.
+                info!("Batch {:?} contains {} B", digest, size);
+            }
         }
 
         // Broadcast the batch through the network.
