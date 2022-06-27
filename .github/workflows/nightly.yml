@@ -101,6 +101,7 @@ jobs:
         uses: technote-space/workflow-conclusion-action@v3
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
         with:
           channel-id: 'build-failures-sui'
           payload: |
@@ -116,4 +117,3 @@ jobs:
                 }
               ]
             }
-        if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
