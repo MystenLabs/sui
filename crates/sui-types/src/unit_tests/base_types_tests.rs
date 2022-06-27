@@ -12,7 +12,6 @@ use move_binary_format::file_format;
 use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
-    // crypto_bls,
     gas_coin::GasCoin,
     object::Object,
     SUI_FRAMEWORK_ADDRESS,
