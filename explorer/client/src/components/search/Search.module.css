@@ -9,7 +9,7 @@ select.categorydropdown > option {
 }
 
 .searchbtn {
-    @apply bg-sui hover:bg-suidark hover:text-white rounded-r-md cursor-pointer leading-8 mr-[1vw] sm:mr-[5vw] ml-0;
+    @apply bg-sui hover:bg-sui-dark hover:text-white rounded-r-md cursor-pointer leading-8 mr-[1vw] sm:mr-[5vw] ml-0;
 }
 
 .disabled {
