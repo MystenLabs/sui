@@ -6014,6 +6014,7 @@ dependencies = [
  "async-trait",
  "base64ct",
  "bcs",
+ "blst",
  "bytes",
  "clap 3.1.18",
  "colored",

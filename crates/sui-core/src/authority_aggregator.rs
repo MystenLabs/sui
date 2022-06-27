@@ -994,9 +994,9 @@ where
                                     self.metrics.num_good_stake.observe(state.good_stake as f64);
                                     self.metrics.num_bad_stake.observe(state.bad_stake as f64);
                                     let aggregated_signatures = aggregate_authority_signatures(
-                                        &state.signatures.iter().map(|(pk, sig)| sig).collect::<Vec<_>>()[..]
+                                        &state.signatures.iter().map(|(_, sig)| sig).collect::<Vec<_>>()[..]
                                     )?;
-                                    let authorities = state.signatures.iter().map(|(pk, sig)| *pk).collect::<Vec<_>>();
+                                    let authorities = state.signatures.iter().map(|(pk, _)| *pk).collect::<Vec<_>>();
                                     state.certificate =
                                         Some(CertifiedTransaction::new_with_aggregate_signatures(
                                             self.committee.epoch(),
@@ -1261,9 +1261,9 @@ where
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
-                let authorities = signatures.iter().map(|(pk, sig)| *pk).collect::<Vec<_>>();
+                let authorities = signatures.iter().map(|(pk, _)| *pk).collect::<Vec<_>>();
                 let aggregated_signature = aggregate_authority_signatures(
-                    &signatures.iter().map(|(pk, sig)| sig).collect::<Vec<_>>()[..]
+                    &signatures.iter().map(|(_, sig)| sig).collect::<Vec<_>>()[..]
                 )?;
                 return Ok(CertifiedTransactionEffects::new(
                     certificate.auth_sign_info.epoch,

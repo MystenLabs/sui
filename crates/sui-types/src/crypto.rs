@@ -838,7 +838,7 @@ impl VerificationObligation {
             Ok(self.lookup)
         } else {
             Err(SuiError::InvalidSignature {
-                error: format!("ERROR {:?}", result),
+                error: format!("ERROR {:?} {:?}", result, self.public_keys.len()),
             })
         }
     }
