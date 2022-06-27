@@ -1,19 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::rpc_types::SuiEventEnvelope;
+use crate::rpc_types::SuiEventFilter;
+use crate::rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams,
+    SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse,
+};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::serde_as;
-use std::collections::BTreeMap;
-
-use crate::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams, SuiEvent,
-    SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse,
-};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -231,8 +230,9 @@ impl TransactionBytes {
     }
 }
 
+#[open_rpc(namespace = "sui", tag = "Event Subscription")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventApi {
-    #[subscription(name = "subscribeMoveEventsByType", item = SuiEvent)]
-    fn subscribe_move_event_by_type(&self, event: String, field_filter: BTreeMap<String, Value>);
+    #[subscription(name = "subscribeEvent", item = SuiEventEnvelope)]
+    fn subscribe_event(&self, filter: SuiEventFilter);
 }

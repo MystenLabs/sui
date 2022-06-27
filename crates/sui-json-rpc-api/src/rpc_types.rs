@@ -15,15 +15,15 @@ use itertools::Itertools;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use move_core_types::parser::{parse_struct_tag, parse_type_tag};
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::ser::Error;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-
-use move_core_types::parser::parse_type_tag;
 use serde_with::serde_as;
+
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -31,18 +31,19 @@ use sui_types::base_types::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
 use sui_types::error::SuiError;
+use sui_types::event::EventType;
 use sui_types::event::{Event, TransferType};
+use sui_types::event_filter::EventFilter;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg,
     SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
 };
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
 use sui_types::sui_serde::{Base64, Encoding};
-
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_types_tests.rs"]
@@ -1191,11 +1192,26 @@ pub struct OwnedObjectRef {
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename = "EventEnvelope", rename_all = "camelCase")]
+pub struct SuiEventEnvelope {
+    /// UTC timestamp in milliseconds since epoch (1/1/1970)
+    pub timestamp: u64,
+    /// Transaction digest of associated transaction, if any
+    pub tx_digest: Option<TransactionDigest>,
+    /// Specific event type
+    pub event: SuiEvent,
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "Event", rename_all = "camelCase")]
 pub enum SuiEvent {
     /// Move-specific event
+    #[serde(rename_all = "camelCase")]
     MoveEvent {
-        #[serde(rename = "type")]
+        package_id: ObjectID,
+        transaction_module: String,
+        sender: SuiAddress,
         type_: String,
         fields: SuiMoveStruct,
         #[serde_as(as = "Base64")]
@@ -1204,20 +1220,39 @@ pub enum SuiEvent {
     },
     /// Module published
     #[serde(rename_all = "camelCase")]
-    Publish { package_id: ObjectID },
+    Publish {
+        sender: SuiAddress,
+        package_id: ObjectID,
+    },
     /// Transfer objects to new address / wrap in another object / coin
     #[serde(rename_all = "camelCase")]
     TransferObject {
+        package_id: ObjectID,
+        transaction_module: String,
+        sender: SuiAddress,
+        recipient: Owner,
         object_id: ObjectID,
         version: SequenceNumber,
-        destination_addr: SuiAddress,
         type_: TransferType,
     },
     /// Delete object
-    DeleteObject(ObjectID),
+    #[serde(rename_all = "camelCase")]
+    DeleteObject {
+        package_id: ObjectID,
+        transaction_module: String,
+        sender: SuiAddress,
+        object_id: ObjectID,
+    },
     /// New object creation
-    NewObject(ObjectID),
-    /// Epooch change
+    #[serde(rename_all = "camelCase")]
+    NewObject {
+        package_id: ObjectID,
+        transaction_module: String,
+        sender: SuiAddress,
+        recipient: Owner,
+        object_id: ObjectID,
+    },
+    /// Epoch change
     EpochChange(EpochId),
     /// New checkpoint
     Checkpoint(CheckpointSequenceNumber),
@@ -1226,29 +1261,67 @@ pub enum SuiEvent {
 impl SuiEvent {
     pub fn try_from(event: Event, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match event {
-            Event::MoveEvent(event) => {
-                let bcs = event.contents().to_vec();
-                let move_obj: SuiParsedMoveObject = SuiMoveObject::try_from(event, resolver)?;
+            Event::MoveEvent {
+                package_id,
+                transaction_module,
+                sender,
+                type_,
+                contents,
+            } => {
+                let bcs = contents.to_vec();
+                let move_obj: SuiParsedMoveObject =
+                    SuiMoveObject::try_from(MoveObject::new(type_, contents), resolver)?;
                 SuiEvent::MoveEvent {
+                    package_id,
+                    transaction_module: transaction_module.to_string(),
+                    sender,
                     type_: move_obj.type_,
                     fields: move_obj.fields,
                     bcs,
                 }
             }
-            Event::Publish { package_id } => SuiEvent::Publish { package_id },
+            Event::Publish { sender, package_id } => SuiEvent::Publish { sender, package_id },
             Event::TransferObject {
+                package_id,
+                transaction_module,
+                sender,
+                recipient,
                 object_id,
                 version,
-                destination_addr,
                 type_,
             } => SuiEvent::TransferObject {
+                package_id,
+                transaction_module: transaction_module.to_string(),
+                sender,
+                recipient,
                 object_id,
                 version,
-                destination_addr,
                 type_,
             },
-            Event::DeleteObject(id) => SuiEvent::DeleteObject(id),
-            Event::NewObject(id) => SuiEvent::NewObject(id),
+            Event::DeleteObject {
+                package_id,
+                transaction_module,
+                sender,
+                object_id,
+            } => SuiEvent::DeleteObject {
+                package_id,
+                transaction_module: transaction_module.to_string(),
+                sender,
+                object_id,
+            },
+            Event::NewObject {
+                package_id,
+                transaction_module,
+                sender,
+                recipient,
+                object_id,
+            } => SuiEvent::NewObject {
+                package_id,
+                transaction_module: transaction_module.to_string(),
+                sender,
+                recipient,
+                object_id,
+            },
             Event::EpochChange(id) => SuiEvent::EpochChange(id),
             Event::Checkpoint(seq) => SuiEvent::Checkpoint(seq),
         })
@@ -1370,4 +1443,58 @@ pub struct MoveCallParams {
     #[serde(default)]
     pub type_arguments: Vec<SuiTypeTag>,
     pub arguments: Vec<SuiJsonValue>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename = "EventFilter")]
+pub enum SuiEventFilter {
+    Package(ObjectID),
+    Module(String),
+    /// Move StructTag string value of the event type e.g. `0x2::devnet_nft::MintNFTEvent`
+    MoveEventType(String),
+    MoveEventField {
+        path: String,
+        value: Value,
+    },
+    SenderAddress(SuiAddress),
+    EventType(EventType),
+    ObjectId(ObjectID),
+    All(Vec<SuiEventFilter>),
+    Any(Vec<SuiEventFilter>),
+    And(Box<SuiEventFilter>, Box<SuiEventFilter>),
+    Or(Box<SuiEventFilter>, Box<SuiEventFilter>),
+}
+
+impl TryInto<EventFilter> for SuiEventFilter {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<EventFilter, anyhow::Error> {
+        use SuiEventFilter::*;
+        Ok(match self {
+            Package(id) => EventFilter::Package(id),
+            Module(module) => EventFilter::Module(Identifier::new(module)?),
+            MoveEventType(event_type) => {
+                // parse_struct_tag converts StructTag string e.g. `0x2::devnet_nft::MintNFTEvent` to StructTag object
+                EventFilter::MoveEventType(parse_struct_tag(&event_type)?)
+            }
+            MoveEventField { path, value } => EventFilter::MoveEventField { path, value },
+            SenderAddress(address) => EventFilter::SenderAddress(address),
+            ObjectId(id) => EventFilter::ObjectId(id),
+            All(filters) => EventFilter::MatchAll(
+                filters
+                    .into_iter()
+                    .map(SuiEventFilter::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            Any(filters) => EventFilter::MatchAny(
+                filters
+                    .into_iter()
+                    .map(SuiEventFilter::try_into)
+                    .collect::<Result<_, _>>()?,
+            ),
+            And(filter_a, filter_b) => All(vec![*filter_a, *filter_b]).try_into()?,
+            Or(filter_a, filter_b) => Any(vec![*filter_a, *filter_b]).try_into()?,
+            EventType(type_) => EventFilter::EventType(type_),
+        })
+    }
 }

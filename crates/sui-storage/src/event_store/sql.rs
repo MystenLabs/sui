@@ -185,10 +185,10 @@ fn event_to_json(event: &EventEnvelope) -> String {
         let maybe_json = match &event.event {
             Event::TransferObject {
                 version,
-                destination_addr,
+                recipient,
                 type_,
                 ..
-            } => Some(json!({"destination": destination_addr.to_string(),
+            } => Some(json!({"destination": recipient.to_string(),
                        "version": version.value(),
                        "type": type_.to_string() })),
             // TODO: for other event types eg EpochChange
@@ -199,7 +199,7 @@ fn event_to_json(event: &EventEnvelope) -> String {
 }
 
 const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, checkpoint, tx_digest, event_type, \
-    package_id, module_name, function, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    package_id, module_name, object_id, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
 const TS_QUERY: &str = "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? LIMIT ?";
 
@@ -247,7 +247,6 @@ impl EventStore for SqlEventStore {
                 .bind(event_type as u16)
                 .bind(event.event.package_id().map(|pid| pid.to_vec()))
                 .bind(event.event.module_name())
-                .bind(event.event.function_name())
                 .bind(event.event.object_id().map(|id| id.to_vec()))
                 .bind(event_to_json(event))
                 .execute(&self.pool)
@@ -361,7 +360,7 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
-    use sui_types::object::MoveObject;
+    use sui_types::object::Owner;
     use sui_types::{
         base_types::SuiAddress,
         event::{Event, EventEnvelope, TransferType},
@@ -403,23 +402,38 @@ mod tests {
 
     fn new_test_publish_event() -> Event {
         Event::Publish {
+            sender: SuiAddress::random_for_testing_only(),
             package_id: ObjectID::random(),
         }
     }
 
     fn new_test_newobj_event() -> Event {
-        Event::NewObject(ObjectID::random())
+        Event::NewObject {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("module").unwrap(),
+            sender: SuiAddress::random_for_testing_only(),
+            recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
+            object_id: ObjectID::random(),
+        }
     }
 
     fn new_test_deleteobj_event() -> Event {
-        Event::DeleteObject(ObjectID::random())
+        Event::DeleteObject {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("module").unwrap(),
+            sender: SuiAddress::random_for_testing_only(),
+            object_id: ObjectID::random(),
+        }
     }
 
     fn new_test_transfer_event(typ: TransferType) -> Event {
         Event::TransferObject {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("module").unwrap(),
+            sender: SuiAddress::random_for_testing_only(),
+            recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
             version: 1.into(),
-            destination_addr: SuiAddress::random_for_testing_only(),
             type_: typ,
         }
     }
@@ -431,7 +445,13 @@ mod tests {
         };
         let event_bytes = bcs::to_bytes(&move_event).unwrap();
         (
-            Event::MoveEvent(MoveObject::new(TestEvent::struct_tag(), event_bytes)),
+            Event::MoveEvent {
+                package_id: ObjectID::random(),
+                transaction_module: Identifier::new("module").unwrap(),
+                sender: SuiAddress::random_for_testing_only(),
+                type_: TestEvent::struct_tag(),
+                contents: event_bytes,
+            },
             move_event.move_struct(),
         )
     }
@@ -443,32 +463,37 @@ mod tests {
         vec![
             EventEnvelope::new(
                 1_000_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_newobj_event(),
                 None,
             ),
-            EventEnvelope::new(1_001_000, None, new_test_publish_event(), None),
+            EventEnvelope::new(
+                1_001_000,
+                TransactionDigest::random(),
+                new_test_publish_event(),
+                None,
+            ),
             EventEnvelope::new(
                 1_002_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_transfer_event(TransferType::Coin),
                 None,
             ),
             EventEnvelope::new(
                 1_003_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_deleteobj_event(),
                 None,
             ),
             EventEnvelope::new(
                 1_004_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 new_test_transfer_event(TransferType::ToAddress),
                 None,
             ),
             EventEnvelope::new(
                 1_005_000,
-                Some(TransactionDigest::random()),
+                TransactionDigest::random(),
                 move_event,
                 Some(json),
             ),
@@ -484,10 +509,6 @@ mod tests {
         assert_eq!(
             queried.module_name,
             orig.event.module_name().map(SharedStr::from)
-        );
-        assert_eq!(
-            queried.function_name,
-            orig.event.function_name().map(SharedStr::from)
         );
         assert_eq!(queried.object_id, orig.event.object_id());
     }

@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::event_filter::Filter;
 use crate::event_handler::EVENT_DISPATCH_BUFFER_SIZE;
 use futures::Stream;
 use std::collections::BTreeMap;
@@ -9,6 +8,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiError;
+use sui_types::event_filter::Filter;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, RwLock};

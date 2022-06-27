@@ -1,26 +1,32 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{future, StreamExt};
-use serde_json::json;
 use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::path::PathBuf;
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui_core::authority::AuthorityState;
-use sui_json::SuiJsonValue;
-use sui_json_rpc_api::rpc_types::{SplitCoinResponse, TransactionResponse};
-use sui_node::SuiNode;
+use std::{collections::BTreeMap, sync::Arc};
 
+use futures::{future, StreamExt};
 use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use move_package::BuildConfig;
-use serde_json::Value;
-use std::net::SocketAddr;
-use std::{collections::BTreeMap, sync::Arc};
+use serde_json::json;
+use tokio::sync::Mutex;
+use tokio::time::timeout;
+use tokio::time::{sleep, Duration};
+use tracing::info;
+
+use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui_core::authority::AuthorityState;
+use sui_json::SuiJsonValue;
+use sui_json_rpc_api::rpc_types::{
+    SplitCoinResponse, SuiEventEnvelope, SuiEventFilter, TransactionResponse,
+};
 use sui_json_rpc_api::rpc_types::{
     SuiEvent, SuiMoveStruct, SuiMoveValue, SuiObjectInfo, SuiObjectRead,
 };
+use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
@@ -28,10 +34,6 @@ use sui_types::{
     messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionInfoRequest},
 };
 use test_utils::network::setup_network_and_wallet;
-use tokio::sync::Mutex;
-use tokio::time::timeout;
-use tokio::time::{sleep, Duration};
-use tracing::info;
 
 async fn transfer_coin(
     context: &mut WalletContext,
@@ -539,12 +541,13 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     // Pass in an unique port for each test case otherwise they may interfere with one another.
     let (node, ws_client) = set_up_subscription(6666, &swarm).await?;
 
-    let params = BTreeMap::<String, Value>::new();
-    let mut sub: Subscription<SuiEvent> = ws_client
+    let mut sub: Subscription<SuiEventEnvelope> = ws_client
         .subscribe(
-            "sui_subscribeMoveEventsByType",
-            rpc_params!["0x2::devnet_nft::MintNFTEvent", params],
-            "sui_unsubscribeMoveEventsByType",
+            "sui_subscribeEvent",
+            rpc_params![SuiEventFilter::MoveEventType(
+                "0x2::devnet_nft::MintNFTEvent".to_string()
+            )],
+            "sui_unsubscribeEvent",
         )
         .await
         .unwrap();
@@ -553,10 +556,9 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     match timeout(Duration::from_secs(5), sub.next()).await {
-        Ok(Some(Ok(SuiEvent::MoveEvent {
-            type_,
-            fields,
-            bcs: _,
+        Ok(Some(Ok(SuiEventEnvelope {
+            event: SuiEvent::MoveEvent { type_, fields, .. },
+            ..
         }))) => {
             assert_eq!(type_, "0x2::devnet_nft::MintNFTEvent");
             assert_eq!(
