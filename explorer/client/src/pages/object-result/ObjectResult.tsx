@@ -1,6 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type TransactionEffectsResponse,
+    getTransactionSender,
+} from '@mysten/sui.js';
 import React, { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -39,15 +43,44 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     );
 };
 
+// Get the data for the object ID and address that publishes a Package
+function getObjectDataWithPackageAddress(objID: string, network: string) {
+    return rpc(network)
+        .getObject(objID as string)
+        .then((objState) => {
+            const resp: DataType = translate(objState) as DataType;
+            if (resp.objType === 'Move Package' && resp.data.tx_digest) {
+                return rpc(network)
+                    .getTransactionWithEffects(resp.data.tx_digest)
+                    .then((txEff: TransactionEffectsResponse) => ({
+                        ...resp,
+                        publisherAddress: getTransactionSender(
+                            txEff.certificate
+                        ),
+                    }))
+                    .catch((err) => {
+                        console.log(err);
+                        // TODO: Not sure if I should show Genesis as Package Publisher or ignore it
+                        return {
+                            ...(resp.owner === 'Immutable'
+                                ? { publisherAddress: 'Genesis' }
+                                : {}),
+                            ...resp,
+                        };
+                    });
+            }
+            return resp;
+        });
+}
+
 const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
-        rpc(network)
-            .getObject(objID as string)
+        getObjectDataWithPackageAddress(objID, network)
             .then((objState) => {
                 setObjectState({
-                    ...(translate(objState) as DataType),
+                    ...(objState as DataType),
                     loadState: 'loaded',
                 });
             })

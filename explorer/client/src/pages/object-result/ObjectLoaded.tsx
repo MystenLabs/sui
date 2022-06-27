@@ -80,6 +80,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
             ? 'Disassembled Bytecode'
             : 'Properties';
 
+    const isPublisherGenesis =
+        data.objType === 'Move Package' && data?.publisherAddress === 'Genesis';
+
     return (
         <>
             <div className={styles.resultbox}>
@@ -120,7 +123,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             </div>
-                            {data.data?.tx_digest && (
+                            {data.data?.tx_digest && !isPublisherGenesis && (
                                 <div>
                                     <div>Last Transaction ID</div>
                                     <div id="lasttxID">
@@ -136,6 +139,18 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 <div>Version</div>
                                 <div>{data.version}</div>
                             </div>
+                            {data?.publisherAddress && (
+                                <div>
+                                    <div>Publisher</div>
+                                    <div id="lasttxID">
+                                        <Longtext
+                                            text={data.publisherAddress}
+                                            category="addresses"
+                                            isLink={!isPublisherGenesis}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             {data.readonly && (
                                 <div>
                                     <div>Read Only?</div>
