@@ -17,4 +17,5 @@ pub mod safe_client;
 pub mod streamer;
 pub mod transaction_input_checker;
 
+mod node_sync;
 mod query_helpers;
