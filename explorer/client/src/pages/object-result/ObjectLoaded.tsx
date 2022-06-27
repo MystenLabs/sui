@@ -88,9 +88,10 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([_, value]) => typeof value == 'object')
         .filter(([key, _]) => key !== 'id');
     
+
+    // Add struct properties to the properties list  
     let structPropertiesTitle;
     let structPropertiesContent;
-
     if (structProperties.length > 0) {
         const structPropertiesData = Object.values(structProperties);
         structPropertiesTitle = structPropertiesData[0][0];
