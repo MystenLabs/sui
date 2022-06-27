@@ -1,5 +1,5 @@
 .networkbox {
-    @apply text-lg cursor-pointer text-offblack bg-green-500 hover:bg-green-900 hover:text-offwhite text-center rounded-lg px-2 my-2 lg:my-0 lg:w-[20vw];
+    @apply text-sm cursor-pointer text-offwhite bg-transparent hover:bg-green-900 leading-8  w-[10rem] mx-[2vw] text-center;
 }
 
 .opennetworkbox {

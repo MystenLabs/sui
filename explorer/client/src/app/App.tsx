@@ -18,14 +18,12 @@ function App() {
         <NetworkContext.Provider value={[network, setNetwork]}>
             <div className={styles.app}>
                 <main>
-                    <div className={styles.search}>
-                        <div className={styles.header}>
-                            <Link className={styles.suititle} to="/">
-                                <SuiLogo />
-                            </Link>
-                            <NetworkSelect />
-                        </div>
+                    <div className={styles.header}>
+                        <Link className={styles.suititle} to="/">
+                            <SuiLogo />
+                        </Link>
                         <Search />
+                        <NetworkSelect />
                     </div>
                     <AppRoutes />
                 </main>

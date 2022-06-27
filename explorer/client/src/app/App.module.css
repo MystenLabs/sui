@@ -3,15 +3,11 @@
 }
 
 div.header {
-    @apply lg:flex lg:justify-between py-[1vh] ml-[5vw] mr-[5vw];
+    @apply flex justify-around py-[1vh] mr-[5vw] bg-header w-[100vw];
 }
 
 a.suititle {
-    @apply text-lg text-offwhite no-underline hover:underline;
-}
-
-.search {
-    @apply bg-header text-offwhite pb-4 w-[100vw];
+    @apply text-lg text-offwhite no-underline hover:underline mx-[2vw];
 }
 
 main {
