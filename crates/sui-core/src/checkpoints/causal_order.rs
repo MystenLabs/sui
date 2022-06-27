@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 
@@ -28,17 +28,20 @@ use super::CheckpointStore;
 
 pub trait CausalOrder {
     fn get_complete_causal_order(
-        self: &Self,
+        &self,
         transactions: &[ExecutionDigests],
         ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>>;
 }
 
 pub trait EffectsStore {
-    fn get_effects(self: &Self, transactions : &[ExecutionDigests]) -> SuiResult<Vec<Option<TransactionEffects>>>;
+    fn get_effects(
+        &self,
+        transactions: &[ExecutionDigests],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>>;
 
     fn causal_order_from_effects(
-        self: &Self,
+        &self,
         transactions: &[ExecutionDigests],
         ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
@@ -60,7 +63,11 @@ pub trait EffectsStore {
 
         // Load the extra transactions in memory, we will use them quite a bit.
         // TODO: monitor memory use here.
-        let tx_not_in_checkpoint: HashSet<_> = ckpt_store.extra_transactions.keys().map(|e| e.transaction).collect();
+        let tx_not_in_checkpoint: HashSet<_> = ckpt_store
+            .extra_transactions
+            .keys()
+            .map(|e| e.transaction)
+            .collect();
 
         // Index the effects by transaction digest, as we will need to look them up.
         let mut effect_map: BTreeMap<TransactionDigest, &TransactionEffects> = effetcs
@@ -76,11 +83,11 @@ pub trait EffectsStore {
         // we must have processed all transactions in the proposed checkpoint, this check is
         // reduced to ensuring that the transactions are in the table `extra_transactions`
         // (that lists transactions executed but not yet checkpointed).
-        let _digests: BTreeSet<_> = digests
+        let digest_map: BTreeMap<TransactionDigest, &ExecutionDigests> = digests
             .iter()
             .filter_map(|d| {
                 if tx_not_in_checkpoint.contains(&d.transaction) {
-                    Some(d.transaction)
+                    Some((d.transaction, d))
                 } else {
                     // We remove the effects map entries for transactions
                     // that are already checkpointed.
@@ -92,34 +99,40 @@ pub trait EffectsStore {
 
         // Set of starting transactions that depend only on previously
         // checkpointed objects.
-        let initial_transactions : BTreeSet<_> = 
-        effect_map.iter().filter_map(|(d, e)| {
-            // All dependencies must be in checkpoint.
-            if e.dependencies.iter().all(|d| !tx_not_in_checkpoint.contains(d)) {
-                Some(d)
-            }
-            else{
-                None
-            }
-        }).collect();
+        let initial_transactions: BTreeSet<_> = effect_map
+            .iter()
+            .filter_map(|(d, e)| {
+                // All dependencies must be in checkpoint.
+                if e.dependencies
+                    .iter()
+                    .all(|d| !tx_not_in_checkpoint.contains(d))
+                {
+                    Some(d)
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         // Build a forward index of transactions. This will allow us to start with the initial
         // and then sequenced trasnactions and efficiently determine which other transactions
         // become candidates for sequencing.
-        let mut forward_index:BTreeMap<&TransactionDigest, Vec<&TransactionDigest>> = BTreeMap::new();
+        let mut forward_index: BTreeMap<&TransactionDigest, Vec<&TransactionDigest>> =
+            BTreeMap::new();
         for (d, effect) in &effect_map {
             for dep in &effect.dependencies {
                 // We only record the dependencies not in a checkpoint, as the ones
                 // in a checkpoint are already satisfied presumably.
                 if tx_not_in_checkpoint.contains(dep) {
-                    forward_index.entry(&dep).or_default().push(d);
+                    forward_index.entry(dep).or_default().push(d);
                 }
             }
         }
 
-        // Define the master sequence, to contain the initial transactions 
+        // Define the master sequence, to contain the initial transactions
         // by transaction digest order.
-        let mut master_sequence : Vec<&TransactionDigest> = initial_transactions.iter().cloned().collect();
+        let mut master_sequence: Vec<&TransactionDigest> =
+            initial_transactions.iter().cloned().collect();
         // A set mirroring the contents of the mater sequence for quick lookup
         let mut master_set = initial_transactions.clone();
         // The transactions that just became executed.
@@ -127,55 +140,63 @@ pub trait EffectsStore {
 
         // Trace forward the executed transactions, starting from the initial set, and adding more
         // trasnactions as all their dependencies become executed. The candidates represent executed
-        // transactions that need to have subsequent transactions depending on them examined to 
+        // transactions that need to have subsequent transactions depending on them examined to
         // determine if all their dependencies are executed. If so they are sequenced, and also added
         // to the candidate set to be examiner once.
-        while !candidates.is_empty()  {
+        while !candidates.is_empty() {
             // we continue while we can make progress
 
             // Take a transaction
             let next_transaction = *candidates.iter().next().unwrap();
             candidates.remove(next_transaction);
 
-            // Check all transactions that depend on it, to see if all 
+            // Check all transactions that depend on it, to see if all
             // dependencies are  satisfied.
             for dep in forward_index.get(next_transaction).unwrap() {
-
                 // The candidate is its parent. If it is the last parent the above will be true
                 // but only once, so we should not already have sequenced it.
                 debug_assert!(!master_set.contains(dep));
 
-                if effect_map.get(*dep).unwrap().dependencies.iter().all(|item| master_set.contains(item)) {
+                if effect_map
+                    .get(*dep)
+                    .unwrap()
+                    .dependencies
+                    .iter()
+                    .all(|item| master_set.contains(item))
+                {
                     // It seems like all dependencies are satisfied for dep, so sequence it.
                     master_sequence.push(dep);
                     master_set.insert(dep);
                     candidates.insert(dep);
                 }
             }
-
         }
 
-        // NOTE: not all transactions have to be seqeunced into the checkpoint. In particular if a 
+        // NOTE: not all transactions have to be seqeunced into the checkpoint. In particular if a
         // byzantine node includes some transaction into their proposal but not its previous dependencies
-        // they may not be checkpointed. That is ok, since we promise finality only if >2/3 honest 
+        // they may not be checkpointed. That is ok, since we promise finality only if >2/3 honest
         // eventually include in proposal, which means that at leats 1 honest will include in a checkpoint
         // and honest nodes include full causal sequences in proposals.
 
-
-        Ok(transactions.iter().cloned().collect())
+        // Map transaction digest back to correct execution digest.
+        Ok(master_sequence
+            .iter()
+            .map(|d| **digest_map.get(*d).unwrap())
+            .collect())
     }
-
 }
 
-
 impl EffectsStore for Arc<AuthorityStore> {
-    fn get_effects(self: &Self, transactions : &[ExecutionDigests]) -> SuiResult<Vec<Option<TransactionEffects>>> {
+    fn get_effects(
+        &self,
+        transactions: &[ExecutionDigests],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(self
-        .effects
-        .multi_get(transactions.iter().map(|d| d.transaction))?
-        .into_iter()
-        .map(|item| item.map(|x| x.effects))
-        .collect())
+            .effects
+            .multi_get(transactions.iter().map(|d| d.transaction))?
+            .into_iter()
+            .map(|item| item.map(|x| x.effects))
+            .collect())
     }
 }
 
@@ -184,19 +205,18 @@ pub struct TestCausalOrderNoop;
 
 impl CausalOrder for TestCausalOrderNoop {
     fn get_complete_causal_order(
-        self: &Self,
+        &self,
         transactions: &[ExecutionDigests],
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
-        Ok(transactions.iter().cloned().collect())
+        Ok(transactions.to_vec())
     }
 }
-
 
 /// Now this is a real causal orderer based on having an Arc<AuthorityStore> handy.
 impl CausalOrder for Arc<AuthorityStore> {
     fn get_complete_causal_order(
-        self: &Self,
+        &self,
         transactions: &[ExecutionDigests],
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
