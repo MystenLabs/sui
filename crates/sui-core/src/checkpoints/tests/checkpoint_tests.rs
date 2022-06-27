@@ -406,7 +406,7 @@ fn latest_proposal() {
 
     // Fail to set if transactions not processed.
     assert!(cps1
-        .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+        .sign_new_checkpoint(summary.clone(), &transactions)
         .is_err());
 
     // Set the transactions as executed.
@@ -422,14 +422,13 @@ fn latest_proposal() {
     cps4.handle_internal_batch(0, &batch).unwrap();
 
     // Try to get checkpoint
-    cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps1.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps2.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps3.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps3.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps4.handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
-        .unwrap();
+    cps4.sign_new_checkpoint(summary, &transactions).unwrap();
 
     // --- TEST3 ---
 
@@ -552,7 +551,7 @@ fn set_get_checkpoint() {
 
     // Need to load the transactions as processed, before getting a checkpoint.
     assert!(cps1
-        .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+        .sign_new_checkpoint(summary.clone(), &transactions)
         .is_err());
     let batch: Vec<_> = transactions
         .transactions
@@ -564,12 +563,11 @@ fn set_get_checkpoint() {
     cps2.handle_internal_batch(0, &batch).unwrap();
     cps3.handle_internal_batch(0, &batch).unwrap();
 
-    cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps1.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps2.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps3.handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
-        .unwrap();
+    cps3.sign_new_checkpoint(summary, &transactions).unwrap();
     // cps4.handle_internal_set_checkpoint(summary, &transactions)
     //     .unwrap();
 
@@ -702,9 +700,7 @@ fn checkpoint_integration() {
 
         // If we have a previous checkpoint, now lets try to process again?
         if let Some((summary, transactions)) = checkpoint_opt.take() {
-            assert!(cps
-                .handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
-                .is_ok());
+            assert!(cps.sign_new_checkpoint(summary, &transactions).is_ok());
 
             // Loop invariant to ensure termination or error
             assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
@@ -744,7 +740,7 @@ fn checkpoint_integration() {
 
         // Cannot register the checkpoint while there are no-executed transactions.
         assert!(cps
-            .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+            .sign_new_checkpoint(summary.clone(), &transactions)
             .is_err());
 
         checkpoint_opt = Some((summary, transactions));
