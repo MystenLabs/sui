@@ -3,13 +3,20 @@
 }
 
 div.header {
-    @apply flex justify-around py-[1vh] mr-[5vw] bg-header w-[100vw];
+    @apply fixed top-0 flex justify-around py-[1vh] mr-[5vw] bg-header w-[100vw];
 }
 
 a.suititle {
     @apply text-lg text-offwhite no-underline hover:underline mx-[2vw];
 }
 
-main {
-    @apply relative;
+.maincontent {
+    @apply absolute z-50 overflow-scroll h-[90vh] w-[50vw] mt-[5vh];
+}
+
+.topHalf {
+  @apply fixed bg-header h-[50vh] w-[100vw] ;
+}
+.btmHalf {
+  @apply fixed bg-offblack h-[50vh] w-[100vw] bottom-0 ;
 }
