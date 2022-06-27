@@ -1,9 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{DigestHandler, Follower};
 use crate::{
-    authority::AuthorityState, authority_aggregator::AuthorityAggregator,
+    authority::AuthorityState,
+    authority_active::gossip::{DigestHandler, Follower},
+    authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
 };
 use async_trait::async_trait;
