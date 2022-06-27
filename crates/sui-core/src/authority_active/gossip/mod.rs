@@ -5,6 +5,7 @@ use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthorityAggregator, CertificateHandler},
     authority_client::AuthorityAPI,
+    node_sync::NodeSyncDigestHandler,
     safe_client::SafeClient,
 };
 use async_trait::async_trait;
@@ -50,8 +51,8 @@ enum GossipType {
     BestEffort,
 }
 
-struct Follower<A> {
-    peer_name: AuthorityName,
+pub(crate) struct Follower<A> {
+    pub peer_name: AuthorityName,
     client: SafeClient<A>,
     state: Arc<AuthorityState>,
     follower_store: Arc<FollowerStore>,
@@ -268,7 +269,7 @@ where
 }
 
 #[async_trait]
-trait DigestHandler<A> {
+pub(crate) trait DigestHandler<A> {
     /// handle_digest
     async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult;
 }
