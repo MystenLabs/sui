@@ -147,7 +147,7 @@ pub async fn checkpoint_process<A>(
             // In either case try to upgrade the signed checkpoint to a certified one
             // if possible
             let result = {
-                state_checkpoints.lock().handle_checkpoint_certificate(
+                state_checkpoints.lock().process_checkpoint_certificate(
                     &checkpoint,
                     &None,
                     committee,
@@ -167,7 +167,7 @@ pub async fn checkpoint_process<A>(
                         .await
                 {
                     // Retry with contents
-                    let _ = state_checkpoints.lock().handle_checkpoint_certificate(
+                    let _ = state_checkpoints.lock().process_checkpoint_certificate(
                         &checkpoint,
                         &Some(contents),
                         committee,
@@ -199,6 +199,13 @@ pub async fn checkpoint_process<A>(
                 timing.consensus_delay_estimate,
             )
             .await;
+        }
+
+        if let Err(err) = state_checkpoints
+            .lock()
+            .attempt_to_construct_checkpoint(committee)
+        {
+            warn!("Error attempting to construct checkpoint: {:?}", err);
         }
 
         // (5) Wait for a long long time.
@@ -419,7 +426,7 @@ where
         if let Err(err) =
             checkpoint_db
                 .lock()
-                .handle_checkpoint_certificate(&past, &None, &net.committee)
+                .process_checkpoint_certificate(&past, &None, &net.committee)
         {
             warn!("Error handling certificate: {err:?}");
         }
@@ -441,7 +448,7 @@ where
         if let Err(err) =
             checkpoint_db
                 .lock()
-                .handle_checkpoint_certificate(&past, &_contents, &net.committee)
+                .process_checkpoint_certificate(&past, &_contents, &net.committee)
         {
             warn!("Sync Err: {err:?}");
         }
@@ -636,7 +643,7 @@ pub async fn diff_proposals<A>(
                             let proposer = fragment.proposer.authority();
                             let other = fragment.other.authority();
                             debug!("Send fragment: {proposer:?} -- {other:?}");
-                            let _ = checkpoint_db.lock().handle_receive_fragment(
+                            let _ = checkpoint_db.lock().submit_local_fragment_to_consensus(
                                 &fragment,
                                 &active_authority.state.committee.load(),
                             );
