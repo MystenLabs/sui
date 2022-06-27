@@ -97,3 +97,9 @@ div.jsondata {
 
     overflow-x: scroll;
 }
+
+div.jsondata {
+    @apply border-solid border-stone-300 mb-[5vh] p-5 bg-white whitespace-pre text-lg font-mono;
+
+    overflow-x: scroll;
+}
