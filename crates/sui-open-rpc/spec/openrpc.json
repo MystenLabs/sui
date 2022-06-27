@@ -16,6 +16,23 @@
   },
   "methods": [
     {
+      "name": "sui_Unknown method name",
+      "tags": [
+        {
+          "name": "Event Subscription"
+        }
+      ],
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+          }
+        }
+      ]
+    },
+    {
       "name": "sui_batchTransaction",
       "tags": [
         {
@@ -1011,6 +1028,9 @@
                 "required": [
                   "bcs",
                   "fields",
+                  "packageId",
+                  "sender",
+                  "transactionModule",
                   "type"
                 ],
                 "properties": {
@@ -1019,6 +1039,15 @@
                   },
                   "fields": {
                     "$ref": "#/components/schemas/MoveStruct"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   },
                   "type": {
                     "type": "string"
@@ -1038,11 +1067,15 @@
               "publish": {
                 "type": "object",
                 "required": [
-                  "packageId"
+                  "packageId",
+                  "sender"
                 ],
                 "properties": {
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   }
                 }
               }
@@ -1059,17 +1092,29 @@
               "transferObject": {
                 "type": "object",
                 "required": [
-                  "destinationAddr",
                   "objectId",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule",
                   "type",
                   "version"
                 ],
                 "properties": {
-                  "destinationAddr": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
                   "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   },
                   "type": {
                     "$ref": "#/components/schemas/TransferType"
@@ -1090,7 +1135,27 @@
             ],
             "properties": {
               "deleteObject": {
-                "$ref": "#/components/schemas/ObjectID"
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "packageId",
+                  "sender",
+                  "transactionModule"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  }
+                }
               }
             },
             "additionalProperties": false
@@ -1103,13 +1168,37 @@
             ],
             "properties": {
               "newObject": {
-                "$ref": "#/components/schemas/ObjectID"
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  }
+                }
               }
             },
             "additionalProperties": false
           },
           {
-            "description": "Epooch change",
+            "description": "Epoch change",
             "type": "object",
             "required": [
               "epochChange"
@@ -1138,6 +1227,192 @@
             },
             "additionalProperties": false
           }
+        ]
+      },
+      "EventFilter": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Package"
+            ],
+            "properties": {
+              "Package": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Module"
+            ],
+            "properties": {
+              "Module": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Move StructTag string value of the event type e.g. `0x2::devnet_nft::MintNFTEvent`",
+            "type": "object",
+            "required": [
+              "MoveEventType"
+            ],
+            "properties": {
+              "MoveEventType": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "MoveEventField"
+            ],
+            "properties": {
+              "MoveEventField": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "value"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "value": true
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "SenderAddress"
+            ],
+            "properties": {
+              "SenderAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "EventType"
+            ],
+            "properties": {
+              "EventType": {
+                "$ref": "#/components/schemas/EventType"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ObjectId"
+            ],
+            "properties": {
+              "ObjectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "All"
+            ],
+            "properties": {
+              "All": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Any"
+            ],
+            "properties": {
+              "Any": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "And"
+            ],
+            "properties": {
+              "And": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Or"
+            ],
+            "properties": {
+              "Or": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "EventType": {
+        "description": "Auto-generated discriminant enum variants",
+        "type": "string",
+        "enum": [
+          "MoveEvent",
+          "Publish",
+          "TransferObject",
+          "DeleteObject",
+          "NewObject",
+          "EpochChange",
+          "Checkpoint"
         ]
       },
       "ExecutionStatus": {
