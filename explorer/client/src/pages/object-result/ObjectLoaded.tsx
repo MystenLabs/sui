@@ -10,17 +10,8 @@ import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
 import codestyle from '../../styles/bytecode.module.css';
 import theme from '../../styles/theme.module.css';
-<<<<<<< HEAD
 import { getOwnerStr, parseImageURL } from '../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../utils/stringUtils';
-=======
-import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
-import { parseImageURL } from '../../utils/objectUtils';
-import {
-    asciiFromNumberBytes,
-    trimStdLibPrefix,
-} from '../../utils/stringUtils';
->>>>>>> cb33e7b7 (lint)
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
