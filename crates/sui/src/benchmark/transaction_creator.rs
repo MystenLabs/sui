@@ -12,6 +12,7 @@ use sui_types::{
     object::Object,
     SUI_FRAMEWORK_ADDRESS,
 };
+use blst::{min_sig as bls};
 
 const OBJECT_ID_OFFSET: &str = "0x10000";
 const GAS_PER_TX: u64 = u64::MAX;
@@ -69,7 +70,15 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
         let pubx = secx.public_key_bytes();
         let sig = AuthoritySignature::new(&certificate.data, secx);
         certificate.auth_sign_info.authorities.push(*pubx);
-        certificate.auth_sign_info.aggregated_signature = Some(sig);
+        certificate.auth_sign_info.aggregated_signature = 
+            match certificate.auth_sign_info.aggregated_signature {
+                Some(prev_sig) => {
+                    let mut aggr_sig = bls::AggregateSignature::from_signature(&prev_sig.0);
+                    aggr_sig.add_signature(&sig.0, true).unwrap();
+                    Some(AuthoritySignature(aggr_sig.to_signature()))
+                },
+                None => Some(sig)
+            };
     }
     certificate
 }
