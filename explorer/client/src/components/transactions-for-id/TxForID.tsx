@@ -61,7 +61,9 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
         <div id="tx" className={styles.txresults}>
             <div className={styles.txheader}>
                 <div className={styles.txid}>TxId</div>
-                <div className={styles.txage}>Time</div>
+                {showData[0].timestamp_ms && (
+                    <div className={styles.txage}>Time</div>
+                )}
                 <div className={styles.txtype}>TxType</div>
                 <div className={styles.txstatus}>Status</div>
                 <div className={styles.txadd}>Addresses</div>
@@ -77,9 +79,11 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                             alttext={truncate(x.txId, 26, '...')}
                         />
                     </div>
-                    <div className={styles.txage}>
-                        {`${timeAgo(x.timestamp_ms)} ago`}
-                    </div>
+                    {x.timestamp_ms && (
+                        <div className={styles.txage}>
+                            {`${timeAgo(x.timestamp_ms)} ago`}
+                        </div>
+                    )}
                     <div className={styles.txtype}>{x.kind}</div>
                     <div
                         className={cl(

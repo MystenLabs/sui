@@ -50,10 +50,14 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             value: txId,
             className: 'columnheader',
         },
-        {
-            label: 'Time',
-            value: tx.timestamp_ms,
-        },
+        ...(tx.timestamp_ms
+            ? [
+                  {
+                      label: 'Time',
+                      value: tx.timestamp_ms,
+                  },
+              ]
+            : []),
 
         {
             // May change later

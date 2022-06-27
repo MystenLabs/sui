@@ -118,7 +118,9 @@ function LatestTxView({
                         )}
                     >
                         <div className={styles.txcardgridlarge}>TxId</div>
-                        <div className={styles.txage}>Time</div>
+                        {results.latestTx[0].timestamp_ms && (
+                            <div className={styles.txage}>Time</div>
+                        )}
                         <div className={styles.txtype}>TxType</div>
                         <div className={styles.txstatus}>Status</div>
                         <div className={styles.txgas}>Gas</div>
@@ -137,9 +139,11 @@ function LatestTxView({
                                     alttext={truncate(tx.txId, TRUNCATE_LENGTH)}
                                 />
                             </div>
-                            <div className={styles.txage}>{`${timeAgo(
-                                tx.timestamp_ms
-                            )} ago`}</div>
+                            {tx.timestamp_ms && (
+                                <div className={styles.txage}>{`${timeAgo(
+                                    tx.timestamp_ms
+                                )} ago`}</div>
+                            )}
                             <div className={styles.txtype}> {tx.kind}</div>
                             <div
                                 className={cl(
