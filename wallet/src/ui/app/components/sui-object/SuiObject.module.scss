@@ -80,3 +80,27 @@
     color: #43b0e6;
     text-decoration: none;
 }
+
+:global(.btn).send {
+    font-size: 11px;
+    font-weight: 300;
+    padding: 4px;
+    margin-left: 5px;
+}
+
+:global(.btn).send-nft {
+    font-size: 15px;
+    font-weight: 300;
+    padding: 4px;
+    background-color: transparent;
+
+    i {
+        color: #43b0e6;
+    }
+}
+
+.icon {
+    display: block;
+    color: #fff;
+    transition: all 200ms ease-in-out;
+}
