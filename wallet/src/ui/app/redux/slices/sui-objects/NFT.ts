@@ -32,6 +32,7 @@ export class ExampleNFT {
     }
 
     // TODO marge this method with mintExampleNFT. Import type from @mysten/sui.js
+    // transfer NFT to another address
     public static async TransferNFT(
         signer: RawSigner,
         nftId: string,

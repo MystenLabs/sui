@@ -6,13 +6,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import TransferCoinForm from './TransferCoinForm';
+import TransferCoinForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
 import Loading from '_components/loading';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountItemizedBalancesSelector,
+    accountNftsSelector,
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { sendTokens } from '_redux/slices/transactions';
@@ -35,6 +36,16 @@ function TransferNFTPage() {
         [searchParams]
     );
 
+    const nftCollections = useAppSelector(accountNftsSelector);
+    if (!nftCollections || !nftCollections.length) {
+        // return
+    }
+
+    const selectedNFT = nftCollections.filter(
+        (nftItems) => nftItems.reference.objectId === objectId
+    )[0];
+
+    console.log(selectedNFT);
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -51,7 +62,7 @@ function TransferNFTPage() {
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
- 
+
     const coinSymbol = useMemo(
         () => (objectId && Coin.getCoinSymbol(objectId)) || '',
         [objectId]
