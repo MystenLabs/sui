@@ -68,7 +68,7 @@ async fn sequence_fragments() {
             let checkpoints_store = handle.state().checkpoints().unwrap();
             checkpoints_store
                 .lock()
-                .handle_internal_batch(next_sequence_number, &transactions)
+                .handle_internal_batch(next_sequence_number, &transactions, committee)
                 .unwrap();
             let proposal = checkpoints_store
                 .lock()
@@ -249,6 +249,10 @@ async fn checkpoint_with_shared_objects() {
                 long_pause_between_checkpoints: Duration::from_millis(10),
                 ..CheckpointProcessControl::default()
             };
+
+            println!("Start active execution process.");
+            active_state.clone().spawn_execute_process().await;
+
             active_state
                 .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
                 .await

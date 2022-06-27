@@ -9,3 +9,6 @@ xclippy = [
     "-Wclippy::disallowed_methods",
 ]
 xlint = "run --package x --bin x -- lint"
+
+[target.'cfg(target_family = "windows")']
+rustflags = [ "-C",  "link-args=/STACK:64000000" ]

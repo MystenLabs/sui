@@ -199,10 +199,11 @@ impl crate::authority::AuthorityState {
                 // If a checkpointing service is present, register the batch with it
                 // to insert the transactions into future checkpoint candidates
                 if let Some(checkpoint) = &self.checkpoints {
-                    if let Err(err) = checkpoint
-                        .lock()
-                        .handle_internal_batch(new_batch.batch.next_sequence_number, &current_batch)
-                    {
+                    if let Err(err) = checkpoint.lock().handle_internal_batch(
+                        new_batch.batch.next_sequence_number,
+                        &current_batch,
+                        &self.committee.load(),
+                    ) {
                         error!("Checkpointing service error: {}", err);
                     }
                 }

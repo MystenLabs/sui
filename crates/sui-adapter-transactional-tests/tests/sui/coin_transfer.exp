@@ -28,4 +28,4 @@ Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::id::VersionedID {id: sui::id:
 
 task 7 'view-object'. lines 20-20:
 Owner: Account Address ( B )
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(107)}}, version: 1u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99592u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(107)}}, version: 1u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99570u64}}

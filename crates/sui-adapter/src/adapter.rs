@@ -1,15 +1,29 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet, HashSet},
+    convert::TryFrom,
+    fmt::Debug,
+};
 
-use crate::bytecode_rewriter::ModuleHandleRewriter;
+use anyhow::Result;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::PartialVMResult,
     file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
+use move_core_types::{
+    account_address::AccountAddress,
+    identifier::Identifier,
+    language_storage::{ModuleId, StructTag, TypeTag},
+    resolver::{ModuleResolver, ResourceResolver},
+};
+pub use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
+
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
@@ -27,22 +41,8 @@ use sui_verifier::{
     verifier,
 };
 
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
-use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, BTreeSet, HashSet},
-    convert::TryFrom,
-    fmt::Debug,
-};
-
+use crate::bytecode_rewriter::ModuleHandleRewriter;
 use crate::object_root_ancestor_map::ObjectRootAncestorMap;
-pub use move_vm_runtime::move_vm::MoveVM;
 
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
     MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
@@ -197,6 +197,7 @@ fn execute_internal<
         .collect();
     process_successful_execution(
         state_view,
+        module_id,
         by_value_object_map,
         mutable_refs,
         events,
@@ -227,7 +228,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let package_id = generate_package_id(&mut modules, ctx)?;
     let vm = verify_and_link(state_view, &modules, package_id, natives, gas_status)?;
-    state_view.log_event(Event::Publish { package_id });
+    state_view.log_event(Event::Publish {
+        sender: ctx.sender(),
+        package_id,
+    });
     store_package_and_init_modules(state_view, &vm, modules, ctx, gas_status)
 }
 
@@ -394,6 +398,7 @@ fn process_successful_execution<
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
     state_view: &mut S,
+    module_id: &ModuleId,
     mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     events: Vec<MoveEvent>,
@@ -438,12 +443,14 @@ fn process_successful_execution<
                     _ => unreachable!(),
                 };
                 handle_transfer(
+                    ctx.sender(),
                     new_owner,
                     type_,
                     event_bytes,
                     tx_digest,
                     &mut by_value_objects,
                     state_view,
+                    module_id,
                     &mut object_owner_map,
                     &newly_generated_ids,
                 )
@@ -467,7 +474,12 @@ fn process_successful_execution<
                             return Err(ExecutionErrorKind::DeleteObjectOwnedObject.into());
                         }
                         Some(_) => {
-                            state_view.log_event(Event::DeleteObject(*obj_id));
+                            state_view.log_event(Event::delete_object(
+                                module_id.address(),
+                                module_id.name(),
+                                ctx.sender(),
+                                *obj_id,
+                            ));
                             state_view.delete_object(obj_id, id.version(), DeleteKind::Normal)
                         }
                         None => {
@@ -478,7 +490,12 @@ fn process_successful_execution<
                             // it will also have version `v+1`, leading to a violation of the invariant that any
                             // object_id and version pair must be unique. Hence for any object that's just unwrapped,
                             // we force incrementing its version number again to make it `v+2` before writing to the store.
-                            state_view.log_event(Event::DeleteObject(*obj_id));
+                            state_view.log_event(Event::delete_object(
+                                module_id.address(),
+                                module_id.name(),
+                                ctx.sender(),
+                                *obj_id,
+                            ));
                             state_view.delete_object(
                                 obj_id,
                                 id.version().increment(),
@@ -500,7 +517,13 @@ fn process_successful_execution<
             }
             EventType::User => {
                 match type_ {
-                    TypeTag::Struct(s) => state_view.log_event(Event::move_event(s, event_bytes)),
+                    TypeTag::Struct(s) => state_view.log_event(Event::move_event(
+                        module_id.address(),
+                        module_id.name(),
+                        ctx.sender(),
+                        s,
+                        event_bytes,
+                    )),
                     _ => unreachable!(
                         "Native function emit_event<T> ensures that T is always bound to structs"
                     ),
@@ -525,12 +548,14 @@ fn handle_transfer<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
+    sender: SuiAddress,
     recipient: Owner,
     type_: TypeTag,
     contents: Vec<u8>,
     tx_digest: TransactionDigest,
     by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
     state_view: &mut S,
+    module_id: &ModuleId,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
 ) -> Result<(), ExecutionError> {
@@ -557,7 +582,13 @@ fn handle_transfer<
             if old_object.is_none() {
                 // Newly created object
                 if newly_generated_ids.contains(&obj_id) {
-                    state_view.log_event(Event::NewObject(obj_id));
+                    state_view.log_event(Event::new_object(
+                        module_id.address(),
+                        module_id.name(),
+                        sender,
+                        recipient,
+                        obj_id,
+                    ));
                 } else {
                     // When an object was wrapped at version `v`, we added an record into `parent_sync`
                     // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
@@ -569,21 +600,21 @@ fn handle_transfer<
             } else if let Some((_, old_obj_ver)) = old_object {
                 // Some kind of transfer since there's an old object
                 // Add an event for the transfer
-
-                match recipient {
-                    Owner::AddressOwner(addr) => state_view.log_event(Event::TransferObject {
+                let transfer_type = match recipient {
+                    Owner::AddressOwner(_) => Some(TransferType::ToAddress),
+                    Owner::ObjectOwner(_) => Some(TransferType::ToObject),
+                    _ => None,
+                };
+                if let Some(type_) = transfer_type {
+                    state_view.log_event(Event::TransferObject {
+                        package_id: ObjectID::from(*module_id.address()),
+                        transaction_module: Identifier::from(module_id.name()),
+                        sender,
+                        recipient,
                         object_id: obj_id,
                         version: old_obj_ver,
-                        destination_addr: addr,
-                        type_: TransferType::ToAddress,
-                    }),
-                    Owner::ObjectOwner(new_owner) => state_view.log_event(Event::TransferObject {
-                        object_id: obj_id,
-                        version: old_obj_ver,
-                        destination_addr: new_owner,
-                        type_: TransferType::ToObject,
-                    }),
-                    _ => {}
+                        type_,
+                    })
                 }
             }
             let obj = Object::new_move(move_obj, recipient, tx_digest);

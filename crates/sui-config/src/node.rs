@@ -6,8 +6,8 @@ use crate::Config;
 use anyhow::Result;
 use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
-use narwhal_config::Committee as ConsensusCommittee;
 use narwhal_config::Parameters as ConsensusParameters;
+use narwhal_config::SharedCommittee as ConsensusCommittee;
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -106,10 +106,7 @@ pub struct ConsensusConfig {
     pub consensus_address: Multiaddr,
     pub consensus_db_path: PathBuf,
 
-    //TODO make narwhal config serializable
-    #[serde(skip_serializing)]
-    #[serde(default)]
-    pub narwhal_config: DebugIgnore<ConsensusParameters>,
+    pub narwhal_config: ConsensusParameters,
 
     pub narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
 }

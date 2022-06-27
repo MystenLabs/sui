@@ -5,7 +5,7 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    sha3_hash, AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignature, BcsSignable,
+    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable,
     EmptySignInfo, Signable, Signature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
@@ -742,7 +742,7 @@ impl PartialEq for SignedTransaction {
     }
 }
 
-pub type CertifiedTransaction = TransactionEnvelope<AuthorityQuorumSignInfo>;
+pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmationTransaction {
@@ -1120,7 +1120,7 @@ impl PartialEq for SignedTransactionEffects {
     }
 }
 
-pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityQuorumSignInfo>;
+pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedTransactionEffects {
     pub fn new(
@@ -1130,7 +1130,7 @@ impl CertifiedTransactionEffects {
     ) -> Self {
         Self {
             effects,
-            auth_signature: AuthorityQuorumSignInfo { epoch, signatures },
+            auth_signature: AuthorityStrongQuorumSignInfo { epoch, signatures },
         }
     }
 
@@ -1249,7 +1249,7 @@ impl CertifiedTransaction {
             is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityQuorumSignInfo { epoch, signatures },
+            auth_sign_info: AuthorityStrongQuorumSignInfo { epoch, signatures },
         }
     }
 
