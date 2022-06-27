@@ -1,12 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_storage::event_store::EventStore;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::debug;
 use typed_store::Map;
 
-use crate::{authority::TypedAuthorityState, authority_client::AuthorityAPI};
+use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 
 use super::{gossip::LocalConfirmationTransactionHandler, ActiveAuthority};
 
@@ -20,7 +19,7 @@ pub trait PendCertificateForExecution {
     ) -> SuiResult<()>;
 }
 
-impl<ES: EventStore> PendCertificateForExecution for TypedAuthorityState<ES> {
+impl PendCertificateForExecution for AuthorityState {
     fn pending_execution(
         &self,
         certs: Vec<(TransactionDigest, CertifiedTransaction)>,

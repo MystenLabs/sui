@@ -276,14 +276,12 @@ fn check_limit(limit: usize) -> Result<(), SuiError> {
     if limit <= MAX_LIMIT {
         Ok(())
     } else {
-        Err(SuiError::TooMuchDataRequested(limit))
+        Err(SuiError::TooManyItemsError(MAX_LIMIT as u64))
     }
 }
 
 #[async_trait]
 impl EventStore for SqlEventStore {
-    type EventIt = std::vec::IntoIter<StoredEvent>;
-
     async fn add_events(
         &self,
         events: &[EventEnvelope],
@@ -339,7 +337,7 @@ impl EventStore for SqlEventStore {
     async fn events_for_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Self::EventIt, SuiError> {
+    ) -> Result<Vec<StoredEvent>, SuiError> {
         let rows = sqlx::query(TX_QUERY)
             .persistent(true)
             .bind(digest.to_bytes())
@@ -347,7 +345,7 @@ impl EventStore for SqlEventStore {
             .fetch_all(&self.pool)
             .await
             .map_err(convert_sqlx_err)?;
-        Ok(rows.into_iter())
+        Ok(rows)
     }
 
     async fn events_by_type(
@@ -356,7 +354,7 @@ impl EventStore for SqlEventStore {
         end_time: u64,
         event_type: EventType,
         limit: usize,
-    ) -> Result<Self::EventIt, SuiError> {
+    ) -> Result<Vec<StoredEvent>, SuiError> {
         check_limit(limit)?;
         let rows = sqlx::query(QUERY_BY_TYPE)
             .persistent(true)
@@ -368,7 +366,7 @@ impl EventStore for SqlEventStore {
             .fetch_all(&self.pool)
             .await
             .map_err(convert_sqlx_err)?;
-        Ok(rows.into_iter())
+        Ok(rows)
     }
 
     async fn event_iterator(
@@ -376,7 +374,7 @@ impl EventStore for SqlEventStore {
         start_time: u64,
         end_time: u64,
         limit: usize,
-    ) -> Result<Self::EventIt, SuiError> {
+    ) -> Result<Vec<StoredEvent>, SuiError> {
         check_limit(limit)?;
         let rows = sqlx::query(TS_QUERY)
             .bind(start_time as i64)
@@ -386,7 +384,7 @@ impl EventStore for SqlEventStore {
             .fetch_all(&self.pool)
             .await
             .map_err(convert_sqlx_err)?;
-        Ok(rows.into_iter())
+        Ok(rows)
     }
 
     async fn events_by_checkpoint(
@@ -394,7 +392,7 @@ impl EventStore for SqlEventStore {
         start_checkpoint: u64,
         end_checkpoint: u64,
         limit: usize,
-    ) -> Result<Self::EventIt, SuiError> {
+    ) -> Result<Vec<StoredEvent>, SuiError> {
         // TODO: a limit maybe doesn't make sense here.  May change to unbounded iterator?
         check_limit(limit)?;
         let rows = sqlx::query(QUERY_BY_CHECKPOINT)
@@ -405,7 +403,7 @@ impl EventStore for SqlEventStore {
             .fetch_all(&self.pool)
             .await
             .map_err(convert_sqlx_err)?;
-        Ok(rows.into_iter())
+        Ok(rows)
     }
 
     async fn events_by_module_id(
@@ -414,7 +412,7 @@ impl EventStore for SqlEventStore {
         end_time: u64,
         module: ModuleId,
         limit: usize,
-    ) -> Result<Self::EventIt, SuiError> {
+    ) -> Result<Vec<StoredEvent>, SuiError> {
         check_limit(limit)?;
         let rows = sqlx::query(QUERY_BY_MODULE)
             .persistent(true)
@@ -427,7 +425,7 @@ impl EventStore for SqlEventStore {
             .fetch_all(&self.pool)
             .await
             .map_err(convert_sqlx_err)?;
-        Ok(rows.into_iter())
+        Ok(rows)
     }
 }
 
@@ -603,8 +601,7 @@ mod tests {
         assert_eq!(db.total_event_count().await?, 6);
 
         // Query for records in time range, end should be exclusive - should get 2
-        let event_it = db.event_iterator(1_000_000, 1_002_000, 20).await?;
-        let queried_events: Vec<_> = event_it.collect();
+        let queried_events = db.event_iterator(1_000_000, 1_002_000, 20).await?;
 
         assert_eq!(queried_events.len(), 2);
         for i in 0..2 {
@@ -629,11 +626,11 @@ mod tests {
         info!("Done inserting");
 
         // Query for transfer event
-        let mut event_it = db
+        let mut events = db
             .events_for_transaction(to_insert[2].tx_digest.unwrap())
             .await?;
-        let transfer_event = event_it.next().expect("No transfer events in result!!");
-        assert_eq!(event_it.next(), None); // Should be no more events, just that one
+        assert_eq!(events.len(), 1); // Should be no more events, just that one
+        let transfer_event = events.pop().unwrap();
 
         test_queried_event_vs_test_envelope(&transfer_event, &to_insert[2]);
 
@@ -671,10 +668,9 @@ mod tests {
         db.add_events(&to_insert, 1).await?;
         info!("Done inserting");
 
-        let event_it = db
+        let queried_events = db
             .events_by_type(1_000_000, 1_005_000, EventType::TransferObject, 2)
             .await?;
-        let queried_events: Vec<_> = event_it.collect();
         assert_eq!(queried_events.len(), 2);
 
         // Desc timestamp order, so the last transfer event should be first
@@ -682,10 +678,9 @@ mod tests {
         test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[2]);
 
         // Query again with limit of 1, it should return only the last transfer event
-        let event_it = db
+        let queried_events = db
             .events_by_type(1_000_000, 1_005_000, EventType::TransferObject, 1)
             .await?;
-        let queried_events: Vec<_> = event_it.collect();
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
 
@@ -708,13 +703,13 @@ mod tests {
         info!("Done inserting");
 
         // Query for the Move event and validate basic fields
-        let mut event_it = db
+        let events = db
             .events_for_transaction(to_insert[5].tx_digest.unwrap())
             .await?;
-        let move_event = event_it.next().expect("No move events in result!!");
-        assert_eq!(event_it.next(), None); // Should be no more events, just that one
+        let move_event = &events[0];
+        assert_eq!(events.len(), 1); // Should be no more events, just that one
 
-        test_queried_event_vs_test_envelope(&move_event, &to_insert[5]);
+        test_queried_event_vs_test_envelope(move_event, &to_insert[5]);
         assert_eq!(move_event.fields.len(), 2);
 
         // Query by module ID
@@ -722,10 +717,9 @@ mod tests {
             *to_insert[5].event.package_id().unwrap(),
             Identifier::new(to_insert[5].event.module_name().unwrap()).unwrap(),
         );
-        let event_it = db
+        let queried_events = db
             .events_by_module_id(1_000_000, 1_005_001, mod_id, 2)
             .await?;
-        let queried_events: Vec<_> = event_it.collect();
         assert_eq!(queried_events.len(), 1);
 
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
@@ -745,7 +739,7 @@ mod tests {
         db.initialize().await?;
 
         let res = db.event_iterator(1_000_000, 1_002_000, 100_000).await;
-        assert!(matches!(res, Err(SuiError::TooMuchDataRequested(100_000))));
+        assert!(matches!(res, Err(SuiError::TooManyItemsError(_))));
 
         Ok(())
     }

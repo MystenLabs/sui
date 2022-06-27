@@ -5,7 +5,6 @@
 // human form rather than the mnimal one - G
 #![allow(clippy::nonminimal_bool)]
 
-use sui_storage::event_store::EventStore;
 use sui_types::base_types::*;
 use sui_types::batch::*;
 use sui_types::error::{SuiError, SuiResult};
@@ -54,7 +53,7 @@ pub type BroadcastReceiver = tokio::sync::broadcast::Receiver<UpdateItem>;
 
 pub type BroadcastPair = (BroadcastSender, BroadcastReceiver);
 
-impl<ES: EventStore> crate::authority::TypedAuthorityState<ES> {
+impl crate::authority::AuthorityState {
     pub fn last_batch(&self) -> Result<Option<SignedBatch>, SuiError> {
         let last_batch = self
             .db()

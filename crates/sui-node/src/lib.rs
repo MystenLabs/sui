@@ -21,7 +21,9 @@ use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
 use sui_storage::{
-    event_store::SqlEventStore, follower_store::FollowerStore, node_sync_store::NodeSyncStore,
+    event_store::{EventStoreType, SqlEventStore},
+    follower_store::FollowerStore,
+    node_sync_store::NodeSyncStore,
     IndexStore,
 };
 
@@ -89,7 +91,7 @@ impl SuiNode {
             let path = config.db_path().join("events.db");
             let db = SqlEventStore::new_from_file(&path).await?;
             db.initialize().await?;
-            Some(Arc::new(db))
+            Some(Arc::new(EventStoreType::SqlEventStore(db)))
         } else {
             None
         };

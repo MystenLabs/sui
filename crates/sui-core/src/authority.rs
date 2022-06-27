@@ -42,7 +42,7 @@ use std::{
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_storage::{
-    event_store::{EventStore, SqlEventStore, StoredEvent},
+    event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
@@ -233,12 +233,9 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
-/// Default store choices for AuthorityState to keep types simple for now
-pub type AuthorityState = TypedAuthorityState<SqlEventStore>;
-
 const DEFAULT_QUERY_LIMIT: usize = 1000;
 
-pub struct TypedAuthorityState<ES: EventStore> {
+pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
     pub name: AuthorityName,
@@ -262,7 +259,7 @@ pub struct TypedAuthorityState<ES: EventStore> {
 
     pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
-    pub event_handler: Option<Arc<EventHandler<ES>>>,
+    pub event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
     pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -281,6 +278,7 @@ pub struct TypedAuthorityState<ES: EventStore> {
 
     pub metrics: AuthorityMetrics,
 
+    // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
     latest_checkpoint_num: AtomicU64,
 }
 
@@ -290,7 +288,7 @@ pub struct TypedAuthorityState<ES: EventStore> {
 /// require &mut. Internally a database is synchronized through a mutex lock.
 ///
 /// Repeating valid commands should produce no changes and return no error.
-impl<ES: EventStore> TypedAuthorityState<ES> {
+impl AuthorityState {
     /// Get a broadcast receiver for updates
     pub fn subscribe_batch(&self) -> BroadcastReceiver {
         self.batch_channels.subscribe()
@@ -1002,7 +1000,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         indexes: Option<Arc<IndexStore>>,
-        event_store: Option<Arc<ES>>,
+        event_store: Option<Arc<EventStoreType>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
@@ -1052,7 +1050,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
 
-        let mut state = TypedAuthorityState {
+        let mut state = AuthorityState {
             name,
             secret,
             committee: ArcSwap::from(Arc::new(current_epoch_info.committee)),
@@ -1332,7 +1330,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
     }
 
     /// Returns a full handle to the event store, including inserts... so be careful!
-    fn get_event_store(&self) -> Option<Arc<ES>> {
+    fn get_event_store(&self) -> Option<Arc<EventStoreType>> {
         self.event_handler
             .as_ref()
             .map(|handler| handler.event_store.clone())
@@ -1342,7 +1340,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
     pub async fn get_events_for_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<impl IntoIterator<Item = StoredEvent>, SuiError> {
+    ) -> Result<Vec<StoredEvent>, SuiError> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
         es.events_for_transaction(digest).await
     }
@@ -1353,7 +1351,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
         start_time: u64,
         end_time: u64,
         limit: Option<usize>,
-    ) -> Result<impl IntoIterator<Item = StoredEvent>, SuiError> {
+    ) -> Result<Vec<StoredEvent>, SuiError> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
         es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
             .await
@@ -1499,10 +1497,7 @@ impl<ES: EventStore> TypedAuthorityState<ES> {
 }
 
 #[async_trait]
-impl<ES> ExecutionState for TypedAuthorityState<ES>
-where
-    ES: EventStore + Sync + Send,
-{
+impl ExecutionState for AuthorityState {
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
 

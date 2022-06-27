@@ -399,13 +399,13 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     // one event is stored, and can be looked up by digest
     // Also query by timestamp verifies that a timestamp is inserted, within an hour
-    let all_events_it = node
+    let all_events = node
         .state()
         .get_events_for_timerange(ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS, None)
         .await?;
-    assert_eq!(all_events_it.into_iter().count(), 1);
-    let event_it = node.state().get_events_for_transaction(digest).await?;
-    assert_eq!(event_it.into_iter().count(), 1);
+    assert_eq!(all_events.len(), 1);
+    let events = node.state().get_events_for_transaction(digest).await?;
+    assert_eq!(events.len(), 1);
 
     Ok(())
 }

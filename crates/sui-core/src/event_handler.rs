@@ -6,9 +6,9 @@ use std::sync::Arc;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use sui_types::base_types::TransactionDigest;
 use tokio_stream::Stream;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
-use sui_storage::event_store::EventStore;
+use sui_storage::event_store::{EventStore, EventStoreType};
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -22,14 +22,14 @@ use crate::streamer::Streamer;
 
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
-pub struct EventHandler<ES: EventStore> {
+pub struct EventHandler {
     module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>,
     event_streamer: Streamer<EventEnvelope, EventFilter>,
-    pub(crate) event_store: Arc<ES>,
+    pub(crate) event_store: Arc<EventStoreType>,
 }
 
-impl<ES: EventStore> EventHandler<ES> {
-    pub fn new(validator_store: Arc<AuthorityStore>, event_store: Arc<ES>) -> Self {
+impl EventHandler {
+    pub fn new(validator_store: Arc<AuthorityStore>, event_store: Arc<EventStoreType>) -> Self {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
             module_cache: SyncModuleCache::new(ResolverWrapper(validator_store)),
@@ -45,7 +45,6 @@ impl<ES: EventStore> EventHandler<ES> {
         seq_num: u64,
         checkpoint_num: u64,
     ) -> SuiResult {
-        // serially dispatch event processing to honor events' orders.
         let res: Result<Vec<_>, _> = effects
             .events
             .iter()
@@ -54,16 +53,16 @@ impl<ES: EventStore> EventHandler<ES> {
         let envelopes = res?;
 
         // Ingest all envelopes together at once (for efficiency) into Event Store
-        // It's good to ingest into store first before sending so that any failures in sending could
-        // use the store as a backing for reliability
         self.event_store
             .add_events(&envelopes, checkpoint_num)
             .await?;
-        debug!(
+        trace!(
             num_events = envelopes.len(),
+            digest =? effects.transaction_digest,
             checkpoint_num, "Finished writing events to event store"
         );
 
+        // serially dispatch event processing to honor events' orders.
         for envelope in envelopes {
             if let Err(e) = self.event_streamer.send(envelope).await {
                 error!(error =? e, "Failed to send EventEnvelope to dispatch");
