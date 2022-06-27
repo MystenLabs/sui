@@ -3,6 +3,7 @@
 
 import { Link } from 'react-router-dom';
 
+import { ReactComponent as SuiLogo } from '../assets/Sui Logo.svg';
 import Footer from '../components/footer/Footer';
 import NetworkSelect from '../components/network/Network';
 import Search from '../components/search/Search';
@@ -20,7 +21,7 @@ function App() {
                     <div className={styles.search}>
                         <div className={styles.header}>
                             <Link className={styles.suititle} to="/">
-                                Sui Explorer
+                                <SuiLogo />
                             </Link>
                             <NetworkSelect />
                         </div>
