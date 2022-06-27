@@ -1621,11 +1621,15 @@
         "type": "object",
         "required": [
           "fields",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "fields": {
             "$ref": "#/components/schemas/MoveStruct"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"
@@ -2053,11 +2057,15 @@
         "type": "object",
         "required": [
           "bcs_bytes",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "bcs_bytes": {
             "$ref": "#/components/schemas/Base64"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"

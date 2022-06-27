@@ -121,6 +121,7 @@ MoveObject:
   STRUCT:
     - type_:
         TYPENAME: StructTag
+    - has_public_transfer: BOOL
     - contents: BYTES
 MovePackage:
   STRUCT:
@@ -220,6 +221,15 @@ Owner:
       Immutable: UNIT
 PublicKeyBytes:
   NEWTYPESTRUCT: BYTES
+PublicTransferObject:
+  STRUCT:
+    - recipient:
+        TYPENAME: SuiAddress
+    - object_ref:
+        TUPLE:
+          - TYPENAME: ObjectID
+          - TYPENAME: SequenceNumber
+          - TYPENAME: ObjectDigest
 SequenceNumber:
   NEWTYPESTRUCT: U64
 Signature:
@@ -235,9 +245,9 @@ SignedBatch:
 SingleTransactionKind:
   ENUM:
     0:
-      TransferCoin:
+      PublicTransferObject:
         NEWTYPE:
-          TYPENAME: TransferCoin
+          TYPENAME: PublicTransferObject
     1:
       Publish:
         NEWTYPE:
@@ -285,15 +295,6 @@ TransactionKind:
         NEWTYPE:
           SEQ:
             TYPENAME: SingleTransactionKind
-TransferCoin:
-  STRUCT:
-    - recipient:
-        TYPENAME: SuiAddress
-    - object_ref:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
 TransferSui:
   STRUCT:
     - recipient:

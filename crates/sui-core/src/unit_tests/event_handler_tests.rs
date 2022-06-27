@@ -4,6 +4,7 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 
+use move_core_types::value::MoveStruct;
 use move_core_types::{
     ident_str,
     language_storage::StructTag,
@@ -17,7 +18,6 @@ use serde_json::json;
 use crate::event_handler::to_json_value;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::MoveObject;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 #[test]
@@ -33,12 +33,10 @@ fn test_to_json_value() {
         ],
     };
     let event_bytes = bcs::to_bytes(&move_event).unwrap();
-    let move_object = MoveObject::new(TestEvent::type_(), event_bytes);
-    let move_struct = move_object
-        .to_move_struct(&TestEvent::layout())
+    let sui_move_struct = MoveStruct::simple_deserialize(&event_bytes, &TestEvent::layout())
         .unwrap()
         .into();
-    let json_value = to_json_value(move_struct).unwrap();
+    let json_value = to_json_value(sui_move_struct).unwrap();
 
     assert_eq!(
         Some(&json!(1000000)),

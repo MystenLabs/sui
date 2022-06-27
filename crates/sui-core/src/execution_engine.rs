@@ -127,7 +127,7 @@ fn execute_transaction<S: BackingPackageStore>(
                         .get(&object_ref.0)
                         .unwrap()
                         .clone();
-                    transfer_object(temporary_store, object, recipient)
+                    transfer_object(temporary_store, object, tx_ctx.sender(), recipient)
                 }
                 SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
                     let gas_object = temporary_store

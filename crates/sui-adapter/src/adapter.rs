@@ -195,6 +195,18 @@ fn execute_internal<
         .into_iter()
         .filter(|(id, _obj)| by_value_objects.contains(id))
         .collect();
+    let session = vm.new_session(state_view);
+    let events = events
+        .into_iter()
+        .map(|(recipient, event_type, type_, event_bytes)| {
+            let loaded_type = session.load_type(&type_)?;
+            let abilities = session.get_type_abilities(&loaded_type)?;
+            Ok((recipient, event_type, type_, abilities, event_bytes))
+        })
+        .collect::<Result<_, ExecutionError>>()?;
+    let (empty_changes, empty_events) = session.finish()?;
+    debug_assert!(empty_changes.into_inner().is_empty());
+    debug_assert!(empty_events.is_empty());
     process_successful_execution(
         state_view,
         module_id,
