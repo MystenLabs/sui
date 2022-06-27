@@ -38,7 +38,7 @@ pub struct EventEnvelope {
 impl EventEnvelope {
     pub fn new(
         timestamp: u64,
-        tx_digest: TransactionDigest,
+        tx_digest: Option<TransactionDigest>,
         seq_num: u64,
         event: Event,
         move_struct_json_value: Option<Value>,
