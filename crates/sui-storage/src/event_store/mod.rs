@@ -13,12 +13,14 @@
 
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
+use futures::prelude::stream::BoxStream;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
 use serde_json::Value;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::error::SuiError;
 use sui_types::event::{EventEnvelope, EventType};
+use tokio_stream::StreamExt;
 
 pub mod sql;
 pub use sql::SqlEventStore;
@@ -115,12 +117,11 @@ pub trait EventStore {
 
     /// Generic event iteration bounded by checkpoint number.  Return in ingestion order.
     /// Checkpoint numbers are inclusive on both ends.
-    async fn events_by_checkpoint(
+    fn events_by_checkpoint(
         &self,
         start_checkpoint: u64,
         end_checkpoint: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredEvent>, SuiError>;
+    ) -> Result<StreamedResult, SuiError>;
 
     /// Queries all Move events belonging to a certain Module ID within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in descending time.
@@ -138,4 +139,30 @@ pub trait EventStore {
 #[enum_dispatch(EventStore)]
 pub enum EventStoreType {
     SqlEventStore,
+}
+
+/// A wrapper around streaming results which makes them easier to deal with
+// TODO: make it generic for non events
+pub struct StreamedResult<'s> {
+    inner: BoxStream<'s, Result<StoredEvent, SuiError>>,
+}
+
+impl<'s> StreamedResult<'s> {
+    pub fn new(stream: BoxStream<'s, Result<StoredEvent, SuiError>>) -> Self {
+        Self { inner: stream }
+    }
+
+    /// Pulls out a chunk of up to max_items items
+    /// NOTE: if there are no more items in the stream, then empty chunk is returned
+    pub async fn next_chunk(&mut self, max_items: usize) -> Result<Vec<StoredEvent>, SuiError> {
+        let mut items = Vec::new();
+        while let Some(res) = self.inner.next().await {
+            match res {
+                Err(e) => return Err(e),
+                Ok(event) if items.len() < max_items => items.push(event),
+                _ => break,
+            }
+        }
+        Ok(items)
+    }
 }

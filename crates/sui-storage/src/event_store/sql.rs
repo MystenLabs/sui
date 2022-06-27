@@ -386,23 +386,18 @@ impl EventStore for SqlEventStore {
         Ok(rows)
     }
 
-    async fn events_by_checkpoint(
+    fn events_by_checkpoint(
         &self,
         start_checkpoint: u64,
         end_checkpoint: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredEvent>, SuiError> {
-        // TODO: a limit maybe doesn't make sense here.  May change to unbounded iterator?
-        check_limit(limit)?;
-        let rows = sqlx::query(QUERY_BY_CHECKPOINT)
+    ) -> Result<StreamedResult, SuiError> {
+        let stream = sqlx::query(QUERY_BY_CHECKPOINT)
             .bind(start_checkpoint as i64)
             .bind(end_checkpoint as i64)
-            .bind(limit as i64)
             .map(sql_row_to_event)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(convert_sqlx_err)?;
-        Ok(rows)
+            .fetch(&self.pool)
+            .map(|r| r.map_err(convert_sqlx_err));
+        Ok(StreamedResult::new(Box::pin(stream)))
     }
 
     async fn events_by_module_id(
