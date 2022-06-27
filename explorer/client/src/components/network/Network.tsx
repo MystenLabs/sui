@@ -3,6 +3,7 @@
 
 import { useCallback, useContext, useState } from 'react';
 
+import { ReactComponent as DownSVG } from '../../assets/Down.svg';
 import { NetworkContext } from '../../context';
 import { Network, getEndpoint } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV, IS_LOCAL_ENV } from '../../utils/envUtil';
@@ -66,7 +67,7 @@ export default function NetworkSelect() {
     return (
         <div>
             <div onClick={openModal} className={styles.networkbox}>
-                {network}
+                {network} <DownSVG />
             </div>
             <div
                 className={isModuleOpen ? styles.opennetworkbox : styles.remove}

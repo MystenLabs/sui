@@ -1,9 +1,9 @@
 .networkbox {
-    @apply text-sm cursor-pointer text-offwhite bg-transparent hover:bg-green-900 leading-8  w-[10rem] mx-[2vw] text-center;
+    @apply text-sm cursor-pointer text-offwhite bg-transparent hover:bg-search-fill leading-8  w-[10rem] mx-[2vw] text-center;
 }
 
 .opennetworkbox {
-    @apply fixed top-0 right-0 w-screen h-screen text-center z-30;
+    @apply fixed top-0 right-0 w-screen h-screen text-center z-30 text-offwhite;
 }
 
 .closeicon {
