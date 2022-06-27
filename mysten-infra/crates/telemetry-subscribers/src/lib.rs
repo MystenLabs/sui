@@ -17,7 +17,7 @@
 //! - `json` - Bunyan formatter - JSON log output, optional
 //! - `tokio-console` - [Tokio-console](https://github.com/tokio-rs/console) subscriber, optional
 
-use std::env;
+use std::{env, io::stderr};
 use tracing::metadata::LevelFilter;
 use tracing::subscriber::set_global_default;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
@@ -28,6 +28,8 @@ use tracing_subscriber::{
     layer::SubscriberExt,
     EnvFilter, Registry,
 };
+
+use crossterm::tty::IsTty;
 
 /// Configuration for different logging/tracing options
 /// ===
@@ -68,7 +70,7 @@ fn get_output(log_file: Option<String>) -> (NonBlocking, WorkerGuard) {
         let file_appender = tracing_appender::rolling::daily("", logfile_prefix);
         tracing_appender::non_blocking(file_appender)
     } else {
-        tracing_appender::non_blocking(std::io::stderr())
+        tracing_appender::non_blocking(stderr())
     }
 }
 
@@ -218,9 +220,9 @@ impl TelemetryConfig {
                 let json_layer = BunyanFormattingLayer::new(config.service_name, nb_output);
                 Box::new(json_layer)
             } else {
-                // Output to file or to stdout with ANSI colors
+                // Output to file or to stderr with ANSI colors
                 let fmt_layer = fmt::layer()
-                    .with_ansi(config.log_file.is_none())
+                    .with_ansi(config.log_file.is_none() && stderr().is_tty())
                     .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                     .with_writer(nb_output);
                 Box::new(fmt_layer)
