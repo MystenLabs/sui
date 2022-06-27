@@ -4,7 +4,6 @@
 use anyhow::Result;
 use futures::TryFutureExt;
 use jsonrpsee::http_server::HttpServerHandle;
-use jsonrpsee::ws_server::WsServerBuilder;
 use jsonrpsee::ws_server::WsServerHandle;
 use multiaddr::Multiaddr;
 use parking_lot::Mutex;
@@ -35,7 +34,6 @@ use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_json_rpc_api::EventApiServer;
 use sui_types::crypto::PublicKeyBytes;
 
 pub mod metrics;
@@ -131,15 +129,16 @@ impl SuiNode {
 
             let mut authority_clients = BTreeMap::new();
 
-            if config.enable_reconfig {
+            let sui_system_state = state.get_sui_system_state_object().await?;
+
+            if config.enable_reconfig && sui_system_state.epoch > 0 {
                 // Create NetworkAuthorityClient with this epoch's network information
-                let sui_system_state = state.get_sui_system_state_object().await?;
                 let epoch_validators = &sui_system_state.validators.active_validators;
 
                 for validator in epoch_validators {
                     let net_addr: &[u8] = &validator.metadata.net_address.clone();
                     let str_addr = std::str::from_utf8(net_addr)?;
-                    let address: Multiaddr = str_addr.parse().unwrap();
+                    let address: Multiaddr = str_addr.parse()?;
                     //let address = Multiaddr::try_from(net_addr)?;
                     let channel = net_config.connect_lazy(&address)?;
                     let client = NetworkAuthorityClient::new(channel);
