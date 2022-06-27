@@ -20,10 +20,10 @@ use sui_types::{
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::{broadcast, mpsc, Semaphore};
+use tokio::sync::{broadcast, mpsc, oneshot, Semaphore};
 use tokio::task::JoinHandle;
 
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 const NODE_SYNC_QUEUE_LEN: usize = 500;
 
@@ -149,6 +149,7 @@ where
 struct DigestsMessage {
     digests: ExecutionDigests,
     peer: AuthorityName,
+    tx: oneshot::Sender<SuiResult>,
 }
 
 /// NodeSyncState is shared by any number of NodeSyncDigestHandler's, and receives DigestsMessage
@@ -179,15 +180,26 @@ where
             // https://github.com/tokio-rs/tokio/discussions/2648
             let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
 
-            while let Some(DigestsMessage { digests, peer }) = receiver.recv().await {
+            while let Some(DigestsMessage { digests, peer, tx }) = receiver.recv().await {
                 let permit = Arc::clone(&limit).acquire_owned().await;
                 let state = state.clone();
                 tokio::spawn(async move {
                     let _permit = permit; // hold semaphore permit until task completes
                                           // TODO: must send status back to follower so that it knows whether to advance
                                           // the watermark.
-                    if let Err(error) = state.process_digest(peer, digests).await {
+                    let res = state.process_digest(peer, digests).await;
+                    if let Err(error) = &res {
                         error!(?digests, ?peer, "process_digest failed: {}", error);
+                    }
+                    if tx.send(res).is_err() {
+                        // This will happen any time the follower times out and restarts, but
+                        // that's ok - the follower won't have marked this digest as processed so it
+                        // will be retried.
+                        debug!(
+                            ?digests,
+                            ?peer,
+                            "could not send process_digest response to caller",
+                        );
                     }
                 });
             }
@@ -396,15 +408,20 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     async fn handle_digest(&self, follower: &Follower<A>, digests: ExecutionDigests) -> SuiResult {
+        let (tx, rx) = oneshot::channel();
         self.sender
             .send(DigestsMessage {
                 digests,
                 peer: follower.peer_name,
+                tx,
             })
             .await
             .map_err(|e| SuiError::GenericAuthorityError {
                 error: e.to_string(),
-            })
+            })?;
+        rx.await.map_err(|e| SuiError::GenericAuthorityError {
+            error: e.to_string(),
+        })?
     }
 }
 
