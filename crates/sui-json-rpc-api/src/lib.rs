@@ -39,7 +39,11 @@ pub trait QuorumDriverApi {
         signature: Base64,
         pub_key: Base64,
     ) -> RpcResult<TransactionResponse>;
+}
 
+#[open_rpc(namespace = "sui", tag = "Wallet Sync API")]
+#[rpc(server, client, namespace = "sui")]
+pub trait WalletSyncApi {
     /// Synchronize client state with validators.
     #[method(name = "syncAccountState")]
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()>;
