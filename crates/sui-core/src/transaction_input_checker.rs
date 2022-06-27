@@ -103,8 +103,8 @@ impl InputObjects {
 }
 
 #[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<const A: bool, S, T>(
-    store: &SuiDataStore<A, S>,
+pub async fn check_transaction_input<S, T>(
+    store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
     shared_obj_metric: &IntCounter,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
@@ -138,8 +138,8 @@ where
 /// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
-async fn check_gas<const A: bool, S>(
-    store: &SuiDataStore<A, S>,
+async fn check_gas<S>(
+    store: &SuiDataStore<S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
     computation_gas_price: u64,
@@ -165,8 +165,8 @@ where
 }
 
 #[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
-async fn fetch_objects<const A: bool, S>(
-    store: &SuiDataStore<A, S>,
+async fn fetch_objects<S>(
+    store: &SuiDataStore<S>,
     input_objects: &[InputObjectKind],
 ) -> Result<Vec<Option<Object>>, SuiError>
 where
@@ -179,8 +179,8 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_locks<const A: bool, S>(
-    store: &SuiDataStore<A, S>,
+async fn check_locks<S>(
+    store: &SuiDataStore<S>,
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>
 where
