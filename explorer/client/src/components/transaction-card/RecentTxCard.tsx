@@ -118,7 +118,7 @@ function LatestTxView({
                         )}
                     >
                         <div className={styles.txcardgridlarge}>TxId</div>
-                        <div className={styles.txage}>Age</div>
+                        <div className={styles.txage}>Time</div>
                         <div className={styles.txtype}>TxType</div>
                         <div className={styles.txstatus}>Status</div>
                         <div className={styles.txgas}>Gas</div>

@@ -61,7 +61,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
         <div id="tx" className={styles.txresults}>
             <div className={styles.txheader}>
                 <div className={styles.txid}>TxId</div>
-                <div className={styles.txage}>Age</div>
+                <div className={styles.txage}>Time</div>
                 <div className={styles.txtype}>TxType</div>
                 <div className={styles.txstatus}>Status</div>
                 <div className={styles.txadd}>Addresses</div>

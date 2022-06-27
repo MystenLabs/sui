@@ -51,7 +51,7 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             className: 'columnheader',
         },
         {
-            label: 'Timestamp',
+            label: 'Time',
             value: tx.timestamp_ms,
         },
 
@@ -209,7 +209,7 @@ function ItemView({ itm, text }: { itm: any; text: string | number }) {
     switch (true) {
         case itm.label === 'Modules':
             return <div className={codestyle.code}>{itm.value}</div>;
-        case itm.label === 'Timestamp':
+        case itm.label === 'Time':
             return (
                 <>{`${timeAgo(text as number)} ago (${convertNumberToDate(
                     text as number
@@ -255,7 +255,7 @@ const TestIDMatcher = (label: string) => {
     switch (label) {
         case 'Transaction ID':
             return 'transactionID';
-        case 'Timestamp':
+        case 'Time':
             return 'timestamp';
         default:
             return '';
