@@ -18,10 +18,12 @@ import st from './SuiObject.module.scss';
 
 export type SuiObjectProps = {
     obj: SuiObjectType;
+    sendNFT?: boolean;
 };
 
-function SuiObject({ obj }: SuiObjectProps) {
+function SuiObject({ obj, sendNFT }: SuiObjectProps) {
     const { objectId } = obj.reference;
+
     const shortId = useMiddleEllipsis(objectId);
     const objType =
         (isSuiMoveObject(obj.data) && obj.data.type) || 'Move Package';
@@ -43,7 +45,7 @@ function SuiObject({ obj }: SuiObjectProps) {
             <div className={st.content}>
                 {imgUrl ? (
                     <>
-                        <div className={st['img-container'] + ' dsdsd'}>
+                        <div className={st['img-container']}>
                             <img className={st.img} src={imgUrl} alt="NFT" />
                         </div>
                         <div className={st.splitter} />
@@ -57,14 +59,16 @@ function SuiObject({ obj }: SuiObjectProps) {
                                     {String(suiMoveObjectFields[aField])}
                                 </Field>
                             ))}
-                            <div>
-                                <Link
-                                    className={cl('btn', st.send)}
-                                    to={sendUrl}
-                                >
-                                    Send NFT
-                                </Link>
-                            </div>
+                            {sendNFT ? (
+                                <div>
+                                    <Link
+                                        className={cl('btn', st.send)}
+                                        to={sendUrl}
+                                    >
+                                        Send NFT
+                                    </Link>
+                                </div>
+                            ) : null}
                         </>
                     ) : null}
                     {isSuiMovePackage(obj.data) ? (

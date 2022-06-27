@@ -6,9 +6,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import TransferCoinForm from './TransferNFTForm';
+import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
 import Loading from '_components/loading';
+import SuiObject from '_components/sui-object';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import {
     accountAggregateBalancesSelector,
@@ -36,16 +37,14 @@ function TransferNFTPage() {
         [searchParams]
     );
 
+    let selectedNFT;
     const nftCollections = useAppSelector(accountNftsSelector);
-    if (!nftCollections || !nftCollections.length) {
-        // return
+    if (nftCollections && nftCollections.length) {
+        selectedNFT = nftCollections.filter(
+            (nftItems) => nftItems.reference.objectId === objectId
+        )[0];
     }
 
-    const selectedNFT = nftCollections.filter(
-        (nftItems) => nftItems.reference.objectId === objectId
-    )[0];
-
-    console.log(selectedNFT);
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -124,12 +123,16 @@ function TransferNFTPage() {
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
-    if (!objectId) {
+
+    if (!objectId || !selectedNFT) {
         return <Navigate to="/nfts" replace={true} />;
     }
+
     return (
         <>
-            <h3>Send {coinSymbol}</h3>
+            <h3>Send This NFT</h3>
+            <SuiObject obj={selectedNFT} />
+            <br />
             <Loading loading={loadingBalance}>
                 <Formik
                     initialValues={initialValues}
@@ -137,7 +140,7 @@ function TransferNFTPage() {
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
                 >
-                    <TransferCoinForm
+                    <TransferNFTForm
                         submitError={sendError}
                         coinBalance={coinBalance.toString()}
                         coinSymbol={coinSymbol}
