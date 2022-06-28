@@ -59,6 +59,7 @@ jobs:
       #     cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   test:
+    name: test
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: ${{ matrix.os }}
@@ -83,7 +84,8 @@ jobs:
 
   # Empty test so that we don't block PRs when rust changes aren't part of the PR:
   # test (self-hosted, self-hosted-ubuntu) is a required status for rust changes.
-  test:
+  test-noop:
+    name: test
     needs: diff
     if: needs.diff.outputs.isRust == 'false'
     strategy:
@@ -91,7 +93,7 @@ jobs:
         os:
           - [self-hosted, self-hosted-ubuntu]
     steps:
-      - run: 'echo "No build required"'
+      - run: 'echo "No build required" '
 
   clippy:
     needs: diff
