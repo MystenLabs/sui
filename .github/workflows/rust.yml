@@ -81,6 +81,18 @@ jobs:
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
 
+  # Empty test so that we don't block PRs when rust changes aren't part of the PR:
+  # test (self-hosted, self-hosted-ubuntu) is a required status for rust changes.
+  test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false'
+    strategy:
+      matrix:
+        os:
+          - [self-hosted, self-hosted-ubuntu]
+    steps:
+      - run: 'echo "No build required"'
+
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
