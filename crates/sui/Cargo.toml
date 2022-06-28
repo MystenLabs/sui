@@ -7,84 +7,44 @@ publish = false
 edition = "2021"
 
 [dependencies]
-rayon = "1.5.3"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
-bytes = "1.1.0"
-futures = "0.3.21"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.80"
-tempfile = "3.3.0"
 tokio = { version = "1.18.2", features = ["full"] }
-parking_lot = "0.12.1"
-rand = "0.7.3"
-toml = "0.5.9"
-strum = "0.24.0"
-strum_macros = "0.24.0"
-num_cpus = "1.13.1"
-base64ct = { version = "1.5.1", features = ["alloc"] }
-ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
-rocksdb = "0.18.0"
-hex = "0.4.3"
 async-trait = "0.1.53"
 serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.34"
-tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-filter"] }
-serde-value = "0.7.0"
-serde-name = "0.2.1"
-dirs = "4.0.0"
 clap = { version = "3.1.17", features = ["derive"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
-prometheus = "0.13.1"
-multiaddr = "0.14.0"
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
-bcs = "0.1.3"
 sui-core = { path = "../sui-core" }
-sui-storage = { path = "../sui-storage" }
-sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
-sui-network = { path = "../sui-network" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
-sui-verifier = { path = "../sui-verifier" }
-sui-open-rpc = { path = "../sui-open-rpc" }
-sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json = { path = "../sui-json" }
 sui-gateway = { path = "../sui-gateway" }
-sui-node = { path = "../sui-node" }
 sui-swarm = { path = "../sui-swarm" }
-sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
 colored = "2.0.0"
 unescape = "0.1.0"
+shell-words = "1.1.0"
 
-move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-unit-test = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "node" }
-
-once_cell = "1.11.0"
-
-jsonrpsee = { version = "0.13.1", features = ["full"] }
-jsonrpsee-proc-macros = "0.13.1"
-jsonrpsee-core = "0.13.1"
-schemars = "0.8.10"
-shell-words = "1.1.0"
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
-pretty_assertions = "1.2.0"
-tokio-util = { version = "0.7.2", features = ["codec"] }
+tempfile = "3.3.0"
+futures = "0.3.21"
+jsonrpsee = { version = "0.13.1", features = ["full"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"}
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
-
-[features]
-benchmark = ["narwhal-node/benchmark"]
+rand = "0.7.3"
+move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
+sui-core = { path = "../sui-core" }
+sui-node = { path = "../sui-node" }

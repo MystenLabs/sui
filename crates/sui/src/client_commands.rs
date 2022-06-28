@@ -24,6 +24,7 @@ use tracing::info;
 use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_api::keystore::Keystore;
 use sui_json_rpc_api::rpc_types::{
     SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects,
 };
@@ -36,29 +37,16 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{
-    config::{Config, GatewayType, PersistedConfig, WalletConfig},
-    keystore::Keystore,
-};
+use crate::config::{Config, GatewayType, PersistedConfig, WalletConfig};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
 pub const EXAMPLE_NFT_URL: &str =
     "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty";
 
-#[derive(Parser)]
-#[clap(name = "", rename_all = "kebab-case", no_binary_name = true)]
-pub struct WalletOpts {
-    #[clap(subcommand)]
-    pub command: WalletCommands,
-    /// Returns command outputs in JSON format.
-    #[clap(long, global = true)]
-    pub json: bool,
-}
-
 #[derive(StructOpt, Debug)]
 #[clap(rename_all = "kebab-case", no_binary_name = true)]
-pub enum WalletCommands {
+pub enum SuiClientCommands {
     /// Switch active address and network(e.g., devnet, local rpc server)
     #[clap(name = "switch")]
     Switch {
@@ -74,7 +62,7 @@ pub enum WalletCommands {
 
     /// Default address used for commands when none specified
     #[clap(name = "active-address")]
-    ActiveAddress {},
+    ActiveAddress,
 
     /// Get obj info
     #[clap(name = "object")]
@@ -272,13 +260,13 @@ pub enum WalletCommands {
     },
 }
 
-impl WalletCommands {
+impl SuiClientCommands {
     pub async fn execute(
         self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
         let ret = Ok(match self {
-            WalletCommands::Publish {
+            SuiClientCommands::Publish {
                 path,
                 gas,
                 gas_budget,
@@ -301,12 +289,12 @@ impl WalletCommands {
                 WalletCommandResult::Publish(response)
             }
 
-            WalletCommands::Object { id } => {
+            SuiClientCommands::Object { id } => {
                 // Fetch the object ref
                 let object_read = context.gateway.get_object(id).await?;
                 WalletCommandResult::Object(object_read)
             }
-            WalletCommands::Call {
+            SuiClientCommands::Call {
                 package,
                 module,
                 function,
@@ -322,7 +310,7 @@ impl WalletCommands {
                 WalletCommandResult::Call(cert, effects)
             }
 
-            WalletCommands::Transfer {
+            SuiClientCommands::Transfer {
                 to,
                 coin_object_id: object_id,
                 gas,
@@ -351,7 +339,7 @@ impl WalletCommands {
                 WalletCommandResult::Transfer(time_total, cert, effects)
             }
 
-            WalletCommands::TransferSui {
+            SuiClientCommands::TransferSui {
                 to,
                 sui_coin_object_id: object_id,
                 gas_budget,
@@ -378,11 +366,11 @@ impl WalletCommands {
                 WalletCommandResult::TransferSui(cert, effects)
             }
 
-            WalletCommands::Addresses => {
+            SuiClientCommands::Addresses => {
                 WalletCommandResult::Addresses(context.config.accounts.clone())
             }
 
-            WalletCommands::Objects { address } => {
+            SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
                 let mut address_object = context
                     .gateway
@@ -397,18 +385,18 @@ impl WalletCommands {
                 WalletCommandResult::Objects(address_object)
             }
 
-            WalletCommands::SyncClientState { address } => {
+            SuiClientCommands::SyncClientState { address } => {
                 let address = address.unwrap_or(context.active_address()?);
                 context.gateway.sync_account_state(address).await?;
                 WalletCommandResult::SyncClientState
             }
-            WalletCommands::NewAddress => {
+            SuiClientCommands::NewAddress => {
                 let address = context.keystore.add_random_key()?;
                 context.config.accounts.push(address);
                 context.config.save()?;
                 WalletCommandResult::NewAddress(address)
             }
-            WalletCommands::Gas { address } => {
+            SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
                 let coins = context
                     .gas_objects(address)
@@ -419,7 +407,7 @@ impl WalletCommands {
                     .collect();
                 WalletCommandResult::Gas(coins)
             }
-            WalletCommands::SplitCoin {
+            SuiClientCommands::SplitCoin {
                 coin_id,
                 amounts,
                 gas,
@@ -438,7 +426,7 @@ impl WalletCommands {
                     .to_split_coin_response()?;
                 WalletCommandResult::SplitCoin(response)
             }
-            WalletCommands::MergeCoin {
+            SuiClientCommands::MergeCoin {
                 primary_coin,
                 coin_to_merge,
                 gas,
@@ -458,7 +446,7 @@ impl WalletCommands {
 
                 WalletCommandResult::MergeCoin(response)
             }
-            WalletCommands::Switch { address, gateway } => {
+            SuiClientCommands::Switch { address, gateway } => {
                 if let Some(addr) = address {
                     if !context.config.accounts.contains(&addr) {
                         return Err(anyhow!("Address {} not managed by wallet", addr));
@@ -481,10 +469,10 @@ impl WalletCommands {
 
                 WalletCommandResult::Switch(SwitchResponse { address, gateway })
             }
-            WalletCommands::ActiveAddress {} => {
+            SuiClientCommands::ActiveAddress => {
                 WalletCommandResult::ActiveAddress(context.active_address().ok())
             }
-            WalletCommands::CreateExampleNFT {
+            SuiClientCommands::CreateExampleNFT {
                 name,
                 description,
                 url,

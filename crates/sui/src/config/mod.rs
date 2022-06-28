@@ -2,10 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::keystore::KeystoreType;
 use serde::{Deserialize, Serialize};
 use serde_with::{hex::Hex, serde_as};
 use std::fmt::{Display, Formatter, Write};
+use sui_json_rpc_api::keystore::KeystoreType;
 use sui_types::base_types::*;
 
 pub use sui_config::Config;

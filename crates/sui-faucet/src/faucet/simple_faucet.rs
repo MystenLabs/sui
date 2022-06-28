@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use sui::wallet_commands::WalletContext;
+use sui::client_commands::WalletContext;
 use sui_json_rpc_api::rpc_types::{SuiExecutionStatus, SuiParsedObject};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
