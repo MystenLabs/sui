@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 rand = "0.7.3"
 serde = { version = "1.0.137", features = ["derive"] }
 tracing = "0.1.34"

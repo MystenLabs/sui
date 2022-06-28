@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 axum = "0.5.9"
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 clap = { version = "3.1.17", features = ["derive"] }
 multiaddr = "0.14.0"
 prometheus = "0.13.1"

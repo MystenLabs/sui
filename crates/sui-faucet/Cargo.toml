@@ -7,7 +7,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 async-trait = "0.1.53"
 axum = "0.5.6"
 clap = { version = "3.1.17", features = ["derive"] }
