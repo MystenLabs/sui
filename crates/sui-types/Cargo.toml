@@ -37,8 +37,8 @@ tonic = "0.7"
 strum = "^0.24"
 strum_macros = "^0.24"
 
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
