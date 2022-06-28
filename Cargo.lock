@@ -6973,6 +6973,7 @@ dependencies = [
  "opentelemetry",
  "parking_lot 0.12.1",
  "rand 0.7.3",
+ "rand 0.8.5",
  "schemars",
  "serde 1.0.137",
  "serde-name",

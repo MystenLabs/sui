@@ -118,7 +118,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
             peer_names = peer_names
                 .into_iter()
-                .filter(|name| committee.voting_rights.contains_key(name))
+                .filter(|name| committee.authority_exists(name))
                 .collect();
         }
         let mut k = 0;
