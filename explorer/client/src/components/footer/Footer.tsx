@@ -91,7 +91,7 @@ function Footer() {
             </div>
 
             <CookiesConsent />
-        </footer>
+        </div>
     );
 }
 
