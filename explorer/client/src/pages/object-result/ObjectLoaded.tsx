@@ -88,17 +88,10 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([_, value]) => typeof value == 'object')
         .filter(([key, _]) => key !== 'id');
 
-    // Add struct properties to the properties list
-    /*const structPropertiesTitle: string[] = [];
-    const structPropertiesContent: any[] = [];
+    let structPropertiesDisplay: any[] = [];
     if (structProperties.length > 0) {
-        const structPropertiesData = Object.values(structProperties);
-        structPropertiesData.forEach((item) => {
-            structPropertiesTitle.push(item[0]);
-            structPropertiesContent.push(item[1]);
-        });
-
-    }*/
+        structPropertiesDisplay = Object.values(structProperties);
+    }
 
     return (
         <>
@@ -273,7 +266,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                     )}
                     {}
                     {structProperties.length > 0 &&
-                        Object.values(structProperties).map((itm, index) => (
+                        structPropertiesDisplay.map((itm, index) => (
                             <div key={index}>
                                 <div className={styles.propertybox}>
                                     <div>
