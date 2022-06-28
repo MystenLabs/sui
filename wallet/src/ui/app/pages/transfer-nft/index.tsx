@@ -16,8 +16,8 @@ import {
     accountItemizedBalancesSelector,
     accountNftsSelector,
 } from '_redux/slices/account';
+import { transferSuiNFT } from '_redux/slices/sui-objects';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { sendTokens } from '_redux/slices/transactions';
 import { balanceFormatOptions } from '_shared/formatting';
 
 import type { SerializedError } from '@reduxjs/toolkit';
@@ -25,7 +25,7 @@ import type { FormikHelpers } from 'formik';
 
 const initialValues = {
     to: '',
-    amount: '',
+    amount: '10000',
 };
 
 export type FormValues = typeof initialValues;
@@ -46,10 +46,13 @@ function TransferNFTPage() {
     }
 
     const balances = useAppSelector(accountItemizedBalancesSelector);
+
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
+    const coinTypes = useMemo(() => Object.keys(balances), [balances]);
+
     const coinBalance = useMemo(
-        () => (objectId && aggregateBalances[objectId]) || BigInt(0),
-        [objectId, aggregateBalances]
+        () => (objectId && aggregateBalances[coinTypes[0]]) || BigInt(0),
+        [objectId, coinTypes, aggregateBalances]
     );
 
     const totalGasCoins = useMemo(
@@ -92,7 +95,7 @@ function TransferNFTPage() {
     const navigate = useNavigate();
     const onHandleSubmit = useCallback(
         async (
-            { to, amount }: FormValues,
+            { to }: FormValues,
             { resetForm }: FormikHelpers<FormValues>
         ) => {
             if (objectId === null) {
@@ -100,17 +103,14 @@ function TransferNFTPage() {
             }
             setSendError(null);
             try {
-                const response = await dispatch(
-                    sendTokens({
-                        amount: BigInt(amount),
+                await dispatch(
+                    transferSuiNFT({
                         recipientAddress: to,
-                        tokenTypeArg: objectId,
+                        nftId: objectId,
                     })
                 ).unwrap();
-                const txDigest =
-                    response.EffectResponse.certificate.transactionDigest;
                 resetForm();
-                navigate(`/tx/${encodeURIComponent(txDigest)}`);
+                navigate('/nfts/');
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }
