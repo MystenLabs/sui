@@ -385,11 +385,14 @@ mod tests {
         }
 
         #[test]
-        //#[ignore = "Issue #375"]
         fn test_dag_sanity_check(
             dag in arb_dag_complete(10, 10)
         ) {
-            assert!(dag.len() <= 100);
+            // the `prop_recursive` combinator used in `arb_dag_complete` is actually probabilistic, see:
+            // https://github.com/AltSysrq/proptest/blob/master/proptest/src/strategy/recursive.rs#L83-L110
+            // so we can't test for our desired size here (100), we rather test for something that will pass
+            // with overwhelming probability
+            assert!(dag.len() <= 200);
         }
 
         #[test]
