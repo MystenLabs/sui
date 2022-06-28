@@ -379,14 +379,13 @@ impl CheckpointStore {
             return Ok(());
         }
 
-        // Is this the next expected checkpoint?
+        // Is this the next expected certificate?
         fp_ensure!(
             self.next_checkpoint() == checkpoint_sequence_number,
             SuiError::GenericAuthorityError {
                 error: format!(
-                    "Unexpected checkpoint, expected next seq={}, provided seq={}",
-                    self.next_checkpoint(),
-                    checkpoint_sequence_number,
+                    "Unexpected certificate, expected next seq={}",
+                    self.next_checkpoint()
                 ),
             }
         );
@@ -615,6 +614,15 @@ impl CheckpointStore {
         let next_sequence_number = self.next_checkpoint();
 
         if let Ok(Some(contents)) = self.reconstruct_contents(committee) {
+            // Here we check, and ensure, all transactions are processed before we
+            // move to sign the checkpoint.
+            if !self
+                .all_checkpoint_transactions_executed(&contents)
+                .map_err(FragmentInternalError::Error)?
+            {
+                return Ok(false);
+            }
+
             let previous_digest = self
                 .get_prev_checkpoint_digest(next_sequence_number)
                 .map_err(FragmentInternalError::Error)?;
@@ -813,7 +821,7 @@ impl CheckpointStore {
 
     // Helper read functions
 
-    /// Return the seq number of the next checkpoint.
+    /// Return the seq number of the last checkpoint we have recorded.
     pub fn next_checkpoint(&mut self) -> CheckpointSequenceNumber {
         self.get_locals().next_checkpoint
     }
@@ -908,13 +916,23 @@ impl CheckpointStore {
         &self,
         transactions: &CheckpointContents,
     ) -> SuiResult<bool> {
-        // TODO: What mechanisms are there to ensure these not-yet-executed transactions
-        // will eventually be executed?
-        Ok(self
+        let new_transactions = self
             .extra_transactions
             .multi_get(transactions.transactions.iter())?
-            .iter()
-            .any(|opt| opt.is_none()))
+            .into_iter()
+            .zip(transactions.transactions.iter())
+            .filter_map(
+                |(opt_seq, tx)| {
+                    if opt_seq.is_none() {
+                        Some(*tx)
+                    } else {
+                        None
+                    }
+                },
+            )
+            .count();
+
+        Ok(new_transactions == 0)
     }
 
     #[cfg(test)]
