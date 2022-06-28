@@ -385,7 +385,7 @@ mod tests {
         }
 
         #[test]
-        #[ignore = "Issue #375"]
+        //#[ignore = "Issue #375"]
         fn test_dag_sanity_check(
             dag in arb_dag_complete(10, 10)
         ) {
