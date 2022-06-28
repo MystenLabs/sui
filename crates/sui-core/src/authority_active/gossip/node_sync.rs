@@ -20,7 +20,7 @@ use sui_types::{
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::{broadcast, mpsc, oneshot, Semaphore, OwnedSemaphorePermit};
+use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 
 use tracing::{debug, error, info, trace, warn};
@@ -209,7 +209,12 @@ where
         })
     }
 
-    async fn process_digest(&self, peer: AuthorityName, digests: ExecutionDigests, permit: OwnedSemaphorePermit) -> SuiResult {
+    async fn process_digest(
+        &self,
+        peer: AuthorityName,
+        digests: ExecutionDigests,
+        permit: OwnedSemaphorePermit,
+    ) -> SuiResult {
         trace!(?digests, ?peer, "process_digest");
 
         // check if we the tx is already locally final
@@ -241,7 +246,18 @@ where
         );
 
         if !is_final {
-            return Ok(());
+            // we won't be downloading anything, so release the permit
+            std::mem::drop(permit);
+
+            // wait until the tx becomes final before returning, so that the follower doesn't mark
+            // this tx as finished prematurely.
+            let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
+            return Ok(rx
+                .recv()
+                .await
+                .map_err(|e| SuiError::GenericAuthorityError {
+                    error: format!("{:?}", e),
+                })?);
         }
 
         trace!(?digests, ?peer, "digests are now final");
