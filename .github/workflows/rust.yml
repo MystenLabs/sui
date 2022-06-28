@@ -62,6 +62,7 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [self-hosted, self-hosted-ubuntu]
+    timeout-minutes: 30
     strategy:
       fail-fast: false
     steps:
