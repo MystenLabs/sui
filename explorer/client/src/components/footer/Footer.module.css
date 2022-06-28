@@ -3,9 +3,17 @@
 }
 
 nav.links {
-    @apply text-left leading-[5vh] h-[5vh];
+    @apply text-left grid grid-cols-3 md:w-[50vw];
 }
 
-.links > a {
-    @apply text-offwhite no-underline hover:text-sui mr-[5vw] font-light text-sm sm:text-lg my-[5vh];
+nav.links > div > h6 {
+    @apply text-sui-grey-60 uppercase font-bold text-xs mb-0;
+}
+
+nav.links > div > ul {
+    @apply list-none pl-0 mt-0;
+}
+
+nav.links a {
+    @apply text-offwhite no-underline font-medium text-xs leading-3 hover:text-sui;
 }
