@@ -649,7 +649,7 @@
       }
     },
     {
-      "name": "sui_publicTransferObject",
+      "name": "sui_transferObject",
       "tags": [
         {
           "name": "Transaction Builder API"
@@ -1953,7 +1953,7 @@
       "PublicKeyBytes": {
         "$ref": "#/components/schemas/Base64"
       },
-      "PublicTransferObject": {
+      "TransferObject": {
         "type": "object",
         "required": [
           "objectRef",
@@ -1968,7 +1968,7 @@
           }
         }
       },
-      "PublicTransferObjectParams": {
+      "TransferObjectParams": {
         "type": "object",
         "required": [
           "objectId",
@@ -2030,11 +2030,11 @@
           {
             "type": "object",
             "required": [
-              "publicTransferObjectRequestParams"
+              "transferObjectRequestParams"
             ],
             "properties": {
-              "publicTransferObjectRequestParams": {
-                "$ref": "#/components/schemas/PublicTransferObjectParams"
+              "transferObjectRequestParams": {
+                "$ref": "#/components/schemas/TransferObjectParams"
               }
             },
             "additionalProperties": false
@@ -2312,11 +2312,11 @@
             "description": "Initiate an object transfer between addresses",
             "type": "object",
             "required": [
-              "PublicTransferObject"
+              "TransferObject"
             ],
             "properties": {
-              "PublicTransferObject": {
-                "$ref": "#/components/schemas/PublicTransferObject"
+              "TransferObject": {
+                "$ref": "#/components/schemas/TransferObject"
               }
             },
             "additionalProperties": false

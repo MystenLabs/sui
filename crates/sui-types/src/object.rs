@@ -34,7 +34,7 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
-    /// Determines if it is usable with the PublicTransferObject
+    /// Determines if it is usable with the TransferObject
     /// Derived from the type_
     has_public_transfer: bool,
     #[serde_as(as = "Bytes")]

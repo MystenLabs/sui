@@ -131,7 +131,7 @@
         "data": {
           "transactions": [
             {
-              "PublicTransferObject": {
+              "TransferObject": {
                 "recipient": "0x8e9d666d3a1591ecab1a5127e93ca14aa7202f9a",
                 "objectRef": {
                   "objectId": "0x03b59f310a0f9b8fb4e4edaf7d93b60acbe30efc",

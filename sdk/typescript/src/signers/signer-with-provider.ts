@@ -12,7 +12,7 @@ import {
   MoveCallTransaction,
   MergeCoinTransaction,
   SplitCoinTransaction,
-  PublicTransferObjectTransaction,
+  TransferObjectTransaction,
   TxnDataSerializer,
 } from './txn-data-serializers/txn-data-serializer';
 
@@ -66,13 +66,13 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * Serialize and Sign a `PublicTransferObject` transaction and submit to the Gateway for execution
+   * Serialize and Sign a `TransferObject` transaction and submit to the Gateway for execution
    */
-  async publicTransferObject(
-    transaction: PublicTransferObjectTransaction
+  async transferObject(
+    transaction: TransferObjectTransaction
   ): Promise<TransactionResponse> {
     const signerAddress = await this.getAddress();
-    const txBytes = await this.serializer.newPublicTransferObject(
+    const txBytes = await this.serializer.newTransferObject(
       signerAddress,
       transaction
     );

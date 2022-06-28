@@ -71,7 +71,7 @@ export class Coin {
         recipient: SuiAddress
     ): Promise<TransactionResponse> {
         const coin = await Coin.selectCoin(signer, coins, amount);
-        return await signer.publicTransferObject({
+        return await signer.transferObject({
             objectId: coin,
             gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER,
             recipient: recipient,
