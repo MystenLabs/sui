@@ -194,20 +194,22 @@ impl IndexStore {
     pub fn get_transactions_by_move_function(
         &self,
         package: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: Option<String>,
+        function: Option<String>,
     ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
         Ok(self
             .transactions_by_move_function
             .iter()
             .skip_to(&(
                 package.clone(),
-                module.clone().to_string(),
-                function.clone().to_string(),
+                module.clone().unwrap_or("".to_string()),
+                function.clone().unwrap_or("".to_string()),
                 TxSequenceNumber::MIN,
             ))?
             .take_while(|((id, m, f, _), _)| {
-                *id == package && *m == module.to_string() && *f == function.to_string()
+                *id == package
+                    && module.as_ref().map(|x| x == m).unwrap_or(true)
+                    && function.as_ref().map(|x| x == f).unwrap_or(true)
             })
             .map(|((_, _, _, seq), digest)| (seq, digest))
             .collect())

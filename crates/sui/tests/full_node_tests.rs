@@ -12,7 +12,6 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{SplitCoinResponse, TransactionResponse};
 use sui_node::SuiNode;
 
-use move_core_types::identifier::Identifier;
 use move_package::BuildConfig;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
@@ -312,13 +311,33 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
         .state()
         .get_transactions_by_move_function(
             package_ref.0,
-            "counter".parse::<Identifier>()?,
-            "increment".parse::<Identifier>()?,
+            Some("counter".to_string()),
+            Some("increment".to_string()),
         )
         .await?;
 
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
+
+    let txes = node
+        .state()
+        .get_transactions_by_move_function(package_ref.0, None, None)
+        .await?;
+
+    // 2 transactions in the package i.e create and increment counter
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1].1, digest);
+
+    eprint!("start...");
+    let txes = node
+        .state()
+        .get_transactions_by_move_function(package_ref.0, Some("counter".to_string()), None)
+        .await?;
+
+    // 2 transactions in the package i.e publish and increment
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1].1, digest);
+
     Ok(())
 }
 

@@ -17,7 +17,6 @@ use async_trait::async_trait;
 use chrono::prelude::*;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::identifier::Identifier;
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -1283,8 +1282,8 @@ impl AuthorityState {
     pub async fn get_transactions_by_move_function(
         &self,
         package: ObjectID,
-        module: Identifier,
-        function: Identifier,
+        module: Option<String>,
+        function: Option<String>,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         Ok(self
             .get_indexes()?
