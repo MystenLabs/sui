@@ -17,21 +17,19 @@ function App() {
     return (
         <NetworkContext.Provider value={[network, setNetwork]}>
             <div className={styles.app}>
+                <header className={styles.header}>
+                    <Link className={styles.suititle} to="/">
+                        <SuiLogo />
+                    </Link>
+                    <Search />
+                    <NetworkSelect />
+                </header>
                 <main>
-                                       <div className={styles.header}>
-                        <Link className={styles.suititle} to="/">
-                            <SuiLogo />
-                        </Link>
-                        <Search />
-                        <NetworkSelect />
-                    </div>
-                   <div className={styles.maincontent}>
                     <AppRoutes />
-      </div>
-                </main><div className={styles.topHalf}/>
-                   <div className={styles.btmHalf}/>
-
-                <Footer />
+                </main>
+                <footer>
+                    <Footer />
+                </footer>
             </div>
         </NetworkContext.Provider>
     );

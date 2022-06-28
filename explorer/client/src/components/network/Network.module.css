@@ -3,7 +3,7 @@
 }
 
 .opennetworkbox {
-    @apply fixed top-0 right-0 w-screen h-screen text-center z-30 text-offwhite;
+    @apply fixed top-0 right-0 w-screen h-screen text-center z-50 text-offwhite;
 }
 
 .closeicon {
@@ -15,7 +15,7 @@ div.opennetworkdetails {
 }
 
 div.detailsbg {
-    @apply absolute top-0 left-0 w-full h-full bg-gray-500 z-20 opacity-50;
+    @apply fixed top-0 left-0 w-full h-full bg-gray-500 z-20 opacity-50;
 }
 
 div.inactive {
