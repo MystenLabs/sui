@@ -128,7 +128,7 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0",
               "method":"sui_transferObject",
               "params":["{{owner_address}}",
-                        "{{coin_object_id}}",
+                        "{{object_id}}",
                         "{{gas_object_id}}",
                         {{gas_budget}},
                         "{{to_address}}"],
@@ -171,16 +171,15 @@ curl --location --request POST $SUI_RPC_HOST \
               "id":1}' | json_pp
 ```
 
-Native transfer by `sui_transferObject` is supported for coin
-objects only (including gas objects). Refer to
+Native transfer by `sui_transferObject` is supported for any object that allows for public transfers. Refer to
 [transactions](transactions.md#native-transaction) documentation for
-more information about a native transfer. Non-coin objects cannot be
+more information about a native transfer. Some objects cannot be
 transferred natively and require a [Move call](#sui_movecall).
 
 You should replace `{{owner_address}}` and `{{to_address}}` in the
 command above with an actual address values, for example one obtained
 from `wallet.conf`. You should also replace
-`{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
+`{{object_id}}` and `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from `objectId` in the output
 of [`sui_getOwnedObjects`](#sui_getownedobjects). You can see that all gas objects generated
 during genesis are of `Coin/SUI` type). For this call to work, objects
@@ -205,7 +204,7 @@ curl --location --request POST $SUI_RPC_HOST \
                   "coin",
                   "transfer",
                   ["0x2::sui::sui"],
-                  ["{{coin_object_id}}", "{{recipient_address}}"],
+                  ["{{object_id}}", "{{recipient_address}}"],
                   "{{gas_object_id}}",
                   2000
               ],
@@ -224,11 +223,10 @@ function is described in more detail in
 the [Sui Wallet](wallet.md#calling-move-code) documentation.
 
 Calling the `transfer` function in the `Coin` module serves the same
-purpose as the native coin transfer ([`sui_transferObject`](#sui_TransferObject)), and is mostly used for illustration
+purpose as the native transfer ([`sui_transferObject`](#sui_TransferObject)), and is mostly used for illustration
 purposes as native transfer is more efficient when it's applicable
-(i.e., we are transferring coins rather than non-coin
-objects). Consequently, you should fill out argument placeholders
-(`{{owner_address}}`, `{{coin_object_id}`, etc.) the same way you
+(i.e., we are simply transferring objects with no additional Move logic). Consequently, you should fill out argument placeholders
+(`{{owner_address}}`, `{{object_id}`, etc.) the same way you
 would for [`sui_transferObject`](#sui_TransferObject) - please note additional
 `0x` prepended to function arguments.
 
