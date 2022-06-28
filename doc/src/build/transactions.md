@@ -37,7 +37,7 @@ In addition to the common metadata above, a publish transaction includes Package
 
 Native transactions are optimized versions of common Sui operations. Each native transaction is semantically equivalent to a specific Move call but has a lower gas cost.
 
-### Transfer Object
+### Transfer object
 
 This transaction type transfers objects from the sender to the specified recipients.
 
