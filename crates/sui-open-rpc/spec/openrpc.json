@@ -649,6 +649,60 @@
       }
     },
     {
+      "name": "sui_publicTransferObject",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create a transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
+      "params": [
+        {
+          "name": "signer",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "recipient",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
       "name": "sui_publish",
       "tags": [
         {
@@ -778,60 +832,6 @@
         "required": true,
         "schema": {
           "type": "null"
-        }
-      }
-    },
-    {
-      "name": "sui_transferCoin",
-      "tags": [
-        {
-          "name": "Transaction Builder API"
-        }
-      ],
-      "description": "Create a transaction to transfer a Sui coin from one address to another.",
-      "params": [
-        {
-          "name": "signer",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "object_id",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "gas",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "gas_budget",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "recipient",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionBytes",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
         }
       }
     },
@@ -1621,11 +1621,15 @@
         "type": "object",
         "required": [
           "fields",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "fields": {
             "$ref": "#/components/schemas/MoveStruct"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"
@@ -1949,6 +1953,36 @@
       "PublicKeyBytes": {
         "$ref": "#/components/schemas/Base64"
       },
+      "PublicTransferObject": {
+        "type": "object",
+        "required": [
+          "objectRef",
+          "recipient"
+        ],
+        "properties": {
+          "objectRef": {
+            "$ref": "#/components/schemas/ObjectRef"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "PublicTransferObjectParams": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "recipient"
+        ],
+        "properties": {
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
       "PublishResponse": {
         "type": "object",
         "required": [
@@ -1996,11 +2030,11 @@
           {
             "type": "object",
             "required": [
-              "transferCoinRequestParams"
+              "publicTransferObjectRequestParams"
             ],
             "properties": {
-              "transferCoinRequestParams": {
-                "$ref": "#/components/schemas/TransferCoinParams"
+              "publicTransferObjectRequestParams": {
+                "$ref": "#/components/schemas/PublicTransferObjectParams"
               }
             },
             "additionalProperties": false
@@ -2023,11 +2057,15 @@
         "type": "object",
         "required": [
           "bcs_bytes",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "bcs_bytes": {
             "$ref": "#/components/schemas/Base64"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"
@@ -2271,14 +2309,14 @@
       "TransactionKind": {
         "oneOf": [
           {
-            "description": "Initiate a coin transfer between addresses",
+            "description": "Initiate an object transfer between addresses",
             "type": "object",
             "required": [
-              "TransferCoin"
+              "PublicTransferObject"
             ],
             "properties": {
-              "TransferCoin": {
-                "$ref": "#/components/schemas/TransferCoin"
+              "PublicTransferObject": {
+                "$ref": "#/components/schemas/PublicTransferObject"
               }
             },
             "additionalProperties": false
@@ -2388,36 +2426,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "TransferCoin": {
-        "type": "object",
-        "required": [
-          "objectRef",
-          "recipient"
-        ],
-        "properties": {
-          "objectRef": {
-            "$ref": "#/components/schemas/ObjectRef"
-          },
-          "recipient": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      },
-      "TransferCoinParams": {
-        "type": "object",
-        "required": [
-          "objectId",
-          "recipient"
-        ],
-        "properties": {
-          "objectId": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "recipient": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
       },
       "TransferSui": {
         "type": "object",

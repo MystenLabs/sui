@@ -26,14 +26,16 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         init_state_with_ids([sender; TOTAL].into_iter().zip(all_ids.clone().into_iter())).await;
     let mut transactions = vec![];
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::TransferCoin(TransferCoin {
-            recipient,
-            object_ref: authority_state
-                .get_object(obj_id)
-                .await?
-                .unwrap()
-                .compute_object_reference(),
-        }));
+        transactions.push(SingleTransactionKind::PublicTransferObject(
+            PublicTransferObject {
+                recipient,
+                object_ref: authority_state
+                    .get_object(obj_id)
+                    .await?
+                    .unwrap()
+                    .compute_object_reference(),
+            },
+        ));
     }
     let package_object_ref = authority_state.get_framework_object_ref().await?;
     for _ in 0..N {
@@ -94,14 +96,16 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         init_state_with_ids([sender; TOTAL].into_iter().zip(all_ids.clone().into_iter())).await;
     let mut transactions = vec![];
     for obj_id in all_ids.iter().take(N) {
-        transactions.push(SingleTransactionKind::TransferCoin(TransferCoin {
-            recipient,
-            object_ref: authority_state
-                .get_object(obj_id)
-                .await?
-                .unwrap()
-                .compute_object_reference(),
-        }));
+        transactions.push(SingleTransactionKind::PublicTransferObject(
+            PublicTransferObject {
+                recipient,
+                object_ref: authority_state
+                    .get_object(obj_id)
+                    .await?
+                    .unwrap()
+                    .compute_object_reference(),
+            },
+        ));
     }
     let package_object_ref = authority_state.get_framework_object_ref().await?;
     transactions.push(SingleTransactionKind::Call(MoveCall {

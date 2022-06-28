@@ -7,7 +7,7 @@ import {
     getTransactions,
     getTransactionDigest,
     getTransactionKindName,
-    getTransferCoinTransaction,
+    getPublicTransferObjectTransaction,
     JsonRpcProvider,
 } from '@mysten/sui.js';
 
@@ -53,7 +53,7 @@ export const getDataOnTxDigests = (
                         const txn = txns[0];
                         const txKind = getTransactionKindName(txn);
                         const recipient =
-                            getTransferCoinTransaction(txn)?.recipient;
+                            getPublicTransferObjectTransaction(txn)?.recipient;
 
                         return {
                             seq,

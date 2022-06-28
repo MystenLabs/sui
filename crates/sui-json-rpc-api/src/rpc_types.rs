@@ -331,6 +331,7 @@ pub trait SuiMoveObject: Sized {
 pub struct SuiParsedMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
+    pub has_public_transfer: bool,
     pub fields: SuiMoveStruct,
 }
 
@@ -345,11 +346,13 @@ impl SuiMoveObject for SuiParsedMoveObject {
             if let SuiMoveStruct::WithTypes { type_, fields } = move_struct {
                 SuiParsedMoveObject {
                     type_,
+                    has_public_transfer: object.has_public_transfer(),
                     fields: SuiMoveStruct::WithFields(fields),
                 }
             } else {
                 SuiParsedMoveObject {
                     type_: object.type_.to_string(),
+                    has_public_transfer: object.has_public_transfer(),
                     fields: move_struct,
                 }
             },
@@ -361,12 +364,27 @@ impl SuiMoveObject for SuiParsedMoveObject {
     }
 }
 
+impl SuiParsedMoveObject {
+    fn try_type_and_fields_from_move_struct(
+        type_: &StructTag,
+        move_struct: MoveStruct,
+    ) -> Result<(String, SuiMoveStruct), anyhow::Error> {
+        Ok(match move_struct.into() {
+            SuiMoveStruct::WithTypes { type_, fields } => {
+                (type_, SuiMoveStruct::WithFields(fields))
+            }
+            fields => (type_.to_string(), fields),
+        })
+    }
+}
+
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "RawMoveObject")]
 pub struct SuiRawMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
+    pub has_public_transfer: bool,
     #[serde_as(as = "Base64")]
     #[schemars(with = "Base64")]
     pub bcs_bytes: Vec<u8>,
@@ -379,6 +397,7 @@ impl SuiMoveObject for SuiRawMoveObject {
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             type_: object.type_.to_string(),
+            has_public_transfer: object.has_public_transfer(),
             bcs_bytes: object.into_contents(),
         })
     }
@@ -828,8 +847,8 @@ impl TryFrom<TransactionData> for SuiTransactionData {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "TransactionKind")]
 pub enum SuiTransactionKind {
-    /// Initiate a coin transfer between addresses
-    TransferCoin(SuiTransferCoin),
+    /// Initiate an object transfer between addresses
+    PublicTransferObject(SuiPublicTransferObject),
     /// Publish a new Move module
     Publish(SuiMovePackage),
     /// Call a function in a published Move module
@@ -845,8 +864,8 @@ impl Display for SuiTransactionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match &self {
-            Self::TransferCoin(t) => {
-                writeln!(writer, "Transaction Kind : Transfer Coin")?;
+            Self::PublicTransferObject(t) => {
+                writeln!(writer, "Transaction Kind : Public Transfer Object")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 writeln!(writer, "Object ID : {}", t.object_ref.object_id)?;
                 writeln!(writer, "Version : {:?}", t.object_ref.version)?;
@@ -896,10 +915,12 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
 
     fn try_from(tx: SingleTransactionKind) -> Result<Self, Self::Error> {
         Ok(match tx {
-            SingleTransactionKind::TransferCoin(t) => Self::TransferCoin(SuiTransferCoin {
-                recipient: t.recipient,
-                object_ref: t.object_ref.into(),
-            }),
+            SingleTransactionKind::PublicTransferObject(t) => {
+                Self::PublicTransferObject(SuiPublicTransferObject {
+                    recipient: t.recipient,
+                    object_ref: t.object_ref.into(),
+                })
+            }
             SingleTransactionKind::TransferSui(t) => Self::TransferSui(SuiTransferSui {
                 recipient: t.recipient,
                 amount: t.amount,
@@ -1269,14 +1290,15 @@ impl SuiEvent {
                 contents,
             } => {
                 let bcs = contents.to_vec();
-                let move_obj: SuiParsedMoveObject =
-                    SuiMoveObject::try_from(MoveObject::new(type_, contents), resolver)?;
+                let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
+                let (type_, fields) =
+                    SuiParsedMoveObject::try_type_and_fields_from_move_struct(&type_, move_struct)?;
                 SuiEvent::MoveEvent {
                     package_id,
                     transaction_module: transaction_module.to_string(),
                     sender,
-                    type_: move_obj.type_,
-                    fields: move_obj.fields,
+                    type_,
+                    fields,
                     bcs,
                 }
             }
@@ -1329,8 +1351,8 @@ impl SuiEvent {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransferCoin", rename_all = "camelCase")]
-pub struct SuiTransferCoin {
+#[serde(rename = "PublicTransferObject", rename_all = "camelCase")]
+pub struct SuiPublicTransferObject {
     pub recipient: SuiAddress,
     pub object_ref: SuiObjectRef,
 }
@@ -1423,13 +1445,13 @@ impl From<TypeTag> for SuiTypeTag {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum RPCTransactionRequestParams {
-    TransferCoinRequestParams(TransferCoinParams),
+    PublicTransferObjectRequestParams(PublicTransferObjectParams),
     MoveCallRequestParams(MoveCallParams),
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct TransferCoinParams {
+pub struct PublicTransferObjectParams {
     pub recipient: SuiAddress,
     pub object_id: ObjectID,
 }

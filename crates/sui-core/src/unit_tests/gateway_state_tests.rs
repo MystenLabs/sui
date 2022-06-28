@@ -42,7 +42,7 @@ async fn create_gateway_state(
     gateway
 }
 
-async fn transfer_coin(
+async fn public_transfer_object(
     gateway: &GatewayState<LocalAuthorityClient>,
     signer: SuiAddress,
     key: &KeyPair,
@@ -51,7 +51,7 @@ async fn transfer_coin(
     recipient: SuiAddress,
 ) -> Result<TransactionEffectsResponse, anyhow::Error> {
     let data = gateway
-        .transfer_coin(
+        .public_transfer_object(
             signer,
             coin_object_id,
             Some(gas_object_id),
@@ -69,7 +69,7 @@ async fn transfer_coin(
 }
 
 #[tokio::test]
-async fn test_transfer_coin() {
+async fn test_public_transfer_object() {
     let (addr1, key1) = get_key_pair();
     let (addr2, _key2) = get_key_pair();
 
@@ -80,7 +80,7 @@ async fn test_transfer_coin() {
         authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
     let gateway = create_gateway_state(genesis_objects).await;
 
-    let effects = transfer_coin(
+    let effects = public_transfer_object(
         &gateway,
         addr1,
         &key1,
@@ -329,7 +329,7 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
     let mut digests = vec![];
     for obj_id in [object1.id(), object2.id(), object3.id()] {
         let data = gateway
-            .transfer_coin(addr1, obj_id, Some(gas_object.id()), 50000, addr2)
+            .public_transfer_object(addr1, obj_id, Some(gas_object.id()), 50000, addr2)
             .await
             .unwrap();
         let signature = key1.sign(&data.to_bytes());
@@ -376,7 +376,7 @@ async fn test_equivocation_resilient() {
     for _ in 0..20 {
         let (recipient, _) = get_key_pair();
         let data = gateway
-            .transfer_coin(
+            .public_transfer_object(
                 addr1,
                 coin_object.id(),
                 Some(gas_object.id()),
@@ -408,7 +408,7 @@ async fn test_equivocation_resilient() {
 }
 
 #[tokio::test]
-async fn test_transfer_coin_with_retry() {
+async fn test_public_transfer_object_with_retry() {
     let (addr1, key1) = get_key_pair();
     let (addr2, _key2) = get_key_pair();
 
@@ -427,7 +427,7 @@ async fn test_transfer_coin_with_retry() {
         .fail_after_handle_confirmation = true;
 
     // Transfer will fail because we would not be able to reach quorum on cert processing.
-    assert!(transfer_coin(
+    assert!(public_transfer_object(
         &gateway,
         addr1,
         &key1,
@@ -666,7 +666,7 @@ async fn test_multiple_gateways() {
         GatewayMetrics::new_for_tests(),
     )
     .unwrap();
-    let response = transfer_coin(
+    let response = public_transfer_object(
         &gateway1,
         addr1,
         &key1,
@@ -680,7 +680,7 @@ async fn test_multiple_gateways() {
 
     // gas_object on gateway2 should be out-of-dated.
     // Show that we can still handle the transaction successfully if we use it on gateway2.
-    let response = transfer_coin(
+    let response = public_transfer_object(
         &gateway2,
         addr1,
         &key1,
@@ -693,7 +693,7 @@ async fn test_multiple_gateways() {
     assert!(response.effects.status.is_ok());
 
     // Now we try to use the same gas object on gateway1, and it will still work.
-    let response = transfer_coin(
+    let response = public_transfer_object(
         &gateway1,
         addr1,
         &key1,
@@ -725,14 +725,18 @@ async fn test_batch_transaction() {
     );
     let gateway = create_gateway_state(genesis_objects).await;
     let params = vec![
-        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
-            object_id: coin_object1.id(),
-            recipient: addr2,
-        }),
-        RPCTransactionRequestParams::TransferCoinRequestParams(TransferCoinParams {
-            object_id: coin_object2.id(),
-            recipient: addr2,
-        }),
+        RPCTransactionRequestParams::PublicTransferObjectRequestParams(
+            PublicTransferObjectParams {
+                object_id: coin_object1.id(),
+                recipient: addr2,
+            },
+        ),
+        RPCTransactionRequestParams::PublicTransferObjectRequestParams(
+            PublicTransferObjectParams {
+                object_id: coin_object2.id(),
+                recipient: addr2,
+            },
+        ),
         RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
             package_object_id: gateway.get_framework_object_ref().await.unwrap().0,
             module: "bag".to_string(),

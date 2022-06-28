@@ -17,21 +17,21 @@ import { balanceFormatOptions } from '_shared/formatting';
 
 import type { FormValues } from './';
 
-import st from './TransferCoinForm.module.scss';
+import st from './PublicTransferObjectForm.module.scss';
 
-export type TransferCoinFormProps = {
+export type PublicTransferObjectFormProps = {
     submitError: string | null;
     coinBalance: string;
     coinSymbol: string;
     onClearSubmitError: () => void;
 };
 
-function TransferCoinForm({
+function PublicTransferObjectForm({
     submitError,
     coinBalance,
     coinSymbol,
     onClearSubmitError,
-}: TransferCoinFormProps) {
+}: PublicTransferObjectFormProps) {
     const {
         isSubmitting,
         isValid,
@@ -103,4 +103,4 @@ function TransferCoinForm({
     );
 }
 
-export default memo(TransferCoinForm);
+export default memo(PublicTransferObjectForm);
