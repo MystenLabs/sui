@@ -331,9 +331,10 @@ where
         .iter()
         .for_each(|(auth, _proposal, checkpoint)| {
             if let AuthenticatedCheckpoint::Signed(signed) = checkpoint {
-                // We check this signature is higher than the highest known checkpoint.
+                // We are interested in this signed checkpoint only if it is
+                // newer than the highest known cert checkpoint.
                 if let Some(newest_checkpoint) = &highest_certificate_cert {
-                    if newest_checkpoint.summary.sequence_number > signed.summary.sequence_number {
+                    if newest_checkpoint.summary.sequence_number >= signed.summary.sequence_number {
                         return;
                     }
                 }
@@ -372,8 +373,6 @@ where
             }
         });
 
-    // Examine whether we should start the next checkpoint by looking at whether we have
-    // >2/3 of validators proposing a new checkpoint.
     let next_proposal_sequence_number = highest_certificate_cert
         .as_ref()
         .map(|cert| cert.summary.sequence_number + 1)
@@ -442,13 +441,13 @@ where
 
     for seq in full_sync_start..latest_known_checkpoint.summary.sequence_number {
         debug!("Full Sync ({name:?}): {seq:?}");
-        let (past, _contents) =
+        let (past, contents) =
             get_one_checkpoint(net.clone(), seq, true, &available_authorities).await?;
 
         if let Err(err) =
             checkpoint_db
                 .lock()
-                .process_checkpoint_certificate(&past, &_contents, &net.committee)
+                .process_checkpoint_certificate(&past, &contents, &net.committee)
         {
             warn!("Sync Err: {err:?}");
         }
