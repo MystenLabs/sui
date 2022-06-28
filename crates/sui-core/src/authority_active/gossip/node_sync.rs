@@ -339,8 +339,7 @@ where
             });
         }
 
-        let _ = rx
-            .recv()
+        rx.recv()
             .await
             .map_err(|e| SuiError::GenericAuthorityError {
                 error: format!("{:?}", e),
