@@ -17,7 +17,7 @@ pub use sui_gateway::config::{GatewayConfig, GatewayType};
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
-pub struct WalletConfig {
+pub struct SuiClientConfig {
     #[serde_as(as = "Vec<Hex>")]
     pub accounts: Vec<SuiAddress>,
     pub keystore: KeystoreType,
@@ -25,9 +25,9 @@ pub struct WalletConfig {
     pub active_address: Option<SuiAddress>,
 }
 
-impl Config for WalletConfig {}
+impl Config for SuiClientConfig {}
 
-impl Display for WalletConfig {
+impl Display for SuiClientConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
 

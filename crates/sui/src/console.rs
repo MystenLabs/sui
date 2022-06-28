@@ -130,7 +130,7 @@ async fn handle_command(
             ..
         })
     ) {
-        println!("Gateway switch completed, please restart wallet.");
+        println!("Gateway switch completed, please restart Sui console.");
         return Ok(true);
     }
     Ok(false)

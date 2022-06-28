@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::{GatewayConfig, GatewayType, WalletConfig};
+use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::MoveCommands;
@@ -280,7 +280,7 @@ impl SuiCommand {
                     ..Default::default()
                 };
 
-                let wallet_config = WalletConfig {
+                let wallet_config = SuiClientConfig {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
                     gateway: GatewayType::Embedded(wallet_gateway_config),
@@ -378,7 +378,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
                 .join(SUI_KEYSTORE_FILENAME);
             let keystore = KeystoreType::File(keystore_path);
             let new_address = keystore.init()?.add_random_key()?;
-            WalletConfig {
+            SuiClientConfig {
                 accounts: vec![new_address],
                 keystore,
                 gateway: GatewayType::RPC(url.to_string()),

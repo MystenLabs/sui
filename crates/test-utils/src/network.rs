@@ -8,7 +8,7 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use sui::{
     client_commands::{SuiClientCommands, WalletContext},
-    config::{GatewayConfig, GatewayType, WalletConfig},
+    config::{GatewayConfig, GatewayType, SuiClientConfig},
 };
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
@@ -72,7 +72,7 @@ pub async fn start_test_network(
     .save(gateway_path)?;
 
     // Create wallet config with stated authorities port
-    WalletConfig {
+    SuiClientConfig {
         accounts,
         keystore: KeystoreType::File(keystore_path),
         gateway: GatewayType::Embedded(GatewayConfig {
@@ -130,7 +130,7 @@ pub async fn start_rpc_test_network(
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
-    let mut wallet_conf: WalletConfig =
+    let mut wallet_conf: SuiClientConfig =
         PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", server_addr);
     let accounts = wallet_conf.accounts.clone();

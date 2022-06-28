@@ -60,15 +60,11 @@ In addition, to conduct advanced work such as altering Sui itself, also obtain:
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-json-rpc
 ```
 
 This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
-* bench - local test and benchmark of the Sui authorities.
-* bench_configure - creates the config files for distributed benchmarking.
-* key_tool - utility for generating keys and addresses encoded as Base64 bytes.
-* remote_load_generator - enables distributed benchmark of the Sui authorities on remote machines.
-* [`rpc-server`](json-rpc.md) - run a local Sui network and gateway service accessible via an RPC interface.
+* [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 * sui - enables `genesis` of validators and accounts, as well as starting the Sui network.
 * [`sui-move`](move.md) - build and test Move packages.
 * [`wallet`](wallet.md) - run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use sui::client_commands::{
     call_move, WalletContext, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL,
 };
-use sui::config::{Config, GatewayType, WalletConfig};
+use sui::config::{Config, GatewayType, SuiClientConfig};
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_faucet::FaucetResponse;
 use sui_json::SuiJsonValue;
@@ -371,7 +371,7 @@ impl ClusterTest {
         let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
         let keystore = KeystoreType::File(keystore_path);
         let new_address = keystore.init().unwrap().add_random_key().unwrap();
-        WalletConfig {
+        SuiClientConfig {
             accounts: vec![new_address],
             keystore,
             gateway: GatewayType::RPC(gateway_addr),

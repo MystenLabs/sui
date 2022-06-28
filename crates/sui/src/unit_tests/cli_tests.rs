@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use sui::client_commands::SwitchResponse;
 use sui::{
     client_commands::{SuiClientCommands, WalletCommandResult, WalletContext},
-    config::{GatewayConfig, GatewayType, WalletConfig},
+    config::{GatewayConfig, GatewayType, SuiClientConfig},
     sui_commands::SuiCommand,
 };
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
@@ -73,7 +73,8 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     assert_eq!(4, network_conf.validator_configs().len());
 
     // Check wallet config
-    let wallet_conf = PersistedConfig::<WalletConfig>::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
+    let wallet_conf =
+        PersistedConfig::<SuiClientConfig>::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
 
     if let GatewayType::Embedded(config) = &wallet_conf.gateway {
         assert_eq!(4, config.validator_set.len());
@@ -104,7 +105,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
 
-    let wallet_config = WalletConfig {
+    let wallet_config = SuiClientConfig {
         accounts: vec![],
         keystore: KeystoreType::File(working_dir.join(SUI_KEYSTORE_FILENAME)),
         gateway: GatewayType::Embedded(GatewayConfig {

@@ -37,7 +37,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::config::{Config, GatewayType, PersistedConfig, WalletConfig};
+use crate::config::{Config, GatewayType, PersistedConfig, SuiClientConfig};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
@@ -514,14 +514,14 @@ impl SuiClientCommands {
 }
 
 pub struct WalletContext {
-    pub config: PersistedConfig<WalletConfig>,
+    pub config: PersistedConfig<SuiClientConfig>,
     pub keystore: Box<dyn Keystore>,
     pub gateway: GatewayClient,
 }
 
 impl WalletContext {
     pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
-        let config: WalletConfig = PersistedConfig::read(config_path).map_err(|err| {
+        let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             err.context(format!(
                 "Cannot open wallet config file at {:?}",
                 config_path
