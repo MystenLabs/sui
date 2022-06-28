@@ -202,13 +202,26 @@ Also note that the primaries are created with only 1 worker node currently.
 When multiple workers are needed we'll add that feature.
 
 
-## Grafana and prometheus
+## Grafana, Prometheus and Loki.
 
 The grafana instance is exposed at http://localhost:3000/
 
 Default user/pass is admin/admin.
 
 You can 'skip' changing that since it's always regenerated.
+
+Grafana is the frontend dashboard and metrics explorer, as well as a means
+for setting up alerts.
+	- https://grafana.com/oss/grafana/
+	- https://grafana.com/grafana/dashboards/ published dashboards, good place to start building.
+
+Prometheus is the defacto standard for pulling metrics from targets and
+storing for use via Grafana and other services (alertmanager, scripts).
+	- https://prometheus.io/docs/introduction/overview/
+
+Loki is a log collector and processor.  It is exposed as a datasource
+in Grafana and makes the logs easily searchable.
+	- https://grafana.com/oss/loki/
 
 ## Troubleshooting
 

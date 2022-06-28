@@ -29,3 +29,12 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
+  - job_name: 'loki-read'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['read:3100']
+
+  - job_name: 'loki-write'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['write:3100']

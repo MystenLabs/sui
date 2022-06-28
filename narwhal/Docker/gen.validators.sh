@@ -21,6 +21,75 @@ mkdir -p $target
 
 ./scripts/gen.compose.py -n ${num} -t templates/node.template > ${target}/docker-compose.yaml
 
+# loki config
+cat > ${target}/loki-config.yaml <<EOF
+---
+server:
+  http_listen_port: 3100
+memberlist:
+  join_members:
+    - loki:7946
+schema_config:
+  configs:
+    - from: 2021-08-01
+      store: boltdb-shipper
+      object_store: s3
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+common:
+  path_prefix: /loki
+  replication_factor: 1
+  storage:
+    s3:
+      endpoint: minio:9000
+      insecure: true
+      bucketnames: "loki-data"
+      access_key_id: loki
+      secret_access_key: supersecret
+      s3forcepathstyle: true
+  ring:
+    kvstore:
+      store: memberlist
+ruler:
+  storage:
+    s3:
+      bucketnames: loki-ruler
+EOF
+
+cat > ${target}/promtail-local-config.yaml <<EOF
+---
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://gateway:3100/loki/api/v1/push
+    tenant_id: tenant1
+
+scrape_configs:
+  - job_name: docker_log_scrape
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+
+  - job_name: validators
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: servicelogs
+          __path__: /validators/validator-*/logs/log-*.txt
+EOF
+
 t=$(($num - 1))
 for i in $(seq -f %02g 0 ${t})
 do
