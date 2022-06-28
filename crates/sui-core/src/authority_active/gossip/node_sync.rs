@@ -188,12 +188,13 @@ where
                     // the semaphore in this context.
                     let permit = limit.acquire_owned().await.unwrap();
 
-                    // TODO: must send status back to follower so that it knows whether to advance
-                    // the watermark.
                     let res = state.process_digest(peer, digests, permit).await;
                     if let Err(error) = &res {
                         error!(?digests, ?peer, "process_digest failed: {}", error);
                     }
+
+                    // Send status back to follower so that it knows whether to advance
+                    // the watermark.
                     if tx.send(res).is_err() {
                         // This will happen any time the follower times out and restarts, but
                         // that's ok - the follower won't have marked this digest as processed so it
@@ -293,8 +294,6 @@ where
             }
         }
 
-        // TODO: support shared object TXes via something like:
-        // self.state.sequence_shared_locks_from_effects(effects).await
         self.state
             .handle_node_sync_transaction(cert, effects)
             .await?;
