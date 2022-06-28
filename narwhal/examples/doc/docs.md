@@ -15,9 +15,11 @@
     - [GetCollectionsRequest](#narwhal-GetCollectionsRequest)
     - [GetCollectionsResponse](#narwhal-GetCollectionsResponse)
     - [MultiAddr](#narwhal-MultiAddr)
+    - [NewEpochRequest](#narwhal-NewEpochRequest)
     - [NewNetworkInfoRequest](#narwhal-NewNetworkInfoRequest)
     - [NodeReadCausalRequest](#narwhal-NodeReadCausalRequest)
     - [NodeReadCausalResponse](#narwhal-NodeReadCausalResponse)
+    - [PrimaryAddresses](#narwhal-PrimaryAddresses)
     - [PublicKey](#narwhal-PublicKey)
     - [ReadCausalRequest](#narwhal-ReadCausalRequest)
     - [ReadCausalResponse](#narwhal-ReadCausalResponse)
@@ -213,6 +215,22 @@ Empty message for when we don&#39;t have anything to return
 
 
 
+<a name="narwhal-NewEpochRequest"></a>
+
+### NewEpochRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| epoch_number | [uint32](#uint32) |  |  |
+| validators | [ValidatorData](#narwhal-ValidatorData) | repeated |  |
+
+
+
+
+
+
 <a name="narwhal-NewNetworkInfoRequest"></a>
 
 ### NewNetworkInfoRequest
@@ -254,6 +272,22 @@ Empty message for when we don&#39;t have anything to return
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | collection_ids | [CertificateDigest](#narwhal-CertificateDigest) | repeated | Resulting sequence of collections from DAG walk. |
+
+
+
+
+
+
+<a name="narwhal-PrimaryAddresses"></a>
+
+### PrimaryAddresses
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| primary_to_primary | [MultiAddr](#narwhal-MultiAddr) |  |  |
+| worker_to_primary | [MultiAddr](#narwhal-MultiAddr) |  |  |
 
 
 
@@ -376,7 +410,7 @@ Empty message for when we don&#39;t have anything to return
 | ----- | ---- | ----- | ----------- |
 | public_key | [PublicKey](#narwhal-PublicKey) |  |  |
 | stake_weight | [int64](#int64) |  |  |
-| address | [MultiAddr](#narwhal-MultiAddr) |  |  |
+| primary_addresses | [PrimaryAddresses](#narwhal-PrimaryAddresses) |  |  |
 
 
 
@@ -409,6 +443,7 @@ Empty message for when we don&#39;t have anything to return
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
+| NewEpoch | [NewEpochRequest](#narwhal-NewEpochRequest) | [Empty](#narwhal-Empty) | Signals a new epoch |
 | NewNetworkInfo | [NewNetworkInfoRequest](#narwhal-NewNetworkInfoRequest) | [Empty](#narwhal-Empty) | Signals a change in networking info |
 
 

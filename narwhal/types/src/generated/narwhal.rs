@@ -35,6 +35,13 @@ pub struct BatchMessage {
     pub transactions: ::core::option::Option<Batch>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PrimaryAddresses {
+    #[prost(message, optional, tag="1")]
+    pub primary_to_primary: ::core::option::Option<MultiAddr>,
+    #[prost(message, optional, tag="2")]
+    pub worker_to_primary: ::core::option::Option<MultiAddr>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MultiAddr {
     #[prost(string, tag="1")]
     pub address: ::prost::alloc::string::String,
@@ -51,7 +58,7 @@ pub struct ValidatorData {
     #[prost(int64, tag="2")]
     pub stake_weight: i64,
     #[prost(message, optional, tag="3")]
-    pub address: ::core::option::Option<MultiAddr>,
+    pub primary_addresses: ::core::option::Option<PrimaryAddresses>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CollectionRetrievalResult {

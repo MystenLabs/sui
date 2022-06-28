@@ -32,9 +32,14 @@ message CollectionError {
     CollectionErrorType error = 2;
 }
 
- message BatchMessage {
+message BatchMessage {
     BatchDigest id = 1;
     Batch transactions = 2;
+}
+
+message PrimaryAddresses {
+    MultiAddr primary_to_primary = 1;
+    MultiAddr worker_to_primary = 2;
 }
 
 message MultiAddr {
@@ -48,7 +53,7 @@ message PublicKey {
 message ValidatorData {
     PublicKey public_key = 1;
     int64 stake_weight = 2;
-    MultiAddr address = 3;
+    PrimaryAddresses primary_addresses = 3;
 }
 
 message CollectionRetrievalResult {
