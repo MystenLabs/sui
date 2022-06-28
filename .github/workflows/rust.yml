@@ -88,11 +88,7 @@ jobs:
     name: test
     needs: diff
     if: needs.diff.outputs.isRust == 'false'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - [self-hosted, self-hosted-ubuntu]
+    runs-on: [self-hosted, self-hosted-ubuntu]
     steps:
       - run: 'echo "No build required" '
 
