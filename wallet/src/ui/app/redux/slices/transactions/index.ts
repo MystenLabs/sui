@@ -48,7 +48,7 @@ export const sendTokens = createAsyncThunk<
                     isSuiMoveObject(anObj.data) && anObj.data.type === coinType
             )
             .map(({ data }) => data as SuiMoveObject);
-        const response = await Coin.publicTransferObject(
+        const response = await Coin.transferCoin(
             api.getSignerInstance(keypairVault.getKeyPair()),
             coins,
             amount,

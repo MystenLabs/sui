@@ -16,7 +16,7 @@ import ImportPage from './pages/initialize/import';
 import SelectPage from './pages/initialize/select';
 import SiteConnectPage from './pages/site-connect';
 import TransactionDetailsPage from './pages/transaction-details';
-import PublicTransferObjectPage from './pages/transfer-coin';
+import TransferCoinPage from './pages/transfer-coin';
 import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -44,7 +44,7 @@ const App = () => {
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
-                <Route path="send" element={<PublicTransferObjectPage />} />
+                <Route path="send" element={<TransferCoinPage />} />
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}

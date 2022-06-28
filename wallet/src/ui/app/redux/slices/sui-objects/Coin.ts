@@ -64,7 +64,7 @@ export class Coin {
      * @param amount The amount to be transfer
      * @param recipient The sui address of the recipient
      */
-    public static async publicTransferObject(
+    public static async transferCoin(
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,

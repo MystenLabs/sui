@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import PublicTransferObjectForm from './PublicTransferObjectForm';
+import TransferCoinForm from './TransferCoinForm';
 import { createValidationSchema } from './validation';
 import Loading from '_components/loading';
 import { useAppSelector, useAppDispatch } from '_hooks';
@@ -29,7 +29,7 @@ const initialValues = {
 export type FormValues = typeof initialValues;
 
 // TODO: show out of sync when sui objects locally might be outdated
-function PublicTransferObjectPage() {
+function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const coinType = useMemo(() => searchParams.get('type'), [searchParams]);
     const balances = useAppSelector(accountItemizedBalancesSelector);
@@ -120,7 +120,7 @@ function PublicTransferObjectPage() {
                     validationSchema={validationSchema}
                     onSubmit={onHandleSubmit}
                 >
-                    <PublicTransferObjectForm
+                    <TransferCoinForm
                         submitError={sendError}
                         coinBalance={coinBalance.toString()}
                         coinSymbol={coinSymbol}
@@ -132,4 +132,4 @@ function PublicTransferObjectPage() {
     );
 }
 
-export default PublicTransferObjectPage;
+export default TransferCoinPage;
