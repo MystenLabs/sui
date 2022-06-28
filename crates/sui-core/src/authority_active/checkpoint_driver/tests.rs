@@ -282,3 +282,54 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
     // After the end all authorities are the same
     assert!(value_set.len() == 1, "Got set {:?}", value_set);
 }
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_empty_checkpoint() {
+    use telemetry_subscribers::init_for_testing;
+    init_for_testing();
+
+    let setup = checkpoint_tests_setup(0, Duration::from_millis(200), false).await;
+
+    let TestSetup {
+        committee: _committee,
+        authorities,
+        transactions: _,
+        aggregator,
+    } = setup;
+
+    // Start active part of authority.
+    for inner_state in authorities.clone() {
+        let clients = aggregator.clone_inner_clients();
+        let _active_handle = tokio::task::spawn(async move {
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    inner_state.authority.clone(),
+                    clients,
+                    GatewayMetrics::new_for_tests(),
+                )
+                .unwrap(),
+            );
+
+            active_state.clone().spawn_execute_process().await;
+
+            // Spin the gossip service.
+            active_state
+                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .await;
+        });
+    }
+
+    // Wait for long enough to have generated some checkpoint.
+    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+
+    for a in authorities {
+        let next_checkpoint_sequence = a
+            .authority
+            .checkpoints
+            .as_ref()
+            .unwrap()
+            .lock()
+            .next_checkpoint();
+        assert!(next_checkpoint_sequence > 0)
+    }
+}
