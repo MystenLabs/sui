@@ -33,10 +33,10 @@ serde-value = "0.7.0"
 serde-name = "0.2.1"
 dirs = "4.0.0"
 clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 prometheus = "0.13.1"
 multiaddr = "0.14.0"
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
 bcs = "0.1.3"
 sui-core = { path = "../sui-core" }
@@ -82,7 +82,7 @@ workspace-hack = { path = "../workspace-hack"}
 [dev-dependencies]
 pretty_assertions = "1.2.0"
 tokio-util = { version = "0.7.2", features = ["codec"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"}
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 

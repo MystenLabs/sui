@@ -28,7 +28,7 @@ sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 workspace-hack = { path = "../workspace-hack"}
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
 [dev-dependencies]
 tempfile = "3.3.0"

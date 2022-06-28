@@ -34,7 +34,7 @@ bincode = "1.3.3"
 schemars = {version = "0.8.10", features = ["either"]}
 either = "1.6.1"
 multiaddr = "0.14.0"
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 prometheus = "0.13.1"
 once_cell = "1.11.0"
 colored = "2.0.0"
@@ -59,7 +59,7 @@ move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f19
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"}
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "executor" }
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "types" }
@@ -73,7 +73,7 @@ serde_yaml = "0.8.23"
 pretty_assertions = "1.2.1"
 temp_testdir = "0.2.3"
 hex = "0.4.3"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
 test-fuzz = "3.0.2"
 test-utils = { path = "../test-utils" }
