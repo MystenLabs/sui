@@ -41,9 +41,9 @@ use crate::{
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
-    PublicTransferObjectParams, PublishResponse, RPCTransactionRequestParams, SplitCoinResponse,
-    SuiMoveObject, SuiObject, SuiObjectInfo, SuiTransactionEffects, SuiTypeTag,
-    TransactionEffectsResponse, TransactionResponse,
+    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
+    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse, TransferObjectParams,
 };
 
 use crate::transaction_input_checker::InputObjects;
@@ -335,7 +335,7 @@ pub trait GatewayAPI {
 
     /// Create a Batch Transaction that contains a vector of parameters needed to construct
     /// all the single transactions in it.
-    /// Supported single transactions are PublicTransferObject and MoveCall.
+    /// Supported single transactions are TransferObject and MoveCall.
     async fn batch_transaction(
         &self,
         signer: SuiAddress,
@@ -855,18 +855,16 @@ where
 
     async fn create_public_transfer_object_transaction_kind(
         &self,
-        params: PublicTransferObjectParams,
+        params: TransferObjectParams,
         used_object_ids: &mut BTreeSet<ObjectID>,
     ) -> Result<SingleTransactionKind, anyhow::Error> {
         used_object_ids.insert(params.object_id);
         let object = self.get_object_internal(&params.object_id).await?;
         let object_ref = object.compute_object_reference();
-        Ok(SingleTransactionKind::PublicTransferObject(
-            PublicTransferObject {
-                recipient: params.recipient,
-                object_ref,
-            },
-        ))
+        Ok(SingleTransactionKind::TransferObject(TransferObject {
+            recipient: params.recipient,
+            object_ref,
+        }))
     }
 
     async fn create_move_call_transaction_kind(
@@ -1063,7 +1061,7 @@ where
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
         let mut used_object_ids = BTreeSet::new();
-        let params = PublicTransferObjectParams {
+        let params = TransferObjectParams {
             recipient,
             object_id,
         };
@@ -1110,7 +1108,7 @@ where
         let mut used_object_ids = BTreeSet::new();
         for param in single_transaction_params {
             let kind = match param {
-                RPCTransactionRequestParams::PublicTransferObjectRequestParams(t) => {
+                RPCTransactionRequestParams::TransferObjectRequestParams(t) => {
                     self.create_public_transfer_object_transaction_kind(t, &mut used_object_ids)
                         .await?
                 }

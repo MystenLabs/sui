@@ -56,7 +56,7 @@ pub enum ObjectArg {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct PublicTransferObject {
+pub struct TransferObject {
     pub recipient: SuiAddress,
     pub object_ref: ObjectRef,
 }
@@ -101,7 +101,7 @@ pub struct ChangeEpoch {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
-    PublicTransferObject(PublicTransferObject),
+    TransferObject(TransferObject),
     /// Publish a new Move module
     Publish(MoveModulePublish),
     /// Call a function in a published Move module
@@ -143,7 +143,7 @@ impl SingleTransactionKind {
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let input_objects = match &self {
-            Self::PublicTransferObject(PublicTransferObject { object_ref, .. }) => {
+            Self::TransferObject(TransferObject { object_ref, .. }) => {
                 vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
             }
             Self::Call(MoveCall {
@@ -207,8 +207,8 @@ impl Display for SingleTransactionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match &self {
-            Self::PublicTransferObject(t) => {
-                writeln!(writer, "Transaction Kind : Public Transfer Object")?;
+            Self::TransferObject(t) => {
+                writeln!(writer, "Transaction Kind : Transfer Object")?;
                 writeln!(writer, "Recipient : {}", t.recipient)?;
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
@@ -377,12 +377,10 @@ where
         gas_payment: ObjectRef,
         gas_budget: u64,
     ) -> Self {
-        let kind = TransactionKind::Single(SingleTransactionKind::PublicTransferObject(
-            PublicTransferObject {
-                recipient,
-                object_ref,
-            },
-        ));
+        let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
+            recipient,
+            object_ref,
+        }));
         Self::new(kind, sender, gas_payment, gas_budget)
     }
 

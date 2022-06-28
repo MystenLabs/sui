@@ -221,7 +221,7 @@ where
         .kind
         .single_transactions()
         .filter_map(|s| {
-            if let SingleTransactionKind::PublicTransferObject(t) = s {
+            if let SingleTransactionKind::TransferObject(t) = s {
                 Some(t.object_ref.0)
             } else {
                 None
