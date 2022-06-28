@@ -32,6 +32,7 @@ const MAX_LIMIT: usize = 5000;
 pub struct SqlEventStore {
     pool: SqlitePool,
     // Sequence number is used to prevent previously ingested events from being ingested again
+    // It acts as a cache, as the seq_num field is also written to the DB.
     seq_num: AtomicU64,
 }
 
@@ -287,6 +288,7 @@ impl EventStore for SqlEventStore {
         events: &[EventEnvelope],
         checkpoint_num: u64,
     ) -> Result<(), SuiError> {
+        // TODO: submit writes in one transaction/batch so it won't just fail in the middle
         let mut cur_seq = self.seq_num.load(Ordering::Acquire);
         let initial_seq = cur_seq;
 
