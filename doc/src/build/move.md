@@ -102,11 +102,11 @@ read more about
 [modules](https://github.com/move-language/move/blob/main/language/documentation/book/src/modules-and-scripts.md#modules)
 in the Move book later.)
 
-> **Important:** In Sui Move, package names are always in CamelCase, which
+> **Important:** In Sui Move, package names are always in CamelCase, while
 > the address alias is lowercase, for examples `sui = 0x2` and `std = 0x1`.
-> So: Sui = name of the imported package (Sui = sui framework), sui = address
-> alias of 0x2, sui::sui = module sui under the address 0x2, and
-> sui::sui::SUI = type in the module above.
+> So: `Sui` = name of the imported package (Sui = sui framework), `sui` = address
+> alias of 0x2, `sui::sui` = module sui under the address 0x2, and
+> `sui::sui::SUI` = type in the module above.
 
 As we can see, when defining a module we specify the module name
 (`Coin`), preceded by the name of the package where this module resides
