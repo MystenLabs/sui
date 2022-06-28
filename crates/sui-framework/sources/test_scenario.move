@@ -137,6 +137,31 @@ module sui::test_scenario {
         remove_unique_object_from_inventory(scenario, objects)
     }
 
+    /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`
+    /// that wast most recently created.
+    /// Aborts if there is no object of type `T` in the inventory of the tx sender.
+    public fun take_last_created_owned<T: key>(scenario: &mut Scenario): T {
+        let signer_address = sender(scenario);
+        let objects: vector<T> = get_account_owned_inventory<T>(
+            signer_address,
+            last_tx_start_index(scenario)
+        );
+        let num_objects = vector::length(&objects);
+        assert!(num_objects > 0, EEmptyInventory);
+        let res = vector::pop_back(&mut objects);
+        let removed_id = id::id(&res);
+        assert!(!vector::contains(&scenario.removed, removed_id), EAlreadyRemovedObject);
+        vector::push_back(&mut scenario.removed, *removed_id);
+        let i = 0;
+        // Put the rest of the objects back into the storage.
+        while (i < num_objects - 1) {
+            update_object(vector::remove(&mut objects, 0));
+            i = i + 1
+        };
+        vector::destroy_empty(objects);
+        res
+    }
+
     /// Similar to take_owned, but only return objects that are immutable with type `T`.
     /// In this case, the sender is irrelevant.
     /// Returns a wrapper that only supports a `borrow` API to get the read-only reference.

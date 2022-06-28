@@ -13,6 +13,8 @@ module sui::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::validator_set::{Self, ValidatorSet};
+    use sui::stake::Stake;
+    use std::option;
 
     friend sui::genesis;
 
@@ -108,7 +110,9 @@ module sui::sui_system {
             pubkey_bytes,
             name,
             net_address,
-            coin::into_balance(stake)
+            coin::into_balance(stake),
+            option::none(),
+            ctx
         );
 
         validator_set::request_add_validator(&mut self.validators, validator);
@@ -138,6 +142,22 @@ module sui::sui_system {
         validator_set::request_add_stake(
             &mut self.validators,
             coin::into_balance(new_stake),
+            option::none(),
+            ctx,
+        )
+    }
+
+    /// A validator can request adding more stake using a locked coin. This will be processed at the end of epoch.
+    public entry fun request_add_stake_with_locked_coin(
+        self: &mut SuiSystemState,
+        new_stake: LockedCoin<SUI>,
+        ctx: &mut TxContext,
+    ) {
+        let (balance, epoch_time_lock) = locked_coin::into_balance(new_stake);
+        validator_set::request_add_stake(
+            &mut self.validators,
+            balance,
+            option::some(epoch_time_lock),
             ctx,
         )
     }
@@ -149,11 +169,13 @@ module sui::sui_system {
     /// If the sender represents an active validator, the request will be processed at the end of epoch.
     public entry fun request_withdraw_stake(
         self: &mut SuiSystemState,
+        stake: &mut Stake,
         withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
         validator_set::request_withdraw_stake(
             &mut self.validators,
+            stake,
             withdraw_amount,
             self.parameters.min_validator_stake,
             ctx,

@@ -9,6 +9,7 @@ module sui::genesis {
     use sui::sui_system;
     use sui::tx_context::TxContext;
     use sui::validator;
+    use std::option;
 
     /// The initial amount of SUI locked in the storage fund.
     /// 10^14, an arbitrary number.
@@ -32,7 +33,7 @@ module sui::genesis {
         validator_names: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
-        _ctx: &mut TxContext,
+        ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new();
         let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
@@ -58,6 +59,8 @@ module sui::genesis {
                 name,
                 net_address,
                 balance::increase_supply(&mut sui_supply, stake),
+                option::none(),
+                ctx
             ));
             i = i + 1;
         };
