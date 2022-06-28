@@ -1,9 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::{IdentStr, Identifier};
+use move_core_types::identifier::IdentStr;
+use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
+use move_core_types::value::MoveStruct;
 use name_variant::NamedVariant;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -13,6 +16,9 @@ use serde_with::Bytes;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 
+use crate::error::SuiError;
+use crate::object::MoveObject;
+use crate::object::ObjectFormatOptions;
 use crate::object::Owner;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
@@ -244,5 +250,22 @@ impl Event {
             }
             _ => None,
         }
+    }
+
+    pub fn move_event_to_move_struct(
+        type_: &StructTag,
+        contents: &[u8],
+        resolver: &impl GetModule,
+    ) -> Result<MoveStruct, SuiError> {
+        let layout = MoveObject::get_layout_from_struct_tag(
+            type_.clone(),
+            ObjectFormatOptions::default(),
+            resolver,
+        )?;
+        MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
+            SuiError::ObjectSerializationError {
+                error: e.to_string(),
+            }
+        })
     }
 }

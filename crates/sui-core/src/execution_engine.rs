@@ -20,8 +20,8 @@ use sui_types::{
     event::{Event, TransferType},
     gas::{self, SuiGasStatus},
     messages::{
-        CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
-        TransactionData, TransactionEffects, TransferCoin, TransferSui,
+        CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, PublicTransferObject,
+        SingleTransactionKind, TransactionData, TransactionEffects, TransferSui,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
@@ -117,7 +117,7 @@ fn execute_transaction<S: BackingPackageStore>(
         // once across single tx, we should be able to run them in parallel.
         for single_tx in transaction_data.kind.into_single_transactions() {
             result = match single_tx {
-                SingleTransactionKind::TransferCoin(TransferCoin {
+                SingleTransactionKind::PublicTransferObject(PublicTransferObject {
                     recipient,
                     object_ref,
                 }) => {
@@ -127,7 +127,7 @@ fn execute_transaction<S: BackingPackageStore>(
                         .get(&object_ref.0)
                         .unwrap()
                         .clone();
-                    transfer_coin(temporary_store, object, tx_ctx.sender(), recipient)
+                    transfer_object(temporary_store, object, tx_ctx.sender(), recipient)
                 }
                 SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
                     let gas_object = temporary_store
@@ -241,7 +241,7 @@ fn execute_transaction<S: BackingPackageStore>(
     (cost_summary, result)
 }
 
-fn transfer_coin<S>(
+fn transfer_object<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut object: Object,
     sender: SuiAddress,
@@ -293,8 +293,7 @@ fn transfer_sui<S>(
 
         // Creat a new gas coin with the amount.
         let new_object = Object::new_move(
-            MoveObject::new(
-                GasCoin::type_(),
+            MoveObject::new_gas_coin(
                 bcs::to_bytes(&GasCoin::new(
                     tx_ctx.fresh_id(),
                     OBJECT_START_VERSION,

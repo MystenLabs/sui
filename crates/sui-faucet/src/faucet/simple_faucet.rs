@@ -82,13 +82,13 @@ impl SimpleFaucet {
         Ok(result)
     }
 
-    async fn transfer_coins(
+    async fn public_transfer_objects(
         &self,
         coins: &[ObjectID],
         recipient: SuiAddress,
     ) -> Result<(), FaucetError> {
         for coin_id in coins.iter() {
-            self.transfer_coin(
+            self.public_transfer_object(
                 *coin_id,
                 self.gas_coin_id,
                 self.active_address,
@@ -131,7 +131,7 @@ impl SimpleFaucet {
         Ok(response)
     }
 
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         coin_id: ObjectID,
         gas_object_id: ObjectID,
@@ -143,7 +143,7 @@ impl SimpleFaucet {
 
         let data = context
             .gateway
-            .transfer_coin(signer, coin_id, Some(gas_object_id), budget, recipient)
+            .public_transfer_object(signer, coin_id, Some(gas_object_id), budget, recipient)
             .await?;
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
         let effects = context
@@ -168,7 +168,7 @@ impl Faucet for SimpleFaucet {
     ) -> Result<FaucetReceipt, FaucetError> {
         let coins = self.get_coins(amounts).await?;
         let coin_ids = coins.iter().map(|c| c.id()).collect::<Vec<ObjectID>>();
-        self.transfer_coins(&coin_ids, recipient).await?;
+        self.public_transfer_objects(&coin_ids, recipient).await?;
         Ok(coins.iter().by_ref().collect())
     }
 }

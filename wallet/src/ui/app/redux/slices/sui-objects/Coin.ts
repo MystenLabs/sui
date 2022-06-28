@@ -64,14 +64,14 @@ export class Coin {
      * @param amount The amount to be transfer
      * @param recipient The sui address of the recipient
      */
-    public static async transferCoin(
+    public static async publicTransferObject(
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint,
         recipient: SuiAddress
     ): Promise<TransactionResponse> {
         const coin = await Coin.selectCoin(signer, coins, amount);
-        return await signer.transferCoin({
+        return await signer.publicTransferObject({
             objectId: coin,
             gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER,
             recipient: recipient,
