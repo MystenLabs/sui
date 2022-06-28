@@ -9,7 +9,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{sleep, Duration, Instant},
 };
-use tracing::{debug, warn};
+use tracing::debug;
 use types::{BatchDigest, Certificate, Header, Round};
 
 #[cfg(test)]
@@ -198,7 +198,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
             if (timer_expired || (enough_digests && advance)) && enough_parents {
                 if timer_expired && matches!(self.network_model, NetworkModel::PartiallySynchronous)
                 {
-                    warn!("Timer expired for round {}", self.round);
+                    debug!("Timer expired for round {}", self.round);
                 }
 
                 // Advance to the next round.
