@@ -10,7 +10,7 @@ import {
 
 import { ExampleNFT } from './NFT';
 
-import type { SuiObject } from '@mysten/sui.js';
+import type { SuiObject, SuiAddress } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -47,6 +47,22 @@ export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     async (_, { extra: { api, keypairVault }, dispatch }) => {
         await ExampleNFT.mintExampleNFT(
             api.getSignerInstance(keypairVault.getKeyPair())
+        );
+        await dispatch(fetchAllOwnedObjects());
+    }
+);
+
+export const transferSuiNFT = createAsyncThunk<
+    void,
+    { nftId: SuiAddress; recipientAddress: SuiAddress },
+    AppThunkConfig
+>(
+    'transferSuiNFT',
+    async (data, { extra: { api, keypairVault }, dispatch }) => {
+        await ExampleNFT.TransferNFT(
+            api.getSignerInstance(keypairVault.getKeyPair()),
+            data.nftId,
+            data.recipientAddress
         );
         await dispatch(fetchAllOwnedObjects());
     }

@@ -31,14 +31,14 @@ function TransferNFTForm({
     const {
         isSubmitting,
         isValid,
-        values: { amount, to },
+        values: { to },
     } = useFormikContext<FormValues>();
     const intl = useIntl();
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
     useEffect(() => {
         onClearRef.current();
-    }, [amount, to]);
+    }, [to]);
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
             <div className={st.group}>
@@ -52,7 +52,6 @@ function TransferNFTForm({
                 <ErrorMessage className={st.error} name="to" component="div" />
             </div>
             <div className={st.group}>
-                <label className={st.label}>Amount:</label>
                 <div className={st.muted}>
                     Available balance:{' '}
                     {intl.formatNumber(
@@ -68,7 +67,8 @@ function TransferNFTForm({
                 />
             </div>
             <div className={st.group}>
-                * Total transaction fee estimate (gas cost): {1000} {GAS_SYMBOL}
+                * Total transaction fee estimate (gas cost): {10000}{' '}
+                {GAS_SYMBOL}
             </div>
             {submitError ? (
                 <div className={st.group}>
