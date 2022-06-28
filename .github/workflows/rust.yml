@@ -59,7 +59,6 @@ jobs:
       #     cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   test:
-    name: test
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: ${{ matrix.os }}
@@ -88,7 +87,11 @@ jobs:
     name: test
     needs: diff
     if: needs.diff.outputs.isRust == 'false'
-    runs-on: [self-hosted, self-hosted-ubuntu]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [self-hosted, self-hosted-ubuntu]
     steps:
       - run: 'echo "No build required" '
 
