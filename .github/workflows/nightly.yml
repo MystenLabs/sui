@@ -93,7 +93,7 @@ jobs:
 
   report-status:
     name: Report Status
-    runs-on: [self-hosted, self-hosted-ubuntu]
+    runs-on: ubuntu-latest
     if: always()
     needs: [beta, release, cargo-udeps]
     steps:
@@ -108,7 +108,7 @@ jobs:
           channel-id: 'build-failures-sui'
           payload: |
             {
-              "text": "Workflow ${{ github.workflow }} failed\nLogs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": "Workflow ${{ github.workflow }} failed\nLogs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
               "blocks": [
                 {
                   "type": "section",
