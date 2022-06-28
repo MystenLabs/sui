@@ -52,7 +52,7 @@ Finish with the detailed [Programming with objects](../build/programming-with-ob
 
 Navigate and search this site however you see fit. Here is the order we recommend if you are new to Sui:
 
-1. Learn [about Sui](../learn/about-sui.md), how [Sui differs from Move](../learn/why-move.md), and [how Sui works](../learn/how-sui-works.md) starting in this very section.
+1. Learn [about Sui](../learn/about-sui.md), how [Sui Move differs from Core Move](../learn/sui-move-diffs.md), and [how Sui works](../learn/how-sui-works.md) starting in this very section.
 1. [Build](../build/index.md) smart contracts, wallets, validators, transactions, and more.
 1. [Explore](../explore/index.md) prototypes and examples.
 1. [Contribute](../contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
