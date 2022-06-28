@@ -20,7 +20,7 @@ use sui_types::{
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::{broadcast, mpsc, oneshot, Semaphore};
+use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 
 use tracing::{debug, error, info, trace, warn};
@@ -181,16 +181,20 @@ where
             let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
 
             while let Some(DigestsMessage { digests, peer, tx }) = receiver.recv().await {
-                let permit = Arc::clone(&limit).acquire_owned().await;
                 let state = state.clone();
+                let limit = limit.clone();
                 tokio::spawn(async move {
-                    let _permit = permit; // hold semaphore permit until task completes
-                                          // TODO: must send status back to follower so that it knows whether to advance
-                                          // the watermark.
-                    let res = state.process_digest(peer, digests).await;
+                    // hold semaphore permit until task completes. unwrap ok because we never close
+                    // the semaphore in this context.
+                    let permit = limit.acquire_owned().await.unwrap();
+
+                    let res = state.process_digest(peer, digests, permit).await;
                     if let Err(error) = &res {
                         error!(?digests, ?peer, "process_digest failed: {}", error);
                     }
+
+                    // Send status back to follower so that it knows whether to advance
+                    // the watermark.
                     if tx.send(res).is_err() {
                         // This will happen any time the follower times out and restarts, but
                         // that's ok - the follower won't have marked this digest as processed so it
@@ -206,7 +210,14 @@ where
         })
     }
 
-    async fn process_digest(&self, peer: AuthorityName, digests: ExecutionDigests) -> SuiResult {
+    async fn process_digest(
+        &self,
+        peer: AuthorityName,
+        digests: ExecutionDigests,
+        permit: OwnedSemaphorePermit,
+    ) -> SuiResult {
+        trace!(?digests, ?peer, "process_digest");
+
         // check if we the tx is already locally final
         if self.state.database.effects_exists(&digests.transaction)? {
             return Ok(());
@@ -236,23 +247,40 @@ where
         );
 
         if !is_final {
-            return Ok(());
+            // we won't be downloading anything, so release the permit
+            std::mem::drop(permit);
+
+            // wait until the tx becomes final before returning, so that the follower doesn't mark
+            // this tx as finished prematurely.
+            let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
+            return rx
+                .recv()
+                .await
+                .map_err(|e| SuiError::GenericAuthorityError {
+                    error: format!("{:?}", e),
+                });
         }
+
+        trace!(?digests, ?peer, "digests are now final");
 
         // Download the cert and effects now that we have established finality and we know that the
         // effects digest is correct.
         let (cert, effects) = self.download_cert_and_effects(&peer, &digests).await?;
 
+        // we're done downloading at this point, so we no longer need to prevent other tasks from
+        // starting.
+        std::mem::drop(permit);
+
         for parent in effects.effects.dependencies.iter() {
+            let (_, mut rx) = self.pending_txes.wait(parent).await;
+
             if self.state.database.effects_exists(parent)? {
                 continue;
             }
 
-            let (_, mut rx) = self.pending_txes.wait(parent).await;
-
-            // because we process digests in causal order, we can be sure that all of our parents
-            // have already started processing, therefore we will eventually be notified that each
-            // parent is complete.
+            trace!(?parent, digest = ?digests.transaction, "waiting for parent");
+            // Since we no longer hold the semaphore permit, can be sure that our parent will be
+            // able to start.
             rx.recv()
                 .await
                 .map_err(|e| SuiError::GenericAuthorityError {
@@ -266,8 +294,6 @@ where
             }
         }
 
-        // TODO: support shared object TXes via something like:
-        // self.state.sequence_shared_locks_from_effects(effects).await
         self.state
             .handle_node_sync_transaction(cert, effects)
             .await?;
@@ -281,6 +307,7 @@ where
             .forget_effects(&digests.effects);
 
         // Notify waiting child transactions.
+        trace!(digest = ?digests.transaction, "notifying parent");
         self.pending_txes.notify(&digests.transaction, ()).await?;
         Ok(())
     }
