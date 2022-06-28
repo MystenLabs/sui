@@ -370,18 +370,17 @@ impl AuthorityState {
         // byzantine validator from giving us incorrect effects.
         signed_effects: SignedTransactionEffects,
     ) -> SuiResult {
-        let transaction_digest = *certificate.digest();
+        let digest = *certificate.digest();
+        debug!(?digest, "handle_node_sync_transaction");
         fp_ensure!(
-            signed_effects.effects.transaction_digest == transaction_digest,
-            // NOTE: the error message here will say 'Error acquiring lock' but what it means is
-            // 'error checking lock'.
+            signed_effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
 
         let tx_guard = self
-            .acquire_tx_guard(&transaction_digest, &certificate)
+            .acquire_tx_guard(&digest, &certificate)
             .await?;
 
         if certificate.contains_shared_object() {
@@ -399,7 +398,8 @@ impl AuthorityState {
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let certificate = confirmation_transaction.certificate;
-        let transaction_digest = *certificate.digest();
+        let digest = *certificate.digest();
+        debug!(?digest, "handle_confirmation_transaction");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -412,7 +412,7 @@ impl AuthorityState {
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
         let tx_guard = self
-            .acquire_tx_guard(&transaction_digest, &certificate)
+            .acquire_tx_guard(&digest, &certificate)
             .await?;
 
         self.process_certificate(tx_guard, certificate).await
@@ -1378,7 +1378,7 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        self.database
+        let res = self.database
             .update_state(
                 temporary_store,
                 certificate,
@@ -1386,7 +1386,11 @@ impl AuthorityState {
                 signed_effects,
                 &signed_effects.effects.digest(),
             )
-            .await
+            .await;
+
+        debug!(digest = ?certificate.digest(), "commit_certificate finished");
+
+        res
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
