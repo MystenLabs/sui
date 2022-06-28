@@ -3,7 +3,7 @@ name: nightly
 on:
   schedule:
     - cron: '0 0 * * *'  # every day at midnight
-  workflow_dispatch
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
