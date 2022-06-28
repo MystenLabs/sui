@@ -81,16 +81,15 @@ async fn checkpoint_active_flow_happy_path() {
             .unwrap()
             .lock()
             .next_checkpoint();
+        // TODO: This check is not very meaningful after we allowed empty checkpoints.
+        // What we want to check is probably the number of non-empty checkpoints.
         assert!(
             next_checkpoint_sequence >= 2,
-            "Expected {} > 2",
+            "Expected {} >= 2",
             next_checkpoint_sequence
         );
         value_set.insert(next_checkpoint_sequence);
     }
-
-    // After the end all authorities are the same
-    assert!(value_set.len() == 1, "Got set {:?}", value_set);
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -176,16 +175,15 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             .unwrap()
             .lock()
             .next_checkpoint();
+        // TODO: This check is not very meaningful after we allowed empty checkpoints.
+        // What we want to check is probably the number of non-empty checkpoints.
         assert!(
             next_checkpoint_sequence > 1,
-            "Expected {} > 2",
+            "Expected {} > 1",
             next_checkpoint_sequence
         );
         value_set.insert(next_checkpoint_sequence);
     }
-
-    // After the end all authorities are the same
-    assert!(value_set.len() == 1, "Got set {:?}", value_set);
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -271,16 +269,15 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             .unwrap()
             .lock()
             .next_checkpoint();
+        // TODO: This check is not very meaningful after we allowed empty checkpoints.
+        // What we want to check is probably the number of non-empty checkpoints.
         assert!(
             next_checkpoint_sequence > 1,
-            "Expected {} > 2",
+            "Expected {} > 1",
             next_checkpoint_sequence
         );
         value_set.insert(next_checkpoint_sequence);
     }
-
-    // After the end all authorities are the same
-    assert!(value_set.len() == 1, "Got set {:?}", value_set);
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
