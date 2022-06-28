@@ -60,14 +60,27 @@ jobs:
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, self-hosted-ubuntu]
     timeout-minutes: 30
+    runs-on: ${{ matrix.os }}
     strategy:
+      matrix:
+        os:
+          - [self-hosted, self-hosted-ubuntu]
+          - [self-hosted, windows]
       fail-fast: false
     steps:
+      # Set the path for windows builds: the runner needs to be able to find
+      # llvm binaries as well as the "bash" binary included with msys64.
+      - name: Adjust path for windows builds
+        if: "startsWith(runner.os, 'windows')"
+        run: |
+          echo "C:\Program Files\llvm\bin;C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
+      # The install script for nextest doesn't work on windows (very linux/bash
+      # specific) so the windows builders already have the binaries installed.
       - uses: taiki-e/install-action@nextest
+        if: "startsWith(runner.os, 'linux')"
       - name: cargo test
         run: |
           cargo nextest run --all-features --profile ci
@@ -76,6 +89,25 @@ jobs:
           cargo test --doc --all-features
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
+        shell: bash
+
+  # This is a no-op job that allows the resulting action names to line up when
+  # there are no rust changes in a given PR/commit. This ensures that we can
+  # continue to block on the rust tests passing in the case of rust changes and
+  # otherwise not block pushes to main.
+  test-notrust:
+    name: test
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [self-hosted, self-hosted-ubuntu]
+          - [self-hosted, windows]
+      fail-fast: false
+    steps:
+      - run: 'echo "No build required" '
 
   clippy:
     needs: diff
