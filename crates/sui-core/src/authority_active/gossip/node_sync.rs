@@ -252,12 +252,12 @@ where
             // wait until the tx becomes final before returning, so that the follower doesn't mark
             // this tx as finished prematurely.
             let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
-            return Ok(rx
+            return rx
                 .recv()
                 .await
                 .map_err(|e| SuiError::GenericAuthorityError {
                     error: format!("{:?}", e),
-                })?);
+                });
         }
 
         trace!(?digests, ?peer, "digests are now final");

@@ -385,9 +385,7 @@ impl AuthorityState {
             }
         );
 
-        let tx_guard = self
-            .acquire_tx_guard(&digest, &certificate)
-            .await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database
@@ -417,9 +415,7 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let tx_guard = self
-            .acquire_tx_guard(&digest, &certificate)
-            .await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         self.process_certificate(tx_guard, certificate).await
     }
@@ -1382,7 +1378,8 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        let res = self.database
+        let res = self
+            .database
             .update_state(
                 temporary_store,
                 certificate,
