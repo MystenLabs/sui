@@ -44,7 +44,7 @@ This transaction type transfers objects from the sender to the specified recipie
 In addition to the common metadata above, a transfer object transaction includes the following fields:
 
 * Input: An object reference pointing to a mutable object owned by the sender. The object must be of type that allows for public transfers--that is, any type with the `store` ability. The gas input object from above cannot also appear as the object input.
-* Recipients: The address that will receive payments from this transfer.
+* Recipient: The address that will receive the object from this transfer.
 
 ### Transfer Sui
 
@@ -55,6 +55,7 @@ In addition to the common metadata above, a transfer Sui transaction includes th
 
 * Input: An object reference pointing to a `sui::coin::Coin<sui::sui::SUI>` object owned by the sender.
 * (Optional) Amount: An unsigned integer encoding the amount that the recipient will receive. The amount will be debited from the input object, wrapped in a freshly created coin object, and sent to the corresponding recipient address. The value of the input object must be greater than or equal to the amount specified.
+* Recipient: The address that will receive the coin from this transfer.
 
 ### Join
 
