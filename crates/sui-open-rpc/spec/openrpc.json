@@ -760,7 +760,7 @@
       "name": "sui_syncAccountState",
       "tags": [
         {
-          "name": "Quorum Driver API"
+          "name": "Wallet Sync API"
         }
       ],
       "description": "Synchronize client state with validators.",
@@ -782,13 +782,13 @@
       }
     },
     {
-      "name": "sui_transferCoin",
+      "name": "sui_transferObject",
       "tags": [
         {
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a transaction to transfer a Sui coin from one address to another.",
+      "description": "Create a transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
       "params": [
         {
           "name": "signer",
@@ -1621,11 +1621,15 @@
         "type": "object",
         "required": [
           "fields",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "fields": {
             "$ref": "#/components/schemas/MoveStruct"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"
@@ -1996,11 +2000,11 @@
           {
             "type": "object",
             "required": [
-              "transferCoinRequestParams"
+              "transferObjectRequestParams"
             ],
             "properties": {
-              "transferCoinRequestParams": {
-                "$ref": "#/components/schemas/TransferCoinParams"
+              "transferObjectRequestParams": {
+                "$ref": "#/components/schemas/TransferObjectParams"
               }
             },
             "additionalProperties": false
@@ -2023,11 +2027,15 @@
         "type": "object",
         "required": [
           "bcs_bytes",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "bcs_bytes": {
             "$ref": "#/components/schemas/Base64"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"
@@ -2271,14 +2279,14 @@
       "TransactionKind": {
         "oneOf": [
           {
-            "description": "Initiate a coin transfer between addresses",
+            "description": "Initiate an object transfer between addresses",
             "type": "object",
             "required": [
-              "TransferCoin"
+              "TransferObject"
             ],
             "properties": {
-              "TransferCoin": {
-                "$ref": "#/components/schemas/TransferCoin"
+              "TransferObject": {
+                "$ref": "#/components/schemas/TransferObject"
               }
             },
             "additionalProperties": false
@@ -2389,7 +2397,7 @@
           }
         ]
       },
-      "TransferCoin": {
+      "TransferObject": {
         "type": "object",
         "required": [
           "objectRef",
@@ -2404,7 +2412,7 @@
           }
         }
       },
-      "TransferCoinParams": {
+      "TransferObjectParams": {
         "type": "object",
         "required": [
           "objectId",

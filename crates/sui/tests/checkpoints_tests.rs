@@ -68,7 +68,7 @@ async fn sequence_fragments() {
             let checkpoints_store = handle.state().checkpoints().unwrap();
             checkpoints_store
                 .lock()
-                .handle_internal_batch(next_sequence_number, &transactions, committee)
+                .handle_internal_batch(next_sequence_number, &transactions)
                 .unwrap();
             let proposal = checkpoints_store
                 .lock()
@@ -103,7 +103,7 @@ async fn sequence_fragments() {
             .checkpoints()
             .unwrap()
             .lock()
-            .handle_receive_fragment(&fragment, committee);
+            .submit_local_fragment_to_consensus(&fragment, committee);
     }
 
     // Wait until all validators sequence and process the fragment.

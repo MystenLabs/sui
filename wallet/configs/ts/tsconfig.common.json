@@ -28,7 +28,10 @@
             "_hooks": ["./src/ui/app/hooks/"],
             "_components/*": ["./src/ui/app/components/*"],
             "_messaging/*": ["./src/shared/messaging/*"],
-            "_messages/*": ["./src/shared/messaging/messages/*"]
+            "_messages": ["./src/shared/messaging/messages/"],
+            "_messages/*": ["./src/shared/messaging/messages/*"],
+            "_payloads": ["./src/shared/messaging/messages/payloads/"],
+            "_payloads/*": ["./src/shared/messaging/messages/payloads/*"]
         }
     },
     "include": ["../../src"],

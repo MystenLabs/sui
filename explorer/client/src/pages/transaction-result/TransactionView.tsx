@@ -7,7 +7,7 @@ import {
     getTransactionKindName,
     getTransactions,
     getTransactionSender,
-    getTransferCoinTransaction,
+    getTransferObjectTransaction,
     getMovePackageContent,
     getObjectId,
 } from '@mysten/sui.js';
@@ -122,8 +122,8 @@ function formatByTransactionKind(
     sender: string
 ) {
     switch (kind) {
-        case 'TransferCoin':
-            const transfer = getTransferCoinTransaction(data)!;
+        case 'TransferObject':
+            const transfer = getTransferObjectTransaction(data)!;
             return [
                 {
                     label: 'Object',

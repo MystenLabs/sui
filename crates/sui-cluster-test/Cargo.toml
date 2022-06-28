@@ -16,7 +16,7 @@ serde_with = { version = "1.13.0", features = ["hex"] }
 tracing = { version = "0.1.34", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
 reqwest = { version = "0.11.10", features = ["blocking", "json"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
 sui-faucet = { path = "../sui-faucet" }
 sui = { path = "../sui" }

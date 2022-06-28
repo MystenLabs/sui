@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 bcs = "0.1.3"
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 base64 = "0.13.0"
 smallvec = "1.8.0"
 num_enum = "0.5.7"
@@ -30,7 +30,7 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1
 workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 sui-framework-build = { path = "../sui-framework-build" }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
