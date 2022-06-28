@@ -221,15 +221,6 @@ Owner:
       Immutable: UNIT
 PublicKeyBytes:
   NEWTYPESTRUCT: BYTES
-PublicTransferObject:
-  STRUCT:
-    - recipient:
-        TYPENAME: SuiAddress
-    - object_ref:
-        TUPLE:
-          - TYPENAME: ObjectID
-          - TYPENAME: SequenceNumber
-          - TYPENAME: ObjectDigest
 SequenceNumber:
   NEWTYPESTRUCT: U64
 Signature:
@@ -245,9 +236,9 @@ SignedBatch:
 SingleTransactionKind:
   ENUM:
     0:
-      PublicTransferObject:
+      TransferObject:
         NEWTYPE:
-          TYPENAME: PublicTransferObject
+          TYPENAME: TransferObject
     1:
       Publish:
         NEWTYPE:
@@ -295,6 +286,15 @@ TransactionKind:
         NEWTYPE:
           SEQ:
             TYPENAME: SingleTransactionKind
+TransferObject:
+  STRUCT:
+    - recipient:
+        TYPENAME: SuiAddress
+    - object_ref:
+        TUPLE:
+          - TYPENAME: ObjectID
+          - TYPENAME: SequenceNumber
+          - TYPENAME: ObjectDigest
 TransferSui:
   STRUCT:
     - recipient:

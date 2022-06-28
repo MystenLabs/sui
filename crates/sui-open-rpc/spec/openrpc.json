@@ -649,60 +649,6 @@
       }
     },
     {
-      "name": "sui_publicTransferObject",
-      "tags": [
-        {
-          "name": "Transaction Builder API"
-        }
-      ],
-      "description": "Create a transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
-      "params": [
-        {
-          "name": "signer",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "object_id",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "gas",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "gas_budget",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "recipient",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionBytes",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
-        }
-      }
-    },
-    {
       "name": "sui_publish",
       "tags": [
         {
@@ -832,6 +778,60 @@
         "required": true,
         "schema": {
           "type": "null"
+        }
+      }
+    },
+    {
+      "name": "sui_transferObject",
+      "tags": [
+        {
+          "name": "Transaction Builder API"
+        }
+      ],
+      "description": "Create a transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
+      "params": [
+        {
+          "name": "signer",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "gas_budget",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "recipient",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionBytes",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TransactionBytes"
         }
       }
     },
@@ -1953,36 +1953,6 @@
       "PublicKeyBytes": {
         "$ref": "#/components/schemas/Base64"
       },
-      "PublicTransferObject": {
-        "type": "object",
-        "required": [
-          "objectRef",
-          "recipient"
-        ],
-        "properties": {
-          "objectRef": {
-            "$ref": "#/components/schemas/ObjectRef"
-          },
-          "recipient": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      },
-      "PublicTransferObjectParams": {
-        "type": "object",
-        "required": [
-          "objectId",
-          "recipient"
-        ],
-        "properties": {
-          "objectId": {
-            "$ref": "#/components/schemas/ObjectID"
-          },
-          "recipient": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      },
       "PublishResponse": {
         "type": "object",
         "required": [
@@ -2030,11 +2000,11 @@
           {
             "type": "object",
             "required": [
-              "publicTransferObjectRequestParams"
+              "transferObjectRequestParams"
             ],
             "properties": {
-              "publicTransferObjectRequestParams": {
-                "$ref": "#/components/schemas/PublicTransferObjectParams"
+              "transferObjectRequestParams": {
+                "$ref": "#/components/schemas/TransferObjectParams"
               }
             },
             "additionalProperties": false
@@ -2312,11 +2282,11 @@
             "description": "Initiate an object transfer between addresses",
             "type": "object",
             "required": [
-              "PublicTransferObject"
+              "TransferObject"
             ],
             "properties": {
-              "PublicTransferObject": {
-                "$ref": "#/components/schemas/PublicTransferObject"
+              "TransferObject": {
+                "$ref": "#/components/schemas/TransferObject"
               }
             },
             "additionalProperties": false
@@ -2426,6 +2396,36 @@
             "additionalProperties": false
           }
         ]
+      },
+      "TransferObject": {
+        "type": "object",
+        "required": [
+          "objectRef",
+          "recipient"
+        ],
+        "properties": {
+          "objectRef": {
+            "$ref": "#/components/schemas/ObjectRef"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      },
+      "TransferObjectParams": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "recipient"
+        ],
+        "properties": {
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "recipient": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
       },
       "TransferSui": {
         "type": "object",

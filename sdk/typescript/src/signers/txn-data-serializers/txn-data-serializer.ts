@@ -6,7 +6,7 @@ import { ObjectId, SuiAddress, SuiJsonValue } from '../../types';
 
 ///////////////////////////////
 // Exported Types
-export interface PublicTransferObjectTransaction {
+export interface TransferObjectTransaction {
   objectId: ObjectId;
   gasPayment?: ObjectId;
   gasBudget: number;
@@ -43,9 +43,9 @@ export interface MoveCallTransaction {
  * Serializes a transaction to a string that can be signed by a `Signer`.
  */
 export interface TxnDataSerializer {
-  newPublicTransferObject(
+  newTransferObject(
     signerAddress: SuiAddress,
-    txn: PublicTransferObjectTransaction
+    txn: TransferObjectTransaction
   ): Promise<Base64DataBuffer>;
 
   newMoveCall(
