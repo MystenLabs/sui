@@ -7,8 +7,27 @@ header {
 }
 
 main {
-    @apply fixed overflow-scroll h-[80vh] w-full top-[6vh] 
-    bg-offwhite rounded-[20px] z-10;
+    @apply fixed overflow-auto h-[80vh] w-full top-[6vh] 
+    bg-offwhite rounded-[20px] z-10 shadow-2xl;
+}
+
+/* Improves scrollbar look on Chromium browsers */
+
+main::-webkit-scrollbar {
+    width: 10px;
+}
+
+main::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+main::-webkit-scrollbar-thumb {
+    background: #898d93;
+    border-radius: 5px;
+}
+
+main::-webkit-scrollbar-thumb:hover {
+    background: #4e555d;
 }
 
 footer {
