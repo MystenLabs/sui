@@ -376,6 +376,7 @@ impl CertifiedCheckpoint {
         }
         obligation.aggregated_signature = Some(self.signature.0);
 
+        println!("1!");
         obligation.verify_all().map(|_| ())?;
         Ok(())
     }

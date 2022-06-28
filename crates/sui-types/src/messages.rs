@@ -1236,14 +1236,12 @@ impl<'a> SignatureAggregator<'a> {
         self.partial.auth_sign_info.aggregated_signature
             = match self.partial.auth_sign_info.aggregated_signature {
                 Some(prev_sig) => {
-                    println!("2 pass");
                     let mut aggr_sig = blst::min_sig::AggregateSignature::from_signature(&prev_sig.0);
                     aggr_sig.add_signature(&signature.0, true)
                     .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
                     Some(AuthoritySignature(aggr_sig.to_signature()))
                 }
                 None => {
-                    println!("1 pass");
                     Some(signature)
                 }
             };

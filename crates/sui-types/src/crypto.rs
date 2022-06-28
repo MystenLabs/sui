@@ -798,24 +798,9 @@ impl VerificationObligation {
             .map(|idx| &self.messages[*idx][..])
             .collect();
 
-        // let sigs = &self.signatures.iter().map(|x| x).collect::<Vec<_>>()[..];
-        // for sig in sigs {
-            // println!("{:?}", (*sig).to_bytes());
-        // }
-        
-        // if sigs.len() == 0 {
-        //     println!("No Signature");
-        //     return Err(SuiError::InvalidSignature {
-        //         error: format!("No signature"),
-        //     });
-        // }
-
-        // let signature = AggregateSignature::aggregate(
-        //     &self.signatures.iter().map(|sig| sig).collect::<Vec<_>>()[..],
-        //     true
-        // ).map_err(|e| SuiError::InvalidSignature {
-        //     error: format!("{:?}", e)
-        // })?.to_signature();
+        if (messages_inner.len() == 0 && self.aggregated_signature == None) {
+           return Ok(self.lookup);
+        }
 
         let result = match self.aggregated_signature {
             Some(signature) => {
@@ -828,6 +813,7 @@ impl VerificationObligation {
                 )
             }
             None => {
+                println!("{:?}", self.public_keys.len());
                 return Err(SuiError::InvalidSignature {
                     error: format!("Empty Signature")
                 })
