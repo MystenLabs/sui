@@ -64,12 +64,10 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "d
 ```
 
 This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
+* sui - The Sui CLI tool, contain subcommands for enables `genesis` of validators and accounts, starting the Sui network, [build and test Move packages](move.md) and a [client](wallet.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
-* sui - enables `genesis` of validators and accounts, as well as starting the Sui network.
-* [`sui-move`](move.md) - build and test Move packages.
-* [`wallet`](wallet.md) - run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions
 
-Confirm the install with:
+Confirm the installation with:
 
 ```
 $ echo $PATH
@@ -97,7 +95,7 @@ $ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 You can start exploring Sui's source code by looking into the following primary directories:
-* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
+* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui CLI binary
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
 * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
@@ -117,6 +115,6 @@ To contribute updates to Sui code, [send pull requests](../contribute/index.md#s
 Continue your journey through:
 
 * [Smart Contracts with Move](move.md)
-* [Wallet Quick Start](wallet.md)
+* [Sui client Quick Start](wallet.md)
 * [RPC Server API](json-rpc.md)
 * [End-to-End tutorial](../explore/tutorials.md)

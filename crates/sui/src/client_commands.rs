@@ -40,7 +40,7 @@ use sui_types::{
 use crate::config::{Config, GatewayType, PersistedConfig, SuiClientConfig};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
-pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command Line Tool";
+pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
 pub const EXAMPLE_NFT_URL: &str =
     "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty";
 
@@ -171,7 +171,7 @@ pub enum SuiClientCommands {
         address: Option<SuiAddress>,
     },
 
-    /// Obtain the Addresses managed by the wallet.
+    /// Obtain the Addresses managed by the client.
     #[clap(name = "addresses")]
     Addresses,
 

@@ -119,7 +119,7 @@ Both functions will compile successfully, because object ownership relationships
 
 Let's try to interact with these two entry functions on-chain and see what happens. First we publish the sample code:
 ```
-$ wallet publish --path sui_core/src/unit_tests/data/object_owner --gas-budget 5000
+$ sui client publish --path sui_core/src/unit_tests/data/object_owner --gas-budget 5000
 ```
 ```
 ----- Publish Results ----
@@ -128,7 +128,7 @@ The newly published package object ID: 0x3cfcee192b2fbafbce74a211e40eaf9e4cb746b
 Then we create a child object:
 ```
 $ export PKG=0x3cfcee192b2fbafbce74a211e40eaf9e4cb746b9
-$ wallet call --package $PKG --module object_owner --function create_child  --gas-budget 1000
+$ sui client call --package $PKG --module object_owner --function create_child  --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -138,7 +138,7 @@ Created Objects:
 At this point we only created the child object, but it's still owned by an account address. We can verify that we should be able to call `mutate_child` function by only passing in the child object:
 ```
 $ export CHILD=0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941
-$ wallet call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
+$ sui client call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -150,7 +150,7 @@ Indeed the transasaction succeeded.
 
 Now let's create the `Parent` object as well:
 ```
-$ wallet call --package $PKG --module object_owner --function create_parent --gas-budget 1000
+$ sui client call --package $PKG --module object_owner --function create_parent --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -160,7 +160,7 @@ Created Objects:
 Now we can make the parent object own the child object:
 ```
 $ export PARENT=0x2f893c18241cfbcd390875f6e1566f4db949392e
-$ wallet call --package $PKG --module object_owner --function add_child --args $PARENT $CHILD --gas-budget 1000
+$ sui client call --package $PKG --module object_owner --function add_child --args $PARENT $CHILD --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -171,7 +171,7 @@ As we can see, the owner of the child object has been changed to the parent obje
 
 Now if we try to call `mutate_child` again, we will see an error:
 ```
-$ wallet call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
+$ sui client call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
 ```
 ```
 Object 0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941 is owned by object 0x2f893c18241cfbcd390875f6e1566f4db949392e, which is not in the input
@@ -179,7 +179,7 @@ Object 0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941 is owned by object 0x2f893c182
 
 To be able to mutate the child object, we must also pass the parent object as argument. Hence we need to call the `mutate_child_with_parent` function:
 ```
-$ wallet call --package $PKG --module object_owner  --function mutate_child_with_parent --args $CHILD $PARENT --gas-budget 1000
+$ sui client call --package $PKG --module object_owner  --function mutate_child_with_parent --args $CHILD $PARENT --gas-budget 1000
 ```
 It will finish successfully.
 
@@ -251,7 +251,7 @@ public entry fun delete_child(child: Child, _parent: &mut Parent) {
     id::delete(id);
 }
 ```
-If you follow the wallet interaction above and then try to call the `delete_child` function here on a child object, you will see the following runtime error:
+If you follow the client interaction above and then try to call the `delete_child` function here on a child object, you will see the following runtime error:
 ```
 An object that's owned by another object cannot be deleted or wrapped.
 It must be transferred to an account address first before deletion

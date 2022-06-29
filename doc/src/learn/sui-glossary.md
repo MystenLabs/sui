@@ -124,8 +124,8 @@ For more information, see [Causal order vs total order](sui-compared#causal-orde
 ### Transfer
 
 A transfer is switching the owner address of a token to a new one via command in Sui. This is accomplished via the
-[Sui Wallet](../build/wallet.md) command line interface. It is one of the more common of many commands
-available in the wallet.
+[Sui CLI client](../build/wallet.md) command line interface. It is one of the more common of many commands
+available in the CLI client.
 
 For more information, see [Transferring objects](../build/wallet.md#transferring-objects).
 

@@ -19,7 +19,7 @@ connect the Sui  client to the DevNet, run the following command:
 ```shell
 $ sui client
 ```
-The Sui CLI will print the following line if the wallet is starting up the
+The Sui CLI will print the following line if the client is starting up the
 first time.
 ```shell
 Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
@@ -38,7 +38,7 @@ If you have used the Sui client before with a local network, follow the next sec
 If you have used the Sui client before, you will have an existing `client.yaml` configuration
 file. Change the configured RPC server URL to DevNet by using:
 ```shell
-$ wallet switch --gateway https://gateway.devnet.sui.io:443
+$ sui client switch --gateway https://gateway.devnet.sui.io:443
 ```
 
 ## Genesis
@@ -100,7 +100,7 @@ with the Sui network validators  and create transactions using the key
 pairs residing in the keystore file.
 
 Here is an example of `client.yaml` showing the accounts and key pairs
-in the wallet configuration (with some values omitted):
+in the client configuration (with some values omitted):
 
 ```yaml
 ---
@@ -165,7 +165,7 @@ all data will be stored locally and the application will make direct
 connection to the validators.
 
 #### RPC gateway
-You can also connect the wallet to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
+You can also connect the client to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
 To use the RPC gateway, update `client.yaml`'s `gateway` section to:
 ```yaml
 ...
@@ -224,7 +224,7 @@ Now start a new terminal since you have Sui running in the first terminal.
 The following commands are supported by the client:
 
     active-address        Default address used for commands when none specified
-    addresses             Obtain the Addresses managed by the wallet
+    addresses             Obtain the Addresses managed by the client
     call                  Call Move function
     clear                 Clear screen
     create-example-nft    Create an example NFT
@@ -265,13 +265,13 @@ accepted the default location for configuration:
 $ sui console 
 ```
 
-This command will look for the wallet configuration file
+This command will look for the client configuration file
 `client.yaml` in the `~/.sui/sui_config` directory. But you can
 override this setting by providing a path to the directory where this
 file is stored:
 
 ```shell
-$ sui console --config /path/to/wallet/config/file
+$ sui console --config /path/to/client/config/file
 ```
 
 The Sui interactive client console supports the following shell functionality:
@@ -283,14 +283,14 @@ The Sui interactive client console supports the following shell functionality:
 * *Tab completion* -
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
 * *Environment variable substitution* -
-  The wallet shell will substitute inputs prefixed with `$` with environment variables,
+  The Sui console will substitute inputs prefixed with `$` with environment variables,
   you can use the `env` command to print out the entire list of variables and
   use `echo` to preview the substitution without invoking any commands.
 
 ### Command line mode
 
 The client can also be used without the interactive shell, which can be useful if
-you want to pipe the output of the wallet to another application or invoke client
+you want to pipe the output of the client to another application or invoke client
 commands using scripts.
 
 ```shell
@@ -320,14 +320,14 @@ But the actual address values will most likely differ
 in your case (as will other values, such as object IDs, in the latter
 parts of this tutorial). Consequently, **do not copy and paste
 the actual command from this tutorial as they are unlikely to work for
-you verbatim**. Each time you create a config for the wallet, addresses
+you verbatim**. Each time you create a config for the client, addresses
 and object IDs will be assigned randomly. Consequently, you cannot rely
 on copy-pasting commands that include these values, as they will be different
 between different users/configs.
 
 ### Active address
 
-Since a wallet manages multiple disjointed addresses, one might need to specify
+Since a Sui CLI client manages multiple disjointed addresses, one might need to specify
 which address they want to call a command on.
 
 For convenience, one can choose to set a default, or active address that will be
@@ -384,7 +384,7 @@ the address owned by the gas object is temporarily used for the transaction.
 
 All Sui transactions require a gas object for payment, as well as a budget. However, specifying
 the gas object can be cumbersome; so in the CLI, one is allowed to omit the gas object and leave
-the wallet to pick an object that meets the specified budget. This gas selection logic is currently
+the client to pick an object that meets the specified budget. This gas selection logic is currently
 rudimentary as it does not combine/split gas as needed but currently picks the first object it finds
 that meets the budget. Note that one can always specify their own gas if they want to manage the gas
 themselves.
@@ -429,7 +429,7 @@ $ sui client gas --address 0x562f07cf6369e8d22dbf226a5bfedc6300014837
 ## Adding accounts to the client
 
 Sui's genesis process will create five accounts by default; if that's
-not enough, there are two ways to add accounts to the Sui wallet if needed.
+not enough, there are two ways to add accounts to the Sui CLI client if needed.
 
 ### Generating a new account
 
@@ -447,7 +447,7 @@ Created new keypair for address : 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
 
 ### Add existing accounts to `client.yaml` manually
 
-If you have an existing key pair from an old wallet config, you can copy the account
+If you have an existing key pair from an old client config, you can copy the account
 address manually to the new `client.yaml`'s accounts section, and add the key pair to the keystore file;
 you won't be able to mutate objects if the account key is missing from the keystore.
 
@@ -472,7 +472,7 @@ OPTIONS:
         --json                 Return command outputs in json format
 ```
 
-To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
+To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your client):
 
 ```shell
 $ sui client objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
@@ -532,7 +532,7 @@ The result shows some basic information about the object, the owner,
 version, ID, if the object is immutable and the type of the object.
 
 > **Important:** To gain a deeper view into the object, include the
-> `--json` flag in the `wallet` command to see the raw JSON representation
+> `--json` flag in the `sui client` command to see the raw JSON representation
 > of the object.
 
 Here is example `json` output:
@@ -578,8 +578,8 @@ Showing 0 results.
 ```
 
 To add objects to the account, you can [invoke a Move function](#calling-move-code),
-or you can transfer one of the existing coins from the genesis account to the new account using a dedicated wallet command.
-We will explore how to transfer coins using the wallet in this section.
+or you can transfer one of the existing coins from the genesis account to the new account using a dedicated Sui client command.
+We will explore how to transfer coins using the Sui CLI client in this section.
 
 `transfer-coin` command usage:
 
@@ -647,7 +647,7 @@ Mutated Objects:
 The account will now have one object:
 
 ```shell
-$ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
+$ sui client objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     1      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
@@ -673,7 +673,7 @@ Storage Rebate: 25
 Previous Transaction: 98HbDxEwEUknQiJzyWM8AiYIM479BEKuGwxrZOGtAwk=
 ----- Data -----
 type: 0x2::devnet_nft::DevNetNFT
-description: An NFT created by the wallet Command Line Tool
+description: An NFT created by the Sui Command Line Tool
 id: 0x524f9fae3ca4554e01354415daf58a05e5bf26ac[1]
 name: Example NFT
 url: ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty
@@ -865,7 +865,7 @@ Updated Gas : Coin { id: 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4, value: 9938
 ```
 
 ```
-$ wallet objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
+$ sui client objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x1da8193ac29f94f8207b0222bd5941b7814c1668 |     1      | nAMEV3NZ0zscjO10QQUt1drLvhNXTk4MVLAg1FXTQxw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
@@ -896,14 +896,14 @@ public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
 ```
 
 Please note that there is no real need to use a Move call to transfer
-coins as this can be accomplished with a built-in wallet
+coins as this can be accomplished with a built-in Sui client
 [command](#transferring-coins) - we chose this example due to its
 simplicity.
 
 Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2225`:
 
 ```shell
-$ wallet objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
+$ sui client objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
                  Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
  0x471c8e241d0473c34753461529b70f9c4ed3151b |     0      | MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
@@ -922,7 +922,7 @@ but for the sake of this exercise, let's choose the last one on the
 list.
 
 We will perform the transfer by calling the `transfer` function from
-the sui module using the following Sui Wallet command:
+the sui module using the following Sui client command:
 
 ```shell
 $ sui client call --function transfer --module sui --package 0x2 --args 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget 1000
@@ -1036,7 +1036,7 @@ an upper limit we use 1000 as our gas budget.
 Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75`) which now has 4 objects left:
 
 ```shell
-$ wallet objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+$ sui client objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 ```
 
 Outputting:
@@ -1086,7 +1086,7 @@ Updated Gas : Coin { id: 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19, value: 9692
 ```
 
 Please note that running this command resulted in creating an object representing the published package.
-From now on, we can use the package object ID (`0xdbcee02bd4eb326122ced0a8540f15a057d82850`) in the Sui wallet's call
+From now on, we can use the package object ID (`0xdbcee02bd4eb326122ced0a8540f15a057d82850`) in the Sui client's call
 command just like we used `0x2` for built-in packages in the
 [Calling Move code](#calling-move-code) section.
 

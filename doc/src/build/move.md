@@ -234,7 +234,7 @@ to define the new ones in the section describing how to
 In addition to functions callable from other functions, however, the
 Sui flavor of the Move language also defines so called _entry
 functions_ that can be called directly from Sui (e.g., from a Sui
-wallet application that can be written in a different language) and
+application that can be written in a different language) and
 must satisfy a certain set of properties.
 
 #### Entry functions
@@ -276,8 +276,8 @@ value, and has three parameters:
   in the function's body as indicated by its name starting with `_`)
   - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
-You can see how the `transfer` function is called from a sample Sui
-wallet in [Calling Move code](wallet.md#calling-move-code).
+You can see how the `transfer` function is called from a Sui
+CLI client in [Calling Move code](wallet.md#calling-move-code).
 
 
 ## Writing a package
@@ -783,10 +783,10 @@ At this point, however, the
 `sui-move` command does not support package publishing. In fact, it is
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
-testing framework. Instead, one can use a sample Sui wallet to
+testing framework. Instead, one can use a Sui CLI client to
 [publish](wallet.md#publish-packages) Move code and to
 [call](wallet.md#calling-move-code) it. See the
-[wallet documentation](wallet.md) for a description of how
+[Sui CLI client documentation](wallet.md) for a description of how
 to publish the package we have [written](#writing-a-package) as as
 part of this tutorial.
 
