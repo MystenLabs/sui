@@ -92,7 +92,7 @@ where
                 )
             })
             .collect();
-        let new_committee = Committee::new(next_epoch, votes);
+        let new_committee = Committee::new(next_epoch, votes)?;
         self.state.insert_new_epoch_info(&new_committee)?;
         let new_net = Arc::new(AuthorityAggregator::new(
             new_committee,

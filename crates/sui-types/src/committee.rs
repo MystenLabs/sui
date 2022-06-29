@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::error::SuiResult;
+use crate::error::{SuiError, SuiResult};
 use ed25519_dalek::PublicKey;
 use itertools::Itertools;
 use rand_latest::rngs::OsRng;
@@ -27,9 +27,29 @@ pub struct Committee {
 }
 
 impl Committee {
-    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, StakeUnit>) -> Self {
+    pub fn new(
+        epoch: EpochId,
+        voting_rights: BTreeMap<AuthorityName, StakeUnit>,
+    ) -> SuiResult<Self> {
         let mut voting_rights: Vec<(AuthorityName, StakeUnit)> =
             voting_rights.iter().map(|(a, s)| (*a, *s)).collect();
+
+        fp_ensure!(
+            // Actual committee size is enforced in sui_system.move.
+            // This is just to ensure that choose_multiple_weighted can't fail.
+            voting_rights.len() < u32::MAX.try_into().unwrap(),
+            SuiError::InvalidCommittee("committee has too many members".into())
+        );
+
+        fp_ensure!(
+            !voting_rights.is_empty(),
+            SuiError::InvalidCommittee("committee has 0 members".into())
+        );
+
+        fp_ensure!(
+            !voting_rights.iter().any(|(_, s)| *s == 0),
+            SuiError::InvalidCommittee("all committee members must have non-zero stake.".into())
+        );
 
         voting_rights.sort_by_key(|(a, _)| *a);
         let total_votes = voting_rights.iter().map(|(_, votes)| *votes).sum();
@@ -39,12 +59,12 @@ impl Committee {
             // e.g. when a new validator is registering themself on-chain.
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
-        Committee {
+        Ok(Committee {
             epoch,
             voting_rights,
             total_votes,
             expanded_keys,
-        }
+        })
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -65,6 +85,9 @@ impl Committee {
     }
 
     fn choose_multiple_weighted(&self, count: usize) -> impl Iterator<Item = &AuthorityName> {
+        // unwrap is safe because we validate the committee composition in `new` above.
+        // See https://docs.rs/rand/latest/rand/distributions/weighted/enum.WeightedError.html
+        // for possible errors.
         self.voting_rights
             .as_slice()
             .choose_multiple_weighted(&mut OsRng, count, |(_, weight)| *weight as f64)
