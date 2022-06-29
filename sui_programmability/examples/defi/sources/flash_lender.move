@@ -73,6 +73,7 @@ module defi::flash_lender {
         let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
         transfer::share_object(flash_lender);
+
         // give the creator admin permissions
         AdminCap { id: tx_context::new_id(ctx), flash_lender_id }
     }
@@ -81,6 +82,7 @@ module defi::flash_lender {
     public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
         let balance = coin::into_balance(to_lend);
         let withdraw_cap = new(balance, fee, ctx);
+
         transfer::transfer(withdraw_cap, tx_context::sender(ctx))
     }
 
@@ -94,9 +96,10 @@ module defi::flash_lender {
     ): (Coin<T>, Receipt<T>) {
         let to_lend = &mut self.to_lend;
         assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
-        let loan = coin::withdraw(to_lend, amount, ctx);
+        let loan = coin::take(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
         let receipt = Receipt { flash_lender_id: *id::id(self), repay_amount };
+
         (loan, receipt)
     }
 
@@ -108,7 +111,7 @@ module defi::flash_lender {
         assert!(id::id(self) == &flash_lender_id, ERepayToWrongLender);
         assert!(coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
 
-        coin::deposit(&mut self.to_lend, payment)
+        coin::put(&mut self.to_lend, payment)
     }
 
     // === Admin-only functionality ===
@@ -125,7 +128,7 @@ module defi::flash_lender {
 
         let to_lend = &mut self.to_lend;
         assert!(balance::value(to_lend) >= amount, EWithdrawTooLarge);
-        coin::withdraw(to_lend, amount, ctx)
+        coin::take(to_lend, amount, ctx)
     }
 
     /// Allow admin to add more funds to `self`
@@ -134,7 +137,7 @@ module defi::flash_lender {
     ) {
         // only the holder of the `AdminCap` for `self` can deposit funds
         check_admin(self, admin_cap);
-        coin::deposit(&mut self.to_lend, coin);
+        coin::put(&mut self.to_lend, coin);
     }
 
     /// Allow admin to update the fee for `self`

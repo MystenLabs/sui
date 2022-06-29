@@ -7,3 +7,5 @@ Sui = { local = "../../../crates/sui-framework" }
 
 [addresses]
 fungible_tokens = "0x0"
+abc = "0x0"
+rc = "0x0"

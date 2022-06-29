@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::sui_system {
-    use sui::balance::{Self, Balance};
-    use sui::coin::{Self, Coin, TreasuryCap};
+    use sui::balance::{Self, Balance, Supply};
+    use sui::coin::{Self, Coin};
     use sui::delegation::{Self, Delegation};
     use sui::epoch_reward_record::{Self, EpochRewardRecord};
     use sui::id::{Self, VersionedID};
@@ -40,7 +40,7 @@ module sui::sui_system {
         /// Contains all information about the validators.
         validators: ValidatorSet,
         /// The SUI treasury capability needed to mint SUI.
-        treasury_cap: TreasuryCap<SUI>,
+        sui_supply: Supply<SUI>,
         /// The storage fund.
         storage_fund: Balance<SUI>,
         /// A list of system config parameters.
@@ -56,7 +56,7 @@ module sui::sui_system {
     /// This function will be called only once in Genesis.
     public(friend) fun create(
         validators: vector<Validator>,
-        treasury_cap: TreasuryCap<SUI>,
+        sui_supply: Supply<SUI>,
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
@@ -67,7 +67,7 @@ module sui::sui_system {
             id: id::get_sui_system_state_object_id(),
             epoch: 0,
             validators: validator_set::new(validators),
-            treasury_cap,
+            sui_supply,
             storage_fund,
             parameters: SystemParameters {
                 min_validator_stake,
@@ -237,8 +237,8 @@ module sui::sui_system {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
 
-        let storage_reward = balance::create_with_value(storage_charge);
-        let computation_reward = balance::create_with_value(computation_charge);
+        let storage_reward = balance::increase_supply(&mut self.sui_supply, storage_charge);
+        let computation_reward = balance::increase_supply(&mut self.sui_supply, computation_charge);
 
         let delegation_stake = validator_set::delegation_stake(&self.validators);
         let validator_stake = validator_set::validator_stake(&self.validators);
@@ -268,7 +268,7 @@ module sui::sui_system {
         );
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `computation_reward`. All of these go to the storage fund.
-        balance::join(&mut self.storage_fund, computation_reward)
+        balance::join(&mut self.storage_fund, computation_reward);
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
