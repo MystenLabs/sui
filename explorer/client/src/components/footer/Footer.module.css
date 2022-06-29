@@ -50,8 +50,12 @@ nav.links a {
     @apply hidden sm:block;
 }
 
+.copyright {
+    @apply text-xs;
+}
+
 .logodesktop > .copyright {
-    @apply text-offwhite text-xs;
+    @apply text-offwhite;
 }
 
 .logomobile {
