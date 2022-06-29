@@ -23,6 +23,7 @@ tokio = { version = "1.18.2", features = ["full"] }
 tokio-stream = "0.1.8"
 
 sui-core = { path = "../sui-core" }
+sui-storage = { path = "../sui-storage" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-json-rpc-api = { path = "../sui-json-rpc-api" }

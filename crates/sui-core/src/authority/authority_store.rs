@@ -72,8 +72,6 @@ pub struct SuiDataStore<S> {
     owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    /// NOTE: after a lock is deleted (after a certificate is processed) the corresponding entry here
-    /// could be deleted, but right now this is only done on gateways, not done on authorities.
     transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
