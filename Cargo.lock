@@ -498,6 +498,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "bindgen"
+version = "0.60.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "062dddbc1ba4aca46de6338e2bf87771414c335f7b2f2036e8f3e9befebf88e6"
+dependencies = [
+ "bitflags",
+ "cexpr",
+ "clang-sys",
+ "lazy_static 1.4.0",
+ "lazycell",
+ "peeking_take_while",
+ "proc-macro2 1.0.39",
+ "quote 1.0.18",
+ "regex",
+ "rustc-hash",
+ "shlex",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3081,7 +3100,7 @@ version = "0.6.1+6.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bc587013734dadb7cf23468e531aa120788b87243648be42e2d3a072186291"
 dependencies = [
- "bindgen",
+ "bindgen 0.59.2",
  "bzip2-sys",
  "cc",
  "glob",
@@ -8496,7 +8515,7 @@ dependencies = [
  "better_typeid_derive",
  "bimap",
  "bincode",
- "bindgen",
+ "bindgen 0.60.1",
  "bit-set",
  "bit-vec",
  "bitflags",
@@ -9124,7 +9143,7 @@ dependencies = [
  "base64",
  "base64ct",
  "bincode",
- "bindgen",
+ "bindgen 0.59.2",
  "bit-set",
  "bit-vec",
  "bitflags",
