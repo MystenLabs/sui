@@ -1,11 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::error::{SuiError, SuiResult};
+use crate::{error::{SuiError, SuiResult}};
 use digest::Digest;
 use ed25519_dalek as dalek;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 use std::{collections::{HashMap}, hash::Hash};
+// use crate::bls12381::{Bls12381KeyPair, Bls12381Signature, Bls12381AuthoritySignature, Bls12381PublicKeyBytes, Bls12381AuthorityQuorumSignInfo};
 use crate::ed25519::{Ed25519KeyPair, Ed25519AuthoritySignature, Ed25519Signature, Ed25519PublicKeyBytes, Ed25519AuthorityQuorumSignInfo, Ed25519AuthoritySignInfo};
 pub use crate::crypto_traits::{BcsSignable, Signable, SignableBytes};
 
@@ -59,63 +60,56 @@ mod private {
 
 pub type PubKeyLookup = HashMap<PublicKeyBytes, dalek::PublicKey>;
 
-#[derive(Default)]
-pub struct VerificationObligation {
-    lookup: PubKeyLookup,
-    messages: Vec<Vec<u8>>,
-    pub message_index: Vec<usize>,
-    pub signatures: Vec<dalek::Signature>,
-    pub public_keys: Vec<dalek::PublicKey>,
-}
+// #[derive(Default)]
+// pub struct VerificationObligation {
+//     lookup: PubKeyLookup,
+//     messages: Vec<Vec<u8>>,
+//     pub message_index: Vec<usize>,
+//     pub signatures: Vec<dalek::Signature>,
+//     pub public_keys: Vec<dalek::PublicKey>,
+// }
 
-impl VerificationObligation {
-    pub fn new(lookup: PubKeyLookup) -> VerificationObligation {
-        VerificationObligation {
-            lookup,
-            ..Default::default()
-        }
-    }
+// impl VerificationObligation {
+//     pub fn lookup_public_key(
+//         &mut self,
+//         key_bytes: &PublicKeyBytes,
+//     ) -> Result<dalek::PublicKey, SuiError> {
+//         match self.lookup.get(key_bytes) {
+//             Some(v) => Ok(*v),
+//             None => {
+//                 let public_key = (*key_bytes).try_into()?;
+//                 self.lookup.insert(*key_bytes, public_key);
+//                 Ok(public_key)
+//             }
+//         }
+//     }
 
-    pub fn lookup_public_key(
-        &mut self,
-        key_bytes: &PublicKeyBytes,
-    ) -> Result<dalek::PublicKey, SuiError> {
-        match self.lookup.get(key_bytes) {
-            Some(v) => Ok(*v),
-            None => {
-                let public_key = (*key_bytes).try_into()?;
-                self.lookup.insert(*key_bytes, public_key);
-                Ok(public_key)
-            }
-        }
-    }
+//     /// Add a new message to the list of messages to be verified.
+//     /// Returns the index of the message.
+//     pub fn add_message(&mut self, message: Vec<u8>) -> usize {
+//         let idx = self.messages.len();
+//         self.messages.push(message);
+//         idx
+//     }
 
-    /// Add a new message to the list of messages to be verified.
-    /// Returns the index of the message.
-    pub fn add_message(&mut self, message: Vec<u8>) -> usize {
-        let idx = self.messages.len();
-        self.messages.push(message);
-        idx
-    }
+//     pub fn verify_all(self) -> SuiResult<PubKeyLookup> {
+//         let messages_inner: Vec<_> = self
+//             .message_index
+//             .iter()
+//             .map(|idx| &self.messages[*idx][..])
+//             .collect();
+//         dalek::verify_batch(
+//             &messages_inner[..],
+//             &self.signatures[..],
+//             &self.public_keys[..],
+//         )
+//         .map_err(|error| SuiError::InvalidSignature {
+//             error: format!("{error}"),
+//         })?;
 
-    pub fn verify_all(self) -> SuiResult<PubKeyLookup> {
-        let messages_inner: Vec<_> = self
-            .message_index
-            .iter()
-            .map(|idx| &self.messages[*idx][..])
-            .collect();
-        dalek::verify_batch(
-            &messages_inner[..],
-            &self.signatures[..],
-            &self.public_keys[..],
-        )
-        .map_err(|error| SuiError::InvalidSignature {
-            error: format!("{error}"),
-        })?;
-
-        Ok(self.lookup)
-    }
-}
+//         Ok(self.lookup)
+//     }
+// }
 
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();

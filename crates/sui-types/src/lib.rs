@@ -33,6 +33,7 @@ pub mod sui_serde;
 pub mod sui_system_state;
 pub mod waypoint;
 pub mod ed25519;
+// pub mod bls12381;
 pub mod crypto_traits;
 
 pub mod event_filter;

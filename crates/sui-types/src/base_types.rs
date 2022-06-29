@@ -25,8 +25,9 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 
+// use crate::bls12381::Bls12381PublicKeyBytes;
 use crate::committee::EpochId;
-use crate::crypto::PublicKeyBytes;
+use crate::crypto::{KeyPair, PublicKeyBytes};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -200,6 +201,24 @@ impl From<PublicKeyBytes> for SuiAddress {
         Self(res)
     }
 }
+
+// impl From<&Bls12381PublicKeyBytes> for SuiAddress {
+//     fn from(key: &Bls12381PublicKeyBytes) -> SuiAddress {
+//         Self::from(*key)
+//     }
+// }
+
+// impl From<Bls12381PublicKeyBytes> for SuiAddress {
+//     fn from(key: Bls12381PublicKeyBytes) -> SuiAddress {
+//         let mut hasher = Sha3_256::default();
+//         hasher.update(key.as_ref());
+//         let g_arr = hasher.finalize();
+
+//         let mut res = [0u8; SUI_ADDRESS_LENGTH];
+//         res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
+//         Self(res)
+//     }
+// }
 
 impl TryFrom<&[u8]> for SuiAddress {
     type Error = SuiError;
@@ -476,7 +495,7 @@ impl ObjectDigest {
 }
 
 pub fn get_new_address() -> SuiAddress {
-    crate::crypto::KeyPair::get_key_pair().0
+    KeyPair::get_key_pair().0
 }
 
 pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>

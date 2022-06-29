@@ -11,7 +11,7 @@ use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{sha3_hash, AuthoritySignature, BcsSignable, VerificationObligation},
+    crypto::{sha3_hash, AuthoritySignature, BcsSignable},
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
@@ -333,13 +333,9 @@ impl CertifiedCheckpointSummary {
             self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
-        let mut obligation = VerificationObligation::default();
         let mut message = Vec::new();
         self.summary.write(&mut message);
-        let idx = obligation.add_message(message);
-        self.auth_signature
-            .add_to_verification_obligation(committee, &mut obligation, idx)?;
-        obligation.verify_all()?;
+        self.auth_signature.verify(message, committee)?;
         Ok(())
     }
 

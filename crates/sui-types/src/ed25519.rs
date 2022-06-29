@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
-use crate::crypto::VerificationObligation;
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
@@ -471,18 +470,15 @@ impl PartialEq for Ed25519AuthoritySignInfo {
 }
 
 impl Ed25519AuthoritySignInfo {
-    pub fn add_to_verification_obligation(
+    pub fn verify(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
-        message_index: usize,
+        message: Vec<u8>
     ) -> SuiResult<()> {
-        obligation
-            .public_keys
-            .push(committee.public_key(&self.authority)?);
-        obligation.signatures.push(self.signature.0);
-        obligation.message_index.push(message_index);
-        Ok(())
+        let key: dalek::PublicKey = self.authority.try_into()?;
+        key.verify(
+            &message[..],
+            &self.signature.0,
+        ).map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })
     }
 }
 
@@ -499,13 +495,11 @@ pub struct Ed25519AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
 }
 
 impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
-    pub fn add_to_verification_obligation(
-        &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
-        message_index: usize,
-    ) -> SuiResult<()> {
-        // Check epoch
+    pub fn verify(
+        &self, 
+        message: Vec<u8>,
+        committee: &Committee
+    ) -> Result<(), SuiError> {
         fp_ensure!(
             self.epoch == committee.epoch(),
             SuiError::WrongEpoch {
@@ -515,25 +509,24 @@ impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHO
 
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
+        let mut authorities: Vec<dalek::PublicKey> = Vec::new();
+        let mut messages : Vec<&[u8]> = Vec::new();
 
-        // Create obligations for the committee signatures
-        for (authority, signature) in self.signatures.iter() {
+        for (authority, _) in self.signatures.iter() {
             // Check that each authority only appears once.
             fp_ensure!(
                 !used_authorities.contains(authority),
                 SuiError::CertificateAuthorityReuse
             );
             used_authorities.insert(*authority);
+
             // Update weight.
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
             weight += voting_rights;
 
-            obligation
-                .public_keys
-                .push(committee.public_key(authority)?);
-            obligation.signatures.push(signature.0);
-            obligation.message_index.push(message_index);
+            authorities.push(committee.public_key(authority)?);
+            messages.push(&message[..]);
         }
 
         let threshold = if STRONG_THRESHOLD {
@@ -542,6 +535,24 @@ impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHO
             committee.validity_threshold()
         };
         fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
+        
+        dalek::verify_batch(
+            &messages
+                .iter()
+                .map(|message| &message[..])
+                .collect::<Vec<_>>()[..],
+            &self.signatures
+                .iter()
+                .map(|(_, sig)| sig.0)
+                .collect::<Vec<_>>()[..],
+            &authorities
+                .iter()
+                .map(|pk| *pk)
+                .collect::<Vec<_>>()[..]
+        )
+        .map_err(|error| SuiError::InvalidSignature {
+            error: format!("{error}"),
+        })?;
 
         Ok(())
     }
