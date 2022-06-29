@@ -1,12 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { lastValueFrom, take } from 'rxjs';
+
+import { createMessage } from '_messages';
+import { PortStream } from '_messaging/PortStream';
+import { isPermissionRequests } from '_payloads/permissions';
 import { setPermissions } from '_redux/slices/permissions';
 
 import type { SuiAddress } from '@mysten/sui.js';
+import type { Message } from '_messages';
+import type {
+    GetPermissionRequests,
+    PermissionResponse,
+} from '_payloads/permissions';
 import type { AppDispatch } from '_store';
 
 export class BackgroundClient {
+    private _portStream: PortStream | null = null;
     private _dispatch: AppDispatch | null = null;
     private _initialized = false;
 
@@ -16,7 +27,7 @@ export class BackgroundClient {
         }
         this._initialized = true;
         this._dispatch = dispatch;
-        // TODO: implement
+        this.createPortStream();
         return this.sendGetPermissionRequests().then(() => undefined);
     }
 
@@ -26,27 +37,56 @@ export class BackgroundClient {
         allowed: boolean,
         responseDate: string
     ) {
-        // TODO: implement
+        this.sendMessage(
+            createMessage<PermissionResponse>({
+                id,
+                type: 'permission-response',
+                accounts,
+                allowed,
+                responseDate,
+            })
+        );
     }
 
     public async sendGetPermissionRequests() {
-        // TODO: remove mock and implement
-        const id = /connect\/(.+)/.exec(window.location.hash)?.[1];
-        if (this._dispatch && id) {
-            this._dispatch(
-                setPermissions([
-                    {
-                        id,
-                        accounts: [],
-                        allowed: null,
-                        createdDate: new Date().toISOString(),
-                        favIcon: 'https://www.google.com/favicon.ico',
-                        origin: 'https://www.google.com',
-                        permissions: ['viewAccount'],
-                        responseDate: null,
-                    },
-                ])
+        const responseStream = this.sendMessage(
+            createMessage<GetPermissionRequests>({
+                type: 'get-permission-requests',
+            })
+        );
+        if (!responseStream) {
+            throw new Error('Failed to send get permissions request');
+        }
+        return lastValueFrom(responseStream.pipe(take(1)));
+    }
+
+    private handleIncomingMessage(msg: Message) {
+        if (!this._initialized || !this._dispatch) {
+            throw new Error(
+                'BackgroundClient is not initialized to handle incoming messages'
             );
+        }
+        const { payload } = msg;
+        if (isPermissionRequests(payload)) {
+            this._dispatch(setPermissions(payload.permissions));
+        }
+    }
+
+    private createPortStream() {
+        this._portStream = PortStream.connectToBackgroundService(
+            'sui_ui<->background'
+        );
+        this._portStream.onDisconnect.subscribe(() => {
+            this.createPortStream();
+        });
+        this._portStream.onMessage.subscribe((msg) =>
+            this.handleIncomingMessage(msg)
+        );
+    }
+
+    private sendMessage(msg: Message) {
+        if (this._portStream?.connected) {
+            return this._portStream.sendMessage(msg);
         }
     }
 }
