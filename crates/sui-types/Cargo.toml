@@ -27,7 +27,7 @@ signature = "1.5.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 parking_lot = "0.12.1"
-base64ct = { version = "1.5.0", features = ["alloc"] }
+base64ct = { version = "1.5.1", features = ["alloc"] }
 sha2 = "0.10.2"
 zeroize = "1.5.4"
 hkdf = "0.12.3"
@@ -47,6 +47,6 @@ move-disassembler = { git = "https://github.com/move-language/move", rev = "ae62
 move-ir-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "crypto" }
 workspace-hack = { path = "../workspace-hack"}
