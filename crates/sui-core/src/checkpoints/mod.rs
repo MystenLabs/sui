@@ -616,8 +616,12 @@ impl CheckpointStore {
 
         // We have a proposal so lets try to re-construct the checkpoint.
         let next_sequence_number = self.next_checkpoint();
+        let locals = self.get_locals();
 
-        if let Ok(Some(contents)) = self.reconstruct_contents(committee) {
+        // Ok to unwrap because of the check above
+        let our_proposal = locals.current_proposal.as_ref().unwrap();
+
+        if let Ok(Some(contents)) = self.reconstruct_contents(committee, our_proposal) {
             // Here we check, and ensure, all transactions are processed before we
             // move to sign the checkpoint.
             if !self
@@ -650,6 +654,7 @@ impl CheckpointStore {
     pub fn reconstruct_contents(
         &mut self,
         committee: &Committee,
+        our_proposal: &CheckpointProposal,
     ) -> Result<Option<CheckpointContents>, FragmentInternalError> {
         let next_sequence_number = self.next_checkpoint();
         let fragments: Vec<_> = self
@@ -667,80 +672,78 @@ impl CheckpointStore {
         .map_err(FragmentInternalError::Error)?;
 
         if let Some(reconstructed) = _potential_checkpoint {
-            if let Some(proposal) = &self.get_locals().current_proposal {
-                // By definition the proposal and the new checkpoint must be in the
-                // same sequence number of checkpoint.
+            // A little argument about how the fragment -> checkpoint process is live
+            //
+            // A global checkpoint candidate must contain at least 2f+1 stake. And as
+            // a result of this f+1 stake will be from honest nodes that by definition
+            // must have submitted a proposal (because it is included!).
+            // So f+1 honest authorities will be able to reconstruct and sign the
+            // checkpoint. And all other authorities by asking all authorities will be
+            // able to get f+1 signatures and construct a checkpoint certificate.
 
-                // Strategy 1 to reconstruct checkpoint -- we are included in it!
+            // By definition the proposal and the new checkpoint must be in the
+            // same sequence number of checkpoint.
 
-                if reconstructed
+            // Strategy 1 to reconstruct checkpoint -- we are included in it!
+
+            if reconstructed
+                .global
+                .authority_waypoints
+                .contains_key(&self.name)
+            {
+                // We are included in the proposal, so we can go ahead and construct the
+                // full checkpoint!
+                let mut contents = our_proposal.transactions.clone();
+                contents.transactions.extend(
+                    // Add all items missing to reach then global waypoint
+                    reconstructed.global.authority_waypoints[&self.name]
+                        .items
+                        .clone(),
+                );
+
+                return Ok(Some(contents));
+            }
+
+            // Strategy 2 to reconstruct checkpoint -- There is a link between us and the checkpoint set
+
+            let local_links: HashSet<_> = self.local_fragments.keys().collect();
+            let checkpoint_keys: HashSet<_> = reconstructed
+                .global
+                .authority_waypoints
+                .keys()
+                .cloned()
+                .collect();
+
+            if let Some(auth) = local_links.intersection(&checkpoint_keys).next() {
+                let fragment = self
+                    .local_fragments
+                    .get(auth)
+                    .map_err(|err| FragmentInternalError::Error(err.into()))?
+                    .unwrap();
+
+                // Extract the diff
+                let diff = if fragment.proposer.authority() == &self.name {
+                    fragment.diff
+                } else {
+                    fragment.diff.swap()
+                };
+
+                if let Ok(contents) = reconstructed
                     .global
-                    .authority_waypoints
-                    .contains_key(&self.name)
+                    .checkpoint_items(&diff, our_proposal.transactions.transactions.clone())
                 {
-                    // We are included in the proposal, so we can go ahead and construct the
-                    // full checkpoint!
-                    let mut contents = proposal.transactions.clone();
-                    contents.transactions.extend(
-                        // Add all items missing to reach then global waypoint
-                        reconstructed.global.authority_waypoints[&self.name]
-                            .items
-                            .clone(),
-                    );
-
+                    let contents = CheckpointContents::new(contents.into_iter());
                     return Ok(Some(contents));
                 }
-
-                // Strategy 2 to reconstruct checkpoint -- There is a link between us and the checkpoint set
-
-                let local_links: HashSet<_> = self.local_fragments.keys().collect();
-                let checkpoint_keys: HashSet<_> = reconstructed
-                    .global
-                    .authority_waypoints
-                    .keys()
-                    .cloned()
-                    .collect();
-
-                if let Some(auth) = local_links.intersection(&checkpoint_keys).next() {
-                    let fragment = self
-                        .local_fragments
-                        .get(auth)
-                        .map_err(|err| FragmentInternalError::Error(err.into()))?
-                        .unwrap();
-
-                    // Extract the diff
-                    let diff = if fragment.proposer.authority() == &self.name {
-                        fragment.diff
-                    } else {
-                        fragment.diff.swap()
-                    };
-
-                    if let Ok(contents) = reconstructed
-                        .global
-                        .checkpoint_items(&diff, proposal.transactions.transactions.clone())
-                    {
-                        let contents = CheckpointContents::new(contents.into_iter());
-                        return Ok(Some(contents));
-                    }
-                }
-            } else {
-                // A little argument about how the fragment -> checkpoint process is live
-                //
-                // A global checkpoint candidate must contain at least 2f+1 stake. And as
-                // a result of this f+1 stake will be from honest nodes that by definition
-                // must have submitted a proposal (because it is included!).
-                // So f+1 honest authorities will be able to reconstruct and sign the
-                // checkpoint. And all other authorities by asking all authorities will be
-                // able to get f+1 signatures and construct a checkpoint certificate.
-
-                // Sets the reconstruction to false, we have all fragments we need, but
-                // just cannot reconstruct the contents.
-                let locals = self.get_locals();
-                let mut new_locals = locals.as_ref().clone();
-                new_locals.no_more_fragments = true;
-                self.set_locals(locals, new_locals)
-                    .map_err(FragmentInternalError::Error)?;
             }
+
+            // Sets the reconstruction to false, we have all fragments we need, but
+            // just cannot reconstruct the contents.
+            let locals = self.get_locals();
+            let mut new_locals = locals.as_ref().clone();
+            new_locals.no_more_fragments = true;
+            self.set_locals(locals, new_locals)
+                .map_err(FragmentInternalError::Error)?;
 
             return Err(FragmentInternalError::Error(SuiError::from(
                 "Missing info to construct known checkpoint.",
