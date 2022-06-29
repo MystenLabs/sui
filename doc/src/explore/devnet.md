@@ -14,7 +14,7 @@ Many improvements to the Sui DevNet are underway, such as the ability to run ful
 
 We provide the following tools for users to interact with the Sui Devnet:
 
-* The [Sui Wallet command line interface (CLI)](../build/wallet.md)
+* The [Sui Wallet command line interface (CLI)](../build/cli-client.md)
     * create and manage your private keys
     * submit transactions for creating example NFTs
     * call and publish Move modules
@@ -43,7 +43,7 @@ In addition, to conduct advanced work such as publishing a Move module or making
 
 ### Set up Sui CLI client, connect to gateway
 
-Now [set up your Sui CLI client and connect to DevNet](../build/wallet.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/wallet.md#manually-change-the-rpc-server-url) if you have already configured a Sui CLI client.
+Now [set up your Sui CLI client and connect to DevNet](../build/cli-client.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/cli-client.md#manually-change-the-rpc-server-url) if you have already configured a Sui CLI client.
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
 

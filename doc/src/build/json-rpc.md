@@ -4,14 +4,14 @@ title: Local RPC Server & JSON-RPC API Quick Start
 
 Welcome to the Sui RPC server quick start.
 
-This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](wallet.md) documentation.
+This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
 
 ## Local RPC server setup
 Follow the instructions to [install Sui binaries](install.md).
 
 ### Start local Sui network
-Follow the instructions to [create](wallet.md#genesis) and [start](wallet.md#starting-the-network) the Sui network.
+Follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) the Sui network.
 The genesis process will create a `gateway.conf` configuration file that will be used by the RPC server.
 
 ### Start local RPC server
@@ -220,7 +220,7 @@ Follow the instructions to [execute the transaction](#3-execute-the-transaction-
 Arguments are passed in, and type will be inferred from function
 signature.  Gas usage is capped by the gas_budget. The `transfer`
 function is described in more detail in
-the [Sui CLI client](wallet.md#calling-move-code) documentation.
+the [Sui CLI client](cli-client.md#calling-move-code) documentation.
 
 Calling the `transfer` function in the `Coin` module serves the same
 purpose as the native transfer ([`sui_transferObject`](#sui_TransferObject)), and is mostly used for illustration

@@ -277,7 +277,7 @@ value, and has three parameters:
   - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
 You can see how the `transfer` function is called from a Sui
-CLI client in [Calling Move code](wallet.md#calling-move-code).
+CLI client in [Calling Move code](cli-client.md#calling-move-code).
 
 
 ## Writing a package
@@ -395,7 +395,7 @@ In order to build a package containing this simple module, we need to
 put some required metadata into the `Move.toml` file, including package
 name, package version, local dependency path to locate Sui framework
 code, and package numeric ID, which must be `0x0` for user-defined modules
-to facilitate [package publishing](wallet.md#publish-packages).
+to facilitate [package publishing](cli-client.md#publish-packages).
 
 ```
 [package]
@@ -784,9 +784,9 @@ At this point, however, the
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
 testing framework. Instead, one can use a Sui CLI client to
-[publish](wallet.md#publish-packages) Move code and to
-[call](wallet.md#calling-move-code) it. See the
-[Sui CLI client documentation](wallet.md) for a description of how
+[publish](cli-client.md#publish-packages) Move code and to
+[call](cli-client.md#calling-move-code) it. See the
+[Sui CLI client documentation](cli-client.md) for a description of how
 to publish the package we have [written](#writing-a-package) as as
 part of this tutorial.
 

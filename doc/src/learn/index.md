@@ -40,7 +40,7 @@ See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/d
 Go to the [Move Quick Start](../build/move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
 ### Sui CLI client quick start
-See the [Sui CLI client Quick Start](../build/wallet.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+See the [Sui CLI client Quick Start](../build/cli-client.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
 ### End-to-end tutorial
 Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.

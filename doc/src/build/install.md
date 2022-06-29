@@ -64,7 +64,7 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "d
 ```
 
 This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
-* sui - The Sui CLI tool, contain subcommands for enables `genesis` of validators and accounts, starting the Sui network, [build and test Move packages](move.md) and a [client](wallet.md) for interacting with the Sui network.
+* sui - The Sui CLI tool, contain subcommands for enables `genesis` of validators and accounts, starting the Sui network, [build and test Move packages](move.md) and a [client](cli-client.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
 Confirm the installation with:
@@ -115,6 +115,6 @@ To contribute updates to Sui code, [send pull requests](../contribute/index.md#s
 Continue your journey through:
 
 * [Smart Contracts with Move](move.md)
-* [Sui client Quick Start](wallet.md)
+* [Sui client Quick Start](cli-client.md)
 * [RPC Server API](json-rpc.md)
 * [End-to-End tutorial](../explore/tutorials.md)

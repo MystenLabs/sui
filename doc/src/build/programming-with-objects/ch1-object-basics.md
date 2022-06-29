@@ -146,7 +146,7 @@ sui-move test
 ```
 
 ### On-chain Interactions
-Now let's try to call `create` in actual transactions and see what happens. To do this, we need to start Sui and the CLI client. Follow the [Sui CLI client guide](../wallet.md) to start the Sui network and set up the client.
+Now let's try to call `create` in actual transactions and see what happens. To do this, we need to start Sui and the CLI client. Follow the [Sui CLI client guide](../cli-client.md) to start the Sui network and set up the client.
 
 Before starting, let's take a look at the default client address (this is the address that will eventually own the object later):
 ```
