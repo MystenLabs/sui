@@ -123,7 +123,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             println!("Start active execution process.");
             active_state.clone().spawn_execute_process().await;
 
-            // Spin the gossip service.
+            // Spin the checkpoint service.
             active_state
                 .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
                 .await;
@@ -273,7 +273,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             .next_checkpoint();
         assert!(
             next_checkpoint_sequence > 1,
-            "Expected {} > 2",
+            "Expected {} > 1",
             next_checkpoint_sequence
         );
         value_set.insert(next_checkpoint_sequence);
