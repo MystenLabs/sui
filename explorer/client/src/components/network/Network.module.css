@@ -1,5 +1,9 @@
+.hamburger {
+    @apply stroke-white stroke-[2px] cursor-pointer;
+}
+
 .networkbox {
-    @apply text-sm cursor-pointer text-offwhite bg-transparent hover:bg-search-fill leading-8  w-[10rem] mx-[2vw] text-center;
+    @apply text-sm cursor-pointer text-offwhite bg-transparent hover:bg-search-fill leading-8  w-[10rem] mx-[2vw] text-center hidden sm:block;
 }
 
 .opennetworkbox {

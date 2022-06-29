@@ -69,6 +69,11 @@ export default function NetworkSelect() {
             <div onClick={openModal} className={styles.networkbox}>
                 {network} <DownSVG />
             </div>
+            <div onClick={openModal} className={styles.hamburger}>
+                <svg height="32" width="32">
+                    <path d="M 2 6 H 30 M 2 14 H 30 M 2 22 H 30" />
+                </svg>
+            </div>
             <div
                 className={isModuleOpen ? styles.opennetworkbox : styles.remove}
             >
