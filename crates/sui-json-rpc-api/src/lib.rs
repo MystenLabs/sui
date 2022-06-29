@@ -245,7 +245,63 @@ impl TransactionBytes {
 
 #[open_rpc(namespace = "sui", tag = "Event Subscription")]
 #[rpc(server, client, namespace = "sui")]
-pub trait EventApi {
+pub trait EventStreamingApi {
     #[subscription(name = "subscribeEvent", item = SuiEventEnvelope)]
     fn subscribe_event(&self, filter: SuiEventFilter);
+}
+
+#[open_rpc(namespace = "sui", tag = "Event Read API")]
+#[rpc(server, client, namespace = "sui")]
+pub trait EventReadApi {
+    #[method(name = "getEventsByTransaction")]
+    async fn get_events_by_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    #[method(name = "getEventsByModule")]
+    async fn get_events_by_module(
+        &self,
+        package: ObjectID,
+        module: String,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    #[method(name = "getEventsByEventType")]
+    async fn get_events_by_event_type(
+        &self,
+        event_type: String,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    #[method(name = "getEventsBySender")]
+    async fn get_events_by_sender(
+        &self,
+        sender: SuiAddress,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    #[method(name = "getEventsByObject")]
+    async fn get_events_by_object(
+        &self,
+        object: ObjectID,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    #[method(name = "getEventsByOwner")]
+    async fn get_events_by_owner(
+        &self,
+        owner: SuiAddress,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
 }
