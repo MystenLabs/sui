@@ -406,7 +406,7 @@ scopeguard = { version = "1", features = ["use_std"] }
 sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
 sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
-send_wrapper = { version = "0.4", default-features = false }
+send_wrapper = { version = "0.6", default-features = false }
 serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8", features = ["std"] }
 serde-dff4ba8e3ae991db = { package = "serde", version = "1", features = ["alloc", "derive", "rc", "serde_derive", "std"] }
 serde-hjson = { version = "0.9", default-features = false }
@@ -1011,7 +1011,7 @@ sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = fa
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
 semver-parser = { version = "0.10", default-features = false }
-send_wrapper = { version = "0.4", default-features = false }
+send_wrapper = { version = "0.6", default-features = false }
 serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8", features = ["std"] }
 serde-dff4ba8e3ae991db = { package = "serde", version = "1", features = ["alloc", "derive", "rc", "serde_derive", "std"] }
 serde-hjson = { version = "0.9", default-features = false }
