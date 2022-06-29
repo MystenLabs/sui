@@ -50,8 +50,8 @@ pub enum SuiError {
     LockErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
-    #[error("Attempt to transfer an object that's not a coin. Object transfer must be done using a distinct Move function call.")]
-    TransferNonCoinError,
+    #[error("Attempt to transfer an object that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
+    TransferObjectWithoutPublicTransferError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
     #[error("The SUI coin to be transferred has balance {balance}, which is not enough to cover the transfer amount {required}")]
@@ -290,6 +290,8 @@ pub enum SuiError {
     },
     #[error("Storage error")]
     StorageError(#[from] TypedStoreError),
+    #[error("Non-RocksDB Storage error: {0}")]
+    GenericStorageError(String),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
@@ -307,6 +309,8 @@ pub enum SuiError {
     // Errors returned by authority and client read API's
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
+    #[error("Event store component is not active on this node")]
+    NoEventStore,
 
     // Client side error
     #[error("Client state has a different pending transaction.")]

@@ -26,26 +26,27 @@ use move_core_types::{
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use prometheus_exporter::prometheus::{
-    register_histogram, register_int_counter, Histogram, IntCounter,
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
 };
 use std::ops::Deref;
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
 };
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_storage::{
+    event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -129,92 +130,99 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 impl AuthorityMetrics {
-    pub fn new() -> AuthorityMetrics {
+    pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
         Self {
-            tx_orders: register_int_counter!(
+            tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
-                "Total number of transaction orders"
+                "Total number of transaction orders",
+                registry,
             )
             .unwrap(),
-            total_certs: register_int_counter!(
+            total_certs: register_int_counter_with_registry!(
                 "total_transaction_certificates",
-                "Total number of transaction certificates handled"
+                "Total number of transaction certificates handled",
+                registry,
             )
             .unwrap(),
             // total_effects == total transactions finished
-            total_effects: register_int_counter!(
+            total_effects: register_int_counter_with_registry!(
                 "total_transaction_effects",
-                "Total number of transaction effects produced"
+                "Total number of transaction effects produced",
+                registry,
             )
             .unwrap(),
-            total_events: register_int_counter!("total_events", "Total number of events produced")
-                .unwrap(),
-            signature_errors: register_int_counter!(
+            total_events: register_int_counter_with_registry!(
+                "total_events",
+                "Total number of events produced",
+                registry,
+            )
+            .unwrap(),
+            signature_errors: register_int_counter_with_registry!(
                 "total_signature_errors",
-                "Number of transaction signature errors"
+                "Number of transaction signature errors",
+                registry,
             )
             .unwrap(),
-            shared_obj_tx: register_int_counter!(
+            shared_obj_tx: register_int_counter_with_registry!(
                 "num_shared_obj_tx",
-                "Number of transactions involving shared objects"
+                "Number of transactions involving shared objects",
+                registry,
             )
             .unwrap(),
-            tx_already_processed: register_int_counter!(
+            tx_already_processed: register_int_counter_with_registry!(
                 "num_tx_already_processed",
-                "Number of transaction orders already processed previously"
+                "Number of transaction orders already processed previously",
+                registry,
             )
             .unwrap(),
-            num_input_objs: register_histogram!(
+            num_input_objs: register_histogram_with_registry!(
                 "num_input_objects",
                 "Distribution of number of input TX objects per TX",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            num_shared_objects: register_histogram!(
+            num_shared_objects: register_histogram_with_registry!(
                 "num_shared_objects",
                 "Number of shared input objects per TX",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            batch_size: register_histogram!(
+            batch_size: register_histogram_with_registry!(
                 "batch_size",
                 "Distribution of size of transaction batch",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            gossip_queued_count: register_int_counter!(
+            gossip_queued_count: register_int_counter_with_registry!(
                 "gossip_queued_count",
                 "Number of digests queued from gossip peers",
+                registry,
             )
             .unwrap(),
-            gossip_sync_count: register_int_counter!(
+            gossip_sync_count: register_int_counter_with_registry!(
                 "gossip_sync_count",
-                "Number of certificates downloaded from gossip peers"
+                "Number of certificates downloaded from gossip peers",
+                registry,
             )
             .unwrap(),
-            gossip_task_success_count: register_int_counter!(
+            gossip_task_success_count: register_int_counter_with_registry!(
                 "gossip_task_success_count",
-                "Number of gossip tasks that completed successfully"
+                "Number of gossip tasks that completed successfully",
+                registry,
             )
             .unwrap(),
-            gossip_task_error_count: register_int_counter!(
+            gossip_task_error_count: register_int_counter_with_registry!(
                 "gossip_task_error_count",
-                "Number of gossip tasks that completed with errors"
+                "Number of gossip tasks that completed with errors",
+                registry,
             )
             .unwrap(),
         }
     }
 }
-
-impl Default for AuthorityMetrics {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// One cannot register a metric multiple times.  We protect initialization with lazy_static
-// for cases such as local tests or "sui start" which starts multiple authorities in one process.
-pub static METRICS: Lazy<AuthorityMetrics> = Lazy::new(AuthorityMetrics::new);
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -224,6 +232,8 @@ pub static METRICS: Lazy<AuthorityMetrics> = Lazy::new(AuthorityMetrics::new);
 ///
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
+
+const DEFAULT_QUERY_LIMIT: usize = 1000;
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
@@ -266,7 +276,10 @@ pub struct AuthorityState {
     /// Ensures there can only be a single consensus client is updating the state.
     pub consensus_guardrail: AtomicUsize,
 
-    pub metrics: &'static AuthorityMetrics,
+    pub metrics: AuthorityMetrics,
+
+    // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
+    latest_checkpoint_num: AtomicU64,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -370,19 +383,16 @@ impl AuthorityState {
         // byzantine validator from giving us incorrect effects.
         signed_effects: SignedTransactionEffects,
     ) -> SuiResult {
-        let transaction_digest = *certificate.digest();
+        let digest = *certificate.digest();
+        debug!(?digest, "handle_node_sync_transaction");
         fp_ensure!(
-            signed_effects.effects.transaction_digest == transaction_digest,
-            // NOTE: the error message here will say 'Error acquiring lock' but what it means is
-            // 'error checking lock'.
+            signed_effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
 
-        let tx_guard = self
-            .acquire_tx_guard(&transaction_digest, &certificate)
-            .await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database
@@ -399,7 +409,8 @@ impl AuthorityState {
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let certificate = confirmation_transaction.certificate;
-        let transaction_digest = *certificate.digest();
+        let digest = *certificate.digest();
+        debug!(?digest, "handle_confirmation_transaction");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -411,9 +422,7 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let tx_guard = self
-            .acquire_tx_guard(&transaction_digest, &certificate)
-            .await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         self.process_certificate(tx_guard, certificate).await
     }
@@ -654,6 +663,10 @@ impl AuthorityState {
             cert.sender_address(),
             cert.data.input_objects()?.iter().map(|o| o.object_id()),
             effects.effects.mutated_and_created(),
+            cert.data
+                .move_calls()?
+                .iter()
+                .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             seq,
             digest,
             timestamp_ms,
@@ -689,9 +702,10 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
+            let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
             event_handler
-                .process_events(&effects.effects, timestamp_ms)
-                .await;
+                .process_events(&effects.effects, timestamp_ms, seq, checkpoint_num)
+                .await?;
         }
 
         Ok(())
@@ -970,23 +984,21 @@ impl AuthorityState {
             CheckpointRequestType::PastCheckpoint(seq) => {
                 checkpoint_store.handle_past_checkpoint(request.detail, *seq)
             }
-            CheckpointRequestType::SetCertificate(cert, opt_contents) => checkpoint_store
-                .handle_checkpoint_certificate(cert, opt_contents, &self.committee.load()),
-            CheckpointRequestType::SetFragment(fragment) => {
-                checkpoint_store.handle_receive_fragment(fragment, &self.committee.load())
-            }
         }
     }
 
+    // TODO: This function takes both committee and genesis as parameter.
+    // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
         committee: Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         indexes: Option<Arc<IndexStore>>,
+        event_store: Option<Arc<EventStoreType>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
-        enable_event_processing: bool,
+        prometheus_registry: &prometheus::Registry,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1031,11 +1043,8 @@ impl AuthorityState {
             .get_last_epoch_info()
             .expect("Fail to load the current epoch info");
 
-        let event_handler = if enable_event_processing {
-            Some(Arc::new(EventHandler::new(store.clone())))
-        } else {
-            None
-        };
+        let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
+
         let mut state = AuthorityState {
             name,
             secret,
@@ -1056,7 +1065,8 @@ impl AuthorityState {
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),
-            metrics: &METRICS,
+            metrics: AuthorityMetrics::new(prometheus_registry),
+            latest_checkpoint_num: AtomicU64::new(0),
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1275,6 +1285,17 @@ impl AuthorityState {
         }
     }
 
+    pub async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self
+            .get_indexes()?
+            .get_transactions_by_move_function(package, module, function)?)
+    }
+
     pub async fn get_timestamp_ms(
         &self,
         digest: &TransactionDigest,
@@ -1312,6 +1333,34 @@ impl AuthorityState {
         address: SuiAddress,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         Ok(self.get_indexes()?.get_transactions_to_addr(address)?)
+    }
+
+    /// Returns a full handle to the event store, including inserts... so be careful!
+    fn get_event_store(&self) -> Option<Arc<EventStoreType>> {
+        self.event_handler
+            .as_ref()
+            .map(|handler| handler.event_store.clone())
+    }
+
+    /// Returns a set of events corresponding to a given transaction, in order events were emitted
+    pub async fn get_events_for_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Vec<StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.events_for_transaction(digest).await
+    }
+
+    /// Returns a whole set of events for a range of time
+    pub async fn get_events_for_timerange(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        limit: Option<usize>,
+    ) -> Result<Vec<StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
+            .await
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {
@@ -1378,7 +1427,8 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        self.database
+        let res = self
+            .database
             .update_state(
                 temporary_store,
                 certificate,
@@ -1386,7 +1436,11 @@ impl AuthorityState {
                 signed_effects,
                 &signed_effects.effects.digest(),
             )
-            .await
+            .await;
+
+        debug!(digest = ?certificate.digest(), "commit_certificate finished");
+
+        res
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
@@ -1509,14 +1563,18 @@ impl ExecutionState for AuthorityState {
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
                 if let Some(checkpoint) = &self.checkpoints {
+                    let mut checkpoint = checkpoint.lock();
                     checkpoint
-                        .lock()
                         .handle_internal_fragment(seq, *fragment, &self.committee.load(), self)
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                     // to persist the consensus index. If the validator crashes, this transaction
                     // may be resent to the checkpoint logic that will simply ignore it.
+
+                    // Cache the next checkpoint number if it changes
+                    self.latest_checkpoint_num
+                        .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
                 }
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment

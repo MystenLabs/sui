@@ -13,9 +13,8 @@ use async_trait::async_trait;
 use futures::future;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
-use once_cell::sync::Lazy;
-use prometheus_exporter::prometheus::{
-    register_histogram, register_int_counter, Histogram, IntCounter,
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
 };
 use tracing::{debug, error, Instrument};
 
@@ -44,7 +43,7 @@ use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
     PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
     SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse, TransferCoinParams,
+    TransactionResponse, TransferObjectParams,
 };
 
 use crate::transaction_input_checker::InputObjects;
@@ -63,6 +62,7 @@ pub type GatewayTxSeqNumber = u64;
 const MAX_NUM_TX_RETRIES: usize = 5;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+#[derive(Clone)]
 pub struct GatewayMetrics {
     total_tx_processed: IntCounter,
     total_tx_errored: IntCounter,
@@ -85,92 +85,100 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 ];
 
 impl GatewayMetrics {
-    pub fn new() -> GatewayMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
-            total_tx_processed: register_int_counter!(
+            total_tx_processed: register_int_counter_with_registry!(
                 "total_tx_processed",
-                "Total number of transaction certificates processed in Gateway"
+                "Total number of transaction certificates processed in Gateway",
+                registry,
             )
             .unwrap(),
-            total_tx_errored: register_int_counter!(
+            total_tx_errored: register_int_counter_with_registry!(
                 "total_tx_errored",
-                "Total number of transactions which errored out"
+                "Total number of transactions which errored out",
+                registry,
             )
             .unwrap(),
             // total_effects == total transactions finished
-            num_tx_publish: register_int_counter!(
+            num_tx_publish: register_int_counter_with_registry!(
                 "num_tx_publish",
                 "Number of publish transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_movecall: register_int_counter!(
+            num_tx_movecall: register_int_counter_with_registry!(
                 "num_tx_movecall",
                 "Number of MOVE call transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_splitcoin: register_int_counter!(
+            num_tx_splitcoin: register_int_counter_with_registry!(
                 "num_tx_splitcoin",
                 "Number of split coin transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_mergecoin: register_int_counter!(
+            num_tx_mergecoin: register_int_counter_with_registry!(
                 "num_tx_mergecoin",
                 "Number of merge coin transactions",
+                registry,
             )
             .unwrap(),
-            total_tx_certificates: register_int_counter!(
+            total_tx_certificates: register_int_counter_with_registry!(
                 "total_tx_certificates",
                 "Total number of certificates made from validators",
+                registry,
             )
             .unwrap(),
-            total_tx_retries: register_int_counter!(
+            total_tx_retries: register_int_counter_with_registry!(
                 "total_tx_retries",
                 "Total number of retries for transactions",
+                registry,
             )
             .unwrap(),
-            shared_obj_tx: register_int_counter!(
+            shared_obj_tx: register_int_counter_with_registry!(
                 "gateway_shared_obj_tx",
-                "Number of transactions involving shared objects"
+                "Number of transactions involving shared objects",
+                registry,
             )
             .unwrap(),
             // It's really important to use the right histogram buckets for accurate histogram collection.
             // Otherwise values get clipped
-            num_signatures: register_histogram!(
+            num_signatures: register_histogram_with_registry!(
                 "num_signatures_per_tx",
                 "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            num_good_stake: register_histogram!(
+            num_good_stake: register_histogram_with_registry!(
                 "num_good_stake_per_tx",
                 "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            num_bad_stake: register_histogram!(
+            num_bad_stake: register_histogram_with_registry!(
                 "num_bad_stake_per_tx",
                 "Amount of bad stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
-            transaction_latency: register_histogram!(
+            transaction_latency: register_histogram_with_registry!(
                 "transaction_latency",
-                "Latency of execute_transaction_impl"
+                "Latency of execute_transaction_impl",
+                registry,
             )
             .unwrap(),
         }
     }
-}
 
-impl Default for GatewayMetrics {
-    fn default() -> Self {
-        Self::new()
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
     }
 }
-
-// One cannot register a metric multiple times.  We protect initialization with lazy_static
-// for cases such as local tests or "sui start" which starts multiple authorities in one process.
-pub static METRICS: Lazy<GatewayMetrics> = Lazy::new(GatewayMetrics::new);
 
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
@@ -181,7 +189,7 @@ pub struct GatewayState<A> {
     /// It's useful if we need some kind of ordering for transactions
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
-    metrics: &'static GatewayMetrics,
+    metrics: GatewayMetrics,
     module_cache: SyncModuleCache<ResolverWrapper<GatewayStore>>,
 }
 
@@ -191,13 +199,19 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
+        metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
-        Self::new_with_authorities(path, AuthorityAggregator::new(committee, authority_clients))
+        Self::new_with_authorities(
+            path,
+            AuthorityAggregator::new(committee, authority_clients, metrics.clone()),
+            metrics,
+        )
     }
 
     pub fn new_with_authorities(
         path: PathBuf,
         authorities: AuthorityAggregator<A>,
+        metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let store = Arc::new(GatewayStore::open(path, None));
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
@@ -205,7 +219,7 @@ impl<A> GatewayState<A> {
             store: store.clone(),
             authorities,
             next_tx_seq_number,
-            metrics: &METRICS,
+            metrics,
             module_cache: SyncModuleCache::new(ResolverWrapper(store)),
         })
     }
@@ -240,8 +254,8 @@ pub trait GatewayAPI {
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error>;
 
-    /// Send coin object to a Sui address.
-    async fn transfer_coin(
+    /// Send an object to a Sui address. The object's type must allow public transfers
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -321,7 +335,7 @@ pub trait GatewayAPI {
 
     /// Create a Batch Transaction that contains a vector of parameters needed to construct
     /// all the single transactions in it.
-    /// Supported single transactions are TransferCoin and MoveCall.
+    /// Supported single transactions are TransferObject and MoveCall.
     async fn batch_transaction(
         &self,
         signer: SuiAddress,
@@ -476,7 +490,7 @@ where
         let tx_digest = transaction.digest();
         let span = tracing::debug_span!(
             "execute_transaction",
-            ?tx_digest,
+            digest = ?tx_digest,
             tx_kind = transaction.data.kind_as_str()
         );
         let exec_result = self
@@ -493,8 +507,7 @@ where
         let (new_certificate, effects) = exec_result?;
 
         debug!(
-            ?new_certificate,
-            ?effects,
+            digest = ?tx_digest,
             "Transaction completed successfully"
         );
 
@@ -673,7 +686,7 @@ where
             ?package,
             ?created_objects,
             ?updated_gas,
-            ?certificate,
+            digest = ?certificate.digest(),
             "Created Publish response"
         );
 
@@ -839,15 +852,15 @@ where
         Ok(coins)
     }
 
-    async fn create_transfer_coin_transaction_kind(
+    async fn create_public_transfer_object_transaction_kind(
         &self,
-        params: TransferCoinParams,
+        params: TransferObjectParams,
         used_object_ids: &mut BTreeSet<ObjectID>,
     ) -> Result<SingleTransactionKind, anyhow::Error> {
         used_object_ids.insert(params.object_id);
         let object = self.get_object_internal(&params.object_id).await?;
         let object_ref = object.compute_object_reference();
-        Ok(SingleTransactionKind::TransferCoin(TransferCoin {
+        Ok(SingleTransactionKind::TransferObject(TransferObject {
             recipient: params.recipient,
             object_ref,
         }))
@@ -955,7 +968,7 @@ where
         let tx_kind = tx.data.kind.clone();
         let tx_digest = tx.digest();
 
-        debug!(?tx_digest, ?tx, "Received execute_transaction request");
+        debug!(digest = ?tx_digest, "Received execute_transaction request");
 
         let span = tracing::debug_span!(
             "gateway_execute_transaction",
@@ -1003,7 +1016,7 @@ where
         let (certificate, effects) = res.unwrap();
         let effects = effects.effects;
 
-        debug!(?tx, ?certificate, ?effects, "Transaction succeeded");
+        debug!(digest = ?tx_digest, "Transaction succeeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
@@ -1038,7 +1051,7 @@ where
         ));
     }
 
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -1047,12 +1060,12 @@ where
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
         let mut used_object_ids = BTreeSet::new();
-        let params = TransferCoinParams {
+        let params = TransferObjectParams {
             recipient,
             object_id,
         };
         let kind = TransactionKind::Single(
-            self.create_transfer_coin_transaction_kind(params, &mut used_object_ids)
+            self.create_public_transfer_object_transaction_kind(params, &mut used_object_ids)
                 .await?,
         );
         let gas_payment = self
@@ -1094,8 +1107,8 @@ where
         let mut used_object_ids = BTreeSet::new();
         for param in single_transaction_params {
             let kind = match param {
-                RPCTransactionRequestParams::TransferCoinRequestParams(t) => {
-                    self.create_transfer_coin_transaction_kind(t, &mut used_object_ids)
+                RPCTransactionRequestParams::TransferObjectRequestParams(t) => {
+                    self.create_public_transfer_object_transaction_kind(t, &mut used_object_ids)
                         .await?
                 }
                 RPCTransactionRequestParams::MoveCallRequestParams(m) => {

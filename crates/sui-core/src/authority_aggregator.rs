@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::gateway_state::{GatewayMetrics, METRICS};
+use crate::gateway_state::GatewayMetrics;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 
@@ -59,18 +59,23 @@ pub struct AuthorityAggregator<A> {
     /// How to talk to this committee.
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     // Metrics
-    pub metrics: &'static GatewayMetrics,
+    pub metrics: GatewayMetrics,
     pub timeouts: TimeoutConfig,
 }
 
 impl<A> AuthorityAggregator<A> {
-    pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
-        Self::new_with_timeouts(committee, authority_clients, Default::default())
+    pub fn new(
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+        metrics: GatewayMetrics,
+    ) -> Self {
+        Self::new_with_timeouts(committee, authority_clients, metrics, Default::default())
     }
 
     pub fn new_with_timeouts(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
+        metrics: GatewayMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
@@ -79,7 +84,7 @@ impl<A> AuthorityAggregator<A> {
                 .into_iter()
                 .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
                 .collect(),
-            metrics: &METRICS,
+            metrics,
             timeouts,
         }
     }

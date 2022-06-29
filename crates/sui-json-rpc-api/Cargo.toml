@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.53"
-anyhow = "1.0.57"
+anyhow = "1.0.58"
 schemars = "0.8.8"
 jsonrpsee = { version = "0.13.1", features = ["full"] }
 jsonrpsee-proc-macros = "0.13.1"

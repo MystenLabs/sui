@@ -19,17 +19,18 @@ use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_WALLET_CONFIG;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_json_rpc::gateway_api::{GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_json_rpc_api::QuorumDriverApiClient;
+use sui_json_rpc_api::EventApiOpenRpc;
 use sui_json_rpc_api::RpcReadApiClient;
 use sui_json_rpc_api::RpcTransactionBuilderClient;
 use sui_json_rpc_api::TransactionBytes;
+use sui_json_rpc_api::WalletSyncApiClient;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -79,10 +80,11 @@ async fn main() {
     let mut open_rpc = sui_rpc_doc();
     open_rpc.add_module(TransactionBuilderImpl::rpc_doc_module());
     open_rpc.add_module(RpcGatewayImpl::rpc_doc_module());
-    open_rpc.add_module(GatewayReadApiImpl::rpc_doc_module());
     open_rpc.add_module(ReadApi::rpc_doc_module());
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
+    open_rpc.add_module(EventApiOpenRpc::module_doc());
+    open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
 
     match options.action {
         Action::Print => {

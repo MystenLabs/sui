@@ -20,13 +20,13 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
-use crate::transaction_input_checker::InputObjects;
 use crate::{
     authority::AuthorityTemporaryStore, authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::CheckpointLocals, epoch::reconfiguration::CHECKPOINT_COUNT_PER_EPOCH,
     execution_engine,
 };
+use crate::{gateway_state::GatewayMetrics, transaction_input_checker::InputObjects};
 
 #[tokio::test]
 async fn test_start_epoch_change() {
@@ -62,6 +62,7 @@ async fn test_start_epoch_change() {
     let active = ActiveAuthority::new_with_ephemeral_follower_store(
         state.clone(),
         net.clone_inner_clients(),
+        GatewayMetrics::new_for_tests(),
     )
     .unwrap();
     // Make the high watermark differ from low watermark.
@@ -180,6 +181,7 @@ async fn test_finish_epoch_change() {
             ActiveAuthority::new_with_ephemeral_follower_store(
                 state.clone(),
                 net.clone_inner_clients(),
+                GatewayMetrics::new_for_tests(),
             )
             .unwrap()
         })

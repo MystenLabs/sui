@@ -78,7 +78,12 @@ pub async fn init_local_authorities_with_genesis(
         post_quorum_timeout: Duration::from_secs(5),
     };
     (
-        AuthorityAggregator::new_with_timeouts(committee, clients, timeouts),
+        AuthorityAggregator::new_with_timeouts(
+            committee,
+            clients,
+            GatewayMetrics::new_for_tests(),
+            timeouts,
+        ),
         states,
     )
 }

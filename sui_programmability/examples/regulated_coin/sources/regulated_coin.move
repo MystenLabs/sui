@@ -168,7 +168,7 @@ module abc::abc {
     ///
     /// TODO: Make TreasuryCap a part of Balance module instead of Coin.
     public entry fun burn(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
-        coin::burn(coin::withdraw(borrow_mut(owned), value, ctx), treasury);
+        coin::burn(treasury, coin::withdraw(borrow_mut(owned), value, ctx));
     }
 
     /// Ban some address and forbid making any transactions from or to this address.

@@ -487,25 +487,18 @@ impl Ed25519AuthoritySignInfo {
 }
 
 /// Represents at least a quorum (could be more) of authority signatures.
+/// STRONG_THRESHOLD indicates whether to use the quorum threshold for quorum check.
+/// When STRONG_THRESHOLD is true, the quorum is valid when the total stake is
+/// at least the quorum threshold (2f+1) of the committee; when STRONG_THRESHOLD is false,
+/// the quorum is valid when the total stake is at least the validity threshold (f+1) of
+/// the committee.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct Ed25519AuthorityQuorumSignInfo {
+pub struct Ed25519AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
     pub signatures: Vec<(AuthorityName, Ed25519AuthoritySignature)>
 }
 
-// Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
-// or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
-//
-// Please note that any such implementation must be agnostic to the exact set of signatures in the certificate, as
-// clients are allowed to equivocate on the exact nature of valid certificates they send to the system. This assertion
-// is a simple tool to make sure certificates are accounted for correctly - should you remove it, you're on your own to
-// maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
-// certificates that differ on signers aren't.
-//
-// see also https://github.com/MystenLabs/sui/issues/266
-//
-
-impl Ed25519AuthorityQuorumSignInfo {
+impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
@@ -543,10 +536,12 @@ impl Ed25519AuthorityQuorumSignInfo {
             obligation.message_index.push(message_index);
         }
 
-        fp_ensure!(
-            weight >= committee.quorum_threshold(),
-            SuiError::CertificateRequiresQuorum
-        );
+        let threshold = if STRONG_THRESHOLD {
+            committee.quorum_threshold()
+        } else {
+            committee.validity_threshold()
+        };
+        fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
 
         Ok(())
     }

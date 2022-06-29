@@ -6,8 +6,8 @@ use crate::Config;
 use anyhow::Result;
 use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
-use narwhal_config::Committee as ConsensusCommittee;
 use narwhal_config::Parameters as ConsensusParameters;
+use narwhal_config::SharedCommittee as ConsensusCommittee;
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -29,6 +29,8 @@ pub struct NodeConfig {
     pub metrics_address: SocketAddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
+    #[serde(default = "default_websocket_address")]
+    pub websocket_address: Option<SocketAddr>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
@@ -59,6 +61,11 @@ fn default_metrics_address() -> SocketAddr {
 pub fn default_json_rpc_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
+}
+
+pub fn default_websocket_address() -> Option<SocketAddr> {
+    use std::net::{IpAddr, Ipv4Addr};
+    Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
 }
 
 impl Config for NodeConfig {}
@@ -99,10 +106,7 @@ pub struct ConsensusConfig {
     pub consensus_address: Multiaddr,
     pub consensus_db_path: PathBuf,
 
-    //TODO make narwhal config serializable
-    #[serde(skip_serializing)]
-    #[serde(default)]
-    pub narwhal_config: DebugIgnore<ConsensusParameters>,
+    pub narwhal_config: ConsensusParameters,
 
     pub narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
 }

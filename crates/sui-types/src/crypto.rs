@@ -5,7 +5,7 @@ use digest::Digest;
 use ed25519_dalek as dalek;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
-use std::collections::{HashMap};
+use std::{collections::{HashMap}, hash::Hash};
 use crate::ed25519::{Ed25519KeyPair, Ed25519AuthoritySignature, Ed25519Signature, Ed25519PublicKeyBytes, Ed25519AuthorityQuorumSignInfo, Ed25519AuthoritySignInfo};
 pub use crate::crypto_traits::{BcsSignable, Signable, SignableBytes};
 
@@ -15,7 +15,7 @@ pub type Signature = Ed25519Signature;
 // Change these to change signatures that Authorities use
 pub type AuthoritySignature = Ed25519AuthoritySignature;
 pub type PublicKeyBytes = Ed25519PublicKeyBytes;
-pub type AuthorityQuorumSignInfo = Ed25519AuthorityQuorumSignInfo;
+pub type AuthorityQuorumSignInfo<const S: bool> = Ed25519AuthorityQuorumSignInfo<S>;
 pub type AuthoritySignInfo = Ed25519AuthoritySignInfo;
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
@@ -31,14 +31,30 @@ impl AuthoritySignInfoTrait for EmptySignInfo {}
 
 impl AuthoritySignInfoTrait for AuthoritySignInfo {}
 
-// static_assertions::assert_not_impl_any!(Ed25519AuthoritySignature: Hash, Eq, PartialEq);
-impl AuthoritySignInfoTrait for AuthoritySignature{}
+pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
+pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
+
+// Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
+// or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
+//
+// Please note that any such implementation must be agnostic to the exact set of signatures in the certificate, as
+// clients are allowed to equivocate on the exact nature of valid certificates they send to the system. This assertion
+// is a simple tool to make sure certificates are accounted for correctly - should you remove it, you're on your own to
+// maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
+// certificates that differ on signers aren't.
+//
+// see also https://github.com/MystenLabs/sui/issues/266
+static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
+static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
+
+impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
+
 
 mod private {
     pub trait SealedAuthoritySignInfoTrait {}
     impl SealedAuthoritySignInfoTrait for super::EmptySignInfo {}
     impl SealedAuthoritySignInfoTrait for super::AuthoritySignInfo {}
-    impl SealedAuthoritySignInfoTrait for super::AuthoritySignature{}
+    impl<const S: bool> SealedAuthoritySignInfoTrait for super::AuthorityQuorumSignInfo<S> {}
 }
 
 pub type PubKeyLookup = HashMap<PublicKeyBytes, dalek::PublicKey>;

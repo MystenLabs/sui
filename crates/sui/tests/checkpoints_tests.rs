@@ -6,6 +6,7 @@ use std::sync::Arc;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    gateway_state::GatewayMetrics,
 };
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
@@ -69,7 +70,10 @@ async fn sequence_fragments() {
                 .lock()
                 .handle_internal_batch(next_sequence_number, &transactions)
                 .unwrap();
-            let proposal = checkpoints_store.lock().set_proposal().unwrap();
+            let proposal = checkpoints_store
+                .lock()
+                .set_proposal(committee.epoch)
+                .unwrap();
             proposal
         })
         .collect();
@@ -99,7 +103,7 @@ async fn sequence_fragments() {
             .checkpoints()
             .unwrap()
             .lock()
-            .handle_receive_fragment(&fragment, committee);
+            .submit_local_fragment_to_consensus(&fragment, committee);
     }
 
     // Wait until all validators sequence and process the fragment.
@@ -144,7 +148,12 @@ async fn end_to_end() {
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    state,
+                    clients,
+                    GatewayMetrics::new_for_tests(),
+                )
+                .unwrap(),
             );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
@@ -229,12 +238,21 @@ async fn checkpoint_with_shared_objects() {
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(state, clients).unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(
+                    state,
+                    clients,
+                    GatewayMetrics::new_for_tests(),
+                )
+                .unwrap(),
             );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
                 ..CheckpointProcessControl::default()
             };
+
+            println!("Start active execution process.");
+            active_state.clone().spawn_execute_process().await;
+
             active_state
                 .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
                 .await

@@ -16,6 +16,7 @@ use sui_json_rpc_api::QuorumDriverApiClient;
 use sui_json_rpc_api::RpcBcsApiClient;
 use sui_json_rpc_api::RpcTransactionBuilderClient;
 use sui_json_rpc_api::TransactionBytes;
+use sui_json_rpc_api::WalletSyncApiClient;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
@@ -46,7 +47,7 @@ impl GatewayAPI for RpcGatewayClient {
             .await?)
     }
 
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -57,7 +58,7 @@ impl GatewayAPI for RpcGatewayClient {
         let bytes: TransactionBytes = self
             .client
             .transaction_builder()
-            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
+            .public_transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
         bytes.to_data()
     }
@@ -80,7 +81,7 @@ impl GatewayAPI for RpcGatewayClient {
 
     async fn sync_account_state(&self, account_addr: SuiAddress) -> Result<(), Error> {
         self.client
-            .quorum_driver()
+            .wallet_sync_api()
             .sync_account_state(account_addr)
             .await?;
         Ok(())

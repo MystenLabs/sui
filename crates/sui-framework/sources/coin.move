@@ -131,11 +131,11 @@ module sui::coin {
     /// Create a coin worth `value`. and increase the total supply
     /// in `cap` accordingly.
     public fun mint<T>(
-        value: u64, cap: &mut TreasuryCap<T>, ctx: &mut TxContext,
+        cap: &mut TreasuryCap<T>, value: u64, ctx: &mut TxContext,
     ): Coin<T> {
         Coin {
             id: tx_context::new_id(ctx),
-            balance: mint_balance(value, cap)
+            balance: mint_balance(cap, value)
         }
     }
 
@@ -143,7 +143,7 @@ module sui::coin {
     /// supply in `cap` accordingly.
     /// Aborts if `value` + `cap.total_supply` >= U64_MAX
     public fun mint_balance<T>(
-        value: u64, cap: &mut TreasuryCap<T>
+        cap: &mut TreasuryCap<T>, value: u64
     ): Balance<T> {
         cap.total_supply = cap.total_supply + value;
         balance::create_with_value(value)
@@ -151,11 +151,12 @@ module sui::coin {
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
-    public fun burn<T>(c: Coin<T>, cap: &mut TreasuryCap<T>) {
+    public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
         let value = balance::destroy<T>(balance);
         id::delete(id);
-        cap.total_supply = cap.total_supply - value
+        cap.total_supply = cap.total_supply - value;
+        value
     }
 
     /// Return the total number of `T`'s in circulation
@@ -170,9 +171,23 @@ module sui::coin {
 
     // === Entrypoints ===
 
+    /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
+    public entry fun mint_and_transfer<T>(
+        c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
+    ) {
+        transfer::transfer(mint(c, amount, ctx), recipient)
+    }
+
+    /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
+    public entry fun burn_<T>(c: &mut TreasuryCap<T>, coin: Coin<T>) {
+        burn(c, coin);
+    }
+
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public entry fun split_and_transfer<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
+    public entry fun split_and_transfer<T>(
+        c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
+    ) {
         transfer::transfer(withdraw(&mut c.balance, amount, ctx), recipient)
     }
 

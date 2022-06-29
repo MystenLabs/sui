@@ -510,7 +510,7 @@ async fn execute_transfer_with_price(
         .unwrap()
         .unwrap();
 
-    let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
         recipient,
         object_ref: object.compute_object_reference(),
     }));

@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ main, extensions ]
+    branches: [ main, extensions, devnet ]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -53,14 +53,16 @@ jobs:
           locked: true
       - run: scripts/license_check.sh
       - run: cargo xlint
-      - run: |
-          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
+      # Temporarily disable hakari checking in CI until rust 1.62 is released in order to get things building in windows
+      # - run: |
+      #     cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
+      #     cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   test:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [self-hosted, self-hosted-ubuntu]
+    timeout-minutes: 30
     strategy:
       fail-fast: false
     steps:

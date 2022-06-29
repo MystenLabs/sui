@@ -1,19 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::rpc_types::SuiEventEnvelope;
+use crate::rpc_types::SuiEventFilter;
+use crate::rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams,
+    SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse,
+};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::serde_as;
-use std::collections::BTreeMap;
-
-use crate::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams, SuiEvent,
-    SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse,
-};
 use sui_json::SuiJsonValue;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -40,7 +39,11 @@ pub trait QuorumDriverApi {
         signature: Base64,
         pub_key: Base64,
     ) -> RpcResult<TransactionResponse>;
+}
 
+#[open_rpc(namespace = "sui", tag = "Wallet Sync API")]
+#[rpc(server, client, namespace = "sui")]
+pub trait WalletSyncApi {
     /// Synchronize client state with validators.
     #[method(name = "syncAccountState")]
     async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()>;
@@ -104,6 +107,14 @@ pub trait RpcFullNodeReadApi {
         object: ObjectID,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
+    #[method(name = "getTransactionsByMoveFunction")]
+    async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
     #[method(name = "getTransactionsFromAddress")]
     async fn get_transactions_from_addr(
         &self,
@@ -120,9 +131,10 @@ pub trait RpcFullNodeReadApi {
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcTransactionBuilder {
-    /// Create a transaction to transfer a Sui coin from one address to another.
-    #[method(name = "transferCoin")]
-    async fn transfer_coin(
+    /// Create a transaction to transfer an object from one address to another. The object's type
+    /// must allow public transfers
+    #[method(name = "transferObject")]
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -231,8 +243,9 @@ impl TransactionBytes {
     }
 }
 
+#[open_rpc(namespace = "sui", tag = "Event Subscription")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventApi {
-    #[subscription(name = "subscribeMoveEventsByType", item = SuiEvent)]
-    fn subscribe_move_event_by_type(&self, event: String, field_filter: BTreeMap<String, Value>);
+    #[subscription(name = "subscribeEvent", item = SuiEventEnvelope)]
+    fn subscribe_event(&self, filter: SuiEventFilter);
 }

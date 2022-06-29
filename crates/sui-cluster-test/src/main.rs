@@ -67,7 +67,7 @@ impl ClusterTest {
         let obj_to_transfer = coins.remove(0);
         let data = wallet_context
             .gateway
-            .transfer_coin(
+            .public_transfer_object(
                 signer,
                 *obj_to_transfer.id(),
                 Some(gas_obj_id),

@@ -35,6 +35,7 @@ pub mod waypoint;
 pub mod ed25519;
 pub mod crypto_traits;
 
+pub mod event_filter;
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 

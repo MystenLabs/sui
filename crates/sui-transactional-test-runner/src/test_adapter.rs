@@ -400,6 +400,7 @@ impl<'a> SuiTestAdapter<'a> {
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
         let gas_object_id = ObjectID::new(self.rng.gen());
+        assert!(!self.object_enumeration.contains_left(&gas_object_id));
         self.enumerate_fake(gas_object_id);
         let new_key_pair;
         let (sender, sender_key) = match sender {

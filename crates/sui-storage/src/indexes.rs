@@ -16,6 +16,7 @@ use sui_types::error::SuiResult;
 use sui_types::base_types::ObjectRef;
 use sui_types::object::Owner;
 
+use move_core_types::identifier::Identifier;
 use typed_store::rocks::DBMap;
 use typed_store::{reopen, traits::Map};
 
@@ -31,6 +32,10 @@ pub struct IndexStore {
 
     /// Index from object id to transactions that modified/created that object id.
     transactions_by_mutated_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
+
+    /// Index from package id, module and function identifier to transactions that used that moce function call as input.
+    transactions_by_move_function:
+        DBMap<(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
 
     /// This is a map between the transaction digest and its timestamp (UTC timestamp in
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
@@ -51,6 +56,7 @@ impl IndexStore {
                 ("transactions_to_addr", &options),
                 ("transactions_by_input_object_id", &options),
                 ("transactions_by_mutated_object_id", &options),
+                ("transactions_by_move_function", &options),
                 ("timestamps", &point_lookup),
             ];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
@@ -62,6 +68,7 @@ impl IndexStore {
             transactions_to_addr,
             transactions_by_input_object_id,
             transactions_by_mutated_object_id,
+            transactions_by_move_function,
             timestamps,
         ) = reopen!(
             &db,
@@ -69,6 +76,7 @@ impl IndexStore {
             "transactions_to_addr"; <(SuiAddress, TxSequenceNumber), TransactionDigest>,
             "transactions_by_input_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
             "transactions_by_mutated_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
+            "transactions_by_move_function"; <(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
             "timestamps";<TransactionDigest, u64>
         );
 
@@ -77,6 +85,7 @@ impl IndexStore {
             transactions_to_addr,
             transactions_by_input_object_id,
             transactions_by_mutated_object_id,
+            transactions_by_move_function,
             timestamps,
         }
     }
@@ -86,6 +95,7 @@ impl IndexStore {
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = &'a (ObjectRef, Owner)> + Clone,
+        move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
         sequence: TxSequenceNumber,
         digest: &TransactionDigest,
         timestamp_ms: u64,
@@ -107,6 +117,16 @@ impl IndexStore {
             mutated_objects
                 .clone()
                 .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
+        )?;
+
+        let batch = batch.insert_batch(
+            &self.transactions_by_move_function,
+            move_functions.map(|(obj_id, module, function)| {
+                (
+                    (obj_id, module.to_string(), function.to_string(), sequence),
+                    *digest,
+                )
+            }),
         )?;
 
         let batch = batch.insert_batch(
@@ -169,6 +189,30 @@ impl IndexStore {
         addr: SuiAddress,
     ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
         Self::get_transactions_by_object(&self.transactions_from_addr, addr)
+    }
+
+    pub fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
+        Ok(self
+            .transactions_by_move_function
+            .iter()
+            .skip_to(&(
+                package,
+                module.clone().unwrap_or_else(|| "".to_string()),
+                function.clone().unwrap_or_else(|| "".to_string()),
+                TxSequenceNumber::MIN,
+            ))?
+            .take_while(|((id, m, f, _), _)| {
+                *id == package
+                    && module.as_ref().map(|x| x == m).unwrap_or(true)
+                    && function.as_ref().map(|x| x == f).unwrap_or(true)
+            })
+            .map(|((_, _, _, seq), digest)| (seq, digest))
+            .collect())
     }
 
     pub fn get_transactions_to_addr(

@@ -4,19 +4,19 @@
 use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Serialize};
+use sui_types::messages_checkpoint::SignedCheckpointSummary;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     messages_checkpoint::{
         CheckpointContents, CheckpointFragment, CheckpointSequenceNumber, CheckpointSummary,
-        SignedCheckpointProposal,
     },
     waypoint::WaypointDiff,
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointProposal {
     /// Name of the authority
-    pub proposal: SignedCheckpointProposal,
+    pub signed_summary: SignedCheckpointSummary,
     /// The transactions included in the proposal.
     /// TODO: only include a commitment by default.
     pub transactions: CheckpointContents,
@@ -28,16 +28,16 @@ impl CheckpointProposal {
     /// proposed transactions.
     /// TODO: Add an identifier for the proposer, probably
     ///       an AuthorityName.
-    pub fn new(proposal: SignedCheckpointProposal, transactions: CheckpointContents) -> Self {
+    pub fn new(proposal: SignedCheckpointSummary, transactions: CheckpointContents) -> Self {
         CheckpointProposal {
-            proposal,
+            signed_summary: proposal,
             transactions,
         }
     }
 
     /// Returns the sequence number of this proposal
     pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
-        self.proposal.0.checkpoint.sequence_number()
+        self.signed_summary.summary.sequence_number()
     }
 
     // Iterate over all transaction/effects
@@ -47,12 +47,12 @@ impl CheckpointProposal {
 
     // Get the inner checkpoint
     pub fn checkpoint(&self) -> &CheckpointSummary {
-        &self.proposal.0.checkpoint
+        &self.signed_summary.summary
     }
 
     // Get the authority name
     pub fn name(&self) -> &AuthorityName {
-        &self.proposal.0.authority
+        self.signed_summary.authority()
     }
 
     /// Construct a Diff structure between this proposal and another
@@ -84,8 +84,8 @@ impl CheckpointProposal {
         );
 
         CheckpointFragment {
-            proposer: self.proposal.clone(),
-            other: other_proposal.proposal.clone(),
+            proposer: self.signed_summary.clone(),
+            other: other_proposal.signed_summary.clone(),
             diff,
             certs: BTreeMap::new(),
         }

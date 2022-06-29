@@ -7,7 +7,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 async-trait = "0.1.53"
 axum = "0.5.6"
 clap = { version = "3.1.17", features = ["derive"] }
@@ -19,6 +19,8 @@ tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.80"
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
+tower-http = { version = "0.3.4", features = ["cors"] }
+http = { version = "0.2.8" }
 
 sui = { path = "../sui" }
 sui-json-rpc-api = { path = "../sui-json-rpc-api" }
@@ -26,6 +28,7 @@ sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 workspace-hack = { path = "../workspace-hack"}
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
 [dev-dependencies]
 tempfile = "3.3.0"

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::gateway_state::GatewayMetrics;
 use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
 use std::sync::Arc;
@@ -14,7 +15,7 @@ async fn pending_exec_storage_notify() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();
 
-    let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;
+    let setup = checkpoint_tests_setup(20, Duration::from_millis(200), true).await;
 
     let TestSetup {
         committee: _committee,
@@ -33,6 +34,7 @@ async fn pending_exec_storage_notify() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
+                    GatewayMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );
@@ -79,6 +81,9 @@ async fn pending_exec_storage_notify() {
                 .collect(),
         )
         .expect("Storage is ok");
+
+    tokio::task::yield_now().await;
+
     // Wait for a notification (must arrive)
     authority_state.database.wait_for_new_pending().await;
     // get back the certificates
@@ -91,10 +96,10 @@ async fn pending_exec_storage_notify() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn pending_exec_full() {
-    use telemetry_subscribers::init_for_testing;
-    init_for_testing();
+    // use telemetry_subscribers::init_for_testing;
+    // init_for_testing();
 
-    let setup = checkpoint_tests_setup(20, Duration::from_millis(200)).await;
+    let setup = checkpoint_tests_setup(20, Duration::from_millis(200), true).await;
 
     let TestSetup {
         committee: _committee,
@@ -113,6 +118,7 @@ async fn pending_exec_full() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
+                    GatewayMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );
