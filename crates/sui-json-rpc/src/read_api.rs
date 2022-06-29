@@ -138,6 +138,18 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
             .await?)
     }
 
+    async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        Ok(self
+            .state
+            .get_transactions_by_move_function(package, module, function)
+            .await?)
+    }
+
     async fn get_transactions_from_addr(
         &self,
         addr: SuiAddress,

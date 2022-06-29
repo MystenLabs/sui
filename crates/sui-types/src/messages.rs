@@ -137,6 +137,13 @@ impl SingleTransactionKind {
         }
     }
 
+    pub fn move_call(&self) -> Option<&MoveCall> {
+        match &self {
+            Self::Call(call @ MoveCall { .. }) => Some(call),
+            _ => None,
+        }
+    }
+
     /// Return the metadata of each of the input objects for the transaction.
     /// For a Move object, we attach the object reference;
     /// for a Move package, we provide the object id only since they never change on chain.
@@ -435,6 +442,27 @@ where
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
         &self.gas_payment
+    }
+
+    pub fn move_calls(&self) -> SuiResult<Vec<&MoveCall>> {
+        let move_calls = match &self.kind {
+            TransactionKind::Single(s) => s.move_call().into_iter().collect(),
+            TransactionKind::Batch(b) => {
+                let mut result = vec![];
+                for kind in b {
+                    fp_ensure!(
+                        !matches!(kind, &SingleTransactionKind::Publish(..)),
+                        SuiError::InvalidBatchTransaction {
+                            error: "Publish transaction is not allowed in Batch Transaction"
+                                .to_owned(),
+                        }
+                    );
+                    result.extend(kind.move_call().into_iter());
+                }
+                result
+            }
+        };
+        Ok(move_calls)
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {

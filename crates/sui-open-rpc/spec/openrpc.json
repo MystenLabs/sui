@@ -348,6 +348,57 @@
       }
     },
     {
+      "name": "sui_getTransactionsByMoveFunction",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "function",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
       "name": "sui_getTransactionsByMutatedObject",
       "tags": [
         {
