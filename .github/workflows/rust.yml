@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ main, extensions ]
+    branches: [ main, extensions, devnet ]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
