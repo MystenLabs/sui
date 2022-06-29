@@ -5,7 +5,7 @@ import {
     getTransactionDigest,
     getTransactions,
     getTransactionKindName,
-    getTransferObjectTransaction,
+    getPublicTransferObjectTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
 } from '@mysten/sui.js';
@@ -92,7 +92,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
                             const recipient =
-                                getTransferObjectTransaction(
+                                getPublicTransferObjectTransaction(
                                     txn
                                 )?.recipient;
 
