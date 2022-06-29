@@ -88,8 +88,7 @@ impl Committee {
         // unwrap is safe because we validate the committee composition in `new` above.
         // See https://docs.rs/rand/latest/rand/distributions/weighted/enum.WeightedError.html
         // for possible errors.
-        self.voting_rights
-            .as_slice()
+        self.voting_rights[..]
             .choose_multiple_weighted(&mut OsRng, count, |(_, weight)| *weight as f64)
             .unwrap()
             .map(|(a, _)| a)
@@ -172,10 +171,9 @@ impl Committee {
     }
 
     pub fn authority_exists(&self, name: &AuthorityName) -> bool {
-        match self.voting_rights.binary_search_by_key(name, |(a, _)| *a) {
-            Err(_) => false,
-            Ok(_) => true,
-        }
+        self.voting_rights
+            .binary_search_by_key(name, |(a, _)| *a)
+            .is_ok()
     }
 }
 
