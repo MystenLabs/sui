@@ -447,6 +447,7 @@ pub enum ExecutionErrorKind {
     // Naitive Transfer errors
     TransferUnowned,
     TransferNonCoin,
+    TransferObjectWithoutPublicTransfer,
     TransferInsufficientBalance,
 
     InvalidTransactionUpdate,
@@ -522,6 +523,7 @@ impl ExecutionError {
             ExecutionErrorKind::InsufficientGas => ExecutionFailureStatus::InsufficientGas,
             ExecutionErrorKind::TransferUnowned
             | ExecutionErrorKind::TransferNonCoin
+            | ExecutionErrorKind::TransferObjectWithoutPublicTransfer
             | ExecutionErrorKind::TransferInsufficientBalance
             | ExecutionErrorKind::InvalidTransactionUpdate
             | ExecutionErrorKind::ObjectNotFound
