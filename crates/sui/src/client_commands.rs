@@ -44,8 +44,8 @@ pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the wallet Command 
 pub const EXAMPLE_NFT_URL: &str =
     "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty";
 
-#[derive(StructOpt, Debug)]
-#[clap(rename_all = "kebab-case", no_binary_name = true)]
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
 pub enum SuiClientCommands {
     /// Switch active address and network(e.g., devnet, local rpc server)
     #[clap(name = "switch")]
@@ -64,7 +64,7 @@ pub enum SuiClientCommands {
     #[clap(name = "active-address")]
     ActiveAddress,
 
-    /// Get obj info
+    /// Get object info
     #[clap(name = "object")]
     Object {
         /// Object ID of the object to fetch
@@ -264,7 +264,7 @@ impl SuiClientCommands {
     pub async fn execute(
         self,
         context: &mut WalletContext,
-    ) -> Result<WalletCommandResult, anyhow::Error> {
+    ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
             SuiClientCommands::Publish {
                 path,
@@ -286,13 +286,13 @@ impl SuiClientCommands {
                     .await?
                     .to_publish_response()?;
 
-                WalletCommandResult::Publish(response)
+                SuiClientCommandResult::Publish(response)
             }
 
             SuiClientCommands::Object { id } => {
                 // Fetch the object ref
                 let object_read = context.gateway.get_object(id).await?;
-                WalletCommandResult::Object(object_read)
+                SuiClientCommandResult::Object(object_read)
             }
             SuiClientCommands::Call {
                 package,
@@ -307,7 +307,7 @@ impl SuiClientCommands {
                     package, &module, &function, type_args, gas, gas_budget, args, context,
                 )
                 .await?;
-                WalletCommandResult::Call(cert, effects)
+                SuiClientCommandResult::Call(cert, effects)
             }
 
             SuiClientCommands::Transfer {
@@ -336,7 +336,7 @@ impl SuiClientCommands {
                 if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error transferring object: {:#?}", effects.status));
                 }
-                WalletCommandResult::Transfer(time_total, cert, effects)
+                SuiClientCommandResult::Transfer(time_total, cert, effects)
             }
 
             SuiClientCommands::TransferSui {
@@ -363,11 +363,11 @@ impl SuiClientCommands {
                 if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error transferring SUI: {:#?}", effects.status));
                 }
-                WalletCommandResult::TransferSui(cert, effects)
+                SuiClientCommandResult::TransferSui(cert, effects)
             }
 
             SuiClientCommands::Addresses => {
-                WalletCommandResult::Addresses(context.config.accounts.clone())
+                SuiClientCommandResult::Addresses(context.config.accounts.clone())
             }
 
             SuiClientCommands::Objects { address } => {
@@ -382,19 +382,19 @@ impl SuiClientCommands {
                     .await?;
                 address_object.extend(object_objects);
 
-                WalletCommandResult::Objects(address_object)
+                SuiClientCommandResult::Objects(address_object)
             }
 
             SuiClientCommands::SyncClientState { address } => {
                 let address = address.unwrap_or(context.active_address()?);
                 context.gateway.sync_account_state(address).await?;
-                WalletCommandResult::SyncClientState
+                SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress => {
                 let address = context.keystore.add_random_key()?;
                 context.config.accounts.push(address);
                 context.config.save()?;
-                WalletCommandResult::NewAddress(address)
+                SuiClientCommandResult::NewAddress(address)
             }
             SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -405,7 +405,7 @@ impl SuiClientCommands {
                     // Ok to unwrap() since `get_gas_objects` guarantees gas
                     .map(|(_, object)| GasCoin::try_from(object).unwrap())
                     .collect();
-                WalletCommandResult::Gas(coins)
+                SuiClientCommandResult::Gas(coins)
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
@@ -424,7 +424,7 @@ impl SuiClientCommands {
                     .execute_transaction(Transaction::new(data, signature))
                     .await?
                     .to_split_coin_response()?;
-                WalletCommandResult::SplitCoin(response)
+                SuiClientCommandResult::SplitCoin(response)
             }
             SuiClientCommands::MergeCoin {
                 primary_coin,
@@ -444,7 +444,7 @@ impl SuiClientCommands {
                     .await?
                     .to_merge_coin_response()?;
 
-                WalletCommandResult::MergeCoin(response)
+                SuiClientCommandResult::MergeCoin(response)
             }
             SuiClientCommands::Switch { address, gateway } => {
                 if let Some(addr) = address {
@@ -467,10 +467,10 @@ impl SuiClientCommands {
                     ));
                 }
 
-                WalletCommandResult::Switch(SwitchResponse { address, gateway })
+                SuiClientCommandResult::Switch(SwitchResponse { address, gateway })
             }
             SuiClientCommands::ActiveAddress => {
-                WalletCommandResult::ActiveAddress(context.active_address().ok())
+                SuiClientCommandResult::ActiveAddress(context.active_address().ok())
             }
             SuiClientCommands::CreateExampleNFT {
                 name,
@@ -506,7 +506,7 @@ impl SuiClientCommands {
                     .reference
                     .object_id;
                 let object_read = context.gateway.get_object(nft_id).await?;
-                WalletCommandResult::CreateExampleNFT(object_read)
+                SuiClientCommandResult::CreateExampleNFT(object_read)
             }
         });
         ret
@@ -614,34 +614,34 @@ impl WalletContext {
     }
 }
 
-impl Display for WalletCommandResult {
+impl Display for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            WalletCommandResult::Publish(response) => {
+            SuiClientCommandResult::Publish(response) => {
                 write!(writer, "{}", response)?;
             }
-            WalletCommandResult::Object(object_read) => {
+            SuiClientCommandResult::Object(object_read) => {
                 let object = unwrap_err_to_string(|| Ok(object_read.object()?));
                 writeln!(writer, "{}", object)?;
             }
-            WalletCommandResult::Call(cert, effects) => {
+            SuiClientCommandResult::Call(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
-            WalletCommandResult::Transfer(time_elapsed, cert, effects) => {
+            SuiClientCommandResult::Transfer(time_elapsed, cert, effects) => {
                 writeln!(writer, "Transfer confirmed after {} us", time_elapsed)?;
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
-            WalletCommandResult::TransferSui(cert, effects) => {
+            SuiClientCommandResult::TransferSui(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
-            WalletCommandResult::Addresses(addresses) => {
+            SuiClientCommandResult::Addresses(addresses) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
                 for address in addresses {
                     writeln!(writer, "{}", address)?;
                 }
             }
-            WalletCommandResult::Objects(object_refs) => {
+            SuiClientCommandResult::Objects(object_refs) => {
                 writeln!(
                     writer,
                     " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
@@ -667,13 +667,13 @@ impl Display for WalletCommandResult {
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
-            WalletCommandResult::SyncClientState => {
+            SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            WalletCommandResult::NewAddress(address) => {
+            SuiClientCommandResult::NewAddress(address) => {
                 writeln!(writer, "Created new keypair for address : {}", &address)?;
             }
-            WalletCommandResult::Gas(gases) => {
+            SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
                 writeln!(
                     writer,
@@ -694,22 +694,22 @@ impl Display for WalletCommandResult {
                     )?;
                 }
             }
-            WalletCommandResult::SplitCoin(response) => {
+            SuiClientCommandResult::SplitCoin(response) => {
                 write!(writer, "{}", response)?;
             }
-            WalletCommandResult::MergeCoin(response) => {
+            SuiClientCommandResult::MergeCoin(response) => {
                 write!(writer, "{}", response)?;
             }
-            WalletCommandResult::Switch(response) => {
+            SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
             }
-            WalletCommandResult::ActiveAddress(response) => {
+            SuiClientCommandResult::ActiveAddress(response) => {
                 match response {
                     Some(r) => write!(writer, "{}", r)?,
                     None => write!(writer, "None")?,
                 };
             }
-            WalletCommandResult::CreateExampleNFT(object_read) => {
+            SuiClientCommandResult::CreateExampleNFT(object_read) => {
                 // TODO: display the content of the object
                 let object = unwrap_err_to_string(|| Ok(object_read.object()?));
                 writeln!(writer, "{}\n", "Successfully created an ExampleNFT:".bold())?;
@@ -784,10 +784,10 @@ fn write_cert_and_effects(
     Ok(writer)
 }
 
-impl Debug for WalletCommandResult {
+impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
-            WalletCommandResult::Object(object_read) => {
+            SuiClientCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
                 Ok(serde_json::to_string_pretty(&object)?)
             }
@@ -804,7 +804,7 @@ fn unwrap_err_to_string<T: Display, F: FnOnce() -> Result<T, anyhow::Error>>(fun
     }
 }
 
-impl WalletCommandResult {
+impl SuiClientCommandResult {
     pub fn print(&self, pretty: bool) {
         let line = if pretty {
             format!("{self}")
@@ -822,7 +822,7 @@ impl WalletCommandResult {
 
 #[derive(Serialize)]
 #[serde(untagged)]
-pub enum WalletCommandResult {
+pub enum SuiClientCommandResult {
     Publish(PublishResponse),
     Object(GetObjectDataResponse),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),

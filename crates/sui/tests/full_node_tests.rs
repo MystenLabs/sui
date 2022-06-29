@@ -19,7 +19,7 @@ use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
-use sui::client_commands::{SuiClientCommands, WalletCommandResult, WalletContext};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{
@@ -60,7 +60,7 @@ async fn transfer_coin(
     .execute(context)
     .await?;
 
-    let digest = if let WalletCommandResult::Transfer(_, cert, _) = res {
+    let digest = if let SuiClientCommandResult::Transfer(_, cert, _) = res {
         cert.transaction_digest
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");
@@ -93,9 +93,9 @@ async fn emit_move_events(
     .execute(context)
     .await?;
 
-    let (object_id, digest) = if let WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists(
-        obj,
-    )) = res
+    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
+        SuiObjectRead::Exists(obj),
+    ) = res
     {
         (obj.reference.object_id, obj.previous_transaction)
     } else {
@@ -545,7 +545,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     .unwrap()
                 };
 
-                owned_tx_digest = if let WalletCommandResult::SplitCoin(SplitCoinResponse {
+                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(SplitCoinResponse {
                     certificate,
                     updated_gas,
                     ..

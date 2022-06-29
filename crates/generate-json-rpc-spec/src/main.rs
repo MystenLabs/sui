@@ -13,7 +13,7 @@ use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-use sui::client_commands::{SuiClientCommands, WalletCommandResult, WalletContext};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_CLIENT_CONFIG;
@@ -193,7 +193,7 @@ async fn create_package_object_response(
     }
     .execute(context)
     .await?;
-    if let WalletCommandResult::Publish(response) = result {
+    if let SuiClientCommandResult::Publish(response) = result {
         Ok((
             context
                 .gateway
@@ -219,7 +219,7 @@ async fn create_transfer_response(
     }
     .execute(context)
     .await?;
-    if let WalletCommandResult::Transfer(_, certificate, effects) = response {
+    if let SuiClientCommandResult::Transfer(_, certificate, effects) = response {
         Ok(TransactionResponse::EffectResponse(
             TransactionEffectsResponse {
                 certificate,
@@ -244,7 +244,7 @@ async fn create_hero_response(
     }
     .execute(context)
     .await?;
-    if let WalletCommandResult::Publish(response) = result {
+    if let SuiClientCommandResult::Publish(response) = result {
         let package_id = response.package.object_id;
         let game_info = response
             .created_objects
@@ -266,7 +266,7 @@ async fn create_hero_response(
         .execute(context)
         .await?;
 
-        if let WalletCommandResult::Call(_, effect) = result {
+        if let SuiClientCommandResult::Call(_, effect) = result {
             let hero = effect.created.first().unwrap();
             Ok((
                 package_id,
@@ -341,7 +341,7 @@ async fn create_coin_split_response(
     .execute(context)
     .await?;
 
-    if let WalletCommandResult::SplitCoin(resp) = result {
+    if let SuiClientCommandResult::SplitCoin(resp) = result {
         Ok(TransactionResponse::SplitCoinResponse(resp))
     } else {
         panic!()
@@ -373,7 +373,7 @@ async fn get_nft_response(
     .execute(context)
     .await?;
 
-    if let WalletCommandResult::Call(certificate, effects) = result {
+    if let SuiClientCommandResult::Call(certificate, effects) = result {
         let object = context
             .gateway
             .get_object(effects.created.first().unwrap().reference.object_id)

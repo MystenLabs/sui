@@ -1,12 +1,12 @@
 ---
-title: Wallet Quick Start
+title: Sui CLI Quick Start
 ---
 
-Welcome to the Sui tutorial on the sample Sui wallet developed
-to facilitate local experimentation with Sui features using a
+Welcome to the Sui tutorial on the Sui CLI developed
+to facilitate experimentation with Sui features using a
 command line interface. In this document, we describe how to set up
-Sui wallet and execute wallet commands through its command line
-interface, *Wallet CLI*.
+The Sui client and execute commands through its command line
+interface, *Sui CLI*.
 
 ## Set up
 
@@ -15,28 +15,28 @@ Follow the instructions to [install Sui binaries](install.md#binaries).
 ## Connect to DevNet
 We are hosting a public [DevNet](../explore/devnet.md) for the community to
 experiment with our  tech and help to shape the future of the Sui network. To
-connect the wallet  client to the DevNet, run the following command:
+connect the Sui  client to the DevNet, run the following command:
 ```shell
-$ wallet
+$ sui client
 ```
-The wallet will print the following line if the wallet is starting up the
+The Sui CLI will print the following line if the wallet is starting up the
 first time.
 ```shell
-Config file ["/Users/dir/.sui/sui_config/wallet.conf"] doesn't exist, do you want to connect to a Sui Gateway [y/n]?
+Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
 ```
 Type 'y' and then press 'Enter'. You should see the following output:
 ```shell
-Sui Gateway Url (Default to Sui DevNet if not specified) :
+Sui RPC server Url (Default to Sui DevNet if not specified) :
 ```
-The wallet will prompt for the Gateway URL, press 'Enter' and it will default to the DevNet,
-or enter the URL if you want to connect to a Gateway hosted elsewhere.
+The Sui client will prompt for the RPC server URL, press 'Enter' and it will default to the DevNet,
+or enter the URL if you want to connect to a server hosted elsewhere.
 
-If you have used the wallet before with a local network, follow the next section to
-[manually change the Gateway URL](#manually-change-the-gateway-url) to DevNet.
+If you have used the Sui client before with a local network, follow the next section to
+[manually change the RPC server URL](#manually-change-the-rpc-server-url) to DevNet.
 
-### Manually change the Gateway URL
-If you have used the wallet before, you will have an existing `wallet.conf` configuration
-file. Change the configured Gateway URL to DevNet by using:
+### Manually change the RPC server URL
+If you have used the Sui client before, you will have an existing `client.yaml` configuration
+file. Change the configured RPC server URL to DevNet by using:
 ```shell
 $ wallet switch --gateway https://gateway.devnet.sui.io:443
 ```
@@ -60,11 +60,11 @@ in [Genesis customization](#customize-genesis).
 
 All of this is contained in configuration and keystore files and an `authorities_db`
 database directory. A `client_db` directory is also created upon running the
-`wallet new-address` command covered later.
+`sui client new-address` command covered later.
 
-The network configuration is stored in `network.conf` and can be used
-subsequently to start the network. The `wallet.conf` and `wallet.key`
-are also created to be used by the Sui wallet to manage the newly
+The network configuration is stored in `network.yaml` and can be used
+subsequently to start the network. The `client.yaml` and `sui.keystore`
+are also created to be used by the Sui client to manage the newly
 created accounts.
 
 By default, these files are placed in your home directory at
@@ -90,55 +90,58 @@ it once again, using the `--working-dir` argument:
 $ sui genesis --force --working-dir /path/to/sui/config/dir
 ```
 
-## Wallet configuration
+## Client configuration
 
-The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
-Sui wallet.  The config file contains information of the accounts and
-the Sui Network Gateway. The keystore file contains all the public-private key pairs of the created accounts.
-Sui wallet uses the network information in `wallet.conf` to communicate
+The genesis process creates a configuration file `client.yaml`, and a keystore file `sui.keystore` for the
+Sui client.  The config file contains information of the accounts and
+the Sui Network server. The keystore file contains all the public-private key pairs of the created accounts.
+Sui client uses the network information in `client.yaml` to communicate
 with the Sui network validators  and create transactions using the key
 pairs residing in the keystore file.
 
-Here is an example of `wallet.conf` showing the accounts and key pairs
+Here is an example of `client.yaml` showing the accounts and key pairs
 in the wallet configuration (with some values omitted):
 
-```json
-{
-  "accounts": [
-    "0x48cf013a76d583c027720f7f9852deac7c84b923",
-    ...
-  ],
-  "keystore": {
-    "File": "./wallet.key"
-  },
-  "gateway": {
-    "embedded": {
-      "authorities": [
-        {
-          "name": "5f9701f4bd2cd7c2f1f23ac6d05515407879f0acf2611517ff188e59c5f61743",
-          "host": "127.0.0.1",
-          "base_port": 10000
-        },
-        ...
-      ],
-      "send_timeout": {
-        "secs": 4,
-        "nanos": 0
-      },
-      "recv_timeout": {
-        "secs": 4,
-        "nanos": 0
-      },
-      "buffer_size": 65507,
-      "db_folder_path": "./client_db"
-    }
-  }
-}
+```yaml
+---
+accounts:
+  - b02b5e57fe3572f94ad5ac2a17392bfb3261f7a0
+  - b4f5ed3cbe78c7969e6ac073f9a0c525fd07f05a
+  - 48ff0a932b12976caec91d521265b009ad5b2225
+  - 08da15bee6a3f5b01edbbd402654a75421d81397
+  - 3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
+keystore:
+  File: /Users/user/.sui/sui_config/sui.keystore
+gateway:
+  embedded:
+    epoch: 0
+    validator_set:
+      - public-key: Ot3ov659M4tl59E9Tq1rUj5SccoXstXrMhQSJX7pFKQ=
+        stake: 1
+        network-address: /dns/localhost/tcp/57468/http
+      - public-key: UGfB4wzJ2Lntn+WJvv+83RSigpuf7Vv2AmCPQR28TVY=
+        stake: 1
+        network-address: /dns/localhost/tcp/57480/http
+      - public-key: 5bO8DUgmA9i1SiUka5BT6VjIclMNQBRnbVww2IXxFqw=
+        stake: 1
+        network-address: /dns/localhost/tcp/57492/http
+      - public-key: 8uV0ml/DPUXG9UbrnlP6v08XaBum9pcIDelRT04NanU=
+        stake: 1
+        network-address: /dns/localhost/tcp/57504/http
+    send_timeout:
+      secs: 4
+      nanos: 0
+    recv_timeout:
+      secs: 4
+      nanos: 0
+    buffer_size: 650000
+    db_folder_path: /Users/user/.sui/sui_config/client_db
+active_address: "0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0"
 ```
 
-The `accounts` variable contains the account's address that the wallet manages. The
-`gateway` variable contains the information of the Sui network that the wallet will
-be connecting to. Currently, only the `embedded` gateway type is supported.
+The `accounts` variable contains the account's address that the client manages. The
+`gateway` variable contains the information of the Sui network that the client will
+be connecting to.
 
 The `authorities` variable is part of the embedded gateway configuration. It contains
 the Sui network validator's name, host and port information. It is used to establish connections
@@ -163,20 +166,17 @@ connection to the validators.
 
 #### RPC gateway
 You can also connect the wallet to the Sui network via an [RPC Gateway](json-rpc.md#start-local-rpc-server);
-To use the RPC gateway, update `wallet.conf`'s `gateway` section to:
-```json
-{
-  ...
-  "gateway": {
-    "rpc":"http://127.0.0.1:5001"
-  },
-  ...
-}
+To use the RPC gateway, update `client.yaml`'s `gateway` section to:
+```yaml
+...
+gateway:
+  rpc: "http://localhost:5001"
+...
 ```
 
 ### Key management
 
-The key pairs are stored in `wallet.key`. However, this is not secure
+The key pairs are stored in `sui.keystore`. However, this is not secure
 and shouldn't be used in a production environment. We have plans to
 implement more secure key management and support hardware signing in a future release.
 
@@ -192,7 +192,7 @@ $ sui start
 ```
 
 This command will look for the Sui network configuration file
-`network.conf` in the `~/.sui/sui_config` directory. But you can
+`network.yaml` in the `~/.sui/sui_config` directory. But you can
 override this setting by providing a path to the directory where
 this file is stored:
 
@@ -203,7 +203,7 @@ $ sui start --config /path/to/sui/network/config/file
 For example:
 
 ```shell
-$ sui start --config /Users/name/tmp/network.conf
+$ sui start --config /Users/name/tmp/network.yaml
 ```
 
 Executing any of these two commands in a terminal window will result
@@ -215,42 +215,45 @@ NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
 If you see errors when trying to start Sui network, particularly if you made some custom changes
  (e.g,
-[customized wallet configuration](#wallet-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
+[customized client configuration](#client-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
-## Using the wallet
+## Using the client
 
 Now start a new terminal since you have Sui running in the first terminal.
 
-The following commands are supported by the wallet:
+The following commands are supported by the client:
 
     active-address        Default address used for commands when none specified
-    addresses             Obtain the addresses managed by the wallet
+    addresses             Obtain the Addresses managed by the wallet
     call                  Call Move function
-    clear                 Clear screen (interactive only)
+    clear                 Clear screen
     create-example-nft    Create an example NFT
-    echo                  Write arguments to the console output (interactive only)
-    env                   Print environment (interactive only)
-    exit                  Exit the interactive shell (interactive only)
+    echo                  Write arguments to the console output
+    env                   Print environment
+    exit                  Exit the interactive shell
     gas                   Obtain all gas objects owned by the address
     help                  Print this message or the help of the given subcommand(s)
     history               Print history
     merge-coin            Merge two coin objects into one coin
     new-address           Generate new address and keypair
-    object                Get object info
+    object                Get obj info
     objects               Obtain all objects owned by the address
     publish               Publish Move modules
     split-coin            Split a coin object into multiple coins
     switch                Switch active address and network(e.g., devnet, local rpc server)
     sync                  Synchronize client state with authorities
     transfer-coin         Transfer coin object
+    transfer-sui          Transfer SUI, and pay gas with the same SUI coin object. If amount is
+                              specified, only the amount is transferred; otherwise the entire object
+                              is transferred
 
 > **Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
 
-Use `wallet -h` to see the most up-to-date list of commands.
+Use `sui client -h` to see the most up-to-date list of commands.
 
 Use `help <command>` to see more information on each command.
 
-You can start the wallet in two modes: interactive shell or command line interface.
+You can start the client in two modes: interactive shell or command line interface.
 
 ### Interactive shell
 
@@ -259,19 +262,19 @@ terminal window than one used to execute `sui start`). Assuming you
 accepted the default location for configuration:
 
 ```shell
-$ wallet -i
+$ sui console 
 ```
 
 This command will look for the wallet configuration file
-`wallet.conf` in the `~/.sui/sui_config` directory. But you can
+`client.yaml` in the `~/.sui/sui_config` directory. But you can
 override this setting by providing a path to the directory where this
 file is stored:
 
 ```shell
-$ wallet -i --config /path/to/wallet/config/file
+$ sui console --config /path/to/wallet/config/file
 ```
 
-The Sui interactive wallet supports the following shell functionality:
+The Sui interactive client console supports the following shell functionality:
 
 * *Command history* -
   The `history` command can be used to print the interactive shell's command history;
@@ -286,20 +289,20 @@ The Sui interactive wallet supports the following shell functionality:
 
 ### Command line mode
 
-The wallet can also be used without the interactive shell, which can be useful if
-you want to pipe the output of the wallet to another application or invoke wallet
+The client can also be used without the interactive shell, which can be useful if
+you want to pipe the output of the wallet to another application or invoke client
 commands using scripts.
 
 ```shell
 USAGE:
-    wallet [SUBCOMMAND]
+    sui client [SUBCOMMAND]
 ```
 
 For example, we can use the following command to see the list of
 accounts available on the platform:
 
 ```shell
-$ wallet addresses
+$ sui client addresses
 ```
 
 The result of running this command should resemble the following output:
@@ -314,7 +317,7 @@ Showing 5 results.
 ```
 
 But the actual address values will most likely differ
-in your case (as will other values, such as object IDs, in the later
+in your case (as will other values, such as object IDs, in the latter
 parts of this tutorial). Consequently, **do not copy and paste
 the actual command from this tutorial as they are unlikely to work for
 you verbatim**. Each time you create a config for the wallet, addresses
@@ -334,10 +337,10 @@ at the start, but this can be changed later.
 In order to see what the current active address is, use the command `active-address`
 
 ```shell
-$ wallet active-address
+$ sui client active-address
 ```
 
-Which will reveal an address resembing:
+Which will reveal an address resembling:
 
 ```shell
 0x562f07cf6369e8d22dbf226a5bfedc6300014837
@@ -346,7 +349,7 @@ Which will reveal an address resembing:
 Changing the default address is as easy as calling the `switch` command:
 
 ```shell
-$ wallet switch --address 0x913cf36f370613ed131868ac6f9da2420166062e
+$ sui client switch --address 0x913cf36f370613ed131868ac6f9da2420166062e
 ```
 
 You will see output like:
@@ -358,16 +361,17 @@ Active address switched to 0x913cf36f370613ed131868ac6f9da2420166062e
 One can call, for example, the `objects` command with or without an address specified.
 When not specified, the active address is used.
 
+```shell
+$ sui client objects
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI> 
 ```
-sui>-$ objects
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      | o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221
-
-sui>-$ objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      | o#6ea7e2d4bf47b3cc219fdc44bf15530244d3b3d1838d59586c0bb41d3db92221
+```shell
+$ sui client objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI> 
 ```
 
 All commands where `address` is omitted will now use the newly specified active address:
@@ -393,12 +397,12 @@ To see how much gas is in an account, use the `gas` command. Note that this comm
 `active-address`, unless otherwise specified.
 
 ```shell
-$ wallet gas
+$ sui client gas
 ```
 
 You will see output like:
 
-```
+```shell
                 Object ID                   |  Version   |  Gas Value
 ------------------------------------------------------------------------
  0x0b8a4620426e526fa42995cf26eb610bfe6bf063 |     0      |   100000
@@ -411,7 +415,7 @@ You will see output like:
 If one does not want to use the active address, the addresses can be specified:
 
 ```shell
-$ wallet gas --address 0x562f07cf6369e8d22dbf226a5bfedc6300014837
+$ sui client gas --address 0x562f07cf6369e8d22dbf226a5bfedc6300014837
                 Object ID                   |  Version   |  Gas Value
 ------------------------------------------------------------------------
  0xa8ddc2661a19010e5f85cbf6d905ddfbe4dd0320 |     0      |   100000
@@ -422,7 +426,7 @@ $ wallet gas --address 0x562f07cf6369e8d22dbf226a5bfedc6300014837
 
 ```
 
-## Adding accounts to the wallet
+## Adding accounts to the client
 
 Sui's genesis process will create five accounts by default; if that's
 not enough, there are two ways to add accounts to the Sui wallet if needed.
@@ -432,7 +436,7 @@ not enough, there are two ways to add accounts to the Sui wallet if needed.
 To create a new account, execute the `new-address` command:
 
 ```shell
-$ wallet new-address
+$ sui client new-address
 ```
 
 The output shows a confirmation after the account has been created:
@@ -441,13 +445,13 @@ The output shows a confirmation after the account has been created:
 Created new keypair for address : 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
 ```
 
-### Add existing accounts to `wallet.conf` manually
+### Add existing accounts to `client.yaml` manually
 
 If you have an existing key pair from an old wallet config, you can copy the account
-address manually to the new `wallet.conf`'s accounts section, and add the key pair to the keystore file;
+address manually to the new `client.yaml`'s accounts section, and add the key pair to the keystore file;
 you won't be able to mutate objects if the account key is missing from the keystore.
 
-Restart the Sui wallet after the modification; the new accounts will appear in the wallet if you query the addresses.
+Restart the Sui console after the modification; the new accounts will appear in the client if you query the addresses.
 
 ## View objects owned by the account
 
@@ -456,34 +460,35 @@ You can use the `objects` command to view the objects owned by the address.
 `objects` command usage:
 
 ```shell
-USAGE:
-    objects [FLAGS] --address <ADDRESS>
+sui-client-objects 
+Obtain all objects owned by the address
 
-FLAGS:
-    -h, --help       Prints help information
-    -i               Start interactive wallet
-        --json       Returns command outputs in JSON format
+USAGE:
+    sui client objects [OPTIONS]
 
 OPTIONS:
         --address <ADDRESS>    Address owning the objects
+    -h, --help                 Print help information
+        --json                 Return command outputs in json format
 ```
 
 To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
 
 ```shell
-$ wallet objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
+$ sui client objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
 ```
 
-The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
+The result should resemble the following.
 
 ```shell
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x00a0a5211f6edcf4ba09d23b8a7250072be1edb6 |     0      | o#fbb33b6524d4a648fd5fff8dc93f3d6858945959b710a0893c2b86504b38f731
- 0x054c8263c73abd697a0f5aa8990d6d7668ce3d0d |     0      | o#cb99c4b8bb83a0b0111583cd2671f27d6eaeb89f89fd7ae822dc335f1a09e187
- 0x804aeaa287a7f87dd22a0885bd9e09aff71f1033 |     0      | o#3a7684039086ad33ea313f37d21ddaedd1cd95ed1f9564a61ba18f8e81ea017b
- 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 |     0      | o#db58b72bd45fb8331558a01baec42ad1575c5870bee882be5bae29c91856fe74
- 0xeea4167be074537f4a2879c7781d8ef4ffd651cc |     0      | o#ded63e5faac3953b25d55634a3471a27696f4886a293c7c6812123784548b7d4
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 |     0      | uCZNPmDWOksKhCKwEaMtST5T4HbTjcgXGHRXP4qTLC8= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xd1949864f94d87cf25e1fd7b1c8ab4bf685f7801 |     0      | OsTryyECAPW9mnSbWlYWELX+QlRg5er7s/DlkgqhDww= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xddb6119c320f52f3fef9fbc272af305d985b6883 |     0      | gBCDdel7iJZnXpuf4g9dqIPT4XjaAY/4knNcDxbTons= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xe1fe79ac8d900342e617e0986f54ff64e4e323de |     0      | qjsWIzAaomo0eqFwQt99EkARsiC/aw2hPDH8quM6pYg= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+Showing 5 results.
 ```
 
 If you want to view more information about the objects, you can use the `object` command.
@@ -491,31 +496,36 @@ If you want to view more information about the objects, you can use the `object`
 Usage of `object` command :
 
 ```shell
-USAGE:
-    object [FLAGS] --id <ID>
+sui-client-object 
+Get object info
 
-FLAGS:
-    -h, --help       Prints help information
-    -i               Start interactive wallet
-        --json       Returns command outputs in JSON format
+USAGE:
+    sui client object [OPTIONS] --id <ID>
 
 OPTIONS:
+    -h, --help       Print help information
         --id <ID>    Object ID of the object to fetch
+        --json       Return command outputs in json format
 ```
 
 To view the object, use the following command:
 
 ```bash
-$ wallet object --id 0x124bbde643189b573c98d05c092f4927225421d7
+$ sui client object --id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55
 ```
 
 This should give you output similar to the following:
 
 ```shell
-ID: 0x124bbde643189b573c98d05c092f4927225421d7
-Version: 1
-Owner: Account Address ( 0x62cd5bc220b28a34265bcb24995fb45a51d39832 )
-Type: 0x2::coin::Coin<0x2::sui::SUI>
+----- Move Object (0x66eaa38c8ea99673a92a076a00101ab9b3a06b55[0]) -----
+Owner: Account Address ( 0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0 )
+Version: 0
+Storage Rebate: 0
+Previous Transaction: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+----- Data -----
+type: 0x2::coin::Coin<0x2::sui::SUI>
+balance: 100000
+id: 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55[0]
 ```
 
 The result shows some basic information about the object, the owner,
@@ -529,38 +539,28 @@ Here is example `json` output:
 
 ```json
 {
-  "contents": {
+  "data": {
+    "dataType": "moveObject",
+    "type": "0x2::coin::Coin<0x2::sui::SUI>",
+    "has_public_transfer": true,
     "fields": {
-      "balance": {
-        "fields": {
-          "value": 99126
-        },
-        "type": "0x2::balance::Balance<0x2::sui::SUI>"
-      },
+      "balance": 100000,
       "id": {
-        "fields": {
-          "id": {
-            "fields": {
-              "id": {
-                "fields": {
-                  "bytes": "124bbde643189b573c98d05c092f4927225421d7"
-                },
-                "type": "0x2::id::ID"
-              }
-            },
-            "type": "0x2::id::UniqueID"
-          },
-          "version": 1
-        },
-        "type": "0x2::id::VersionedID"
+        "id": "0x66eaa38c8ea99673a92a076a00101ab9b3a06b55",
+        "version": 0
       }
-    },
-    "type": "0x2::coin::Coin<0x2::sui::SUI>"
+    }
   },
   "owner": {
-    "AddressOwner": "0x62cd5bc220b28a34265bcb24995fb45a51d39832"
+    "AddressOwner": "0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0"
   },
-  "tx_digest": "9811H0rZPbDwZ1dWRFLzQoKJarCue108+pzhGH7dAv4="
+  "previousTransaction": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  "storageRebate": 0,
+  "reference": {
+    "objectId": "0x66eaa38c8ea99673a92a076a00101ab9b3a06b55",
+    "version": 0,
+    "digest": "j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo="
+  }
 }
 ```
 
@@ -571,7 +571,7 @@ Coins *are* objects yet have a specific use case that allow for native commands 
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
 ```shell
-$ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
+$ sui client objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
                  Object ID                  |  Version   |                                Digest
 ------------------------------------------------------------------------------------------------------------------------------
 Showing 0 results.
@@ -584,20 +584,31 @@ We will explore how to transfer coins using the wallet in this section.
 `transfer-coin` command usage:
 
 ```shell
-USAGE:
-    transfer-coin [FLAGS] [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
+sui-client-transfer-coin 
+Transfer coin object
 
-FLAGS:
-    -h, --help       Prints help information
-    -i               Start interactive wallet
-        --json       Returns command outputs in JSON format
+USAGE:
+    sui client transfer-coin [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
-        --coin-object-id <COIN_OBJECT_ID>       Coin to transfer, in 20 bytes Hex string
-        --gas <GAS>                             ID of the coin object for gas payment, in 20 bytes Hex string If not provided, a coin
-                                                object with at least gas_budget value will be selected
-        --gas-budget <GAS_BUDGET>               Gas budget for this transfer
-        --to <TO>                               Recipient address
+        --coin-object-id <COIN_OBJECT_ID>
+            Coin to transfer, in 20 bytes Hex string
+
+        --gas <GAS>
+            ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
+            object with at least gas_budget value will be selected
+
+        --gas-budget <GAS_BUDGET>
+            Gas budget for this transfer
+
+    -h, --help
+            Print help information
+
+        --json
+            Return command outputs in json format
+
+        --to <TO>
+            Recipient address
 ```
 
 To transfer a coin object to a recipient, you will need the recipient's address,
@@ -610,35 +621,36 @@ mechanisms. For now, just set something large enough.
 Here is an example transfer of an object to account `0xf456ebef195e4a231488df56b762ac90695be2dd`:
 
 ```shell
-$ wallet transfer-coin --to 0xc72cf3adcc4d11c03079cef2c8992aea5268677a --coin-object-id 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 --gas-budget 100
+$ sui client transfer-coin --to 0xf456ebef195e4a231488df56b762ac90695be2dd --coin-object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
 ```
 
 With output like:
 
 ```
-Transfer confirmed after 4412 us
+Transfer confirmed after 16896 us
 ----- Certificate ----
-Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a]
-Transaction Kind : Transfer
-Recipient : 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
-Object ID : 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1
-Sequence Number : SequenceNumber(0)
-Object Digest : db58b72bd45fb8331558a01baec42ad1575c5870bee882be5bae29c91856fe74
-
+Transaction Hash: mjj1+0Wn+lER1oSD7fwXmoaxzoZW1pmMOqHQJgniy8U=
+Transaction Signature: YLbToj+MjgQnaix24ObbE+BdXna6bB9gSSm+YMa/VHsX5g68T9+5vRnGbvDECGoioluUQP0k/zSPvQU5Y/uXCA==@BE/TaOYjyEtJUqF0Db4FEcVT4umrPmp760gFLQIGA1E=
+Signed Authorities : [k#f2e5749a5fc33d45c6f546eb9e53fabf4f17681ba6f697080de9514f4e0d6a75, k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4, k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56]
+Transaction Kind : Public Transfer Object
+Recipient : 0xf456ebef195e4a231488df56b762ac90695be2dd
+Object ID : 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55
+Version : SequenceNumber(1)
+Object Digest : NFDitxwq+bXetYmBxsw9RYEFqq+NWIbRxVoyv3JJXSE=
 ----- Transaction Effects ----
-Status : Success { gas_used: 18, results: [] }
+Status : Success
 Mutated Objects:
-0x00a0a5211f6edcf4ba09d23b8a7250072be1edb6 SequenceNumber(1) o#0a4be8bae4e4ea4d8e3a9f5d4ff8533aa36bff247238ab668edc1e5369843c64
-0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 SequenceNumber(1) o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297
+  - ID: 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 , Owner: Account Address ( 0xf456ebef195e4a231488df56b762ac90695be2dd )
+  - ID: 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 , Owner: Account Address ( 0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0 )
 ```
 
 The account will now have one object:
 
 ```shell
 $ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0xda2237a9890bccebeeeae0d23ec739f00d2ce2b1 |     0      | o#f77edd77f5c154a850078b81b320870890bbb4f06d18f80fd512b1cc26bc3297
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     1      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
 ```
 
 ## Creating example NFTs
@@ -646,7 +658,7 @@ $ wallet objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
 You may create an [NFT-like object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/devnet_nft.move#L16) on Sui using the following command:
 
 ```shell
-$ wallet create-example-nft
+$ sui client create-example-nft
 ```
 
 You will see output resembling:
@@ -654,11 +666,17 @@ You will see output resembling:
 ```shell
 Successfully created an ExampleNFT:
 
-Owner: AddressOwner(k#66af3898e7558b79e115ab61184a958497d1905a)
+----- Move Object (0x524f9fae3ca4554e01354415daf58a05e5bf26ac[1]) -----
+Owner: Account Address ( 0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0 )
 Version: 1
-ID: 0x70874f1abd0a9a0126726a626ff48374f7b2d9c6
-Readonly: false
-Type: 0x2::devnet_nft::DevNetNFT
+Storage Rebate: 25
+Previous Transaction: 98HbDxEwEUknQiJzyWM8AiYIM479BEKuGwxrZOGtAwk=
+----- Data -----
+type: 0x2::devnet_nft::DevNetNFT
+description: An NFT created by the wallet Command Line Tool
+id: 0x524f9fae3ca4554e01354415daf58a05e5bf26ac[1]
+name: Example NFT
+url: ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty
 ```
 
 The command will invoke the `mint` function in the `devnet_nft` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
@@ -667,17 +685,23 @@ The command will invoke the `mint` function in the `devnet_nft` module, which mi
 `create-example-nft` command usage:
 
 ```shell
+sui-client-create-example-nft 
+Create an example NFT
+
 USAGE:
-    wallet create-example-nft [OPTIONS]
+    sui client create-example-nft [OPTIONS]
 
 OPTIONS:
         --description <DESCRIPTION>    Description of the NFT
-        --gas <GAS>                    ID of the gas object for gas payment, in 20 bytes hex string
+        --gas <GAS>                    ID of the gas object for gas payment, in 20 bytes Hex string
                                        If not provided, a gas object with at least gas_budget value
                                        will be selected
         --gas-budget <GAS_BUDGET>      Gas budget for this transfer
+    -h, --help                         Print help information
+        --json                         Return command outputs in json format
         --name <NAME>                  Name of the NFT
         --url <URL>                    Display url(e.g., an image url) of the NFT
+
 ```
 
 
@@ -694,66 +718,77 @@ We can use the `merge-coin` command and `split-coin` command to consolidate or s
 Usage of `merge-coin`:
 
 ```shell
-USAGE:
-    merge-coin [FLAGS] [OPTIONS] --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
+sui-client-merge-coin 
+Merge two coin objects into one coin
 
-FLAGS:
-    -h, --help       Prints help information
-    -i               Start interactive wallet
-        --json       Returns command outputs in JSON format
+USAGE:
+    sui client merge-coin [OPTIONS] --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
-        --coin-to-merge <COIN_TO_MERGE>    Coin to be merged, in 20 bytes Hex string
-        --gas <GAS>                        ID of the gas object for gas payment, in 20 bytes Hex string If not provided,
-                                           a gas object with at least gas_budget value will be selected
-        --gas-budget <GAS_BUDGET>          Gas budget for this call
-        --primary-coin <PRIMARY_COIN>      Coin to merge into, in 20 bytes Hex string
+        --coin-to-merge <COIN_TO_MERGE>
+            Coin to be merged, in 20 bytes Hex string
+
+        --gas <GAS>
+            ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
+            object with at least gas_budget value will be selected
+
+        --gas-budget <GAS_BUDGET>
+            Gas budget for this call
+
+    -h, --help
+            Print help information
+
+        --json
+            Return command outputs in json format
+
+        --primary-coin <PRIMARY_COIN>
+            Coin to merge into, in 20 bytes Hex string
 ```
 
 Here is an example of how to merge coins. To merge coins, you will need at lease three coin objects -
 two coin objects for merging, and one for the gas payment.
 You also need to specify the maximum gas budget that should be expanded for the coin merge operations.
-Let us examine objects owned by address `0xef999dbdb19ccca504eef5432cec69ea8a1d4a1b`
+Let us examine objects owned by address `0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75`
 and use the first coin (gas) object as the one to be the result of the merge, the second one to be merged, and the third one to be used as payment:
 
 ```shell
-$ wallet objects --address 0xef999dbdb19ccca504eef5432cec69ea8a1d4a1b
+$ sui client objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 ```
 
 And its output:
 
 ```
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x149a3493c97fafc696526052fe08e77043d4be0b |     0      | o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5
- 0x1b19f74ad77a95d7562432f6991ac9ec1ea2c57c |     0      | o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352
- 0x4c21fcc8ca953162877fe740f78d9c109145cc73 |     0      | o#18229401e7eb96bc23878e1f33d134e19ea5fd0a031bdb323c83baae4eab7097
- 0x646902fa947abf2e125131af0f3a9d5697c8f884 |     0      | o#f0bc58de072c0f028b02a0fe53644a74e5b490652c49471a99ffccb2fbb0e60e
- 0xbec3bf567a6e32508c96663a339635dc0fb0095c |     0      | o#cfafb0b086cb2df2e8dfb25d84948a45aa19578c45bbaef98d1d5fbcf266db40
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x1e90389f5d70d7fa6ce973155460e1c04deae194 |     0      | BC5O8Bf6Uw8S1LV1y4RCI6+kz1KhZG/aOpeqq9kTAvs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x351f08f03709cebea85dcd20e24b00fbc1851c92 |     0      | 9aYvavAzY6chYbOUtMtJj0g/5GNc+KBsqptCX5pmQ2Y= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x3c720502f9eabb17a52a999859fbbaeb408b1d14 |     0      | WUPT6P40veMZ/C7GiQpv92I4EH+hvh5BbkBt+7p9yH0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x7438af4677b9cea2094848f611143346183c11d1 |     0      | 55B56RG/kCeHrN6GXdIq0IvnyYD/hng9J7I7FNRykQ4= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x9d5f2b2564ad2255c24a03556785bddc85381508 |     0      | rmyYjq/UEED0xR0hE3Da8OYgBAu3MYxKQ3v76pGTDek= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+Showing 5 results.
 ```
 
 Then we merge:
 ```shell
-$ wallet merge-coin --primary-coin 0x149a3493c97fafc696526052fe08e77043d4be0b  --coin-to-merge 0x1b19f74ad77a95d7562432f6991ac9ec1ea2c57c --gas-budget 1000
+$ sui client merge-coin --primary-coin 0x1e90389f5d70d7fa6ce973155460e1c04deae194 --coin-to-merge 0x351f08f03709cebea85dcd20e24b00fbc1851c92 --gas-budget 1000
 ```
 
 With results resembling:
 
 ```
 ----- Certificate ----
-Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a]
+Transaction Hash: kxxpeggKaMpiWTpSrCNYcu3EDBfNWBJiIPnqae99Znw=
+Transaction Signature: /4jxUHC8iZRaHlgbgfOr962BqIRb7AavVJE8GUlY6EMehedF8iVxPf8URe5wFyrxD8IvEclN3Z1qJ4UweYCQAA==@cQeSjZ1xq4QC+7G5/MlAhnZuie6ZrukU/ps2LHmX3D8=
+Signed Authorities : [k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4, k#e5b3bc0d482603d8b54a25246b9053e958c872530d4014676d5c30d885f116ac, k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56]
 Transaction Kind : Call
-Gas Budget : 1000
 Package ID : 0x2
-Module : Coin
+Module : coin
 Function : join
-Object Arguments : [(0x149a3493c97fafc696526052fe08e77043d4be0b, SequenceNumber(0), o#2d50f098c913e1863ece507dcdcd5a291252f6c1df89ec8f16c62b542ac723b5), (1B19F74AD77A95D7562432F6991AC9EC1EA2C57C, SequenceNumber(0), o#d390dc554759f892a714b2659046f3f47830cd789b3ec1df9d40bd876c3e1352)]
-Pure Arguments : []
-Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })]
-
+Arguments : ["0x1e90389f5d70d7fa6ce973155460e1c04deae194", "0x351f08f03709cebea85dcd20e24b00fbc1851c92"]
+Type Arguments : ["0x2::sui::SUI"]
 ----- Merge Coin Results ----
-Updated Coin : Coin { id: 0x149a3493c97fafc696526052fe08e77043d4be0b, value: 200000 }
-Updated Gas : Coin { id: 0x4c21fcc8ca953162877fe740f78d9c109145cc73, value: 99995 }
+Updated Coin : Coin { id: 0x1e90389f5d70d7fa6ce973155460e1c04deae194, value: 200000 }
+Updated Gas : Coin { id: 0x3c720502f9eabb17a52a999859fbbaeb408b1d14, value: 99444 }
 ```
 
 ### Split coins
@@ -761,40 +796,42 @@ Updated Gas : Coin { id: 0x4c21fcc8ca953162877fe740f78d9c109145cc73, value: 9999
 Usage of `split-coin`:
 
 ```shell
-USAGE:
-    split-coin [FLAGS] [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET>
+sui-client-split-coin 
+Split a coin object into multiple coins
 
-FLAGS:
-    -h, --help       Prints help information
-    -i               Start interactive wallet
-        --json       Returns command outputs in JSON format
+USAGE:
+    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --amounts <AMOUNTS>... --gas-budget <GAS_BUDGET>
 
 OPTIONS:
         --amounts <AMOUNTS>...       Amount to split out from the coin
         --coin-id <COIN_ID>          Coin to Split, in 20 bytes Hex string
-        --gas <GAS>                  ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas
-                                     object with at least gas_budget value will be selected
+        --gas <GAS>                  ID of the gas object for gas payment, in 20 bytes Hex string If
+                                     not provided, a gas object with at least gas_budget value will
+                                     be selected
         --gas-budget <GAS_BUDGET>    Gas budget for this call
+    -h, --help                       Print help information
+        --json                       Return command outputs in json format
 ```
 
 For splitting coins, you will need at lease two coins to execute the `split-coin` command,
 one coin to split, one for the gas payment.
 
-Let us examine objects owned by address `0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0`:
+Let us examine objects owned by address `0x08da15bee6a3f5b01edbbd402654a75421d81397`:
 
 ```shell
-$ wallet objects --address 0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
+$ sui client objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
 ```
 
 With output resembling:
 
-```                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 |     0      | o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1
- 0xb402f52ba6216a770939e6d4922ae6d6d05c2256 |     0      | o#b95d120c36fab571c2389bccf507530a39e0055cdd9e9793aaf4ef691b1b8c96
- 0xba280146ecd5f74f5a0f31de4d1883bc078d3729 |     0      | o#edb2c038d6fd258b71d811cfa941216991d3a6bf99a783c90835becd443eb66c
- 0xbd0c7b951a255b078044ef492099cd6e0ed1fd9b |     0      | o#9a937af506d95bb1ffc77ff8f8cc0fbcc550c566f9b41289e1f17d67fd1b9bf8
- 0xfc4d67d8c7db119901ef0a0d4bc9ec61584a0b2d |     0      | o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669
+```shell
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 |     0      | uNcjv6KP8AXgQHTFmiEPV3tpWZcYHb1HmBR0B2pMsAo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4 |     0      | /ug6IGGld90PqnmL9qijciCqn25V11nn5/PAsKjxMY0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x7f7b7c1589aceb073a7c8740b1d47d05e4d89e3c |     0      | N5+qKRenKWqb7Y6WKZuFD+fRDB6pj/OtIyri+FSQ3Q0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xe42558e82e315c9c81ee5b9f1ac3db819ece5c1d |     0      | toHeih0DeFrqxQhGzVUi9EkVwAZSbLx6hv2gpMgNBbs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xfa322fee6a7f4c266ad4840e85bf3d87689b6de0 |     0      | DxjnkJTSl0o6HlzeOX5K/If61bbFwvRDydjzd2bq8ho= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
 Showing 5 results.
 ```
 
@@ -803,41 +840,42 @@ with values of 1000, 5000 and 3000, respectively; note the `--amounts` argument 
 We use the second coin on the list to pay for this transaction.
 
 ```shell
-$ wallet split-coin --coin-id 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 --amounts 1000 5000 3000 --gas-budget 1000
+$ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --amounts 1000 5000 3000 --gas-budget 1000
 ```
 
 You will see output resembling:
 
 ```
 ----- Certificate ----
-Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#22d43b47ab73dc69819d7f3c840c9c24344bbd6b2e3692400d1c083825362865, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2]
+Transaction Hash: qpxpv+EySl6tkz7OZ+/h/cpOlC/q1kBepr/qrDHsg7k=
+Transaction Signature: BsuWPuG9iBnvc/cQBbpBvDsBnzLXrhxPpoblpZ7ZcTQ78X9AtPO7knOaPjEbLxEJMGpOCPTIWa0eMPpoqT/SDQ==@ZXB4tfniuC6Oir8aVtIR5C00Md/tG3WSZRNN7nDDZLs=
+Signed Authorities : [k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4, k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#f2e5749a5fc33d45c6f546eb9e53fabf4f17681ba6f697080de9514f4e0d6a75]
 Transaction Kind : Call
-Gas Budget : 1000
 Package ID : 0x2
-Module : Coin
+Module : coin
 Function : split_vec
-Object Arguments : [(0x13347bd461e8a2b9ee5de7f6131063a3050a45c4, SequenceNumber(0), o#4ca351cbf507cac8162cb8278a38c1c9cdf4c6d2be05f2bee405da02ce8a4aa1)]
-Pure Arguments : [[3, 232, 3, 0, 0, 0, 0, 0, 0, 136, 19, 0, 0, 0, 0, 0, 0, 184, 11, 0, 0, 0, 0, 0, 0]]
-Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("sui"), name: Identifier("SUI"), type_params: [] })]
-
+Arguments : ["0x4a2853304fd2c243dae7d1ba58260bb7c40724e1", [1000,5000,3000]]
+Type Arguments : ["0x2::sui::SUI"]
 ----- Split Coin Results ----
-Updated Coin : Coin { id: 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4, value: 91000 }
-New Coins : Coin { id: 0x72129fbf3168c37a4dd8ec7ee69da28d0d4d4636, value: 5000 },
-            Coin { id: 0x821942c9375b644c6fc7531e46a70acb98fb5180, value: 1000 },
-            Coin { id: 0xd2e65e9a3107662f7b6399bd1d82c235cfd8c874, value: 3000 }
-Updated Gas : Coin { id: 0xb402f52ba6216a770939e6d4922ae6d6d05c2256, value: 99780 }
+Updated Coin : Coin { id: 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1, value: 91000 }
+New Coins : Coin { id: 0x1da8193ac29f94f8207b0222bd5941b7814c1668, value: 3000 },
+            Coin { id: 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e, value: 5000 },
+            Coin { id: 0xd5b694f67410d5b6cd293128cd48953aaa0a3dce, value: 1000 }
+Updated Gas : Coin { id: 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4, value: 99385 }
+```
 
-$ wallet objects --address 0x45cda12e3bafe3017b4b3cd62c493e5fbaad7fb0
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x13347bd461e8a2b9ee5de7f6131063a3050a45c4 |     1      | o#4f86a454ed9aa482adcbfece78cdd77d491d4e768aa8034af78a237d18e09f9f
- 0x72129fbf3168c37a4dd8ec7ee69da28d0d4d4636 |     1      | o#247905d1c8eee09b4d3bd02f4229376cd7482705e28ef7ff4ca86774d09c72b8
- 0x821942c9375b644c6fc7531e46a70acb98fb5180 |     1      | o#51aefcb853df1d24b98b975795e21b90496135e292967f7dee0a8fc12079d3af
- 0xb402f52ba6216a770939e6d4922ae6d6d05c2256 |     1      | o#9a20e2565db46aa371ab7932ab4b35494ef2e6a2251955a326e5f0fea6c0ee00
- 0xba280146ecd5f74f5a0f31de4d1883bc078d3729 |     0      | o#edb2c038d6fd258b71d811cfa941216991d3a6bf99a783c90835becd443eb66c
- 0xbd0c7b951a255b078044ef492099cd6e0ed1fd9b |     0      | o#9a937af506d95bb1ffc77ff8f8cc0fbcc550c566f9b41289e1f17d67fd1b9bf8
- 0xd2e65e9a3107662f7b6399bd1d82c235cfd8c874 |     1      | o#c904eaa7b7cc659bc34beec8e7d5ab2cfc51236d498c12cde0d7542b3b1d8b89
- 0xfc4d67d8c7db119901ef0a0d4bc9ec61584a0b2d |     0      | o#f1c1ca7cb3ef5f3e2a4fff5ec4ebc657388b1e2142432f66199886904eaf1669
+```
+$ wallet objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x1da8193ac29f94f8207b0222bd5941b7814c1668 |     1      | nAMEV3NZ0zscjO10QQUt1drLvhNXTk4MVLAg1FXTQxw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e |     1      | blMuVATrI89PRvqA4Kuv6rNkbuAb+bYhmkMocY7pavw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 |     1      | uhfauig0guMidpxFyCO6FzhzDfucss+eA6xWzAVF3sU= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4 |     1      | sWTy2PUbt3UFEKx1Km32dEG7cQscSK+eVc3ChaZCkkA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x7f7b7c1589aceb073a7c8740b1d47d05e4d89e3c |     0      | N5+qKRenKWqb7Y6WKZuFD+fRDB6pj/OtIyri+FSQ3Q0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xd5b694f67410d5b6cd293128cd48953aaa0a3dce |     1      | 4V0BC6eopxkN6wIOdm2FVgwN3psNbPvLKQ9/zrYtsDM= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xe42558e82e315c9c81ee5b9f1ac3db819ece5c1d |     0      | toHeih0DeFrqxQhGzVUi9EkVwAZSbLx6hv2gpMgNBbs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xfa322fee6a7f4c266ad4840e85bf3d87689b6de0 |     0      | DxjnkJTSl0o6HlzeOX5K/If61bbFwvRDydjzd2bq8ho= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
 Showing 8 results.
 ```
 
@@ -846,7 +884,7 @@ From the result, we can see three new coins were created in the transaction.
 ## Calling Move code
 
 The genesis state of the Sui platform includes Move code that is
-immediately ready to be called from Wallet CLI. Please see our
+immediately ready to be called from Sui CLI. Please see our
 [Move developer documentation](move.md#first-look-at-move-source-code)
 for the first look at Move source code and a description of the
 following function we will be calling in this tutorial:
@@ -862,17 +900,17 @@ coins as this can be accomplished with a built-in wallet
 [command](#transferring-coins) - we chose this example due to its
 simplicity.
 
-Let us examine objects owned by address `0xae6fb6036570fec1df71599740c132cdf5b45b9d`:
+Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2225`:
 
 ```shell
-$ wallet objects --address ae6fb6036570fec1df71599740c132cdf5b45b9d
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac |     0      | o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1
- 0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
- 0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
- 0xa9e4fda731fc888cc536da62c887c63e9becbe77 |     0      | o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1
- 0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 |     0      | o#4c6be9267d9aeb43f024c1604c765e3f127f8bc2dc4174a5fea5f26d1f7ed03e
+$ wallet objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x471c8e241d0473c34753461529b70f9c4ed3151b |     0      | MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     0      | VIbuA4fcsitOUmJLQ+FugZWIn7bg6LnVO8eTIAUDzkg= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
 Showing 5 results.
 ```
 
@@ -887,7 +925,7 @@ We will perform the transfer by calling the `transfer` function from
 the sui module using the following Sui Wallet command:
 
 ```shell
-$ wallet call --function transfer --module sui --package 0x2 --args 0x5044DC15D3C71D500116EB026E8B70D0A180F3AC 0xF456EBEF195E4A231488DF56B762AC90695BE2DD --gas-budget 1000
+$ sui client call --function transfer --module sui --package 0x2 --args 0x471c8e241d0473c34753461529b70f9c4ed3151b 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
@@ -922,21 +960,20 @@ changes as a result of the function call:
 
 ```shell
 ----- Certificate ----
-Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#f9664056f3cc46b03e86beeb3febf99af1c9ec3f6aa709a1dbd101c9e9a79c3a, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2]
+Transaction Hash: KT7sEHzxavRFkLijfKGDqj6kM5bVl1QA1IawJPV2+Go=
+Transaction Signature: GIUaa8yAPgy/eSVypVz+fmbjC2mL5kHuYNodUyNcIUMvlUN5XxyPYdL8C25vvH6rYt/ZUDY2ntZU1NHUp4yPCg==@iocJzkLCMJMh1VGZ6sUsw0okqoDP71ed9a4Vf2vWlx4=
+Signed Authorities : [k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#e5b3bc0d482603d8b54a25246b9053e958c872530d4014676d5c30d885f116ac, k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4]
 Transaction Kind : Call
-Gas Budget : 1000
 Package ID : 0x2
 Module : sui
 Function : transfer
-Object Arguments : [(0x5044dc15d3c71d500116eb026e8b70d0a180f3ac, SequenceNumber(0), o#748fabf1f7f92c8d00b54f5b431fd4e28d9dfd642cc0bc5c48b16dc0efdc58c1)]
-Pure Arguments : [[244, 86, 235, 239, 25, 94, 74, 35, 20, 136, 223, 86, 183, 98, 172, 144, 105, 91, 226, 221]]
+Arguments : ["0x471c8e241d0473c34753461529b70f9c4ed3151b", "0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75"]
 Type Arguments : []
-
 ----- Transaction Effects ----
-Status : Success { gas_used: 11, results: [] }
+Status : Success
 Mutated Objects:
-0x5044dc15d3c71d500116eb026e8b70d0a180f3ac SequenceNumber(1) o#6b384c50aa19204f3dd98dd52b39217ff234ed321cc2666b91ba6dadc14bd837
-0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 SequenceNumber(1) o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04
+  - ID: 0x471c8e241d0473c34753461529b70f9c4ed3151b , Owner: Account Address ( 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 )
+  - ID: 0x53b50e3020a01e1fd6acf832a871feee240183f0 , Owner: Account Address ( 0x48ff0a932b12976caec91d521265b009ad5b2225 )
 ```
 
 This output indicates the gas object
@@ -947,13 +984,13 @@ of the `transfer` function) by querying objects that are now owned by
 the sender:
 
 ```shell
-$ wallet objects --address 0xae6fb6036570fec1df71599740c132cdf5b45b9d
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
- 0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
- 0xa9e4fda731fc888cc536da62c887c63e9becbe77 |     0      | o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1
- 0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 |     1      | o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04
+$ sui client objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
 Showing 4 results.
 ```
 
@@ -962,17 +999,21 @@ And if we inspect this object, we can see it has the new
 owner, different from the original one:
 
 ```shell
-$ wallet object --id 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac
+$ sui client object --id 0x471c8e241d0473c34753461529b70f9c4ed3151b
 ```
 
 Resulting in:
 
 ```
-Owner: AddressOwner(k#f456ebef195e4a231488df56b762ac90695be2dd)
+----- Move Object (0x471c8e241d0473c34753461529b70f9c4ed3151b[1]) -----
+Owner: Account Address ( 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75 )
 Version: 1
-ID: 0x5044dc15d3c71d500116eb026e8b70d0a180f3ac
-Readonly: false
-Type: 0x2::coin::Coin<0x2::sui::SUI>
+Storage Rebate: 15
+Previous Transaction: KT7sEHzxavRFkLijfKGDqj6kM5bVl1QA1IawJPV2+Go=
+----- Data -----
+type: 0x2::coin::Coin<0x2::sui::SUI>
+balance: 100000
+id: 0x471c8e241d0473c34753461529b70f9c4ed3151b[1]
 ```
 
 ## Publish packages
@@ -981,65 +1022,71 @@ In order for user-written code to be available in Sui, it must be
 *published* to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
 Please see the [Move developer documentation](move.md) for a
 description on how to [write a simple Move code package](move.md#writing-a-package),
-which we can publish using Sui wallet's `publish` command.
+which we can publish using Sui client's `publish` command.
 
 The publish command
 requires us to specify a directory where the user-defined package lives.
 It's the path to the `my_move_package` as per the
-[package creation description](move.md#writing-a-package)), a gas
+[package creation description](move.md#writing-a-package), a gas
 object that will be used to pay for publishing the package (we use the
 same gas object we used to pay for the function call in the
 [Calling Move code](#calling-move-code)) section, and gas budget to put
-an upper limit (we use 1000 as our gas budget.
+an upper limit we use 1000 as our gas budget.
 
-Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`AE6FB6036570FEC1DF71599740C132CDF5B45B9D`) which now has 4 objecst left:
+Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75`) which now has 4 objects left:
 
 ```shell
-$ wallet objects --address 0xae6fb6036570fec1df71599740c132cdf5b45b9d
+$ wallet objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 ```
 
 Outputting:
 
 ```
-                 Object ID                  |  Version   |                                Digest
-------------------------------------------------------------------------------------------------------------------------------
- 0x749e3ee0e0ac93bfc06ed58972efe87717a428da |     0      | o#05efb7971ec89b78fd512913fb6f9bfbd0b5ffd2e99775493f9703ff153b3998
- 0x98765d1cbc66bdfc443aa60b614427470b266b28 |     0      | o#5f1696a263b9c97ba2e50175db0af1052a70943148b697fca98f98781482eba5
- 0xa9e4fda731fc888cc536da62c887c63e9becbe77 |     0      | o#ed2945e8d8a8a6c2f3fdc75a84c6cea2a9d74e2fce90779d6d3955c9416a75a1
- 0xb6e55f0eb3b820cb848b3bbb6db4bc34e54f2413 |     1      | o#227a2127b17bdfd36c1f7982969588c3baea7a96f7019158018be1c4f152db04
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
 Showing 4 results.
 ```
 
 The whole command to publish a package for address
-`0xae6fb6036570fec1df71599740c132cdf5b45b9d` resembles the following (assuming
+`0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75` resembles the following (assuming
 that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-$ wallet publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
+$ sui client publish --path $PATH_TO_PACKAGE/my_move_package --gas-budget 30000
 ```
 
 The result of running this command should look as follows:
 
 ```shell
 ----- Certificate ----
-Signed Authorities : [k#21d89c3a12409b7aeadf36a9753417ead5fa9ea607ccb666e83b739b8a73c5e8, k#8d86bef2f8ae835d4763c9a697ad5c458130907996d59adc4ea5be37f2e0fab2, k#22d43b47ab73dc69819d7f3c840c9c24344bbd6b2e3692400d1c083825362865]
+Transaction Hash: evmJUz0+a2oFMbsTza2U+vC9q2KHeDVVV9XUma8OXv8=
+Transaction Signature: 7Lqy/KQW86Tq81cUxLMW07AQw1S+D4QLFC9/jMNKrau81eABHpxG2lgaVaAh0c+d5ldYhp75SmpY0pxq0FSLBA==@BE/TaOYjyEtJUqF0Db4FEcVT4umrPmp760gFLQIGA1E=
+Signed Authorities : [k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#f2e5749a5fc33d45c6f546eb9e53fabf4f17681ba6f697080de9514f4e0d6a75, k#e5b3bc0d482603d8b54a25246b9053e958c872530d4014676d5c30d885f116ac]
 Transaction Kind : Publish
-Gas Budget : 30000
-
 ----- Publish Results ----
-The newly published package object: (0xbaeef9626cc17311e6a3ee99b44ca453d2cc390f, SequenceNumber(1), o#9bf20104335bcffcaa51e39737206e87df53b6f907afca6117c82818e704968e)
+The newly published package object ID: 0xdbcee02bd4eb326122ced0a8540f15a057d82850
+
 List of objects created by running module initializers:
-Owner: AddressOwner(k#ae6fb6036570fec1df71599740c132cdf5b45b9d)
+----- Move Object (0x4ac2df49c3698baaef11ae23b3d8417d7e5ed65f[1]) -----
+Owner: Account Address ( 0xb02b5e57fe3572f94ad5ac2a17392bfb3261f7a0 )
 Version: 1
-ID: 0xfdee51771ae2a264d61eb8a7726d43948b278b90
-Readonly: false
-Type: 0xbaeef9626cc17311e6a3ee99b44ca453d2cc390f::M1::Forge
-Updated Gas : Coin { id: 0x749e3ee0e0ac93bfc06ed58972efe87717a428da, value: 99232 }
+Storage Rebate: 12
+Previous Transaction: evmJUz0+a2oFMbsTza2U+vC9q2KHeDVVV9XUma8OXv8=
+----- Data -----
+type: 0xdbcee02bd4eb326122ced0a8540f15a057d82850::m1::Forge
+id: 0x4ac2df49c3698baaef11ae23b3d8417d7e5ed65f[1]
+swords_created: 0
+
+Updated Gas : Coin { id: 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19, value: 96929 }
 ```
 
 Please note that running this command resulted in creating an object representing the published package.
-From now on, we can use the package object ID (`0x52fa2ff453cfecba06bb84b3b43147c586960e69`) in the Sui wallet's call
+From now on, we can use the package object ID (`0xdbcee02bd4eb326122ced0a8540f15a057d82850`) in the Sui wallet's call
 command just like we used `0x2` for built-in packages in the
 [Calling Move code](#calling-move-code) section.
 
@@ -1050,7 +1097,7 @@ the part of Move developer documentation concerning [module
 initializers](move.md#module-initializers) for more details on module
 initializers.
 
-Finally, we  see that the the gas object that was used to pay for
+Finally, we see that the gas object that was used to pay for
 publishing was updated as well.
 
 ## Customize genesis
@@ -1062,82 +1109,19 @@ file using the `--config` flag.
 $ sui genesis --config <Path to genesis config file>
 ```
 
-Example `genesis.conf`:
+Example `genesis.yaml`:
 
-```json
-{
-  "authorities": [
-    {
-      "key_pair": "xWhgxF5fagohi2V9jzUToxnhJbTwbtV2qX4dbMGXR7lORTBuDBe+ppFDnnHz8L/BcYHWO76EuQzUYe5pnpLsFQ==",
-      "host": "127.0.0.1",
-      "port": 10000,
-      "db_path": "./authorities_db/4e45306e0c17bea691439e71f3f0bfc17181d63bbe84b90cd461ee699e92ec15",
-      "stake": 1
-    }
-  ],
-  "accounts": [
-    {
-      "address": "0xbd654f352c895d9ec14c491d3f2b4e1f98fb07323383bebe9f95ab625bff2fa0",
-      "gas_objects": [
-        {
-          "object_id": "0x5c68ac7ba66ef69fdea0651a21b531a37bf342b7",
-          "gas_value": 1000
-        }
-      ]
-    }
-  ],
-  "move_packages": ["<Paths to custom move packages>"],
-  "sui_framework_lib_path": "<Paths to Sui framework lib>",
-  "move_framework_lib_path": "<Paths to move framework lib>"
-}
-```
+```yaml
+---
+validator_genesis_info: ~
+committee_size: 4
+accounts:
+  - gas_objects:
+      - object_id: "0xdbac75c4e5a5064875cb8566a533547957092f93"
+        gas_value: 100000
+    gas_object_ranges: []
+move_packages: ["<Paths to custom move packages>"]
+sui_framework_lib_path: ~
+move_framework_lib_path: ~
 
-All attributes in `genesis.conf` are optional, and default values
-will be used if the attributes are not provided.
-For example, the
-config shown below will create a network of four validators, and
-pre-populate two gas objects for four newly generated accounts:
-
-```json
-{
-  "authorities": [
-    {},{},{},{}
-  ],
-  "accounts": [
-    { "gas_objects":[{},{}] },
-    { "gas_objects":[{},{}] },
-    { "gas_objects":[{},{}] },
-    { "gas_objects":[{},{}] }
-  ]
-}
-```
-
-If you use any custom accounts in `genesis.conf`, ensure you have a corresponding private key in
-`wallet.key`. Ensure `wallet.key` is in the working directory of the wallet. If you do not have the private key of the addresses specified, you cannot use custom genesis. *Never share your private keys.* For testing the `genesis.conf` example below, you can use the following private key:
-
-`genesis.conf`
-
-```
-{
-  "authorities": [
-    {},{},{},{}
-  ],
-  "accounts": [
-    {
-      "address": "0x09818aac3edf9cf9b006b70c36e7241768b26386",
-      "gas_objects": [
-        {
-          "object_id": "0000000000000000000000000000000000000003",
-          "gas_value": 10000000
-        }
-      ]
-    }
-  ]
-}
-```
-`wallet.key`
-```
-[
-  "WKk4nT2oyPKbFrFAyepT5wEsummWsA6qdhsqzc6CVC9fvTt3J2u6yy5WuW9B6OU3mkcyPC/4Axstn0BpIhzZNg==",
-]
 ```

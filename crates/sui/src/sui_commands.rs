@@ -26,7 +26,7 @@ use tracing::info;
 
 #[derive(Parser)]
 #[clap(
-    name = "Sui",
+    name = "sui",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case",
     author,
@@ -84,9 +84,9 @@ pub enum SuiCommand {
         #[clap(long = "client.config")]
         config: Option<PathBuf>,
         #[clap(subcommand)]
-        cmd: SuiClientCommands,
+        cmd: Option<SuiClientCommands>,
         /// Return command outputs in json format.
-        #[clap(long)]
+        #[clap(long, global = true)]
         json: bool,
     },
 
@@ -324,17 +324,24 @@ impl SuiCommand {
                 prompt_if_no_config(&config)?;
                 let mut context = WalletContext::new(&config)?;
 
-                // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.
-                if !matches!(
-                    cmd,
-                    SuiClientCommands::Switch {
-                        gateway: Some(_),
-                        ..
+                if let Some(cmd) = cmd {
+                    // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.
+                    if !matches!(
+                        cmd,
+                        SuiClientCommands::Switch {
+                            gateway: Some(_),
+                            ..
+                        }
+                    ) {
+                        sync_accounts(&mut context).await?;
                     }
-                ) {
-                    sync_accounts(&mut context).await?;
+                    cmd.execute(&mut context).await?.print(!json);
+                } else {
+                    // Print help
+                    let mut app: Command = SuiCommand::command();
+                    app.build();
+                    app.find_subcommand_mut("client").unwrap().print_help()?;
                 }
-                cmd.execute(&mut context).await?.print(!json);
                 Ok(())
             }
             SuiCommand::Move { path, std, cmd } => cmd.execute(path.as_ref(), std),
@@ -358,11 +365,11 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
     // Prompt user for connect to gateway if config not exists.
     if !wallet_conf_path.exists() {
         print!(
-            "Config file [{:?}] doesn't exist, do you want to connect to a Sui Gateway [yN]?",
+            "Config file [{:?}] doesn't exist, do you want to connect to a Sui RPC server [yN]?",
             wallet_conf_path
         );
         if matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y") {
-            print!("Sui Gateway Url (Default to Sui DevNet if not specified) : ");
+            print!("Sui RPC server Url (Default to Sui DevNet if not specified) : ");
             let url = read_line()?;
             let url = if url.trim().is_empty() {
                 SUI_DEV_NET_URL

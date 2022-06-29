@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::SwitchResponse;
-use crate::client_commands::{SuiClientCommands, WalletCommandResult, WalletContext};
+use crate::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use crate::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
 };
@@ -100,7 +100,7 @@ async fn handle_command(
     // TODO: Completion data are keyed by strings, are there ways to make it more error proof?
     if let Ok(mut cache) = completion_cache.write() {
         match result {
-            WalletCommandResult::Addresses(ref addresses) => {
+            SuiClientCommandResult::Addresses(ref addresses) => {
                 let addresses = addresses
                     .iter()
                     .map(|addr| format!("{addr}"))
@@ -108,7 +108,7 @@ async fn handle_command(
                 cache.insert(CacheKey::flag("--address"), addresses.clone());
                 cache.insert(CacheKey::flag("--to"), addresses);
             }
-            WalletCommandResult::Objects(ref objects) => {
+            SuiClientCommandResult::Objects(ref objects) => {
                 let objects = objects
                     .iter()
                     .map(|oref| format!("{}", oref.object_id))
@@ -125,7 +125,7 @@ async fn handle_command(
     // Quit shell after gateway switch
     if matches!(
         result,
-        WalletCommandResult::Switch(SwitchResponse {
+        SuiClientCommandResult::Switch(SwitchResponse {
             gateway: Some(_),
             ..
         })
