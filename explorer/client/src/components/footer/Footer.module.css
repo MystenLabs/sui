@@ -1,5 +1,5 @@
 .footer {
-    @apply bg-sui-grey-75 w-full z-10 pl-[1vw] sm:pl-[5vw] pt-[5vh];
+    @apply bg-sui-grey-75 z-10 pl-[1vw] sm:pl-[5vw] pt-[5vh];
 }
 
 nav.links {

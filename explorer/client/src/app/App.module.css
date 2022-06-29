@@ -1,5 +1,5 @@
 .app {
-    @apply font-sans w-screen;
+    @apply font-sans w-full;
 
     background: linear-gradient(
         to bottom,
