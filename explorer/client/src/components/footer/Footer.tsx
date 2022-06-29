@@ -11,7 +11,7 @@ function Footer() {
     return (
         <div className={styles.footer}>
             <nav className={styles.links}>
-                <div className={styles.logo}>
+                <div className={styles.logodesktop}>
                     <SuiLogoIcon />
                     <div className={styles.copyright}>
                         <div>&copy;2022 Copyright Sui.</div>
@@ -83,23 +83,16 @@ function Footer() {
                     </ul>
                 </div>
             </nav>
+            <div className={styles.logomobile}>
+                <SuiLogoIcon />
+                <div className={styles.copyright}>
+                    <div>&copy;2022 Copyright Sui. All rights reserved.</div>
+                </div>
+            </div>
+
             <CookiesConsent />
         </div>
     );
 }
 
 export default Footer;
-/*
-                <Link to="/" id="homeBtn">
-                    Home
-                </Link>
-                <ExternalLink href="https://sui.io/" label="Sui" />
-                <ExternalLink
-                    href="https://mystenlabs.com/"
-                    label="Mysten Labs"
-                />
-                <ExternalLink
-                    href="https://docs.sui.io/"
-                    label="Developer Hub"
-                />
-                */
