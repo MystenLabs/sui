@@ -40,9 +40,22 @@ pub struct ViewObjectCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct TransferObjectCommand {
+    pub id: u64,
+    #[clap(long = "recipient")]
+    pub recipient: String,
+    #[clap(long = "sender")]
+    pub sender: Option<String>,
+    #[clap(long = "gas-budget")]
+    pub gas_budget: Option<u64>,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
+    #[clap(name = "transfer-object")]
+    TransferObject(TransferObjectCommand),
 }
 
 #[derive(Debug)]

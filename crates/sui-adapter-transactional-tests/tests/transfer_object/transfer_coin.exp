@@ -1,0 +1,15 @@
+processed 4 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'view-object'. lines 8-8:
+Owner: Account Address ( A )
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(100)}}, version: 0u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100000u64}}
+
+task 2 'transfer-object'. lines 10-10:
+written: object(100), object(104)
+
+task 3 'view-object'. lines 12-12:
+Owner: Account Address ( B )
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(100)}}, version: 1u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100000u64}}

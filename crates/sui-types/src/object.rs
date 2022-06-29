@@ -569,7 +569,7 @@ impl Object {
     }
 
     pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
-        if !self.is_owned() {
+        if !matches!(self.owner, Owner::AddressOwner(_)) {
             return Err(ExecutionErrorKind::TransferUnowned.into());
         }
         let has_public_transfer = match &self.data {
@@ -577,7 +577,7 @@ impl Object {
             Data::Package(_) => false,
         };
         if !has_public_transfer {
-            return Err(ExecutionErrorKind::TransferNonCoin.into());
+            return Err(ExecutionErrorKind::TransferObjectWithoutPublicTransfer.into());
         }
         Ok(())
     }
