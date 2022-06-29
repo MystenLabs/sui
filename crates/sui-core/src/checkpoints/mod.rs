@@ -362,17 +362,28 @@ impl CheckpointStore {
         })
     }
 
+    pub fn sign_new_checkpoint(
+        &mut self,
+        summary: CheckpointSummary,
+        contents: &CheckpointContents,
+    ) -> SuiResult {
+        let checkpoint = AuthenticatedCheckpoint::Signed(
+            SignedCheckpointSummary::new_from_summary(summary, self.name, &*self.secret),
+        );
+        self.handle_internal_set_checkpoint(&checkpoint, contents)
+    }
+
     /// Call this function internally to update the latest checkpoint.
     /// Internally it is called with an unsigned checkpoint, and results
     /// in the checkpoint being signed, stored and the contents
     /// registered as processed or unprocessed.
     pub fn handle_internal_set_checkpoint(
         &mut self,
-        epoch: EpochId,
-        checkpoint: CheckpointSummary,
+        checkpoint: &AuthenticatedCheckpoint,
         contents: &CheckpointContents,
     ) -> Result<(), SuiError> {
-        let checkpoint_sequence_number = *checkpoint.sequence_number();
+        let summary = checkpoint.summary();
+        let checkpoint_sequence_number = *summary.sequence_number();
 
         // Process checkpoints once but allow idempotent processing
         if self.checkpoints.get(&checkpoint_sequence_number)?.is_some() {
@@ -392,6 +403,7 @@ impl CheckpointStore {
 
         // Ensure we have processed all transactions contained in this checkpoint.
         if !self.all_checkpoint_transactions_executed(contents)? {
+            // TODO: We need to schedule all unexecuted transactions for execution.
             return Err(SuiError::from(
                 "Checkpoint contains unexecuted transactions.",
             ));
@@ -405,11 +417,6 @@ impl CheckpointStore {
         //   contents as such a list instead of a set.
         // Probably we need access to the effects to do the above.
 
-        // Sign the new checkpoint
-        let signed_checkpoint = AuthenticatedCheckpoint::Signed(
-            SignedCheckpointSummary::new_from_summary(checkpoint, self.name, &*self.secret),
-        );
-
         // Make a DB batch
         let batch = self.checkpoints.batch();
 
@@ -417,7 +424,7 @@ impl CheckpointStore {
         let batch = batch
             .insert_batch(
                 &self.checkpoints,
-                [(&checkpoint_sequence_number, &signed_checkpoint)],
+                [(&checkpoint_sequence_number, checkpoint)],
             )?
             // Drop the fragments for the previous checkpoint
             .delete_batch(
@@ -436,9 +443,6 @@ impl CheckpointStore {
         // Update the transactions databases.
         let transactions: Vec<_> = contents.transactions.iter().cloned().collect();
         self.update_new_checkpoint_inner(checkpoint_sequence_number, &transactions, batch)?;
-
-        // Try to set a fresh proposal, and ignore errors if this fails.
-        let _ = self.new_proposal(epoch);
 
         Ok(())
     }
@@ -632,7 +636,7 @@ impl CheckpointStore {
                 &contents,
                 previous_digest,
             );
-            self.handle_internal_set_checkpoint(committee.epoch, summary, &contents)
+            self.sign_new_checkpoint(summary, &contents)
                 .map_err(FragmentInternalError::Error)?;
 
             return Ok(true);
@@ -773,26 +777,9 @@ impl CheckpointStore {
                     // Check and process contents
                     checkpoint.verify_with_transactions(committee, contents)?;
                     self.handle_internal_set_checkpoint(
-                        committee.epoch,
-                        checkpoint.summary.clone(),
+                        &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
                         contents,
                     )?;
-                    // Then insert it
-                    self.checkpoints.insert(
-                        checkpoint.summary.sequence_number(),
-                        &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
-                    )?;
-
-                    // Now that we have the new checkpoint we try to move forward the checkpoint creation
-                    // process. We try to use fragments in the sequence to create past checkpoints.
-                    loop {
-                        let construct = self.attempt_to_construct_checkpoint(committee);
-                        // Exit if checkpoint construction leads to an error or returns false
-                        // (ie no new checkpoint is created.)
-                        if construct.is_err() || !construct.unwrap() {
-                            break;
-                        }
-                    }
                 } else {
                     return Err(SuiError::from("No checkpoint set at this sequence."));
                 }
