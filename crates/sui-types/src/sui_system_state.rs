@@ -17,6 +17,7 @@ pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
+    pub storage_gas_price: u64,
 }
 
 /// Rust version of the Move Std::Option::Option type.
