@@ -3,8 +3,6 @@
 
 use rand::{prelude::StdRng, SeedableRng};
 use sui_types::committee::Committee;
-use sui_types::crypto::get_key_pair;
-use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::KeyPair;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
@@ -33,7 +31,7 @@ pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Committee, SuiA
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let (authority_address, authority_key) = get_key_pair_from_rng(rng);
+    let (authority_address, authority_key) = KeyPair::get_key_pair_from_rng(rng);
     let mut authorities = BTreeMap::new();
     authorities.insert(
         /* address */ *authority_key.public_key_bytes(),
@@ -64,7 +62,7 @@ pub(crate) async fn init_state(
 
 #[tokio::test]
 async fn test_open_manager() {
-    // let (_, authority_key) = get_key_pair();
+    // let (_, authority_key) = KeyPair::get_key_pair();
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -338,7 +336,7 @@ async fn test_batch_manager_drop_out_of_order() {
 
 #[tokio::test]
 async fn test_handle_move_order_with_batch() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let authority_state = Arc::new(init_state_with_objects(vec![gas_payment_object]).await);
@@ -754,7 +752,7 @@ async fn test_safe_batch_stream() {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
-    let (_, authority_key) = get_key_pair();
+    let (_, authority_key) = KeyPair::get_key_pair();
     let mut authorities = BTreeMap::new();
     let public_key_bytes = *authority_key.public_key_bytes();
     println!("init public key {:?}", public_key_bytes);
@@ -807,7 +805,7 @@ async fn test_safe_batch_stream() {
     assert!(!error_found);
 
     // Byzantine cases:
-    let (_, authority_key) = get_key_pair();
+    let (_, authority_key) = KeyPair::get_key_pair();
     let public_key_bytes_b = *authority_key.public_key_bytes();
     let state_b = AuthorityState::new(
         committee.clone(),

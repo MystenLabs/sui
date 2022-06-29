@@ -714,7 +714,6 @@ impl SignedTransaction {
         let idx = obligation.add_message(message);
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
-
         obligation.verify_all()?;
         Ok(weight)
     }

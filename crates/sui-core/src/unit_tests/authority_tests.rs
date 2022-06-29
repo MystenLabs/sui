@@ -17,7 +17,7 @@ use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
     crypto::KeyPair,
-    crypto::{get_key_pair, Signature},
+    crypto::{Signature},
     messages::Transaction,
     object::{Owner, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
@@ -85,7 +85,7 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_bad_signature() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -112,7 +112,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     let num_orders = authority_state.metrics.tx_orders.get();
     let num_errors = authority_state.metrics.signature_errors.get();
 
-    let (_unknown_address, unknown_key) = get_key_pair();
+    let (_unknown_address, unknown_key) = KeyPair::get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
     bad_signature_transfer_transaction.tx_signature =
         Signature::new(&transfer_transaction.data, &unknown_key);
@@ -150,7 +150,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_with_max_sequence_number() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let recipient = dbg_addr(2);
@@ -190,7 +190,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_shared_object_with_max_sequence_number() {
-    let (sender, keypair) = get_key_pair();
+    let (sender, keypair) = KeyPair::get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
@@ -244,7 +244,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
 #[tokio::test]
 async fn test_handle_transfer_transaction_unknown_sender() {
     let sender = get_new_address();
-    let (unknown_address, unknown_key) = get_key_pair();
+    let (unknown_address, unknown_key) = KeyPair::get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let recipient = dbg_addr(2);
@@ -297,7 +297,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 
 #[test]
 fn test_handle_transfer_transaction_bad_sequence_number() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let object_id: ObjectID = random_object_id();
     let recipient = Address::Sui(dbg_addr(2));
     let authority_state = init_state_with_object(sender, object_id);
@@ -322,7 +322,7 @@ fn test_handle_transfer_transaction_bad_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -403,7 +403,7 @@ async fn test_handle_transfer_transaction_ok() {
 
 #[tokio::test]
 async fn test_transfer_package() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
@@ -431,7 +431,7 @@ async fn test_transfer_package() {
 // We expect it to fail early during transaction handle phase.
 #[tokio::test]
 async fn test_immutable_gas() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let mut_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, mut_object_id)]).await;
@@ -502,7 +502,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 // Test that publishing a module that depends on an existing one works
 #[tokio::test]
 async fn test_publish_dependent_module_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
@@ -552,7 +552,7 @@ async fn test_publish_dependent_module_ok() {
 // Test that publishing a module with no dependencies works
 #[tokio::test]
 async fn test_publish_module_no_dependencies_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = MAX_GAS;
     let gas_payment_object =
@@ -579,7 +579,7 @@ async fn test_publish_module_no_dependencies_ok() {
 
 #[tokio::test]
 async fn test_publish_non_existing_dependent_module() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
@@ -634,7 +634,7 @@ async fn test_publish_non_existing_dependent_module() {
 
 #[tokio::test]
 async fn test_handle_move_transaction() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
@@ -666,7 +666,7 @@ async fn test_handle_move_transaction() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_double_spend() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -706,7 +706,7 @@ async fn test_handle_transfer_transaction_double_spend() {
 #[tokio::test]
 async fn test_handle_confirmation_transaction_unknown_sender() {
     let recipient = dbg_addr(2);
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let authority_state = init_state().await;
 
     let object = Object::with_id_owner_for_testing(
@@ -743,7 +743,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // * Create an explicit transfer, and execute it.
     // * Then try to execute it again.
 
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
@@ -818,7 +818,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_receiver_equal_sender() {
-    let (address, key) = get_key_pair();
+    let (address, key) = KeyPair::get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
@@ -864,7 +864,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -953,7 +953,7 @@ async fn test_handle_confirmation_transaction_ok() {
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_idempotent() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -1017,7 +1017,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
 
 #[tokio::test]
 async fn test_move_call_mutable_object_not_mutated() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
@@ -1075,7 +1075,7 @@ async fn test_move_call_mutable_object_not_mutated() {
 
 #[tokio::test]
 async fn test_move_call_delete() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
@@ -1131,7 +1131,7 @@ async fn test_move_call_delete() {
 
 #[tokio::test]
 async fn test_get_latest_parent_entry() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
@@ -1303,7 +1303,7 @@ async fn test_idempotent_reversed_confirmation() {
     // and then receive the raw transaction latter. We should still ensure idempotent
     // response and be able to get back the same result.
     let recipient = dbg_addr(2);
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
 
     let object = Object::with_owner_for_testing(sender);
     let object_ref = object.compute_object_reference();
@@ -1389,7 +1389,7 @@ async fn test_change_epoch_transaction() {
 
 #[tokio::test]
 async fn test_transfer_sui_no_amount() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -1440,7 +1440,7 @@ async fn test_transfer_sui_no_amount() {
 
 #[tokio::test]
 async fn test_transfer_sui_with_amount() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -1494,8 +1494,8 @@ async fn test_transfer_sui_with_amount() {
 #[tokio::test]
 async fn test_store_revert_state_update() {
     // This test checks the correctness of revert_state_update in SuiDataStore.
-    let (sender, sender_key) = get_key_pair();
-    let (recipient, _sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
+    let (recipient, _sender_key) = KeyPair::get_key_pair();
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let gas_object_ref = gas_object.compute_object_reference();
@@ -1564,7 +1564,7 @@ async fn test_store_revert_state_update() {
 
 #[cfg(test)]
 fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStore>) {
-    let (authority_address, authority_key) = get_key_pair();
+    let (authority_address, authority_key) = KeyPair::get_key_pair();
     let mut authorities = BTreeMap::new();
     authorities.insert(
         /* address */ *authority_key.public_key_bytes(),
@@ -1777,7 +1777,7 @@ pub async fn create_move_object(
 
 #[tokio::test]
 async fn shared_object() {
-    let (sender, keypair) = get_key_pair();
+    let (sender, keypair) = KeyPair::get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();

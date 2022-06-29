@@ -9,8 +9,8 @@ use sui_core::{
 };
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
-    crypto::get_key_pair_from_rng,
     messages::{CallArg, ExecutionStatus, ObjectArg},
+    crypto::KeyPair
 };
 use test_utils::transaction::publish_counter_package;
 use test_utils::{
@@ -127,7 +127,7 @@ async fn end_to_end() {
     // Make a few test transactions.
     let total_transactions = 3;
     let mut rng = StdRng::from_seed([0; 32]);
-    let keys = (0..total_transactions).map(|_| get_key_pair_from_rng(&mut rng).1);
+    let keys = (0..total_transactions).map(|_| KeyPair::get_key_pair_from_rng(&mut rng).1);
     let (transactions, input_objects) = test_transactions(keys);
     let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
 
@@ -212,7 +212,7 @@ async fn checkpoint_with_shared_objects() {
     // Make a few test transactions.
     let total_transactions = 3;
     let mut rng = StdRng::from_seed([0; 32]);
-    let keys = (0..total_transactions).map(|_| get_key_pair_from_rng(&mut rng).1);
+    let keys = (0..total_transactions).map(|_| KeyPair::get_key_pair_from_rng(&mut rng).1);
     let (transactions, input_objects) = test_transactions(keys);
 
     // Spawn a quorum of authorities.

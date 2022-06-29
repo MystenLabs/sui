@@ -16,6 +16,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::{CertifiedTransaction, SignedTransactionEffects},
 };
+use sui_types::crypto::KeyPair;
 
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
@@ -414,13 +415,13 @@ mod tests {
 
     use sui_types::{
         base_types::{AuthorityName, TransactionEffectsDigest},
-        crypto::get_key_pair,
+        crypto::KeyPair
     };
 
     use super::EffectsStakeMap;
 
     fn random_authority_name() -> AuthorityName {
-        let key = get_key_pair();
+        let key = KeyPair::get_key_pair();
         *key.1.public_key_bytes()
     }
 

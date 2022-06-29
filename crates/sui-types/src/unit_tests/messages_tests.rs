@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::crypto::get_key_pair;
+use crate::crypto::KeyPair;
 
 use super::*;
 
@@ -20,9 +20,9 @@ fn random_object_ref() -> ObjectRef {
 fn test_signed_values() {
     let mut authorities = BTreeMap::new();
     // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (a1, sec1) = get_key_pair();
-    let (a2, sec2) = get_key_pair();
-    let (_, sec3) = get_key_pair();
+    let (a1, sec1) = KeyPair::get_key_pair();
+    let (a2, sec2) = KeyPair::get_key_pair();
+    let (_, sec3) = KeyPair::get_key_pair();
 
     authorities.insert(
         /* address */ *sec1.public_key_bytes(),
@@ -78,9 +78,9 @@ fn test_signed_values() {
 
 #[test]
 fn test_certificates() {
-    let (a1, sec1) = get_key_pair();
-    let (a2, sec2) = get_key_pair();
-    let (_, sec3) = get_key_pair();
+    let (a1, sec1) = KeyPair::get_key_pair();
+    let (a2, sec2) = KeyPair::get_key_pair();
+    let (_, sec3) = KeyPair::get_key_pair();
 
     let mut authorities = BTreeMap::new();
     authorities.insert(

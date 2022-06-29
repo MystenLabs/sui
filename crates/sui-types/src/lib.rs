@@ -32,6 +32,8 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod waypoint;
+pub mod ed25519;
+pub mod crypto_traits;
 
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;

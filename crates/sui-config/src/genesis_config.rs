@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use sui_types::base_types::{ObjectID, SuiAddress, TxContext};
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
+use sui_types::crypto::{KeyPair};
 use sui_types::object::Object;
 use tracing::info;
 
@@ -43,7 +43,7 @@ impl GenesisConfig {
             let address = if let Some(address) = account.address {
                 address
             } else {
-                let (address, keypair) = get_key_pair_from_rng(&mut rng);
+                let (address, keypair) = KeyPair::get_key_pair_from_rng(&mut rng);
                 keys.push(keypair);
                 address
             };

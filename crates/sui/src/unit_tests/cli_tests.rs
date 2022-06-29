@@ -22,8 +22,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::get_key_pair,
     gas_coin::GasCoin,
+    crypto::KeyPair
 };
 
 use test_utils::network::{setup_network_and_wallet, start_test_network};
@@ -119,7 +119,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 accounts
     for _ in 0..3 {
         wallet_config.accounts.push({
-            let (address, _) = get_key_pair();
+            let (address, _) = KeyPair::get_key_pair();
             address
         });
     }

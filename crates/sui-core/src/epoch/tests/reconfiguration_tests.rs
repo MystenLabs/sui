@@ -12,8 +12,8 @@ use std::{
 
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AuthoritySignature, Signature},
-    error::SuiError,
+    crypto::{AuthoritySignature, KeyPair, Signature},
+    error::{SuiError},
     gas::SuiGasStatus,
     messages::{ConfirmationTransaction, SignatureAggregator, Transaction, TransactionData},
     object::Object,
@@ -31,7 +31,7 @@ use crate::{
 #[tokio::test]
 async fn test_start_epoch_change() {
     // Create a sender, owning an object and a gas object.
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key) = KeyPair::get_key_pair();
     let object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let genesis_objects = vec![object.clone(), gas_object.clone()];

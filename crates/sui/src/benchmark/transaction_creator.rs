@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
-    crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature},
+    crypto::{AuthoritySignature, KeyPair, Signature},
     messages::*,
     object::Object,
     SUI_FRAMEWORK_ADDRESS,
@@ -86,7 +86,7 @@ fn make_transactions(
     account_gas_objects
         .par_iter()
         .map(|(objects, gas_obj)| {
-            let next_recipient: SuiAddress = get_key_pair().0;
+            let next_recipient: SuiAddress = KeyPair::get_key_pair().0;
             let mut single_kinds = vec![];
             for object in objects {
                 single_kinds.push(make_transfer_transaction(
@@ -154,7 +154,7 @@ impl TransactionCreator {
         let (address, keypair) = if let Some(a) = sender {
             (SuiAddress::from(a.public_key_bytes()), a.copy())
         } else {
-            get_key_pair()
+            KeyPair::get_key_pair()
         };
         let (transactions, txn_objects) = self.make_transactions(
             address,

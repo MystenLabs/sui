@@ -5,7 +5,7 @@ use clap::*;
 use std::{fs, path::Path};
 use sui_types::{
     base_types::SuiAddress,
-    crypto::{get_key_pair, KeyPair},
+    crypto::{KeyPair},
 };
 
 #[allow(clippy::large_enum_variant)]
@@ -25,7 +25,7 @@ enum KeyToolOpt {
 
 fn main() {
     let res = match KeyToolOpt::parse() {
-        KeyToolOpt::Generate {} => get_key_pair(),
+        KeyToolOpt::Generate {} => KeyPair::get_key_pair(),
         KeyToolOpt::Unpack { keypair } => (SuiAddress::from(keypair.public_key_bytes()), keypair),
     };
     let path_str = format!("{}.key", res.0).to_lowercase();

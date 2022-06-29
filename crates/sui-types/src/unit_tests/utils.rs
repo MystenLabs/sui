@@ -3,7 +3,7 @@
 
 use crate::{
     committee::Committee,
-    crypto::{get_key_pair_from_rng, KeyPair},
+    crypto::{KeyPair},
 };
 use std::collections::BTreeMap;
 
@@ -22,7 +22,7 @@ where
     let mut keys = Vec::new();
 
     for _ in 0..num {
-        let (_, inner_authority_key) = get_key_pair_from_rng(rand);
+        let (_, inner_authority_key) = KeyPair::get_key_pair_from_rng(rand);
         authorities.insert(
             /* address */ *inner_authority_key.public_key_bytes(),
             /* voting right */ 1,

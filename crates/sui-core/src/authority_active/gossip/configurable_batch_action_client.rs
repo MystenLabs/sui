@@ -17,7 +17,7 @@ use sui_adapter::genesis;
 use sui_types::base_types::*;
 use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::crypto::{KeyPair, PublicKeyBytes};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
@@ -214,7 +214,7 @@ pub async fn init_configurable_authorities(
     Vec<ExecutionDigests>,
 ) {
     let authority_count = 4;
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
     let mut gas_objects = Vec::new();
     for _i in 0..authority_action.len() {
         gas_objects.push(Object::with_owner_for_testing(addr1));
@@ -225,7 +225,7 @@ pub async fn init_configurable_authorities(
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..authority_count {
-        let (_, key_pair) = get_key_pair();
+        let (_, key_pair) = KeyPair::get_key_pair();
         let authority_name = *key_pair.public_key_bytes();
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));

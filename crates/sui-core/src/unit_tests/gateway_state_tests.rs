@@ -13,7 +13,7 @@ use sui_types::crypto::KeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
-use sui_types::{crypto::get_key_pair, object::Owner};
+use sui_types::{object::Owner};
 
 use crate::authority_aggregator::authority_aggregator_tests::{
     authority_genesis_objects, crate_object_move_transaction, get_local_client,
@@ -68,8 +68,8 @@ async fn transfer_coin(
 
 #[tokio::test]
 async fn test_transfer_coin() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _key2) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _key2) = KeyPair::get_key_pair();
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
@@ -99,7 +99,7 @@ async fn test_transfer_coin() {
 
 #[tokio::test]
 async fn test_move_call() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
     let gas_object = Object::with_owner_for_testing(addr1);
     let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
     let gateway = create_gateway_state(genesis_objects).await;
@@ -129,7 +129,7 @@ async fn test_move_call() {
 
 #[tokio::test]
 async fn test_publish() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
     let gas_object = Object::with_owner_for_testing(addr1);
     let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
     let gateway = create_gateway_state(genesis_objects).await;
@@ -160,7 +160,7 @@ async fn test_publish() {
 
 #[tokio::test]
 async fn test_coin_split() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
@@ -214,7 +214,7 @@ async fn test_coin_split() {
 
 #[tokio::test]
 async fn test_coin_split_insufficient_gas() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
@@ -256,7 +256,7 @@ async fn test_coin_split_insufficient_gas() {
 
 #[tokio::test]
 async fn test_coin_merge() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
 
     let coin_object1 = Object::with_owner_for_testing(addr1);
     let coin_object2 = Object::with_owner_for_testing(addr1);
@@ -304,8 +304,8 @@ async fn test_coin_merge() {
 
 #[tokio::test]
 async fn test_recent_transactions() -> Result<(), anyhow::Error> {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _) = KeyPair::get_key_pair();
 
     let object1 = Object::with_owner_for_testing(addr1);
     let object2 = Object::with_owner_for_testing(addr1);
@@ -361,7 +361,7 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_equivocation_resilient() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
     let genesis_objects =
@@ -372,7 +372,7 @@ async fn test_equivocation_resilient() {
     // We create 20 requests that try to touch the same object to the gateway.
     // Make sure that one of them succeeds and there are no pending tx in the end.
     for _ in 0..20 {
-        let (recipient, _) = get_key_pair();
+        let (recipient, _) = KeyPair::get_key_pair();
         let data = gateway
             .transfer_coin(
                 addr1,
@@ -407,8 +407,8 @@ async fn test_equivocation_resilient() {
 
 #[tokio::test]
 async fn test_transfer_coin_with_retry() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _key2) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _key2) = KeyPair::get_key_pair();
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
@@ -521,7 +521,7 @@ async fn test_transfer_coin_with_retry() {
 
 #[tokio::test]
 async fn test_get_owner_object() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
     let gas_object = Object::with_owner_for_testing(addr1);
     let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
     let gateway = create_gateway_state(genesis_objects).await;
@@ -638,8 +638,8 @@ async fn test_get_owner_object() {
 
 #[tokio::test]
 async fn test_multiple_gateways() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _key2) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _key2) = KeyPair::get_key_pair();
 
     let coin_object1 = Object::with_owner_for_testing(addr1);
     let coin_object2 = Object::with_owner_for_testing(addr1);
@@ -701,8 +701,8 @@ async fn test_multiple_gateways() {
 
 #[tokio::test]
 async fn test_batch_transaction() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _key2) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _key2) = KeyPair::get_key_pair();
 
     let coin_object1 = Object::with_owner_for_testing(addr1);
     let coin_object2 = Object::with_owner_for_testing(addr1);

@@ -43,7 +43,7 @@ pub struct NodeConfig {
 }
 
 fn default_key_pair() -> Arc<KeyPair> {
-    Arc::new(sui_types::crypto::get_key_pair().1)
+    Arc::new(sui_types::crypto::KeyPair::get_key_pair().1)
 }
 
 fn default_grpc_address() -> Multiaddr {

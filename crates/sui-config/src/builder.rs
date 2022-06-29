@@ -17,7 +17,8 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
+use sui_types::{base_types::encode_bytes_hex};
+use sui_types::crypto::KeyPair;
 
 pub struct ConfigBuilder<R = OsRng> {
     rng: R,
@@ -70,7 +71,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(mut self) -> NetworkConfig {
         let validators = (0..self.committee_size.get())
-            .map(|_| get_key_pair_from_rng(&mut self.rng).1)
+            .map(|_| KeyPair::get_key_pair_from_rng(&mut self.rng).1)
             .map(|key_pair| ValidatorGenesisInfo {
                 key_pair,
                 network_address: utils::new_network_address(),
