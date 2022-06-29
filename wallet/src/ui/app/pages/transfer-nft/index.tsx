@@ -55,8 +55,13 @@ function TransferNFTPage() {
     const [sendError, setSendError] = useState<string | null>(null);
 
     const validationSchema = useMemo(
-        () => createValidationSchema(gasAggregateBalance, address || ''),
-        [gasAggregateBalance, address]
+        () =>
+            createValidationSchema(
+                gasAggregateBalance,
+                address || '',
+                objectId || ''
+            ),
+        [gasAggregateBalance, address, objectId]
     );
     const dispatch = useAppDispatch();
     const navigate = useNavigate();

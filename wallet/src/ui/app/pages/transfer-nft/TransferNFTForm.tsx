@@ -9,7 +9,6 @@ import AddressInput from '_components/address-input';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
 import type { FormValues } from '.';
@@ -75,13 +74,10 @@ function TransferNFTForm({
                     component="div"
                 />
             </div>
-            <div className={st.group}>
-                * Total transaction fee estimate (gas cost): {transferCost}{' '}
-                {GAS_SYMBOL}
-            </div>
+
             {BigInt(gasBalance) < transferCost && (
                 <div className={st.error}>
-                    Insufficient balance to cover transfer cost
+                    * Insufficient balance to cover transfer cost
                 </div>
             )}
             {submitError ? (
