@@ -33,6 +33,8 @@ pub struct EventEnvelope {
     pub timestamp: u64,
     /// Transaction digest of associated transaction, if any
     pub tx_digest: Option<TransactionDigest>,
+    /// Sequence number, must be nondecreasing for event ingestion idempotency
+    pub seq_num: u64,
     /// Specific event type
     pub event: Event,
     /// json value for MoveStruct (for MoveEvent only)
@@ -42,13 +44,15 @@ pub struct EventEnvelope {
 impl EventEnvelope {
     pub fn new(
         timestamp: u64,
-        tx_digest: TransactionDigest,
+        tx_digest: Option<TransactionDigest>,
+        seq_num: u64,
         event: Event,
         move_struct_json_value: Option<Value>,
     ) -> Self {
         Self {
             timestamp,
-            tx_digest: Some(tx_digest),
+            tx_digest,
+            seq_num,
             event,
             move_struct_json_value,
         }

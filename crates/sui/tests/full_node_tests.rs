@@ -344,6 +344,8 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+const HOUR_MS: u64 = 3_600_000;
+
 #[tokio::test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
@@ -391,6 +393,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
@@ -436,6 +439,20 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // timestamp is recorded
     let ts = node.state().get_timestamp_ms(&digest).await?;
     assert!(ts.is_some());
+
+    // This is a poor substitute for the post processing taking some time
+    // Unfortunately event store writes seem to add some latency so this wait is needed
+    sleep(Duration::from_millis(1000)).await;
+
+    // one event is stored, and can be looked up by digest
+    // Also query by timestamp verifies that a timestamp is inserted, within an hour
+    let all_events = node
+        .state()
+        .get_events_for_timerange(ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS, None)
+        .await?;
+    assert_eq!(all_events.len(), 1);
+    let events = node.state().get_events_for_transaction(digest).await?;
+    assert_eq!(events.len(), 1);
 
     Ok(())
 }

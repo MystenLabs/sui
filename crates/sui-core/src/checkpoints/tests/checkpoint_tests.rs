@@ -788,9 +788,9 @@ async fn test_batch_to_checkpointing() {
         secret,
         store.clone(),
         None,
+        None,
         Some(checkpoints.clone()),
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
         &prometheus::Registry::new(),
     )
     .await;
@@ -879,8 +879,8 @@ async fn test_batch_to_checkpointing_init_crash() {
             store.clone(),
             None,
             None,
+            None,
             &sui_config::genesis::Genesis::get_default_genesis(),
-            false,
             &prometheus::Registry::new(),
         )
         .await;
@@ -961,9 +961,9 @@ async fn test_batch_to_checkpointing_init_crash() {
             secret,
             store.clone(),
             None,
+            None,
             Some(checkpoints.clone()),
             &sui_config::genesis::Genesis::get_default_genesis(),
-            false,
             &prometheus::Registry::new(),
         )
         .await;
@@ -1480,9 +1480,9 @@ pub async fn checkpoint_tests_setup(
             secret,
             store.clone(),
             None,
+            None,
             Some(checkpoint.clone()),
             &genesis,
-            false,
             &prometheus::Registry::new(),
         )
         .await;

@@ -35,16 +35,18 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
 };
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_storage::{
+    event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -231,6 +233,8 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
+const DEFAULT_QUERY_LIMIT: usize = 1000;
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -273,6 +277,9 @@ pub struct AuthorityState {
     pub consensus_guardrail: AtomicUsize,
 
     pub metrics: AuthorityMetrics,
+
+    // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
+    latest_checkpoint_num: AtomicU64,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -695,9 +702,10 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
+            let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
             event_handler
-                .process_events(&effects.effects, timestamp_ms)
-                .await;
+                .process_events(&effects.effects, timestamp_ms, seq, checkpoint_num)
+                .await?;
         }
 
         Ok(())
@@ -987,9 +995,9 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         indexes: Option<Arc<IndexStore>>,
+        event_store: Option<Arc<EventStoreType>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
-        enable_event_processing: bool,
         prometheus_registry: &prometheus::Registry,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
@@ -1035,11 +1043,8 @@ impl AuthorityState {
             .get_last_epoch_info()
             .expect("Fail to load the current epoch info");
 
-        let event_handler = if enable_event_processing {
-            Some(Arc::new(EventHandler::new(store.clone())))
-        } else {
-            None
-        };
+        let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
+
         let mut state = AuthorityState {
             name,
             secret,
@@ -1061,6 +1066,7 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics: AuthorityMetrics::new(prometheus_registry),
+            latest_checkpoint_num: AtomicU64::new(0),
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1329,6 +1335,34 @@ impl AuthorityState {
         Ok(self.get_indexes()?.get_transactions_to_addr(address)?)
     }
 
+    /// Returns a full handle to the event store, including inserts... so be careful!
+    fn get_event_store(&self) -> Option<Arc<EventStoreType>> {
+        self.event_handler
+            .as_ref()
+            .map(|handler| handler.event_store.clone())
+    }
+
+    /// Returns a set of events corresponding to a given transaction, in order events were emitted
+    pub async fn get_events_for_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Vec<StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.events_for_transaction(digest).await
+    }
+
+    /// Returns a whole set of events for a range of time
+    pub async fn get_events_for_timerange(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        limit: Option<usize>,
+    ) -> Result<Vec<StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
+            .await
+    }
+
     pub async fn insert_genesis_object(&self, object: Object) {
         self.database
             .insert_genesis_object(object)
@@ -1529,14 +1563,18 @@ impl ExecutionState for AuthorityState {
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
                 if let Some(checkpoint) = &self.checkpoints {
+                    let mut checkpoint = checkpoint.lock();
                     checkpoint
-                        .lock()
                         .handle_internal_fragment(seq, *fragment, &self.committee.load(), self)
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                     // to persist the consensus index. If the validator crashes, this transaction
                     // may be resent to the checkpoint logic that will simply ignore it.
+
+                    // Cache the next checkpoint number if it changes
+                    self.latest_checkpoint_num
+                        .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
                 }
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment

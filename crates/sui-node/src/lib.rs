@@ -20,7 +20,12 @@ use sui_core::{
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
-use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore, IndexStore};
+use sui_storage::{
+    event_store::{EventStoreType, SqlEventStore},
+    follower_store::FollowerStore,
+    node_sync_store::NodeSyncStore,
+    IndexStore,
+};
 
 use sui_json_rpc::event_api::EventApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
@@ -82,6 +87,15 @@ impl SuiNode {
 
         let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
 
+        let event_store = if config.enable_event_processing {
+            let path = config.db_path().join("events.db");
+            let db = SqlEventStore::new_from_file(&path).await?;
+            db.initialize().await?;
+            Some(Arc::new(EventStoreType::SqlEventStore(db)))
+        } else {
+            None
+        };
+
         let state = Arc::new(
             AuthorityState::new(
                 committee,
@@ -89,9 +103,9 @@ impl SuiNode {
                 secret,
                 store,
                 index_store.clone(),
+                event_store,
                 checkpoint_store,
                 genesis,
-                config.enable_event_processing,
                 &prometheus_registry,
             )
             .await,
