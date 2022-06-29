@@ -367,6 +367,9 @@ pub enum SuiError {
     #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
     QuorumDriverCommunicationError { error: String },
 
+    #[error("Operation timed out")]
+    TimeoutError,
+
     #[error("Error executing {0}")]
     ExecutionError(String),
 
