@@ -81,7 +81,7 @@ async fn pending_exec_storage_notify() {
                 .collect(),
         )
         .expect("Storage is ok");
-        
+
     tokio::task::yield_now().await;
 
     // Wait for a notification (must arrive)
