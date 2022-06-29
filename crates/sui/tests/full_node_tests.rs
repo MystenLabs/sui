@@ -345,6 +345,51 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
+    let (swarm, context, _) = setup_network_and_wallet().await?;
+
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config).await?;
+    let sender = context.config.accounts.get(0).cloned().unwrap();
+    let (package_ref, counter_id) = publish_package_and_make_counter(&context, sender).await;
+    let digest = increment_counter(&context, sender, None, package_ref, counter_id).await;
+
+    wait_for_tx(digest, node.state().clone()).await;
+    let txes = node
+        .state()
+        .get_transactions_by_move_function(
+            package_ref.0,
+            Some("counter".to_string()),
+            Some("increment".to_string()),
+        )
+        .await?;
+
+    assert_eq!(txes.len(), 1);
+    assert_eq!(txes[0].1, digest);
+
+    let txes = node
+        .state()
+        .get_transactions_by_move_function(package_ref.0, None, None)
+        .await?;
+
+    // 2 transactions in the package i.e create and increment counter
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1].1, digest);
+
+    eprint!("start...");
+    let txes = node
+        .state()
+        .get_transactions_by_move_function(package_ref.0, Some("counter".to_string()), None)
+        .await?;
+
+    // 2 transactions in the package i.e publish and increment
+    assert_eq!(txes.len(), 2);
+    assert_eq!(txes[1].1, digest);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 

@@ -656,6 +656,10 @@ impl AuthorityState {
             cert.sender_address(),
             cert.data.input_objects()?.iter().map(|o| o.object_id()),
             effects.effects.mutated_and_created(),
+            cert.data
+                .move_calls()?
+                .iter()
+                .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             seq,
             digest,
             timestamp_ms,
@@ -1273,6 +1277,17 @@ impl AuthorityState {
                 error: "extended object indexing is not enabled on this server".into(),
             }),
         }
+    }
+
+    pub async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self
+            .get_indexes()?
+            .get_transactions_by_move_function(package, module, function)?)
     }
 
     pub async fn get_timestamp_ms(

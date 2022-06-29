@@ -107,6 +107,14 @@ pub trait RpcFullNodeReadApi {
         object: ObjectID,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
+    #[method(name = "getTransactionsByMoveFunction")]
+    async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
     #[method(name = "getTransactionsFromAddress")]
     async fn get_transactions_from_addr(
         &self,
