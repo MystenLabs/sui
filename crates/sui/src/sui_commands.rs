@@ -7,9 +7,11 @@ use crate::{
 use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use clap::*;
+use narwhal_config;
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_config::{builder::ConfigBuilder, NetworkConfig};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
 use sui_config::{
@@ -78,8 +80,12 @@ impl SuiCommand {
                         ))
                     })?;
 
-                let mut swarm =
-                    Swarm::builder().from_network_config(sui_config_dir()?, network_config);
+                let mut swarm = Swarm::builder()
+                    .narwhal_config(narwhal_config::Parameters {
+                        max_header_delay: Duration::from_secs(5),
+                        ..Default::default()
+                    })
+                    .from_network_config(sui_config_dir()?, network_config);
                 swarm.launch().await?;
 
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));

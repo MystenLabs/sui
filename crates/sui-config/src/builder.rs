@@ -11,7 +11,6 @@ use arc_swap::ArcSwap;
 use debug_ignore::DebugIgnore;
 use narwhal_config::{Authority, Parameters, PrimaryAddresses, Stake, WorkerAddresses};
 use rand::rngs::OsRng;
-use std::time::Duration;
 use std::{
     collections::BTreeMap,
     num::NonZeroUsize,
@@ -26,6 +25,7 @@ pub struct ConfigBuilder<R = OsRng> {
     randomize_ports: bool,
     committee_size: NonZeroUsize,
     initial_accounts_config: Option<GenesisConfig>,
+    narwhal_config: Option<Parameters>,
 }
 
 impl ConfigBuilder {
@@ -36,6 +36,7 @@ impl ConfigBuilder {
             randomize_ports: true,
             committee_size: NonZeroUsize::new(1).unwrap(),
             initial_accounts_config: None,
+            narwhal_config: None,
         }
     }
 }
@@ -56,6 +57,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn narwhal_config(mut self, cfg: Parameters) -> Self {
+        self.narwhal_config = Some(cfg);
+        self
+    }
+
     pub fn rng<N: ::rand::RngCore + ::rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng,
@@ -63,6 +69,7 @@ impl<R> ConfigBuilder<R> {
             randomize_ports: self.randomize_ports,
             committee_size: self.committee_size,
             initial_accounts_config: self.initial_accounts_config,
+            narwhal_config: self.narwhal_config,
         }
     }
 }
@@ -164,6 +171,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             epoch: genesis.epoch(),
         }));
 
+        let narwhal_config = self.narwhal_config.unwrap_or_default();
+
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
@@ -181,10 +190,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,
-                    narwhal_config: Parameters {
-                        max_header_delay: Duration::from_secs(5),
-                        ..Default::default()
-                    },
+                    narwhal_config: narwhal_config.clone(),
                     narwhal_committee: narwhal_committee.clone(),
                 };
 

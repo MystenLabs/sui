@@ -17,12 +17,15 @@ use sui_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use tempfile::TempDir;
 
+use narwhal_config;
+
 pub struct SwarmBuilder<R = OsRng> {
     rng: R,
     // template: NodeConfig,
     dir: Option<PathBuf>,
     committee_size: NonZeroUsize,
     initial_accounts_config: Option<GenesisConfig>,
+    narwhal_config: Option<narwhal_config::Parameters>,
 }
 
 impl SwarmBuilder {
@@ -33,6 +36,7 @@ impl SwarmBuilder {
             dir: None,
             committee_size: NonZeroUsize::new(1).unwrap(),
             initial_accounts_config: None,
+            narwhal_config: None,
         }
     }
 }
@@ -44,6 +48,7 @@ impl<R> SwarmBuilder<R> {
             dir: self.dir,
             committee_size: self.committee_size,
             initial_accounts_config: self.initial_accounts_config,
+            narwhal_config: self.narwhal_config,
         }
     }
 
@@ -69,6 +74,11 @@ impl<R> SwarmBuilder<R> {
         self.initial_accounts_config = Some(initial_accounts_config);
         self
     }
+
+    pub fn narwhal_config(mut self, cfg: narwhal_config::Parameters) -> Self {
+        self.narwhal_config = Some(cfg);
+        self
+    }
 }
 
 impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
@@ -85,6 +95,12 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
         if let Some(initial_accounts_config) = self.initial_accounts_config {
             config_builder = config_builder.initial_accounts_config(initial_accounts_config);
         }
+
+        let config_builder = if let Some(cfg) = self.narwhal_config {
+            config_builder.narwhal_config(cfg)
+        } else {
+            config_builder
+        };
 
         let network_config = config_builder
             .committee_size(self.committee_size)

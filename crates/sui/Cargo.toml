@@ -70,6 +70,8 @@ move-unit-test = { git = "https://github.com/move-language/move", rev = "ae62d5f
 
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "node" }
 
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "config" }
+
 once_cell = "1.11.0"
 
 jsonrpsee = { version = "0.13.1", features = ["full"] }

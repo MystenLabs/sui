@@ -6357,6 +6357,7 @@ dependencies = [
  "bytes",
  "clap 3.1.18",
  "colored",
+ "config 0.1.0",
  "dirs",
  "ed25519-dalek",
  "futures",
@@ -6863,6 +6864,7 @@ name = "sui-swarm"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "config 0.1.0",
  "futures",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
  "rand 0.7.3",
