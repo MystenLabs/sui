@@ -1,16 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// A storable handler for `Coin` balances.
-/// Allows separation of the transferable `Coin` type and the storable
-/// `Balance` eliminating the need to create new IDs for each application
-/// that needs to hold coins.
+/// A storable handler for Balances in general. Is used in the `Coin`
+/// module to allow balance operations and can be used to implement
+/// custom coins with `Supply` and `Balance`s.
 module sui::balance {
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
 
+    /// For when an overflow is happening on Supply operations.
+    const EOverflow: u64 = 1;
+
     /// For when trying to withdraw more than there is.
-    const ENotEnough: u64 = 0;
+    const ENotEnough: u64 = 2;
 
     /// A Supply of T. Used for minting and burning.
     /// Wrapped into a `TreasuryCap` in the `Coin` module.
@@ -42,15 +44,17 @@ module sui::balance {
     }
 
     /// Increase supply by `value` and create a new `Balance<T>` with this value.
-    public fun increase_supply<T>(supply: &mut Supply<T>, value: u64): Balance<T> {
-        supply.value = supply.value + value;
+    public fun increase_supply<T>(self: &mut Supply<T>, value: u64): Balance<T> {
+        assert!(value < (18446744073709551615u64 - self.value), EOverflow);
+        self.value = self.value + value;
         Balance { value }
     }
 
     /// Burn a Balance<T> and decrease Supply<T>.
-    public fun decrease_supply<T>(supply: &mut Supply<T>, balance: Balance<T>): u64 {
+    public fun decrease_supply<T>(self: &mut Supply<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
-        supply.value = supply.value - value;
+        assert!(self.value >= value, EOverflow);
+        self.value = self.value - value;
         value
     }
 
