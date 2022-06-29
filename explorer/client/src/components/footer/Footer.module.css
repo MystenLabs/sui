@@ -1,13 +1,13 @@
 .footer {
-    @apply fixed bottom-0 bg-sui-grey-75 w-full px-[5vw] z-10;
+    @apply bg-sui-grey-75 w-full px-[5vw] z-10;
 }
 
 nav.links {
-    @apply text-left grid grid-cols-3 md:w-[50vw];
+    @apply fixed bottom-0 left-[5vw] text-left grid grid-cols-4 md:w-[50vw];
 }
 
 nav.links > div > h6 {
-    @apply text-sui-grey-60 uppercase font-bold text-xs mb-0;
+    @apply text-sui-grey-60 uppercase font-bold text-xs my-0;
 }
 
 nav.links > div > ul {
@@ -16,4 +16,8 @@ nav.links > div > ul {
 
 nav.links a {
     @apply text-offwhite no-underline font-medium text-xs leading-3 hover:text-sui;
+}
+
+.copyright {
+    @apply text-offwhite text-xs;
 }

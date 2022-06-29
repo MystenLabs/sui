@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
 import { CookiesConsent } from '../cookies-consent/CookiesConsent';
 import ExternalLink from '../external-link/ExternalLink';
 
@@ -10,6 +11,14 @@ function Footer() {
     return (
         <div className={styles.footer}>
             <nav className={styles.links}>
+                <div className={styles.logo}>
+                    <SuiLogoIcon />
+                    <div className={styles.copyright}>
+                        <div>&copy;2022 Copyright Sui.</div>
+                        <div>All rights reserved.</div>
+                    </div>
+                </div>
+
                 <div>
                     <h6>Read</h6>
                     <ul>
