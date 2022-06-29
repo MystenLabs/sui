@@ -426,7 +426,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
 
