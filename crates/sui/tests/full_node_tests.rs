@@ -298,12 +298,12 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+    let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
     let sender = context.config.accounts.get(0).cloned().unwrap();
-    let (package_ref, counter_id) = publish_package_and_make_counter(&mut context, sender).await;
+    let (package_ref, counter_id) = publish_package_and_make_counter(&context, sender).await;
     let digest = increment_counter(&context, sender, None, package_ref, counter_id).await;
 
     wait_for_tx(digest, node.state().clone()).await;
