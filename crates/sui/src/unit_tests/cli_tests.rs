@@ -102,10 +102,6 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
-    GenesisConfig::for_local_testing()
-        .persisted(&PathBuf::from(".").join("genesis.yaml"))
-        .save()?;
-
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
 
