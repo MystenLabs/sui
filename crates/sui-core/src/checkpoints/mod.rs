@@ -754,18 +754,20 @@ impl CheckpointStore {
     /// A cert without contents is only stored if we have already processed
     /// internally the checkpoint. A cert with contents is processed as if
     /// it came from the internal consensus.
+    ///
+    /// Returns whether a new cert is stored locally.
     pub fn process_checkpoint_certificate(
         &mut self,
         checkpoint: &CertifiedCheckpointSummary,
         contents: &Option<CheckpointContents>,
         committee: &Committee,
-    ) -> Result<CheckpointResponse, SuiError> {
+    ) -> Result<bool, SuiError> {
         // Get the record in our checkpoint database for this sequence number.
         let current = self.checkpoints.get(checkpoint.summary.sequence_number())?;
 
         match &current {
             // If cert exists, do nothing (idempotent)
-            Some(AuthenticatedCheckpoint::Certified(_current_cert)) => {}
+            Some(AuthenticatedCheckpoint::Certified(_current_cert)) => Ok(false),
             // If no such checkpoint is known, then return an error
             // NOTE: a checkpoint must first be confirmed internally before an external
             // certificate is registered.
@@ -777,8 +779,9 @@ impl CheckpointStore {
                         &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
                         contents,
                     )?;
+                    Ok(true)
                 } else {
-                    return Err(SuiError::from("No checkpoint set at this sequence."));
+                    Err(SuiError::from("No checkpoint set at this sequence."))
                 }
             }
             // In this case we have an internal signed checkpoint so we promote it to a
@@ -789,18 +792,14 @@ impl CheckpointStore {
                     checkpoint.summary.sequence_number(),
                     &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
                 )?;
+                Ok(true)
             }
             Some(AuthenticatedCheckpoint::None) => {
                 // If we are here there was a bug? We never assign the None case
                 // to a stored value.
                 unreachable!();
             }
-        };
-
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Success,
-            detail: None,
-        })
+        }
     }
 
     // Helper read functions

@@ -157,18 +157,30 @@ pub async fn checkpoint_process<A>(
 
             // sync_to_checkpoint only syncs to the checkpoint before the latest checkpoint.
             // The latest checkpoint requires special handling (refer to the comments there).
-            if let Err(err) = update_latest_checkpoint(
+            let result = update_latest_checkpoint(
                 active_authority.state.name,
                 &net,
                 &state_checkpoints,
                 &checkpoint,
                 committee,
             )
-            .await
-            {
-                warn!("Failed to update latest checkpoint: {:?}", err);
-                tokio::time::sleep(timing.delay_on_local_failure).await;
-                continue;
+            .await;
+            match result {
+                Err(err) => {
+                    warn!("Failed to update latest checkpoint: {:?}", err);
+                    tokio::time::sleep(timing.delay_on_local_failure).await;
+                    continue;
+                }
+                Ok(true) => {
+                    let name = state_checkpoints.lock().name;
+                    let next_checkpoint = state_checkpoints.lock().next_checkpoint();
+                    debug!("{name:?} at checkpoint {next_checkpoint:?}");
+                    tokio::time::sleep(timing.long_pause_between_checkpoints).await;
+                    continue;
+                }
+                Ok(false) => {
+                    // Nothing new.
+                }
             }
         }
 
@@ -220,13 +232,6 @@ pub async fn checkpoint_process<A>(
             }
             Ok(true) => (),
         }
-
-        // (4) Wait for a long long time.
-        let name = state_checkpoints.lock().name;
-        let next_checkpoint = state_checkpoints.lock().next_checkpoint();
-
-        debug!("{name:?} at checkpoint {next_checkpoint:?}");
-        tokio::time::sleep(timing.long_pause_between_checkpoints).await;
     }
 }
 
@@ -419,35 +424,36 @@ async fn update_latest_checkpoint<A>(
     state_checkpoints: &Arc<Mutex<CheckpointStore>>,
     checkpoint: &CertifiedCheckpointSummary,
     committee: &Committee,
-) -> SuiResult
+) -> SuiResult<bool>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let result = {
-        state_checkpoints
-            .lock()
-            .process_checkpoint_certificate(checkpoint, &None, committee)
-    }; // unlock
+    let result = state_checkpoints
+        .lock()
+        .process_checkpoint_certificate(checkpoint, &None, committee);
 
-    if let Err(err) = result {
-        warn!("Cannot process checkpoint: {err:?}");
-        drop(err);
+    match result {
+        Err(err) => {
+            warn!("Cannot process checkpoint: {err:?}");
 
-        // One of the errors may be due to the fact that we do not have
-        // the full contents of the checkpoint. So we try to download it.
-        // TODO: clean up the errors to get here only when the error is
-        //       "No checkpoint set at this sequence."
-        if let Ok(contents) = get_checkpoint_contents(self_name, net.clone(), checkpoint).await {
-            // Retry with contents
-            state_checkpoints.lock().process_checkpoint_certificate(
-                checkpoint,
-                &Some(contents),
-                committee,
-            )?;
+            // One of the errors may be due to the fact that we do not have
+            // the full contents of the checkpoint. So we try to download it.
+            // TODO: clean up the errors to get here only when the error is
+            //       "No checkpoint set at this sequence."
+            if let Ok(contents) = get_checkpoint_contents(self_name, net.clone(), checkpoint).await
+            {
+                // Retry with contents
+                state_checkpoints.lock().process_checkpoint_certificate(
+                    checkpoint,
+                    &Some(contents),
+                    committee,
+                )
+            } else {
+                Err(err)
+            }
         }
+        Ok(b) => Ok(b),
     }
-
-    Ok(())
 }
 
 /// Download all checkpoints that are not known to us
