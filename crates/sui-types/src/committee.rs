@@ -47,8 +47,10 @@ impl Committee {
         );
 
         fp_ensure!(
-            !voting_rights.iter().any(|(_, s)| *s == 0),
-            SuiError::InvalidCommittee("all committee members must have non-zero stake.".into())
+            voting_rights.iter().any(|(_, s)| *s != 0),
+            SuiError::InvalidCommittee(
+                "at least one committee member must have non-zero stake.".into()
+            )
         );
 
         voting_rights.sort_by_key(|(a, _)| *a);
