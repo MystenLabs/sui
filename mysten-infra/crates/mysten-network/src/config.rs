@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+use crate::metrics::{DefaultMetricsCallbackProvider, MetricsCallbackProvider};
 use crate::{
     client::{connect_lazy_with_config, connect_with_config},
     server::ServerBuilder,
@@ -80,7 +80,14 @@ impl Config {
     }
 
     pub fn server_builder(&self) -> ServerBuilder {
-        ServerBuilder::from_config(self)
+        ServerBuilder::from_config(self, DefaultMetricsCallbackProvider::default())
+    }
+
+    pub fn server_builder_with_metrics<M>(&self, metrics_provider: M) -> ServerBuilder<M>
+    where
+        M: MetricsCallbackProvider,
+    {
+        ServerBuilder::from_config(self, metrics_provider)
     }
 
     pub async fn connect(&self, addr: &Multiaddr) -> Result<Channel> {

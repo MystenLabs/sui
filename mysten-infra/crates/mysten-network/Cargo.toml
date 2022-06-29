@@ -14,6 +14,8 @@ futures = "0.3.21"
 serde = { version = "1.0.137", features = ["derive"] }
 tokio = { version = "1.17.0", features = ["sync", "rt", "macros"] }
 tokio-stream = { version = "0.1", features = ["net"] }
-tonic = { version = "0.7", features = ["transport"] }
+tonic = { version = "0.7.2", features = ["transport"] }
 tonic-health = "0.6.0"
-tower = { version = "0.4", features = ["full"] }
+tower = { version = "0.4.12", features = ["full"] }
+tower-http = { version = "0.3.3", features = ["trace", "set-header", "propagate-header"] }
+tracing = "0.1.34"
