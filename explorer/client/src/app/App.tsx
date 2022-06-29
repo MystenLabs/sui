@@ -17,7 +17,7 @@ function App() {
     return (
         <NetworkContext.Provider value={[network, setNetwork]}>
             <div className={styles.app}>
-                <header className={styles.header}>
+                <header className={styles.header} id="homeBtn">
                     <Link className={styles.suititle} to="/">
                         <SuiLogo />
                     </Link>
