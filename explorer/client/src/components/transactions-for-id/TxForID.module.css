@@ -28,10 +28,6 @@
     @apply col-span-2;
 }
 
-.txadd a {
-    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
-}
-
 .failure {
     @apply text-red-300;
 }

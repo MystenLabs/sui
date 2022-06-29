@@ -70,7 +70,10 @@ async fn sequence_fragments() {
                 .lock()
                 .handle_internal_batch(next_sequence_number, &transactions)
                 .unwrap();
-            let proposal = checkpoints_store.lock().set_proposal().unwrap();
+            let proposal = checkpoints_store
+                .lock()
+                .set_proposal(committee.epoch)
+                .unwrap();
             proposal
         })
         .collect();
@@ -100,7 +103,7 @@ async fn sequence_fragments() {
             .checkpoints()
             .unwrap()
             .lock()
-            .handle_receive_fragment(&fragment, committee);
+            .submit_local_fragment_to_consensus(&fragment, committee);
     }
 
     // Wait until all validators sequence and process the fragment.
@@ -246,6 +249,10 @@ async fn checkpoint_with_shared_objects() {
                 long_pause_between_checkpoints: Duration::from_millis(10),
                 ..CheckpointProcessControl::default()
             };
+
+            println!("Start active execution process.");
+            active_state.clone().spawn_execute_process().await;
+
             active_state
                 .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
                 .await

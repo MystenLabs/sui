@@ -14,9 +14,9 @@ use sui_types::{
     error::SuiError,
     messages::{CertifiedTransaction, ConfirmationTransaction, TransactionInfoRequest},
     messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointDigest, CheckpointFragment, CheckpointRequest, CheckpointResponse,
-        CheckpointSequenceNumber, SignedCheckpoint, SignedCheckpointProposal,
+        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
+        CheckpointResponse, CheckpointSequenceNumber, SignedCheckpointSummary,
     },
 };
 use tokio::time::timeout;
@@ -28,7 +28,6 @@ use crate::{
 };
 use sui_types::committee::StakeUnit;
 use tracing::{debug, info, warn};
-use typed_store::Map;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -126,7 +125,7 @@ pub async fn checkpoint_process<A>(
         if let Some(checkpoint) = checkpoint {
             // Check if there are more historic checkpoints to catch up with
             let next_checkpoint = state_checkpoints.lock().next_checkpoint();
-            if next_checkpoint < checkpoint.checkpoint.sequence_number {
+            if next_checkpoint < checkpoint.summary.sequence_number {
                 // TODO log error
                 if let Err(err) = sync_to_checkpoint(
                     active_authority.state.name,
@@ -148,7 +147,7 @@ pub async fn checkpoint_process<A>(
             // In either case try to upgrade the signed checkpoint to a certified one
             // if possible
             let result = {
-                state_checkpoints.lock().handle_checkpoint_certificate(
+                state_checkpoints.lock().process_checkpoint_certificate(
                     &checkpoint,
                     &None,
                     committee,
@@ -168,7 +167,7 @@ pub async fn checkpoint_process<A>(
                         .await
                 {
                     // Retry with contents
-                    let _ = state_checkpoints.lock().handle_checkpoint_certificate(
+                    let _ = state_checkpoints.lock().process_checkpoint_certificate(
                         &checkpoint,
                         &Some(contents),
                         committee,
@@ -177,22 +176,7 @@ pub async fn checkpoint_process<A>(
             }
         }
 
-        // (3) Process any unprocessed transactions. We do this before trying to move to the
-        //     next proposal.
-        if let Err(err) = process_unprocessed_digests(
-            active_authority,
-            state_checkpoints.clone(),
-            timing.per_other_authority_delay,
-        )
-        .await
-        {
-            warn!("Error processing unprocessed: {:?}", err);
-            // Nothing happens until we catch up with the unprocessed transactions of the
-            // previous checkpoint.
-            continue;
-        }
-
-        // (4) Check if we need to advance to the next checkpoint, in case >2/3
+        // (3) Check if we need to advance to the next checkpoint, in case >2/3
         // have a proposal out. If so we start creating and injecting fragments
         // into the consensus protocol to make the new checkpoint.
         let weight: StakeUnit = proposals
@@ -202,7 +186,10 @@ pub async fn checkpoint_process<A>(
 
         let _start_checkpoint_making = weight > committee.quorum_threshold();
 
-        let proposal = state_checkpoints.lock().new_proposal().clone();
+        let proposal = state_checkpoints
+            .lock()
+            .new_proposal(committee.epoch)
+            .clone();
         if let Ok(my_proposal) = proposal {
             diff_proposals(
                 active_authority,
@@ -212,6 +199,13 @@ pub async fn checkpoint_process<A>(
                 timing.consensus_delay_estimate,
             )
             .await;
+        }
+
+        if let Err(err) = state_checkpoints
+            .lock()
+            .attempt_to_construct_checkpoint(committee)
+        {
+            warn!("Error attempting to construct checkpoint: {:?}", err);
         }
 
         // (5) Wait for a long long time.
@@ -231,8 +225,8 @@ pub async fn get_latest_proposal_and_checkpoint_from_all<A>(
     timeout_until_quorum: Duration,
 ) -> Result<
     (
-        Option<CertifiedCheckpoint>,
-        Vec<(AuthorityName, SignedCheckpointProposal)>,
+        Option<CertifiedCheckpointSummary>,
+        Vec<(AuthorityName, SignedCheckpointSummary)>,
     ),
     SuiError,
 >
@@ -245,7 +239,7 @@ where
         bad_weight: StakeUnit,
         responses: Vec<(
             AuthorityName,
-            Option<SignedCheckpointProposal>,
+            Option<SignedCheckpointSummary>,
             AuthenticatedCheckpoint,
         )>,
         errors: Vec<(AuthorityName, SuiError)>,
@@ -313,11 +307,11 @@ where
         .await?;
 
     // Extract the highest checkpoint cert returned.
-    let mut highest_certificate_cert: Option<CertifiedCheckpoint> = None;
+    let mut highest_certificate_cert: Option<CertifiedCheckpointSummary> = None;
     for state in &final_state.responses {
         if let AuthenticatedCheckpoint::Certified(cert) = &state.2 {
             if let Some(old_cert) = &highest_certificate_cert {
-                if cert.checkpoint.sequence_number > old_cert.checkpoint.sequence_number {
+                if cert.summary.sequence_number > old_cert.summary.sequence_number {
                     highest_certificate_cert = Some(cert.clone());
                 }
             } else {
@@ -330,28 +324,24 @@ where
     #[allow(clippy::type_complexity)]
     let mut partial_checkpoints: BTreeMap<
         (CheckpointSequenceNumber, CheckpointDigest),
-        Vec<(AuthorityName, SignedCheckpoint)>,
+        Vec<(AuthorityName, SignedCheckpointSummary)>,
     > = BTreeMap::new();
     final_state
         .responses
         .iter()
         .for_each(|(auth, _proposal, checkpoint)| {
             if let AuthenticatedCheckpoint::Signed(signed) = checkpoint {
-                // We check this signature is higher than the highest known checkpoint.
+                // We are interested in this signed checkpoint only if it is
+                // newer than the highest known cert checkpoint.
                 if let Some(newest_checkpoint) = &highest_certificate_cert {
-                    if newest_checkpoint.checkpoint.sequence_number
-                        > signed.checkpoint.sequence_number
-                    {
+                    if newest_checkpoint.summary.sequence_number >= signed.summary.sequence_number {
                         return;
                     }
                 }
 
                 // Collect signed checkpoints by sequence number and digest.
                 partial_checkpoints
-                    .entry((
-                        signed.checkpoint.sequence_number,
-                        signed.checkpoint.digest(),
-                    ))
+                    .entry((signed.summary.sequence_number, signed.summary.digest()))
                     .or_insert_with(Vec::new)
                     .push((*auth, signed.clone()));
             }
@@ -373,7 +363,7 @@ where
             //           the checkpoint for others to download.
             if weight >= net.committee.validity_threshold() {
                 // Try to construct a valid checkpoint.
-                let certificate = CertifiedCheckpoint::aggregate(
+                let certificate = CertifiedCheckpointSummary::aggregate(
                     signed.iter().map(|(_, signed)| signed.clone()).collect(),
                     &net.committee,
                 );
@@ -383,11 +373,9 @@ where
             }
         });
 
-    // Examine whether we should start the next checkpoint by looking at whether we have
-    // >2/3 of validators proposing a new checkpoint.
     let next_proposal_sequence_number = highest_certificate_cert
         .as_ref()
-        .map(|cert| cert.checkpoint.sequence_number + 1)
+        .map(|cert| cert.summary.sequence_number + 1)
         .unwrap_or(0);
 
     // Collect proposals
@@ -396,7 +384,7 @@ where
         .iter()
         .filter_map(|(auth, proposal, _checkpoint)| {
             if let Some(p) = proposal {
-                if p.0.checkpoint.sequence_number == next_proposal_sequence_number {
+                if p.summary.sequence_number == next_proposal_sequence_number {
                     return Some((*auth, p.clone()));
                 }
             }
@@ -412,13 +400,15 @@ pub async fn sync_to_checkpoint<A>(
     name: AuthorityName,
     net: Arc<AuthorityAggregator<A>>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
-    latest_known_checkpoint: CertifiedCheckpoint,
+    latest_known_checkpoint: CertifiedCheckpointSummary,
 ) -> Result<(), SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // Get out last checkpoint
     let latest_checkpoint = checkpoint_db.lock().latest_stored_checkpoint()?;
+    // We use the latest available authorities not the authorities that signed the checkpoint
+    // since these might be gone after the epoch they were active.
     let available_authorities: BTreeSet<_> = latest_known_checkpoint
         .signatory_authorities()
         .cloned()
@@ -427,7 +417,7 @@ where
     // Check if the latest checkpoint is merely a signed checkpoint, and if
     // so download a full certificate for it.
     if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
-        let seq = *signed.checkpoint.sequence_number();
+        let seq = *signed.summary.sequence_number();
         debug!("Partial Sync ({name:?}): {seq:?}",);
         let (past, _contents) =
             get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
@@ -435,7 +425,7 @@ where
         if let Err(err) =
             checkpoint_db
                 .lock()
-                .handle_checkpoint_certificate(&past, &None, &net.committee)
+                .process_checkpoint_certificate(&past, &None, &net.committee)
         {
             warn!("Error handling certificate: {err:?}");
         }
@@ -443,21 +433,21 @@ where
 
     let full_sync_start = latest_checkpoint
         .map(|chk| match chk {
-            AuthenticatedCheckpoint::Signed(signed) => signed.checkpoint.sequence_number + 1,
-            AuthenticatedCheckpoint::Certified(cert) => cert.checkpoint.sequence_number + 1,
+            AuthenticatedCheckpoint::Signed(signed) => signed.summary.sequence_number + 1,
+            AuthenticatedCheckpoint::Certified(cert) => cert.summary.sequence_number + 1,
             AuthenticatedCheckpoint::None => unreachable!(),
         })
         .unwrap_or(0);
 
-    for seq in full_sync_start..latest_known_checkpoint.checkpoint.sequence_number {
+    for seq in full_sync_start..latest_known_checkpoint.summary.sequence_number {
         debug!("Full Sync ({name:?}): {seq:?}");
-        let (past, _contents) =
+        let (past, contents) =
             get_one_checkpoint(net.clone(), seq, true, &available_authorities).await?;
 
         if let Err(err) =
             checkpoint_db
                 .lock()
-                .handle_checkpoint_certificate(&past, &_contents, &net.committee)
+                .process_checkpoint_certificate(&past, &contents, &net.committee)
         {
             warn!("Sync Err: {err:?}");
         }
@@ -475,7 +465,7 @@ pub async fn get_one_checkpoint<A>(
     sequence_number: CheckpointSequenceNumber,
     contents: bool,
     available_authorities: &BTreeSet<AuthorityName>,
-) -> Result<(CertifiedCheckpoint, Option<CheckpointContents>), SuiError>
+) -> Result<(CertifiedCheckpointSummary, Option<CheckpointContents>), SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -522,7 +512,7 @@ where
 pub async fn get_checkpoint_contents<A>(
     name: AuthorityName,
     net: Arc<AuthorityAggregator<A>>,
-    checkpoint: &CertifiedCheckpoint,
+    checkpoint: &CertifiedCheckpointSummary,
 ) -> Result<CheckpointContents, SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -544,7 +534,7 @@ where
         let client = net.clone_client(sample_authority);
         match client
             .handle_checkpoint(CheckpointRequest::past(
-                checkpoint.checkpoint.sequence_number,
+                checkpoint.summary.sequence_number,
                 true,
             ))
             .await
@@ -554,7 +544,7 @@ where
                 detail: Some(contents),
             }) => {
                 // Check here that the digest of contents matches
-                if contents.digest() != checkpoint.checkpoint.content_digest {
+                if contents.digest() != checkpoint.summary.content_digest {
                     // A byzantine authority!
                     // TODO: Report Byzantine authority
                     warn!("Sync Error: Incorrect contents returned");
@@ -580,7 +570,7 @@ pub async fn diff_proposals<A>(
     active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     my_proposal: &CheckpointProposal,
-    proposals: Vec<(AuthorityName, SignedCheckpointProposal)>,
+    proposals: Vec<(AuthorityName, SignedCheckpointSummary)>,
     consensus_delay_estimate: Duration,
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -594,7 +584,7 @@ pub async fn diff_proposals<A>(
 
     loop {
         let next_checkpoint_sequence_number: u64 = checkpoint_db.lock().next_checkpoint();
-        if next_checkpoint_sequence_number > *my_proposal.proposal.0.checkpoint.sequence_number() {
+        if next_checkpoint_sequence_number > *my_proposal.signed_summary.summary.sequence_number() {
             // Our work here is done, we have progressed past the checkpoint for which we were given a proposal.
             // Our DB has been updated (presumably by consensus) with the sought information (a checkpoint
             // for this sequence number)
@@ -619,7 +609,7 @@ pub async fn diff_proposals<A>(
                 if let AuthorityCheckpointInfo::Proposal { current, previous } = &response.info {
                     // Check if there is a latest checkpoint
                     if let AuthenticatedCheckpoint::Certified(prev) = previous {
-                        if prev.checkpoint.sequence_number > next_checkpoint_sequence_number {
+                        if prev.summary.sequence_number > next_checkpoint_sequence_number {
                             // We are now way behind, return
                             return;
                         }
@@ -631,7 +621,7 @@ pub async fn diff_proposals<A>(
                     }
 
                     // Check the proposal is also for the same checkpoint sequence number
-                    if current.as_ref().unwrap().0.checkpoint.sequence_number()
+                    if current.as_ref().unwrap().summary.sequence_number()
                         != my_proposal.sequence_number()
                     {
                         return;
@@ -649,10 +639,10 @@ pub async fn diff_proposals<A>(
                     {
                         Ok(fragment) => {
                             // On success send the fragment to consensus
-                            let proposer = &fragment.proposer.0.authority;
-                            let other = &fragment.other.0.authority;
+                            let proposer = fragment.proposer.authority();
+                            let other = fragment.other.authority();
                             debug!("Send fragment: {proposer:?} -- {other:?}");
-                            let _ = checkpoint_db.lock().handle_receive_fragment(
+                            let _ = checkpoint_db.lock().submit_local_fragment_to_consensus(
                                 &fragment,
                                 &active_authority.state.committee.load(),
                             );
@@ -709,7 +699,7 @@ where
     let client = active_authority
         .net
         .load()
-        .clone_client(&fragment.other.0.authority);
+        .clone_client(fragment.other.authority());
     for tx_digest in &fragment.diff.first.items {
         let response = client
             .handle_transaction_info_request(TransactionInfoRequest::from(tx_digest.transaction))
@@ -731,77 +721,6 @@ where
     fragment.certs = diff_certs;
 
     Ok(fragment)
-}
-
-/// Looks into the unprocessed_digests and tries to process them all to allow
-/// for the creation of the next proposal. Also uses the unprocessed_content
-/// to look for transactions before going to fetch them from the network.
-pub async fn process_unprocessed_digests<A>(
-    active_authority: &ActiveAuthority<A>,
-    checkpoint_db: Arc<Mutex<CheckpointStore>>,
-    per_other_authority_delay: Duration,
-) -> Result<(), SuiError>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    let unprocessed_digests: Vec<_> = checkpoint_db
-        .lock()
-        .unprocessed_transactions
-        .iter()
-        .map(|(digest, _)| digest)
-        .collect();
-
-    let existing_certificates = checkpoint_db
-        .lock()
-        .unprocessed_contents
-        .multi_get(&unprocessed_digests)?;
-
-    // First process all certs that we have stored in the unprocessed_contents
-    let mut processed = BTreeSet::new();
-    for (digest, cert) in unprocessed_digests
-        .iter()
-        .zip(existing_certificates.iter())
-        .filter_map(|(digest, cert_opt)| cert_opt.as_ref().map(|c| (digest, c)))
-    {
-        active_authority
-            .net
-            .load()
-            .sync_certificate_to_authority_with_timeout(
-                ConfirmationTransaction::new(cert.clone()),
-                active_authority.state.name,
-                per_other_authority_delay,
-                3,
-            )
-            .await?;
-        processed.insert(digest);
-    }
-
-    for digest in &unprocessed_digests {
-        // If we have processed this continue with the next cert, nothing to do
-        if active_authority
-            .state
-            .database
-            .effects_exists(&digest.transaction)?
-        {
-            continue;
-        }
-
-        // Download the certificate
-        debug!("Try sync for digest: {digest:?}");
-        if let Err(err) = sync_digest(
-            active_authority.state.name,
-            active_authority.net.load().clone(),
-            digest.transaction,
-            per_other_authority_delay,
-        )
-        .await
-        {
-            warn!("Error doing sync from digest {digest:?}: {err}");
-            return Err(err);
-        }
-    }
-
-    Ok(())
 }
 
 /// Sync to a transaction certificate

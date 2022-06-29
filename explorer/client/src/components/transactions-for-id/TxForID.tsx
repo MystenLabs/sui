@@ -8,7 +8,6 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useState, useEffect, useContext } from 'react';
-import { Link } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
 import {
@@ -24,6 +23,8 @@ import Longtext from '../longtext/Longtext';
 import PaginationWrapper from '../pagination/PaginationWrapper';
 
 import styles from './TxForID.module.css';
+
+const TRUNCATE_LENGTH = 14;
 
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
@@ -84,22 +85,24 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                     <div className={styles.txadd}>
                         <div>
                             From:
-                            <Link
-                                className={styles.txlink}
-                                to={'addresses/' + x.From}
-                            >
-                                {truncate(x.From, 14, '...')}
-                            </Link>
+                            <Longtext
+                                text={x.From}
+                                category="addresses"
+                                isLink={true}
+                                isCopyButton={false}
+                                alttext={truncate(x.From, TRUNCATE_LENGTH)}
+                            />
                         </div>
                         {x.To && (
                             <div>
                                 To :
-                                <Link
-                                    className={styles.txlink}
-                                    to={'addresses/' + x.To}
-                                >
-                                    {truncate(x.To, 14, '...')}
-                                </Link>
+                                <Longtext
+                                    text={x.To}
+                                    category="addresses"
+                                    isLink={true}
+                                    isCopyButton={false}
+                                    alttext={truncate(x.To, TRUNCATE_LENGTH)}
+                                />
                             </div>
                         )}
                     </div>

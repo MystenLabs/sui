@@ -976,14 +976,11 @@ impl AuthorityState {
             CheckpointRequestType::PastCheckpoint(seq) => {
                 checkpoint_store.handle_past_checkpoint(request.detail, *seq)
             }
-            CheckpointRequestType::SetCertificate(cert, opt_contents) => checkpoint_store
-                .handle_checkpoint_certificate(cert, opt_contents, &self.committee.load()),
-            CheckpointRequestType::SetFragment(fragment) => {
-                checkpoint_store.handle_receive_fragment(fragment, &self.committee.load())
-            }
         }
     }
 
+    // TODO: This function takes both committee and genesis as parameter.
+    // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
         committee: Committee,
         name: AuthorityName,

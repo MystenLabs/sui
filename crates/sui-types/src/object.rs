@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
-use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
@@ -35,6 +34,9 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
+    /// Determines if it is usable with the PublicTransferObject
+    /// Derived from the type_
+    has_public_transfer: bool,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
@@ -57,8 +59,37 @@ pub struct ObjectFormatOptions {
 }
 
 impl MoveObject {
-    pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
-        Self { type_, contents }
+    /// Creates a new Move object of type `type_` with BCS encoded bytes in `contents`
+    /// `has_public_transfer` is determined by the abilities of the `type_`, but resolving
+    /// the abilities requires the compiled modules of the `type_: StructTag`.
+    /// In other words, `has_public_transfer` will be the same for all objects of the same `type_`.
+    ///
+    /// # Safety
+    ///
+    /// This function should ONLY be called if has_public_transfer has been determined by the type_.
+    /// Yes, this is a bit of an abuse of the `unsafe` marker, but bad things will happen if this
+    /// is inconsistent
+    pub unsafe fn new_from_execution(
+        type_: StructTag,
+        has_public_transfer: bool,
+        contents: Vec<u8>,
+    ) -> Self {
+        // coins should always have public transfer, as they always should have store.
+        // Thus, type_ == GasCoin::type_() ==> has_public_transfer
+        debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
+        Self {
+            type_,
+            has_public_transfer,
+            contents,
+        }
+    }
+
+    pub fn new_gas_coin(contents: Vec<u8>) -> Self {
+        unsafe { Self::new_from_execution(GasCoin::type_(), true, contents) }
+    }
+
+    pub fn has_public_transfer(&self) -> bool {
+        self.has_public_transfer
     }
 
     pub fn id(&self) -> ObjectID {
@@ -137,7 +168,15 @@ impl MoveObject {
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
-        let type_ = TypeTag::Struct(self.type_.clone());
+        Self::get_layout_from_struct_tag(self.type_.clone(), format, resolver)
+    }
+
+    pub fn get_layout_from_struct_tag(
+        struct_tag: StructTag,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<MoveStructLayout, SuiError> {
+        let type_ = TypeTag::Struct(struct_tag);
         let layout = if format.include_types {
             TypeLayoutBuilder::build_with_types(&type_, resolver)
         } else {
@@ -179,7 +218,8 @@ impl MoveObject {
     pub fn object_size_for_gas_metering(&self) -> usize {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
-        self.contents.len() + seriealized_type_tag.len()
+        // + 1 for 'has_public_transfer'
+        self.contents.len() + seriealized_type_tag.len() + 1
     }
 }
 
@@ -424,7 +464,7 @@ impl Object {
         &mut self,
         new_owner: SuiAddress,
     ) -> Result<(), ExecutionError> {
-        self.is_transfer_eligible()?;
+        self.ensure_public_transfer_eligible()?;
         self.owner = Owner::AddressOwner(new_owner);
         Ok(())
     }
@@ -444,6 +484,7 @@ impl Object {
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
+            has_public_transfer: true,
             contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
@@ -457,6 +498,7 @@ impl Object {
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
+            has_public_transfer: true,
             contents: GasCoin::new(id, SequenceNumber::new(), gas).to_bcs_bytes(),
         });
         Self {
@@ -479,6 +521,7 @@ impl Object {
     ) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
+            has_public_transfer: true,
             contents: GasCoin::new(id, version, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
@@ -525,20 +568,17 @@ impl Object {
         Ok(type_tag)
     }
 
-    pub fn is_transfer_eligible(&self) -> Result<(), ExecutionError> {
+    pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
         if !self.is_owned() {
             return Err(ExecutionErrorKind::TransferUnowned.into());
         }
-
-        let is_coin = match &self.data {
-            Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
+        let has_public_transfer = match &self.data {
+            Data::Move(m) => m.has_public_transfer(),
             Data::Package(_) => false,
         };
-
-        if !is_coin {
+        if !has_public_transfer {
             return Err(ExecutionErrorKind::TransferNonCoin.into());
         }
-
         Ok(())
     }
 }

@@ -46,7 +46,6 @@ struct Follower<A> {
     aggregator: Arc<AuthorityAggregator<A>>,
 }
 
-const EACH_ITEM_DELAY_MS: u64 = 1_000;
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
 const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
@@ -247,6 +246,7 @@ where
 
 #[async_trait]
 trait DigestHandler<A> {
+    /// handle_digest
     async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult;
 }
 
@@ -359,7 +359,8 @@ where
     ) -> SuiResult {
         // Global timeout, we do not exceed this time in this task.
         let mut timeout = Box::pin(tokio::time::sleep(duration));
-        let mut queue = FuturesOrdered::new();
+        let mut results = FuturesOrdered::new();
+        let mut batch_seq_to_record = None;
 
         let req = BatchInfoRequest {
             start: self.max_seq,
@@ -379,26 +380,23 @@ where
                     match items {
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
                             let next_seq = signed_batch.batch.next_sequence_number;
-                            self.follower_store.record_next_sequence(&self.peer_name, next_seq)?;
-                             match self.max_seq {
-                                Some(max_seq) => {
-                                    if next_seq < max_seq {
-                                        info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
-                                    }
+                            batch_seq_to_record = Some(next_seq);
+                            if let Some(max_seq) = self.max_seq {
+                                if next_seq < max_seq {
+                                    info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
                                 }
-                                None => {}
                             }
                         },
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
-                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
-                            if !self.state.database.effects_exists(&digest.transaction)? {
-                                queue.push(async move {
-                                    tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
-                                    digest
-                                });
-                                self.state.metrics.gossip_queued_count.inc();
-                            }
+                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
+                            let fut = handler.handle_digest(self, digest);
+                            results.push(async move {
+                                fut.await?;
+                                Ok::<TxSequenceNumber, SuiError>(seq)
+                            });
+
+                            self.state.metrics.gossip_queued_count.inc();
                         },
 
                         // Return any errors.
@@ -417,8 +415,15 @@ where
                         },
                     }
                 },
-                digest = &mut queue.next() , if !queue.is_empty() => {
-                    handler.handle_digest(self, digest.unwrap()).await?;
+
+                result = &mut results.next() , if !results.is_empty() => {
+                    let seq = result.unwrap()?;
+                    if let Some(batch_seq) = batch_seq_to_record {
+                        if seq >= batch_seq {
+                            self.follower_store.record_next_sequence(&self.peer_name, batch_seq)?;
+                            batch_seq_to_record = None;
+                        }
+                    }
                 }
             };
         }

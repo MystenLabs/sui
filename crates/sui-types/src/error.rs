@@ -50,8 +50,8 @@ pub enum SuiError {
     LockErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
-    #[error("Attempt to transfer an object that's not a coin. Object transfer must be done using a distinct Move function call.")]
-    TransferNonCoinError,
+    #[error("Attempt to transfer an object that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
+    TransferObjectWithoutPublicTransferError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
     #[error("The SUI coin to be transferred has balance {balance}, which is not enough to cover the transfer amount {required}")]

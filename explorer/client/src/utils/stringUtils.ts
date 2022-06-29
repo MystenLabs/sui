@@ -28,7 +28,7 @@ export function transformURL(url: string) {
     return `https://ipfs.io/ipfs/${found[1]}`;
 }
 
-export function truncate(fullStr: string, strLen: number, separator: string) {
+export function truncate(fullStr: string, strLen: number, separator?: string) {
     if (fullStr.length <= strLen) return fullStr;
 
     separator = separator || '...';

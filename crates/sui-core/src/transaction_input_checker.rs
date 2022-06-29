@@ -221,7 +221,7 @@ where
         .kind
         .single_transactions()
         .filter_map(|s| {
-            if let SingleTransactionKind::TransferCoin(t) = s {
+            if let SingleTransactionKind::PublicTransferObject(t) = s {
                 Some(t.object_ref.0)
             } else {
                 None
@@ -238,7 +238,7 @@ where
             }
         };
         if transfer_object_ids.contains(&object.id()) {
-            object.is_transfer_eligible()?;
+            object.ensure_public_transfer_eligible()?;
         }
         // Check if the object contents match the type of lock we need for
         // this object.

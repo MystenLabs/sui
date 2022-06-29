@@ -333,7 +333,7 @@ impl WalletCommands {
 
                 let data = context
                     .gateway
-                    .transfer_coin(from, object_id, gas, gas_budget, to)
+                    .public_transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context

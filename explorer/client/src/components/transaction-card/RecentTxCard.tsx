@@ -3,7 +3,7 @@
 
 import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
 import { NetworkContext } from '../../context';
@@ -26,6 +26,8 @@ import type {
 } from '@mysten/sui.js';
 
 import styles from './RecentTxCard.module.css';
+
+const TRUNCATE_LENGTH = 25;
 
 const initState: { loadState: string; latestTx: TxnData[] } = {
     loadState: 'pending',
@@ -125,14 +127,12 @@ function LatestTxView({
                             className={cl(styles.txcardgrid, styles.txcard)}
                         >
                             <div className={styles.txcardgridlarge}>
-                                <div className={styles.txlink}>
-                                    <Longtext
-                                        text={tx.txId}
-                                        category="transactions"
-                                        isLink={true}
-                                        alttext={truncate(tx.txId, 26, '...')}
-                                    />
-                                </div>
+                                <Longtext
+                                    text={tx.txId}
+                                    category="transactions"
+                                    isLink={true}
+                                    alttext={truncate(tx.txId, TRUNCATE_LENGTH)}
+                                />
                             </div>
                             <div className={styles.txtype}> {tx.kind}</div>
                             <div
@@ -147,22 +147,30 @@ function LatestTxView({
                             <div className={styles.txadd}>
                                 <div>
                                     From:
-                                    <Link
-                                        className={styles.txlink}
-                                        to={'addresses/' + tx.From}
-                                    >
-                                        {truncate(tx.From, 25, '...')}
-                                    </Link>
+                                    <Longtext
+                                        text={tx.From}
+                                        category="addresses"
+                                        isLink={true}
+                                        isCopyButton={false}
+                                        alttext={truncate(
+                                            tx.From,
+                                            TRUNCATE_LENGTH
+                                        )}
+                                    />
                                 </div>
                                 {tx.To && (
                                     <div>
                                         To :
-                                        <Link
-                                            className={styles.txlink}
-                                            to={'addresses/' + tx.To}
-                                        >
-                                            {truncate(tx.To, 25, '...')}
-                                        </Link>
+                                        <Longtext
+                                            text={tx.To}
+                                            category="addresses"
+                                            isLink={true}
+                                            isCopyButton={false}
+                                            alttext={truncate(
+                                                tx.To,
+                                                TRUNCATE_LENGTH
+                                            )}
+                                        />
                                     </div>
                                 )}
                             </div>
