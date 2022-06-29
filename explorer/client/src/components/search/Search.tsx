@@ -48,7 +48,7 @@ function Search() {
             aria-label="search form"
         >
             <input
-                className={styles.searchtext}
+                className={styles.searchtextdesktop}
                 id="searchText"
                 placeholder="Search by Addresses / Objects / Transactions / Epochs"
                 value={input}
@@ -56,7 +56,15 @@ function Search() {
                 autoFocus
                 type="text"
             />
-
+            <input
+                className={styles.searchtextmobile}
+                id="searchText"
+                placeholder="Search Anything"
+                value={input}
+                onChange={handleTextChange}
+                autoFocus
+                type="text"
+            />
             <button
                 id="searchBtn"
                 type="submit"

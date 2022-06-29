@@ -14,8 +14,17 @@
     @apply bg-transparent text-offwhite cursor-text;
 }
 
-.searchtext {
+.searchtextdesktop,
+.searchtextmobile {
     @apply bg-transparent border-none font-mono leading-8
     flex-1 w-[85%]
     text-xs text-white  pl-[1vw];
+}
+
+.searchtextdesktop {
+    @apply hidden sm:block;
+}
+
+.searchtextmobile {
+    @apply sm:hidden block;
 }
