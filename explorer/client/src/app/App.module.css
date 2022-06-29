@@ -1,14 +1,22 @@
 .app {
     @apply font-sans w-screen;
+
+    background: linear-gradient(
+        to bottom,
+        #2a4362 50%,
+        #2a4362 0%,
+        #767a81 0%,
+        #767a81 50%
+    );
 }
 
 header {
-    @apply flex justify-around py-[1vh] mr-[5vw] bg-header w-[100vw] h-[20vh];
+    @apply flex justify-around py-[2vh] mr-[5vw] bg-header;
 }
 
 main {
-    @apply fixed overflow-auto h-[80vh] w-full top-[7vh] 
-    bg-offwhite rounded-[20px] z-10 shadow-2xl;
+    @apply relative z-10 py-2  
+    bg-offwhite rounded-[20px] shadow-2xl;
 }
 
 /* Improves scrollbar look on Chromium browsers */
@@ -31,7 +39,7 @@ main::-webkit-scrollbar-thumb:hover {
 }
 
 footer {
-    @apply fixed bottom-0 bg-sui-grey-75 w-full px-[5vw] z-0 h-[20vh];
+    @apply font-sans bottom-0 bg-sui-grey-75 z-0 h-[20vh];
 }
 
 a.suititle {

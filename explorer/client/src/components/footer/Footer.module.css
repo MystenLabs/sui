@@ -1,9 +1,9 @@
 .footer {
-    @apply bg-sui-grey-75 w-full px-[5vw] z-10;
+    @apply bg-sui-grey-75 w-full z-10 pl-[1vw] sm:pl-[5vw] pt-[5vh];
 }
 
 nav.links {
-    @apply fixed bottom-0 left-[5vw] text-left grid grid-cols-4 md:w-[50vw];
+    @apply left-[5vw] text-left grid grid-cols-4 md:w-[50vw];
 }
 
 nav.links > div > h6 {
