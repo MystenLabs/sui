@@ -596,7 +596,7 @@ better_any = { version = "0.1", default-features = false }
 better_typeid_derive = { version = "0.1", default-features = false }
 bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
-bindgen = { version = "0.59", default-features = false, features = ["runtime"] }
+bindgen = { version = "0.60", default-features = false, features = ["runtime"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
 bitflags = { version = "1" }
