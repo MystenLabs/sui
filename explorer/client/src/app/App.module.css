@@ -19,25 +19,6 @@ main {
     bg-offwhite rounded-[20px] shadow-2xl;
 }
 
-/* Improves scrollbar look on Chromium browsers */
-
-main::-webkit-scrollbar {
-    width: 10px;
-}
-
-main::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-main::-webkit-scrollbar-thumb {
-    background: #898d93;
-    border-radius: 5px;
-}
-
-main::-webkit-scrollbar-thumb:hover {
-    background: #4e555d;
-}
-
 footer {
     @apply font-sans bottom-0 bg-sui-grey-75 z-0 h-[20vh];
 }
