@@ -1727,3 +1727,124 @@ async fn checkpoint_messaging_flow() {
         assert!(matches!(response.info, AuthorityCheckpointInfo::Success));
     }
 }
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_no_more_fragments() {
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
+
+    // Check that the system is running.
+    let t = setup.transactions.pop().unwrap();
+    let (_cert, effects) = setup
+        .aggregator
+        .execute_transaction(&t)
+        .await
+        .expect("All ok.");
+
+    // Check whether this is a success?
+    assert!(matches!(
+        effects.effects.status,
+        ExecutionStatus::Success { .. }
+    ));
+
+    // Wait for a batch to go through
+    // (We do not really wait, we jump there since real-time is not running).
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // Happy path checkpoint flow
+
+    // Step 1 -- get a bunch of proposals
+    let mut proposals = Vec::new();
+    // First make sure each authority creates a proposal.
+    for auth in &setup.authorities {
+        let proposal = auth
+            .checkpoint
+            .lock()
+            .new_proposal(setup.committee.epoch)
+            .unwrap();
+        proposals.push(proposal);
+    }
+
+    let p3 = proposals.pop().unwrap();
+    let p2 = proposals.pop().unwrap();
+    let p1 = proposals.pop().unwrap();
+    let p0 = proposals.pop().unwrap();
+
+    let f01 = p0.fragment_with(&p1);
+    let f02 = p0.fragment_with(&p2);
+    let f03 = p0.fragment_with(&p3);
+
+    // put in fragment 0-1 and no checkpoint can be formed
+
+    setup.authorities[0]
+        .checkpoint
+        .lock()
+        .submit_local_fragment_to_consensus(&f01, &setup.committee)
+        .unwrap();
+
+    // Give time to the receiving task to process (so that consensus can sequence fragments).
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Expecting more fragments
+    assert!(
+        !setup.authorities[0]
+            .checkpoint
+            .lock()
+            .get_locals()
+            .no_more_fragments
+    );
+
+    // put in fragment 0-2, now node 0 can form a checkpoint but not node 3
+
+    setup.authorities[0]
+        .checkpoint
+        .lock()
+        .submit_local_fragment_to_consensus(&f02, &setup.committee)
+        .unwrap();
+
+    // Give time to the receiving task to process (so that consensus can sequence fragments).
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    assert!(setup.authorities[0]
+        .checkpoint
+        .lock()
+        .attempt_to_construct_checkpoint(&setup.committee)
+        .unwrap());
+
+    // Expecting more fragments
+    assert!(
+        !setup.authorities[0]
+            .checkpoint
+            .lock()
+            .get_locals()
+            .no_more_fragments
+    );
+
+    // node 3 cannot make one
+    assert!(!setup.authorities[3]
+        .checkpoint
+        .lock()
+        .attempt_to_construct_checkpoint(&setup.committee)
+        .unwrap());
+
+    // Expecting more fragments
+    assert!(
+        setup.authorities[3]
+            .checkpoint
+            .lock()
+            .get_locals()
+            .no_more_fragments
+    );
+
+    // Now fie node 3 a link and it can make the checkpoint
+    setup.authorities[3]
+        .checkpoint
+        .lock()
+        .submit_local_fragment_to_consensus(&f03, &setup.committee)
+        .unwrap();
+
+    assert!(setup.authorities[3]
+        .checkpoint
+        .lock()
+        .attempt_to_construct_checkpoint(&setup.committee)
+        .unwrap());
+}
