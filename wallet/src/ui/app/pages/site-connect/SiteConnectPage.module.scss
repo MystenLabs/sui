@@ -46,6 +46,11 @@
     background-color: #c7c7c7;
     border-radius: 4px;
     display: inline-block;
+    margin-right: 12px;
+
+    &:last-child {
+        margin-right: 0;
+    }
 }
 
 .actions {

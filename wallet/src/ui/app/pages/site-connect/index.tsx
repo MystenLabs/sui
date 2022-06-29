@@ -20,6 +20,7 @@ import st from './SiteConnectPage.module.scss';
 
 const permissionTypeToTxt: Record<PermissionType, string> = {
     viewAccount: 'View Account',
+    suggestTransactions: 'Propose transactions',
 };
 
 function SiteConnectPage() {
