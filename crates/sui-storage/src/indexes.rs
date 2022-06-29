@@ -201,9 +201,9 @@ impl IndexStore {
             .transactions_by_move_function
             .iter()
             .skip_to(&(
-                package.clone(),
-                module.clone().unwrap_or("".to_string()),
-                function.clone().unwrap_or("".to_string()),
+                package,
+                module.clone().unwrap_or_else(|| "".to_string()),
+                function.clone().unwrap_or_else(|| "".to_string()),
                 TxSequenceNumber::MIN,
             ))?
             .take_while(|((id, m, f, _), _)| {
