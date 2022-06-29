@@ -15,8 +15,14 @@ const Header = () => {
             <Link id="homeBtn" className={styles.suititle} to="/">
                 <SuiLogo />
             </Link>
-            <Search />
-            <NetworkSelect />
+
+            <div className={styles.search}>
+                <Search />
+            </div>
+
+            <div className={styles.networkselect}>
+                <NetworkSelect />
+            </div>
         </header>
     );
 };
