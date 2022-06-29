@@ -434,8 +434,6 @@ fn latest_proposal() {
 
     // No valid checkpoint proposal condition...
     assert!(cps1.get_locals().current_proposal.is_none());
-    // ... because a valid checkpoint cannot be generated.
-    assert!(cps1.set_proposal(committee.epoch).is_err());
 
     let request = CheckpointRequest::latest(false);
     let response = cps1.handle_latest_proposal(&request).expect("no errors");
