@@ -8,6 +8,7 @@ import { useIntl } from 'react-intl';
 import AddressInput from '_components/address-input';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import NumberInput from '_components/number-input';
 import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
@@ -15,30 +16,29 @@ import type { FormValues } from '.';
 
 import st from './TransferNFTForm.module.scss';
 
-export type TransferCoinFormProps = {
+export type TransferNFTFormProps = {
     submitError: string | null;
-    coinBalance: string;
-    coinSymbol: string;
+    gasBalance: string;
     onClearSubmitError: () => void;
 };
 
 function TransferNFTForm({
     submitError,
-    coinBalance,
-    coinSymbol,
+    gasBalance,
     onClearSubmitError,
-}: TransferCoinFormProps) {
+}: TransferNFTFormProps) {
     const {
         isSubmitting,
         isValid,
-        values: { to },
+        values: { to, amount },
     } = useFormikContext<FormValues>();
     const intl = useIntl();
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
+    const transferCost = 10000;
     useEffect(() => {
         onClearRef.current();
-    }, [to]);
+    }, [to, amount]);
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
             <div className={st.group}>
@@ -51,14 +51,23 @@ function TransferNFTForm({
                 <div className={st.muted}>The recipient&apos;s address</div>
                 <ErrorMessage className={st.error} name="to" component="div" />
             </div>
+
             <div className={st.group}>
+                <label className={st.label}>Amount:</label>
+                <Field
+                    component={NumberInput}
+                    allowNegative={false}
+                    name="amount"
+                    value={transferCost}
+                    className={st.input}
+                    disabled={true}
+                />
                 <div className={st.muted}>
                     Available balance:{' '}
                     {intl.formatNumber(
-                        BigInt(coinBalance),
+                        BigInt(gasBalance),
                         balanceFormatOptions
                     )}{' '}
-                    {coinSymbol}
                 </div>
                 <ErrorMessage
                     className={st.error}
@@ -67,9 +76,14 @@ function TransferNFTForm({
                 />
             </div>
             <div className={st.group}>
-                * Total transaction fee estimate (gas cost): {10000}{' '}
+                * Total transaction fee estimate (gas cost): {transferCost}{' '}
                 {GAS_SYMBOL}
             </div>
+            {BigInt(gasBalance) < transferCost && (
+                <div className={st.error}>
+                    Insufficient balance to cover transfer cost
+                </div>
+            )}
             {submitError ? (
                 <div className={st.group}>
                     <Alert>

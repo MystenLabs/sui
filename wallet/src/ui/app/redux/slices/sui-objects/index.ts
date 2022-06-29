@@ -10,7 +10,7 @@ import {
 
 import { ExampleNFT } from './NFT';
 
-import type { SuiObject, SuiAddress } from '@mysten/sui.js';
+import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -54,7 +54,7 @@ export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
 
 export const transferSuiNFT = createAsyncThunk<
     void,
-    { nftId: SuiAddress; recipientAddress: SuiAddress },
+    { nftId: ObjectId; recipientAddress: SuiAddress },
     AppThunkConfig
 >(
     'transferSuiNFT',

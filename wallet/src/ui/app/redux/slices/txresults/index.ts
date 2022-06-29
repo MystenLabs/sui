@@ -92,9 +92,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
                             const recipient =
-                                getTransferObjectTransaction(
-                                    txn
-                                )?.recipient;
+                                getTransferObjectTransaction(txn)?.recipient;
 
                             return {
                                 seq,
