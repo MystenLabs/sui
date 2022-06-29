@@ -1,4 +1,4 @@
-.footer {
+footer {
     @apply bg-sui-grey-75 z-10 sm:pl-[5vw] pt-[10vh] sm:pt-[5vh];
 }
 

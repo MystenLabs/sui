@@ -1,12 +1,3 @@
-.logo {
-    @apply font-advanced text-2xl lg:text-4xl text-black 
-  no-underline;
-}
-
-.nav {
-    @apply mt-[1vh] ml-[5vw];
-}
-
 header {
-    @apply h-[2rem];
+    @apply flex justify-around py-[2vh] mr-[5vw] bg-header;
 }

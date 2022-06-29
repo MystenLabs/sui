@@ -10,17 +10,9 @@
     );
 }
 
-header {
-    @apply flex justify-around py-[2vh] mr-[5vw] bg-header;
-}
-
 main {
     @apply relative z-10 py-2  
     bg-offwhite rounded-[20px] shadow-2xl;
-}
-
-footer {
-    @apply font-sans bottom-0 bg-sui-grey-75 z-0 h-[20vh];
 }
 
 a.suititle {
