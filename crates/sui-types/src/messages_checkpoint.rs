@@ -97,23 +97,6 @@ impl CheckpointRequest {
             detail,
         }
     }
-
-    pub fn set_checkpoint(
-        certificate: CertifiedCheckpointSummary,
-        contents: Option<CheckpointContents>,
-    ) -> CheckpointRequest {
-        CheckpointRequest {
-            request_type: CheckpointRequestType::SetCertificate(certificate, contents),
-            detail: false,
-        }
-    }
-
-    pub fn set_fragment(fragment: CheckpointFragment) -> CheckpointRequest {
-        CheckpointRequest {
-            request_type: CheckpointRequestType::SetFragment(Box::new(fragment)),
-            detail: false,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -122,10 +105,6 @@ pub enum CheckpointRequestType {
     LatestCheckpointProposal,
     // Requests a past checkpoint
     PastCheckpoint(CheckpointSequenceNumber),
-    // Set a checkpoint certificate
-    SetCertificate(CertifiedCheckpointSummary, Option<CheckpointContents>),
-    // Submit a consensus fragment to a node
-    SetFragment(Box<CheckpointFragment>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

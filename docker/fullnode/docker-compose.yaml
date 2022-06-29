@@ -2,7 +2,7 @@
 version: "3.9"
 services:
   fullnode:
-    image: mysten/sui-node:devnet-0.4.0
+    image: mysten/sui-node:stable
     ports:
     - "9000:9000"
     - "9184:9184"

@@ -11,7 +11,7 @@ jsonrpsee = { version = "0.13.1", features = ["full"] }
 jsonrpsee-core = "0.13.1"
 once_cell = "1.12.0"
 prometheus = "0.13.1"
-anyhow = "1.0.57"
+anyhow = "1.0.58"
 sui-open-rpc = { path = "../sui-open-rpc" }
 tracing = "0.1.34"
 async-trait = "0.1.53"

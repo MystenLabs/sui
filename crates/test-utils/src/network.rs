@@ -16,10 +16,13 @@ use sui_config::PersistedConfig;
 use sui_config::{Config, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
 use sui_core::gateway_state::GatewayMetrics;
 use sui_gateway::create_client;
-use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
+use sui_json_rpc::gateway_api::{
+    GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
+};
 use sui_json_rpc_api::QuorumDriverApiServer;
 use sui_json_rpc_api::RpcReadApiServer;
 use sui_json_rpc_api::RpcTransactionBuilderServer;
+use sui_json_rpc_api::WalletSyncApiServer;
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 const NUM_VALIDAOTR: usize = 4;
@@ -114,6 +117,7 @@ async fn start_rpc_gateway(
     module.merge(RpcGatewayImpl::new(client.clone()).into_rpc())?;
     module.merge(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
     module.merge(TransactionBuilderImpl::new(client.clone()).into_rpc())?;
+    module.merge(GatewayWalletSyncApiImpl::new(client.clone()).into_rpc())?;
 
     let handle = server.start(module)?;
     Ok((addr, handle))

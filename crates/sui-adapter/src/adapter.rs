@@ -13,7 +13,7 @@ use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     errors::PartialVMResult,
-    file_format::{CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
+    file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -195,6 +195,18 @@ fn execute_internal<
         .into_iter()
         .filter(|(id, _obj)| by_value_objects.contains(id))
         .collect();
+    let session = vm.new_session(state_view);
+    let events = events
+        .into_iter()
+        .map(|(recipient, event_type, type_, event_bytes)| {
+            let loaded_type = session.load_type(&type_)?;
+            let abilities = session.get_type_abilities(&loaded_type)?;
+            Ok((recipient, event_type, type_, abilities, event_bytes))
+        })
+        .collect::<Result<_, ExecutionError>>()?;
+    let (empty_changes, empty_events) = session.finish()?;
+    debug_assert!(empty_changes.into_inner().is_empty());
+    debug_assert!(empty_events.is_empty());
     process_successful_execution(
         state_view,
         module_id,
@@ -386,7 +398,7 @@ pub fn generate_package_id(
     Ok(package_id)
 }
 
-type MoveEvent = (Vec<u8>, u64, TypeTag, Vec<u8>);
+type MoveEvent = (Vec<u8>, u64, TypeTag, AbilitySet, Vec<u8>);
 
 /// Update `state_view` with the effects of successfully executing a transaction:
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
@@ -423,7 +435,7 @@ fn process_successful_execution<
     state_view.set_create_object_ids(newly_generated_ids.clone());
     // process events to identify transfers, freezes
     for e in events {
-        let (recipient, event_type, type_, event_bytes) = e;
+        let (recipient, event_type, type_, abilities, event_bytes) = e;
         let event_type = EventType::try_from(event_type as u8)
             .expect("Safe because event_type is derived from an EventType enum");
         match event_type {
@@ -446,6 +458,7 @@ fn process_successful_execution<
                     ctx.sender(),
                     new_owner,
                     type_,
+                    abilities,
                     event_bytes,
                     tx_digest,
                     &mut by_value_objects,
@@ -551,6 +564,7 @@ fn handle_transfer<
     sender: SuiAddress,
     recipient: Owner,
     type_: TypeTag,
+    abilities: AbilitySet,
     contents: Vec<u8>,
     tx_digest: TransactionDigest,
     by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
@@ -561,7 +575,10 @@ fn handle_transfer<
 ) -> Result<(), ExecutionError> {
     match type_ {
         TypeTag::Struct(s_type) => {
-            let mut move_obj = MoveObject::new(s_type, contents);
+            let has_public_transfer = abilities.has_store();
+            // safe because `has_public_transfer` was properly determined from the abilities
+            let mut move_obj =
+                unsafe { MoveObject::new_from_execution(s_type, has_public_transfer, contents) };
             let old_object = by_value_objects.remove(&move_obj.id());
 
             #[cfg(debug_assertions)]

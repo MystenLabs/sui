@@ -11,6 +11,7 @@ use sui_json_rpc_api::rpc_types::{
 };
 use sui_json_rpc_api::{
     QuorumDriverApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
+    WalletSyncApiClient,
 };
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -33,7 +34,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn test_transfer_coin() -> Result<(), anyhow::Error> {
+async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let test_network = start_rpc_test_network(None).await?;
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
@@ -41,7 +42,7 @@ async fn test_transfer_coin() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     let tx_data: TransactionBytes = http_client
-        .transfer_coin(
+        .public_transfer_object(
             *address,
             objects.first().unwrap().object_id,
             Some(objects.last().unwrap().object_id),
@@ -186,7 +187,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let mut tx_responses = Vec::new();
     for oref in &objects[..objects.len() - 1] {
         let tx_data: TransactionBytes = http_client
-            .transfer_coin(*address, oref.object_id, Some(gas_id), 1000, *address)
+            .public_transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
 
         let keystore = SuiKeystore::load_or_create(&test_network.network.dir().join("wallet.key"))?;

@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferCoinTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferCoin, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, TransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferObjectTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferObject, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, TransactionResponse } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
 import { PublicKey } from "./cryptography/publickey";
@@ -53,7 +53,7 @@ export function isPublicKeyData(obj: any, _argumentName?: string): obj is Public
     )
 }
 
-export function isTransferCoinTransaction(obj: any, _argumentName?: string): obj is TransferCoinTransaction {
+export function isTransferObjectTransaction(obj: any, _argumentName?: string): obj is TransferObjectTransaction {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -122,7 +122,7 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        typeof obj.newTransferCoin === "function" &&
+        typeof obj.newTransferObject === "function" &&
         typeof obj.newMoveCall === "function" &&
         typeof obj.newMergeCoin === "function" &&
         typeof obj.newSplitCoin === "function"
@@ -325,7 +325,7 @@ export function isSequenceNumber(obj: any, _argumentName?: string): obj is Seque
     )
 }
 
-export function isTransferCoin(obj: any, _argumentName?: string): obj is TransferCoin {
+export function isTransferObject(obj: any, _argumentName?: string): obj is TransferObject {
     return (
         (obj !== null &&
             typeof obj === "object" ||
@@ -345,7 +345,7 @@ export function isRawAuthoritySignInfo(obj: any, _argumentName?: string): obj is
 
 export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
     return (
-        (obj === "TransferCoin" ||
+        (obj === "TransferObject" ||
             obj === "Publish" ||
             obj === "Call")
     )
@@ -356,7 +356,7 @@ export function isSuiTransactionKind(obj: any, _argumentName?: string): obj is S
         ((obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-            isTransferCoin(obj.TransferCoin) as boolean ||
+            isTransferObject(obj.TransferObject) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
