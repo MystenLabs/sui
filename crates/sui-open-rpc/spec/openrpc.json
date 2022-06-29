@@ -121,6 +121,310 @@
       }
     },
     {
+      "name": "sui_getEventsByEventType",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "event_type",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByModule",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByObject",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByOwner",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsBySender",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "sender",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByTransaction",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_getObject",
       "tags": [
         {
@@ -1279,6 +1583,40 @@
             "additionalProperties": false
           }
         ]
+      },
+      "EventEnvelope": {
+        "type": "object",
+        "required": [
+          "event",
+          "timestamp"
+        ],
+        "properties": {
+          "event": {
+            "description": "Specific event type",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Event"
+              }
+            ]
+          },
+          "timestamp": {
+            "description": "UTC timestamp in milliseconds since epoch (1/1/1970)",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "txDigest": {
+            "description": "Transaction digest of associated transaction, if any",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
       },
       "EventFilter": {
         "oneOf": [

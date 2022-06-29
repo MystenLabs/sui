@@ -8,8 +8,10 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use futures::{future, StreamExt};
 use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee_core::client::ClientT;
 use move_package::BuildConfig;
 use serde_json::json;
 use tokio::sync::Mutex;
@@ -597,6 +599,21 @@ async fn set_up_subscription(port: u16, swarm: &Swarm) -> Result<(SuiNode, Clien
     Ok((node, client))
 }
 
+/// Call this function to set up a network and a fullnode and return a jsonrpc client.
+/// Pass in an unique port for each test case otherwise they may interfere with one another.
+async fn set_up_jsonrpc(port: u16, swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::Error> {
+    let jsonrpc_server_url = format!("127.0.0.1:{}", port);
+    let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
+
+    let mut config = swarm.config().generate_fullnode_config();
+    config.json_rpc_address = jsonrpc_addr;
+
+    let node = SuiNode::start(&config).await?;
+
+    let client = HttpClientBuilder::default().build(&format!("http://{}", jsonrpc_server_url))?;
+    Ok((node, client))
+}
+
 #[tokio::test]
 async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
@@ -650,5 +667,22 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
         ),
     }
 
+    Ok(())
+}
+
+// A test placeholder to verify event read APIs
+// TODO: add real tests when event store integration is done
+#[tokio::test]
+async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
+    let (swarm, _context, address) = setup_network_and_wallet().await?;
+    // Pass in an unique port for each test case otherwise they may interfere with one another.
+    let (_node, jsonrpc_client) = set_up_jsonrpc(6667, &swarm).await?;
+
+    let params = rpc_params![address, 10, 0, 666];
+    let response: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByOwner", params)
+        .await
+        .unwrap();
+    assert!(response.is_empty());
     Ok(())
 }
