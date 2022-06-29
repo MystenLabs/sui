@@ -45,3 +45,7 @@ nav.links a {
 .logomobile > .copyright {
     @apply mt-[14px] text-sui-grey-50;
 }
+
+.copyright {
+    @apply text-offwhite text-xs;
+}
