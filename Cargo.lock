@@ -3122,12 +3122,12 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b5b3890533e543cb605cadca8060f9439a2032e5e6d088e3414ad32a46362a3"
+checksum = "cc195aab5b803465bf614a5a4765741abce6c8d64e7d8ca57acd2923661fba9f"
 dependencies = [
  "clap 3.1.18",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel 0.5.4",
  "rayon",
  "termcolor",
 ]
