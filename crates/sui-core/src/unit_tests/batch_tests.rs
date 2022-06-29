@@ -56,8 +56,8 @@ pub(crate) async fn init_state(
         store,
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
         &prometheus::Registry::new(),
     )
     .await
@@ -771,8 +771,8 @@ async fn test_safe_batch_stream() {
         store.clone(),
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
         &prometheus::Registry::new(),
     )
     .await;
@@ -818,8 +818,8 @@ async fn test_safe_batch_stream() {
         store,
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
         &prometheus::Registry::new(),
     )
     .await;

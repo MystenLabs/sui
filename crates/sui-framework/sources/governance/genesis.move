@@ -20,6 +20,9 @@ module sui::genesis {
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
 
+    /// Initial storage gas price
+    const INIT_STORAGE_GAS_PRICE: u64 = 1;
+
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
@@ -64,6 +67,7 @@ module sui::genesis {
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
+            INIT_STORAGE_GAS_PRICE,
         );
     }
 }

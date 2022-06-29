@@ -406,7 +406,7 @@ fn latest_proposal() {
 
     // Fail to set if transactions not processed.
     assert!(cps1
-        .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+        .sign_new_checkpoint(summary.clone(), &transactions)
         .is_err());
 
     // Set the transactions as executed.
@@ -422,21 +422,18 @@ fn latest_proposal() {
     cps4.handle_internal_batch(0, &batch).unwrap();
 
     // Try to get checkpoint
-    cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps1.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps2.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps3.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps3.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps4.handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
-        .unwrap();
+    cps4.sign_new_checkpoint(summary, &transactions).unwrap();
 
     // --- TEST3 ---
 
     // No valid checkpoint proposal condition...
     assert!(cps1.get_locals().current_proposal.is_none());
-    // ... because a valid checkpoint cannot be generated.
-    assert!(cps1.set_proposal(committee.epoch).is_err());
 
     let request = CheckpointRequest::latest(false);
     let response = cps1.handle_latest_proposal(&request).expect("no errors");
@@ -552,7 +549,7 @@ fn set_get_checkpoint() {
 
     // Need to load the transactions as processed, before getting a checkpoint.
     assert!(cps1
-        .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+        .sign_new_checkpoint(summary.clone(), &transactions)
         .is_err());
     let batch: Vec<_> = transactions
         .transactions
@@ -564,12 +561,11 @@ fn set_get_checkpoint() {
     cps2.handle_internal_batch(0, &batch).unwrap();
     cps3.handle_internal_batch(0, &batch).unwrap();
 
-    cps1.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps1.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps2.handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+    cps2.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
-    cps3.handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
-        .unwrap();
+    cps3.sign_new_checkpoint(summary, &transactions).unwrap();
     // cps4.handle_internal_set_checkpoint(summary, &transactions)
     //     .unwrap();
 
@@ -609,10 +605,7 @@ fn set_get_checkpoint() {
     let response_ckp = cps1
         .process_checkpoint_certificate(&checkpoint_cert, &None, &committee)
         .unwrap();
-    assert!(matches!(
-        response_ckp.info,
-        AuthorityCheckpointInfo::Success
-    ));
+    assert!(response_ckp);
 
     // Now we have a certified checkpoint
     let response = cps1.handle_past_checkpoint(true, 0).unwrap();
@@ -640,10 +633,7 @@ fn set_get_checkpoint() {
     let response_ckp = cps4
         .process_checkpoint_certificate(&checkpoint_cert, &Some(transactions), &committee)
         .unwrap();
-    assert!(matches!(
-        response_ckp.info,
-        AuthorityCheckpointInfo::Success
-    ));
+    assert!(response_ckp);
 
     // Now we have a certified checkpoint
     let response = cps4.handle_past_checkpoint(true, 0).unwrap();
@@ -702,9 +692,7 @@ fn checkpoint_integration() {
 
         // If we have a previous checkpoint, now lets try to process again?
         if let Some((summary, transactions)) = checkpoint_opt.take() {
-            assert!(cps
-                .handle_internal_set_checkpoint(committee.epoch, summary, &transactions)
-                .is_ok());
+            assert!(cps.sign_new_checkpoint(summary, &transactions).is_ok());
 
             // Loop invariant to ensure termination or error
             assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
@@ -744,7 +732,7 @@ fn checkpoint_integration() {
 
         // Cannot register the checkpoint while there are no-executed transactions.
         assert!(cps
-            .handle_internal_set_checkpoint(committee.epoch, summary.clone(), &transactions)
+            .sign_new_checkpoint(summary.clone(), &transactions)
             .is_err());
 
         checkpoint_opt = Some((summary, transactions));
@@ -800,9 +788,9 @@ async fn test_batch_to_checkpointing() {
         secret,
         store.clone(),
         None,
+        None,
         Some(checkpoints.clone()),
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
         &prometheus::Registry::new(),
     )
     .await;
@@ -891,8 +879,8 @@ async fn test_batch_to_checkpointing_init_crash() {
             store.clone(),
             None,
             None,
+            None,
             &sui_config::genesis::Genesis::get_default_genesis(),
-            false,
             &prometheus::Registry::new(),
         )
         .await;
@@ -973,9 +961,9 @@ async fn test_batch_to_checkpointing_init_crash() {
             secret,
             store.clone(),
             None,
+            None,
             Some(checkpoints.clone()),
             &sui_config::genesis::Genesis::get_default_genesis(),
-            false,
             &prometheus::Registry::new(),
         )
         .await;
@@ -1492,9 +1480,9 @@ pub async fn checkpoint_tests_setup(
             secret,
             store.clone(),
             None,
+            None,
             Some(checkpoint.clone()),
             &genesis,
-            false,
             &prometheus::Registry::new(),
         )
         .await;
@@ -1728,6 +1716,127 @@ async fn checkpoint_messaging_flow() {
             )
             .unwrap();
 
-        assert!(matches!(response.info, AuthorityCheckpointInfo::Success));
+        assert!(response);
     }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_no_more_fragments() {
+    let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
+
+    // Check that the system is running.
+    let t = setup.transactions.pop().unwrap();
+    let (_cert, effects) = setup
+        .aggregator
+        .execute_transaction(&t)
+        .await
+        .expect("All ok.");
+
+    // Check whether this is a success?
+    assert!(matches!(
+        effects.effects.status,
+        ExecutionStatus::Success { .. }
+    ));
+
+    // Wait for a batch to go through
+    // (We do not really wait, we jump there since real-time is not running).
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    // Happy path checkpoint flow
+
+    // Step 1 -- get a bunch of proposals
+    let mut proposals = Vec::new();
+    // First make sure each authority creates a proposal.
+    for auth in &setup.authorities {
+        let proposal = auth
+            .checkpoint
+            .lock()
+            .new_proposal(setup.committee.epoch)
+            .unwrap();
+        proposals.push(proposal);
+    }
+
+    let p3 = proposals.pop().unwrap();
+    let p2 = proposals.pop().unwrap();
+    let p1 = proposals.pop().unwrap();
+    let p0 = proposals.pop().unwrap();
+
+    let f01 = p0.fragment_with(&p1);
+    let f02 = p0.fragment_with(&p2);
+    let f03 = p0.fragment_with(&p3);
+
+    // put in fragment 0-1 and no checkpoint can be formed
+
+    setup.authorities[0]
+        .checkpoint
+        .lock()
+        .submit_local_fragment_to_consensus(&f01, &setup.committee)
+        .unwrap();
+
+    // Give time to the receiving task to process (so that consensus can sequence fragments).
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Expecting more fragments
+    assert!(
+        !setup.authorities[0]
+            .checkpoint
+            .lock()
+            .get_locals()
+            .no_more_fragments
+    );
+
+    // put in fragment 0-2, now node 0 can form a checkpoint but not node 3
+
+    setup.authorities[0]
+        .checkpoint
+        .lock()
+        .submit_local_fragment_to_consensus(&f02, &setup.committee)
+        .unwrap();
+
+    // Give time to the receiving task to process (so that consensus can sequence fragments).
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    assert!(setup.authorities[0]
+        .checkpoint
+        .lock()
+        .attempt_to_construct_checkpoint(&setup.committee)
+        .unwrap());
+
+    // Expecting more fragments
+    assert!(
+        !setup.authorities[0]
+            .checkpoint
+            .lock()
+            .get_locals()
+            .no_more_fragments
+    );
+
+    // node 3 cannot make one
+    assert!(!setup.authorities[3]
+        .checkpoint
+        .lock()
+        .attempt_to_construct_checkpoint(&setup.committee)
+        .unwrap());
+
+    // Expecting more fragments
+    assert!(
+        setup.authorities[3]
+            .checkpoint
+            .lock()
+            .get_locals()
+            .no_more_fragments
+    );
+
+    // Now fie node 3 a link and it can make the checkpoint
+    setup.authorities[3]
+        .checkpoint
+        .lock()
+        .submit_local_fragment_to_consensus(&f03, &setup.committee)
+        .unwrap();
+
+    assert!(setup.authorities[3]
+        .checkpoint
+        .lock()
+        .attempt_to_construct_checkpoint(&setup.committee)
+        .unwrap());
 }

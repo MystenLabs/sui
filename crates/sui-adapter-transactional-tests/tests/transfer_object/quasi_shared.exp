@@ -1,0 +1,28 @@
+processed 7 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 8-28:
+created: object(105)
+written: object(104)
+
+task 2 'run'. lines 30-30:
+created: object(107)
+written: object(106)
+
+task 3 'run'. lines 32-32:
+created: object(109)
+written: object(107), object(108)
+
+task 4 'view-object'. lines 34-34:
+Owner: Object ID: ( fake(107) )
+Contents: test::m::Child {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(109)}}, version: 1u64}}
+
+task 5 'transfer-object'. lines 36-36:
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TransferUnowned, source: None } }
+
+task 6 'view-object'. lines 38-38:
+Owner: Object ID: ( fake(107) )
+Contents: test::m::Child {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(109)}}, version: 2u64}}

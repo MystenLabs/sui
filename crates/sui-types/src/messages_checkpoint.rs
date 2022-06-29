@@ -148,6 +148,16 @@ pub enum AuthenticatedCheckpoint {
     Certified(CertifiedCheckpointSummary),
 }
 
+impl AuthenticatedCheckpoint {
+    pub fn summary(&self) -> &CheckpointSummary {
+        match self {
+            Self::Signed(s) => &s.summary,
+            Self::Certified(c) => &c.summary,
+            Self::None => unreachable!(),
+        }
+    }
+}
+
 pub type CheckpointDigest = [u8; 32];
 
 // The constituent parts of checkpoints, signed and certified

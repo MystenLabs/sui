@@ -41,7 +41,7 @@ fn make_transfer_transaction(
             ],
         })
     } else {
-        SingleTransactionKind::PublicTransferObject(PublicTransferObject {
+        SingleTransactionKind::TransferObject(TransferObject {
             recipient,
             object_ref,
         })

@@ -76,6 +76,7 @@ module sui::validator_set {
             0
         );
         vector::push_back(&mut self.pending_validators, validator);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     /// Called by `SuiSystem`, to remove a validator.
@@ -95,6 +96,7 @@ module sui::validator_set {
             0
         );
         vector::push_back(&mut self.pending_removals, validator_index);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     /// Called by `SuiSystem`, to add more stake to a validator.
@@ -109,6 +111,7 @@ module sui::validator_set {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         validator::request_add_stake(validator, new_stake);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
@@ -123,6 +126,7 @@ module sui::validator_set {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     public(friend) fun is_active_validator(
@@ -139,6 +143,7 @@ module sui::validator_set {
     ) {
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         validator::request_add_delegation(validator, delegate_amount);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     public(friend) fun request_remove_delegation(
@@ -153,7 +158,12 @@ module sui::validator_set {
             let validator_index = option::extract(&mut validator_index_opt);
             let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
             validator::request_remove_delegation(validator, delegate_amount);
-        }
+        } else {
+            // TODO: How do we deal with undelegating from inactive validators?
+            // https://github.com/MystenLabs/sui/issues/2837
+            abort 0
+        };
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     public(friend) fun create_epoch_records(

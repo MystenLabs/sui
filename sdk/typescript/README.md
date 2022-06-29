@@ -80,7 +80,7 @@ const signer = new RawSigner(
   keypair,
   new JsonRpcProvider('https://gateway.devnet.sui.io:443')
 );
-const transferTxn = await signer.publicTransferObject({
+const transferTxn = await signer.transferObject({
   objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   gasBudget: 1000,
   recipient: '0xd84058cb73bdeabe123b56632713dcd65e1a6c92',

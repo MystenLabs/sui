@@ -508,12 +508,10 @@ async fn execute_transfer_with_price(
         .unwrap()
         .unwrap();
 
-    let kind = TransactionKind::Single(SingleTransactionKind::PublicTransferObject(
-        PublicTransferObject {
-            recipient,
-            object_ref: object.compute_object_reference(),
-        },
-    ));
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
+        recipient,
+        object_ref: object.compute_object_reference(),
+    }));
     let data =
         TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, gas_price);
     let signature = Signature::new(&data, &sender_key);

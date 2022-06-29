@@ -107,6 +107,14 @@ pub trait RpcFullNodeReadApi {
         object: ObjectID,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
+    #[method(name = "getTransactionsByMoveFunction")]
+    async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
     #[method(name = "getTransactionsFromAddress")]
     async fn get_transactions_from_addr(
         &self,
@@ -125,7 +133,7 @@ pub trait RpcFullNodeReadApi {
 pub trait RpcTransactionBuilder {
     /// Create a transaction to transfer an object from one address to another. The object's type
     /// must allow public transfers
-    #[method(name = "publicTransferObject")]
+    #[method(name = "transferObject")]
     async fn public_transfer_object(
         &self,
         signer: SuiAddress,

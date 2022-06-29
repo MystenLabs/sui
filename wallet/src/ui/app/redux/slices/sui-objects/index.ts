@@ -29,9 +29,9 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     const allSuiObjects: SuiObject[] = [];
     if (address) {
         const allObjectRefs =
-            await api.instance.gateway.getObjectsOwnedByAddress(`${address}`);
+            await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
         const objectIDs = allObjectRefs.map((anObj) => anObj.objectId);
-        const allObjRes = await api.instance.gateway.getObjectBatch(objectIDs);
+        const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
         for (const objRes of allObjRes) {
             const suiObj = getObjectExistsResponse(objRes);
             if (suiObj) {

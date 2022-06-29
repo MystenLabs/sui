@@ -14,7 +14,11 @@ use futures::{
 };
 use std::future::Future;
 use std::ops::Deref;
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+    time::Duration,
+};
 use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
 use sui_types::committee::StakeUnit;
 use sui_types::{
@@ -26,7 +30,7 @@ use sui_types::{
         TransactionInfoResponse,
     },
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 #[cfg(test)]
 mod configurable_batch_action_client;
@@ -326,18 +330,20 @@ where
             Err(_e) => {
                 // If there was no start sequence found for this peer, it is likely a new peer
                 // that has just joined the network, start at 0.
-                info!("New gossip peer has joined: {:?}", peer_name);
-                Some(0)
+                info!(peer = ?peer_name, "New gossip peer has joined");
+                0
             }
-            Ok(s) => s.or(Some(0)),
+            Ok(s) => s.unwrap_or(0),
         };
+
+        debug!(peer = ?peer_name, ?start_seq, "Restarting follower at sequence");
 
         Self {
             peer_name,
             client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
             follower_store: active_authority.follower_store.clone(),
-            max_seq: start_seq,
+            max_seq: Some(start_seq),
             aggregator: active_authority.net.load().clone(),
         }
     }
@@ -357,16 +363,18 @@ where
         duration: Duration,
         handler: Handler,
     ) -> SuiResult {
+        let peer = self.peer_name;
         // Global timeout, we do not exceed this time in this task.
         let mut timeout = Box::pin(tokio::time::sleep(duration));
         let mut results = FuturesOrdered::new();
-        let mut batch_seq_to_record = None;
+        let mut batch_seq_to_record = VecDeque::new();
 
         let req = BatchInfoRequest {
             start: self.max_seq,
             length: REQUEST_FOLLOW_NUM_DIGESTS,
         };
 
+        let mut last_seq_in_cur_batch: TxSequenceNumber = 0;
         let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
 
         loop {
@@ -380,7 +388,8 @@ where
                     match items {
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
                             let next_seq = signed_batch.batch.next_sequence_number;
-                            batch_seq_to_record = Some(next_seq);
+                            debug!(?peer, batch_next_seq = ?next_seq, "Received signed batch");
+                            batch_seq_to_record.push_back((next_seq, last_seq_in_cur_batch));
                             if let Some(max_seq) = self.max_seq {
                                 if next_seq < max_seq {
                                     info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
@@ -389,11 +398,17 @@ where
                         },
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
-                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest))))) => {
-                            let fut = handler.handle_digest(self, digest);
+                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests))))) => {
+                            trace!(?peer, ?digests, ?seq, "received tx from peer");
+
+                            // track the last observed sequence in a batch, so we can tell when the
+                            // batch has been fully processed.
+                            last_seq_in_cur_batch = seq;
+
+                            let fut = handler.handle_digest(self, digests);
                             results.push(async move {
                                 fut.await?;
-                                Ok::<TxSequenceNumber, SuiError>(seq)
+                                Ok::<(TxSequenceNumber, ExecutionDigests), SuiError>((seq, digests))
                             });
 
                             self.state.metrics.gossip_queued_count.inc();
@@ -417,12 +432,15 @@ where
                 },
 
                 result = &mut results.next() , if !results.is_empty() => {
-                    let seq = result.unwrap()?;
-                    if let Some(batch_seq) = batch_seq_to_record {
-                        if seq >= batch_seq {
-                            self.follower_store.record_next_sequence(&self.peer_name, batch_seq)?;
-                            batch_seq_to_record = None;
+                    let (seq, digests) = result.unwrap()?;
+                    trace!(?peer, ?seq, ?digests, "digest handler finished");
+
+                    while let Some((batch_seq, last_seq_in_batch)) = batch_seq_to_record.front() {
+                        if seq < *last_seq_in_batch {
+                            break;
                         }
+                        self.follower_store.record_next_sequence(&self.peer_name, *batch_seq)?;
+                        batch_seq_to_record.pop_front();
                     }
                 }
             };

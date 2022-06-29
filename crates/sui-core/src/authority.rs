@@ -35,16 +35,18 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
 };
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
 use sui_storage::{
+    event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -231,6 +233,8 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
+const DEFAULT_QUERY_LIMIT: usize = 1000;
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -273,6 +277,9 @@ pub struct AuthorityState {
     pub consensus_guardrail: AtomicUsize,
 
     pub metrics: AuthorityMetrics,
+
+    // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
+    latest_checkpoint_num: AtomicU64,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -376,19 +383,16 @@ impl AuthorityState {
         // byzantine validator from giving us incorrect effects.
         signed_effects: SignedTransactionEffects,
     ) -> SuiResult {
-        let transaction_digest = *certificate.digest();
+        let digest = *certificate.digest();
+        debug!(?digest, "handle_node_sync_transaction");
         fp_ensure!(
-            signed_effects.effects.transaction_digest == transaction_digest,
-            // NOTE: the error message here will say 'Error acquiring lock' but what it means is
-            // 'error checking lock'.
+            signed_effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {
                 err: "effects/tx digest mismatch".to_string()
             }
         );
 
-        let tx_guard = self
-            .acquire_tx_guard(&transaction_digest, &certificate)
-            .await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database
@@ -405,7 +409,8 @@ impl AuthorityState {
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let certificate = confirmation_transaction.certificate;
-        let transaction_digest = *certificate.digest();
+        let digest = *certificate.digest();
+        debug!(?digest, "handle_confirmation_transaction");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -417,9 +422,7 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let tx_guard = self
-            .acquire_tx_guard(&transaction_digest, &certificate)
-            .await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         self.process_certificate(tx_guard, certificate).await
     }
@@ -660,6 +663,10 @@ impl AuthorityState {
             cert.sender_address(),
             cert.data.input_objects()?.iter().map(|o| o.object_id()),
             effects.effects.mutated_and_created(),
+            cert.data
+                .move_calls()?
+                .iter()
+                .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             seq,
             digest,
             timestamp_ms,
@@ -695,9 +702,10 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
+            let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
             event_handler
-                .process_events(&effects.effects, timestamp_ms)
-                .await;
+                .process_events(&effects.effects, timestamp_ms, seq, checkpoint_num)
+                .await?;
         }
 
         Ok(())
@@ -987,9 +995,9 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
         indexes: Option<Arc<IndexStore>>,
+        event_store: Option<Arc<EventStoreType>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
-        enable_event_processing: bool,
         prometheus_registry: &prometheus::Registry,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
@@ -1035,11 +1043,8 @@ impl AuthorityState {
             .get_last_epoch_info()
             .expect("Fail to load the current epoch info");
 
-        let event_handler = if enable_event_processing {
-            Some(Arc::new(EventHandler::new(store.clone())))
-        } else {
-            None
-        };
+        let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
+
         let mut state = AuthorityState {
             name,
             secret,
@@ -1061,6 +1066,7 @@ impl AuthorityState {
             ),
             consensus_guardrail: AtomicUsize::new(0),
             metrics: AuthorityMetrics::new(prometheus_registry),
+            latest_checkpoint_num: AtomicU64::new(0),
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1279,6 +1285,17 @@ impl AuthorityState {
         }
     }
 
+    pub async fn get_transactions_by_move_function(
+        &self,
+        package: ObjectID,
+        module: Option<String>,
+        function: Option<String>,
+    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
+        Ok(self
+            .get_indexes()?
+            .get_transactions_by_move_function(package, module, function)?)
+    }
+
     pub async fn get_timestamp_ms(
         &self,
         digest: &TransactionDigest,
@@ -1316,6 +1333,34 @@ impl AuthorityState {
         address: SuiAddress,
     ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
         Ok(self.get_indexes()?.get_transactions_to_addr(address)?)
+    }
+
+    /// Returns a full handle to the event store, including inserts... so be careful!
+    fn get_event_store(&self) -> Option<Arc<EventStoreType>> {
+        self.event_handler
+            .as_ref()
+            .map(|handler| handler.event_store.clone())
+    }
+
+    /// Returns a set of events corresponding to a given transaction, in order events were emitted
+    pub async fn get_events_for_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Vec<StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.events_for_transaction(digest).await
+    }
+
+    /// Returns a whole set of events for a range of time
+    pub async fn get_events_for_timerange(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        limit: Option<usize>,
+    ) -> Result<Vec<StoredEvent>, SuiError> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
+            .await
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {
@@ -1382,7 +1427,8 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        self.database
+        let res = self
+            .database
             .update_state(
                 temporary_store,
                 certificate,
@@ -1390,7 +1436,11 @@ impl AuthorityState {
                 signed_effects,
                 &signed_effects.effects.digest(),
             )
-            .await
+            .await;
+
+        debug!(digest = ?certificate.digest(), "commit_certificate finished");
+
+        res
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
@@ -1513,14 +1563,18 @@ impl ExecutionState for AuthorityState {
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
                 if let Some(checkpoint) = &self.checkpoints {
+                    let mut checkpoint = checkpoint.lock();
                     checkpoint
-                        .lock()
                         .handle_internal_fragment(seq, *fragment, &self.committee.load(), self)
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                     // to persist the consensus index. If the validator crashes, this transaction
                     // may be resent to the checkpoint logic that will simply ignore it.
+
+                    // Cache the next checkpoint number if it changes
+                    self.latest_checkpoint_num
+                        .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
                 }
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
