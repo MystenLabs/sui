@@ -1,5 +1,5 @@
 .hamburger {
-    @apply stroke-white stroke-[2px] cursor-pointer sm:hidden block;
+    @apply stroke-white stroke-[2.5px] cursor-pointer sm:hidden block;
 }
 
 .networkbox {

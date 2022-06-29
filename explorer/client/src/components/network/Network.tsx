@@ -70,8 +70,8 @@ export default function NetworkSelect() {
                 {network} <DownSVG />
             </div>
             <div onClick={openModal} className={styles.hamburger}>
-                <svg height="32" width="32">
-                    <path d="M 2 6 H 30 M 2 14 H 30 M 2 22 H 30" />
+                <svg height="30.5" width="30.5">
+                    <path d="M 2.5 10 H 28 M 2.5 18 H 28 M 2.5 26 H 28" />
                 </svg>
             </div>
             <div

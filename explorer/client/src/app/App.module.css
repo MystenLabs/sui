@@ -3,11 +3,11 @@
 }
 
 header {
-    @apply flex justify-around py-[1vh] mr-[5vw] bg-header w-[100vw] h-[6vh];
+    @apply flex justify-around py-[1vh] mr-[5vw] bg-header w-[100vw] h-[20vh];
 }
 
 main {
-    @apply fixed overflow-auto h-[80vh] w-full top-[6vh] 
+    @apply fixed overflow-auto h-[80vh] w-full top-[7vh] 
     bg-offwhite rounded-[20px] z-10 shadow-2xl;
 }
 

@@ -1,5 +1,5 @@
 .form {
-    @apply flex bg-search-fill w-[50%] sm:w-[90%] border-[1px] border-solid border-sui rounded-[6px] h-[2rem];
+    @apply flex bg-search-fill w-[62%] sm:w-[500px] border-[1px] border-solid border-sui rounded-[6px] h-[2rem];
 }
 
 .searchbtn {
