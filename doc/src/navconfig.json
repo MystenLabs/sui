@@ -153,6 +153,10 @@
       {
         "label": "Run a Fullnode",
         "fileName": "build/fullnode"
+      },
+      {
+        "label": "Subscribe to Events",
+        "fileName": "build/pubsub"
       }
     ],
     "explore": [
