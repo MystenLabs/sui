@@ -103,7 +103,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .await?;
 
     let response = tx_response.to_publish_response()?;
-    assert_eq!(2, response.created_objects.len());
+    assert_eq!(5, response.created_objects.len());
     Ok(())
 }
 

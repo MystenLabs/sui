@@ -6,7 +6,11 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{balance::Balance, coin::TreasuryCap, id::VersionedID, SUI_FRAMEWORK_ADDRESS};
+use crate::{
+    balance::{Balance, Supply},
+    id::VersionedID,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -69,7 +73,7 @@ pub struct SuiSystemState {
     pub id: VersionedID,
     pub epoch: u64,
     pub validators: ValidatorSet,
-    pub treasury_cap: TreasuryCap,
+    pub treasury_cap: Supply,
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
     pub delegation_reward: Balance,
