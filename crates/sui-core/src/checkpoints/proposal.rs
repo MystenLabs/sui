@@ -13,7 +13,7 @@ use sui_types::{
     waypoint::WaypointDiff,
 };
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointProposal {
     /// Name of the authority
     pub signed_summary: SignedCheckpointSummary,

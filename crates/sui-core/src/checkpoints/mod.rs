@@ -48,7 +48,9 @@ pub struct CheckpointLocals {
     // The next checkpoint number expected.
     pub next_checkpoint: CheckpointSequenceNumber,
 
-    // The next transaction after what is included in the proposal
+    // The next transaction after what is included in the proposal.
+    // NOTE: This will be set to 0 if the current checkpoint is empty
+    // and doesn't contain any transactions.
     pub proposal_next_transaction: Option<TxSequenceNumber>,
 
     // The next transaction sequence number of transactions processed
@@ -860,7 +862,6 @@ impl CheckpointStore {
         // Check that:
         // - there is no current proposal.
         // - there are no unprocessed transactions.
-        // - there are some extra transactions to include.
 
         let locals = self.get_locals();
 
@@ -868,14 +869,14 @@ impl CheckpointStore {
             return Ok(proposal.clone());
         }
 
-        if self.extra_transactions.iter().count() == 0 {
-            return Err(SuiError::from("Cannot propose an empty set."));
-        }
-
         // Include the sequence number of all extra transactions not already in a
         // checkpoint. And make a list of the transactions.
         let checkpoint_sequence = self.next_checkpoint();
-        let next_local_tx_sequence = self.extra_transactions.values().max().unwrap() + 1;
+        let next_local_tx_sequence = if let Some(m) = self.extra_transactions.values().max() {
+            m + 1
+        } else {
+            0
+        };
 
         // Extract the previous checkpoint digest if there is one.
         let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
