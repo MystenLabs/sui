@@ -19,7 +19,7 @@ pub type StakeUnit = u64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     pub epoch: EpochId,
-    pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
+    voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
@@ -153,6 +153,14 @@ impl Committee {
             }
         }
         unreachable!();
+    }
+
+    pub fn num_members(&self) -> usize {
+        self.voting_rights.len()
+    }
+
+    pub fn members(&self) -> impl Iterator<Item = &(AuthorityName, StakeUnit)> {
+        self.voting_rights.iter()
     }
 
     pub fn names(&self) -> impl Iterator<Item = &AuthorityName> {
