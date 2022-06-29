@@ -823,7 +823,7 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
-                        let lock = if !object.is_owned() {
+                        let lock = if !object.is_owned_or_quasi_shared() {
                             // Unowned obejcts have no locks.
                             None
                         } else {

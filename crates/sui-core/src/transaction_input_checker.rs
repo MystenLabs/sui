@@ -232,6 +232,7 @@ where
             }
         })
         .collect();
+
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
         // All objects must exist in the DB.
         let object = match object {

@@ -294,7 +294,7 @@ impl Owner {
         self == &Owner::Immutable
     }
 
-    pub fn is_owned(&self) -> bool {
+    pub fn is_owned_or_quasi_shared(&self) -> bool {
         match self {
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) => true,
             Owner::Shared | Owner::Immutable => false,
@@ -388,8 +388,8 @@ impl Object {
         self.owner.is_immutable()
     }
 
-    pub fn is_owned(&self) -> bool {
-        self.owner.is_owned()
+    pub fn is_owned_or_quasi_shared(&self) -> bool {
+        self.owner.is_owned_or_quasi_shared()
     }
 
     pub fn is_shared(&self) -> bool {
@@ -460,25 +460,16 @@ impl Object {
 
     /// Change the owner of `self` to `new_owner`. This function does not increase the version
     /// number of the object.
-    pub fn transfer_without_version_change(
-        &mut self,
-        new_owner: SuiAddress,
-    ) -> Result<(), ExecutionError> {
-        self.ensure_public_transfer_eligible()?;
+    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) {
         self.owner = Owner::AddressOwner(new_owner);
-        Ok(())
     }
 
     /// Change the owner of `self` to `new_owner`. This function will increment the version
     /// number of the object after transfer.
-    pub fn transfer_and_increment_version(
-        &mut self,
-        new_owner: SuiAddress,
-    ) -> Result<(), ExecutionError> {
-        self.transfer_without_version_change(new_owner)?;
+    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) {
+        self.transfer_without_version_change(new_owner);
         let data = self.data.try_as_move_mut().unwrap();
         data.increment_version();
-        Ok(())
     }
 
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
