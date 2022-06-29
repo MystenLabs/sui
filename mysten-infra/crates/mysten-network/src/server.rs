@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+use crate::metrics::{
+    DefaultMetricsCallbackProvider, MetricsCallbackProvider, MetricsHandler,
+    GRPC_ENDPOINT_PATH_HEADER,
+};
 use crate::{
     config::Config,
     multiaddr::{parse_dns, parse_ip4, parse_ip6},
@@ -11,6 +14,7 @@ use multiaddr::{Multiaddr, Protocol};
 use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
+use tonic::codegen::http::HeaderValue;
 use tonic::{
     body::BoxBody,
     codegen::{
@@ -26,22 +30,45 @@ use tower::{
     util::Either,
     Service, ServiceBuilder,
 };
+use tower_http::classify::{GrpcErrorsAsFailures, SharedClassifier};
+use tower_http::propagate_header::PropagateHeaderLayer;
+use tower_http::set_header::SetRequestHeaderLayer;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnBodyChunk, DefaultOnEos, TraceLayer};
 
-pub struct ServerBuilder {
-    router: Router<WrapperService>,
+pub struct ServerBuilder<M: MetricsCallbackProvider = DefaultMetricsCallbackProvider> {
+    router: Router<WrapperService<M>>,
     health_reporter: tonic_health::server::HealthReporter,
 }
 
-type WrapperService = Stack<
+type AddPathToHeaderFunction = fn(&Request<Body>) -> Option<HeaderValue>;
+
+type WrapperService<M> = Stack<
     Stack<
-        Either<LoadShedLayer, Identity>,
-        Stack<Either<GlobalConcurrencyLimitLayer, Identity>, Identity>,
+        PropagateHeaderLayer,
+        Stack<
+            TraceLayer<
+                SharedClassifier<GrpcErrorsAsFailures>,
+                DefaultMakeSpan,
+                MetricsHandler<M>,
+                MetricsHandler<M>,
+                DefaultOnBodyChunk,
+                DefaultOnEos,
+                MetricsHandler<M>,
+            >,
+            Stack<
+                SetRequestHeaderLayer<AddPathToHeaderFunction>,
+                Stack<
+                    Either<LoadShedLayer, Identity>,
+                    Stack<Either<GlobalConcurrencyLimitLayer, Identity>, Identity>,
+                >,
+            >,
+        >,
     >,
     Identity,
 >;
 
-impl ServerBuilder {
-    pub fn from_config(config: &Config) -> Self {
+impl<M: MetricsCallbackProvider> ServerBuilder<M> {
+    pub fn from_config(config: &Config, metrics_provider: M) -> Self {
         let mut builder = tonic::transport::server::Server::builder();
 
         if let Some(limit) = config.concurrency_limit_per_connection {
@@ -62,13 +89,31 @@ impl ServerBuilder {
             None
         };
 
+        let metrics = MetricsHandler::new(metrics_provider);
+
+        let request_metrics = TraceLayer::new_for_grpc()
+            .on_request(metrics.clone())
+            .on_response(metrics.clone())
+            .on_failure(metrics);
+
         let global_concurrency_limit = config
             .global_concurrency_limit
             .map(tower::limit::GlobalConcurrencyLimitLayer::new);
 
+        fn add_path_to_request_header(request: &Request<Body>) -> Option<HeaderValue> {
+            let path = request.uri().path();
+            Some(HeaderValue::from_str(path).unwrap())
+        }
+
         let layer = ServiceBuilder::new()
             .option_layer(global_concurrency_limit)
             .option_layer(load_shed)
+            .layer(SetRequestHeaderLayer::overriding(
+                GRPC_ENDPOINT_PATH_HEADER.clone(),
+                add_path_to_request_header as AddPathToHeaderFunction,
+            ))
+            .layer(request_metrics)
+            .layer(PropagateHeaderLayer::new(GRPC_ENDPOINT_PATH_HEADER.clone()))
             .into_inner();
 
         let (health_reporter, health_service) = tonic_health::server::health_reporter();
@@ -224,8 +269,13 @@ fn update_tcp_port_in_multiaddr(addr: &Multiaddr, port: u16) -> Multiaddr {
 #[cfg(test)]
 mod test {
     use crate::config::Config;
+    use crate::metrics::MetricsCallbackProvider;
     use multiaddr::multiaddr;
     use multiaddr::Multiaddr;
+    use std::ops::Deref;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+    use tonic::Code;
     use tonic_health::proto::health_client::HealthClient;
     use tonic_health::proto::HealthCheckRequest;
 
@@ -238,6 +288,132 @@ mod test {
         // But it doesn't round-trip in the human readable format
         let s = addr.to_string();
         assert!(s.parse::<Multiaddr>().is_err());
+    }
+
+    #[tokio::test]
+    async fn test_metrics_layer_successful() {
+        #[derive(Clone)]
+        struct Metrics {
+            /// a flag to figure out whether the
+            /// on_request method has been called.
+            metrics_called: Arc<Mutex<bool>>,
+        }
+
+        impl MetricsCallbackProvider for Metrics {
+            fn on_request(&self, path: String) {
+                assert_eq!(path, "/grpc.health.v1.Health/Check");
+            }
+
+            fn on_response(
+                &self,
+                path: String,
+                _latency: Duration,
+                status: u16,
+                grpc_status_code: Code,
+            ) {
+                assert_eq!(path, "/grpc.health.v1.Health/Check");
+                assert_eq!(status, 200);
+                assert_eq!(grpc_status_code, Code::Ok);
+                let mut m = self.metrics_called.lock().unwrap();
+                *m = true
+            }
+        }
+
+        let metrics = Metrics {
+            metrics_called: Arc::new(Mutex::new(false)),
+        };
+
+        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+        let config = Config::new();
+
+        let mut server = config
+            .server_builder_with_metrics(metrics.clone())
+            .bind(&address)
+            .await
+            .unwrap();
+
+        let address = server.local_addr().to_owned();
+        let cancel_handle = server.take_cancel_handle().unwrap();
+        let server_handle = tokio::spawn(server.serve());
+        let channel = config.connect(&address).await.unwrap();
+        let mut client = HealthClient::new(channel);
+
+        client
+            .check(HealthCheckRequest {
+                service: "".to_owned(),
+            })
+            .await
+            .unwrap();
+
+        cancel_handle.send(()).unwrap();
+        server_handle.await.unwrap().unwrap();
+
+        assert!(metrics.metrics_called.lock().unwrap().deref());
+    }
+
+    #[tokio::test]
+    async fn test_metrics_layer_error() {
+        #[derive(Clone)]
+        struct Metrics {
+            /// a flag to figure out whether the
+            /// on_request method has been called.
+            metrics_called: Arc<Mutex<bool>>,
+        }
+
+        impl MetricsCallbackProvider for Metrics {
+            fn on_request(&self, path: String) {
+                assert_eq!(path, "/grpc.health.v1.Health/Check");
+            }
+
+            fn on_response(
+                &self,
+                path: String,
+                _latency: Duration,
+                status: u16,
+                grpc_status_code: Code,
+            ) {
+                assert_eq!(path, "/grpc.health.v1.Health/Check");
+                assert_eq!(status, 200);
+                // According to https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc
+                // code 5 is not_found , which is what we expect to get in this case
+                assert_eq!(grpc_status_code, Code::NotFound);
+                let mut m = self.metrics_called.lock().unwrap();
+                *m = true
+            }
+        }
+
+        let metrics = Metrics {
+            metrics_called: Arc::new(Mutex::new(false)),
+        };
+
+        let address: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+        let config = Config::new();
+
+        let mut server = config
+            .server_builder_with_metrics(metrics.clone())
+            .bind(&address)
+            .await
+            .unwrap();
+
+        let address = server.local_addr().to_owned();
+        let cancel_handle = server.take_cancel_handle().unwrap();
+        let server_handle = tokio::spawn(server.serve());
+        let channel = config.connect(&address).await.unwrap();
+        let mut client = HealthClient::new(channel);
+
+        // Call the healthcheck for a service that doesn't exist
+        // that should give us back an error with code 5 (not_found)
+        // https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc
+        let _ = client
+            .check(HealthCheckRequest {
+                service: "non-existing-service".to_owned(),
+            })
+            .await;
+
+        cancel_handle.send(()).unwrap();
+        server_handle.await.unwrap().unwrap();
+
+        assert!(metrics.metrics_called.lock().unwrap().deref());
     }
 
     async fn test_multiaddr(address: Multiaddr) {
