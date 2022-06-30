@@ -11,31 +11,31 @@ const API_ENV_TO_EXPLORER_URL: Record<API_ENV, string | undefined> = {
     [API_ENV.staging]: process.env.EXPLORER_URL_STAGING,
 };
 
-function getDefaultUrl() {
-    const url = API_ENV_TO_EXPLORER_URL[DEFAULT_API_ENV];
+// TODO: rewrite this
+function getDefaultUrl(apiEnv?: API_ENV) {
+    const url = API_ENV_TO_EXPLORER_URL[apiEnv || DEFAULT_API_ENV];
     if (!url) {
         throw new Error(`Url for API_ENV ${DEFAULT_API_ENV} is not defined`);
     }
     return url;
 }
 
-const DEFAULT_EXPLORER_URL = getDefaultUrl();
-
 export class Explorer {
-    private static _url = DEFAULT_EXPLORER_URL;
-
-    public static getObjectUrl(objectID: ObjectId) {
-        return new URL(`/objects/${objectID}`, Explorer._url).href;
+    public static getObjectUrl(objectID: ObjectId, apiEnv: API_ENV) {
+        return new URL(`/objects/${objectID}`, getDefaultUrl(apiEnv)).href;
     }
 
-    public static getTransactionUrl(txDigest: TransactionDigest) {
+    public static getTransactionUrl(
+        txDigest: TransactionDigest,
+        apiEnv: API_ENV
+    ) {
         return new URL(
             `/transactions/${encodeURIComponent(txDigest)}`,
-            Explorer._url
+            getDefaultUrl(apiEnv)
         ).href;
     }
 
-    public static getAddressUrl(address: SuiAddress) {
-        return new URL(`/addresses/${address}`, Explorer._url).href;
+    public static getAddressUrl(address: SuiAddress, apiEnv: API_ENV) {
+        return new URL(`/addresses/${address}`, getDefaultUrl(apiEnv)).href;
     }
 }
