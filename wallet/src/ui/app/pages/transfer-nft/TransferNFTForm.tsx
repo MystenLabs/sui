@@ -16,12 +16,14 @@ import st from './TransferNFTForm.module.scss';
 export type TransferNFTFormProps = {
     submitError: string | null;
     gasBalance: string;
+    transferCost: number;
     onClearSubmitError: () => void;
 };
 
 function TransferNFTForm({
     submitError,
     gasBalance,
+    transferCost,
     onClearSubmitError,
 }: TransferNFTFormProps) {
     const {
@@ -32,7 +34,6 @@ function TransferNFTForm({
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
-    const transferCost = 450;
     useEffect(() => {
         onClearRef.current();
     }, [to, amount]);

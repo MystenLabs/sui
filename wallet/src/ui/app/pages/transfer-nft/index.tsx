@@ -20,9 +20,10 @@ import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
+const transferCost = 450;
 const initialValues = {
     to: '',
-    amount: 10000,
+    amount: transferCost,
 };
 
 export type FormValues = typeof initialValues;
@@ -79,6 +80,7 @@ function TransferNFTPage() {
                     transferSuiNFT({
                         recipientAddress: to,
                         nftId: objectId,
+                        transferCost: transferCost,
                     })
                 ).unwrap();
                 resetForm();
@@ -115,6 +117,7 @@ function TransferNFTPage() {
                     <TransferNFTForm
                         submitError={sendError}
                         gasBalance={gasAggregateBalance.toString()}
+                        transferCost={transferCost}
                         onClearSubmitError={handleOnClearSubmitError}
                     />
                 </Formik>

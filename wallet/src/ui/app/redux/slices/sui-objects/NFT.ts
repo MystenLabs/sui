@@ -36,11 +36,12 @@ export class ExampleNFT {
     public static async TransferNFT(
         signer: RawSigner,
         nftId: string,
-        recipientID: string
+        recipientID: string,
+        transferCost: number
     ): Promise<TransactionResponse> {
         return await signer.transferObject({
             objectId: nftId,
-            gasBudget: 430,
+            gasBudget: transferCost,
             recipient: recipientID,
         });
     }
