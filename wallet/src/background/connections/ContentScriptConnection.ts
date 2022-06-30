@@ -8,7 +8,9 @@ import {
     isAcquirePermissionsRequest,
     isHasPermissionRequest,
 } from '_payloads/permissions';
+import { isExecuteTransactionRequest } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
+import Transactions from '_src/background/Transactions';
 
 import type { SuiAddress } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -19,6 +21,7 @@ import type {
     HasPermissionsResponse,
     AcquirePermissionsResponse,
 } from '_payloads/permissions';
+import type { ExecuteTransactionResponse } from '_payloads/transactions';
 import type { Runtime } from 'webextension-polyfill';
 
 export class ContentScriptConnection extends Connection {
@@ -47,15 +50,7 @@ export class ContentScriptConnection extends Connection {
                 )) ||
                 !existingPermission
             ) {
-                this.sendError(
-                    {
-                        error: true,
-                        message:
-                            "Operation not allowed, dapp doesn't have the required permissions",
-                        code: -2,
-                    },
-                    msg.id
-                );
+                this.sendNotAllowedError(msg.id);
             } else {
                 this.sendAccounts(existingPermission.accounts, msg.id);
             }
@@ -97,6 +92,36 @@ export class ContentScriptConnection extends Connection {
                     msg.id
                 );
             }
+        } else if (isExecuteTransactionRequest(payload)) {
+            const allowed = await Permissions.hasPermissions(this.origin, [
+                'viewAccount',
+                'suggestTransactions',
+            ]);
+            if (allowed) {
+                try {
+                    const result = await Transactions.executeTransaction(
+                        payload.transaction,
+                        this
+                    );
+                    this.send(
+                        createMessage<ExecuteTransactionResponse>(
+                            { type: 'execute-transaction-response', result },
+                            msg.id
+                        )
+                    );
+                } catch (e) {
+                    this.sendError(
+                        {
+                            error: true,
+                            code: -1,
+                            message: (e as Error).message,
+                        },
+                        msg.id
+                    );
+                }
+            } else {
+                this.sendNotAllowedError(msg.id);
+            }
         }
     }
 
@@ -117,6 +142,18 @@ export class ContentScriptConnection extends Connection {
         responseForID?: string
     ) {
         this.send(createMessage(error, responseForID));
+    }
+
+    private sendNotAllowedError(requestID?: string) {
+        this.sendError(
+            {
+                error: true,
+                message:
+                    "Operation not allowed, dapp doesn't have the required permissions",
+                code: -2,
+            },
+            requestID
+        );
     }
 
     private sendAccounts(accounts: SuiAddress[], responseForID?: string) {

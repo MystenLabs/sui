@@ -1,11 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
-import AccountAddress from '_components/account-address';
 import Loading from '_components/loading';
+import UserApproveContainer from '_components/user-approve-container';
+// TODO: fix imports ordering for this
+import stUserApprove from '_components/user-approve-container/UserApproveContainer.module.scss';
 import { useAppDispatch, useAppSelector, useInitializedGuard } from '_hooks';
 import {
     permissionsSelectors,
@@ -14,7 +16,6 @@ import {
 
 import type { PermissionType } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
-import type { MouseEventHandler } from 'react';
 
 import st from './SiteConnectPage.module.scss';
 
@@ -40,16 +41,13 @@ function SiteConnectPage() {
     const dispatch = useAppDispatch();
     const permissionRequest = useAppSelector(permissionSelector);
     const activeAccount = useAppSelector(({ account }) => account.address);
-    const [submitting, setSubmitting] = useState(false);
-    const handleOnResponse = useCallback<MouseEventHandler<HTMLButtonElement>>(
-        (e) => {
-            const allowed = e.currentTarget.dataset.allow === 'true';
+    const handleOnSubmit = useCallback(
+        (allowed: boolean) => {
             if (requestID && activeAccount) {
-                setSubmitting(true);
                 dispatch(
                     respondToPermissionRequest({
                         id: requestID,
-                        accounts: allowed ? [activeAccount] : [],
+                        accounts: allowed ? [`0x${activeAccount}`] : [],
                         allowed,
                     })
                 );
@@ -69,24 +67,15 @@ function SiteConnectPage() {
     return (
         <Loading loading={loading}>
             {permissionRequest ? (
-                <div className={st.container}>
-                    <h2 className={st.title}>Connect to Sui wallet</h2>
-                    <label className={st.label}>Site</label>
-                    <div className={st.originContainer}>
-                        {permissionRequest.favIcon ? (
-                            <img
-                                className={st.favIcon}
-                                src={permissionRequest.favIcon}
-                                alt="Site favicon"
-                            />
-                        ) : null}
-                        <span className={st.origin}>
-                            {permissionRequest.origin}
-                        </span>
-                    </div>
-                    <label className={st.label}>Account</label>
-                    <AccountAddress showLink={false} />
-                    <label className={st.label}>Permissions</label>
+                <UserApproveContainer
+                    title="Connect to Sui wallet"
+                    origin={permissionRequest.origin}
+                    originFavIcon={permissionRequest.favIcon}
+                    approveTitle="Connect"
+                    rejectTitle="Cancel"
+                    onSubmit={handleOnSubmit}
+                >
+                    <label className={stUserApprove.label}>Permissions</label>
                     <div className={st.permissionsContainer}>
                         {permissionRequest.permissions.map((aPermission) => (
                             <span className={st.permission} key={aPermission}>
@@ -94,27 +83,7 @@ function SiteConnectPage() {
                             </span>
                         ))}
                     </div>
-                    <div className={st.actions}>
-                        <button
-                            type="button"
-                            data-allow="false"
-                            onClick={handleOnResponse}
-                            className="btn link"
-                            disabled={submitting}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            className="btn"
-                            data-allow="true"
-                            onClick={handleOnResponse}
-                            disabled={submitting}
-                        >
-                            Connect
-                        </button>
-                    </div>
-                </div>
+                </UserApproveContainer>
             ) : null}
         </Loading>
     );

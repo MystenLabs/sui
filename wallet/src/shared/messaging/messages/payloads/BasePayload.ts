@@ -12,7 +12,12 @@ export type PayloadType =
     | 'has-permissions-request'
     | 'has-permissions-response'
     | 'acquire-permissions-request'
-    | 'acquire-permissions-response';
+    | 'acquire-permissions-response'
+    | 'execute-transaction-request'
+    | 'execute-transaction-response'
+    | 'get-transaction-requests'
+    | 'get-transaction-requests-response'
+    | 'transaction-request-response';
 
 export interface BasePayload {
     type: PayloadType;

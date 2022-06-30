@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { DappTxApprovalPage } from './pages/dapp-tx-approval';
 import HomePage from './pages/home';
 import NftsPage from './pages/home/nfts';
 import SettingsPage from './pages/home/settings';
@@ -62,6 +63,7 @@ const App = () => {
                 <Route path="backup" element={<BackupPage />} />
             </Route>
             <Route path="/connect/:requestID" element={<SiteConnectPage />} />
+            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
             <Route
                 path="*"
                 element={<Navigate to="/tokens" replace={true} />}
