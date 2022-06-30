@@ -11,6 +11,7 @@ use sui_core::{
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     messages::{CallArg, ExecutionStatus, ObjectArg},
+    crypto::KeyPair
 };
 use test_utils::transaction::publish_counter_package;
 use test_utils::{

@@ -8,7 +8,7 @@ use authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use move_binary_format::file_format;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use sui_types::{
-    crypto::Signature,
+    crypto::{KeyPair, Signature},
     messages::Transaction,
     object::Owner,
 };

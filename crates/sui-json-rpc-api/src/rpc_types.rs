@@ -993,9 +993,9 @@ impl Display for SuiCertifiedTransaction {
             writer,
             "Signed Authorities : {:?}",
             self.auth_sign_info
-                .signatures
+                .authorities()
                 .iter()
-                .map(|(name, _)| name)
+                .map(|name| name)
                 .collect::<Vec<_>>()
         )?;
         write!(writer, "{}", &self.data)?;

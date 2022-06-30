@@ -4,7 +4,7 @@
 
 use super::base_types::*;
 use crate::error::{SuiError, SuiResult};
-use ed25519_dalek::PublicKey;
+use crate::crypto::PublicKey;
 use itertools::Itertools;
 use rand_latest::rngs::OsRng;
 use rand_latest::seq::SliceRandom;

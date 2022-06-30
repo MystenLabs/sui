@@ -12,7 +12,7 @@ use std::{
 
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{AuthoritySignature, Signature},
+    crypto::{AuthoritySignature, Signature, KeyPair},
     error::SuiError,
     gas::SuiGasStatus,
     messages::{ConfirmationTransaction, SignatureAggregator, Transaction, TransactionData},

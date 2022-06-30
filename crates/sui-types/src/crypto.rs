@@ -9,26 +9,26 @@ use std::{collections::{HashMap}, hash::Hash};
 pub use crate::crypto_traits::{BcsSignable, Signable, SignableBytes};
 
 // Change these to edDSA
-use crate::ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519AuthoritySignature, Ed25519Signature, Ed25519PublicKeyBytes, Ed25519AuthorityQuorumSignInfo, Ed25519AuthoritySignInfo};
-pub type KeyPair = Ed25519KeyPair;
-pub type PublicKey = Ed25519PublicKey;
-pub type Signature = Ed25519Signature;
-pub type AuthoritySignature = Ed25519AuthoritySignature;
-pub type PublicKeyBytes = Ed25519PublicKeyBytes;
-pub type AuthorityQuorumSignInfo<const S: bool> = Ed25519AuthorityQuorumSignInfo<S>;
-pub type AuthoritySignInfo = Ed25519AuthoritySignInfo;
+// use crate::ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519AuthoritySignature, Ed25519Signature, Ed25519PublicKeyBytes, Ed25519AuthorityQuorumSignInfo, Ed25519AuthoritySignInfo};
+// pub type KeyPair = Ed25519KeyPair;
+// pub type PublicKey = Ed25519PublicKey;
+// pub type Signature = Ed25519Signature;
+// pub type AuthoritySignature = Ed25519AuthoritySignature;
+// pub type PublicKeyBytes = Ed25519PublicKeyBytes;
+// pub type AuthorityQuorumSignInfo<const S: bool> = Ed25519AuthorityQuorumSignInfo<S>;
+// pub type AuthoritySignInfo = Ed25519AuthoritySignInfo;
 
 
 // UNCOMMENT TO CHANGE SIGNATURE SCHEME TO BLS
 
-// use crate::bls12381::{Bls12381PublicKey, Bls12381KeyPair, Bls12381Signature, Bls12381AuthoritySignature, Bls12381PublicKeyBytes, Bls12381AuthorityQuorumSignInfo, Bls12381AuthoritySignInfo};
-// pub type KeyPair = Bls12381KeyPair;
-// pub type PublicKey = Bls12381PublicKey;
-// pub type Signature = Bls12381Signature;
-// pub type AuthoritySignature = Bls12381AuthoritySignature;
-// pub type PublicKeyBytes = Bls12381PublicKeyBytes;
-// pub type AuthorityQuorumSignInfo<const S: bool> = Bls12381AuthorityQuorumSignInfo<S>;
-// pub type AuthoritySignInfo = Bls12381AuthoritySignInfo;
+use crate::bls12381::{Bls12381PublicKey, Bls12381KeyPair, Bls12381Signature, Bls12381AuthoritySignature, Bls12381PublicKeyBytes, Bls12381AuthorityQuorumSignInfo, Bls12381AuthoritySignInfo};
+pub type KeyPair = Bls12381KeyPair;
+pub type PublicKey = Bls12381PublicKey;
+pub type Signature = Bls12381Signature;
+pub type AuthoritySignature = Bls12381AuthoritySignature;
+pub type PublicKeyBytes = Bls12381PublicKeyBytes;
+pub type AuthorityQuorumSignInfo<const S: bool> = Bls12381AuthorityQuorumSignInfo<S>;
+pub type AuthoritySignInfo = Bls12381AuthoritySignInfo;
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
 /// to template on whether the struct is signed by an authority. We want to limit how

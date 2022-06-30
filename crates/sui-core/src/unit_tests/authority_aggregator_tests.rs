@@ -878,3 +878,4 @@ async fn test_process_transaction_fault_fail() {
     )
     .await
     .is_err());
+}
