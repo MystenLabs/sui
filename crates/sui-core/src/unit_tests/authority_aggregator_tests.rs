@@ -56,7 +56,7 @@ pub async fn init_local_authorities_with_genesis(
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, voting_rights).unwrap();
 
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();

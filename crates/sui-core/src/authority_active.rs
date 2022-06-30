@@ -125,9 +125,8 @@ impl<A> ActiveAuthority<A> {
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
                 committee
-                    .voting_rights
-                    .iter()
-                    .map(|(name, _)| (*name, AuthorityHealth::default()))
+                    .names()
+                    .map(|name| (*name, AuthorityHealth::default()))
                     .collect(),
             )),
             state: authority,
@@ -245,7 +244,7 @@ where
         // Number of tasks at most "degree" and no more than committee - 1
         // (validators do not follow themselves for gossip)
         let committee = self.state.committee.load().deref().clone();
-        let target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+        let target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
         tokio::task::spawn(async move {
             gossip_process(&self, target_num_tasks).await;
@@ -260,7 +259,7 @@ where
         // nodes follow all validators to ensure they can eventually determine
         // finality of certs. We need to follow 2f+1 _honest_ validators to
         // eventually find finality, therefore we must follow all validators.
-        let target_num_tasks = committee.voting_rights.len();
+        let target_num_tasks = committee.num_members();
 
         tokio::task::spawn(async move {
             node_sync_process(&self, target_num_tasks, node_sync_store).await;

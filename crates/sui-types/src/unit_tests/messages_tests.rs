@@ -32,7 +32,7 @@ fn test_signed_values() {
         /* address */ *sec2.public_key_bytes(),
         /* voting right */ 0,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
@@ -91,7 +91,7 @@ fn test_certificates() {
         /* address */ *sec2.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),

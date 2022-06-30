@@ -22,7 +22,7 @@ pub fn create_client(
             e
         )
     })?;
-    let committee = config.make_committee();
+    let committee = config.make_committee()?;
     let authority_clients = config.make_authority_clients();
     Ok(Arc::new(GatewayState::new(
         config.db_folder_path,

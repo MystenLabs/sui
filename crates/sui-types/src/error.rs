@@ -369,6 +369,9 @@ pub enum SuiError {
 
     #[error("Error executing {0}")]
     ExecutionError(String),
+
+    #[error("Invalid committee composition")]
+    InvalidCommittee(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

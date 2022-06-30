@@ -92,7 +92,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
     let mut committee = local_active.state.committee.load().deref().clone();
 
     // Number of tasks at most "degree" and no more than committee - 1
-    let mut target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+    let mut target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
     // If we do not expect to connect to anyone
     if target_num_tasks == 0 {
@@ -115,10 +115,10 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             // validators, and let them end naturally.
             local_active = Arc::new(active_authority.clone());
             committee = local_active.state.committee.load().deref().clone();
-            target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+            target_num_tasks = usize::min(committee.num_members() - 1, degree);
             peer_names = peer_names
                 .into_iter()
-                .filter(|name| committee.voting_rights.contains_key(name))
+                .filter(|name| committee.authority_exists(name))
                 .collect();
         }
         let mut k = 0;
@@ -230,7 +230,7 @@ where
 {
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
-    let mut tries_remaining = active_authority.state.committee.load().voting_rights.len();
+    let mut tries_remaining = active_authority.state.committee.load().num_members();
     while tries_remaining > 0 {
         let name = *active_authority.state.committee.load().sample();
         if peer_names.contains(&name)
