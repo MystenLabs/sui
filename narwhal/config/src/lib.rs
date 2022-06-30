@@ -16,6 +16,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
+    net::SocketAddr,
     ops::Deref,
     sync::Arc,
     time::Duration,
@@ -128,6 +129,24 @@ pub struct Parameters {
     pub consensus_api_grpc: ConsensusAPIGrpcParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
     pub max_concurrent_requests: usize,
+    /// Properties for the prometheus metrics
+    pub prometheus_metrics: PrometheusMetricsParameters,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct PrometheusMetricsParameters {
+    /// Socket address the server should be listening to.
+    pub socket_addr: SocketAddr,
+}
+
+impl Default for PrometheusMetricsParameters {
+    fn default() -> Self {
+        Self {
+            socket_addr: format!("127.0.0.1:{}", get_available_port())
+                .parse()
+                .unwrap(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -201,6 +220,7 @@ impl Default for Parameters {
             block_synchronizer: BlockSynchronizerParameters::default(),
             consensus_api_grpc: ConsensusAPIGrpcParameters::default(),
             max_concurrent_requests: 500_000,
+            prometheus_metrics: PrometheusMetricsParameters::default(),
         }
     }
 }
@@ -264,7 +284,11 @@ impl Parameters {
         info!(
             "Max concurrent requests set to {}",
             self.max_concurrent_requests
-        )
+        );
+        info!(
+            "Prometheus metrics server will run on {}",
+            self.prometheus_metrics.socket_addr
+        );
     }
 }
 
@@ -525,7 +549,10 @@ mod tests {
                  "get_collections_timeout": "5_000ms",
                  "remove_collections_timeout": "5_000ms"
              },
-             "max_concurrent_requests": 500000
+             "max_concurrent_requests": 500000,
+             "prometheus_metrics": {
+                 "socket_addr": "127.0.0.1:0"
+             }
           }"#;
 
         // AND temporary file
@@ -581,6 +608,10 @@ mod tests {
                 .as_millis(),
             5_000
         );
+        assert_eq!(
+            params.prometheus_metrics.socket_addr.to_string(),
+            "127.0.0.1:0",
+        );
     }
 
     #[test]
@@ -617,6 +648,9 @@ mod tests {
         ));
         assert!(logs_contain("Get collections timeout set to 5000 ms"));
         assert!(logs_contain("Remove collections timeout set to 5000 ms"));
-        assert!(logs_contain("Max concurrent requests set to 500000"))
+        assert!(logs_contain("Max concurrent requests set to 500000"));
+        assert!(logs_contain(
+            "Prometheus metrics server will run on 127.0.0.1"
+        ));
     }
 }

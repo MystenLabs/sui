@@ -17,11 +17,14 @@ use executor::{
     ExecutionIndices, ExecutionState, ExecutionStateError, SerializedTransaction, SubscriberResult,
 };
 use futures::future::join_all;
-use node::{Node, NodeStorage};
+use node::{
+    metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
+    Node, NodeStorage,
+};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver};
-use tracing::subscriber::set_global_default;
+use tracing::{info, subscriber::set_global_default};
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 #[tokio::main]
@@ -142,18 +145,23 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     let (tx_transaction_confirmation, rx_transaction_confirmation) =
         channel(Node::CHANNEL_CAPACITY);
 
+    let registry;
+
     // Check whether to run a primary, a worker, or an entire authority.
     let node_handles = match matches.subcommand() {
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
+            registry = primary_metrics_registry(keypair.public().clone());
+
             let handle = Node::spawn_primary(
                 keypair,
                 committee,
                 &store,
-                parameters,
+                parameters.clone(),
                 /* consensus */ !sub_matches.is_present("consensus-disabled"),
                 /* execution_state */ Arc::new(SimpleExecutionState),
                 tx_transaction_confirmation,
+                &registry,
             )
             .await?;
             vec![handle]
@@ -167,17 +175,28 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
 
+            registry = worker_metrics_registry(id, keypair.public().clone());
+
             Node::spawn_workers(
                 /* name */
                 keypair.public().clone(),
                 vec![id],
                 committee,
                 &store,
-                parameters,
+                parameters.clone(),
+                &registry,
             )
         }
         _ => unreachable!(),
     };
+
+    // spin up prometheus server exporter
+    let prom_address = parameters.prometheus_metrics.socket_addr;
+    info!(
+        "Starting Prometheus HTTP metrics endpoint at {}",
+        prom_address
+    );
+    let _metrics_server_handle = start_prometheus_server(prom_address, &registry);
 
     // Analyze the consensus' output.
     analyze(rx_transaction_confirmation).await;

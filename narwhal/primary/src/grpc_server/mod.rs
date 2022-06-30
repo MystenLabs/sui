@@ -3,8 +3,9 @@
 
 use self::{configuration::NarwhalConfiguration, validator::NarwhalValidator};
 use crate::{
-    block_synchronizer::handler::Handler, grpc_server::proposer::NarwhalProposer, BlockCommand,
-    BlockRemoverCommand,
+    block_synchronizer::handler::Handler,
+    grpc_server::{metrics::EndpointMetrics, proposer::NarwhalProposer},
+    BlockCommand, BlockRemoverCommand,
 };
 use config::SharedCommittee;
 use consensus::dag::Dag;
@@ -16,6 +17,7 @@ use tracing::{error, info};
 use types::{ConfigurationServer, ProposerServer, ValidatorServer};
 
 mod configuration;
+pub mod metrics;
 mod proposer;
 mod validator;
 
@@ -31,6 +33,7 @@ pub struct ConsensusAPIGrpc<
     block_synchronizer_handler: Arc<SynchronizerHandler>,
     dag: Option<Arc<Dag<PublicKey>>>,
     committee: SharedCommittee<PublicKey>,
+    endpoints_metrics: EndpointMetrics,
 }
 
 impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
@@ -45,6 +48,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         block_synchronizer_handler: Arc<SynchronizerHandler>,
         dag: Option<Arc<Dag<PublicKey>>>,
         committee: SharedCommittee<PublicKey>,
+        endpoints_metrics: EndpointMetrics,
     ) {
         tokio::spawn(async move {
             let _ = Self {
@@ -56,6 +60,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
                 block_synchronizer_handler,
                 dag,
                 committee,
+                endpoints_metrics,
             }
             .run()
             .await
@@ -74,12 +79,11 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         );
 
         let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), Arc::clone(&self.committee));
-
         let narwhal_configuration = NarwhalConfiguration::new(Arc::clone(&self.committee));
 
         let config = mysten_network::config::Config::default();
         let server = config
-            .server_builder()
+            .server_builder_with_metrics(self.endpoints_metrics.clone())
             .add_service(ValidatorServer::new(narwhal_validator))
             .add_service(ConfigurationServer::new(narwhal_configuration))
             .add_service(ProposerServer::new(narwhal_proposer))

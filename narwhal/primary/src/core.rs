@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
+    metrics::PrimaryMetrics,
     primary::PrimaryMessage,
     synchronizer::Synchronizer,
 };
@@ -16,6 +17,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
+    time::Instant,
 };
 use store::Store;
 use tokio::{
@@ -80,6 +82,8 @@ pub struct Core<PublicKey: VerifyingKey> {
     network: PrimaryNetwork,
     /// Keeps the cancel handlers of the messages we sent.
     cancel_handlers: HashMap<Round, Vec<CancelHandler<()>>>,
+    /// Metrics handler
+    metrics: Arc<PrimaryMetrics>,
 }
 
 impl<PublicKey: VerifyingKey> Core<PublicKey> {
@@ -98,6 +102,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         rx_proposer: Receiver<Header<PublicKey>>,
         tx_consensus: Sender<Certificate<PublicKey>>,
         tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round)>,
+        metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -123,6 +128,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                 certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
                 network: Default::default(),
                 cancel_handlers: HashMap::with_capacity(2 * gc_depth as usize),
+                metrics,
             }
             .run()
             .await;
@@ -167,6 +173,10 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         // no points in trying to synchronize them or vote for the header. We just need to gather the payload.
         if self.gc_round >= header.round {
             if self.synchronizer.missing_payload(header).await? {
+                self.metrics
+                    .headers_suspended
+                    .with_label_values(&[&header.epoch.to_string(), "missing_payload"])
+                    .inc();
                 debug!("Downloading the payload of {header}");
             }
             return Ok(());
@@ -177,6 +187,10 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         // reschedule processing of this header.
         let parents: Vec<Certificate<PublicKey>> = self.synchronizer.get_parents(header).await?;
         if parents.is_empty() {
+            self.metrics
+                .headers_suspended
+                .with_label_values(&[&header.epoch.to_string(), "missing_parents"])
+                .inc();
             debug!("Processing of {} suspended: missing parent(s)", header.id);
             return Ok(());
         }
@@ -198,12 +212,26 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         // Ensure we have the payload. If we don't, the synchronizer will ask our workers to get it, and then
         // reschedule processing of this header once we have it.
         if self.synchronizer.missing_payload(header).await? {
+            self.metrics
+                .headers_suspended
+                .with_label_values(&[&header.epoch.to_string(), "missing_payload"])
+                .inc();
             debug!("Processing of {header} suspended: missing payload");
             return Ok(());
         }
 
         // Store the header.
         self.header_store.write(header.id, header.clone()).await;
+
+        let header_source = if self.name.eq(&header.author) {
+            "own"
+        } else {
+            "other"
+        };
+        self.metrics
+            .headers_processed
+            .with_label_values(&[&header.epoch.to_string(), header_source])
+            .inc();
 
         // Check if we can vote for this header.
         if self
@@ -264,6 +292,11 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                 .or_insert_with(Vec::new)
                 .extend(handlers);
 
+            self.metrics
+                .certificates_created
+                .with_label_values(&[&certificate.epoch().to_string()])
+                .inc();
+
             // Process the new certificate.
             self.process_certificate(certificate)
                 .await
@@ -299,6 +332,10 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                 "Processing of {:?} suspended: missing ancestors",
                 certificate
             );
+            self.metrics
+                .certificates_suspended
+                .with_label_values(&[&certificate.epoch().to_string(), "missing_parents"])
+                .inc();
             return Ok(());
         }
 
@@ -306,6 +343,16 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         self.certificate_store
             .write(certificate.digest(), certificate.clone())
             .await;
+
+        let certificate_source = if self.name.eq(&certificate.header.author) {
+            "own"
+        } else {
+            "other"
+        };
+        self.metrics
+            .certificates_processed
+            .with_label_values(&[&certificate.epoch().to_string(), certificate_source])
+            .inc();
 
         // Check if we have enough certificates to enter a new dag round and propose a header.
         if let Some(parents) = self
@@ -450,12 +497,19 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             // Cleanup internal state.
             let round = self.consensus_round.load(Ordering::Relaxed);
             if round > self.gc_depth {
+                let now = Instant::now();
+
                 let gc_round = round - self.gc_depth;
                 self.last_voted.retain(|k, _| k > &gc_round);
                 self.processing.retain(|k, _| k > &gc_round);
                 self.certificates_aggregators.retain(|k, _| k > &gc_round);
                 self.cancel_handlers.retain(|k, _| k > &gc_round);
                 self.gc_round = gc_round;
+
+                self.metrics
+                    .gc_core_latency
+                    .with_label_values(&[&self.committee.epoch.to_string()])
+                    .observe(now.elapsed().as_secs_f64());
             }
         }
     }

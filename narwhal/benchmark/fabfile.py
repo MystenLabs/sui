@@ -42,7 +42,10 @@ def local(ctx, debug=True):
             "get_collections_timeout": "5_000ms",
             "remove_collections_timeout": "5_000ms"
         },
-        'max_concurrent_requests': 500_000
+        'max_concurrent_requests': 500_000,
+        'prometheus_metrics': {
+            "socket_addr": "127.0.0.1:0"
+        }
     }
     try:
         ret = LocalBench(bench_params, node_params).run(debug)
@@ -81,7 +84,10 @@ def demo(ctx, debug=True):
         "max_concurrent_requests": 500_000,
         "max_header_delay": "2000ms",  # ms
         "sync_retry_delay": "10_000ms",  # ms
-        "sync_retry_nodes": 3  # number of nodes
+        "sync_retry_nodes": 3,  # number of nodes
+        'prometheus_metrics': {
+            "socket_addr": "127.0.0.1:0"
+        }
     }
     try:
         ret = Demo(bench_params, node_params).run(debug)
@@ -192,7 +198,10 @@ def remote(ctx, debug=False):
             "get_collections_timeout": "5_000ms",
             "remove_collections_timeout": "5_000ms"
         },
-        'max_concurrent_requests': 500_000
+        'max_concurrent_requests': 500_000,
+        'prometheus_metrics': {
+            "socket_addr": "127.0.0.1:0"
+        }
     }
     try:
         Bench(ctx).run(bench_params, node_params, debug)

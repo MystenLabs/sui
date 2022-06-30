@@ -3,7 +3,7 @@ cognitive-complexity-threshold = 100
 # types are used for safety encoding
 type-complexity-threshold = 10000
 # big constructors
-too-many-arguments-threshold =  14
+too-many-arguments-threshold =  15
 
 disallowed-methods = [
     # we use tracing with the log feature instead of the log crate.

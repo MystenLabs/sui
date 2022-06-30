@@ -25,6 +25,7 @@ use crypto::{
 };
 use multiaddr::{Multiaddr, Protocol};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::{
     net::Ipv4Addr,
@@ -47,7 +48,10 @@ use types::{
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-use crate::block_synchronizer::handler::BlockSynchronizerHandler;
+use crate::{
+    block_synchronizer::handler::BlockSynchronizerHandler,
+    metrics::{initialise_metrics, PrimaryMetrics},
+};
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 /// The messages sent by the workers to their primary.
@@ -102,6 +106,7 @@ impl Primary {
         dag: Option<Arc<Dag<PublicKey>>>,
         network_model: NetworkModel,
         tx_committed_certificates: Sender<Certificate<PublicKey>>,
+        registry: &Registry,
     ) -> JoinHandle<()> {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -125,6 +130,11 @@ impl Primary {
 
         // Write the parameters to the logs.
         parameters.tracing();
+
+        // Initialise the metrics
+        let metrics = initialise_metrics(registry);
+        let endpoint_metrics = metrics.endpoint_metrics.unwrap();
+        let node_metrics = Arc::new(metrics.node_metrics.unwrap());
 
         // Atomic variable use to synchronize all tasks with the latest consensus round. This is only
         // used for cleanup. The only task that write into this variable is `GarbageCollector`.
@@ -164,6 +174,7 @@ impl Primary {
             tx_others_digests,
             tx_batches,
             tx_batch_removal,
+            metrics: node_metrics.clone(),
         }
         .spawn(address.clone());
         info!(
@@ -201,6 +212,7 @@ impl Primary {
             /* rx_proposer */ rx_headers,
             tx_consensus,
             /* tx_proposer */ tx_parents,
+            node_metrics,
         );
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
@@ -323,6 +335,7 @@ impl Primary {
                 block_synchronizer_handler,
                 dag,
                 committee.clone(),
+                endpoint_metrics,
             );
         }
 
@@ -430,6 +443,7 @@ struct WorkerReceiverHandler {
     tx_others_digests: Sender<(BatchDigest, WorkerId)>,
     tx_batches: Sender<BatchResult>,
     tx_batch_removal: Sender<DeleteBatchResult>,
+    metrics: Arc<PrimaryMetrics>,
 }
 
 impl WorkerReceiverHandler {
@@ -460,16 +474,26 @@ impl WorkerToPrimary for WorkerReceiverHandler {
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
 
         match message {
-            WorkerPrimaryMessage::OurBatch(digest, worker_id) => self
-                .tx_our_digests
-                .send((digest, worker_id))
-                .await
-                .expect("Failed to send workers' digests"),
-            WorkerPrimaryMessage::OthersBatch(digest, worker_id) => self
-                .tx_others_digests
-                .send((digest, worker_id))
-                .await
-                .expect("Failed to send workers' digests"),
+            WorkerPrimaryMessage::OurBatch(digest, worker_id) => {
+                self.metrics
+                    .batches_received
+                    .with_label_values(&[&worker_id.to_string(), "our_batch"])
+                    .inc();
+                self.tx_our_digests
+                    .send((digest, worker_id))
+                    .await
+                    .expect("Failed to send workers' digests")
+            }
+            WorkerPrimaryMessage::OthersBatch(digest, worker_id) => {
+                self.metrics
+                    .batches_received
+                    .with_label_values(&[&worker_id.to_string(), "others_batch"])
+                    .inc();
+                self.tx_others_digests
+                    .send((digest, worker_id))
+                    .await
+                    .expect("Failed to send workers' digests")
+            }
             WorkerPrimaryMessage::RequestedBatch(digest, transactions) => self
                 .tx_batches
                 .send(Ok(BatchMessage {

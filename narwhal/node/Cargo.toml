@@ -15,7 +15,7 @@ cfg-if = "1.0.0"
 clap = "2.34"
 futures = "0.3.21"
 rand = "0.7.3"
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "af52637e73332eba7c8844e9bcdeb5b48854eabf" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "16f00004fc7673f84b40615be19f907a0b3e1d5b" }
 thiserror = "1.0.31"
 tokio = { version = "1.19.2", features = ["full"] }
 tokio-stream = "0.1.9"
@@ -33,6 +33,8 @@ primary = { path = "../primary" }
 types = { path = "../types" }
 worker = { path = "../worker" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+axum = "0.5.10"
+prometheus = "0.13.1"
 
 [dev-dependencies]
 ed25519-dalek = "1.0.1"

@@ -27,6 +27,7 @@ mod utils;
 #[cfg(test)]
 #[path = "tests/common.rs"]
 mod common;
+mod metrics;
 
 pub use crate::{
     block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
@@ -36,6 +37,7 @@ pub use crate::{
         BlockHeader,
     },
     block_waiter::{BlockCommand, BlockWaiter},
+    grpc_server::metrics::EndpointMetrics,
     primary::{
         NetworkModel, PayloadToken, Primary, PrimaryWorkerMessage, WorkerPrimaryError,
         WorkerPrimaryMessage, CHANNEL_CAPACITY,

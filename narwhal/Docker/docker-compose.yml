@@ -17,6 +17,7 @@ services:
       - "3001" # Port to listen on messages from our worker nodes
     ports:
       - "8000:8000" # expose the gRPC port to be publicly accessible
+      - "8100:8010" # expose the port listening to metrics endpoint for prometheus metrics
     volumes:
       - ./validators:/validators
       - ./validators/validator-0/logs:/home/logs
@@ -57,6 +58,7 @@ services:
       - "3001" # Port to listen on messages from our worker nodes
     ports:
       - "8001:8000" # expose the gRPC port to be publicly accessible
+      - "8101:8010" # expose the port listening to metrics endpoint for prometheus metrics
     volumes:
       - ./validators:/validators
       - ./validators/validator-1/logs:/home/logs
@@ -97,6 +99,7 @@ services:
       - "3001" # Port to listen on messages from our worker nodes
     ports:
       - "8002:8000" # expose the gRPC port to be publicly accessible
+      - "8102:8010" # expose the port listening to metrics endpoint for prometheus metrics
     volumes:
       - ./validators:/validators
       - ./validators/validator-2/logs:/home/logs
@@ -137,6 +140,7 @@ services:
       - "3001" # Port to listen on messages from worker nodes
     ports:
       - "8003:8000" # expose the gRPC port to be publicly accessible
+      - "8103:8010" # expose the port listening to metrics endpoint for prometheus metrics
     volumes:
       - ./validators:/validators
       - ./validators/validator-3/logs:/home/logs

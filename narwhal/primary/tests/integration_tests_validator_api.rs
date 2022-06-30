@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use config::{Parameters, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
@@ -10,6 +9,7 @@ use crypto::{
 };
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
+use prometheus::default_registry;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
@@ -114,6 +114,7 @@ async fn test_get_collections() {
         /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
         NetworkModel::Asynchronous,
         tx_feedback,
+        default_registry(),
     );
 
     // Spawn a `Worker` instance.
@@ -280,6 +281,7 @@ async fn test_remove_collections() {
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
+        default_registry(),
     );
 
     // Wait for tasks to start
@@ -477,6 +479,7 @@ async fn test_read_causal_signed_certificates() {
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
+        default_registry(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
@@ -504,6 +507,7 @@ async fn test_read_causal_signed_certificates() {
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
         NetworkModel::Asynchronous,
         tx_feedback_2,
+        default_registry(),
     );
 
     // Wait for tasks to start
@@ -663,6 +667,7 @@ async fn test_read_causal_unsigned_certificates() {
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
+        default_registry(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
@@ -683,6 +688,7 @@ async fn test_read_causal_unsigned_certificates() {
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
         NetworkModel::Asynchronous,
         tx_feedback_2,
+        default_registry(),
     );
 
     // Wait for tasks to start
@@ -816,6 +822,7 @@ async fn test_get_collections_with_missing_certificates() {
         Some(Arc::new(Dag::new(&committee, rx_new_certificates_1).1)),
         NetworkModel::Asynchronous,
         tx_feedback_1,
+        default_registry(),
     );
 
     // Spawn a `Worker` instance for primary 1.
@@ -845,6 +852,7 @@ async fn test_get_collections_with_missing_certificates() {
         None,
         NetworkModel::Asynchronous,
         tx_feedback_2,
+        default_registry(),
     );
 
     // Spawn a `Worker` instance for primary 2.

@@ -6,6 +6,7 @@ use consensus::dag::Dag;
 use crypto::traits::KeyPair;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
+use prometheus::default_registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{committee, keys, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -45,6 +46,7 @@ async fn test_new_epoch() {
         /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
         NetworkModel::Asynchronous,
         tx_feedback,
+        default_registry(),
     );
 
     // Wait for tasks to start
@@ -112,6 +114,7 @@ async fn test_new_network_info() {
         /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
         NetworkModel::Asynchronous,
         /* tx_committed_certificates */ tx_feedback,
+        default_registry(),
     );
 
     // Wait for tasks to start

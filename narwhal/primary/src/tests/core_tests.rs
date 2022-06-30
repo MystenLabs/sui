@@ -3,12 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::create_db_stores;
-use crypto::traits::KeyPair;
+use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use prometheus::Registry;
 use test_utils::{
-    certificate, committee, header, headers, keys, votes, PrimaryToPrimaryMockServer,
+    certificate, committee, fixture_batch_with_transactions, header, headers, keys, votes,
+    PrimaryToPrimaryMockServer,
 };
 use tokio::sync::mpsc::channel;
-use types::{BatchDigest, Header, Vote};
+use types::{Header, Vote};
 
 #[tokio::test]
 async fn process_header() {
@@ -52,6 +54,8 @@ async fn process_header() {
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
 
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
     // Spawn the core.
     Core::spawn(
         name,
@@ -68,6 +72,7 @@ async fn process_header() {
         /* rx_proposer */ rx_headers,
         tx_consensus,
         /* tx_proposer */ tx_parents,
+        metrics.clone(),
     );
 
     // Send a header to the core.
@@ -86,6 +91,14 @@ async fn process_header() {
     // Ensure the header is correctly stored.
     let stored = header_store.read(header().id).await.unwrap();
     assert_eq!(stored, Some(header()));
+
+    let mut m = HashMap::new();
+    m.insert("epoch", "0");
+    m.insert("source", "other");
+    assert_eq!(
+        metrics.headers_processed.get_metric_with(&m).unwrap().get(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -116,9 +129,11 @@ async fn process_header_missing_parent() {
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
 
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
     // Spawn the core.
     Core::spawn(
-        name,
+        name.clone(),
         committee(None),
         header_store.clone(),
         certificates_store.clone(),
@@ -132,13 +147,21 @@ async fn process_header_missing_parent() {
         /* rx_proposer */ rx_headers,
         tx_consensus,
         /* tx_proposer */ tx_parents,
+        metrics.clone(),
     );
 
     // Send a header to the core.
-    let header = Header {
-        parents: [CertificateDigest::default()].iter().cloned().collect(),
-        ..header()
-    };
+    let kp = keys(None).pop().unwrap();
+    let builder = types::HeaderBuilder::<Ed25519PublicKey>::default();
+    let header = builder
+        .author(name.clone())
+        .round(1)
+        .epoch(0)
+        .parents([CertificateDigest::default()].iter().cloned().collect())
+        .with_payload_batch(fixture_batch_with_transactions(10), 0)
+        .build(&kp)
+        .unwrap();
+
     let id = header.id;
     tx_primary_messages
         .send(PrimaryMessage::Header(header))
@@ -147,6 +170,14 @@ async fn process_header_missing_parent() {
 
     // Ensure the header is not stored.
     assert!(header_store.read(id).await.unwrap().is_none());
+
+    let mut m = HashMap::new();
+    m.insert("epoch", "0");
+    m.insert("reason", "missing_parents");
+    assert_eq!(
+        metrics.headers_suspended.get_metric_with(&m).unwrap().get(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -177,9 +208,11 @@ async fn process_header_missing_payload() {
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
 
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
     // Spawn the core.
     Core::spawn(
-        name,
+        name.clone(),
         committee(None),
         header_store.clone(),
         certificates_store.clone(),
@@ -193,13 +226,31 @@ async fn process_header_missing_payload() {
         /* rx_proposer */ rx_headers,
         tx_consensus,
         /* tx_proposer */ tx_parents,
+        metrics.clone(),
     );
 
-    // Send a header to the core.
-    let header = Header {
-        payload: [(BatchDigest::default(), 0)].iter().cloned().collect(),
-        ..header()
-    };
+    // Send a header that another node has created to the core.
+    // We need this header to be another's node, because our own
+    // created headers are not checked against having a payload.
+    // Just take another keys other than this node's.
+    let keys = keys(None);
+    let kp = keys.get(1).unwrap();
+    let name = kp.public().clone();
+    let builder = types::HeaderBuilder::<Ed25519PublicKey>::default();
+    let header = builder
+        .author(name.clone())
+        .round(1)
+        .epoch(0)
+        .parents(
+            Certificate::genesis(&committee(None))
+                .iter()
+                .map(|x| x.digest())
+                .collect(),
+        )
+        .with_payload_batch(fixture_batch_with_transactions(10), 0)
+        .build(kp)
+        .unwrap();
+
     let id = header.id;
     tx_primary_messages
         .send(PrimaryMessage::Header(header))
@@ -208,6 +259,14 @@ async fn process_header_missing_payload() {
 
     // Ensure the header is not stored.
     assert!(header_store.read(id).await.unwrap().is_none());
+
+    let mut m = HashMap::new();
+    m.insert("epoch", "0");
+    m.insert("reason", "missing_payload");
+    assert_eq!(
+        metrics.headers_suspended.get_metric_with(&m).unwrap().get(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -240,6 +299,8 @@ async fn process_votes() {
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
 
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
     // Spawn the core.
     Core::spawn(
         name.clone(),
@@ -256,6 +317,7 @@ async fn process_votes() {
         /* rx_proposer */ rx_headers,
         tx_consensus,
         /* tx_proposer */ tx_parents,
+        metrics.clone(),
     );
 
     // Make the certificate we expect to receive.
@@ -284,6 +346,17 @@ async fn process_votes() {
             x => panic!("Unexpected message: {:?}", x),
         }
     }
+
+    let mut m = HashMap::new();
+    m.insert("epoch", "0");
+    assert_eq!(
+        metrics
+            .certificates_created
+            .get_metric_with(&m)
+            .unwrap()
+            .get(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -314,6 +387,8 @@ async fn process_certificates() {
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
 
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
     // Spawn the core.
     Core::spawn(
         name,
@@ -330,6 +405,7 @@ async fn process_certificates() {
         /* rx_proposer */ rx_headers,
         tx_consensus,
         /* tx_proposer */ tx_parents,
+        metrics.clone(),
     );
 
     // Send enough certificates to the core.
@@ -357,4 +433,16 @@ async fn process_certificates() {
         let stored = certificates_store.read(x.digest()).await.unwrap();
         assert_eq!(stored, Some(x.clone()));
     }
+
+    let mut m = HashMap::new();
+    m.insert("epoch", "0");
+    m.insert("source", "other");
+    assert_eq!(
+        metrics
+            .certificates_processed
+            .get_metric_with(&m)
+            .unwrap()
+            .get(),
+        3
+    );
 }

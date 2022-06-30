@@ -118,7 +118,10 @@ cat > ${target}/parameters.json <<EOF
     "max_concurrent_requests": 500000,
     "max_header_delay": "2000ms",
     "sync_retry_delay": "10_000ms",
-    "sync_retry_nodes": 3
+    "sync_retry_nodes": 3,
+    "prometheus_metrics": {
+        "socket_addr": "0.0.0.0:8010"
+    }
 }
 EOF
 

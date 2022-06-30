@@ -39,7 +39,7 @@ def main():
                 }
             }
         }
-    out = {"authorities": temp}
+    out = {"authorities": temp, "epoch": 0}
     print(json.dumps(out, indent=4))
 
 if __name__ == '__main__':
