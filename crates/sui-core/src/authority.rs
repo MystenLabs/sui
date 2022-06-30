@@ -392,7 +392,7 @@ impl AuthorityState {
             }
         );
 
-        let tx_guard = self.acquire_tx_guard(&certificate).await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database
@@ -422,13 +422,16 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let tx_guard = self.acquire_tx_guard(&certificate).await?;
+        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
 
         self.process_certificate(tx_guard, certificate).await
     }
 
-    async fn acquire_tx_guard(&self, cert: &CertifiedTransaction) -> SuiResult<CertTxGuard> {
-        let digest = cert.digest();
+    async fn acquire_tx_guard<'a>(
+        &'a self,
+        digest: &TransactionDigest,
+        cert: &CertifiedTransaction,
+    ) -> SuiResult<CertTxGuard<'a>> {
         match self.database.wal.begin_tx(digest, cert).await? {
             Some(g) => Ok(g),
             None => {
@@ -787,7 +790,7 @@ impl AuthorityState {
             // the transaction (ie. this transaction is the next to be executed).
             debug!("Shared-locks already assigned to {digest:?} - executing now");
 
-            let tx_guard = self.acquire_tx_guard(&certificate).await?;
+            let tx_guard = self.acquire_tx_guard(digest, &certificate).await?;
 
             return self
                 .process_certificate(tx_guard, certificate)
