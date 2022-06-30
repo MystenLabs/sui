@@ -38,7 +38,7 @@ impl FragmentReconstruction {
         seq: u64,
         committee: Committee,
         fragments: &[CheckpointFragment],
-    ) -> Result<Option<FragmentReconstruction>, SuiError> {
+    ) -> Result<FragmentReconstruction, SuiError> {
         let mut span = SpanGraph::new(&committee);
         let mut fragments_used = Vec::new();
         let mut proposals: HashMap<AuthorityName, CheckpointSummary> = HashMap::new();
@@ -102,17 +102,19 @@ impl FragmentReconstruction {
                     }
                 }
 
-                return Ok(Some(FragmentReconstruction {
+                return Ok(FragmentReconstruction {
                     global,
                     committee,
                     extra_transactions,
-                }));
+                });
             }
         }
 
         // If we run out of candidates with no checkpoint, there is no
         // checkpoint yet.
-        Ok(None)
+        Err(SuiError::from(
+            "Failed to construct checkpoint after using all fragments",
+        ))
     }
 }
 
