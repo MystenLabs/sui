@@ -1,8 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
-use sui_config::NetworkConfig;
+use sui_config::{Config, NetworkConfig};
 
 use super::load_generator::calculate_throughput;
 use clap::*;

@@ -2,9 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod benchmark;
+pub mod client_commands;
 pub mod config;
-pub mod keystore;
+pub mod console;
+pub mod keytool;
 pub mod shell;
 pub mod sui_commands;
-pub mod wallet_commands;
+pub mod sui_move;

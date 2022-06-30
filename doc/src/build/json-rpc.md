@@ -4,14 +4,14 @@ title: Local RPC Server & JSON-RPC API Quick Start
 
 Welcome to the Sui RPC server quick start.
 
-This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [wallet](wallet.md) documentation.
+This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
 
 ## Local RPC server setup
 Follow the instructions to [install Sui binaries](install.md).
 
 ### Start local Sui network
-Follow the instructions to [create](wallet.md#genesis) and [start](wallet.md#starting-the-network) the Sui network.
+Follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) the Sui network.
 The genesis process will create a `gateway.conf` configuration file that will be used by the RPC server.
 
 ### Start local RPC server
@@ -58,7 +58,7 @@ You can see an example of the discovery service in the [OpenRPC Playground](http
 ### sui_syncAccountState
 
 Synchronize client state with validators with the following command,
-replacing `{{address}}` with an actual address value, for example one obtained from `wallet.conf`:
+replacing `{{address}}` with an actual address value, for example one obtained from `client.yaml`:
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -80,7 +80,7 @@ curl --location --request POST $SUI_RPC_HOST \
 
 You should replace `{{address}}` in the command above with an actual
 address value, you can retrieve the list of the addresses created during
-genesis from `wallet.conf`. Ensure you have run [`sui_syncAccountState`](#sui_syncaccountstate)
+genesis from `client.yaml`. Ensure you have run [`sui_syncAccountState`](#sui_syncaccountstate)
 
 The output you see should resemble the following (abbreviated to show only two objects):
 
@@ -147,7 +147,7 @@ A transaction data response will be returned from the gateway server.
 ```
 #### 2, Sign the transaction using the Sui signtool
 ```shell
-sui signtool --address <owner_address> --data <tx_bytes>
+sui keytool sign --address <owner_address> --data <tx_bytes>
 ```
 The signing tool will create and print out the signature and public key information.
 You will see output resembling:
@@ -178,7 +178,7 @@ transferred natively and require a [Move call](#sui_movecall).
 
 You should replace `{{owner_address}}` and `{{to_address}}` in the
 command above with an actual address values, for example one obtained
-from `wallet.conf`. You should also replace
+from `client.yaml`. You should also replace
 `{{object_id}}` and `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from `objectId` in the output
 of [`sui_getOwnedObjects`](#sui_getownedobjects). You can see that all gas objects generated
@@ -220,7 +220,7 @@ Follow the instructions to [execute the transaction](#3-execute-the-transaction-
 Arguments are passed in, and type will be inferred from function
 signature.  Gas usage is capped by the gas_budget. The `transfer`
 function is described in more detail in
-the [Sui Wallet](wallet.md#calling-move-code) documentation.
+the [Sui CLI client](cli-client.md#calling-move-code) documentation.
 
 Calling the `transfer` function in the `Coin` module serves the same
 purpose as the native transfer ([`sui_transferObject`](#sui_TransferObject)), and is mostly used for illustration
@@ -256,9 +256,9 @@ need to execute module initializers.
 
 You should replace `{{owner_address}}` in the
 command above with an actual address values, for example one obtained
-from `wallet.conf`. You should also replace `{{gas_object_id}}` in the command above with
+from `client.yaml`. You should also replace `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from `objectId` in the output
-of [`sui_getownedobjects`](#sui_getownedobjects). You can see that all gas objects generated
+of [`sui_getOwnedObjects`](#sui_getownedobjects). You can see that all gas objects generated
 during genesis are of `Coin/SUI` type). For this call to work, the object
 represented by `{{gas_object_id}}` must be owned by the address represented by
 `{{owner_address}}`.
@@ -266,13 +266,13 @@ represented by `{{gas_object_id}}` must be owned by the address represented by
 To publish a Move module, you also need `{{vector_of_compiled_modules}}`. To generate the value of this field, use the `sui-move` command. The `sui-move` command supports printing the bytecodes as base64 with the following option
 
 ```
-sui-move --path <move-module-path> build --dump-bytecode-as-base64
+sui move --path <move-module-path> build --dump-bytecode-as-base64
 ```
 
 Assuming that the location of the package's sources is in the `PATH_TO_PACKAGE` environment variable an example command would resemble the following
 
 ```
-sui-move --path $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
+sui move --path $PATH_TO_PACKAGE/my_move_package build --dump-bytecode-as-base64
 
 ["oRzrCwUAAAAJAQAIAggUAxw3BFMKBV1yB88BdAjDAigK6wIFDPACQgAAAQEBAgEDAAACAAEEDAEAAQEBDAEAAQMDAgAABQABAAAGAgEAAAcDBAAACAUBAAEFBwEBAAEKCQoBAgMLCwwAAgwNAQEIAQcODwEAAQgQAQEABAYFBgcICAYJBgMHCwEBCAALAgEIAAcIAwABBwgDAwcLAQEIAAMHCAMBCwIBCAADCwEBCAAFBwgDAQgAAgsCAQkABwsBAQkAAQsBAQgAAgkABwgDAQsBAQkAAQYIAwEFAgkABQMDBwsBAQkABwgDAQsCAQkAAgsBAQkABQdNQU5BR0VEBENvaW4IVHJhbnNmZXIJVHhDb250ZXh0C1RyZWFzdXJ5Q2FwBGJ1cm4EaW5pdARtaW50DHRyYW5zZmVyX2NhcAtkdW1teV9maWVsZA9jcmVhdGVfY3VycmVuY3kGc2VuZGVyCHRyYW5zZmVyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgACAQkBAAEAAAEECwELADgAAgEAAAAICwkSAAoAOAEMAQsBCwAuEQY4AgICAQAAAQULAQsACwI4AwIDAQAAAQQLAAsBOAQCAA==", "oRzrCwUAAAALAQAOAg4kAzJZBIsBHAWnAasBB9IC6QEIuwQoBuMECgrtBB0MigWzAQ29BgYAAAABAQIBAwEEAQUBBgAAAgAABwgAAgIMAQABBAQCAAEBAgAGBgIAAxAEAAISDAEAAQAIAAEAAAkCAwAACgQFAAALBgcAAAwEBQAADQQFAAIVCgUBAAIICwMBAAIWDQ4BAAIXERIBAgYYAhMAAhkCDgEABRoVAwEIAhsWAwEAAgsXDgEAAg0YBQEABgkHCQgMCA8JCQsMCw8MFAYPBgwNDA0PDgkPCQMHCAELAgEIAAcIBQILAgEIAwsCAQgEAQcIBQABBggBAQMEBwgBCwIBCAMLAgEIBAcIBQELAgEIAAMLAgEIBAMLAgEIAwEIAAEGCwIBCQACCwIBCQAHCwcBCQABCAMDBwsCAQkAAwcIBQELAgEJAAEIBAELBwEIAAIJAAcIBQELBwEJAAEIBgEIAQEJAAIHCwIBCQALAgEJAAMDBwsHAQkABwgFAQYLBwEJAAZCQVNLRVQHTUFOQUdFRARDb2luAklEA1NVSQhUcmFuc2ZlcglUeENvbnRleHQHUmVzZXJ2ZQRidXJuBGluaXQObWFuYWdlZF9zdXBwbHkEbWludApzdWlfc3VwcGx5DHRvdGFsX3N1cHBseQtkdW1teV9maWVsZAJpZAtWZXJzaW9uZWRJRAx0cmVhc3VyeV9jYXALVHJlYXN1cnlDYXADc3VpB21hbmFnZWQFdmFsdWUId2l0aGRyYXcPY3JlYXRlX2N1cnJlbmN5Bm5ld19pZAR6ZXJvDHNoYXJlX29iamVjdARqb2luAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgMIAAAAAAAAAAAAAgEOAQECBA8IBhELBwEIABMLAgEIAxQLAgEIBAABAAAIFg4BOAAMBAsBCgAPADgBCgAPAQoECgI4AgwFCwAPAgsECwI4AwwDCwULAwIBAAAAEA8JEgAKADgEDAEKABEKCwEKADgFCwA4BhIBOAcCAgEAAAMECwAQAjgIAgMBAAAFHA4BOAkMBAoEDgI4CCEDDgsAAQsDAQcAJwoADwELATgKCgAPAgsCOAsLBAsADwALAzgMAgQBAAADBAsAEAE4CQIFAQAAAwQLABAAOA0CAQEBAgEDAA=="]
 Build Successful

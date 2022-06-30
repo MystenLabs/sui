@@ -146,17 +146,17 @@ sui-move test
 ```
 
 ### On-chain Interactions
-Now let's try to call `create` in actual transactions and see what happens. To do this, we need to start Sui and the wallet. Follow the [Wallet guide](../wallet.md) to start the Sui network and set up the wallet.
+Now let's try to call `create` in actual transactions and see what happens. To do this, we need to start Sui and the CLI client. Follow the [Sui CLI client guide](../cli-client.md) to start the Sui network and set up the client.
 
-Before starting, let's take a look at the default wallet address (this is the address that will eventually own the object later):
+Before starting, let's take a look at the default client address (this is the address that will eventually own the object later):
 ```
-$ wallet active-address
+$ sui client active-address
 ```
-This will tell you the current wallet address.
+This will tell you the current client address.
 
 First, we need to publish the code on-chain. Assuming the path to the root of the repository containing Sui source code is $ROOT:
 ```
-$ wallet publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+$ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
 You can find the published package object ID in the **Publish Results** output:
 ```
@@ -169,7 +169,7 @@ $ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
 Next we can call the function to create a color object:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
@@ -183,7 +183,7 @@ $ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 ```
 We can inspect this object and see what kind of object it is:
 ```
-$ wallet object --id $OBJECT
+$ sui client object --id $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
@@ -193,11 +193,11 @@ ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 Readonly: false
 Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
 ```
-As we can see, it's owned by the current default wallet address that we saw earlier. And the type of this object is `ColorObject`!
+As we can see, it's owned by the current default client address that we saw earlier. And the type of this object is `ColorObject`!
 
 You can also look at the data content of the object by adding the `--json` parameter:
 ```
-$ wallet object --id $OBJECT --json
+$ sui client object --id $OBJECT --json
 ```
 This will print the values of all the fields in the Move object, such as the values of `red`, `green`, and `blue`.
 

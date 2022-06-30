@@ -16,8 +16,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_config::{sui_config_dir, SUI_WALLET_CONFIG};
+use sui::client_commands::{SuiClientCommands, WalletContext};
+use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
@@ -145,7 +145,7 @@ async fn request_gas(
 
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     // Create Wallet context.
-    let wallet_conf = sui_config_dir()?.join(SUI_WALLET_CONFIG);
+    let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context
@@ -156,7 +156,7 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
         .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
 
     // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
+    SuiClientCommands::SyncClientState {
         address: Some(address),
     }
     .execute(&mut context)
