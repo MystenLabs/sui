@@ -568,7 +568,10 @@ where
                     },
                 };
             }
-            info!("quorum_once_with_timeout failed on all authorities, retrying");
+            info!(
+                ?authority_errors,
+                "quorum_once_with_timeout failed on all authorities, retrying"
+            );
         }
     }
 
