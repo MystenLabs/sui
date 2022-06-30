@@ -5,7 +5,7 @@ title: Sui CLI Quick Start
 Welcome to the Sui tutorial on the Sui CLI developed
 to facilitate experimentation with Sui features using a
 command line interface. In this document, we describe how to set up
-The Sui client and execute commands through its command line
+the Sui client and execute commands through its command line
 interface, *Sui CLI*.
 
 ## Set up
@@ -28,8 +28,8 @@ Type 'y' and then press 'Enter'. You should see the following output:
 ```shell
 Sui RPC server Url (Default to Sui DevNet if not specified) :
 ```
-The Sui client will prompt for the RPC server URL, press 'Enter' and it will default to the DevNet,
-or enter the URL if you want to connect to a server hosted elsewhere.
+The Sui client will prompt for the RPC server URL; press 'Enter' and it will default to DevNet.
+Or enter a custom URL if you want to connect to a server hosted elsewhere.
 
 If you have used the Sui client before with a local network, follow the next section to
 [manually change the RPC server URL](#manually-change-the-rpc-server-url) to DevNet.
@@ -76,8 +76,7 @@ argument. Run the command like so to place the files in the `dir` directory:
 $ sui genesis --working-dir /path/to/sui/config/dir
 ```
 
-:note: That path and directory must already exist and will not be
-created with the `--working-dir` argument.
+> **Note:** That path and directory must already exist and will not be created with the `--working-dir` argument.
 
 ### Recreating genesis
 
@@ -217,11 +216,11 @@ If you see errors when trying to start Sui network, particularly if you made som
  (e.g,
 [customized client configuration](#client-configuration)), you should [recreate Sui genesis state](#recreating-genesis).
 
-## Using the client
+## Using the Sui client
 
-Now start a new terminal since you have Sui running in the first terminal.
+Now start a new terminal since you have the Sui network running in the first terminal.
 
-The following commands are supported by the client:
+The following commands are supported by the Sui client:
 
     active-address        Default address used for commands when none specified
     addresses             Obtain the Addresses managed by the client
@@ -453,7 +452,7 @@ you won't be able to mutate objects if the account key is missing from the keyst
 
 Restart the Sui console after the modification; the new accounts will appear in the client if you query the addresses.
 
-## View objects owned by the account
+## View objects owned by the address
 
 You can use the `objects` command to view the objects owned by the address.
 
@@ -472,7 +471,7 @@ OPTIONS:
         --json                 Return command outputs in json format
 ```
 
-To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your client):
+To view the objects owned by the addresses created in genesis, run the following command (substituting the address with one of the genesis addresses in your client):
 
 ```shell
 $ sui client objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
