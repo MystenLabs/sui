@@ -109,7 +109,7 @@ struct Method {
 struct Tag {
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    summery: Option<String>,
+    summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
 }
@@ -196,6 +196,7 @@ impl RpcModuleDocBuilder {
         result: Option<ContentDescriptor>,
         doc: &str,
         tag: Option<String>,
+        is_pubsub: bool,
     ) {
         let description = if doc.trim().is_empty() {
             None
@@ -203,6 +204,28 @@ impl RpcModuleDocBuilder {
             Some(doc.trim().to_string())
         };
         let name = format!("{}_{}", namespace, name);
+        let mut tags = tag
+            .map(|t| Tag {
+                name: t,
+                summary: None,
+                description: None,
+            })
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        if is_pubsub {
+            tags.push(Tag {
+                name: "Websocket".to_string(),
+                summary: None,
+                description: None,
+            });
+            tags.push(Tag {
+                name: "PubSub".to_string(),
+                summary: None,
+                description: None,
+            });
+        }
+
         self.methods.insert(
             name.clone(),
             Method {
@@ -210,14 +233,7 @@ impl RpcModuleDocBuilder {
                 description,
                 params,
                 result,
-                tags: tag
-                    .map(|t| Tag {
-                        name: t,
-                        summery: None,
-                        description: None,
-                    })
-                    .into_iter()
-                    .collect(),
+                tags,
             },
         );
     }

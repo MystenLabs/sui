@@ -16,23 +16,6 @@
   },
   "methods": [
     {
-      "name": "sui_Unknown method name",
-      "tags": [
-        {
-          "name": "Event Subscription"
-        }
-      ],
-      "params": [
-        {
-          "name": "filter",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/EventFilter"
-          }
-        }
-      ]
-    },
-    {
       "name": "sui_batchTransaction",
       "tags": [
         {
@@ -1108,6 +1091,36 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
+        }
+      }
+    },
+    {
+      "name": "sui_subscribeEvent",
+      "tags": [
+        {
+          "name": "Event Subscription"
+        },
+        {
+          "name": "Websocket"
+        },
+        {
+          "name": "PubSub"
+        }
+      ],
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiEventEnvelope",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/EventEnvelope"
         }
       }
     },
