@@ -16,7 +16,7 @@ use sui_types::{
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
         CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, SignedCheckpointSummary,
+        CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
 use tokio::time::timeout;
@@ -440,7 +440,17 @@ where
             // the full contents of the checkpoint. So we try to download it.
             // TODO: clean up the errors to get here only when the error is
             //       "No checkpoint set at this sequence."
-            if let Ok(contents) = get_checkpoint_contents(self_name, net.clone(), checkpoint).await
+            let available_authorities: BTreeSet<_> = checkpoint
+                .signatory_authorities()
+                .filter(|a| **a != self_name)
+                .cloned()
+                .collect();
+            if let Ok((_, contents)) = get_one_checkpoint_with_contents(
+                net.clone(),
+                &checkpoint.summary,
+                &available_authorities,
+            )
+            .await
             {
                 // Retry with contents
                 state_checkpoints.lock().process_checkpoint_certificate(
@@ -513,6 +523,20 @@ where
     Ok(())
 }
 
+pub async fn get_one_checkpoint_with_contents<A>(
+    net: Arc<AuthorityAggregator<A>>,
+    summary: &CheckpointSummary,
+    available_authorities: &BTreeSet<AuthorityName>,
+) -> Result<(CertifiedCheckpointSummary, CheckpointContents), SuiError>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    get_one_checkpoint(net, *summary.sequence_number(), true, available_authorities)
+        .await
+        // unwrap ok because of true param above.
+        .map(|ok| (ok.0, ok.1.unwrap()))
+}
+
 /// Gets one checkpoint certificate and optionally its contents. Note this must be
 /// given a checkpoint number that the validator knows exists, for examples because
 /// they have seen a subsequent certificate.
@@ -548,7 +572,22 @@ where
                 info: AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(past)),
                 detail,
             }) => {
-                return Ok((past, detail));
+                match (contents, detail) {
+                    // TODO: this should be done by SafeClient
+                    (true, None) => {
+                        warn!(
+                            "Sync Error: ByzantineAuthoritySuspicion: should have returned detail"
+                        );
+                    }
+                    (_, Some(detail)) => {
+                        if past.summary.content_digest == detail.digest() {
+                            return Ok((past, Some(detail)));
+                        } else {
+                            warn!("Sync Error: ByzantineAuthoritySuspicion: digest mismatch");
+                        }
+                    }
+                    (_, detail) => return Ok((past, detail)),
+                };
             }
             Ok(resp) => {
                 warn!("Sync Error: Unexpected answer: {resp:?}");
@@ -562,62 +601,6 @@ where
     Err(SuiError::GenericAuthorityError {
         error: "Used all authorities but did not get a valid previous checkpoint.".to_string(),
     })
-}
-
-/// Given a checkpoint certificate we sample validators and try to download the certificate contents.
-#[allow(clippy::collapsible_match)]
-pub async fn get_checkpoint_contents<A>(
-    name: AuthorityName,
-    net: Arc<AuthorityAggregator<A>>,
-    checkpoint: &CertifiedCheckpointSummary,
-) -> Result<CheckpointContents, SuiError>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    let mut available_authorities: BTreeSet<_> =
-        checkpoint.signatory_authorities().cloned().collect();
-    available_authorities.remove(&name);
-
-    loop {
-        // Get a random authority by stake
-        let sample_authority = net.committee.sample();
-        if !available_authorities.contains(sample_authority) {
-            // We want to pick an authority that has the checkpoint and its full history.
-            continue;
-        }
-
-        // Note: safe to do lookup since authority comes from the committee sample
-        //       so this should not panic.
-        let client = net.clone_client(sample_authority);
-        match client
-            .handle_checkpoint(CheckpointRequest::past(
-                checkpoint.summary.sequence_number,
-                true,
-            ))
-            .await
-        {
-            Ok(CheckpointResponse {
-                info: _info,
-                detail: Some(contents),
-            }) => {
-                // Check here that the digest of contents matches
-                if contents.digest() != checkpoint.summary.content_digest {
-                    // A byzantine authority!
-                    // TODO: Report Byzantine authority
-                    warn!("Sync Error: Incorrect contents returned");
-                    continue;
-                }
-
-                return Ok(contents);
-            }
-            Ok(resp) => {
-                warn!("Sync Error: Unexpected answer: {resp:?}");
-            }
-            Err(err) => {
-                warn!("Sync Error: peer error: {err:?}");
-            }
-        }
-    }
 }
 
 /// Picks other authorities at random and constructs checkpoint fragments
