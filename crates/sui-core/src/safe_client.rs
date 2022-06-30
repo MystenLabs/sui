@@ -6,7 +6,10 @@ use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::PublicKeyBytes;
-use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::messages_checkpoint::{
+    AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointRequest, CheckpointRequestType,
+    CheckpointResponse, CheckpointSequenceNumber,
+};
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -398,13 +401,73 @@ where
         Ok(transaction_info)
     }
 
+    fn verify_authenticated_checkpoint(
+        &self,
+        expected_seq: Option<CheckpointSequenceNumber>,
+        checkpoint: &AuthenticatedCheckpoint,
+    ) -> SuiResult {
+        let observed_seq = match checkpoint {
+            AuthenticatedCheckpoint::None => None,
+            AuthenticatedCheckpoint::Signed(s) => {
+                s.verify()?;
+                Some(*s.summary.sequence_number())
+            }
+            AuthenticatedCheckpoint::Certified(c) => {
+                c.verify(&self.committee)?;
+                Some(*c.summary.sequence_number())
+            }
+        };
+
+        match (expected_seq, observed_seq) {
+            (Some(e), Some(o)) => {
+                fp_ensure!(
+                    e == o,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    }
+                );
+                Ok(())
+            }
+            (None, _) => Ok(()),
+            _ => Err(SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+            }),
+        }
+    }
+
     pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        // SECURITY TODO: Implement all checks!
+        let req_type = request.request_type.clone();
 
-        self.authority_client.handle_checkpoint(request).await
+        let resp = self.authority_client.handle_checkpoint(request).await?;
+
+        match req_type {
+            CheckpointRequestType::LatestCheckpointProposal => {
+                if let AuthorityCheckpointInfo::Proposal { current, previous } = &resp.info {
+                    if let Some(current) = current {
+                        current.verify()?;
+                    }
+                    self.verify_authenticated_checkpoint(None, previous)?;
+                    Ok(resp)
+                } else {
+                    Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    })
+                }
+            }
+            CheckpointRequestType::PastCheckpoint(seq) => {
+                if let AuthorityCheckpointInfo::Past(past) = &resp.info {
+                    self.verify_authenticated_checkpoint(Some(seq), past)?;
+                    Ok(resp)
+                } else {
+                    Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    })
+                }
+            }
+        }
     }
 
     /// Handle Batch information requests for this authority.
