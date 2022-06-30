@@ -254,7 +254,7 @@ lru = { version = "0.7", features = ["hashbrown"] }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matches = { version = "0.1", default-features = false }
-matchit = { version = "0.5" }
+matchit = { version = "0.6" }
 memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "2", default-features = false }
@@ -840,7 +840,7 @@ maplit = { version = "1", default-features = false }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matches = { version = "0.1", default-features = false }
-matchit = { version = "0.5" }
+matchit = { version = "0.6" }
 memchr = { version = "2", features = ["std", "use_std"] }
 memoffset = { version = "0.6" }
 merlin = { version = "2", default-features = false }
