@@ -27,7 +27,7 @@ class Permissions {
     private _permissionResponses: Subject<PermissionResponse> = new Subject();
 
     public async acquirePermissions(
-        permissionTypes: PermissionType[],
+        permissionTypes: readonly PermissionType[],
         connection: ContentScriptConnection
     ): Promise<Permission> {
         const { origin } = connection;
@@ -127,7 +127,7 @@ class Permissions {
 
     public async hasPermissions(
         origin: string,
-        permissionTypes: PermissionType[],
+        permissionTypes: readonly PermissionType[],
         permission?: Permission | null
     ): Promise<boolean> {
         const existingPermission = await this.getPermission(origin, permission);
@@ -142,7 +142,7 @@ class Permissions {
 
     private async createPermissionRequest(
         origin: string,
-        permissionTypes: PermissionType[],
+        permissionTypes: readonly PermissionType[],
         favIcon: string | undefined,
         existingPermission?: Permission | null
     ): Promise<Permission> {
@@ -164,7 +164,7 @@ class Permissions {
                 createdDate: new Date().toISOString(),
                 origin,
                 favIcon,
-                permissions: permissionTypes,
+                permissions: permissionTypes as PermissionType[],
                 responseDate: null,
             };
         }
