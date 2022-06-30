@@ -7,11 +7,10 @@ use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
 use futures::{future, StreamExt};
-use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee_core::client::ClientT;
 use move_package::BuildConfig;
 use serde_json::json;
 use tokio::sync::Mutex;

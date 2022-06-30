@@ -14,7 +14,7 @@ use sui::{
 };
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
 use sui_config::{
-    Config, NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
+    Config, NetworkConfig, PersistedConfig, ValidatorInfo, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
