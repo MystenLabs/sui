@@ -76,6 +76,7 @@ pub async fn init_local_authorities_with_genesis(
         authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
+        serial_authority_request_timeout: Duration::from_secs(1),
     };
     (
         AuthorityAggregator::new_with_timeouts(
