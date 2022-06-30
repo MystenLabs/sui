@@ -550,57 +550,13 @@ pub async fn get_one_checkpoint<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let mut available_authorities = available_authorities.clone();
-    while !available_authorities.is_empty() {
-        // Get a random authority by stake
-        let sample_authority = net.committee.sample();
-        if !available_authorities.contains(sample_authority) {
-            // We want to pick an authority that has the checkpoint and its full history.
-            continue;
-        }
-
-        available_authorities.remove(sample_authority);
-
-        // Note: safe to do lookup since authority comes from the committee sample
-        //       so this should not panic.
-        let client = net.clone_client(sample_authority);
-        match client
-            .handle_checkpoint(CheckpointRequest::past(sequence_number, contents))
-            .await
-        {
-            Ok(CheckpointResponse {
-                info: AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(past)),
-                detail,
-            }) => {
-                match (contents, detail) {
-                    // TODO: this should be done by SafeClient
-                    (true, None) => {
-                        warn!(
-                            "Sync Error: ByzantineAuthoritySuspicion: should have returned detail"
-                        );
-                    }
-                    (_, Some(detail)) => {
-                        if past.summary.content_digest == detail.digest() {
-                            return Ok((past, Some(detail)));
-                        } else {
-                            warn!("Sync Error: ByzantineAuthoritySuspicion: digest mismatch");
-                        }
-                    }
-                    (_, detail) => return Ok((past, detail)),
-                };
-            }
-            Ok(resp) => {
-                warn!("Sync Error: Unexpected answer: {resp:?}");
-            }
-            Err(err) => {
-                warn!("Sync Error: peer error: {err:?}");
-            }
-        }
-    }
-
-    Err(SuiError::GenericAuthorityError {
-        error: "Used all authorities but did not get a valid previous checkpoint.".to_string(),
-    })
+    net.get_certified_checkpoint(
+        &CheckpointRequest::past(sequence_number, contents),
+        available_authorities,
+        // Loop forever until we get the cert from someone.
+        None,
+    )
+    .await
 }
 
 /// Picks other authorities at random and constructs checkpoint fragments
