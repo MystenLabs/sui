@@ -56,7 +56,7 @@ pub async fn init_local_authorities_with_genesis(
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, voting_rights).unwrap();
 
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
@@ -76,6 +76,7 @@ pub async fn init_local_authorities_with_genesis(
         authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
+        serial_authority_request_timeout: Duration::from_secs(1),
     };
     (
         AuthorityAggregator::new_with_timeouts(
@@ -173,7 +174,7 @@ pub fn crate_object_move_transaction(
             arguments,
             GAS_VALUE_FOR_TESTING / 2,
         ),
-        &*secret,
+        secret,
     )
 }
 

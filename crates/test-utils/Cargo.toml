@@ -28,7 +28,7 @@ sui-gateway = { path = "../sui-gateway" }
 move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"}
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "config" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "config" }
 
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }

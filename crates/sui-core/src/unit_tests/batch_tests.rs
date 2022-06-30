@@ -37,7 +37,7 @@ where
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     (committee, authority_address, authority_key)
 }
@@ -759,7 +759,7 @@ async fn test_safe_batch_stream() {
     println!("init public key {:?}", public_key_bytes);
 
     authorities.insert(public_key_bytes, 1);
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
     // Create an authority
     let store = Arc::new(AuthorityStore::open(&path, None));
     let state = AuthorityState::new(

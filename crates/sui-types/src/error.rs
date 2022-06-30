@@ -367,8 +367,14 @@ pub enum SuiError {
     #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
     QuorumDriverCommunicationError { error: String },
 
+    #[error("Operation timed out")]
+    TimeoutError,
+
     #[error("Error executing {0}")]
     ExecutionError(String),
+
+    #[error("Invalid committee composition")]
+    InvalidCommittee(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -447,6 +453,7 @@ pub enum ExecutionErrorKind {
     // Naitive Transfer errors
     TransferUnowned,
     TransferNonCoin,
+    TransferObjectWithoutPublicTransfer,
     TransferInsufficientBalance,
 
     InvalidTransactionUpdate,
@@ -522,6 +529,7 @@ impl ExecutionError {
             ExecutionErrorKind::InsufficientGas => ExecutionFailureStatus::InsufficientGas,
             ExecutionErrorKind::TransferUnowned
             | ExecutionErrorKind::TransferNonCoin
+            | ExecutionErrorKind::TransferObjectWithoutPublicTransfer
             | ExecutionErrorKind::TransferInsufficientBalance
             | ExecutionErrorKind::InvalidTransactionUpdate
             | ExecutionErrorKind::ObjectNotFound

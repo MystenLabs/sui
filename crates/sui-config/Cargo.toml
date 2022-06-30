@@ -12,7 +12,7 @@ arc-swap = "1.5.0"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_yaml = "0.8.23"
-base64ct = { version = "1.5.0", features = ["alloc"] }
+base64ct = { version = "1.5.1", features = ["alloc"] }
 rand = "0.7.3"
 dirs = "4.0.0"
 multiaddr = "0.14.0"
@@ -20,8 +20,8 @@ once_cell = "1.11.0"
 debug-ignore = { version = "1.0.2", features = ["serde"] }
 tracing = "0.1.34"
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "crypto" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "crypto" }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 

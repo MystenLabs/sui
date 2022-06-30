@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use jsonrpsee::http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 
@@ -20,9 +21,41 @@ pub mod event_api;
 pub mod gateway_api;
 pub mod read_api;
 
+pub enum ServerBuilder<M = ()> {
+    HttpBuilder(HttpServerBuilder<M>),
+    WsBuilder(WsServerBuilder<M>),
+}
+
+pub enum ServerHandle {
+    HttpHandler(HttpServerHandle),
+    WsHandle(WsServerHandle),
+}
+
+#[derive(Clone)]
+pub enum ApiMetrics {
+    JsonRpcMetrics(JsonRpcMetrics),
+    WebsocketMetrics(WebsocketMetrics),
+}
+
+impl ServerHandle {
+    pub fn into_http_server_handle(self) -> Option<HttpServerHandle> {
+        match self {
+            ServerHandle::HttpHandler(handle) => Some(handle),
+            _ => None,
+        }
+    }
+
+    pub fn into_ws_server_handle(self) -> Option<WsServerHandle> {
+        match self {
+            ServerHandle::WsHandle(handle) => Some(handle),
+            _ => None,
+        }
+    }
+}
+
 pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
-    server_builder: HttpServerBuilder<JsonRpcMetrics>,
+    server_builder: ServerBuilder<ApiMetrics>,
     rpc_doc: Project,
 }
 
@@ -39,21 +72,44 @@ pub fn sui_rpc_doc() -> Project {
 }
 
 impl JsonRpcServerBuilder {
-    pub fn new(prometheus_registry: &prometheus::Registry) -> anyhow::Result<Self> {
-        let mut ac_builder = AccessControlBuilder::default();
+    pub fn new(
+        use_websocket: bool,
+        prometheus_registry: &prometheus::Registry,
+    ) -> anyhow::Result<Self> {
+        let (ac_builder, allow_list) = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
+            Ok(value) => {
+                let owned_list: Vec<String> = value
+                    .split(',')
+                    .into_iter()
+                    .map(|s| s.into())
+                    .collect::<Vec<_>>();
+                (
+                    AccessControlBuilder::default().set_allowed_origins(&owned_list)?,
+                    owned_list,
+                )
+            }
+            _ => (AccessControlBuilder::default(), vec![]),
+        };
 
-        if let Ok(value) = env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
-            let list = value.split(',').collect::<Vec<_>>();
-            info!("Setting ACCESS_CONTROL_ALLOW_ORIGIN to : {:?}", list);
-            ac_builder = ac_builder.set_allowed_origins(list)?;
-        }
-
-        let acl = ac_builder.build();
-        info!(?acl);
-
-        let server_builder = HttpServerBuilder::default()
-            .set_access_control(acl)
-            .set_middleware(JsonRpcMetrics::new(prometheus_registry));
+        let server_builder = if use_websocket {
+            let mut builder = WsServerBuilder::default()
+                .set_middleware(ApiMetrics::WebsocketMetrics(WebsocketMetrics {}));
+            if !allow_list.is_empty() {
+                info!("Setting ACCESS_CONTROL_ALLOW_ORIGIN to : {:?}", allow_list);
+                builder = builder.set_allowed_origins(allow_list)?;
+            }
+            ServerBuilder::WsBuilder(builder)
+        } else {
+            let acl = ac_builder.build();
+            info!(?acl);
+            ServerBuilder::HttpBuilder(
+                HttpServerBuilder::default()
+                    .set_access_control(acl)
+                    .set_middleware(ApiMetrics::JsonRpcMetrics(JsonRpcMetrics::new(
+                        prometheus_registry,
+                    ))),
+            )
+        };
 
         let module = RpcModule::new(());
 
@@ -72,25 +128,33 @@ impl JsonRpcServerBuilder {
     pub async fn start(
         mut self,
         listen_address: SocketAddr,
-    ) -> Result<HttpServerHandle, anyhow::Error> {
+    ) -> Result<ServerHandle, anyhow::Error> {
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
+        let methods_names = self.module.method_names().collect::<Vec<_>>();
+        let (handle, addr, server_name) = match self.server_builder {
+            ServerBuilder::HttpBuilder(http_builder) => {
+                let server = http_builder.build(listen_address).await?;
+                let addr = server.local_addr()?;
+                let handle = server.start(self.module)?;
+                (ServerHandle::HttpHandler(handle), addr, "JSON-RPC")
+            }
+            ServerBuilder::WsBuilder(ws_builder) => {
+                let server = ws_builder.build(listen_address).await?;
+                let addr = server.local_addr()?;
+                let handle = server.start(self.module)?;
+                (ServerHandle::WsHandle(handle), addr, "Websocket")
+            }
+        };
+        info!(local_addr =? addr, "Sui {server_name} server listening on {addr}");
+        info!("Available {server_name} methods : {:?}", methods_names);
 
-        let server = self.server_builder.build(listen_address).await?;
-
-        let addr = server.local_addr()?;
-        info!(local_addr =? addr, "Sui JSON-RPC server listening on {addr}");
-        info!(
-            "Available JSON-RPC methods : {:?}",
-            self.module.method_names().collect::<Vec<_>>()
-        );
-
-        server.start(self.module).map_err(Into::into)
+        Ok(handle)
     }
 }
 
 #[derive(Clone)]
-struct JsonRpcMetrics {
+pub struct JsonRpcMetrics {
     /// Counter of requests, route is a label (ie separate timeseries per route)
     requests_by_route: IntCounterVec,
     /// Request latency, route is a label
@@ -127,7 +191,11 @@ impl JsonRpcMetrics {
     }
 }
 
-impl Middleware for JsonRpcMetrics {
+// TODO: add metrics middleware for ws server
+#[derive(Clone)]
+pub struct WebsocketMetrics {}
+
+impl Middleware for ApiMetrics {
     type Instant = Instant;
 
     fn on_request(&self) -> Instant {
@@ -135,13 +203,20 @@ impl Middleware for JsonRpcMetrics {
     }
 
     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
-        self.requests_by_route.with_label_values(&[name]).inc();
-        let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
-        self.req_latency_by_route
-            .with_label_values(&[name])
-            .observe(req_latency_secs);
-        if !success {
-            self.errors_by_route.with_label_values(&[name]).inc();
+        if let ApiMetrics::JsonRpcMetrics(JsonRpcMetrics {
+            requests_by_route,
+            req_latency_by_route,
+            errors_by_route,
+        }) = self
+        {
+            requests_by_route.with_label_values(&[name]).inc();
+            let req_latency_secs = (Instant::now() - started_at).as_secs_f64();
+            req_latency_by_route
+                .with_label_values(&[name])
+                .observe(req_latency_secs);
+            if !success {
+                errors_by_route.with_label_values(&[name]).inc();
+            }
         }
     }
 }

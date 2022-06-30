@@ -33,4 +33,5 @@ pub fn test_committee() -> Committee {
             .map(|(_, x)| (*x.public_key_bytes(), /* voting right */ 1))
             .collect(),
     )
+    .unwrap()
 }

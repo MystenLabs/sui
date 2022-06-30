@@ -60,20 +60,14 @@ In addition, to conduct advanced work such as altering Sui itself, also obtain:
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-json-rpc
 ```
 
 This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
-* bench - local test and benchmark of the Sui authorities.
-* bench_configure - creates the config files for distributed benchmarking.
-* key_tool - utility for generating keys and addresses encoded as Base64 bytes.
-* remote_load_generator - enables distributed benchmark of the Sui authorities on remote machines.
-* [`rpc-server`](json-rpc.md) - run a local Sui network and gateway service accessible via an RPC interface.
-* sui - enables `genesis` of validators and accounts, as well as starting the Sui network.
-* [`sui-move`](move.md) - build and test Move packages.
-* [`wallet`](wallet.md) - run a local Sui network and gateway service accessible via the wallet CLI. The wallet CLI manage keypairs to sign/send transactions
+* sui - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move.md), as well as a [client](cli-client.md) for interacting with the Sui network.
+* [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
-Confirm the install with:
+Confirm the installation with:
 
 ```
 $ echo $PATH
@@ -101,7 +95,7 @@ $ git clone https://github.com/MystenLabs/sui.git --branch devnet
 ```
 
 You can start exploring Sui's source code by looking into the following primary directories:
-* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui binaries (`wallet`, `sui-move`, and more)
+* [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - the Sui CLI binary
 * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui's Move language integration also including games and other Move code examples for testing and reuse
 * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - authority server and Sui Gateway
 * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - coins, gas, and other object types
@@ -121,6 +115,6 @@ To contribute updates to Sui code, [send pull requests](../contribute/index.md#s
 Continue your journey through:
 
 * [Smart Contracts with Move](move.md)
-* [Wallet Quick Start](wallet.md)
+* [Sui client Quick Start](cli-client.md)
 * [RPC Server API](json-rpc.md)
 * [End-to-End tutorial](../explore/tutorials.md)

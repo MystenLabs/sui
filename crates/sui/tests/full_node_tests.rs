@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
 use futures::{future, StreamExt};
-use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT};
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use move_package::BuildConfig;
@@ -17,7 +18,7 @@ use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{
@@ -49,7 +50,7 @@ async fn transfer_coin(
         "transferring coin {:?} from {:?} -> {:?}",
         object_to_send, sender, receiver
     );
-    let res = WalletCommands::Transfer {
+    let res = SuiClientCommands::Transfer {
         to: receiver,
         coin_object_id: object_to_send,
         gas: None,
@@ -58,7 +59,7 @@ async fn transfer_coin(
     .execute(context)
     .await?;
 
-    let digest = if let WalletCommandResult::Transfer(_, cert, _) = res {
+    let digest = if let SuiClientCommandResult::Transfer(_, cert, _) = res {
         cert.transaction_digest
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");
@@ -81,7 +82,7 @@ async fn emit_move_events(
     let (sender, object_refs) = get_account_and_objects(context).await.unwrap();
     let gas_object = object_refs.get(0).unwrap().object_id;
 
-    let res = WalletCommands::CreateExampleNFT {
+    let res = SuiClientCommands::CreateExampleNFT {
         name: Some("example_nft_name".into()),
         description: Some("example_nft_desc".into()),
         url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
@@ -91,9 +92,9 @@ async fn emit_move_events(
     .execute(context)
     .await?;
 
-    let (object_id, digest) = if let WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists(
-        obj,
-    )) = res
+    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
+        SuiObjectRead::Exists(obj),
+    ) = res
     {
         (obj.reference.object_id, obj.previous_transaction)
     } else {
@@ -512,7 +513,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
             let (sender, object_to_split) = {
                 let context = &mut context.lock().await;
                 let address = context.config.accounts[i];
-                WalletCommands::SyncClientState {
+                SuiClientCommands::SyncClientState {
                     address: Some(address),
                 }
                 .execute(context)
@@ -532,7 +533,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
             for _ in 0..10 {
                 let res = {
                     let context = &mut context.lock().await;
-                    WalletCommands::SplitCoin {
+                    SuiClientCommands::SplitCoin {
                         amounts: vec![1],
                         coin_id: object_to_split.0,
                         gas: gas_object,
@@ -543,7 +544,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     .unwrap()
                 };
 
-                owned_tx_digest = if let WalletCommandResult::SplitCoin(SplitCoinResponse {
+                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(SplitCoinResponse {
                     certificate,
                     updated_gas,
                     ..
@@ -594,6 +595,21 @@ async fn set_up_subscription(port: u16, swarm: &Swarm) -> Result<(SuiNode, Clien
     let client = WsClientBuilder::default()
         .build(&format!("ws://{}", ws_server_url))
         .await?;
+    Ok((node, client))
+}
+
+/// Call this function to set up a network and a fullnode and return a jsonrpc client.
+/// Pass in an unique port for each test case otherwise they may interfere with one another.
+async fn set_up_jsonrpc(port: u16, swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::Error> {
+    let jsonrpc_server_url = format!("127.0.0.1:{}", port);
+    let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
+
+    let mut config = swarm.config().generate_fullnode_config();
+    config.json_rpc_address = jsonrpc_addr;
+
+    let node = SuiNode::start(&config).await?;
+
+    let client = HttpClientBuilder::default().build(&format!("http://{}", jsonrpc_server_url))?;
     Ok((node, client))
 }
 
@@ -650,5 +666,22 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
         ),
     }
 
+    Ok(())
+}
+
+// A test placeholder to verify event read APIs
+// TODO: add real tests when event store integration is done
+#[tokio::test]
+async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
+    let (swarm, _context, address) = setup_network_and_wallet().await?;
+    // Pass in an unique port for each test case otherwise they may interfere with one another.
+    let (_node, jsonrpc_client) = set_up_jsonrpc(6667, &swarm).await?;
+
+    let params = rpc_params![address, 10, 0, 666];
+    let response: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByOwner", params)
+        .await
+        .unwrap();
+    assert!(response.is_empty());
     Ok(())
 }

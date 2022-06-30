@@ -2,7 +2,7 @@
 title: Subscribe to JSON-RPC Real-Time Events
 ---
 
-Sui [fullnode](fullnode.md) supports publish / subscribe using JSON-RPC notifications via websocket.
+Sui [fullnode](fullnode.md) supports publish / subscribe using [JSON-RPC](json-rpc.md) notifications via websocket.
 This service allows clients to filter and subscribe to a real-time event stream generated from Move or from the Sui
 network.
 
@@ -152,14 +152,14 @@ We provide a few operators for combining filters:
 | Operator | Description                                                             |                                               Example                                               |
 |----------|-------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------:|
 | And      | Combine two filters; behaves the same as boolean And operator           |                       `{"And":[{"Package":"0x2"}, {"Module":"devnet_nft"}]}`                        |
-| Or       | Combine two filters; behaves the same as boolean Or operator             |                           `{"Or":[{"Package":"0x2"}, {"Package":"0x1"}]}`                           |
-| All      | Combine a list of filters; returns true if all filters match the event |          `{"All":[{"EventType":"MoveEvent"}, {"Package":"0x2"}, {"Module":"devnet_nft"}]}`          |
-| Any      | Combine a list of filters; returns true if any filter matches the event  | `{"Any":[{"EventType":"MoveEvent"}, {"EventType":"TransferObject"}, {"EventType":"DeleteObject"}]}` |
+| Or       | Combine two filters; behaves the same as boolean Or operator            |                           `{"Or":[{"Package":"0x2"}, {"Package":"0x1"}]}`                           |
+| All      | Combine a list of filters; returns true if all filters match the event  |          `{"All":[{"EventType":"MoveEvent"}, {"Package":"0x2"}, {"Module":"devnet_nft"}]}`          |
+| Any      | Combine a list of filters; returns true if any filter matches the event | `{"Any":[{"EventType":"MoveEvent"}, {"EventType":"TransferObject"}, {"EventType":"DeleteObject"}]}` |
 
 ## Examples
 
 ### Subscribe
-Here is an example of subscribing to a stream of `MoveEvent` emitted by the `0x2::devnet_nft` package, which is created by the [Wallet CLI](wallet.md#creating-example-nfts) `create-example-nft` command:
+Here is an example of subscribing to a stream of `MoveEvent` emitted by the `0x2::devnet_nft` package, which is created by the [Sui CLI client](cli-client.md#creating-example-nfts) `create-example-nft` command:
 ```shell
 >> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"0x2"}, {"Module":"devnet_nft"}]}}
 << {"jsonrpc":"2.0","result":3121662727959200,"id":1}

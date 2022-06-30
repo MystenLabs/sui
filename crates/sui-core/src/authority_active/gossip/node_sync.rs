@@ -364,15 +364,10 @@ where
     ) -> SuiResult {
         let digest = digests.transaction;
 
-        // TODO: Add a function to AuthorityAggregator to try multiple validators - even
-        // though we are fetching the cert/effects from the same validator that sent us the tx
-        // digest, and even though we know the cert is final, any given validator may be byzantine
-        // and refuse to give us the cert and effects.
-        let client = aggregator.clone_client(&peer);
-        let resp = client
+        // TODO: should we suggest that we try peer first?
+        let resp = aggregator
             .handle_transaction_and_effects_info_request(digests)
-            .await
-            .expect("TODO: need to use authority aggregator to download cert");
+            .await?;
 
         let cert = resp.certified_transaction.ok_or_else(|| {
             info!(?digest, ?peer, "validator did not return cert");

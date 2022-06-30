@@ -1487,13 +1487,12 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
     let mut temporary_store =
         AuthorityTemporaryStore::new(store.clone(), InputObjects::new(vec![]), genesis_digest);
     let mut pubkeys = Vec::new();
-    for name in committee.voting_rights.keys() {
+    for name in committee.names() {
         pubkeys.push(committee.public_key(name)?.to_bytes().to_vec());
     }
     // TODO: May use separate sui address than derived from pubkey.
     let sui_addresses: Vec<AccountAddress> = committee
-        .voting_rights
-        .keys()
+        .names()
         .map(|pk| SuiAddress::from(pk).into())
         .collect();
     // TODO: Allow config to specify human readable validator names.
@@ -1501,11 +1500,7 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
         .map(|i| Vec::from(format!("Validator{}", i).as_bytes()))
         .collect();
     // TODO: Change voting_rights to use u64 instead of usize.
-    let stakes: Vec<u64> = committee
-        .voting_rights
-        .values()
-        .map(|v| *v as u64)
-        .collect();
+    let stakes: Vec<u64> = committee.stakes().collect();
     adapter::execute(
         move_vm,
         &mut temporary_store,

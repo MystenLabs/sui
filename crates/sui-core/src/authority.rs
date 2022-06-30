@@ -1007,7 +1007,7 @@ impl AuthorityState {
             adapter::new_move_vm(native_functions.clone())
                 .expect("We defined natives to not fail here"),
         );
-
+        // TODO: update this function to not take genesis, committee if store already exists
         // Only initialize an empty database.
         if store
             .database_is_empty()

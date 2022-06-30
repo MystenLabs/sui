@@ -30,6 +30,6 @@ where
         keys.push(inner_authority_key);
     }
 
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
     (keys, committee)
 }

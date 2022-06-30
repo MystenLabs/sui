@@ -205,7 +205,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8dd4e5f0bf8285d5ed538d27fab7411f3e297908fd93c62195de8bee3f199e82"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -265,7 +265,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cda8f4bcc10624c4e85bc66b3f452cca98cfa5ca002dc83a16aad2367641bea"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -286,7 +286,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -297,7 +297,7 @@ version = "0.1.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96cf8829f67d2eab0b2dfa42c5d0ef737e0724e4a82b01b3e292456202b19716"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -420,9 +420,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "base64ct"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dea908e7347a8c64e378c17e30ef880ad73e3b4498346b055c2c00ea342f3179"
+checksum = "3bdca834647821e0b13d9539a8634eb62d3501b6b6c2cec1722786ee6671b851"
 
 [[package]]
 name = "bcs"
@@ -458,7 +458,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3deeecb812ca5300b7d3f66f730cc2ebd3511c3d36c691dd79c165d5b19a26e3"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -490,7 +490,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "lazycell",
  "peeking_take_while",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "regex",
  "rustc-hash",
@@ -623,9 +623,9 @@ dependencies = [
 
 [[package]]
 name = "blst"
-version = "0.3.9"
+version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c521c26a784d5c4bcd98d483a7d3518376e9ff1efbcfa9e2d456ab8183752303"
+checksum = "6a30d0edd9dd1c60ddb42b80341c7852f6f985279a5c1a83659dcb65899dec99"
 dependencies = [
  "cc",
  "glob",
@@ -871,7 +871,7 @@ checksum = "25320346e922cffe59c0bbc5410c8d8784509efb321488971081313cb1e1a33c"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -979,13 +979,28 @@ version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900#05fa85552c49f0775a47d72c37074c9ca1754900"
 dependencies = [
  "arc-swap",
- "crypto",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "multiaddr",
  "serde 1.0.137",
  "serde_json",
  "thiserror",
  "tracing",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "config"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "arc-swap",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "multiaddr",
+ "serde 1.0.137",
+ "serde_json",
+ "thiserror",
+ "tracing",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -1013,9 +1028,9 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0",
- "crypto",
- "dag",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "match_opt",
  "rand 0.7.3",
  "rocksdb",
@@ -1025,8 +1040,33 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "types",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "consensus"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "arc-swap",
+ "bincode",
+ "blake2",
+ "bytes",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "match_opt",
+ "rand 0.7.3",
+ "rocksdb",
+ "serde 1.0.137",
+ "serde_bytes",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -1048,8 +1088,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31432bc31ff8883bf6a693a79371862f73087822470c82d6a1ec778781ee3978"
 dependencies = [
  "console-api",
- "crossbeam-channel 0.5.4",
- "crossbeam-utils 0.8.8",
+ "crossbeam-channel",
+ "crossbeam-utils",
  "futures",
  "hdrhistogram",
  "humantime",
@@ -1111,7 +1151,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49fc9a695bca7f35f5f4c15cddc84415f66a74ea78eef08e90c5024f2b540e23"
 dependencies = [
- "crc-catalog",
+ "crc-catalog 1.1.1",
 ]
 
 [[package]]
@@ -1119,6 +1159,12 @@ name = "crc-catalog"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccaeedb56da03b09f598226e25e80088cb4cd25f316e6e4df7d695f0feeb1403"
+
+[[package]]
+name = "crc-catalog"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d0165d2900ae6778e36e80bbc4da3b5eefccee9ba939761f9c2882a5d9af3ff"
 
 [[package]]
 name = "crc32fast"
@@ -1172,21 +1218,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae5588f6b3c3cb05239e90bd110f257254aecd01e4635400391aeae07497845"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
  "crossbeam-queue",
- "crossbeam-utils 0.8.8",
-]
-
-[[package]]
-name = "crossbeam-channel"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b153fe7cbef478c567df0f972e02e6d736db11affe43dfc9c56a9374d1adfb87"
-dependencies = [
- "crossbeam-utils 0.7.2",
- "maybe-uninit",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -1196,7 +1232,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aaa7bd5fb665c6864b5f963dd9097905c54125909c7aa94c9e18507cdbe6c53"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -1207,7 +1243,7 @@ checksum = "6455c0ca19f0d2fbf751b908d5c55c1f5cbc65e03c4225427254b46890bdde1e"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-epoch",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -1218,7 +1254,7 @@ checksum = "1145cf131a2c6ba0615079ab6a638f7e1973ac9c2634fcbeaaad6114246efe8c"
 dependencies = [
  "autocfg",
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "lazy_static 1.4.0",
  "memoffset",
  "scopeguard",
@@ -1231,18 +1267,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f25d8400f4a7a5778f0e4e52384a48cbd9b5c495d110786187fc750075277a2"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.8",
-]
-
-[[package]]
-name = "crossbeam-utils"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3c7c73a2d1e9fc0886a08b93e98eb643461230d5f1925e4036204d5f2e261a8"
-dependencies = [
- "autocfg",
- "cfg-if 0.1.10",
- "lazy_static 1.4.0",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -1343,6 +1368,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "base64ct",
+ "blake2",
+ "blst",
+ "ed25519-dalek",
+ "eyre",
+ "once_cell",
+ "rand 0.7.3",
+ "readonly",
+ "serde 1.0.137",
+ "serde_bytes",
+ "signature",
+ "tokio",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "zeroize",
+]
+
+[[package]]
 name = "crypto-common"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1428,7 +1474,7 @@ version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900#05fa85552c49f0775a47d72c37074c9ca1754900"
 dependencies = [
  "arc-swap",
- "crypto",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "dashmap",
  "either",
  "itertools",
@@ -1437,6 +1483,23 @@ dependencies = [
  "serde 1.0.137",
  "thiserror",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "dag"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "arc-swap",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "dashmap",
+ "either",
+ "itertools",
+ "once_cell",
+ "rayon",
+ "serde 1.0.137",
+ "thiserror",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -1467,7 +1530,7 @@ checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
 dependencies = [
  "fnv",
  "ident_case",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "strsim 0.10.0",
  "syn 1.0.96",
@@ -1481,7 +1544,7 @@ checksum = "649c91bc01e8b1eac09fb91e8dbc7d517684ca6be8ebc75bb9cafc894f9fdb6f"
 dependencies = [
  "fnv",
  "ident_case",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "strsim 0.10.0",
  "syn 1.0.96",
@@ -1553,7 +1616,7 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -1564,7 +1627,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e79116f119dd1dba1abf1f3405f03b9b0e79a27a3883864bfebded8a3dc768cd"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -1585,7 +1648,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f91d4cfa921f1c05904dc3c57b4a32c38aed3340cce209f3a6fd1478babafc4"
 dependencies = [
  "darling 0.14.1",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -1831,7 +1894,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0eb359f1476bf611266ac1f5355bc14aeca37b299d0ebccc038ee7058891c9cb"
 dependencies = [
  "once_cell",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -1901,13 +1964,13 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0",
- "consensus",
- "crypto",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "futures",
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "primary",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "rocksdb",
  "serde 1.0.137",
  "thiserror",
@@ -1916,9 +1979,38 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "types",
- "worker",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "executor"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "blake2",
+ "bytes",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "futures",
+ "multiaddr",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "rocksdb",
+ "serde 1.0.137",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tracing",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -2137,7 +2229,7 @@ version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33c1e13800337f4d4d7a316bf45a567dbcb6ffe087f16424852d97e97a91f512"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -2474,7 +2566,7 @@ checksum = "31672b7011be2c4f7456c4ddbcb40e7e9a4a9fad8efe49a6ebaf5f307d0109c0"
 dependencies = [
  "base64",
  "byteorder",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "flate2",
  "nom 7.1.1",
  "num-traits 0.2.15",
@@ -2686,7 +2778,7 @@ version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "713f1b139373f96a2e0ce3ac931cd01ee973c3c5dd7c40c0c2efe96ad2b6751d"
 dependencies = [
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "globset",
  "lazy_static 1.4.0",
  "log",
@@ -2728,7 +2820,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e074c19deab2501407c91ba1860fa3d6820bfde307db6d8cb851b55a10be89b"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
 ]
 
@@ -2740,12 +2832,12 @@ checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
-version = "1.8.2"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6012d540c5baa3589337a98ce73408de9b5a25ec9fc2c6fd6be8f0d39e0ca5a"
+checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
 ]
 
 [[package]]
@@ -2820,9 +2912,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.57"
+version = "0.3.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "671a26f820db17c2a2750743f1dd03bafd15b98c9f30c7c2628c024c05d73397"
+checksum = "c3fac17f7123a73ca62df411b1bf727ccc805daa070338fda671c86dac1bdc27"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -2949,7 +3041,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b8d7f449cab3b747f12c3efc27f5cad537f3b597c6a3838b0fac628f4bf730a"
 dependencies = [
  "proc-macro-crate",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -3097,12 +3189,12 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b5b3890533e543cb605cadca8060f9439a2032e5e6d088e3414ad32a46362a3"
+checksum = "cc195aab5b803465bf614a5a4765741abce6c8d64e7d8ca57acd2923661fba9f"
 dependencies = [
  "clap 3.1.18",
- "crossbeam-channel 0.4.4",
+ "crossbeam-channel",
  "rayon",
  "termcolor",
 ]
@@ -3200,12 +3292,6 @@ name = "matchit"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73cbba799671b762df5a175adf59ce145165747bb891505c43d09aefbbf38beb"
-
-[[package]]
-name = "maybe-uninit"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
 name = "memchr"
@@ -3311,7 +3397,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "262d56735932ee0240d515656e5a7667af3af2a5b0af4da558c4cff2b2aeb0c7"
 dependencies = [
  "cfg-if 1.0.0",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -4021,7 +4107,7 @@ checksum = "fc076939022111618a5026d3be019fd8b366e76314538ff9a1b59ffbcbf98bcd"
 dependencies = [
  "proc-macro-crate",
  "proc-macro-error",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
  "synstructure",
@@ -4074,7 +4160,7 @@ name = "name-variant"
 version = "1.0.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4#94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -4125,7 +4211,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "bytes",
- "crypto",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "futures",
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
@@ -4135,8 +4221,30 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tracing",
- "types",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "network"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "async-trait",
+ "backoff",
+ "bytes",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "futures",
+ "multiaddr",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "rand 0.7.3",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tracing",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -4204,12 +4312,12 @@ dependencies = [
  "bytes",
  "cfg-if 1.0.0",
  "clap 2.34.0",
- "config 0.1.0",
- "consensus",
- "crypto",
- "executor",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "futures",
- "primary",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "rand 0.7.3",
  "thiserror",
  "tokio",
@@ -4219,10 +4327,43 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber 0.3.11",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "types",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "url",
- "worker",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "node"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "async-trait",
+ "bincode",
+ "bytes",
+ "cfg-if 1.0.0",
+ "clap 2.34.0",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "futures",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "rand 0.7.3",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber 0.3.11",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "url",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -4372,7 +4513,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b0498641e53dd6ac1a4f22547548caa6864cc4933784319cd1775271c5a46ce"
 dependencies = [
  "proc-macro-crate",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -4440,7 +4581,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b501e44f11665960c7e7fcf062c7d96a14ade4aa98116c004b2e37b5be7d736c"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -4471,7 +4612,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6105e89802af13fdf48c49d7646d3b533a70e536d818aae7e78ba0433d01acb8"
 dependencies = [
  "async-trait",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "futures-channel",
  "futures-executor",
  "futures-util",
@@ -4551,7 +4692,7 @@ checksum = "03f2cb802b5bdfdf52f1ffa0b54ce105e4d346e91990dd571f86c91321ad49e2"
 dependencies = [
  "Inflector",
  "proc-macro-error",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -4706,7 +4847,7 @@ checksum = "99b8db626e31e5b81787b9783425769681b347011cc59471e33ea46d2ea0cf55"
 dependencies = [
  "pest",
  "pest_meta",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -4796,7 +4937,7 @@ version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "744b6f092ba29c3650faf274db506afd39944f48420f6c86b17cfe0ee1cb36bb"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -4907,11 +5048,11 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.1.11"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f28f53e8b192565862cf99343194579a022eb9c7dd3a8d03134734803c7b3125"
+checksum = "9e1516508b396cefe095485fdce673007422f5e48e82934b7b423dc26aa5e6a4"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "syn 1.0.96",
 ]
 
@@ -4926,16 +5067,16 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0",
- "consensus",
- "crypto",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "derive_builder",
  "ed25519-dalek",
  "futures",
  "itertools",
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "network",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "prost",
  "rand 0.7.3",
  "serde 1.0.137",
@@ -4946,8 +5087,43 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "types",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "primary"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "async-recursion",
+ "async-trait",
+ "base64",
+ "bincode",
+ "blake2",
+ "bytes",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "derive_builder",
+ "ed25519-dalek",
+ "futures",
+ "itertools",
+ "multiaddr",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "prost",
+ "rand 0.7.3",
+ "serde 1.0.137",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tower",
+ "tracing",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -4967,7 +5143,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
 dependencies = [
  "proc-macro-error-attr",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
  "version_check",
@@ -4979,7 +5155,7 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "version_check",
 ]
@@ -4995,9 +5171,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.39"
+version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c54b25569025b7fc9651de43004ae593a75ad88543b17178aa5e1b9c4f15f56f"
+checksum = "dd96a1e8ed2596c337f8eae5f24924ec83f5ad5ab21ea8e455d3566c69fbcaf7"
 dependencies = [
  "unicode-ident",
 ]
@@ -5088,7 +5264,7 @@ checksum = "7b670f45da57fb8542ebdbb6105a925fe571b67f9e7ed9f47a06a84e72b4e7cc"
 dependencies = [
  "anyhow",
  "itertools",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -5152,7 +5328,7 @@ version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1feb54ed693b93a84e14094943b84b7c4eae204c512b7ccb95ab0c66d278ad1"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
 ]
 
 [[package]]
@@ -5282,9 +5458,9 @@ version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "258bcdb5ac6dad48491bb2992db6b7cf74878b0384908af124823d118c99683f"
 dependencies = [
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "num_cpus",
 ]
 
@@ -5321,7 +5497,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1195d8cd0ebd43f09af81cbfabd0105419337d13baf2b537ee6788f2c63f825d"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -5367,7 +5543,7 @@ version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a043824e29c94169374ac5183ac0ed43f5724dc4556b19568007486bd840fa1f"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -5660,7 +5836,7 @@ version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af4d7e1b012cb3d9129567661a63755ea4b8a7386d339dc945ae187e403c6743"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "serde_derive_internals",
  "syn 1.0.96",
@@ -5831,7 +6007,7 @@ version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f26faba0c3959972377d3b2d306ee9f71faee9714294e41bb777f83f88578be"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -5842,7 +6018,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85bf8229e7920a9f636479437026331ce11aa132b4dde37d121944a44d6e5f3c"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -5897,7 +6073,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e182d6ec6f05393cc0e5ed1bf81ad6db3a8feedf8ee515ecdd369809bcce8082"
 dependencies = [
  "darling 0.13.4",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -6154,6 +6330,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlformat"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f87e292b4291f154971a43c3774364e2cbcaec599d3f5bf6fa9d122885dbc38a"
+dependencies = [
+ "itertools",
+ "nom 7.1.1",
+ "unicode_categories",
+]
+
+[[package]]
 name = "sqlx"
 version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6198,7 +6385,7 @@ dependencies = [
  "rustls 0.19.1",
  "sha2 0.10.2",
  "smallvec",
- "sqlformat",
+ "sqlformat 0.1.8",
  "sqlx-rt",
  "stringprep",
  "thiserror",
@@ -6218,7 +6405,7 @@ dependencies = [
  "either",
  "heck 0.4.0",
  "once_cell",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "sha2 0.10.2",
  "sqlx-core",
@@ -6306,7 +6493,7 @@ checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
 dependencies = [
  "heck 0.3.3",
  "proc-macro-error",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -6324,7 +6511,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6878079b17446e4d3eba6192bb0a2950d5b14f0ed8424b852310e5a94345d0ef"
 dependencies = [
  "heck 0.4.0",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "rustversion",
  "syn 1.0.96",
@@ -6352,71 +6539,35 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64ct",
- "bcs",
- "bytes",
  "clap 3.1.18",
  "colored",
- "dirs",
- "ed25519-dalek",
  "futures",
- "hex",
  "jsonrpsee",
- "jsonrpsee-core",
- "jsonrpsee-proc-macros",
- "move-binary-format",
- "move-bytecode-utils",
- "move-bytecode-verifier",
  "move-core-types",
  "move-package",
  "move-unit-test",
- "multiaddr",
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
- "node",
- "num_cpus",
- "once_cell",
- "parking_lot 0.12.1",
- "pretty_assertions",
- "prometheus",
  "rand 0.7.3",
- "rayon",
- "rocksdb",
  "rustyline",
  "rustyline-derive",
- "schemars",
  "serde 1.0.137",
- "serde-name",
- "serde-value",
  "serde_json",
  "serde_with",
  "shell-words",
- "strum",
- "strum_macros",
- "sui-adapter",
  "sui-config",
  "sui-core",
  "sui-framework",
  "sui-gateway",
  "sui-json",
- "sui-json-rpc",
  "sui-json-rpc-api",
- "sui-network",
  "sui-node",
- "sui-open-rpc",
- "sui-open-rpc-macros",
  "sui-quorum-driver",
- "sui-storage",
  "sui-swarm",
  "sui-types",
- "sui-verifier",
  "telemetry-subscribers",
  "tempfile",
  "test-utils",
  "tokio",
- "tokio-util",
- "toml",
  "tracing",
- "tracing-subscriber 0.3.11",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
  "unescape",
  "workspace-hack 0.1.0",
@@ -6454,6 +6605,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-benchmark"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 3.1.18",
+ "futures",
+ "move-core-types",
+ "multiaddr",
+ "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "num_cpus",
+ "prometheus",
+ "rayon",
+ "rocksdb",
+ "serde 1.0.137",
+ "serde_json",
+ "serde_with",
+ "strum",
+ "strum_macros",
+ "sui-config",
+ "sui-core",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.11",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
 name = "sui-cluster-test"
 version = "0.1.0"
 dependencies = [
@@ -6464,6 +6645,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sui",
+ "sui-config",
  "sui-core",
  "sui-faucet",
  "sui-json",
@@ -6484,8 +6666,8 @@ dependencies = [
  "arc-swap",
  "base64ct",
  "bcs",
- "config 0.1.0",
- "crypto",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "debug-ignore",
  "dirs",
  "move-binary-format",
@@ -6516,11 +6698,11 @@ dependencies = [
  "chrono",
  "clap 3.1.18",
  "colored",
- "crypto",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "curve25519-dalek",
  "ed25519-dalek",
  "either",
- "executor",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "futures",
  "hex",
  "itertools",
@@ -6532,7 +6714,7 @@ dependencies = [
  "move-vm-types",
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
- "node",
+ "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
@@ -6567,7 +6749,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
- "types",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "workspace-hack 0.1.0",
 ]
 
@@ -6644,30 +6826,22 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "ed25519-dalek",
+ "clap 3.1.18",
  "futures",
- "jsonrpsee",
- "jsonrpsee-core",
- "jsonrpsee-proc-macros",
- "move-bytecode-utils",
- "move-core-types",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
- "once_cell",
  "prometheus",
- "schemars",
  "serde 1.0.137",
- "serde_json",
- "serde_with",
- "strum",
- "strum_macros",
  "sui-config",
  "sui-core",
+ "sui-framework",
  "sui-json",
+ "sui-json-rpc",
  "sui-json-rpc-api",
- "sui-open-rpc",
+ "sui-node",
  "sui-types",
+ "telemetry-subscribers",
+ "test-utils",
  "tokio",
- "tokio-stream",
  "tracing",
  "workspace-hack 0.1.0",
 ]
@@ -6726,6 +6900,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "colored",
+ "ed25519-dalek",
  "either",
  "itertools",
  "jsonrpsee",
@@ -6808,7 +6983,7 @@ version = "0.1.0"
 dependencies = [
  "derive-syn-parse",
  "itertools",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
  "workspace-hack 0.1.0",
@@ -6924,11 +7099,11 @@ dependencies = [
  "bcs",
  "bincode",
  "blst",
- "crypto",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "curve25519-dalek",
  "digest 0.10.3",
  "ed25519-dalek",
- "executor",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "hex",
  "hkdf",
  "itertools",
@@ -7003,7 +7178,7 @@ version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0748dd251e24453cb8717f0354206b91557e4ec8703673a4b30208f2abaf1ebf"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "unicode-ident",
 ]
@@ -7020,7 +7195,7 @@ version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
  "unicode-xid 0.2.3",
@@ -7155,7 +7330,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf82068d044bda291ae8cad09018bfa8df3e303825a724839dc2d21283fafeb"
 dependencies = [
  "cargo_metadata",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "serde 1.0.137",
  "strum_macros",
@@ -7170,7 +7345,7 @@ dependencies = [
  "darling 0.14.1",
  "if_chain",
  "lazy_static 1.4.0",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "subprocess",
  "syn 1.0.96",
@@ -7201,7 +7376,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bytes",
- "config 0.1.0",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "futures",
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
@@ -7260,7 +7435,7 @@ version = "1.0.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0396bc89e626244658bef819e22d0cc459e795a5ebe878e6ec336d1674a8d79a"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -7388,7 +7563,7 @@ version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9724f9a975fb987ef7a3cd9be0350edcbe130698af5b8f7a631e23d42d052484"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -7526,7 +7701,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9263bf4c9bfaae7317c1c2faf7f18491d2fe476f70c414b73bf5d445b00ffa1"
 dependencies = [
  "prettyplease",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "prost-build",
  "quote 1.0.18",
  "syn 1.0.96",
@@ -7538,7 +7713,7 @@ version = "0.7.2"
 source = "git+https://github.com/hyperium/tonic.git?rev=de2e4ac077c076736dc451f3415ea7da1a61a560#de2e4ac077c076736dc451f3415ea7da1a61a560"
 dependencies = [
  "prettyplease",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -7642,7 +7817,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "time 0.3.9",
  "tracing-subscriber 0.3.11",
 ]
@@ -7653,7 +7828,7 @@ version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc6b8ad3567499f98a1db7a752b07a7c8c7c7c34c332ec00effb2b0027974b7c"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -7862,9 +8037,9 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0",
- "crypto",
- "dag",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "derive_builder",
  "ed25519-dalek",
  "proptest",
@@ -7878,6 +8053,33 @@ dependencies = [
  "tonic",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "types"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "base64",
+ "bincode",
+ "blake2",
+ "bytes",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "derive_builder",
+ "ed25519-dalek",
+ "proptest",
+ "proptest-derive",
+ "prost",
+ "rand 0.7.3",
+ "serde 1.0.137",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -8029,7 +8231,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2e7e85a0596447f0f2ac090e16bc4c516c6fe91771fb0c0ccf7fa3dae896b9c"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
 ]
@@ -8103,7 +8305,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d257817081c7dffcdbab24b9e62d2def62e2ff7d00b1c20062551e6cccc145ff"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
 ]
 
@@ -8157,9 +8359,9 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.80"
+version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27370197c907c55e3f1a9fbe26f44e937fe6451368324e009cba39e139dc08ad"
+checksum = "7c53b543413a17a202f4be280a7e5c62a1c69345f5de525ee64f8cfdbc954994"
 dependencies = [
  "cfg-if 1.0.0",
  "serde 1.0.137",
@@ -8169,14 +8371,14 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-backend"
-version = "0.2.80"
+version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53e04185bfa3a779273da532f5025e33398409573f348985af9a1cbf3774d3f4"
+checksum = "5491a68ab4500fa6b4d726bd67408630c3dbe9c4fe7bda16d5c82a1fd8c7340a"
 dependencies = [
  "bumpalo",
  "lazy_static 1.4.0",
  "log",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
  "wasm-bindgen-shared",
@@ -8196,9 +8398,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.80"
+version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17cae7ff784d7e83a2fe7611cfe766ecf034111b49deb850a3dc7699c08251f5"
+checksum = "c441e177922bc58f1e12c022624b6216378e5febc2f0533e41ba443d505b80aa"
 dependencies = [
  "quote 1.0.18",
  "wasm-bindgen-macro-support",
@@ -8206,11 +8408,11 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.80"
+version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99ec0dc7a4756fffc231aab1b9f2f578d23cd391390ab27f952ae0c9b3ece20b"
+checksum = "7d94ac45fcf608c1f45ef53e748d35660f168490c10b23704c7779ab8f5c3048"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
  "wasm-bindgen-backend",
@@ -8219,9 +8421,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.80"
+version = "0.2.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d554b7f530dee5964d9a9468d95c1f8b8acae4f282807e7d27d4b03099a46744"
+checksum = "6a89911bd99e5f3659ec4acf9c4d93b0a90fe4a2a11f15328472058edc5261be"
 
 [[package]]
 name = "web-sys"
@@ -8424,14 +8626,14 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0",
- "crypto",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "ed25519-dalek",
  "futures",
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "network",
- "primary",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "serde 1.0.137",
  "tokio",
  "tokio-stream",
@@ -8440,8 +8642,38 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
- "types",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+]
+
+[[package]]
+name = "worker"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "blake2",
+ "bytes",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "ed25519-dalek",
+ "futures",
+ "multiaddr",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "serde 1.0.137",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tower",
+ "tracing",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
 ]
 
 [[package]]
@@ -8537,36 +8769,39 @@ dependencies = [
  "colored",
  "colored-diff",
  "combine",
- "config 0.1.0",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "config 0.11.0",
- "consensus",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "console-api",
  "console-subscriber",
  "constant_time_eq",
  "core2",
  "crc",
- "crc-catalog",
+ "crc-catalog 2.1.0",
  "crc32fast",
  "criterion",
  "criterion-plot",
  "crossbeam",
- "crossbeam-channel 0.4.4",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
  "crossbeam-queue",
- "crossbeam-utils 0.7.2",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "crossterm 0.21.0",
  "crossterm 0.22.1",
- "crypto",
+ "crossterm 0.23.2",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "crypto-common",
  "crypto-mac",
  "csv",
  "csv-core",
  "curve25519-dalek",
  "curve25519-dalek-fiat",
- "dag",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "darling 0.13.4",
  "darling 0.14.1",
  "darling_core 0.13.4",
@@ -8605,10 +8840,12 @@ dependencies = [
  "ed25519-dalek-fiat",
  "either",
  "endian-type",
+ "enum_dispatch",
  "env_logger",
  "ethnum",
  "event-listener",
- "executor",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "eyre",
  "fail",
  "fastrand",
@@ -8722,7 +8959,6 @@ dependencies = [
  "matchers",
  "matches",
  "matchit",
- "maybe-uninit",
  "memchr",
  "memoffset",
  "merlin",
@@ -8772,14 +9008,17 @@ dependencies = [
  "multihash-derive",
  "multimap",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
  "name-variant",
  "named-lock",
  "nested",
- "network",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "nexlint",
  "nexlint-lints",
  "nibble_vec",
- "node",
+ "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "nom 5.1.2",
  "nom 7.1.1",
  "normalize-line-endings",
@@ -8843,12 +9082,13 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "prettyplease",
- "primary",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "proc-macro-crate",
  "proc-macro-error",
  "proc-macro-error-attr",
  "proc-macro2 0.4.30",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "prometheus",
  "proptest",
  "proptest-derive",
@@ -8944,7 +9184,7 @@ dependencies = [
  "socket2",
  "soketto",
  "spin 0.9.3",
- "sqlformat",
+ "sqlformat 0.2.0",
  "sqlx",
  "sqlx-core",
  "sqlx-macros",
@@ -9029,8 +9269,10 @@ dependencies = [
  "twox-hash",
  "typed-arena",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
  "typenum",
- "types",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "ucd-trie",
  "uncased",
  "unescape",
@@ -9075,8 +9317,10 @@ dependencies = [
  "webpki-roots 0.21.1",
  "webpki-roots 0.22.3",
  "which",
- "worker",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "yaml-rust",
  "zeroize",
  "zeroize_derive",
@@ -9150,10 +9394,10 @@ dependencies = [
  "crc32fast",
  "criterion",
  "criterion-plot",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "crypto-mac",
  "csv",
  "csv-core",
@@ -9288,7 +9532,341 @@ dependencies = [
  "proc-macro-error",
  "proc-macro-error-attr",
  "proc-macro2 0.4.30",
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
+ "proptest",
+ "proptest-derive",
+ "prost",
+ "prost-build",
+ "prost-derive",
+ "prost-types",
+ "quick-error 1.2.3",
+ "quick-error 2.0.1",
+ "quote 0.6.13",
+ "quote 1.0.18",
+ "rand 0.7.3",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "rand_core 0.5.1",
+ "rand_core 0.6.3",
+ "rand_pcg",
+ "rand_xorshift",
+ "rayon",
+ "rayon-core",
+ "readonly",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "remove_dir_all",
+ "ring",
+ "rocksdb",
+ "rustc-hash",
+ "rustc_version 0.3.3",
+ "rustc_version 0.4.0",
+ "rustls 0.20.6",
+ "rustls-pemfile",
+ "rusty-fork",
+ "ryu",
+ "same-file",
+ "scopeguard",
+ "sct 0.7.0",
+ "semver 0.11.0",
+ "semver 1.0.9",
+ "semver-parser",
+ "serde 1.0.137",
+ "serde-reflection",
+ "serde_bytes",
+ "serde_cbor",
+ "serde_derive",
+ "serde_json",
+ "serde_test",
+ "serde_with",
+ "serde_with_macros",
+ "serde_yaml",
+ "sha2 0.9.9",
+ "sharded-slab",
+ "shlex",
+ "signature",
+ "slab",
+ "smallvec",
+ "socket2",
+ "static_assertions",
+ "strsim 0.10.0",
+ "strsim 0.8.0",
+ "structopt",
+ "structopt-derive",
+ "subtle",
+ "syn 0.15.44",
+ "syn 1.0.96",
+ "sync_wrapper",
+ "synstructure",
+ "tempfile",
+ "termcolor",
+ "termtree",
+ "textwrap 0.11.0",
+ "textwrap 0.15.0",
+ "thiserror",
+ "thiserror-impl",
+ "thread_local",
+ "time 0.3.9",
+ "tinytemplate",
+ "tinyvec",
+ "tinyvec_macros",
+ "tokio",
+ "tokio-io-timeout",
+ "tokio-macros",
+ "tokio-rustls 0.23.4",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "tonic",
+ "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic-health",
+ "tower",
+ "tower-http",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+ "tracing-attributes",
+ "tracing-core",
+ "tracing-futures",
+ "tracing-log",
+ "tracing-subscriber 0.2.25",
+ "tracing-subscriber 0.3.11",
+ "tracing-test",
+ "tracing-test-macro",
+ "try-lock",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "typenum",
+ "ucd-trie",
+ "unicode-bidi",
+ "unicode-ident",
+ "unicode-normalization",
+ "unicode-segmentation",
+ "unicode-width",
+ "unicode-xid 0.1.0",
+ "unicode-xid 0.2.3",
+ "unsigned-varint",
+ "untrusted",
+ "url",
+ "vec_map",
+ "version_check",
+ "wait-timeout",
+ "walkdir",
+ "want",
+ "webpki 0.22.0",
+ "which",
+ "yaml-rust",
+ "zeroize",
+ "zeroize_derive",
+ "zstd-sys",
+]
+
+[[package]]
+name = "workspace-hack"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d#3cf68183b22acfe014118ef2713d5094159f2f4d"
+dependencies = [
+ "adler",
+ "ahash",
+ "aho-corasick",
+ "ansi_term",
+ "anyhow",
+ "arc-swap",
+ "ark-bls12-377",
+ "ark-crypto-primitives",
+ "ark-ec",
+ "ark-ed-on-bw6-761",
+ "ark-ed-on-cp6-782",
+ "ark-ff",
+ "ark-ff-asm",
+ "ark-ff-macros",
+ "ark-relations",
+ "ark-serialize",
+ "ark-serialize-derive",
+ "ark-snark",
+ "ark-std",
+ "arrayref",
+ "arrayvec 0.7.2",
+ "async-recursion",
+ "async-stream",
+ "async-stream-impl",
+ "async-trait",
+ "atty",
+ "autocfg",
+ "axum",
+ "axum-core",
+ "backoff",
+ "base64",
+ "base64ct",
+ "bincode",
+ "bindgen",
+ "bit-set",
+ "bit-vec",
+ "bitflags",
+ "blake2",
+ "blake2s_simd",
+ "block-buffer 0.9.0",
+ "bls-crypto",
+ "blst",
+ "bs58",
+ "bstr",
+ "byteorder",
+ "bytes",
+ "bzip2-sys",
+ "cast",
+ "cc",
+ "cexpr",
+ "cfg-if 1.0.0",
+ "clang-sys",
+ "clap 2.34.0",
+ "clap 3.1.18",
+ "clap_lex",
+ "cmake",
+ "collectable",
+ "constant_time_eq",
+ "core2",
+ "crc32fast",
+ "criterion",
+ "criterion-plot",
+ "crossbeam-channel",
+ "crossbeam-deque",
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "crypto-mac",
+ "csv",
+ "csv-core",
+ "curve25519-dalek",
+ "darling 0.13.4",
+ "darling 0.14.1",
+ "darling_core 0.13.4",
+ "darling_core 0.14.1",
+ "darling_macro 0.13.4",
+ "darling_macro 0.14.1",
+ "dashmap",
+ "data-encoding",
+ "derivative",
+ "derive_builder",
+ "derive_builder_core",
+ "derive_builder_macro",
+ "diff",
+ "difflib",
+ "digest 0.9.0",
+ "downcast",
+ "ed25519",
+ "ed25519-dalek",
+ "either",
+ "env_logger",
+ "eyre",
+ "fastrand",
+ "fixedbitset 0.4.1",
+ "flate2",
+ "float-cmp",
+ "fnv",
+ "form_urlencoded",
+ "fragile",
+ "futures",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-macro",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "generic-array 0.14.5",
+ "getrandom 0.1.16",
+ "getrandom 0.2.6",
+ "glob",
+ "h2",
+ "half",
+ "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
+ "hdrhistogram",
+ "heck 0.3.3",
+ "heck 0.4.0",
+ "hex",
+ "http",
+ "http-body",
+ "http-range-header",
+ "httparse",
+ "httpdate",
+ "humantime",
+ "hyper",
+ "hyper-timeout",
+ "ident_case",
+ "idna",
+ "indenter",
+ "indexmap",
+ "instant",
+ "itertools",
+ "itoa 0.4.8",
+ "itoa 1.0.2",
+ "jobserver",
+ "keccak",
+ "lazy_static 1.4.0",
+ "lazycell",
+ "libc",
+ "libloading",
+ "librocksdb-sys",
+ "libz-sys",
+ "linked-hash-map",
+ "lock_api 0.4.7",
+ "log",
+ "lru",
+ "match_opt",
+ "matchers",
+ "matches",
+ "matchit",
+ "memchr",
+ "memoffset",
+ "merlin",
+ "mime",
+ "minimal-lexical",
+ "miniz_oxide",
+ "mio 0.8.3",
+ "mockall",
+ "mockall_derive",
+ "multiaddr",
+ "multihash",
+ "multihash-derive",
+ "multimap",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
+ "nom 7.1.1",
+ "normalize-line-endings",
+ "num-bigint",
+ "num-integer",
+ "num-traits 0.2.15",
+ "num_cpus",
+ "once_cell",
+ "oorandom",
+ "opaque-debug 0.3.0",
+ "os_str_bytes",
+ "parking_lot 0.12.1",
+ "parking_lot_core 0.9.3",
+ "paste",
+ "peeking_take_while",
+ "percent-encoding",
+ "pest",
+ "petgraph 0.6.2",
+ "pin-project",
+ "pin-project-internal",
+ "pin-project-lite",
+ "pin-utils",
+ "pkg-config",
+ "plotters",
+ "plotters-backend",
+ "plotters-svg",
+ "ppv-lite86",
+ "predicates",
+ "predicates-core",
+ "predicates-tree",
+ "pretty_assertions",
+ "prettyplease",
+ "proc-macro-crate",
+ "proc-macro-error",
+ "proc-macro-error-attr",
+ "proc-macro2 0.4.30",
+ "proc-macro2 1.0.40",
  "proptest",
  "proptest-derive",
  "prost",
@@ -9451,7 +10029,7 @@ version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f8f187641dad4f680d25c4bfc4225b418165984179f26ca76ec4fb6441d3a17"
 dependencies = [
- "proc-macro2 1.0.39",
+ "proc-macro2 1.0.40",
  "quote 1.0.18",
  "syn 1.0.96",
  "synstructure",

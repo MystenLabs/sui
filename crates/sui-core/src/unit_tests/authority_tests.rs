@@ -1345,6 +1345,7 @@ async fn test_genesis_sui_sysmtem_state_object() {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
     let move_object = sui_system_object.data.try_as_move().unwrap();
     let _sui_system_state = bcs::from_bytes::<SuiSystemState>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemState::type_());
@@ -1570,7 +1571,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     // Create a random directory to store the DB
 

@@ -246,7 +246,7 @@ module nfts::marketplaceTests {
             let mkp = test_scenario::borrow_mut(&mut mkp_wrapper);
             let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
             let listing = test_scenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
-            let payment = coin::withdraw(coin::balance_mut(&mut coin), 100, test_scenario::ctx(scenario));
+            let payment = coin::take(coin::balance_mut(&mut coin), 100, test_scenario::ctx(scenario));
 
             // Do the buy call and expect successful purchase.
             let nft = marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);
@@ -280,7 +280,7 @@ module nfts::marketplaceTests {
             let listing = test_scenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
 
             // AMOUNT here is 10 while expected is 100.
-            let payment = coin::withdraw(coin::balance_mut(&mut coin), 10, test_scenario::ctx(scenario));
+            let payment = coin::take(coin::balance_mut(&mut coin), 10, test_scenario::ctx(scenario));
 
             // Attempt to buy and expect failure purchase.
             let nft = marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);

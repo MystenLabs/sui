@@ -31,7 +31,7 @@ impl NetworkConfig {
     }
 
     pub fn committee(&self) -> Committee {
-        self.genesis.committee()
+        self.genesis.committee().unwrap()
     }
 
     pub fn into_validator_configs(self) -> Vec<NodeConfig> {
@@ -72,6 +72,7 @@ impl NetworkConfig {
             consensus_config: None,
             enable_event_processing: true,
             enable_gossip: true,
+            enable_reconfig: false,
             genesis: validator_config.genesis.clone(),
         }
     }

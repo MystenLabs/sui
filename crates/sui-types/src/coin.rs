@@ -9,7 +9,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::balance::Balance;
+use crate::balance::{Balance, Supply};
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     id::VersionedID,
@@ -83,5 +83,5 @@ impl Coin {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TreasuryCap {
     pub id: VersionedID,
-    pub total_supply: u64,
+    pub total_supply: Supply,
 }

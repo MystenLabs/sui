@@ -3,10 +3,10 @@
 
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 
-use crate::QuorumDriverApiClient;
-use crate::RpcFullNodeReadApiClient;
-use crate::RpcReadApiClient;
-use crate::RpcTransactionBuilderClient;
+pub use crate::QuorumDriverApiClient;
+pub use crate::RpcFullNodeReadApiClient;
+pub use crate::RpcReadApiClient;
+pub use crate::RpcTransactionBuilderClient;
 use crate::WalletSyncApiClient;
 
 pub struct SuiRpcClient {

@@ -788,8 +788,7 @@ pub async fn sync_digest<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let mut source_authorities: BTreeSet<AuthorityName> =
-        net.committee.voting_rights.keys().copied().collect();
+    let mut source_authorities: BTreeSet<AuthorityName> = net.committee.names().copied().collect();
     source_authorities.remove(&name);
 
     // Now try to update the destination authority sequentially using

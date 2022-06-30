@@ -21,8 +21,10 @@ use sui_types::{
     object::Object,
 };
 
+use crate::epoch::reconfiguration::Reconfigurable;
 #[cfg(test)]
 use sui_config::genesis::Genesis;
+use sui_network::tonic::transport::Channel;
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -99,6 +101,17 @@ impl NetworkAuthorityClient {
 
     fn client(&self) -> ValidatorClient<tonic::transport::Channel> {
         self.client.clone()
+    }
+}
+
+#[async_trait]
+impl Reconfigurable for NetworkAuthorityClient {
+    fn needs_network_recreation() -> bool {
+        true
+    }
+
+    fn recreate(channel: tonic::transport::Channel) -> Self {
+        NetworkAuthorityClient::new(channel)
     }
 }
 
@@ -221,6 +234,16 @@ pub struct LocalAuthorityClient {
     pub fault_config: LocalAuthorityClientFaultConfig,
 }
 
+impl Reconfigurable for LocalAuthorityClient {
+    fn needs_network_recreation() -> bool {
+        false
+    }
+
+    fn recreate(_channel: Channel) -> Self {
+        unreachable!(); // this function should not get called because the above function returns false
+    }
+}
+
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_transaction(
@@ -271,8 +294,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
         let state = self.state.clone();
-        let result = state.handle_account_info_request(request).await;
-        result
+        state.handle_account_info_request(request).await
     }
 
     async fn handle_object_info_request(
@@ -280,8 +302,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.state.clone();
-        let x = state.handle_object_info_request(request).await;
-        x
+        state.handle_object_info_request(request).await
     }
 
     /// Handle Object information requests for this account.
@@ -290,9 +311,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-
-        let result = state.handle_transaction_info_request(request).await;
-        result
+        state.handle_transaction_info_request(request).await
     }
 
     /// Handle Batch information requests for this authority.

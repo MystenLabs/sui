@@ -9,9 +9,8 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use debug_ignore::DebugIgnore;
-use narwhal_config::{Authority, Parameters, PrimaryAddresses, Stake, WorkerAddresses};
+use narwhal_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
 use rand::rngs::OsRng;
-use std::time::Duration;
 use std::{
     collections::BTreeMap,
     num::NonZeroUsize,
@@ -182,10 +181,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,
-                    narwhal_config: Parameters {
-                        max_header_delay: Duration::from_secs(5),
-                        ..Default::default()
-                    },
+                    narwhal_config: Default::default(),
                     narwhal_committee: narwhal_committee.clone(),
                 };
 
@@ -199,6 +195,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_gossip: true,
+                    enable_reconfig: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })

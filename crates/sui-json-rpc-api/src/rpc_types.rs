@@ -419,12 +419,12 @@ impl TryFrom<&SuiParsedObject> for GasCoin {
             SuiData::Package(_) => {}
         }
 
-        return Err(SuiError::TypeError {
+        Err(SuiError::TypeError {
             error: format!(
                 "Gas object type is not a gas coin: {:?}",
                 object.data.type_()
             ),
-        });
+        })
     }
 }
 
@@ -441,9 +441,9 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
             }
             _ => {}
         }
-        return Err(SuiError::TypeError {
+        Err(SuiError::TypeError {
             error: format!("Struct is not a gas coin: {move_struct:?}"),
-        });
+        })
     }
 }
 

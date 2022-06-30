@@ -3,10 +3,13 @@
 
 use anyhow::Result;
 use futures::TryFutureExt;
+use jsonrpsee::http_server::HttpServerHandle;
+use jsonrpsee::ws_server::WsServerHandle;
+use multiaddr::Multiaddr;
 use parking_lot::Mutex;
+use prometheus::Registry;
+use std::option::Option::None;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
-
-use jsonrpsee::ws_server::WsServerBuilder;
 use tracing::info;
 
 use sui_config::NodeConfig;
@@ -27,10 +30,11 @@ use sui_storage::{
     IndexStore,
 };
 
-use sui_json_rpc::event_api::EventApiImpl;
+use sui_json_rpc::event_api::EventReadApiImpl;
+use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_json_rpc_api::EventApiServer;
+use sui_types::crypto::PublicKeyBytes;
 
 pub mod metrics;
 
@@ -62,7 +66,7 @@ impl SuiNode {
         let genesis = config.genesis()?;
 
         let secret = Arc::pin(config.key_pair().copy());
-        let committee = genesis.committee();
+        let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
         let checkpoint_store = if config.consensus_config().is_some() {
             Some(Arc::new(Mutex::new(CheckpointStore::open(
@@ -124,12 +128,33 @@ impl SuiNode {
             net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
 
             let mut authority_clients = BTreeMap::new();
-            for validator in genesis.validator_set() {
-                let channel = net_config
-                    .connect_lazy(validator.network_address())
-                    .unwrap();
-                let client = NetworkAuthorityClient::new(channel);
-                authority_clients.insert(validator.public_key(), client);
+
+            let sui_system_state = state.get_sui_system_state_object().await?;
+
+            if config.enable_reconfig && sui_system_state.epoch > 0 {
+                // Create NetworkAuthorityClient with this epoch's network information
+                let epoch_validators = &sui_system_state.validators.active_validators;
+
+                for validator in epoch_validators {
+                    let net_addr: &[u8] = &validator.metadata.net_address.clone();
+                    let str_addr = std::str::from_utf8(net_addr)?;
+                    let address: Multiaddr = str_addr.parse()?;
+                    //let address = Multiaddr::try_from(net_addr)?;
+                    let channel = net_config.connect_lazy(&address)?;
+                    let client = NetworkAuthorityClient::new(channel);
+                    let name: &[u8] = &validator.metadata.name;
+                    let public_key_bytes = PublicKeyBytes::try_from(name)?;
+                    authority_clients.insert(public_key_bytes, client);
+                }
+            } else {
+                // Create NetworkAuthorityClient with the genesis set
+                for validator in genesis.validator_set() {
+                    let channel = net_config
+                        .connect_lazy(validator.network_address())
+                        .unwrap();
+                    let client = NetworkAuthorityClient::new(channel);
+                    authority_clients.insert(validator.public_key(), client);
+                }
             }
 
             let gateway_metrics =
@@ -201,32 +226,8 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let json_rpc_service = if config.consensus_config().is_some() {
-            None
-        } else {
-            let mut server = JsonRpcServerBuilder::new(&prometheus_registry)?;
-            server.register_module(ReadApi::new(state.clone()))?;
-            server.register_module(FullNodeApi::new(state.clone()))?;
-            server.register_module(BcsApiImpl::new(state.clone()))?;
-
-            let server_handle = server.start(config.json_rpc_address).await?;
-            Some(server_handle)
-        };
-
-        // TODO: we will change the conditions soon when we introduce txn subs
-        let ws_subscription_service = match (config.websocket_address, state.event_handler.clone())
-        {
-            (Some(ws_addr), Some(event_handler)) => {
-                let ws_server = WsServerBuilder::default().build(ws_addr).await?;
-                let server_addr = ws_server.local_addr()?;
-                let ws_handle =
-                    ws_server.start(EventApiImpl::new(state.clone(), event_handler).into_rpc())?;
-
-                info!("Starting WS endpoint at ws://{}", server_addr);
-                Some(ws_handle)
-            }
-            _ => None,
-        };
+        let (json_rpc_service, ws_subscription_service) =
+            build_node_server(state.clone(), config, &prometheus_registry).await?;
 
         let node = Self {
             grpc_server,
@@ -253,4 +254,48 @@ impl SuiNode {
 
         Ok(())
     }
+}
+
+pub async fn build_node_server(
+    state: Arc<AuthorityState>,
+    config: &NodeConfig,
+    prometheus_registry: &Registry,
+) -> Result<(Option<HttpServerHandle>, Option<WsServerHandle>)> {
+    // Validators do not expose these APIs
+    if config.consensus_config().is_some() {
+        return Ok((None, None));
+    }
+
+    let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
+
+    server.register_module(ReadApi::new(state.clone()))?;
+    server.register_module(FullNodeApi::new(state.clone()))?;
+    server.register_module(BcsApiImpl::new(state.clone()))?;
+
+    if let Some(event_handler) = state.event_handler.clone() {
+        server.register_module(EventReadApiImpl::new(state.clone(), event_handler))?;
+    }
+
+    let rpc_server_handle = server
+        .start(config.json_rpc_address)
+        .await?
+        .into_http_server_handle()
+        .expect("Expect a http server handle");
+
+    // TODO: we will change the conditions soon when we introduce txn subs
+    let ws_server_handle = match (config.websocket_address, state.event_handler.clone()) {
+        (Some(ws_addr), Some(event_handler)) => {
+            let mut server = JsonRpcServerBuilder::new(true, prometheus_registry)?;
+            server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
+            Some(
+                server
+                    .start(ws_addr)
+                    .await?
+                    .into_ws_server_handle()
+                    .expect("Expect a websocket server handle"),
+            )
+        }
+        _ => None,
+    };
+    Ok((Some(rpc_server_handle), ws_server_handle))
 }

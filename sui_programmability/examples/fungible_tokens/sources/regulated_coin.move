@@ -68,7 +68,7 @@ module rc::regulated_coin {
 
     /// Join Balances of a `RegulatedCoin` c1 and `RegulatedCoin` c2.
     public fun join<T: drop>(witness: T, c1: &mut RegulatedCoin<T>, c2: RegulatedCoin<T>) {
-        balance::join(&mut c1.balance, into_balance(witness, c2))
+        balance::join(&mut c1.balance, into_balance(witness, c2));
     }
 
     /// Subtract `RegulatedCoin` with `value` from `RegulatedCoin`.
@@ -160,20 +160,20 @@ module abc::abc {
     }
 
     /// Mint more ABC. Requires TreasuryCap for authorization, so can only be done by admins.
-    public entry fun mint(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, _: &mut TxContext) {
-        balance::join(borrow_mut(owned), coin::mint_balance(value, treasury))
+    public entry fun mint(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64) {
+        balance::join(borrow_mut(owned), coin::mint_balance(treasury, value));
     }
 
     /// Burn `value` amount of `RCoin<ABC>`. Requires TreasuryCap for authorization, so can only be done by admins.
     ///
     /// TODO: Make TreasuryCap a part of Balance module instead of Coin.
     public entry fun burn(treasury: &mut TreasuryCap<ABC>, owned: &mut RCoin<ABC>, value: u64, ctx: &mut TxContext) {
-        coin::burn(treasury, coin::withdraw(borrow_mut(owned), value, ctx));
+        coin::burn(treasury, coin::take(borrow_mut(owned), value, ctx));
     }
 
     /// Ban some address and forbid making any transactions from or to this address.
     /// Only owner of the TreasuryCap can perform this action.
-    public entry fun ban(_cap: &TreasuryCap<ABC>, registry: &mut Registry, to_ban: address, _: &mut TxContext) {
+    public entry fun ban(_cap: &TreasuryCap<ABC>, registry: &mut Registry, to_ban: address) {
         vector::push_back(&mut registry.banned, to_ban)
     }
 
@@ -229,7 +229,7 @@ module abc::abc {
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
 
-        transfer::transfer(coin::withdraw(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
+        transfer::transfer(coin::take(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
     }
 
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
@@ -319,7 +319,7 @@ module abc::tests {
 
     // === Helpers and basic test organization ===
 
-    fun scenario(): Scenario { test_scenario::begin(&@ABC) }
+    fun scenario(): Scenario { test_scenario::begin(&@0xABC) }
     fun people(): (address, address, address) { (@0xABC, @0xE05, @0xFACE) }
 
     // Admin creates a regulated coin ABC and mints 1,000,000 of it.
@@ -334,7 +334,7 @@ module abc::tests {
             let cap = test_scenario::take_owned<TreasuryCap<ABC>>(test);
             let coin = test_scenario::take_owned<RCoin<ABC>>(test);
 
-            abc::mint(&mut cap, &mut coin, 1000000, ctx(test));
+            abc::mint(&mut cap, &mut coin, 1000000);
 
             assert!(rcoin::value(&coin) == 1000000, 0);
 
@@ -442,7 +442,7 @@ module abc::tests {
 
         next_tx(test, &user1); {
             let coin = test_scenario::take_owned<Coin<ABC>>(test);
-            Sui::transfer::transfer(coin, user2);
+            sui::transfer::transfer(coin, user2);
         };
     }
 
@@ -455,7 +455,7 @@ module abc::tests {
 
         next_tx(test, &user2); {
             let coin = test_scenario::take_owned<Coin<ABC>>(test);
-            Sui::transfer::transfer(coin, admin);
+            sui::transfer::transfer(coin, admin);
         };
 
         next_tx(test, &admin); {
@@ -482,7 +482,7 @@ module abc::tests {
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = test_scenario::borrow_mut(&mut reg);
 
-            abc::ban(&cap, reg_ref, user1, ctx(test));
+            abc::ban(&cap, reg_ref, user1);
 
             test_scenario::return_shared(test, reg);
             test_scenario::return_owned(test, cap);
@@ -534,7 +534,7 @@ module abc::tests {
 
         next_tx(test, &user1); {
             let coin = test_scenario::take_owned<RCoin<ABC>>(test);
-            Sui::transfer::transfer(coin, user2);
+            sui::transfer::transfer(coin, user2);
         };
 
         next_tx(test, &user2); {

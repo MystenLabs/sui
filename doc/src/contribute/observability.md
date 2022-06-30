@@ -193,7 +193,7 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
    ```shell
    $ SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start
    ```
-1. Run some transfers with wallet, or run the benchmarking tool.
+1. Run some transfers with Sui CLI client, or run the benchmarking tool.
 4. Browse to `http://localhost:16686/` and select Sui as the service.
 
 > **Note:** Separate spans (which are not nested) are not connected as a single trace for now.

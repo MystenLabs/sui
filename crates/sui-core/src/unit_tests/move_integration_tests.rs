@@ -523,7 +523,7 @@ pub async fn build_and_try_publish_test_package(
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
-    let signature = Signature::new(&data, &*sender_key);
+    let signature = Signature::new(&data, sender_key);
     let transaction = Transaction::new(data, signature);
     send_and_confirm_transaction(authority, transaction)
         .await
