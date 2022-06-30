@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 
 import { Explorer } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
+import { ENV_TO_API } from '_app/ApiProvider';
 import BsIcon from '_components/bs-icon';
 import ExternalLink from '_components/external-link';
 import { useAppSelector } from '_hooks';
@@ -38,13 +39,15 @@ function useAddress(props: ExplorerLinkProps) {
 function ExplorerLink(props: ExplorerLinkProps) {
     const { type, children, className, title } = props;
     const address = useAddress(props);
+    const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
     const objectID = type === ExplorerLinkType.object ? props.objectID : null;
     const transactionID =
         type === ExplorerLinkType.transaction ? props.transactionID : null;
+
     const explorerHref = useMemo(() => {
         switch (type) {
             case ExplorerLinkType.address:
-                return address && Explorer.getAddressUrl(address);
+                return address && ENV_TO_API[selectedApiEnv].explorer;
             case ExplorerLinkType.object:
                 return objectID && Explorer.getObjectUrl(objectID);
             case ExplorerLinkType.transaction:
@@ -52,7 +55,7 @@ function ExplorerLink(props: ExplorerLinkProps) {
                     transactionID && Explorer.getTransactionUrl(transactionID)
                 );
         }
-    }, [type, address, objectID, transactionID]);
+    }, [type, address, objectID, transactionID, selectedApiEnv]);
     if (!explorerHref) {
         return null;
     }
