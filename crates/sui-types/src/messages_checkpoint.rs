@@ -310,21 +310,21 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityWeakQuorumSignInfo {
-                epoch: committee.epoch,
-                signatures: signed_checkpoints
+            auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
+                committee.epoch,
+                signed_checkpoints
                     .into_iter()
                     .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
-                    .collect(),
-            },
+                    .collect::<Vec<_>>()
+            )?
         };
 
         certified_checkpoint.verify(committee)?;
         Ok(certified_checkpoint)
     }
 
-    pub fn signatory_authorities(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.auth_signature.signatures.iter().map(|(name, _)| name)
+    pub fn signatory_authorities(&self) -> Vec<AuthorityName> {
+        self.auth_signature.authorities().iter().map(|x| *x).collect::<_>()
     }
 
     /// Check that a certificate is valid, and signed by a quorum of authorities

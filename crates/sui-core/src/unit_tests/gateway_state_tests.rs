@@ -69,15 +69,9 @@ async fn public_transfer_object(
 }
 
 #[tokio::test]
-<<<<<<< HEAD
 async fn test_transfer_coin() {
     let (addr1, key1) = KeyPair::get_key_pair();
     let (addr2, _key2) = KeyPair::get_key_pair();
-=======
-async fn test_public_transfer_object() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _key2) = get_key_pair();
->>>>>>> ab9d80b6a9469ca8d55f13a7320ea6b834f8a1a0
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
@@ -414,15 +408,9 @@ async fn test_equivocation_resilient() {
 }
 
 #[tokio::test]
-<<<<<<< HEAD
-async fn test_transfer_coin_with_retry() {
+async fn test_public_transfer_object_with_retry() {
     let (addr1, key1) = KeyPair::get_key_pair();
     let (addr2, _key2) = KeyPair::get_key_pair();
-=======
-async fn test_public_transfer_object_with_retry() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _key2) = get_key_pair();
->>>>>>> ab9d80b6a9469ca8d55f13a7320ea6b834f8a1a0
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);

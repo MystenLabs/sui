@@ -13,7 +13,8 @@ use serde::de::{Deserializer, Error};
 use serde::ser::Serializer;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::{DeserializeAs, SerializeAs};
+use serde_with::{DeserializeAs, SerializeAs, Bytes};
+use blst::{min_sig as bls, BLST_ERROR};
 
 use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
 
@@ -144,6 +145,38 @@ where
         } else {
             R::deserialize_as(deserializer)
         }
+    }
+}
+
+pub struct BlsSignature;
+
+impl SerializeAs<bls::Signature> for BlsSignature {
+    fn serialize_as<S>(source: &bls::Signature, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            // Serialise to Base64 encoded String
+            Base64::encode(source.to_bytes()).serialize(serializer)
+        } else {
+            // Serialise to Bytes
+            Bytes::serialize_as(&source.serialize(), serializer)
+        }
+    }
+}
+
+impl<'de> DeserializeAs<'de, bls::Signature> for BlsSignature {
+    fn deserialize_as<D>(deserializer: D) -> Result<bls::Signature, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bytes = if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Base64::decode(&s).map_err(to_custom_error::<'de, D, _>)?
+        } else {
+            Bytes::deserialize_as(deserializer)?
+        };
+        bls::Signature::deserialize(&bytes).map_err(to_custom_error::<'de, D, _>)
     }
 }
 

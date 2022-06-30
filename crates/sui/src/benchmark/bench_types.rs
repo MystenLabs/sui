@@ -22,7 +22,7 @@ use sui_types::crypto::{KeyPair, PublicKeyBytes};
 )]
 pub struct Benchmark {
     /// Size of the Sui committee.
-    #[clap(long, default_value = "1", global = true)]
+    #[clap(long, default_value = "30", global = true)]
     pub committee_size: usize,
     /// Timeout for sending queries (us)
     #[clap(long, default_value = "400000000", global = true)]
@@ -42,7 +42,7 @@ pub struct Benchmark {
     /// Use Move orders
     #[clap(long, global = true)]
     pub use_native: bool,
-    #[clap(long, default_value = "2000", global = true)]
+    #[clap(long, default_value = "2", global = true)]
     pub batch_size: usize,
 
     #[clap(
@@ -91,7 +91,7 @@ pub enum RunningMode {
 pub enum MicroBenchmarkType {
     Throughput {
         /// Number of transactions to be sent in the benchmark
-        #[clap(long, default_value = "100000")]
+        #[clap(long, default_value = "1000")]
         num_transactions: usize,
     },
     Latency {

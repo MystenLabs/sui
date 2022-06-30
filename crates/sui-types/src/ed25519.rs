@@ -491,10 +491,19 @@ impl Ed25519AuthoritySignInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Ed25519AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
-    pub signatures: Vec<(AuthorityName, Ed25519AuthoritySignature)>
+    pub signatures: Vec<(Ed25519PublicKeyBytes, Ed25519AuthoritySignature)>
 }
 
 impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
+    pub fn new_with_signatures(
+        epoch: EpochId,
+        signatures: Vec<(Ed25519PublicKeyBytes, Ed25519AuthoritySignature)>
+    ) -> SuiResult<Self> {
+        Ok(Ed25519AuthorityQuorumSignInfo {
+            epoch, signatures
+        })
+    }
+
     pub fn verify(
         &self, 
         message: Vec<u8>,
@@ -526,7 +535,7 @@ impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHO
             weight += voting_rights;
 
             authorities.push(committee.public_key(authority)?);
-            messages.push(&message[..]);
+            messages.push(&message[..])
         }
 
         let threshold = if STRONG_THRESHOLD {

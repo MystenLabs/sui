@@ -1145,11 +1145,11 @@ impl CertifiedTransactionEffects {
         epoch: EpochId,
         effects: TransactionEffects,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-    ) -> Self {
-        Self {
+    ) -> SuiResult<Self> {
+        Ok(Self {
             effects,
-            auth_signature: AuthorityStrongQuorumSignInfo { epoch, signatures },
-        }
+            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(epoch, signatures)?
+        })
     }
 
     pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
@@ -1241,8 +1241,7 @@ impl<'a> SignatureAggregator<'a> {
         // Update certificate.
         self.partial
             .auth_sign_info
-            .signatures
-            .push((authority, signature));
+            .add_signature(signature, authority);
 
         if self.weight >= self.committee.quorum_threshold() {
             Ok(Some(self.partial.clone()))
@@ -1254,21 +1253,27 @@ impl<'a> SignatureAggregator<'a> {
 
 impl CertifiedTransaction {
     pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
-        Self::new_with_signatures(epoch, transaction, vec![])
+        CertifiedTransaction {
+            transaction_digest: transaction.transaction_digest,
+            is_verified: false,
+            data: transaction.data,
+            tx_signature: transaction.tx_signature,
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch)
+        }
     }
 
     pub fn new_with_signatures(
         epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-    ) -> CertifiedTransaction {
-        CertifiedTransaction {
+    ) -> SuiResult<CertifiedTransaction> {
+        Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityStrongQuorumSignInfo { epoch, signatures },
-        }
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(epoch, signatures)?,
+        })
     }
 
     pub fn to_transaction(self) -> Transaction {
@@ -1304,9 +1309,9 @@ impl Display for CertifiedTransaction {
             writer,
             "Signed Authorities : {:?}",
             self.auth_sign_info
-                .signatures
+                .authorities()
                 .iter()
-                .map(|(name, _)| name)
+                .map(|name| name)
                 .collect::<Vec<_>>()
         )?;
         write!(writer, "{}", &self.data.kind)?;

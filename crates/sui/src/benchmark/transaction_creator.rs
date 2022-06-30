@@ -57,9 +57,8 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
 fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTransaction {
     // Make certificate
     let committee = network_config.committee();
-    let mut certificate = CertifiedTransaction::new(committee.epoch(), tx.clone());
-    certificate.auth_sign_info.epoch = committee.epoch();
     // TODO: Why iterating from 0 to quorum_threshold??
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     for i in 0..committee.quorum_threshold() {
         let secx = network_config
             .validator_configs()
@@ -67,10 +66,10 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             .unwrap()
             .key_pair();
         let pubx = secx.public_key_bytes();
-        let sig = AuthoritySignature::new(&certificate.data, secx);
-        certificate.auth_sign_info.signatures.push((*pubx, sig));
+        let sig = AuthoritySignature::new(&tx.data, secx);
+        signatures.push((*pubx, sig));
     }
-    certificate
+    CertifiedTransaction::new_with_signatures(committee.epoch(), tx.clone(), signatures).unwrap()
 }
 
 fn make_transactions(

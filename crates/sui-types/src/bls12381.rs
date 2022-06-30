@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
-use crate::crypto::VerificationObligation;
+use crate::crypto::{AuthoritySignInfoTrait};
 use crate::crypto_traits::Signable;
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
-// use crate::sui_serde::BlsSignature;
+use crate::sui_serde::BlsSignature;
 use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
 use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
-use narwhal_crypto::bls12381::BLS12381KeyPair;
 use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
@@ -31,6 +30,7 @@ use std::{
     fmt::{self, Display},
     mem::MaybeUninit,
 };
+use hkdf::Hkdf;
 
 use blst::{min_sig as bls, BLST_ERROR};
 use ::blst::{blst_scalar, blst_scalar_from_uint64};
@@ -40,6 +40,8 @@ pub const BLST_SK_SIZE: usize = 32;
 pub const BLST_PK_SIZE: usize = 96;
 pub const BLST_SIG_SIZE: usize = 48;
 
+pub type Bls12381PublicKey = bls::PublicKey;
+
 #[derive(Debug)]
 pub struct BlstKeypair {
     pub public: bls::PublicKey,
@@ -47,12 +49,12 @@ pub struct BlstKeypair {
 }
 
 impl BlstKeypair {
-    fn to_bytes(&self) -> &[u8] {
+    fn to_bytes(&self) -> Vec<u8> {
         let key_concat: Vec<u8> = self.public.to_bytes()
         .iter().cloned()
         .chain(self.secret.to_bytes().iter().cloned())
         .collect();
-        &key_concat[..]
+        key_concat
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<BlstKeypair, BLST_ERROR> {
@@ -90,17 +92,34 @@ impl Bls12381KeyPair {
         }
     }
 
-    // /// Make a Narwhal-compatible key pair from a Sui keypair.
-    // pub fn make_narwhal_keypair(&self) -> Ed25519KeyPairStruct {
-    //     let key = self.copy();
-    //     let kp = DalekKeypair::generate(&mut OsRng);
-    //     Ed25519KeyPairStruct {
-    //         name: Ed25519PublicKey(key.key_pair.public),
-    //         secret: Ed25519PrivateKey(key.key_pair.secret),
-    //         name: Ed25519PublicKey(kp.public),
-    //         secret: Ed25519PrivateKey(kp.secret),
-    //     }
-    // }
+    pub fn new_deterministic_keypair(seed: &[u8], id: &[u8], domain: &[u8]) -> SuiResult<Bls12381KeyPair>{
+        // HKDF<Sha3_256> to deterministically generate an ed25519 private key.
+        let hk = Hkdf::<Sha3_256>::new(Some(id), seed);
+        let mut okm = [0u8; BLST_SK_SIZE];
+        hk.expand(domain, &mut okm)
+            .map_err(|e| SuiError::HkdfError(e.to_string()))?;
+
+        let secret = bls::SecretKey::key_gen(&okm, &[])
+            .map_err(|e| SuiError::SignatureKeyGenError("Error Filler".to_string()))?;
+        let public = secret.sk_to_pk();
+
+        Ok(Bls12381KeyPair {
+            key_pair: BlstKeypair {
+                public,
+                secret 
+            },
+            public_key_cell: OnceCell::new()
+        })
+    }
+
+    /// Make a Narwhal-compatible key pair from a Sui keypair.
+    pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
+        let kp = DalekKeypair::generate(&mut OsRng);
+        Ed25519KeyPair {
+            name: Ed25519PublicKey(kp.public),
+            secret: Ed25519PrivateKey(kp.secret),
+        }
+    }
 }
 
 impl Serialize for Bls12381KeyPair {
@@ -189,11 +208,11 @@ impl Bls12381PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
-    // // /// Make a Narwhal-compatible public key from a Sui pub.
-    // pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
-    //     let kp = DalekKeypair::generate(&mut OsRng);
-    //     Ok(Ed25519PublicKey(kp.public))
-    // }
+    /// Make a Narwhal-compatible public key from a Sui pub.
+    pub fn make_narwhal_public_key(&self) -> Result<Ed25519PublicKey, signature::Error> {
+        let kp = DalekKeypair::generate(&mut OsRng);
+        Ok(Ed25519PublicKey(kp.public))
+    }
 }
 
 impl AsRef<[u8]> for Bls12381PublicKeyBytes {
@@ -232,60 +251,58 @@ impl std::fmt::Debug for Bls12381PublicKeyBytes {
     }
 }
 
-pub fn random_key_pairs(num: usize) -> Vec<Bls12381KeyPair> {
-    let mut items = num;
-    let mut rng = OsRng;
-
-    std::iter::from_fn(|| {
-        if items == 0 {
-            None
-        } else {
-            items -= 1;
-            Some(get_key_pair_from_rng(&mut rng).1)
-        }
-    })
-    .collect::<Vec<_>>()
-}
-
-// 
-// Keypair Generation
-// 
-
-// TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
-// TODO: rename to random_key_pair
-pub fn get_key_pair() -> (SuiAddress, Bls12381KeyPair) {
-
-    get_key_pair_from_rng(&mut OsRng)
-}
-
-/// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
-pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, Bls12381KeyPair)
-where
-    R: rand::CryptoRng + rand::RngCore,
-{
-    let mut seed = [0u8; 32];
-    OsRng.fill_bytes(&mut seed);
-
-    let secret = bls::SecretKey::key_gen(&seed, &[]).unwrap();
-    let public = secret.sk_to_pk();
-
-    let keypair = Bls12381KeyPair {
-        key_pair: BlstKeypair { public, secret },
-        public_key_cell: OnceCell::new(),
-    };
-    (SuiAddress::from(keypair.public_key_bytes()), keypair)
-}
-
-// TODO: C-GETTER
-pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, Bls12381KeyPair) {
-    let keypair = Bls12381KeyPair {
-        key_pair: BlstKeypair { 
-            public: bls::PublicKey::from_bytes(&bytes[..BLST_PK_SIZE]).unwrap(),
-            secret: bls::SecretKey::from_bytes(&bytes[BLST_PK_SIZE..]).unwrap(), 
-        },
-        public_key_cell: OnceCell::new(),
-    };
-    (SuiAddress::from(keypair.public_key_bytes()), keypair)
+impl Bls12381KeyPair {
+    pub fn random_key_pairs(num: usize) -> Vec<Bls12381KeyPair> {
+        let mut items = num;
+        let mut rng = OsRng;
+    
+        std::iter::from_fn(|| {
+            if items == 0 {
+                None
+            } else {
+                items -= 1;
+                Some(Self::get_key_pair_from_rng(&mut rng).1)
+            }
+        })
+        .collect::<Vec<_>>()
+    }
+        
+    // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
+    // TODO: rename to random_key_pair
+    pub fn get_key_pair() -> (SuiAddress, Bls12381KeyPair) {
+    
+        Self::get_key_pair_from_rng(&mut OsRng)
+    }
+    
+    /// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
+    pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, Bls12381KeyPair)
+    where
+        R: rand::CryptoRng + rand::RngCore,
+    {
+        let mut seed = [0u8; 32];
+        OsRng.fill_bytes(&mut seed);
+    
+        let secret = bls::SecretKey::key_gen(&seed, &[]).unwrap();
+        let public = secret.sk_to_pk();
+    
+        let keypair = Bls12381KeyPair {
+            key_pair: BlstKeypair { public, secret },
+            public_key_cell: OnceCell::new(),
+        };
+        (SuiAddress::from(keypair.public_key_bytes()), keypair)
+    }
+    
+    // TODO: C-GETTER
+    pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, Bls12381KeyPair) {
+        let keypair = Bls12381KeyPair {
+            key_pair: BlstKeypair { 
+                public: bls::PublicKey::from_bytes(&bytes[..BLST_PK_SIZE]).unwrap(),
+                secret: bls::SecretKey::from_bytes(&bytes[BLST_PK_SIZE..]).unwrap(), 
+            },
+            public_key_cell: OnceCell::new(),
+        };
+        (SuiAddress::from(keypair.public_key_bytes()), keypair)
+    }    
 }
 
 // 
@@ -452,7 +469,7 @@ impl Bls12381AuthoritySignature {
     }
 
     /// Signature verification for a single signature
-    pub fn verify<T>(&self, value: &T, author: Bls12381AuthoritySignature) -> Result<(), SuiError>
+    pub fn verify<T>(&self, value: &T, author: Bls12381PublicKeyBytes) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
     {
@@ -544,7 +561,6 @@ pub struct Bls12381AuthoritySignInfo {
     pub authority: Bls12381PublicKeyBytes,
     pub signature: Bls12381AuthoritySignature,
 }
-impl AuthoritySignInfoTrait for AuthoritySignInfo {}
 
 impl Hash for Bls12381AuthoritySignInfo {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -562,49 +578,109 @@ impl PartialEq for Bls12381AuthoritySignInfo {
 }
 
 impl Bls12381AuthoritySignInfo {
-    pub fn verify() {
-        
-    }
-
-    pub fn add_to_verification_obligation(
+    pub fn verify(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
-        message_index: usize,
+        message: Vec<u8>
     ) -> SuiResult<()> {
-        obligation
-            .public_keys
-            .push(committee.public_key(&self.authority)?);
-        obligation.aggregated_signature = match obligation.aggregated_signature {
-            Some(signature) => {
-                let mut aggr_sig = bls::AggregateSignature::from_signature(&signature);
-                aggr_sig.add_signature(&self.signature.0, true)
-                .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
-                Some(aggr_sig.to_signature())
-            },
-            None => Some(self.signature.0)
-        };
-        obligation.message_index.push(message_index);
-        Ok(())
+        let key: bls::PublicKey = self.authority.try_into()?;
+        let result = self.signature.0.verify(
+            true,
+            &message[..],
+            DST,
+            &[],
+            &key,
+            true
+        );
+        if result == BLST_ERROR::BLST_SUCCESS {
+            Ok(())
+        } else {
+            Err(SuiError::InvalidSignature {
+                error: format!("ERROR {:?}", result),
+            })
+        }
     }
 }
+
+pub fn aggregate_authority_signatures(
+    authority_signatures: &[&Bls12381AuthoritySignature]
+) -> Result<Bls12381AuthoritySignature, SuiError> {
+    Ok(Bls12381AuthoritySignature(aggregate_bls_signature(
+        &authority_signatures.iter().map(|s| s.0).collect::<Vec<_>>()[..]
+    )?))
+}
+
+pub fn aggregate_bls_signature(signatures: &[bls::Signature]) -> Result<bls::Signature, SuiError> {
+    let aggregated_signature = bls::AggregateSignature::aggregate(
+        &signatures.iter().map(|sig| sig).collect::<Vec<_>>()[..],
+        true
+    ).map_err(|e| SuiError::InvalidSignature {
+        error: format!("{:?}", e)
+    })?;
+    Ok(aggregated_signature.to_signature())
+}
+
 
 /// Represents at least a quorum (could be more) of authority signatures.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Bls12381AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
-    pub authorities: Vec<AuthorityName>,
+    pub authorities: Vec<Bls12381PublicKeyBytes>,
     pub aggregated_signature: Option<Bls12381AuthoritySignature>,
 }
 
 impl<const STRONG_THRESHOLD: bool> Bls12381AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
-    pub fn add_to_verification_obligation(
-        &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
-        message_index: usize,
-    ) -> SuiResult<()> {
-        // Check epoch
+    pub fn new(
+        epoch: EpochId
+    ) -> Self {
+        Bls12381AuthorityQuorumSignInfo {
+            epoch: epoch,
+            authorities: vec![],
+            aggregated_signature: None
+        } 
+    }
+
+    pub fn new_with_signatures(
+        epoch: EpochId,
+        signatures: Vec<(Bls12381PublicKeyBytes, Bls12381AuthoritySignature)>
+    ) -> SuiResult<Self> {
+        Ok(Bls12381AuthorityQuorumSignInfo {
+            epoch: epoch,
+            authorities: signatures.iter().map(|(pk, _)| *pk).collect::<Vec<_>>(),
+            aggregated_signature: Some(aggregate_authority_signatures(
+                &signatures.iter().map(|(_, sig)| sig).collect::<Vec<_>>()[..]
+            )?)
+        })
+    }
+
+    pub fn authorities(&self) -> Vec<Bls12381PublicKeyBytes> {
+        self.authorities.clone()
+    }
+
+    pub fn add_signature(
+        &mut self,
+        signature: Bls12381AuthoritySignature,
+        authority: Bls12381PublicKeyBytes
+    ) -> SuiResult<()> { 
+        self.aggregated_signature = match self.aggregated_signature {
+            Some(prev_sig) => {
+                let mut aggr_sig = blst::min_sig::AggregateSignature::from_signature(&prev_sig.0);
+                aggr_sig.add_signature(&signature.0, true)
+                .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
+                Some(Bls12381AuthoritySignature(aggr_sig.to_signature()))
+            }
+            None => {
+                Some(signature)
+            }
+        };
+        self.authorities.push(authority);
+        Ok(())
+    }
+
+    pub fn verify(
+        &self, 
+        message: Vec<u8>,
+        committee: &Committee
+    ) -> Result<(), SuiError> {
         fp_ensure!(
             self.epoch == committee.epoch(),
             SuiError::WrongEpoch {
@@ -614,8 +690,8 @@ impl<const STRONG_THRESHOLD: bool> Bls12381AuthorityQuorumSignInfo<STRONG_THRESH
 
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
+        let mut authorities: Vec<bls::PublicKey> = Vec::new();
 
-        // Create obligations for the committee signatures
         for authority in self.authorities.iter() {
             // Check that each authority only appears once.
             fp_ensure!(
@@ -623,45 +699,44 @@ impl<const STRONG_THRESHOLD: bool> Bls12381AuthorityQuorumSignInfo<STRONG_THRESH
                 SuiError::CertificateAuthorityReuse
             );
             used_authorities.insert(*authority);
+
             // Update weight.
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
             weight += voting_rights;
 
-            obligation
-                .public_keys
-                .push(committee.public_key(authority)?);
-            obligation.message_index.push(message_index);
+            authorities.push(committee.public_key(authority)?);
         }
 
-        obligation.aggregated_signature = 
-            match obligation.aggregated_signature {
-                Some(prev_sig) => {
-                    match self.aggregated_signature {
-                        Some(prev_aggr_sig) => {
-                            let mut aggr_sig = bls::AggregateSignature::from_signature(&prev_sig);
-                            aggr_sig.add_signature(&prev_aggr_sig.0, true)
-                            .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
-                            Some(aggr_sig.to_signature())
-                        }
-                        None => Some(prev_sig)
-                    }
-                }
-                None => {
-                    match self.aggregated_signature {
-                        Some(sig) => Some(sig.0),
-                        None => None
-                    }
-                }
-            };
-
         let threshold = if STRONG_THRESHOLD {
-                committee.quorum_threshold()
-            } else {
-                committee.validity_threshold()
-            };
+            committee.quorum_threshold()
+        } else {
+            committee.validity_threshold()
+        };
         fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
-    
-        Ok(())
-    }
+
+        let result = match self.aggregated_signature {
+            Some(signature) => {
+                signature.0.fast_aggregate_verify(
+                    true,
+                    &message[..],
+                    DST,
+                    &authorities.iter().map(|pk| pk).collect::<Vec<_>>()[..]
+                )
+            }
+            None => {
+                return Err(SuiError::InvalidSignature {
+                    error: format!("Empty Signature")
+                })
+            }
+        };
+
+        if result == BLST_ERROR::BLST_SUCCESS {
+            Ok(())
+        } else {
+            Err(SuiError::InvalidSignature {
+                error: format!("ERROR {:?}", result),
+            })
+        }
+    }    
 }

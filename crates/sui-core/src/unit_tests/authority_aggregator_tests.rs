@@ -279,7 +279,7 @@ where
         committee.epoch(),
         transaction.unwrap().to_transaction(),
         votes,
-    )
+    ).unwrap()
 }
 
 pub async fn do_cert<A>(
