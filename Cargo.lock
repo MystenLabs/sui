@@ -1151,7 +1151,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49fc9a695bca7f35f5f4c15cddc84415f66a74ea78eef08e90c5024f2b540e23"
 dependencies = [
- "crc-catalog 1.1.1",
+ "crc-catalog",
 ]
 
 [[package]]
@@ -1159,12 +1159,6 @@ name = "crc-catalog"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccaeedb56da03b09f598226e25e80088cb4cd25f316e6e4df7d695f0feeb1403"
-
-[[package]]
-name = "crc-catalog"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d0165d2900ae6778e36e80bbc4da3b5eefccee9ba939761f9c2882a5d9af3ff"
 
 [[package]]
 name = "crc32fast"
@@ -6330,17 +6324,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sqlformat"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f87e292b4291f154971a43c3774364e2cbcaec599d3f5bf6fa9d122885dbc38a"
-dependencies = [
- "itertools",
- "nom 7.1.1",
- "unicode_categories",
-]
-
-[[package]]
 name = "sqlx"
 version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6385,7 +6368,7 @@ dependencies = [
  "rustls 0.19.1",
  "sha2 0.10.2",
  "smallvec",
- "sqlformat 0.1.8",
+ "sqlformat",
  "sqlx-rt",
  "stringprep",
  "thiserror",
@@ -8777,7 +8760,7 @@ dependencies = [
  "constant_time_eq",
  "core2",
  "crc",
- "crc-catalog 2.1.0",
+ "crc-catalog",
  "crc32fast",
  "criterion",
  "criterion-plot",
@@ -9182,7 +9165,7 @@ dependencies = [
  "socket2",
  "soketto",
  "spin 0.9.3",
- "sqlformat 0.2.0",
+ "sqlformat",
  "sqlx",
  "sqlx-core",
  "sqlx-macros",
