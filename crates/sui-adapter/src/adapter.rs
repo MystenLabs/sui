@@ -44,6 +44,9 @@ use sui_verifier::{
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use crate::object_root_ancestor_map::ObjectRootAncestorMap;
 
+const SUI_PACKAGE_NAME: &str = "Sui";
+const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";
+
 pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
     MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)
 }
@@ -371,8 +374,11 @@ pub fn generate_package_id(
     let package_id = ctx.fresh_id();
     for module in modules.iter() {
         let old_module_id = module.self_id();
+        let package_name = old_module_id.name().as_str();
+        let is_framework =
+            package_name == SUI_PACKAGE_NAME || package_name == MOVE_STDLIB_PACKAGE_NAME;
         let old_address = *old_module_id.address();
-        if old_address != AccountAddress::ZERO {
+        if !is_framework && old_address != AccountAddress::ZERO {
             let handle = module.module_handle_at(module.self_module_handle_idx);
             let name = module.identifier_at(handle.name);
             return Err(ExecutionError::new_with_source(

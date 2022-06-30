@@ -1207,6 +1207,10 @@ impl AuthorityState {
         self.database.get_sui_system_state_object()
     }
 
+    pub async fn get_sui_system_state_object_ref(&self) -> SuiResult<ObjectRef> {
+        self.database.get_sui_system_state_object_ref()
+    }
+
     pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_latest_parent_entry(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),

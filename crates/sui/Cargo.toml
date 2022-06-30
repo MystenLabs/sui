@@ -18,6 +18,7 @@ tokio = { version = "1.20.0", features = ["full"] }
 async-trait = "0.1.53"
 serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.35"
+bcs = "0.1.3"
 clap = { version = "3.1.17", features = ["derive"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
@@ -46,7 +47,6 @@ move-package = { git = "https://github.com/move-language/move", rev = "790715285
 
 workspace-hack = { path = "../workspace-hack"}
 multiaddr = "0.14.0"
-bcs = "0.1.3"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }
