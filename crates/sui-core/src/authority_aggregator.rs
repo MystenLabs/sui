@@ -472,13 +472,12 @@ where
             Result<V, SuiError>,
         ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
-        // TODO: shuffle here according to stake
-        let authority_clients = &self.authority_clients;
+        let authorities_shuffled = self.committee.shuffle_by_stake();
 
         // First, execute in parallel for each authority FMap.
-        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
+        let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
+            .map(|name| {
+                let client = &self.authority_clients[name];
                 let execute = map_each_authority.clone();
                 async move {
                     (
@@ -791,12 +790,7 @@ where
         // We update each object at each authority that does not have it.
         for object_id in objects {
             // Authorities to update.
-            let mut authorities: HashSet<AuthorityName> = self
-                .committee
-                .voting_rights
-                .iter()
-                .map(|(name, _)| *name)
-                .collect();
+            let mut authorities: HashSet<AuthorityName> = self.committee.names().cloned().collect();
 
             let (aggregate_object_info, certificates) = self.get_object_by_id(*object_id).await?;
 

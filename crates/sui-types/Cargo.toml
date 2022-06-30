@@ -37,6 +37,9 @@ tonic = "0.7"
 strum = "^0.24"
 strum_macros = "^0.24"
 
+# This version is incompatible with ed25519-dalek
+rand_latest = { version = "0.8.5", package = "rand" }
+
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 

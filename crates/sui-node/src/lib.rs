@@ -64,7 +64,7 @@ impl SuiNode {
         let genesis = config.genesis()?;
 
         let secret = Arc::pin(config.key_pair().copy());
-        let committee = genesis.committee();
+        let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
         let checkpoint_store = if config.consensus_config().is_some() {
             Some(Arc::new(Mutex::new(CheckpointStore::open(

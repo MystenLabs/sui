@@ -71,7 +71,7 @@ pub fn test_authority_aggregator(
         .iter()
         .map(|config| (config.public_key(), config.stake()))
         .collect();
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, voting_rights).unwrap();
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
