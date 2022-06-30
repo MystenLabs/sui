@@ -9,6 +9,7 @@ use anyhow::anyhow;
 use base64ct::Encoding;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
+use hkdf::Hkdf;
 use narwhal_crypto::ed25519::{Ed25519KeyPair as NarwhalEd25519KeyPair, Ed25519PrivateKey as NarwhalEd25519PrivateKey, Ed25519PublicKey as NarwhalEd25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
@@ -16,6 +17,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use sha3::Sha3_256;
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -28,6 +30,9 @@ pub struct Ed25519KeyPair {
     key_pair: DalekKeypair,
     public_key_cell: OnceCell<Ed25519PublicKeyBytes>,
 }
+
+pub type Ed25519PublicKey = dalek::PublicKey;
+pub type Ed25519SecretKey = dalek::SecretKey;
 
 impl Ed25519KeyPair {
     pub fn public_key_bytes(&self) -> &Ed25519PublicKeyBytes {
@@ -48,6 +53,24 @@ impl Ed25519KeyPair {
             },
             public_key_cell: OnceCell::new(),
         }
+    }
+
+    pub fn new_deterministic_keypair(seed: &[u8], id: &[u8], domain: &[u8]) -> SuiResult<Ed25519KeyPair>{        // HKDF<Sha3_256> to deterministically generate an ed25519 private key.
+        let hk = Hkdf::<Sha3_256>::new(Some(id), seed);
+        let mut okm = [0u8; ed25519_dalek::SECRET_KEY_LENGTH];
+        hk.expand(domain, &mut okm)
+            .map_err(|e| SuiError::HkdfError(e.to_string()))?;
+
+        // This should never fail, as we ensured the HKDF output is SECRET_KEY_LENGTH bytes.
+        let ed25519_secret_key = ed25519_dalek::SecretKey::from_bytes(&okm)
+            .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+        let ed25519_public_key = ed25519_dalek::PublicKey::from(&ed25519_secret_key);
+
+        let dalek_keypair = ed25519_dalek::Keypair {
+            secret: ed25519_secret_key,
+            public: ed25519_public_key,
+        };
+        Ok(Ed25519KeyPair::from(dalek_keypair))
     }
 
     /// Make a Narwhal-compatible key pair from a Sui keypair.
@@ -495,6 +518,15 @@ pub struct Ed25519AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
 }
 
 impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
+    pub fn new(
+        epoch: EpochId
+    ) -> Self {
+        Ed25519AuthorityQuorumSignInfo {
+            epoch: epoch,
+            signatures: vec![],
+        } 
+    }
+    
     pub fn new_with_signatures(
         epoch: EpochId,
         signatures: Vec<(Ed25519PublicKeyBytes, Ed25519AuthoritySignature)>
@@ -502,6 +534,14 @@ impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHO
         Ok(Ed25519AuthorityQuorumSignInfo {
             epoch, signatures
         })
+    }
+
+    pub fn authorities(&self) -> Vec<Ed25519PublicKeyBytes> {
+        self.signatures.iter().map(|(p, s)| *p).collect::<Vec<_>>()
+    }
+
+    pub fn add_signature(&mut self, sig: Ed25519AuthoritySignature, pk: Ed25519PublicKeyBytes) {
+        self.signatures.push((pk, sig));
     }
 
     pub fn verify(

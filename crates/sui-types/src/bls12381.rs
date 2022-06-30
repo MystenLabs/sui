@@ -32,13 +32,13 @@ use std::{
 };
 use hkdf::Hkdf;
 
-use blst::{min_sig as bls, BLST_ERROR};
+use blst::{min_pk as bls, BLST_ERROR};
 use ::blst::{blst_scalar, blst_scalar_from_uint64};
 use rand::{RngCore};
 
 pub const BLST_SK_SIZE: usize = 32;
-pub const BLST_PK_SIZE: usize = 96;
-pub const BLST_SIG_SIZE: usize = 48;
+pub const BLST_PK_SIZE: usize = 48;
+pub const BLST_SIG_SIZE: usize = 96;
 
 pub type Bls12381PublicKey = bls::PublicKey;
 
@@ -663,7 +663,7 @@ impl<const STRONG_THRESHOLD: bool> Bls12381AuthorityQuorumSignInfo<STRONG_THRESH
     ) -> SuiResult<()> { 
         self.aggregated_signature = match self.aggregated_signature {
             Some(prev_sig) => {
-                let mut aggr_sig = blst::min_sig::AggregateSignature::from_signature(&prev_sig.0);
+                let mut aggr_sig = blst::min_pk::AggregateSignature::from_signature(&prev_sig.0);
                 aggr_sig.add_signature(&signature.0, true)
                 .map_err(|err| SuiError::InvalidSignature { error: format!("{:?}", err) })?;
                 Some(Bls12381AuthoritySignature(aggr_sig.to_signature()))

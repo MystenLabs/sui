@@ -231,24 +231,6 @@ impl SignatureSeed {
         domain: Option<&[u8]>,
     ) -> Result<KeyPair, SuiError> {
         Ok(KeyPair::new_deterministic_keypair(&self.0, id, domain.unwrap_or(&DEFAULT_DOMAIN))?)
-        
-        // // HKDF<Sha3_256> to deterministically generate an ed25519 private key.
-        // let hk = Hkdf::<Sha3_256>::new(Some(id), &self.0);
-        // let mut okm = [0u8; ed25519_dalek::SECRET_KEY_LENGTH];
-        // hk.expand(domain.unwrap_or(&DEFAULT_DOMAIN), &mut okm)
-        //     .map_err(|e| SuiError::HkdfError(e.to_string()))?;
-
-        // // This should never fail, as we ensured the HKDF output is SECRET_KEY_LENGTH bytes.
-        // let ed25519_secret_key = ed25519_dalek::SecretKey::from_bytes(&okm)
-        //     .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-        // let ed25519_public_key = ed25519_dalek::PublicKey::from(&ed25519_secret_key);
-
-        // let dalek_keypair = ed25519_dalek::Keypair {
-        //     secret: ed25519_secret_key,
-        //     public: ed25519_public_key,
-        // };
-        // Ok(Ed25519KeyPair::from(dalek_keypair))
-        
     }
 }
 

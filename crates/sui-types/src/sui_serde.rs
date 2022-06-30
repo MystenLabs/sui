@@ -14,7 +14,7 @@ use serde::ser::Serializer;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{DeserializeAs, SerializeAs, Bytes};
-use blst::{min_sig as bls, BLST_ERROR};
+use blst::{min_pk as bls};
 
 use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
 
