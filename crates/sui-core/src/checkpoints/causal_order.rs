@@ -189,8 +189,8 @@ pub trait EffectsStore {
         // NOTE: not all transactions have to be seqeunced into the checkpoint. In particular if a
         // byzantine node includes some transaction into their proposal but not its previous dependencies
         // they may not be checkpointed. That is ok, since we promise finality only if >2/3 honest
-        // eventually include in proposal, which means that at leats 1 honest will include in a checkpoint
-        // and honest nodes include full causal sequences in proposals.
+        // eventually include a transactions in a proposal, which means that at leats 1 honest will
+        // include it in a proposal and honest nodes include full causal sequences in proposals.
 
         // Map transaction digest back to correct execution digest.
         Ok(master_sequence

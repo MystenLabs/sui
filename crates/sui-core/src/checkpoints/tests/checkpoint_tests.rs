@@ -10,6 +10,7 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
+    checkpoints::causal_order::TestCausalOrderNoop,
     gateway_state::GatewayMetrics,
 };
 use rand::prelude::StdRng;
@@ -1279,7 +1280,8 @@ fn test_fragment_full_flow() {
                 &PendCertificateForExecutionNoop
             )
             .is_ok());
-        cps0.attempt_to_construct_checkpoint(&committee).unwrap();
+        cps0.attempt_to_construct_checkpoint(&committee, TestCausalOrderNoop)
+            .unwrap();
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
         );
@@ -1663,7 +1665,7 @@ async fn checkpoint_messaging_flow() {
     for auth in &setup.authorities {
         auth.checkpoint
             .lock()
-            .attempt_to_construct_checkpoint(&setup.committee)
+            .attempt_to_construct_checkpoint(&setup.committee, TestCausalOrderNoop)
             .unwrap();
     }
 
@@ -1799,7 +1801,7 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[0]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint(&setup.committee, TestCausalOrderNoop)
         .unwrap());
 
     // Expecting more fragments
@@ -1815,7 +1817,7 @@ async fn test_no_more_fragments() {
     assert!(!setup.authorities[3]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint(&setup.committee, TestCausalOrderNoop)
         .unwrap());
 
     // Expecting more fragments
@@ -1837,6 +1839,6 @@ async fn test_no_more_fragments() {
     assert!(setup.authorities[3]
         .checkpoint
         .lock()
-        .attempt_to_construct_checkpoint(&setup.committee)
+        .attempt_to_construct_checkpoint(&setup.committee, TestCausalOrderNoop)
         .unwrap());
 }

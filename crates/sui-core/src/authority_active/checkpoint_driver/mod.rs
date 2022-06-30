@@ -216,7 +216,7 @@ pub async fn checkpoint_process<A>(
 
         let success = state_checkpoints
             .lock()
-            .attempt_to_construct_checkpoint(committee);
+            .attempt_to_construct_checkpoint(committee, active_authority.state.database.clone());
 
         match success {
             Err(err) => {

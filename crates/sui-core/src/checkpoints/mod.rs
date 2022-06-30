@@ -38,8 +38,8 @@ use crate::{
     authority_active::execution_driver::PendCertificateForExecution,
 };
 
-use self::proposal::CheckpointProposal;
 use self::reconstruction::FragmentReconstruction;
+use self::{causal_order::CausalOrder, proposal::CheckpointProposal};
 
 pub type DBLabel = usize;
 const LOCALS: DBLabel = 0;
@@ -610,6 +610,7 @@ impl CheckpointStore {
     pub fn attempt_to_construct_checkpoint(
         &mut self,
         committee: &Committee,
+        orderer: impl CausalOrder,
     ) -> Result<bool, FragmentInternalError> {
         // We only attempt to reconstruct if we have a local proposal.
         // By limiting reconstruction to when we have proposals we are
@@ -626,6 +627,11 @@ impl CheckpointStore {
         let our_proposal = locals.current_proposal.as_ref().unwrap();
 
         if let Ok(Some(contents)) = self.reconstruct_contents(committee, our_proposal) {
+            let old_order: Vec<_> = contents.transactions.iter().cloned().collect();
+            let _new_order = orderer
+                .get_complete_causal_order(&old_order, self)
+                .map_err(FragmentInternalError::Error)?;
+
             let previous_digest = self
                 .get_prev_checkpoint_digest(next_sequence_number)
                 .map_err(FragmentInternalError::Error)?;
