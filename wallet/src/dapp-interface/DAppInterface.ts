@@ -8,7 +8,7 @@ import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload } from '_payloads';
 import { ALL_PERMISSION_TYPES } from '_payloads/permissions';
 
-import type { SuiAddress } from '@mysten/sui.js';
+import type { SuiAddress, MoveCallTransaction } from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -19,6 +19,10 @@ import type {
     AcquirePermissionsRequest,
     AcquirePermissionsResponse,
 } from '_payloads/permissions';
+import type {
+    ExecuteTransactionRequest,
+    ExecuteTransactionResponse,
+} from '_payloads/transactions';
 import type { Observable } from 'rxjs';
 
 function mapToPromise<T extends Payload, R>(
@@ -79,6 +83,16 @@ export class DAppInterface {
                 type: 'get-account',
             }),
             (response) => response.accounts
+        );
+    }
+
+    public executeMoveCall(transaction: MoveCallTransaction) {
+        return mapToPromise(
+            this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
+                type: 'execute-transaction-request',
+                transaction,
+            }),
+            (response) => response.result
         );
     }
 
