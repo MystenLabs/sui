@@ -45,7 +45,6 @@ pub trait EffectsStore {
         transactions: &[ExecutionDigests],
         ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
-
         let effects = self.get_effects(transactions)?;
 
         // Ensure all transactions included are executed (static property). This should be true since we should not

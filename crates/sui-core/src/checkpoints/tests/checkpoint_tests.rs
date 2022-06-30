@@ -180,7 +180,6 @@ fn make_checkpoint_db() {
     cps.update_processed_transactions(&[(6, t6)]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
-
 }
 
 #[test]
