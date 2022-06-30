@@ -463,6 +463,14 @@ impl CheckpointStore {
         next_sequence_number: TxSequenceNumber,
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
+
+        // Check if we have already processed this block, and if
+        // so just return.
+        let locals = self.get_locals();
+        if next_sequence_number <= locals.next_transaction_sequence {
+            return Ok(());
+        } 
+
         self.update_processed_transactions(transactions)?;
 
         // Updates the local sequence number of transactions processed.

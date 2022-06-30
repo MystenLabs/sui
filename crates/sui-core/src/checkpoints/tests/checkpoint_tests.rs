@@ -416,10 +416,10 @@ fn latest_proposal() {
         .enumerate()
         .map(|(u, c)| (u as u64, *c))
         .collect();
-    cps1.handle_internal_batch(0, &batch).unwrap();
-    cps2.handle_internal_batch(0, &batch).unwrap();
-    cps3.handle_internal_batch(0, &batch).unwrap();
-    cps4.handle_internal_batch(0, &batch).unwrap();
+    cps1.handle_internal_batch(batch.len() as u64, &batch).unwrap();
+    cps2.handle_internal_batch(batch.len() as u64, &batch).unwrap();
+    cps3.handle_internal_batch(batch.len() as u64, &batch).unwrap();
+    cps4.handle_internal_batch(batch.len() as u64, &batch).unwrap();
 
     // Try to get checkpoint
     cps1.sign_new_checkpoint(summary.clone(), &transactions)
@@ -556,9 +556,9 @@ fn set_get_checkpoint() {
         .enumerate()
         .map(|(u, c)| (u as u64, *c))
         .collect();
-    cps1.handle_internal_batch(0, &batch).unwrap();
-    cps2.handle_internal_batch(0, &batch).unwrap();
-    cps3.handle_internal_batch(0, &batch).unwrap();
+    cps1.handle_internal_batch(batch.len() as u64, &batch).unwrap();
+    cps2.handle_internal_batch(batch.len() as u64, &batch).unwrap();
+    cps3.handle_internal_batch(batch.len() as u64, &batch).unwrap();
 
     cps1.sign_new_checkpoint(summary.clone(), &transactions)
         .unwrap();
@@ -628,7 +628,7 @@ fn set_get_checkpoint() {
     assert!(response_ckp.is_err());
 
     // Process transactions and then ask for checkpoint.
-    cps4.handle_internal_batch(0, &batch).unwrap();
+    cps4.handle_internal_batch(batch.len() as u64 , &batch).unwrap();
     let response_ckp = cps4
         .process_checkpoint_certificate(&checkpoint_cert, &Some(transactions), &committee)
         .unwrap();
