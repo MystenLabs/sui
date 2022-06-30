@@ -35,6 +35,7 @@ use sui_types::{
     messages::{CallArg, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_verifier::{
     entry_points_verifier::{is_tx_context, INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
@@ -431,6 +432,10 @@ fn process_successful_execution<
     }
     let tx_digest = ctx.digest();
     // newly_generated_ids contains all object IDs generated in this transaction.
+    // TODO: In the case of the special system transaction that creates the system state object,
+    // there is one extra object created with ID hardcoded at 0x5, and it won't be included in
+    // `newly_generated_ids`. To cope with this, we special check the ID inside `handle_transfer`.
+    // It's a bit hacky. Ideally, we want `newly_generated_ids` to include it. But it's unclear how.
     let newly_generated_ids = ctx.recreate_all_ids();
     state_view.set_create_object_ids(newly_generated_ids.clone());
     // process events to identify transfers, freezes
@@ -598,7 +603,7 @@ fn handle_transfer<
             // The following condition checks if this object was unwrapped in this transaction.
             if old_object.is_none() {
                 // Newly created object
-                if newly_generated_ids.contains(&obj_id) {
+                if newly_generated_ids.contains(&obj_id) || obj_id == SUI_SYSTEM_STATE_OBJECT_ID {
                     state_view.log_event(Event::new_object(
                         module_id.address(),
                         module_id.name(),
