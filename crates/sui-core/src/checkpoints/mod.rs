@@ -12,7 +12,11 @@ pub(crate) mod checkpoint_tests;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::{collections::{HashSet, BTreeSet}, path::Path, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashSet},
+    path::Path,
+    sync::Arc,
+};
 use sui_storage::default_db_options;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -696,7 +700,7 @@ impl CheckpointStore {
             {
                 // We are included in the proposal, so we can go ahead and construct the
                 // full checkpoint!
-                let mut contents : BTreeSet<_> = our_proposal.transactions.iter().cloned().collect();
+                let mut contents: BTreeSet<_> = our_proposal.transactions.iter().cloned().collect();
                 contents.extend(
                     // Add all items missing to reach then global waypoint
                     reconstructed.global.authority_waypoints[&self.name]

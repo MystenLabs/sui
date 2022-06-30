@@ -45,7 +45,6 @@ pub trait EffectsStore {
         transactions: &[ExecutionDigests],
         ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
-
         // Order inputs
         // let transaction_set : BTreeSet<_> = transactions.iter().cloned().collect();
         // let transactions : Vec<_> = transaction_set.into_iter().collect();
