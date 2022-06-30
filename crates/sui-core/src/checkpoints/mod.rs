@@ -90,16 +90,9 @@ pub struct CheckpointStore {
     /// The signature key of the authority.
     pub secret: StableSyncAuthoritySigner,
 
-    /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
-    /// sequence number they were assigned to.
-    pub transactions_to_checkpoint:
-        DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
-
     /// The mapping from checkpoint to transaction/effects contained within the checkpoint.
-    /// The second part of the key is the local sequence number if the transaction was
-    /// processed or Max(u64) / 2 + offset if not. It allows the authority to store and serve
-    /// checkpoints in a causal order that can be processed in order. (Note the set
-    /// of transactions in the checkpoint is global but not the order.)
+    /// The second part of the key is the sequence number of the transactions within the
+    /// checkpoint.
     pub checkpoint_contents: DBMap<(CheckpointSequenceNumber, TxSequenceNumber), ExecutionDigests>,
 
     /// The set of transaction/effects this authority has processed but have not yet been
@@ -242,7 +235,6 @@ impl CheckpointStore {
             &path,
             Some(options.clone()),
             &[
-                ("transactions_to_checkpoint", &point_lookup),
                 ("checkpoint_contents", &options),
                 ("extra_transactions", &point_lookup),
                 ("checkpoints", &point_lookup),
@@ -254,7 +246,6 @@ impl CheckpointStore {
         .expect("Cannot open DB.");
 
         let (
-            transactions_to_checkpoint,
             checkpoint_contents,
             extra_transactions,
             checkpoints,
@@ -263,7 +254,6 @@ impl CheckpointStore {
             locals,
         ) = reopen! (
             &db,
-            "transactions_to_checkpoint";<ExecutionDigests,(CheckpointSequenceNumber, TxSequenceNumber)>,
             "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),ExecutionDigests>,
             "extra_transactions";<ExecutionDigests,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
@@ -275,7 +265,6 @@ impl CheckpointStore {
         let mut checkpoint_db = CheckpointStore {
             name,
             secret,
-            transactions_to_checkpoint,
             checkpoint_contents,
             extra_transactions,
             checkpoints,
@@ -417,14 +406,6 @@ impl CheckpointStore {
             ));
         }
 
-        // TODO: ISSUE #2039
-        // - check the new checkpoint contents do not include already checkpointed transactions.
-        // - check that the sequence is complete, ie no missing dependencies in the checkpoint or
-        //   previous checkpoint for all transactions included.
-        // - create a canonical causal order that is deterministic across authorities and store
-        //   contents as such a list instead of a set.
-        // Probably we need access to the effects to do the above.
-
         // Make a DB batch
         let batch = self.checkpoints.batch();
 
@@ -463,13 +444,12 @@ impl CheckpointStore {
         next_sequence_number: TxSequenceNumber,
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
-
         // Check if we have already processed this block, and if
         // so just return.
         let locals = self.get_locals();
         if next_sequence_number <= locals.next_transaction_sequence {
             return Ok(());
-        } 
+        }
 
         self.update_processed_transactions(transactions)?;
 
@@ -639,11 +619,11 @@ impl CheckpointStore {
         let our_proposal = locals.current_proposal.as_ref().unwrap();
 
         if let Ok(Some(contents)) = self.reconstruct_contents(committee, our_proposal) {
+            // Create a new order for the checkpointed contents
             let old_order: Vec<_> = contents.iter().cloned().collect();
             let new_order = orderer
                 .get_complete_causal_order(&old_order, self)
                 .map_err(FragmentInternalError::Error)?;
-
             let ordered_contents = CheckpointContents::new(new_order.into_iter());
 
             let previous_digest = self
@@ -943,7 +923,7 @@ impl CheckpointStore {
             ));
         }
 
-        let batch = self.transactions_to_checkpoint.batch();
+        let batch = self.checkpoints.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
         Ok(())
     }
@@ -966,67 +946,25 @@ impl CheckpointStore {
             });
         }
 
-        // Process transactions not already in a checkpoint
-        // A malicious validator could include in the proposal some transactions
-        // that are already checkpointed. Since we do not check fragments for
-        // such a condition, we filter them here.
-        // TODO: consider whether we should check this condition and reject
-        //       fragments that contain transactions already checkpointed.
-        let new_transactions = self
-            .transactions_to_checkpoint
-            .multi_get(transactions.iter())?
-            .into_iter()
-            .zip(transactions.iter())
-            .filter_map(
-                |(opt_seq, tx)| {
-                    if opt_seq.is_none() {
-                        Some(*tx)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect::<Vec<_>>();
-
-        // TODO: Issue #2039
-        // After we have performed all checks to ensure that there are no duplicate
-        // transactions in checkpoints, the checkpoint is complere and causally
-        // ordered we can refactor the code below, as all transactions are
-        // new transactions.
-        debug_assert!(new_transactions.len() == transactions.len());
-
-        let transactions_with_seq = self.extra_transactions.multi_get(new_transactions.iter())?;
-
         // Debug check that we only make a checkpoint if we have processed all the checkpointed
         // transactions and their history.
-        debug_assert!(transactions_with_seq.iter().all(|item| item.is_some()));
+        debug_assert!({
+            // Since all are executed, all have a sequence number.
+            let transactions_with_seq = self.extra_transactions.multi_get(transactions.iter())?;
+
+            transactions_with_seq.iter().all(|item| item.is_some())
+        });
 
         // Delete the extra transactions now used
-        let batch = batch.delete_batch(
-            &self.extra_transactions,
-            transactions_with_seq
-                .iter()
-                .zip(new_transactions.iter())
-                .filter_map(|(opt, tx)| if opt.is_some() { Some(tx) } else { None }),
-        )?;
+        let batch = batch.delete_batch(&self.extra_transactions, transactions.iter())?;
 
         // Now write the checkpoint data to the database
 
-        let checkpoint_data: Vec<_> = new_transactions
+        let checkpoint_data: Vec<_> = transactions
             .iter()
-            .zip(transactions_with_seq.iter())
-            .map(|(tx, opt)| {
-                // Unwrap safe since we have checked all transactions are processed
-                // to get to this point.
-                let iseq = opt.as_ref().unwrap();
-                ((seq, *iseq), *tx)
-            })
+            .enumerate()
+            .map(|(i, digest)| ((seq, i as u64), *digest))
             .collect();
-
-        let batch = batch.insert_batch(
-            &self.transactions_to_checkpoint,
-            checkpoint_data.iter().map(|(a, b)| (b, a)),
-        )?;
 
         let batch = batch.insert_batch(&self.checkpoint_contents, checkpoint_data.into_iter())?;
 
@@ -1046,87 +984,20 @@ impl CheckpointStore {
         Ok(())
     }
 
-    /// Updates the store on the basis of transactions that have been processed. This is idempotent
-    /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
-    /// unprocessed transactions (this is the low watermark).
+    /// Updates the store on the basis of transactions that have been processed. Assumes that the
+    /// digests provided are not duplicates of ones already in checkpoints. This is the case as a
+    /// checkpoint is processed only when all its tx are processed, therefore they cannot be processed
+    /// again to appear in a new batch.
     fn update_processed_transactions(
         &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
-        let in_checkpoint = self
-            .transactions_to_checkpoint
-            .multi_get(transactions.iter().map(|(_, tx)| tx))?;
-
-        let batch = self.transactions_to_checkpoint.batch();
-
-        // Check we are not re-proposing the same transactions that are already in a
-        // final checkpoint. This should not be possible since we only accept (sign /
-        // record) a checkpoint if we have already processed all transactions within.
-        let already_in_checkpoint_tx = transactions
-            .iter()
-            .zip(&in_checkpoint)
-            .filter_map(
-                |((_seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .count();
-
-        if already_in_checkpoint_tx != 0 {
-            return Err(SuiError::CheckpointingError {
-                error: "Processing transactions already in a checkpoint.".to_string(),
-            });
-        }
-
-        // Update the entry to the transactions_to_checkpoint
-
-        let batch = batch.insert_batch(
-            &self.transactions_to_checkpoint,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some((tx, (in_chk.unwrap().0, *seq)))
-                    } else {
-                        None
-                    }
-                }),
-        )?;
-
-        // Update the checkpoint local sequence number
-        let batch = batch.insert_batch(
-            &self.checkpoint_contents,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(((in_chk.unwrap().0, *seq), tx))
-                    } else {
-                        None
-                    }
-                }),
-        )?;
-
         // If the transactions processed did not belong to a checkpoint yet, we add them to the list
         // of `extra` transactions, that we should be actively propagating to others.
+        let batch = self.extra_transactions.batch();
         let batch = batch.insert_batch(
             &self.extra_transactions,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_none() {
-                        Some((tx, seq))
-                    } else {
-                        None
-                    }
-                }),
+            transactions.iter().map(|(i, tx)| (tx, i)),
         )?;
 
         // Write to the database.
