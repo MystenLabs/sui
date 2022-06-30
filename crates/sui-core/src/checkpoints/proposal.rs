@@ -42,7 +42,7 @@ impl CheckpointProposal {
 
     // Iterate over all transaction/effects
     pub fn transactions(&self) -> impl Iterator<Item = &ExecutionDigests> {
-        self.transactions.transactions.iter()
+        self.transactions.iter()
     }
 
     // Get the inner checkpoint
@@ -66,7 +66,7 @@ impl CheckpointProposal {
     pub fn fragment_with(&self, other_proposal: &CheckpointProposal) -> CheckpointFragment {
         let all_elements = self
             .transactions()
-            .chain(other_proposal.transactions.transactions.iter())
+            .chain(other_proposal.transactions.iter())
             .collect::<HashSet<_>>();
 
         let my_transactions = self.transactions().collect();

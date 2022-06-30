@@ -12,7 +12,7 @@ pub(crate) mod checkpoint_tests;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, path::Path, sync::Arc};
+use std::{collections::{HashSet, BTreeSet}, path::Path, sync::Arc};
 use sui_storage::default_db_options;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -445,7 +445,7 @@ impl CheckpointStore {
             .delete_batch(&self.local_fragments, self.local_fragments.keys())?;
 
         // Update the transactions databases.
-        let transactions: Vec<_> = contents.transactions.iter().cloned().collect();
+        let transactions: Vec<_> = contents.iter().cloned().collect();
         self.update_new_checkpoint_inner(checkpoint_sequence_number, &transactions, batch)?;
 
         Ok(())
@@ -627,7 +627,7 @@ impl CheckpointStore {
         let our_proposal = locals.current_proposal.as_ref().unwrap();
 
         if let Ok(Some(contents)) = self.reconstruct_contents(committee, our_proposal) {
-            let old_order: Vec<_> = contents.transactions.iter().cloned().collect();
+            let old_order: Vec<_> = contents.iter().cloned().collect();
             let _new_order = orderer
                 .get_complete_causal_order(&old_order, self)
                 .map_err(FragmentInternalError::Error)?;
@@ -694,14 +694,14 @@ impl CheckpointStore {
             {
                 // We are included in the proposal, so we can go ahead and construct the
                 // full checkpoint!
-                let mut contents = our_proposal.transactions.clone();
-                contents.transactions.extend(
+                let mut contents : BTreeSet<_> = our_proposal.transactions.iter().cloned().collect();
+                contents.extend(
                     // Add all items missing to reach then global waypoint
                     reconstructed.global.authority_waypoints[&self.name]
                         .items
                         .clone(),
                 );
-
+                let contents = CheckpointContents::new(contents.into_iter());
                 return Ok(Some(contents));
             }
 
@@ -731,7 +731,7 @@ impl CheckpointStore {
 
                 if let Ok(contents) = reconstructed
                     .global
-                    .checkpoint_items(&diff, our_proposal.transactions.transactions.clone())
+                    .checkpoint_items(&diff, our_proposal.transactions.iter().cloned().collect())
                 {
                     let contents = CheckpointContents::new(contents.into_iter());
                     return Ok(Some(contents));
@@ -909,7 +909,7 @@ impl CheckpointStore {
         // will eventually be executed?
         Ok(self
             .extra_transactions
-            .multi_get(transactions.transactions.iter())?
+            .multi_get(transactions.iter())?
             .iter()
             .all(|opt| opt.is_some()))
     }

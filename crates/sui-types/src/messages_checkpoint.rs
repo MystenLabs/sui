@@ -360,7 +360,7 @@ impl CertifiedCheckpointSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    pub transactions: BTreeSet<ExecutionDigests>,
+    transactions: BTreeSet<ExecutionDigests>,
 }
 
 impl BcsSignable for CheckpointContents {}
@@ -377,6 +377,10 @@ impl CheckpointContents {
 
     pub fn digest(&self) -> [u8; 32] {
         sha3_hash(self)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&ExecutionDigests> {
+        self.transactions.iter()
     }
 }
 

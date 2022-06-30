@@ -412,7 +412,6 @@ fn latest_proposal() {
 
     // Set the transactions as executed.
     let batch: Vec<_> = transactions
-        .transactions
         .iter()
         .enumerate()
         .map(|(u, c)| (u as u64, *c))
@@ -553,7 +552,6 @@ fn set_get_checkpoint() {
         .sign_new_checkpoint(summary.clone(), &transactions)
         .is_err());
     let batch: Vec<_> = transactions
-        .transactions
         .iter()
         .enumerate()
         .map(|(u, c)| (u as u64, *c))
@@ -1296,7 +1294,7 @@ fn test_fragment_full_flow() {
         .handle_past_checkpoint(true, 0)
         .expect("No errors on response");
     // Ensure the reconstruction worked
-    assert_eq!(response.detail.unwrap().transactions.len(), 2);
+    assert_eq!(response.detail.unwrap().iter().count(), 2);
 
     // TEST 3 -- feed the framents to the node 6 which cannot decode the
     // sequence of fragments.
@@ -1693,7 +1691,7 @@ async fn checkpoint_messaging_flow() {
         }
     }
 
-    assert_eq!(contents.as_ref().unwrap().transactions.len(), 1);
+    assert_eq!(contents.as_ref().unwrap().iter().count(), 1);
 
     // Construct a certificate
     // We need at least f+1 signatures
