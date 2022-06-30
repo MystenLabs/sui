@@ -1305,6 +1305,13 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(transaction)
     }
 
+    pub fn multi_get_certified_transaction(
+        &self,
+        transaction_digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CertifiedTransaction>>> {
+        Ok(self.certificates.multi_get(transaction_digests)?)
+    }
+
     pub fn insert_new_epoch_info(&self, epoch_info: EpochInfoLocals) -> SuiResult {
         self.epochs
             .insert(&epoch_info.committee.epoch(), &epoch_info)?;
