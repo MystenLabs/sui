@@ -11,11 +11,7 @@ function NftsPage() {
     return (
         <ObjectsLayout totalItems={nfts.length} emptyMsg="No NFTs found">
             {nfts.map((anNft) => (
-                <SuiObject
-                    obj={anNft}
-                    sendNFT={true}
-                    key={anNft.reference.objectId}
-                />
+                <SuiObject obj={anNft} key={anNft.reference.objectId} />
             ))}
         </ObjectsLayout>
     );
