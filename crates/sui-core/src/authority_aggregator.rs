@@ -37,9 +37,15 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
 pub struct TimeoutConfig {
+    // Timeout used when making many concurrent requests - ok if it is large because a slow
+    // authority won't block other authorities from being contacted.
     pub authority_request_timeout: Duration,
     pub pre_quorum_timeout: Duration,
     pub post_quorum_timeout: Duration,
+
+    // Timeout used when making serial requests. Should be smaller, since we wait to hear from each
+    // authority before continuing.
+    pub serial_authority_request_timeout: Duration,
 }
 
 impl Default for TimeoutConfig {
@@ -48,6 +54,7 @@ impl Default for TimeoutConfig {
             authority_request_timeout: Duration::from_secs(60),
             pre_quorum_timeout: Duration::from_secs(60),
             post_quorum_timeout: Duration::from_secs(30),
+            serial_authority_request_timeout: Duration::from_secs(5),
         }
     }
 }
@@ -515,6 +522,47 @@ where
                 }
         }
         Ok(accumulated_state)
+    }
+
+    /// Like quorum_map_then_reduce_with_timeout, but for things that need only a single
+    /// successful response, such as fetching a Transaction from some authority.
+    /// This is intended for cases in which byzantine authorities can time out or slow-loris, but
+    /// can't give a false answer, because e.g. the digest of the response is known, or a
+    /// quorum-signed object such as a checkpoint has been requested.
+    pub(crate) async fn quorum_once_with_timeout<'a, S, FMap>(
+        &'a self,
+        // The async function used to apply to each authority. It takes an authority name,
+        // and authority client parameter and returns a Result<V>.
+        map_each_authority: FMap,
+        timeout_each_authority: Duration,
+    ) -> Result<S, SuiError>
+    where
+        FMap: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, S, SuiError>,
+    {
+        let authorities_shuffled = self.committee.shuffle_by_stake();
+
+        let mut authority_errors: Vec<(AuthorityName, SuiError)> = Vec::new();
+
+        // TODO: possibly increase concurrency after first failure to reduce latency.
+        for name in authorities_shuffled {
+            let client = &self.authority_clients[name];
+
+            let res = timeout(timeout_each_authority, map_each_authority(*name, client)).await;
+
+            match res {
+                // timeout
+                Err(_) => authority_errors.push((*name, SuiError::TimeoutError)),
+                // request completed
+                Ok(inner_res) => match inner_res {
+                    Err(e) => authority_errors.push((*name, e)),
+                    Ok(_) => return inner_res,
+                },
+            }
+        }
+
+        Err(SuiError::TooManyIncorrectAuthorities {
+            errors: authority_errors,
+        })
     }
 
     /// Return all the information in the network regarding the latest state of a specific object.
@@ -1408,5 +1456,23 @@ where
             .send(ret_val)
             .await
             .expect("Cannot send object on channel after object fetch attempt");
+    }
+
+    pub async fn handle_transaction_and_effects_info_request(
+        &self,
+        digests: &ExecutionDigests,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        self.quorum_once_with_timeout(
+            |_name, client| {
+                Box::pin(async move {
+                    client
+                        .handle_transaction_and_effects_info_request(digests)
+                        .await
+                })
+            },
+            // A long timeout before we hear back from a quorum
+            self.timeouts.serial_authority_request_timeout,
+        )
+        .await
     }
 }
