@@ -53,7 +53,7 @@ pub trait WriteAheadLog<'a, C> {
     /// The possible return values mean:
     ///
     ///   Ok(None) => There was a concurrent instance of the same tx in progress, but it ended
-    ///   witout being committed. The caller may not proceed processing that tx. A TxGuard for
+    ///   without being committed. The caller may not proceed processing that tx. A TxGuard for
     ///   that tx can be (eventually) obtained by calling read_one_recoverable_tx().
     ///
     ///   Ok(Some(TxGuard)) => No other concurrent instance of the same tx is in progress, nor can
