@@ -830,10 +830,9 @@ where
                     return Ok(id);
                 }
             }
-            return Err(anyhow!(
-                "No non-argument gas objects found with value >= budget {}",
-                budget
-            ));
+            Err(anyhow!(
+                "No non-argument gas objects found with value >= budget {budget}"
+            ))
         }
     }
 
