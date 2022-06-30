@@ -108,8 +108,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        let result = state.handle_confirmation_transaction(transaction).await;
-        result
+        state.handle_confirmation_transaction(transaction).await
     }
 
     async fn handle_consensus_transaction(
@@ -138,8 +137,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.state.clone();
-        let x = state.handle_object_info_request(request).await;
-        x
+        state.handle_object_info_request(request).await
     }
 
     /// Handle Object information requests for this account.
@@ -147,8 +145,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let result = self.state.handle_transaction_info_request(request).await;
-        result
+        self.state.handle_transaction_info_request(request).await
     }
 
     /// Handle Batch information requests for this authority.

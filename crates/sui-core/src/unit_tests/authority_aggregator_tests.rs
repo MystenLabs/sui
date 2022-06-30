@@ -173,7 +173,7 @@ pub fn crate_object_move_transaction(
             arguments,
             GAS_VALUE_FOR_TESTING / 2,
         ),
-        &*secret,
+        secret,
     )
 }
 
