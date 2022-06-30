@@ -28,7 +28,7 @@ This doesn't mean that Sui as a platform never orders transactions with respect 
 
 ## A collaborative approach to transaction submission
 
-Sui validates transactions individually, rather than batching them in the traditional blocks. The key advantage of this approach low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone that the transaction will be processed by the Sui network.
+Sui validates transactions individually, rather than batching them in the traditional blocks. The key advantage of this approach is low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone that the transaction will be processed by the Sui network.
 
 But the process of submitting a transaction is a bit more involved. That little more work occurs on the network. (With bandwidth getting cheaper, this is less of a concern.) Whereas a usual blockchain can accept a bunch of transactions from the same author in a fire-and-forget mode, Sui transaction submission follows these steps:
 
@@ -112,7 +112,7 @@ The downside of allowing head-of-line blocking on the sender for these simple tr
 
 Sui can make total queries more difficult than in traditional blockchains since it does not always impose total order of transactions. Total queries are fairly rare with respect to local reads (see above) but useful in some scenarios. For example, a new validator joins the network and needs to download the total state to disk, or an auditor wishes to audit the entire blockchain.
 
-Sui mitigates this with checkpoints. A checkpoint is established every time an increment is added to a blockchain resulting from a certified transaction. Blocks work much like a [write ahead log](https://en.wikipedia.org/wiki/Write-ahead_logging) that stores state prior to full execution of a program. The calls in that program represent a smart contract in a blockchain. A block contains not only the transactions but also commitments to the state of the blockchain before and after the transactions.
+Sui mitigates this with checkpoints. A checkpoint is established every time an increment is added to a blockchain resulting from a certified transaction. Checkpoints work much like a [write ahead log](https://en.wikipedia.org/wiki/Write-ahead_logging) that stores state prior to full execution of a program. The calls in that program represent a smart contract in a blockchain. A checkpoint contains not only the transactions but also commitments to the state of the blockchain before and after the transactions.
 
 Sui uses the state commitment that arrives upon epoch change. Sui requires a single answer from the multiple validators and leverages an accessory protocol to derive the hash representing the state of the blockchain. This protocol consumes little bandwidth and does not impede the ingestion of transactions. Validators produce checkpoints at every epoch change. Sui requires the validators to also produce checkpoints even more frequently. So users may use these checkpoints to audit the blockchain with some effort.
 

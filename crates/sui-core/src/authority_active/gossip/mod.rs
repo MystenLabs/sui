@@ -14,8 +14,12 @@ use futures::{
 };
 use std::future::Future;
 use std::ops::Deref;
-use std::{collections::HashSet, sync::Arc, time::Duration};
-use sui_storage::follower_store::FollowerStore;
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+    time::Duration,
+};
+use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -26,13 +30,16 @@ use sui_types::{
         TransactionInfoResponse,
     },
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 #[cfg(test)]
 mod configurable_batch_action_client;
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+mod node_sync;
+use node_sync::NodeSyncDigestHandler;
 
 struct Follower<A> {
     peer_name: AuthorityName,
@@ -43,7 +50,6 @@ struct Follower<A> {
     aggregator: Arc<AuthorityAggregator<A>>,
 }
 
-const EACH_ITEM_DELAY_MS: u64 = 1_000;
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
 const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
@@ -56,15 +62,25 @@ where
     follower_process(active_authority, degree, GossipDigestHandler::new()).await;
 }
 
-pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
-where
+pub async fn node_sync_process<A>(
+    active_authority: &ActiveAuthority<A>,
+    degree: usize,
+    node_sync_store: Arc<NodeSyncStore>,
+) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // TODO: special case follower for node sync.
-    follower_process(active_authority, degree, GossipDigestHandler::new()).await;
+    let state = active_authority.state.clone();
+    let aggregator = active_authority.net.load().clone();
+    follower_process(
+        active_authority,
+        degree,
+        NodeSyncDigestHandler::new(state, aggregator, node_sync_store),
+    )
+    .await;
 }
 
-async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
+async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
     active_authority: &ActiveAuthority<A>,
     degree: usize,
     handler: Handler,
@@ -76,7 +92,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
     let mut committee = local_active.state.committee.load().deref().clone();
 
     // Number of tasks at most "degree" and no more than committee - 1
-    let mut target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+    let mut target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
     // If we do not expect to connect to anyone
     if target_num_tasks == 0 {
@@ -99,10 +115,10 @@ async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
             // validators, and let them end naturally.
             local_active = Arc::new(active_authority.clone());
             committee = local_active.state.committee.load().deref().clone();
-            target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+            target_num_tasks = usize::min(committee.num_members() - 1, degree);
             peer_names = peer_names
                 .into_iter()
-                .filter(|name| committee.voting_rights.contains_key(name))
+                .filter(|name| committee.authority_exists(name))
                 .collect();
         }
         let mut k = 0;
@@ -128,6 +144,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
 
             peer_names.insert(name);
             let local_active_ref_copy = local_active.clone();
+            let handler_clone = handler.clone();
             gossip_tasks.push(async move {
                 let follower = Follower::new(name, &local_active_ref_copy);
                 // Add more duration if we make more than 1 to ensure overlap
@@ -135,7 +152,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Copy>(
                 follower
                     .start(
                         Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS + k * 15),
-                        handler,
+                        handler_clone,
                     )
                     .await
             });
@@ -188,8 +205,8 @@ async fn wait_for_one_gossip_task_to_finish<A>(
     peer_names.remove(&finished_name);
 }
 
-struct LocalConfirmationTransactionHandler {
-    state: Arc<AuthorityState>,
+pub struct LocalConfirmationTransactionHandler {
+    pub state: Arc<AuthorityState>,
 }
 
 #[async_trait]
@@ -213,7 +230,7 @@ where
 {
     // Make sure we exit loop by limiting the number of tries to choose peer
     // where n is the total number of committee members.
-    let mut tries_remaining = active_authority.state.committee.load().voting_rights.len();
+    let mut tries_remaining = active_authority.state.committee.load().num_members();
     while tries_remaining > 0 {
         let name = *active_authority.state.committee.load().sample();
         if peer_names.contains(&name)
@@ -233,6 +250,7 @@ where
 
 #[async_trait]
 trait DigestHandler<A> {
+    /// handle_digest
     async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult;
 }
 
@@ -258,7 +276,7 @@ impl GossipDigestHandler {
                 .sync_authority_source_to_destination(
                     ConfirmationTransaction { certificate },
                     follower.peer_name,
-                    LocalConfirmationTransactionHandler {
+                    &LocalConfirmationTransactionHandler {
                         state: follower.state.clone(),
                     },
                 )
@@ -312,18 +330,20 @@ where
             Err(_e) => {
                 // If there was no start sequence found for this peer, it is likely a new peer
                 // that has just joined the network, start at 0.
-                info!("New gossip peer has joined: {:?}", peer_name);
-                Some(0)
+                info!(peer = ?peer_name, "New gossip peer has joined");
+                0
             }
-            Ok(s) => s.or(Some(0)),
+            Ok(s) => s.unwrap_or(0),
         };
+
+        debug!(peer = ?peer_name, ?start_seq, "Restarting follower at sequence");
 
         Self {
             peer_name,
             client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
             follower_store: active_authority.follower_store.clone(),
-            max_seq: start_seq,
+            max_seq: Some(start_seq),
             aggregator: active_authority.net.load().clone(),
         }
     }
@@ -343,15 +363,18 @@ where
         duration: Duration,
         handler: Handler,
     ) -> SuiResult {
+        let peer = self.peer_name;
         // Global timeout, we do not exceed this time in this task.
         let mut timeout = Box::pin(tokio::time::sleep(duration));
-        let mut queue = FuturesOrdered::new();
+        let mut results = FuturesOrdered::new();
+        let mut batch_seq_to_record = VecDeque::new();
 
         let req = BatchInfoRequest {
             start: self.max_seq,
             length: REQUEST_FOLLOW_NUM_DIGESTS,
         };
 
+        let mut last_seq_in_cur_batch: TxSequenceNumber = 0;
         let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
 
         loop {
@@ -365,26 +388,30 @@ where
                     match items {
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
                             let next_seq = signed_batch.batch.next_sequence_number;
-                            self.follower_store.record_next_sequence(&self.peer_name, next_seq)?;
-                             match self.max_seq {
-                                Some(max_seq) => {
-                                    if next_seq < max_seq {
-                                        info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
-                                    }
+                            debug!(?peer, batch_next_seq = ?next_seq, "Received signed batch");
+                            batch_seq_to_record.push_back((next_seq, last_seq_in_cur_batch));
+                            if let Some(max_seq) = self.max_seq {
+                                if next_seq < max_seq {
+                                    info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
                                 }
-                                None => {}
                             }
                         },
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
-                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
-                            if !self.state.database.effects_exists(&digest.transaction)? {
-                                queue.push(async move {
-                                    tokio::time::sleep(Duration::from_millis(EACH_ITEM_DELAY_MS)).await;
-                                    digest
-                                });
-                                self.state.metrics.gossip_queued_count.inc();
-                            }
+                        Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests))))) => {
+                            trace!(?peer, ?digests, ?seq, "received tx from peer");
+
+                            // track the last observed sequence in a batch, so we can tell when the
+                            // batch has been fully processed.
+                            last_seq_in_cur_batch = seq;
+
+                            let fut = handler.handle_digest(self, digests);
+                            results.push(async move {
+                                fut.await?;
+                                Ok::<(TxSequenceNumber, ExecutionDigests), SuiError>((seq, digests))
+                            });
+
+                            self.state.metrics.gossip_queued_count.inc();
                         },
 
                         // Return any errors.
@@ -403,8 +430,18 @@ where
                         },
                     }
                 },
-                digest = &mut queue.next() , if !queue.is_empty() => {
-                    handler.handle_digest(self, digest.unwrap()).await?;
+
+                result = &mut results.next() , if !results.is_empty() => {
+                    let (seq, digests) = result.unwrap()?;
+                    trace!(?peer, ?seq, ?digests, "digest handler finished");
+
+                    while let Some((batch_seq, last_seq_in_batch)) = batch_seq_to_record.front() {
+                        if seq < *last_seq_in_batch {
+                            break;
+                        }
+                        self.follower_store.record_next_sequence(&self.peer_name, *batch_seq)?;
+                        batch_seq_to_record.pop_front();
+                    }
                 }
             };
         }

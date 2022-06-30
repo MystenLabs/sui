@@ -78,14 +78,14 @@ test_scenario::next_tx(scenario, &owner);
 ### Pass objects by value
 Objects can also be passed by value into an entry function. By doing so, the object is moved out of Sui storage (a.k.a. deleted). It is then up to the Move code to decide where this object should go.
 
-> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `VersionedID` as a field, and the [VersionedID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) does not have the `drop` ability, the Sui object struct type [must not](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
+> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `VersionedID` as a field, and the [VersionedID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) does not have the `drop` ability, the Sui object struct type [must not](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
 
 There are two ways we can deal with a pass-by-value Sui object in Move:
 
 #### Option 1. Delete the object
 If the intention is to actually delete the object, we can unpack the object. This can be done only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). Upon unpacking, if any field is also of struct type, recursive unpacking and deletion will be required.
 
-However, the `id` field of a Sui object requires special handling. We must call the following API in the [ID](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) module to signal Sui that we intend to delete this object:
+However, the `id` field of a Sui object requires special handling. We must call the following API in the [ID](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) module to signal Sui that we intend to delete this object:
 ```rust
 public fun delete(versioned_id: VersionedID);
 ```
@@ -166,7 +166,7 @@ test_scenario::next_tx(scenario, &recipient);
 Now it's time to try this out on-chain. Assuming you have already followed the instructions in [Chapter 1](./ch1-object-basics.md#on-chain-interactions), you should already have the package published and a new object created.
 Now we can try to transfer it to another account address. First let's see what other account addresses you own:
 ```
-$ wallet addresses
+$ sui client addresses
 ```
 Since the default current address is the first address, let's pick the second address in the list as the recipient. In my case, I have `0x1416f3d5af469905b0580b9af843ec82d02efd30`. Let's save it for convenience:
 ```
@@ -174,33 +174,33 @@ $ export RECIPIENT=0x1416f3d5af469905b0580b9af843ec82d02efd30
 ```
 Now let's transfer the object to this address:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "transfer" --args \"0x$OBJECT\" \"0x$RECIPIENT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "transfer" --args \"0x$OBJECT\" \"0x$RECIPIENT\"
 ```
 Now let's see what objects the `RECIPIENT` owns:
 ```
-$ wallet objects --address $RECIPIENT
+$ sui client objects --address $RECIPIENT
 ```
 We should be able to see that one of the objects in the list is the new `ColorObject`! This means the transfer was successful.
 
 Let's also try to delete this object:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
 ```
 Oops. It will error out and complain that the account address is unable to lock the object, which is a valid error because we have already transferred the object away from the original owner.
 
-In order to operate on this object, we need to switch our wallet address to `$RECIPIENT`:
+In order to operate on this object, we need to switch our client address to `$RECIPIENT`:
 ```
-$ wallet switch --address $RECIPIENT
+$ sui client switch --address $RECIPIENT
 ```
 And try the deletion again:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
 ```
 In the output, you will see in the `Transaction Effects` section a list of deleted objects.
 This shows that the object was successfully deleted. If we run this again:
 ```
-$ wallet objects --address $RECIPIENT
+$ sui client objects --address $RECIPIENT
 ```
-We will see that this object is no longer there in the wallet.
+We will see that this object is no longer there in the address.
 
 Now you know how to pass objects by reference and value and transfer them on-chain.

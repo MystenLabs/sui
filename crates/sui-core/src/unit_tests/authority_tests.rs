@@ -39,9 +39,11 @@ impl TestCallArg {
             Self::Object(object_id) => {
                 let object = state.get_object(&object_id).await.unwrap().unwrap();
                 if object.is_shared() {
-                    CallArg::SharedObject(object_id)
+                    CallArg::Object(ObjectArg::SharedObject(object_id))
                 } else {
-                    CallArg::ImmOrOwnedObject(object.compute_object_reference())
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                        object.compute_object_reference(),
+                    ))
                 }
             }
             Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
@@ -201,7 +203,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, 10);
-        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
@@ -220,7 +222,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         gas_object_ref,
         /* args */
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
             CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],
@@ -419,10 +421,10 @@ async fn test_transfer_package() {
         package_object_ref,
         gas_object.compute_object_reference(),
     );
-    let result = authority_state
+    authority_state
         .handle_transaction(transfer_transaction.clone())
-        .await;
-    assert_eq!(result.unwrap_err(), SuiError::TransferUnownedError);
+        .await
+        .unwrap_err();
 }
 
 // This test attempts to use an immutable gas object to pay for gas.
@@ -1343,6 +1345,7 @@ async fn test_genesis_sui_sysmtem_state_object() {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
     let move_object = sui_system_object.data.try_as_move().unwrap();
     let _sui_system_state = bcs::from_bytes::<SuiSystemState>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemState::type_());
@@ -1431,7 +1434,7 @@ async fn test_transfer_sui_no_amount() {
     )
     .unwrap();
     assert_eq!(
-        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage(),
+        new_balance as i64 + effects.gas_cost_summary().net_gas_usage(),
         init_balance as i64
     );
 }
@@ -1484,9 +1487,78 @@ async fn test_transfer_sui_with_amount() {
     )
     .unwrap();
     assert_eq!(
-        new_balance as i64 + effects.status.gas_cost_summary().net_gas_usage() + 500,
+        new_balance as i64 + effects.gas_cost_summary().net_gas_usage() + 500,
         init_balance as i64
     );
+}
+
+#[tokio::test]
+async fn test_store_revert_state_update() {
+    // This test checks the correctness of revert_state_update in SuiDataStore.
+    let (sender, sender_key) = get_key_pair();
+    let (recipient, _sender_key) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+
+    let tx_data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&tx_data, &sender_key);
+    let transaction = Transaction::new(tx_data, signature);
+
+    let certificate = init_certified_transaction(transaction, &authority_state);
+    let tx_digest = *certificate.digest();
+    authority_state
+        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .await
+        .unwrap();
+
+    authority_state
+        .database
+        .revert_state_update(&tx_digest)
+        .unwrap();
+    assert_eq!(
+        authority_state
+            .database
+            .get_object(&gas_object_id)
+            .unwrap()
+            .unwrap()
+            .owner,
+        Owner::AddressOwner(sender),
+    );
+    assert_eq!(
+        authority_state
+            .database
+            .get_latest_parent_entry(gas_object_id)
+            .unwrap()
+            .unwrap(),
+        (gas_object_ref, TransactionDigest::genesis()),
+    );
+    assert!(authority_state
+        .database
+        .get_owner_objects(Owner::AddressOwner(recipient))
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        authority_state
+            .database
+            .get_owner_objects(Owner::AddressOwner(sender))
+            .unwrap()
+            .len(),
+        1,
+    );
+    assert!(authority_state
+        .database
+        .get_certified_transaction(&tx_digest)
+        .unwrap()
+        .is_none());
+    assert!(authority_state.database.get_effects(&tx_digest).is_err());
 }
 
 // helpers
@@ -1499,7 +1571,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     // Create a random directory to store the DB
 
@@ -1521,8 +1593,9 @@ pub async fn init_state() -> AuthorityState {
         store,
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
+        &prometheus::Registry::new(),
     )
     .await
 }
@@ -1719,7 +1792,7 @@ async fn shared_object() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
-        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
 
@@ -1739,7 +1812,7 @@ async fn shared_object() {
         gas_object_ref,
         /* args */
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure(16u64.to_le_bytes().to_vec()),
             CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
         ],

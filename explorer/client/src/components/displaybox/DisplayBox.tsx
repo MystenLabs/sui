@@ -3,11 +3,11 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-import { processDisplayValue } from '../../utils/stringUtils';
+import { transformURL } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
-function DisplayBox({ display }: { display: string | { bytes: number[] } }) {
+function DisplayBox({ display }: { display: string }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
@@ -47,7 +47,7 @@ function DisplayBox({ display }: { display: string | { bytes: number[] } }) {
                     className={styles.imagebox}
                     style={imageStyle}
                     alt="NFT"
-                    src={processDisplayValue(display)}
+                    src={transformURL(display)}
                     onLoad={handleImageLoad}
                     onError={handleImageFail}
                 />

@@ -1,0 +1,39 @@
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    flex: 1;
+    align-self: stretch;
+}
+
+.group {
+    display: flex;
+    flex-flow: column nowrap;
+
+    & + & {
+        margin-top: 8px;
+    }
+}
+
+.label {
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.error {
+    color: #8b1111;
+    line-height: 1em;
+    min-height: 1em;
+    margin-top: 2px;
+    margin-bottom: 5px;
+}
+
+.muted {
+    font-size: 12px;
+    font-weight: 400;
+    color: #666;
+    margin-top: 1px;
+}
+
+.input {
+    padding: 12px;
+}

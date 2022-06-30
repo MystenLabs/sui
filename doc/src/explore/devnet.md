@@ -14,7 +14,7 @@ Many improvements to the Sui DevNet are underway, such as the ability to run ful
 
 We provide the following tools for users to interact with the Sui Devnet:
 
-* The [Sui Wallet command line interface (CLI)](../build/wallet.md)
+* The [Sui Wallet command line interface (CLI)](../build/cli-client.md)
     * create and manage your private keys
     * submit transactions for creating example NFTs
     * call and publish Move modules
@@ -28,12 +28,12 @@ You may simply [install Sui](../build/install.md) and then request test tokens a
 
 1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 1. the [`git` command line interface](https://git-scm.com/download/).
-1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `wallet`.
+1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `sui`.
 
 Remember, you can confirm the existence of a command in your PATH by running `which` followed by the command, for example:
 
 ```shell
-$ which wallet
+$ which sui
 ```
 You should see the path to the command. Otherwise, reinstall.
 
@@ -41,9 +41,9 @@ You should see the path to the command. Otherwise, reinstall.
 
 In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
 
-### Set up wallet, connect to gateway
+### Set up Sui CLI client, connect to gateway
 
-Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/wallet.md#manually-change-the-gateway-url) if you have already configured a Sui wallet.
+Now [set up your Sui CLI client and connect to DevNet](../build/cli-client.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/cli-client.md#manually-change-the-rpc-server-url) if you have already configured a Sui CLI client.
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
 
@@ -51,18 +51,18 @@ Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-dev
 
 ### Request gas tokens
 
-Request gas tokens by posting your wallet address in the [#devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
+Request gas tokens by posting your address in the [#devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
 
-You can find your wallet address by running:
+You can find your address by running:
 ```shell
-$ wallet active-address
+$ sui client active-address
 ```
 
 ### Mint an example NFT
 
 To create a Non-Fungible Token (NFT), run:
 ```shell
-$ wallet create-example-nft
+$ sui client create-example-nft
 ```
 
 You will see output resembling:
@@ -75,7 +75,7 @@ Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
 Type: 0x2::devnet_nft::DevNetNFT
 ```
 
-The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `wallet` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
+The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `Sui CLI client` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
 
 Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) at:
 https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
@@ -86,7 +86,7 @@ Replace the object ID in the link above with the object ID of the Example NFT yo
 
 Note you may easily customize the name, description, or image of the NFT upon creation, like so:
 ```shell
-$ wallet create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
+$ sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
 ```
 
 Which results in a new object ID:
@@ -124,7 +124,7 @@ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explor
 
 Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
-$ wallet publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
+$ sui client publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
 
 You will see this output:
@@ -156,9 +156,9 @@ Specific object IDs displayed above may differ from one Sui installation to the 
 
 In the previous section, we learned how to publish a Move package; and in this section, we will learn how to call into functions defined in this package. As a result of publishing a package, we obtained the new package object ID (<PACKAGE_ID>) and ID of the `Forge` object (<FORGE_ID>) that can be used to create swords and transfer them to other players.
 
-Let’s assume that the placeholder for the address of the player to receive a sword is <PLAYER_ADDRESS>. If you don’t know any address other than your own, you can create one using the following `wallet` command and use it whenever you see the <PLAYER_ADDRESS> placeholder:
+Let’s assume that the placeholder for the address of the player to receive a sword is <PLAYER_ADDRESS>. If you don’t know any address other than your own, you can create one using the following `client` command and use it whenever you see the <PLAYER_ADDRESS> placeholder:
 ```shell
-$ wallet new-address
+$ sui client new-address
 ```
 
 Which yields output resembling:
@@ -172,7 +172,7 @@ In order to create a sword and transfer it to another player, we use the followi
 
 Now run:
 ```shell
-$ wallet call --function sword_create --module M1 --package 0x<PACKAGE_ID> --args \"0x<FORGE_ID>\" 42 7 \"0x<PLAYER_ADDRESS>\" --gas-budget 30000
+$ sui client call --function sword_create --module M1 --package 0x<PACKAGE_ID> --args \"0x<FORGE_ID>\" 42 7 \"0x<PLAYER_ADDRESS>\" --gas-budget 30000
 ```
 
 And receive output like:

@@ -1,16 +1,17 @@
 [package]
 name = "sui-node"
-version = "0.0.0"
+version = "0.5.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+axum = "0.5.9"
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 clap = { version = "3.1.17", features = ["derive"] }
 multiaddr = "0.14.0"
-prometheus_exporter = "0.8.4"
+prometheus = "0.13.1"
 tokio = { version = "1.18.2", features = ["full"] }
 tracing = "0.1.34"
 parking_lot = "0.12.1"
@@ -28,6 +29,6 @@ sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 sui-types = { path = "../sui-types" }
 
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 workspace-hack = { path = "../workspace-hack"}

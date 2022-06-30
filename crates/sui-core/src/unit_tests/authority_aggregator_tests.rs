@@ -56,7 +56,7 @@ pub async fn init_local_authorities_with_genesis(
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, voting_rights).unwrap();
 
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
@@ -76,9 +76,15 @@ pub async fn init_local_authorities_with_genesis(
         authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
+        serial_authority_request_timeout: Duration::from_secs(1),
     };
     (
-        AuthorityAggregator::new_with_timeouts(committee, clients, timeouts),
+        AuthorityAggregator::new_with_timeouts(
+            committee,
+            clients,
+            GatewayMetrics::new_for_tests(),
+            timeouts,
+        ),
         states,
     )
 }
@@ -124,7 +130,7 @@ fn transfer_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     let args = vec![
-        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
@@ -168,7 +174,7 @@ pub fn crate_object_move_transaction(
             arguments,
             GAS_VALUE_FOR_TESTING / 2,
         ),
-        &*secret,
+        secret,
     )
 }
 
@@ -187,7 +193,7 @@ pub fn delete_object_move_transaction(
             ident_str!("delete").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![CallArg::ImmOrOwnedObject(object_ref)],
+            vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))],
             GAS_VALUE_FOR_TESTING / 2,
         ),
         secret,
@@ -203,7 +209,7 @@ pub fn set_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     let args = vec![
-        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&value).unwrap()),
     ];
 

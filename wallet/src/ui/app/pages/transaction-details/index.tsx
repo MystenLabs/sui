@@ -25,7 +25,7 @@ import st from './TransactionDetailsPage.module.scss';
 const cl = clBind.bind(st);
 
 const txKindToTxt: Record<TransactionKindName, string> = {
-    TransferCoin: 'Coin transfer',
+    TransferObject: 'Object transfer',
     Call: 'Call',
     Publish: 'Publish',
 };

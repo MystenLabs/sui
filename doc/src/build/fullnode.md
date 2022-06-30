@@ -115,9 +115,14 @@ If you are using Linux, install these extra dependencies. For example, in Ubuntu
 
 ## Configuring your fullnode
 
-Currently, the only supported way of running a fullnode requires building from
-source. In the future, we will provide Docker images for more flexibility
-in how a fullnode is run.
+You may run a fullnode either by employing Docker or by building from
+source.
+
+### Using Docker Compose
+
+Follow the instructions in the
+[Fullnode Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme)
+to run a Sui fullnode using Docker.
 
 ### Building from source
 
@@ -145,7 +150,7 @@ in how a fullnode is run.
     ```shell
     $ git checkout --track upstream/devnet
     ```
-1. Make a copy of the fullnode configuration template:
+1. Make a copy of the [fullnode configuration template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
@@ -177,6 +182,7 @@ in how a fullnode is run.
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 1. Post build, receive the success confirmation message, `SuiNode started!`
+1. Optional: [Publish / subscribe](pubsub.md) to notifications using JSON-RPC via websocket.
 
 Your fullnode will now be serving the read endpoints of the [Sui JSON-RPC
 API](../build/json-rpc.md#sui-json-rpc-api) at:
@@ -200,6 +206,8 @@ The Explorer will now use your local fullnode to explore the state of the chain.
 
 Monitor your fullnode using the instructions at [Logging, Tracing, Metrics, and
 Observability](https://docs.sui.io/contribute/observability).
+
+Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` file.
 
 ## Updating your fullnode with new releases
 

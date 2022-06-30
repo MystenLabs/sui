@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::transaction_input_checker::InputObjects;
 use move_core_types::account_address::AccountAddress;
-use sui_types::{event::Event, gas::SuiGasStatus, object::Owner};
+use sui_types::error::ExecutionError;
+use sui_types::{
+    event::Event,
+    gas::{GasCostSummary, SuiGasStatus},
+    object::Owner,
+};
 
 use super::*;
 
@@ -108,7 +113,7 @@ impl<S> AuthorityTemporaryStore<S> {
         &mut self,
         gas_status: &mut SuiGasStatus,
         gas_object: &mut Object,
-    ) -> SuiResult {
+    ) -> Result<(), ExecutionError> {
         let mut objects_to_update = vec![];
         // Also charge gas for mutating the gas object in advance.
         let gas_object_size = gas_object.object_size_for_gas_metering();
@@ -170,6 +175,7 @@ impl<S> AuthorityTemporaryStore<S> {
         shared_object_refs: Vec<ObjectRef>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
+        gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
     ) -> TransactionEffects {
@@ -183,6 +189,7 @@ impl<S> AuthorityTemporaryStore<S> {
         };
         TransactionEffects {
             status,
+            gas_used: gas_cost_summary,
             shared_objects: shared_object_refs,
             transaction_digest: *transaction_digest,
             created: self

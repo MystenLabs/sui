@@ -10,7 +10,6 @@ pub mod authority_server;
 pub mod checkpoints;
 pub mod consensus_adapter;
 pub mod epoch;
-pub mod event_filter;
 pub mod event_handler;
 pub mod execution_engine;
 pub mod gateway_state;

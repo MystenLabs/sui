@@ -20,7 +20,10 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> crate::Result<()> {
-    let direct_dups_config = DirectDepDupsConfig { allow: vec![] };
+    // rand can be removed if/when ed25519_dalek upgrades to rand 0.8
+    let direct_dups_config = DirectDepDupsConfig {
+        allow: vec!["rand".to_string()],
+    };
     let banned_deps_config = BannedDepsConfig {
         direct: vec![
             (

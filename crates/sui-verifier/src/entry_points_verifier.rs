@@ -13,12 +13,12 @@ use sui_types::{
         STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
         TX_CONTEXT_STRUCT_NAME,
     },
-    error::{SuiError, SuiResult},
+    error::ExecutionError,
     id::{ID_MODULE_NAME, ID_STRUCT_NAME},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{format_signature_token, resolve_struct};
+use crate::{format_signature_token, resolve_struct, verification_failure};
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
@@ -36,16 +36,14 @@ pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 /// - The function must have at least one parameter: &mut TxContext (see `is_tx_context`)
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
-pub fn verify_module(module: &CompiledModule) -> SuiResult {
+pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     for func_def in &module.function_defs {
-        verify_init_not_called(module, func_def)
-            .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+        verify_init_not_called(module, func_def).map_err(verification_failure)?;
 
         let handle = module.function_handle_at(func_def.function);
         let name = module.identifier_at(handle.name);
         if name == INIT_FN_NAME {
-            verify_init_function(module, func_def)
-                .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+            verify_init_function(module, func_def).map_err(verification_failure)?;
             continue;
         }
 
@@ -55,8 +53,7 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
             // it's not an entry function
             continue;
         }
-        verify_entry_function_impl(module, func_def)
-            .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+        verify_entry_function_impl(module, func_def).map_err(verification_failure)?;
     }
     Ok(())
 }

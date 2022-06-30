@@ -71,7 +71,7 @@ pub fn test_authority_aggregator(
         .iter()
         .map(|config| (config.public_key(), config.stake()))
         .collect();
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, voting_rights).unwrap();
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -81,7 +81,8 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    AuthorityAggregator::new(committee, clients)
+    let metrics = sui_core::gateway_state::GatewayMetrics::new(&prometheus::Registry::new());
+    AuthorityAggregator::new(committee, clients, metrics)
 }
 
 /// Get a network client to communicate with the consensus.

@@ -1,0 +1,38 @@
+processed 10 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 8-29:
+created: object(105)
+written: object(104)
+
+task 2 'run'. lines 31-31:
+created: object(107)
+written: object(106)
+
+task 3 'view-object'. lines 33-33:
+Owner: Account Address ( A )
+Contents: test::m::S {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(107)}}, version: 1u64}}
+
+task 4 'transfer-object'. lines 35-35:
+written: object(107), object(108)
+
+task 5 'view-object'. lines 37-40:
+Owner: Account Address ( B )
+Contents: test::m::S {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(107)}}, version: 2u64}}
+
+task 6 'run'. lines 42-42:
+created: object(110)
+written: object(109)
+
+task 7 'view-object'. lines 44-44:
+Owner: Account Address ( A )
+Contents: test::m::Cup<test::m::S> {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(110)}}, version: 1u64}}
+
+task 8 'transfer-object'. lines 46-46:
+written: object(110), object(111)
+
+task 9 'view-object'. lines 48-48:
+Owner: Account Address ( B )
+Contents: test::m::Cup<test::m::S> {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(110)}}, version: 2u64}}

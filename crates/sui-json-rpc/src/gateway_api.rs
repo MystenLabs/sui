@@ -17,6 +17,7 @@ use sui_json_rpc_api::rpc_types::{
 use sui_json_rpc_api::rpc_types::{RPCTransactionRequestParams, SuiTypeTag};
 use sui_json_rpc_api::{
     QuorumDriverApiServer, RpcReadApiServer, RpcTransactionBuilderServer, TransactionBytes,
+    WalletSyncApiServer,
 };
 use sui_open_rpc::Module;
 use sui_types::sui_serde::Base64;
@@ -28,6 +29,10 @@ use sui_types::{
 };
 
 pub struct RpcGatewayImpl {
+    client: GatewayClient,
+}
+
+pub struct GatewayWalletSyncApiImpl {
     client: GatewayClient,
 }
 
@@ -44,6 +49,13 @@ impl RpcGatewayImpl {
         Self { client }
     }
 }
+
+impl GatewayWalletSyncApiImpl {
+    pub fn new(client: GatewayClient) -> Self {
+        Self { client }
+    }
+}
+
 impl GatewayReadApiImpl {
     pub fn new(client: GatewayClient) -> Self {
         Self { client }
@@ -73,12 +85,6 @@ impl QuorumDriverApiServer for RpcGatewayImpl {
             .await;
         Ok(result?)
     }
-
-    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
-        debug!("sync_account_state : {}", address);
-        self.client.sync_account_state(address).await?;
-        Ok(())
-    }
 }
 
 impl SuiRpcModule for RpcGatewayImpl {
@@ -88,6 +94,25 @@ impl SuiRpcModule for RpcGatewayImpl {
 
     fn rpc_doc_module() -> Module {
         sui_json_rpc_api::QuorumDriverApiOpenRpc::module_doc()
+    }
+}
+
+#[async_trait]
+impl WalletSyncApiServer for GatewayWalletSyncApiImpl {
+    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
+        debug!("sync_account_state : {}", address);
+        self.client.sync_account_state(address).await?;
+        Ok(())
+    }
+}
+
+impl SuiRpcModule for GatewayWalletSyncApiImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        sui_json_rpc_api::WalletSyncApiOpenRpc::module_doc()
     }
 }
 
@@ -152,7 +177,7 @@ impl SuiRpcModule for GatewayReadApiImpl {
 
 #[async_trait]
 impl RpcTransactionBuilderServer for TransactionBuilderImpl {
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -162,7 +187,7 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .client
-            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
+            .public_transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

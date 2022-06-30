@@ -9,32 +9,29 @@ use move_binary_format::{
     },
     CompiledModule,
 };
-use sui_types::{
-    error::{SuiError, SuiResult},
-    SUI_FRAMEWORK_ADDRESS,
-};
+use sui_types::{error::ExecutionError, SUI_FRAMEWORK_ADDRESS};
 
-use crate::format_signature_token;
+use crate::{format_signature_token, verification_failure};
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
 /// restricted to the module.
 /// For example, with `transfer::transfer<T>(...)`, either:
 /// - `T` must be a type declared in the current module or
 /// - `T` must have `store`
-pub fn verify_module(module: &CompiledModule) -> SuiResult {
+pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     let view = &BinaryIndexedView::Module(module);
     // do not need to check the sui::transfer module itself
     if is_transfer_module(view, module.self_handle()) {
         return Ok(());
     }
     for func_def in &module.function_defs {
-        verify_function(view, func_def).map_err(|error| SuiError::ModuleVerificationFailure {
-            error: format!(
+        verify_function(view, func_def).map_err(|error| {
+            verification_failure(format!(
                 "{}::{}. {}",
                 module.self_id(),
                 module.identifier_at(module.function_handle_at(func_def.function).name),
                 error
-            ),
+            ))
         })?;
     }
     Ok(())

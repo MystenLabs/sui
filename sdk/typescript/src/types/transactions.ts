@@ -4,15 +4,15 @@
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
-export type TransferCoin = {
+export type TransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
 };
 export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
-export type TransactionKindName = 'TransferCoin' | 'Publish' | 'Call';
+export type TransactionKindName = 'TransferObject' | 'Publish' | 'Call';
 export type SuiTransactionKind =
-  | { TransferCoin: TransferCoin }
+  | { TransferObject: TransferObject }
   | { Publish: SuiMovePackage }
   | { Call: MoveCall };
 export type TransactionData = {
@@ -46,7 +46,6 @@ export type GasCostSummary = {
 export type ExecutionStatusType = 'success' | 'failure';
 export type ExecutionStatus = {
   status: ExecutionStatusType;
-  gas_cost: GasCostSummary;
   error?: string;
 };
 
@@ -59,6 +58,7 @@ export type OwnedObjectRef = {
 export type TransactionEffects = {
   /** The status of the execution */
   status: ExecutionStatus;
+  gasUsed: GasCostSummary;
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects?: SuiObjectRef[];
   /** The transaction digest */
@@ -188,10 +188,10 @@ export function getTransactionGasBudget(tx: CertifiedTransaction): number {
   return tx.data.gasBudget;
 }
 
-export function getTransferCoinTransaction(
+export function getTransferObjectTransaction(
   data: SuiTransactionKind
-): TransferCoin | undefined {
-  return 'TransferCoin' in data ? data.TransferCoin : undefined;
+): TransferObject | undefined {
+  return 'TransferObject' in data ? data.TransferObject : undefined;
 }
 
 export function getPublishTransaction(
@@ -241,7 +241,7 @@ export function getExecutionStatusError(
 export function getExecutionStatusGasSummary(
   data: TransactionEffectsResponse
 ): GasCostSummary {
-  return getExecutionStatus(data).gas_cost;
+  return data.effects.gasUsed;
 }
 
 export function getTotalGasUsed(data: TransactionEffectsResponse): number {

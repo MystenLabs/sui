@@ -36,7 +36,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui_storage::follower_store::FollowerStore;
+use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -44,7 +44,7 @@ use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority_client::AuthorityAPI, gateway_state::GatewayMetrics,
 };
 use tokio::time::Instant;
 
@@ -54,7 +54,9 @@ use gossip::{gossip_process, node_sync_process};
 pub mod checkpoint_driver;
 use checkpoint_driver::checkpoint_process;
 
-use self::checkpoint_driver::CheckpointProcessControl;
+pub mod execution_driver;
+
+use self::{checkpoint_driver::CheckpointProcessControl, execution_driver::execution_process};
 
 // TODO: Make these into a proper config
 const MAX_RETRIES_RECORDED: u32 = 10;
@@ -108,6 +110,7 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
+    pub gateway_metrics: GatewayMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -115,15 +118,15 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         follower_store: Arc<FollowerStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
+        gateway_metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
                 committee
-                    .voting_rights
-                    .iter()
-                    .map(|(name, _)| (*name, AuthorityHealth::default()))
+                    .names()
+                    .map(|name| (*name, AuthorityHealth::default()))
                     .collect(),
             )),
             state: authority,
@@ -131,17 +134,25 @@ impl<A> ActiveAuthority<A> {
             net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
                 committee,
                 authority_clients,
+                gateway_metrics.clone(),
             ))),
+            gateway_metrics,
         })
     }
 
     pub fn new_with_ephemeral_follower_store(
         authority: Arc<AuthorityState>,
         authority_clients: BTreeMap<AuthorityName, A>,
+        gateway_metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
         let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
-        Self::new(authority, follower_store, authority_clients)
+        Self::new(
+            authority,
+            follower_store,
+            authority_clients,
+            gateway_metrics,
+        )
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -197,6 +208,7 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
+            gateway_metrics: self.gateway_metrics.clone(),
         }
     }
 }
@@ -205,23 +217,20 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub async fn spawn_checkpoint_process(self) {
+    pub async fn spawn_checkpoint_process(self: Arc<Self>) {
         self.spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
             .await
     }
 
     /// Spawn all active tasks.
     pub async fn spawn_checkpoint_process_with_config(
-        self,
+        self: Arc<Self>,
         checkpoint_process_control: Option<CheckpointProcessControl>,
     ) {
-        let active = Arc::new(self);
-
         // Spawn task to take care of checkpointing
-        let checkpoint_locals = active; // .clone();
         let _checkpoint_join = tokio::task::spawn(async move {
             if let Some(checkpoint) = checkpoint_process_control {
-                checkpoint_process(&checkpoint_locals, &checkpoint).await;
+                checkpoint_process(&self, &checkpoint).await;
             }
         });
 
@@ -231,29 +240,36 @@ where
     }
 
     /// Spawn gossip process
-    pub async fn spawn_gossip_process(self, degree: usize) -> JoinHandle<()> {
-        let active = Arc::new(self);
-
+    pub async fn spawn_gossip_process(self: Arc<Self>, degree: usize) -> JoinHandle<()> {
         // Number of tasks at most "degree" and no more than committee - 1
         // (validators do not follow themselves for gossip)
-        let committee = active.state.committee.load().deref().clone();
-        let target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+        let committee = self.state.committee.load().deref().clone();
+        let target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
         tokio::task::spawn(async move {
-            gossip_process(&active, target_num_tasks).await;
+            gossip_process(&self, target_num_tasks).await;
         })
     }
 
-    pub async fn spawn_node_sync_process(self) -> JoinHandle<()> {
-        let active = Arc::new(self);
-        let committee = active.state.committee.load().deref().clone();
+    pub async fn spawn_node_sync_process(
+        self: Arc<Self>,
+        node_sync_store: Arc<NodeSyncStore>,
+    ) -> JoinHandle<()> {
+        let committee = self.state.committee.load().deref().clone();
         // nodes follow all validators to ensure they can eventually determine
         // finality of certs. We need to follow 2f+1 _honest_ validators to
         // eventually find finality, therefore we must follow all validators.
-        let target_num_tasks = committee.voting_rights.len();
+        let target_num_tasks = committee.num_members();
 
         tokio::task::spawn(async move {
-            node_sync_process(&active, target_num_tasks).await;
+            node_sync_process(&self, target_num_tasks, node_sync_store).await;
+        })
+    }
+
+    /// Spawn pending certificate execution process
+    pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
+        tokio::task::spawn(async move {
+            execution_process(&self).await;
         })
     }
 }

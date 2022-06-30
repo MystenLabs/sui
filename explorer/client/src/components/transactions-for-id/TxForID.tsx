@@ -8,7 +8,6 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useState, useEffect, useContext } from 'react';
-import { Link } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
 import {
@@ -21,8 +20,11 @@ import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
+import PaginationWrapper from '../pagination/PaginationWrapper';
 
 import styles from './TxForID.module.css';
+
+const TRUNCATE_LENGTH = 14;
 
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
@@ -47,6 +49,8 @@ const getTx = async (
     category === 'address'
         ? rpc(network).getTransactionsForAddress(id)
         : rpc(network).getTransactionsForObject(id);
+
+const viewFn = (results: any) => <TxForIDView showData={results} />;
 
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     if (!showData || showData.length === 0) return <></>;
@@ -81,22 +85,24 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                     <div className={styles.txadd}>
                         <div>
                             From:
-                            <Link
-                                className={styles.txlink}
-                                to={'addresses/' + x.From}
-                            >
-                                {truncate(x.From, 14, '...')}
-                            </Link>
+                            <Longtext
+                                text={x.From}
+                                category="addresses"
+                                isLink={true}
+                                isCopyButton={false}
+                                alttext={truncate(x.From, TRUNCATE_LENGTH)}
+                            />
                         </div>
                         {x.To && (
                             <div>
                                 To :
-                                <Link
-                                    className={styles.txlink}
-                                    to={'addresses/' + x.To}
-                                >
-                                    {truncate(x.To, 14, '...')}
-                                </Link>
+                                <Longtext
+                                    text={x.To}
+                                    category="addresses"
+                                    isLink={true}
+                                    isCopyButton={false}
+                                    alttext={truncate(x.To, TRUNCATE_LENGTH)}
+                                />
                             </div>
                         )}
                     </div>
@@ -119,7 +125,7 @@ function TxForIDStatic({
         .map((id) => findTxDatafromID(id))
         .filter((x) => x !== undefined) as TxnData[];
     if (!data) return <></>;
-    return <TxForIDView showData={data} />;
+    return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
 }
 
 function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
@@ -163,7 +169,8 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
 
     if (showData.loadState === 'loaded') {
         const data = showData.data;
-        return <TxForIDView showData={data} />;
+        if (!data) return <></>;
+        return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
     }
 
     return (

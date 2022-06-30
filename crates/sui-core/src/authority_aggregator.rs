@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::gateway_state::{GatewayMetrics, METRICS};
+use crate::gateway_state::GatewayMetrics;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 
@@ -37,9 +37,15 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
 pub struct TimeoutConfig {
+    // Timeout used when making many concurrent requests - ok if it is large because a slow
+    // authority won't block other authorities from being contacted.
     pub authority_request_timeout: Duration,
     pub pre_quorum_timeout: Duration,
     pub post_quorum_timeout: Duration,
+
+    // Timeout used when making serial requests. Should be smaller, since we wait to hear from each
+    // authority before continuing.
+    pub serial_authority_request_timeout: Duration,
 }
 
 impl Default for TimeoutConfig {
@@ -48,6 +54,7 @@ impl Default for TimeoutConfig {
             authority_request_timeout: Duration::from_secs(60),
             pre_quorum_timeout: Duration::from_secs(60),
             post_quorum_timeout: Duration::from_secs(30),
+            serial_authority_request_timeout: Duration::from_secs(5),
         }
     }
 }
@@ -59,18 +66,23 @@ pub struct AuthorityAggregator<A> {
     /// How to talk to this committee.
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     // Metrics
-    pub metrics: &'static GatewayMetrics,
+    pub metrics: GatewayMetrics,
     pub timeouts: TimeoutConfig,
 }
 
 impl<A> AuthorityAggregator<A> {
-    pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
-        Self::new_with_timeouts(committee, authority_clients, Default::default())
+    pub fn new(
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+        metrics: GatewayMetrics,
+    ) -> Self {
+        Self::new_with_timeouts(committee, authority_clients, metrics, Default::default())
     }
 
     pub fn new_with_timeouts(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
+        metrics: GatewayMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
@@ -79,7 +91,7 @@ impl<A> AuthorityAggregator<A> {
                 .into_iter()
                 .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
                 .collect(),
-            metrics: &METRICS,
+            metrics,
             timeouts,
         }
     }
@@ -159,8 +171,9 @@ where
         &self,
         cert: ConfirmationTransaction,
         source_authority: AuthorityName,
-        cert_handler: CertHandler,
+        cert_handler: &CertHandler,
     ) -> Result<(), SuiError> {
+        // TODO(panic): this panics
         let source_client = self.authority_clients[&source_authority].clone();
 
         // This represents a stack of certificates that we need to register with the
@@ -295,6 +308,30 @@ where
         .await
     }
 
+    pub async fn sync_certificate_to_authority_with_timeout(
+        &self,
+        cert: ConfirmationTransaction,
+        destination_authority: AuthorityName,
+        timeout_period: Duration,
+        retries: usize,
+    ) -> Result<(), SuiError> {
+        let cert_handler = RemoteConfirmationTransactionHandler {
+            destination_authority,
+            destination_client: self.authority_clients[&destination_authority].clone(),
+        };
+        debug!(cert =? cert.certificate.digest(),
+               dest_authority =? destination_authority,
+               "Syncing certificate to dest authority");
+        self.sync_certificate_to_authority_with_timeout_inner(
+            cert,
+            destination_authority,
+            &cert_handler,
+            timeout_period,
+            retries,
+        )
+        .await
+    }
+
     /// Sync a certificate to an authority.
     ///
     /// This function infers which authorities have the history related to
@@ -302,10 +339,13 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    pub async fn sync_certificate_to_authority_with_timeout(
+    pub async fn sync_certificate_to_authority_with_timeout_inner<
+        CertHandler: ConfirmationTransactionHandler,
+    >(
         &self,
         cert: ConfirmationTransaction,
         destination_authority: AuthorityName,
+        cert_handler: &CertHandler,
         timeout_period: Duration,
         retries: usize,
     ) -> Result<(), SuiError> {
@@ -332,9 +372,6 @@ where
                 source_authorities.push(*sample_authority);
             }
         }
-        debug!(cert =? cert.certificate.digest(),
-               dest_authority =? destination_authority,
-               ?source_authorities, "Syncing certificate to dest authority");
 
         // Now try to update the destination authority sequentially using
         // the source authorities we have sampled.
@@ -346,10 +383,7 @@ where
             let sync_fut = self.sync_authority_source_to_destination(
                 cert.clone(),
                 source_authority,
-                RemoteConfirmationTransactionHandler {
-                    destination_authority,
-                    destination_client: self.authority_clients[&destination_authority].clone(),
-                },
+                cert_handler,
             );
 
             // Be careful.  timeout() returning OK just means the Future completed.
@@ -445,13 +479,12 @@ where
             Result<V, SuiError>,
         ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
-        // TODO: shuffle here according to stake
-        let authority_clients = &self.authority_clients;
+        let authorities_shuffled = self.committee.shuffle_by_stake();
 
         // First, execute in parallel for each authority FMap.
-        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
+        let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
+            .map(|name| {
+                let client = &self.authority_clients[name];
                 let execute = map_each_authority.clone();
                 async move {
                     (
@@ -489,6 +522,47 @@ where
                 }
         }
         Ok(accumulated_state)
+    }
+
+    /// Like quorum_map_then_reduce_with_timeout, but for things that need only a single
+    /// successful response, such as fetching a Transaction from some authority.
+    /// This is intended for cases in which byzantine authorities can time out or slow-loris, but
+    /// can't give a false answer, because e.g. the digest of the response is known, or a
+    /// quorum-signed object such as a checkpoint has been requested.
+    pub(crate) async fn quorum_once_with_timeout<'a, S, FMap>(
+        &'a self,
+        // The async function used to apply to each authority. It takes an authority name,
+        // and authority client parameter and returns a Result<V>.
+        map_each_authority: FMap,
+        timeout_each_authority: Duration,
+    ) -> Result<S, SuiError>
+    where
+        FMap: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, S, SuiError>,
+    {
+        let authorities_shuffled = self.committee.shuffle_by_stake();
+
+        let mut authority_errors: Vec<(AuthorityName, SuiError)> = Vec::new();
+
+        // TODO: possibly increase concurrency after first failure to reduce latency.
+        for name in authorities_shuffled {
+            let client = &self.authority_clients[name];
+
+            let res = timeout(timeout_each_authority, map_each_authority(*name, client)).await;
+
+            match res {
+                // timeout
+                Err(_) => authority_errors.push((*name, SuiError::TimeoutError)),
+                // request completed
+                Ok(inner_res) => match inner_res {
+                    Err(e) => authority_errors.push((*name, e)),
+                    Ok(_) => return inner_res,
+                },
+            }
+        }
+
+        Err(SuiError::TooManyIncorrectAuthorities {
+            errors: authority_errors,
+        })
     }
 
     /// Return all the information in the network regarding the latest state of a specific object.
@@ -764,12 +838,7 @@ where
         // We update each object at each authority that does not have it.
         for object_id in objects {
             // Authorities to update.
-            let mut authorities: HashSet<AuthorityName> = self
-                .committee
-                .voting_rights
-                .iter()
-                .map(|(name, _)| *name)
-                .collect();
+            let mut authorities: HashSet<AuthorityName> = self.committee.names().cloned().collect();
 
             let (aggregate_object_info, certificates) = self.get_object_by_id(*object_id).await?;
 
@@ -1387,5 +1456,23 @@ where
             .send(ret_val)
             .await
             .expect("Cannot send object on channel after object fetch attempt");
+    }
+
+    pub async fn handle_transaction_and_effects_info_request(
+        &self,
+        digests: &ExecutionDigests,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        self.quorum_once_with_timeout(
+            |_name, client| {
+                Box::pin(async move {
+                    client
+                        .handle_transaction_and_effects_info_request(digests)
+                        .await
+                })
+            },
+            // A long timeout before we hear back from a quorum
+            self.timeouts.serial_authority_request_timeout,
+        )
+        .await
     }
 }

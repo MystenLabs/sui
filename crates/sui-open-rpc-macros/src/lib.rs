@@ -157,7 +157,7 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
 
             let returns = match &method.sig.output {
                 syn::ReturnType::Default => None,
-                syn::ReturnType::Type(_, output) => extract_type_from(&*output, "RpcResult"),
+                syn::ReturnType::Type(_, output) => extract_type_from(output, "RpcResult"),
             };
             methods.push(Method {
                 name: method_name,
