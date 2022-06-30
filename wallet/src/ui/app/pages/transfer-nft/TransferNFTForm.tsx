@@ -51,7 +51,8 @@ function TransferNFTForm({
             </div>
 
             <div className={st.group}>
-                * Total transaction fee estimate (gas cost): 430 {GAS_SYMBOL}
+                * Total transaction fee estimate (gas cost): {transferCost}{' '}
+                {GAS_SYMBOL}
             </div>
             {BigInt(gasBalance) < transferCost && (
                 <div className={st.error}>
