@@ -12,33 +12,30 @@
 module sui::bag {
     use std::errors;
     use std::option::{Self, Option};
-    use std::vector::Self;
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer::{Self, ChildRef};
     use sui::tx_context::{Self, TxContext};
+    use sui::vec_set::VecSet;
+    use sui::vec_set;
 
     // Error codes
-    /// When removing an object from the collection, EObjectNotFound
-    /// will be triggered if the object is not owned by the collection.
-    const EObjectNotFound: u64 = 0;
-
     /// Adding the same object to the collection twice is not allowed.
-    const EObjectDoubleAdd: u64 = 1;
+    const EObjectDoubleAdd: u64 = 0;
 
     /// The max capacity set for the collection cannot exceed the hard limit
     /// which is DEFAULT_MAX_CAPACITY.
-    const EInvalidMaxCapacity: u64 = 2;
+    const EInvalidMaxCapacity: u64 = 1;
 
     /// Trying to add object to the collection when the collection is
     /// already at its maximum capacity.
-    const EMaxCapacityExceeded: u64 = 3;
+    const EMaxCapacityExceeded: u64 = 2;
 
     // TODO: this is a placeholder number
     const DEFAULT_MAX_CAPACITY: u64 = 65536;
 
     struct Bag has key {
         id: VersionedID,
-        objects: vector<ID>,
+        objects: VecSet<ID>,
         max_capacity: u64,
     }
 
@@ -55,7 +52,7 @@ module sui::bag {
         );
         Bag {
             id: tx_context::new_id(ctx),
-            objects: vector::empty(),
+            objects: vec_set::empty(),
             max_capacity,
         }
     }
@@ -67,7 +64,7 @@ module sui::bag {
 
     /// Returns the size of the Bag.
     public fun size(c: &Bag): u64 {
-        vector::length(&c.objects)
+        vec_set::size(&c.objects)
     }
 
     /// Add an object to the Bag.
@@ -83,7 +80,7 @@ module sui::bag {
         if (contains(c, id)) {
             abort EObjectDoubleAdd
         };
-        vector::push_back(&mut c.objects, *id);
+        vec_set::insert(&mut c.objects, *id);
         transfer::transfer_to_object_unsafe(object, old_child_ref, c);
     }
 
@@ -103,17 +100,13 @@ module sui::bag {
     /// Check whether the Bag contains a specific object,
     /// identified by the object id in bytes.
     public fun contains(c: &Bag, id: &ID): bool {
-        option::is_some(&find(c, id))
+        vec_set::contains(&c.objects, id)
     }
 
     /// Remove and return the object from the Bag.
     /// Abort if the object is not found.
     public fun remove<T: key + store>(c: &mut Bag, object: T): T {
-        let idx = find(c, id::id(&object));
-        if (option::is_none(&idx)) {
-            abort EObjectNotFound
-        };
-        vector::remove(&mut c.objects, *option::borrow(&idx));
+        vec_set::remove(&mut c.objects, id::id(&object));
         object
     }
 
@@ -133,19 +126,5 @@ module sui::bag {
         owner_id: VersionedID,
     ): (VersionedID, ChildRef<Bag>) {
         transfer::transfer_to_object_id(obj, owner_id)
-    }
-
-    /// Look for the object identified by `id_bytes` in the Bag.
-    /// Returns the index if found, none if not found.
-    fun find(c: &Bag, id: &ID): Option<u64> {
-        let i = 0;
-        let len = size(c);
-        while (i < len) {
-            if (vector::borrow(&c.objects, i) == id) {
-                return option::some(i)
-            };
-            i = i + 1;
-        };
-        return option::none()
     }
 }
