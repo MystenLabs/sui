@@ -17,7 +17,7 @@ and playing it to the end.
    running the `sui start` command.
 
 After completing these steps, you will have a running local Sui instance and
-the `client` command used in the remainder of this tutorial in your path.
+the `sui client` command used in the remainder of this tutorial in your path.
 Simply leave the terminal with Sui running and start a new terminal for the
 remainder of this tutorial.
 
