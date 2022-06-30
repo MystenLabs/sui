@@ -116,7 +116,7 @@ Then create a new `ColorObject`:
 ```
 $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
-Set the newly created object ID to `$OBJECT`. If we look at the list of objects in the current active account address's:
+Set the newly created object ID to `$OBJECT`. If we look at the list of objects in the current active account address:
 ```
 $ sui client objects --address=$ADDR
 ```
