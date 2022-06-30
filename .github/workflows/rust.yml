@@ -53,10 +53,9 @@ jobs:
           locked: true
       - run: scripts/license_check.sh
       - run: cargo xlint
-      # Temporarily disable hakari checking in CI until rust 1.62 is released in order to get things building in windows
-      # - run: |
-      #     cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-      #     cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
+      - run: |
+          cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
+          cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
 
   test:
     needs: diff
