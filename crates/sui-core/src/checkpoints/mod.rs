@@ -960,13 +960,12 @@ impl CheckpointStore {
 
         // Now write the checkpoint data to the database
 
-        let checkpoint_data: Vec<_> = transactions
+        let checkpoint_data = transactions
             .iter()
             .enumerate()
-            .map(|(i, digest)| ((seq, i as u64), *digest))
-            .collect();
+            .map(|(i, digest)| ((seq, i as u64), *digest));
 
-        let batch = batch.insert_batch(&self.checkpoint_contents, checkpoint_data.into_iter())?;
+        let batch = batch.insert_batch(&self.checkpoint_contents, checkpoint_data)?;
 
         // Write to the database.
         batch.write()?;

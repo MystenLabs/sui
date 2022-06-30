@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
@@ -360,7 +360,7 @@ impl CertifiedCheckpointSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    transactions: BTreeSet<ExecutionDigests>,
+    transactions: Vec<ExecutionDigests>,
 }
 
 impl BcsSignable for CheckpointContents {}
