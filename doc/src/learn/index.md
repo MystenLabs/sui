@@ -53,7 +53,7 @@ Finish with the detailed [Programming with objects](../build/programming-with-ob
 Navigate and search this site however you see fit. Here is the order we recommend if you are new to Sui:
 
 1. Learn [about Sui](../learn/about-sui.md), how [Sui Move differs from Core Move](../learn/sui-move-diffs.md), and [how Sui works](../learn/how-sui-works.md) starting in this very section.
-1. [Build](../build/index.md) smart contracts, sui client, validators, transactions, and more.
+1. [Build](../build/index.md) smart contracts, the Sui client, a Sui fullnode, and more.
 1. [Explore](../explore/index.md) prototypes and examples.
 1. [Contribute](../contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
 1. Employ the [Sui API Reference](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false) reference files for the [Sui JSON-RPC API](../build/json-rpc.md).
