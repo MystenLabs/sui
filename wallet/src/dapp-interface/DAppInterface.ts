@@ -6,12 +6,38 @@ import { filter, lastValueFrom, map, take } from 'rxjs';
 import { createMessage } from '_messages';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload } from '_payloads';
+import { ALL_PERMISSION_TYPES } from '_payloads/permissions';
 
 import type { SuiAddress } from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type {
+    PermissionType,
+    HasPermissionsRequest,
+    HasPermissionsResponse,
+    AcquirePermissionsRequest,
+    AcquirePermissionsResponse,
+} from '_payloads/permissions';
 import type { Observable } from 'rxjs';
+
+function mapToPromise<T extends Payload, R>(
+    stream: Observable<T>,
+    project: (value: T) => R
+) {
+    return lastValueFrom(
+        stream.pipe(
+            take<T>(1),
+            map<T, R>((response) => {
+                if (isErrorPayload(response)) {
+                    // TODO: throw proper error
+                    throw new Error(response.message);
+                }
+                return project(response);
+            })
+        )
+    );
+}
 
 export class DAppInterface {
     private _messagesStream: WindowMessageStream;
@@ -23,20 +49,37 @@ export class DAppInterface {
         );
     }
 
-    public getAccounts(): Promise<SuiAddress[]> {
-        const stream = this.send<GetAccount, GetAccountResponse>({
-            type: 'get-account',
-        }).pipe(
-            take(1),
-            map((response) => {
-                if (isErrorPayload(response)) {
-                    // TODO: throw proper error
-                    throw new Error(response.message);
-                }
-                return response.accounts;
-            })
+    public hasPermissions(
+        permissions: readonly PermissionType[] = ALL_PERMISSION_TYPES
+    ): Promise<boolean> {
+        return mapToPromise(
+            this.send<HasPermissionsRequest, HasPermissionsResponse>({
+                type: 'has-permissions-request',
+                permissions,
+            }),
+            (response) => response.result
         );
-        return lastValueFrom(stream);
+    }
+
+    public requestPermissions(
+        permissions: readonly PermissionType[] = ALL_PERMISSION_TYPES
+    ): Promise<boolean> {
+        return mapToPromise(
+            this.send<AcquirePermissionsRequest, AcquirePermissionsResponse>({
+                type: 'acquire-permissions-request',
+                permissions,
+            }),
+            (response) => response.result
+        );
+    }
+
+    public getAccounts(): Promise<SuiAddress[]> {
+        return mapToPromise(
+            this.send<GetAccount, GetAccountResponse>({
+                type: 'get-account',
+            }),
+            (response) => response.accounts
+        );
     }
 
     private send<

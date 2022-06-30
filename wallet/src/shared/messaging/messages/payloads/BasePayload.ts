@@ -8,7 +8,11 @@ export type PayloadType =
     | 'permission-response'
     | 'get-permission-requests'
     | 'get-account'
-    | 'get-account-response';
+    | 'get-account-response'
+    | 'has-permissions-request'
+    | 'has-permissions-response'
+    | 'acquire-permissions-request'
+    | 'acquire-permissions-response';
 
 export interface BasePayload {
     type: PayloadType;
