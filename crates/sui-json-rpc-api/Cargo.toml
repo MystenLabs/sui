@@ -23,6 +23,7 @@ either = "1.6.1"
 move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 itertools = "0.10.3"
+ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }

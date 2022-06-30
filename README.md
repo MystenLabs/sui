@@ -8,7 +8,7 @@
 
 * To learn how to use Sui, take our [end-to-end tutorial](doc/src/explore/tutorials.md).
 * To jump right into building smart contract applications on top of Sui, start at the [Move Smart Contract Quick Start](doc/src/build/move.md).
-* To experiment with a sample Sui wallet, check out [Wallet Quick Start](doc/src/build/wallet.md).
+* To experiment with the Sui CLI client, check out [Sui CLI client Quick Start](doc/src/build/cli-client.md).
 * To understand what's possible by browsing Move code built on top of Sui, review the [examples](doc/src/explore/examples.md).
 * To start coding against Sui's REST APIs, start at the [API reference](https://app.swaggerhub.com/apis/arun-koshy/sui-api).
 * To learn what distinguishes Sui from other blockchain systems, see [How Sui Differs?](doc/src/learn/sui-compared.md).

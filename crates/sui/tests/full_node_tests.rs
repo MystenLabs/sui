@@ -7,11 +7,10 @@ use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
 use futures::{future, StreamExt};
-use jsonrpsee::core::client::{Client, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee_core::client::ClientT;
 use move_package::BuildConfig;
 use serde_json::json;
 use tokio::sync::Mutex;
@@ -19,7 +18,7 @@ use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{
@@ -51,7 +50,7 @@ async fn transfer_coin(
         "transferring coin {:?} from {:?} -> {:?}",
         object_to_send, sender, receiver
     );
-    let res = WalletCommands::Transfer {
+    let res = SuiClientCommands::Transfer {
         to: receiver,
         coin_object_id: object_to_send,
         gas: None,
@@ -60,7 +59,7 @@ async fn transfer_coin(
     .execute(context)
     .await?;
 
-    let digest = if let WalletCommandResult::Transfer(_, cert, _) = res {
+    let digest = if let SuiClientCommandResult::Transfer(_, cert, _) = res {
         cert.transaction_digest
     } else {
         panic!("transfer command did not return WalletCommandResult::Transfer");
@@ -83,7 +82,7 @@ async fn emit_move_events(
     let (sender, object_refs) = get_account_and_objects(context).await.unwrap();
     let gas_object = object_refs.get(0).unwrap().object_id;
 
-    let res = WalletCommands::CreateExampleNFT {
+    let res = SuiClientCommands::CreateExampleNFT {
         name: Some("example_nft_name".into()),
         description: Some("example_nft_desc".into()),
         url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
@@ -93,9 +92,9 @@ async fn emit_move_events(
     .execute(context)
     .await?;
 
-    let (object_id, digest) = if let WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists(
-        obj,
-    )) = res
+    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
+        SuiObjectRead::Exists(obj),
+    ) = res
     {
         (obj.reference.object_id, obj.previous_transaction)
     } else {
@@ -514,7 +513,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
             let (sender, object_to_split) = {
                 let context = &mut context.lock().await;
                 let address = context.config.accounts[i];
-                WalletCommands::SyncClientState {
+                SuiClientCommands::SyncClientState {
                     address: Some(address),
                 }
                 .execute(context)
@@ -534,7 +533,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
             for _ in 0..10 {
                 let res = {
                     let context = &mut context.lock().await;
-                    WalletCommands::SplitCoin {
+                    SuiClientCommands::SplitCoin {
                         amounts: vec![1],
                         coin_id: object_to_split.0,
                         gas: gas_object,
@@ -545,7 +544,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     .unwrap()
                 };
 
-                owned_tx_digest = if let WalletCommandResult::SplitCoin(SplitCoinResponse {
+                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(SplitCoinResponse {
                     certificate,
                     updated_gas,
                     ..

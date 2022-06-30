@@ -13,10 +13,10 @@ use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui::wallet_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
+use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::genesis_config::GenesisConfig;
-use sui_config::SUI_WALLET_CONFIG;
+use sui_config::SUI_CLIENT_CONFIG;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::gateway_api::{GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
@@ -130,7 +130,7 @@ async fn create_response_sample() -> Result<
 > {
     let network = start_rpc_test_network(Some(GenesisConfig::custom_genesis(1, 4, 30))).await?;
     let working_dir = network.network.dir();
-    let config = working_dir.join(SUI_WALLET_CONFIG);
+    let config = working_dir.join(SUI_CLIENT_CONFIG);
 
     let mut context = WalletContext::new(&config)?;
     let address = context.config.accounts.first().cloned().unwrap();
@@ -186,14 +186,14 @@ async fn create_response_sample() -> Result<
 async fn create_package_object_response(
     context: &mut WalletContext,
 ) -> Result<(GetObjectDataResponse, TransactionResponse), anyhow::Error> {
-    let result = WalletCommands::Publish {
+    let result = SuiClientCommands::Publish {
         path: "sui_programmability/examples/move_tutorial".to_string(),
         gas: None,
         gas_budget: 10000,
     }
     .execute(context)
     .await?;
-    if let WalletCommandResult::Publish(response) = result {
+    if let SuiClientCommandResult::Publish(response) = result {
         Ok((
             context
                 .gateway
@@ -211,7 +211,7 @@ async fn create_transfer_response(
     address: SuiAddress,
     coins: &[SuiObjectInfo],
 ) -> Result<TransactionResponse, anyhow::Error> {
-    let response = WalletCommands::Transfer {
+    let response = SuiClientCommands::Transfer {
         to: address,
         coin_object_id: coins.first().unwrap().object_id,
         gas: None,
@@ -219,7 +219,7 @@ async fn create_transfer_response(
     }
     .execute(context)
     .await?;
-    if let WalletCommandResult::Transfer(_, certificate, effects) = response {
+    if let SuiClientCommandResult::Transfer(_, certificate, effects) = response {
         Ok(TransactionResponse::EffectResponse(
             TransactionEffectsResponse {
                 certificate,
@@ -237,14 +237,14 @@ async fn create_hero_response(
     coins: &[SuiObjectInfo],
 ) -> Result<(ObjectID, GetObjectDataResponse), anyhow::Error> {
     // Create hero response
-    let result = WalletCommands::Publish {
+    let result = SuiClientCommands::Publish {
         path: "sui_programmability/examples/games".to_string(),
         gas: None,
         gas_budget: 10000,
     }
     .execute(context)
     .await?;
-    if let WalletCommandResult::Publish(response) = result {
+    if let SuiClientCommandResult::Publish(response) = result {
         let package_id = response.package.object_id;
         let game_info = response
             .created_objects
@@ -254,7 +254,7 @@ async fn create_hero_response(
 
         let game_info = SuiJsonValue::new(json!(game_info.reference.object_id.to_hex_literal()))?;
         let coin = SuiJsonValue::new(json!(coins.first().unwrap().object_id.to_hex_literal()))?;
-        let result = WalletCommands::Call {
+        let result = SuiClientCommands::Call {
             package: package_id,
             module: "hero".to_string(),
             function: "acquire_hero".to_string(),
@@ -266,7 +266,7 @@ async fn create_hero_response(
         .execute(context)
         .await?;
 
-        if let WalletCommandResult::Call(_, effect) = result {
+        if let SuiClientCommandResult::Call(_, effect) = result {
             let hero = effect.created.first().unwrap();
             Ok((
                 package_id,
@@ -332,7 +332,7 @@ async fn create_coin_split_response(
     coins: &[SuiObjectInfo],
 ) -> Result<TransactionResponse, anyhow::Error> {
     // create coin_split response
-    let result = WalletCommands::SplitCoin {
+    let result = SuiClientCommands::SplitCoin {
         coin_id: coins.first().unwrap().object_id,
         amounts: vec![20, 20, 20, 20, 20],
         gas: None,
@@ -341,7 +341,7 @@ async fn create_coin_split_response(
     .execute(context)
     .await?;
 
-    if let WalletCommandResult::SplitCoin(resp) = result {
+    if let SuiClientCommandResult::SplitCoin(resp) = result {
         Ok(TransactionResponse::SplitCoinResponse(resp))
     } else {
         panic!()
@@ -361,7 +361,7 @@ async fn get_nft_response(
         .map(SuiJsonValue::new)
         .collect::<Result<_, _>>()?;
 
-    let result = WalletCommands::Call {
+    let result = SuiClientCommands::Call {
         package: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         module: "devnet_nft".to_string(),
         function: "mint".to_string(),
@@ -373,7 +373,7 @@ async fn get_nft_response(
     .execute(context)
     .await?;
 
-    if let WalletCommandResult::Call(certificate, effects) = result {
+    if let SuiClientCommandResult::Call(certificate, effects) = result {
         let object = context
             .gateway
             .get_object(effects.created.first().unwrap().reference.object_id)

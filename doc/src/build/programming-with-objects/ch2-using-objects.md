@@ -166,7 +166,7 @@ test_scenario::next_tx(scenario, &recipient);
 Now it's time to try this out on-chain. Assuming you have already followed the instructions in [Chapter 1](./ch1-object-basics.md#on-chain-interactions), you should already have the package published and a new object created.
 Now we can try to transfer it to another account address. First let's see what other account addresses you own:
 ```
-$ wallet addresses
+$ sui client addresses
 ```
 Since the default current address is the first address, let's pick the second address in the list as the recipient. In my case, I have `0x1416f3d5af469905b0580b9af843ec82d02efd30`. Let's save it for convenience:
 ```
@@ -174,33 +174,33 @@ $ export RECIPIENT=0x1416f3d5af469905b0580b9af843ec82d02efd30
 ```
 Now let's transfer the object to this address:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "transfer" --args \"0x$OBJECT\" \"0x$RECIPIENT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "transfer" --args \"0x$OBJECT\" \"0x$RECIPIENT\"
 ```
 Now let's see what objects the `RECIPIENT` owns:
 ```
-$ wallet objects --address $RECIPIENT
+$ sui client objects --address $RECIPIENT
 ```
 We should be able to see that one of the objects in the list is the new `ColorObject`! This means the transfer was successful.
 
 Let's also try to delete this object:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
 ```
 Oops. It will error out and complain that the account address is unable to lock the object, which is a valid error because we have already transferred the object away from the original owner.
 
-In order to operate on this object, we need to switch our wallet address to `$RECIPIENT`:
+In order to operate on this object, we need to switch our client address to `$RECIPIENT`:
 ```
-$ wallet switch --address $RECIPIENT
+$ sui client switch --address $RECIPIENT
 ```
 And try the deletion again:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
 ```
 In the output, you will see in the `Transaction Effects` section a list of deleted objects.
 This shows that the object was successfully deleted. If we run this again:
 ```
-$ wallet objects --address $RECIPIENT
+$ sui client objects --address $RECIPIENT
 ```
-We will see that this object is no longer there in the wallet.
+We will see that this object is no longer there in the address.
 
 Now you know how to pass objects by reference and value and transfer them on-chain.

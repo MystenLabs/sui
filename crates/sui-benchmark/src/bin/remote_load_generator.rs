@@ -3,15 +3,14 @@
 
 use clap::*;
 use futures::join;
-use sui::benchmark::bench_types::{MicroBenchmarkResult, RemoteLoadGenConfig};
-use sui::benchmark::load_generator::MultiFixedRateLoadGenerator;
+use sui_benchmark::benchmark::bench_types::{MicroBenchmarkResult, RemoteLoadGenConfig};
+use sui_benchmark::benchmark::load_generator::MultiFixedRateLoadGenerator;
 
 use std::panic;
 use std::path::PathBuf;
-use sui::benchmark::transaction_creator::TransactionCreator;
-use sui::benchmark::validator_preparer::ValidatorPreparer;
-use sui::config::PersistedConfig;
-use sui_config::NetworkConfig;
+use sui_benchmark::benchmark::transaction_creator::TransactionCreator;
+use sui_benchmark::benchmark::validator_preparer::ValidatorPreparer;
+use sui_config::{NetworkConfig, PersistedConfig};
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::KeyPair;
 use tokio::runtime::Builder;

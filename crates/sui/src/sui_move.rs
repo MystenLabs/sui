@@ -5,9 +5,8 @@ use clap::*;
 use colored::Colorize;
 use move_unit_test::UnitTestingConfig;
 use std::path::Path;
-use sui_types::exit_main;
 
-#[derive(Parser)]
+#[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum MoveCommands {
     /// Build and verify Move project
@@ -55,28 +54,4 @@ impl MoveCommands {
         }
         Ok(())
     }
-}
-
-#[derive(Parser)]
-#[clap(
-    name = "Sui Move Development Tool",
-    about = "Tool to build and test Move applications",
-    rename_all = "kebab-case"
-)]
-struct MoveOpt {
-    /// Path to the Move project root.
-    #[clap(long, default_value = "./")]
-    path: String,
-    /// Whether we are building/testing the std/framework code.
-    #[clap(long)]
-    std: bool,
-    /// Subcommands.
-    #[clap(subcommand)]
-    cmd: MoveCommands,
-}
-
-fn main() {
-    let options = MoveOpt::parse();
-    let path = options.path;
-    exit_main!(options.cmd.execute(path.as_ref(), options.std))
 }

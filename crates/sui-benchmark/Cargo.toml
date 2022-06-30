@@ -1,0 +1,39 @@
+[package]
+name = "sui-benchmark"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+rayon = "1.5.3"
+anyhow = { version = "1.0.57", features = ["backtrace"] }
+futures = "0.3.21"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.80"
+tempfile = "3.3.0"
+tokio = { version = "1.18.2", features = ["full"] }
+strum = "0.24.0"
+strum_macros = "0.24.0"
+num_cpus = "1.13.1"
+rocksdb = "0.18.0"
+serde_with = { version = "1.14.0", features = ["hex"] }
+tracing = "0.1.34"
+tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-filter"] }
+clap = { version = "3.1.17", features = ["derive"] }
+prometheus = "0.13.1"
+multiaddr = "0.14.0"
+
+bcs = "0.1.3"
+sui-core = { path = "../sui-core" }
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+
+move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "05fa85552c49f0775a47d72c37074c9ca1754900", package = "node" }
+
+workspace-hack = { path = "../workspace-hack"}
+
+[features]
+benchmark = ["narwhal-node/benchmark"]

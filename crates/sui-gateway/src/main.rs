@@ -21,7 +21,7 @@ const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
 
 #[cfg(test)]
-#[path = "../unit_tests/rpc_server_tests.rs"]
+#[path = "unit_tests/rpc_server_tests.rs"]
 mod rpc_server_tests;
 
 #[derive(Parser)]
