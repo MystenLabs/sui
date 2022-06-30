@@ -354,9 +354,8 @@ where
         let mut candidate_source_authorties: HashSet<AuthorityName> = cert
             .certificate
             .auth_sign_info
-            .signatures
-            .iter()
-            .map(|(name, _)| *name)
+            .authorities()
+            .into_iter()
             .collect();
 
         // Sample a `retries` number of distinct authorities by stake.
@@ -1045,8 +1044,8 @@ where
                                             self.committee.epoch(),
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
-                                        ));
-                                }
+                                        )?);
+                                    }
                             }
                             // If we get back an error, then we aggregate and check
                             // if we have too many errors
@@ -1307,7 +1306,7 @@ where
                     certificate.auth_sign_info.epoch,
                     effects,
                     signatures,
-                ));
+                )?);
             }
         }
 

@@ -476,7 +476,7 @@ impl ObjectDigest {
 }
 
 pub fn get_new_address() -> SuiAddress {
-    crate::crypto::get_key_pair().0
+    crate::crypto::KeyPair::get_key_pair().0
 }
 
 pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>

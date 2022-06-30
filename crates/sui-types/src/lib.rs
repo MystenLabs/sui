@@ -19,6 +19,7 @@ pub mod batch;
 pub mod coin;
 pub mod committee;
 pub mod crypto;
+pub mod crypto_traits;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;
@@ -32,6 +33,11 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod waypoint;
+
+// Only uncomment one 
+pub mod ed25519;
+// pub mod bls12381;
+
 
 pub mod event_filter;
 #[path = "./unit_tests/utils.rs"]

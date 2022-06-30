@@ -11,33 +11,27 @@ use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{sha3_hash, AuthoritySignature, BcsSignable, VerificationObligation},
+    crypto::{sha3_hash, AuthoritySignature, BcsSignable},
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
 
 /*
-
     The checkpoint messages, structures and protocol: A gentle overview
     -------------------------------------------------------------------
-
     Checkpoint proposals:
     --------------------
-
     Authorities operate and process certified transactions. When they have
     processed all transactions included in a previous checkpoint (we will
     see how this is set) each authority proposes a signed proposed
     checkpoint (SignedCheckpointProposal) for the next sequence number.
-
     A proposal is built on the basis of a set of transactions that the
     authority has processed and wants to include in the next checkpoint.
     Right now we just list these as transaction digests but down the line
     we will rely on more efficient ways to determine the set for parties that
     may already have a very similar set of digests.
-
     From proposals to checkpoints:
     -----------------------------
-
     A checkpoint is formed by a set of checkpoint proposals representing
     2/3 of the authorities by stake. The checkpoint contains the union of
     transactions in all the proposals. A checkpoint needs to provide enough
@@ -45,10 +39,8 @@ use serde::{Deserialize, Serialize};
     included. Since all authorities need to agree on which checkpoint (out
     of the potentially many sets of 2/3 stake) constitutes the checkpoint
     we need an agreement protocol to determine this.
-
     Checkpoint confirmation:
     -----------------------
-
     Once a checkpoint is determined each authority forms a CheckpointSummary
     with all the transactions in the checkpoint, and signs it with its
     authority key to form a SignedCheckpoint. A collection of 2/3 authority
@@ -56,10 +48,8 @@ use serde::{Deserialize, Serialize};
     structure that is kept in the long term to attest of the sequence of
     checkpoints. Once a CertifiedCheckpoint is recoded for a checkpoint
     all other information leading to the checkpoint may be deleted.
-
     Reads:
     -----
-
     To facilitate the protocol authorities always provide facilities for
     reads:
     - To get past checkpoints signatures, certificates and the transactions
@@ -67,7 +57,6 @@ use serde::{Deserialize, Serialize};
     - To get the current signed proposal. Or if there is no proposal a
       hint about which transaction digests are pending processing to get
       a proposal.
-
 */
 
 pub type CheckpointSequenceNumber = u64;
@@ -310,21 +299,21 @@ impl CertifiedCheckpointSummary {
 
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
-            auth_signature: AuthorityWeakQuorumSignInfo {
-                epoch: committee.epoch,
-                signatures: signed_checkpoints
+            auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
+                committee.epoch,
+                signed_checkpoints
                     .into_iter()
                     .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
-                    .collect(),
-            },
+                    .collect::<Vec<_>>()
+            )?
         };
 
         certified_checkpoint.verify(committee)?;
         Ok(certified_checkpoint)
     }
 
-    pub fn signatory_authorities(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.auth_signature.signatures.iter().map(|(name, _)| name)
+    pub fn signatory_authorities(&self) -> Vec<AuthorityName> {
+        self.auth_signature.authorities().iter().map(|x| *x).collect::<_>()
     }
 
     /// Check that a certificate is valid, and signed by a quorum of authorities
@@ -333,13 +322,9 @@ impl CertifiedCheckpointSummary {
             self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
-        let mut obligation = VerificationObligation::default();
         let mut message = Vec::new();
         self.summary.write(&mut message);
-        let idx = obligation.add_message(message);
-        self.auth_signature
-            .add_to_verification_obligation(committee, &mut obligation, idx)?;
-        obligation.verify_all()?;
+        self.auth_signature.verify(message, committee)?;
         Ok(())
     }
 

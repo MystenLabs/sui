@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, KeyPair, Signature};
+use sui_types::crypto::{KeyPair, Signature};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]
@@ -67,7 +67,7 @@ impl Keystore for SuiKeystore {
     }
 
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        let (address, keypair) = get_key_pair();
+        let (address, keypair) = KeyPair::get_key_pair();
         self.keys.insert(address, keypair);
         self.save()?;
         Ok(address)

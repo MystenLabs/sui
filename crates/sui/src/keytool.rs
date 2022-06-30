@@ -10,7 +10,7 @@ use sui_types::base_types::decode_bytes_hex;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::SuiAddress,
-    crypto::{get_key_pair, KeyPair},
+    crypto::{KeyPair},
 };
 use tracing::info;
 
@@ -37,7 +37,7 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate => {
-                let (address, keypair) = get_key_pair();
+                let (address, keypair) = KeyPair::get_key_pair();
                 store_and_print_keypair(address, keypair)
             }
             KeyToolCommand::Unpack { keypair } => {

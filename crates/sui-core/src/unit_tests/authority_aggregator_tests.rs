@@ -8,8 +8,8 @@ use signature::Signer;
 
 use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
-use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
+use sui_types::crypto::KeyPair;
 
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
@@ -51,7 +51,7 @@ pub async fn init_local_authorities_with_genesis(
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..genesis_objects.len() {
-        let (_, key_pair) = get_key_pair();
+        let (_, key_pair) = KeyPair::get_key_pair();
         let authority_name = *key_pair.public_key_bytes();
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
@@ -280,7 +280,7 @@ where
         committee.epoch(),
         transaction.unwrap().to_transaction(),
         votes,
-    )
+    ).unwrap()
 }
 
 pub async fn do_cert<A>(
@@ -334,8 +334,8 @@ async fn execute_transaction_with_fault_configs(
     configs_before_process_transaction: &[(usize, LocalAuthorityClientFaultConfig)],
     configs_before_process_certificate: &[(usize, LocalAuthorityClientFaultConfig)],
 ) -> SuiResult {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _) = KeyPair::get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
@@ -494,8 +494,8 @@ async fn test_map_reducer() {
 
 #[tokio::test]
 async fn test_get_all_owned_objects() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _) = KeyPair::get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_ref_1 = gas_object1.compute_object_reference();
     let gas_object2 = Object::with_owner_for_testing(addr2);
@@ -583,8 +583,8 @@ async fn test_get_all_owned_objects() {
 
 #[tokio::test]
 async fn test_sync_all_owned_objects() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
+    let (addr2, _) = KeyPair::get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
@@ -695,7 +695,7 @@ async fn test_sync_all_owned_objects() {
 
 #[tokio::test]
 async fn test_process_transaction1() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
@@ -756,7 +756,7 @@ async fn get_owned_objects(
 
 #[tokio::test]
 async fn test_process_certificate() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1) = KeyPair::get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let genesis_objects =
@@ -878,4 +878,3 @@ async fn test_process_transaction_fault_fail() {
     )
     .await
     .is_err());
-}

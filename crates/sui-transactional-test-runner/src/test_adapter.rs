@@ -45,7 +45,7 @@ use sui_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
         SUI_ADDRESS_LENGTH,
     },
-    crypto::{get_key_pair_from_rng, KeyPair, Signature},
+    crypto::{KeyPair, Signature},
     event::Event,
     gas,
     messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
@@ -124,7 +124,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         };
         let accounts = account_names
             .into_iter()
-            .map(|n| (n, get_key_pair_from_rng(&mut rng)))
+            .map(|n| (n, KeyPair::get_key_pair_from_rng(&mut rng)))
             .collect::<BTreeMap<_, _>>();
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
@@ -434,7 +434,7 @@ impl<'a> SuiTestAdapter<'a> {
                 None => panic!("Unbound account {}", n),
             },
             None => {
-                let (sender, sender_key) = get_key_pair_from_rng(&mut self.rng);
+                let (sender, sender_key) = KeyPair::get_key_pair_from_rng(&mut self.rng);
                 new_key_pair = sender_key;
                 (sender, &new_key_pair)
             }
