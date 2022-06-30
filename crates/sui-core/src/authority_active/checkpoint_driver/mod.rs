@@ -16,7 +16,7 @@ use sui_types::{
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
         CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, SignedCheckpointSummary,
+        CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
 use tokio::time::timeout;
@@ -447,7 +447,7 @@ where
                 .collect();
             if let Ok((_, contents)) = get_one_checkpoint_with_contents(
                 net.clone(),
-                checkpoint.summary.sequence_number,
+                &checkpoint.summary,
                 &available_authorities,
             )
             .await
@@ -525,13 +525,13 @@ where
 
 pub async fn get_one_checkpoint_with_contents<A>(
     net: Arc<AuthorityAggregator<A>>,
-    sequence_number: CheckpointSequenceNumber,
+    summary: &CheckpointSummary,
     available_authorities: &BTreeSet<AuthorityName>,
 ) -> Result<(CertifiedCheckpointSummary, CheckpointContents), SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    get_one_checkpoint(net, sequence_number, true, available_authorities)
+    get_one_checkpoint(net, *summary.sequence_number(), true, available_authorities)
         .await
         // unwrap ok because of true param above.
         .map(|ok| (ok.0, ok.1.unwrap()))
@@ -572,12 +572,21 @@ where
                 info: AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(past)),
                 detail,
             }) => {
-                return match (contents, &detail) {
+                match (contents, detail) {
                     // TODO: this should be done by SafeClient
-                    (true, None) => Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: *sample_authority,
-                    }),
-                    _ => Ok((past, detail)),
+                    (true, None) => {
+                        warn!(
+                            "Sync Error: ByzantineAuthoritySuspicion: should have returned detail"
+                        );
+                    }
+                    (_, Some(detail)) => {
+                        if past.summary.content_digest == detail.digest() {
+                            return Ok((past, Some(detail)));
+                        } else {
+                            warn!("Sync Error: ByzantineAuthoritySuspicion: digest mismatch");
+                        }
+                    }
+                    (_, detail) => return Ok((past, detail)),
                 };
             }
             Ok(resp) => {
