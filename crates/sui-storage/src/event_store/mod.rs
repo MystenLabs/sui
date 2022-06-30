@@ -29,7 +29,7 @@ use flexstr::SharedStr;
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredEvent {
     /// UTC timestamp in milliseconds
     timestamp: u64,
@@ -62,7 +62,7 @@ pub struct StoredEvent {
 /// Enum for different types of values returnable from events in the EventStore
 // This is distinct from MoveValue because we want to explicitly represent (and translate)
 // blobs and strings, allowing us to use more efficient representations.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EventValue {
     Move(MoveValue),
     /// Efficient string representation, no allocation for small strings
