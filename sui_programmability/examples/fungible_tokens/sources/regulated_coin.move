@@ -17,7 +17,7 @@ module rc::regulated_coin {
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
     /// with all the other Coins and methods, as well as the `creator` field, which
     /// can be used for additional security/regulation implementations.
-    struct RegulatedCoin<phantom T> has key {
+    struct RegulatedCoin<phantom T> has key, store {
         id: VersionedID,
         balance: Balance<T>,
         creator: address
