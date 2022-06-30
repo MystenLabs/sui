@@ -419,7 +419,6 @@ where
         };
 
         match (expected_seq, observed_seq) {
-            (None, None) => Ok(()),
             (Some(e), Some(o)) => {
                 fp_ensure!(
                     e == o,
@@ -429,6 +428,7 @@ where
                 );
                 Ok(())
             }
+            (None, _) => Ok(()),
             _ => Err(SuiError::ByzantineAuthoritySuspicion {
                 authority: self.address,
             }),
