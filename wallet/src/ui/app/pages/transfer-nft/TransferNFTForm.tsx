@@ -7,7 +7,10 @@ import { useEffect, useRef, memo } from 'react';
 import AddressInput from '_components/address-input';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
+import {
+    GAS_SYMBOL,
+    DEFAULT_NFT_TRANSFER_GAS_FEE,
+} from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from '.';
 
@@ -16,14 +19,12 @@ import st from './TransferNFTForm.module.scss';
 export type TransferNFTFormProps = {
     submitError: string | null;
     gasBalance: string;
-    transferCost: number;
     onClearSubmitError: () => void;
 };
 
 function TransferNFTForm({
     submitError,
     gasBalance,
-    transferCost,
     onClearSubmitError,
 }: TransferNFTFormProps) {
     const {
@@ -51,10 +52,10 @@ function TransferNFTForm({
             </div>
 
             <div className={st.group}>
-                * Total transaction fee estimate (gas cost): {transferCost}{' '}
-                {GAS_SYMBOL}
+                * Total transaction fee estimate (gas cost):
+                {DEFAULT_NFT_TRANSFER_GAS_FEE} {GAS_SYMBOL}
             </div>
-            {BigInt(gasBalance) < transferCost && (
+            {BigInt(gasBalance) < DEFAULT_NFT_TRANSFER_GAS_FEE && (
                 <div className={st.error}>
                     * Insufficient balance to cover transfer cost
                 </div>
