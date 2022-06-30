@@ -18,6 +18,7 @@ pub type PublicKeyBytes = Ed25519PublicKeyBytes;
 pub type AuthorityQuorumSignInfo<const S: bool> = Ed25519AuthorityQuorumSignInfo<S>;
 pub type AuthoritySignInfo = Ed25519AuthoritySignInfo;
 
+
 // UNCOMMENT TO CHANGE SIGNATURE SCHEME TO BLS
 
 // use crate::bls12381::{Bls12381PublicKey, Bls12381KeyPair, Bls12381Signature, Bls12381AuthoritySignature, Bls12381PublicKeyBytes, Bls12381AuthorityQuorumSignInfo, Bls12381AuthoritySignInfo};
