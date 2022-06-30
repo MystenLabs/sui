@@ -379,7 +379,7 @@ impl CheckpointContents {
         sha3_hash(self)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&ExecutionDigests> {
+    pub fn iter(&self) -> impl Iterator<Item = &ExecutionDigests> {
         self.transactions.iter()
     }
 }
