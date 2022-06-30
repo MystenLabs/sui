@@ -498,25 +498,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bindgen"
-version = "0.60.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "062dddbc1ba4aca46de6338e2bf87771414c335f7b2f2036e8f3e9befebf88e6"
-dependencies = [
- "bitflags",
- "cexpr",
- "clang-sys",
- "lazy_static 1.4.0",
- "lazycell",
- "peeking_take_while",
- "proc-macro2 1.0.39",
- "quote 1.0.18",
- "regex",
- "rustc-hash",
- "shlex",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1107,8 +1088,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31432bc31ff8883bf6a693a79371862f73087822470c82d6a1ec778781ee3978"
 dependencies = [
  "console-api",
- "crossbeam-channel 0.5.4",
- "crossbeam-utils 0.8.8",
+ "crossbeam-channel",
+ "crossbeam-utils",
  "futures",
  "hdrhistogram",
  "humantime",
@@ -1170,7 +1151,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49fc9a695bca7f35f5f4c15cddc84415f66a74ea78eef08e90c5024f2b540e23"
 dependencies = [
- "crc-catalog 1.1.1",
+ "crc-catalog",
 ]
 
 [[package]]
@@ -1178,12 +1159,6 @@ name = "crc-catalog"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccaeedb56da03b09f598226e25e80088cb4cd25f316e6e4df7d695f0feeb1403"
-
-[[package]]
-name = "crc-catalog"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d0165d2900ae6778e36e80bbc4da3b5eefccee9ba939761f9c2882a5d9af3ff"
 
 [[package]]
 name = "crc32fast"
@@ -1237,21 +1212,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae5588f6b3c3cb05239e90bd110f257254aecd01e4635400391aeae07497845"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
  "crossbeam-queue",
- "crossbeam-utils 0.8.8",
-]
-
-[[package]]
-name = "crossbeam-channel"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b153fe7cbef478c567df0f972e02e6d736db11affe43dfc9c56a9374d1adfb87"
-dependencies = [
- "crossbeam-utils 0.7.2",
- "maybe-uninit",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -1261,7 +1226,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aaa7bd5fb665c6864b5f963dd9097905c54125909c7aa94c9e18507cdbe6c53"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -1272,7 +1237,7 @@ checksum = "6455c0ca19f0d2fbf751b908d5c55c1f5cbc65e03c4225427254b46890bdde1e"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-epoch",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -1283,7 +1248,7 @@ checksum = "1145cf131a2c6ba0615079ab6a638f7e1973ac9c2634fcbeaaad6114246efe8c"
 dependencies = [
  "autocfg",
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "lazy_static 1.4.0",
  "memoffset",
  "scopeguard",
@@ -1296,18 +1261,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f25d8400f4a7a5778f0e4e52384a48cbd9b5c495d110786187fc750075277a2"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.8",
-]
-
-[[package]]
-name = "crossbeam-utils"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3c7c73a2d1e9fc0886a08b93e98eb643461230d5f1925e4036204d5f2e261a8"
-dependencies = [
- "autocfg",
- "cfg-if 0.1.10",
- "lazy_static 1.4.0",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -2293,7 +2247,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e64b03909df88034c26dc1547e8970b91f98bdb65165d6a4e9110d94263dbb2c"
 dependencies = [
  "gloo-timers",
- "send_wrapper 0.4.0",
+ "send_wrapper",
 ]
 
 [[package]]
@@ -2606,7 +2560,7 @@ checksum = "31672b7011be2c4f7456c4ddbcb40e7e9a4a9fad8efe49a6ebaf5f307d0109c0"
 dependencies = [
  "base64",
  "byteorder",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "flate2",
  "nom 7.1.1",
  "num-traits 0.2.15",
@@ -2818,7 +2772,7 @@ version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "713f1b139373f96a2e0ce3ac931cd01ee973c3c5dd7c40c0c2efe96ad2b6751d"
 dependencies = [
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "globset",
  "lazy_static 1.4.0",
  "log",
@@ -3207,7 +3161,7 @@ version = "0.6.1+6.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bc587013734dadb7cf23468e531aa120788b87243648be42e2d3a072186291"
 dependencies = [
- "bindgen 0.59.2",
+ "bindgen",
  "bzip2-sys",
  "cc",
  "glob",
@@ -3234,7 +3188,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc195aab5b803465bf614a5a4765741abce6c8d64e7d8ca57acd2923661fba9f"
 dependencies = [
  "clap 3.1.18",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "rayon",
  "termcolor",
 ]
@@ -3332,12 +3286,6 @@ name = "matchit"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73cbba799671b762df5a175adf59ce145165747bb891505c43d09aefbbf38beb"
-
-[[package]]
-name = "maybe-uninit"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
 name = "memchr"
@@ -4658,7 +4606,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6105e89802af13fdf48c49d7646d3b533a70e536d818aae7e78ba0433d01acb8"
 dependencies = [
  "async-trait",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "futures-channel",
  "futures-executor",
  "futures-util",
@@ -5504,9 +5452,9 @@ version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "258bcdb5ac6dad48491bb2992db6b7cf74878b0384908af124823d118c99683f"
 dependencies = [
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "num_cpus",
 ]
 
@@ -5969,12 +5917,6 @@ name = "send_wrapper"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
-
-[[package]]
-name = "send_wrapper"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "serde"
@@ -7856,7 +7798,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "time 0.3.9",
  "tracing-subscriber 0.3.11",
 ]
@@ -8764,7 +8706,7 @@ dependencies = [
  "better_typeid_derive",
  "bimap",
  "bincode",
- "bindgen 0.60.1",
+ "bindgen",
  "bit-set",
  "bit-vec",
  "bitflags",
@@ -8808,28 +8750,30 @@ dependencies = [
  "colored",
  "colored-diff",
  "combine",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "config 0.11.0",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "console-api",
  "console-subscriber",
  "constant_time_eq",
  "core2",
  "crc",
- "crc-catalog 2.1.0",
+ "crc-catalog",
  "crc32fast",
  "criterion",
  "criterion-plot",
  "crossbeam",
- "crossbeam-channel 0.4.4",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
  "crossbeam-queue",
- "crossbeam-utils 0.7.2",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "crossterm 0.21.0",
  "crossterm 0.22.1",
+ "crossterm 0.23.2",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "crypto-common",
  "crypto-mac",
@@ -8837,6 +8781,7 @@ dependencies = [
  "csv-core",
  "curve25519-dalek",
  "curve25519-dalek-fiat",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "darling 0.13.4",
  "darling 0.14.1",
@@ -8876,9 +8821,11 @@ dependencies = [
  "ed25519-dalek-fiat",
  "either",
  "endian-type",
+ "enum_dispatch",
  "env_logger",
  "ethnum",
  "event-listener",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "eyre",
  "fail",
@@ -8993,7 +8940,6 @@ dependencies = [
  "matchers",
  "matches",
  "matchit",
- "maybe-uninit",
  "memchr",
  "memoffset",
  "merlin",
@@ -9043,13 +8989,16 @@ dependencies = [
  "multihash-derive",
  "multimap",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
+ "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
  "name-variant",
  "named-lock",
  "nested",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "nexlint",
  "nexlint-lints",
  "nibble_vec",
+ "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "nom 5.1.2",
  "nom 7.1.1",
@@ -9114,6 +9063,7 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "prettyplease",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "proc-macro-crate",
  "proc-macro-error",
@@ -9179,7 +9129,7 @@ dependencies = [
  "semver 0.11.0",
  "semver 1.0.9",
  "semver-parser",
- "send_wrapper 0.6.0",
+ "send_wrapper",
  "serde 0.8.23",
  "serde 1.0.137",
  "serde-hjson",
@@ -9300,7 +9250,9 @@ dependencies = [
  "twox-hash",
  "typed-arena",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
+ "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=af52637e73332eba7c8844e9bcdeb5b48854eabf)",
  "typenum",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "ucd-trie",
  "uncased",
@@ -9346,7 +9298,9 @@ dependencies = [
  "webpki-roots 0.21.1",
  "webpki-roots 0.22.3",
  "which",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=05fa85552c49f0775a47d72c37074c9ca1754900)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=3cf68183b22acfe014118ef2713d5094159f2f4d)",
  "yaml-rust",
  "zeroize",
@@ -9392,7 +9346,7 @@ dependencies = [
  "base64",
  "base64ct",
  "bincode",
- "bindgen 0.59.2",
+ "bindgen",
  "bit-set",
  "bit-vec",
  "bitflags",
@@ -9421,10 +9375,10 @@ dependencies = [
  "crc32fast",
  "criterion",
  "criterion-plot",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "crypto-mac",
  "csv",
  "csv-core",
@@ -9726,7 +9680,7 @@ dependencies = [
  "base64",
  "base64ct",
  "bincode",
- "bindgen 0.59.2",
+ "bindgen",
  "bit-set",
  "bit-vec",
  "bitflags",
@@ -9755,10 +9709,10 @@ dependencies = [
  "crc32fast",
  "criterion",
  "criterion-plot",
- "crossbeam-channel 0.5.4",
+ "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-epoch",
- "crossbeam-utils 0.8.8",
+ "crossbeam-utils",
  "crypto-mac",
  "csv",
  "csv-core",
