@@ -14,7 +14,3 @@ main {
     @apply relative z-10 py-2 min-h-[77vh]  
     bg-offwhite rounded-[20px] shadow-2xl;
 }
-
-a.suititle {
-    @apply text-lg text-offwhite no-underline hover:underline mx-[2vw];
-}
