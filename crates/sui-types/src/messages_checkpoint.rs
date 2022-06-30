@@ -51,7 +51,7 @@ use serde::{Deserialize, Serialize};
 
     Once a checkpoint is determined each authority forms a CheckpointSummary
     with all the transactions in the checkpoint, and signs it with its
-    authority key to form a SignedCheckpoint. A collection of 2/3 authority
+    authority key to form a SignedCheckpoint. A collection of >1/3 authority
     signatures on a checkpoint forms a CertifiedCheckpoint. And this is the
     structure that is kept in the long term to attest of the sequence of
     checkpoints. Once a CertifiedCheckpoint is recoded for a checkpoint
@@ -434,6 +434,8 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use rand::prelude::StdRng;
     use rand::SeedableRng;
 

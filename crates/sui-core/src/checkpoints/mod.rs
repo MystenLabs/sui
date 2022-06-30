@@ -628,9 +628,11 @@ impl CheckpointStore {
 
         if let Ok(Some(contents)) = self.reconstruct_contents(committee, our_proposal) {
             let old_order: Vec<_> = contents.iter().cloned().collect();
-            let _new_order = orderer
+            let new_order = orderer
                 .get_complete_causal_order(&old_order, self)
                 .map_err(FragmentInternalError::Error)?;
+
+            let ordered_contents = CheckpointContents::new(new_order.into_iter());
 
             let previous_digest = self
                 .get_prev_checkpoint_digest(next_sequence_number)
@@ -638,10 +640,10 @@ impl CheckpointStore {
             let summary = CheckpointSummary::new(
                 committee.epoch,
                 next_sequence_number,
-                &contents,
+                &ordered_contents,
                 previous_digest,
             );
-            self.sign_new_checkpoint(summary, &contents)
+            self.sign_new_checkpoint(summary, &ordered_contents)
                 .map_err(FragmentInternalError::Error)?;
 
             return Ok(true);
