@@ -81,13 +81,9 @@ RUN cargo build --${BUILD_MODE} --all-features --bin node
 #################################################################
 
 # Creat another layer so we can re-use caching
-FROM rust:1.60-slim-bullseye
+FROM debian:bullseye-slim
 ARG BUILD_MODE
 WORKDIR "$WORKDIR/narwhal"
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libssl1.1 iputils-ping telnet curl \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy the Narwhal node binary to bin folder
 COPY --from=builder narwhal/target/${BUILD_MODE}/node bin/

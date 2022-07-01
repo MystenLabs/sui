@@ -128,3 +128,17 @@ EOF
 ./scripts/gen.committee.py -n ${num} -d ${target} > ${target}/committee.json
 
 cp -r templates/{grafana,prometheus} ${target}/
+
+# add the primary and worker nodes to the prometheus.yaml scrape configs.
+t=$(($num - 1))
+for i in $(seq -f %02g 0 ${t})
+do
+    scrape="primary_${i}:8010"
+    cat >> ${target}/prometheus/prometheus.yml <<EOF
+
+  - job_name: 'primary_${i}'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['${scrape}']
+EOF
+done
