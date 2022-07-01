@@ -373,7 +373,9 @@ impl AuthorityState {
         }
     }
 
-    pub async fn handle_node_sync_transaction(
+    /// We cannot use handle_certificate in fullnode to execute a certificate because there is no
+    /// consensus engine to assign locks for shared objects. Hence we need special handling here.
+    pub async fn handle_node_sync_certificate(
         &self,
         certificate: CertifiedTransaction,
         // Signed effects is signed by only one validator, it is not a
@@ -392,7 +394,7 @@ impl AuthorityState {
             }
         );
 
-        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
+        let tx_guard = self.acquire_tx_guard(&certificate).await?;
 
         if certificate.contains_shared_object() {
             self.database
@@ -403,13 +405,11 @@ impl AuthorityState {
         Ok(())
     }
 
-    /// Confirm a transfer.
-    pub async fn handle_confirmation_transaction(
+    pub async fn handle_certificate(
         &self,
-        confirmation_transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        let certificate = confirmation_transaction.certificate;
-        let digest = *certificate.digest();
+        let digest = certificate.digest();
         debug!(?digest, "handle_confirmation_transaction");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
@@ -422,16 +422,16 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let tx_guard = self.acquire_tx_guard(&digest, &certificate).await?;
+        let tx_guard = self.acquire_tx_guard(&certificate).await?;
 
         self.process_certificate(tx_guard, certificate).await
     }
 
     async fn acquire_tx_guard<'a, 'b>(
         &'a self,
-        digest: &'b TransactionDigest,
         cert: &'b CertifiedTransaction,
     ) -> SuiResult<CertTxGuard<'a>> {
+        let digest = cert.digest();
         match self.database.wal.begin_tx(digest, cert).await? {
             Some(g) => Ok(g),
             None => {
@@ -516,6 +516,12 @@ impl AuthorityState {
     ) -> SuiResult<TransactionInfoResponse> {
         self.metrics.total_certs.inc();
         let transaction_digest = *certificate.digest();
+        // The cert could have been processed by a concurrent attempt of the same cert, so check if
+        // the effects have already been written.
+        if let Some(info) = self.check_tx_already_executed(&transaction_digest).await? {
+            tx_guard.release();
+            return Ok(info);
+        }
 
         if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
             tx_guard.release();
@@ -523,7 +529,7 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        // Check the certificate and retrieve the transfer data.
+        // Check the certificate signatures.
         let committee = &self.committee.load();
         tracing::trace_span!("cert_check_signature")
             .in_scope(|| certificate.verify(committee))
@@ -531,15 +537,6 @@ impl AuthorityState {
                 self.metrics.signature_errors.inc();
                 e
             })?;
-
-        // The cert could have been processed by a concurrent attempt of the same cert, so check if
-        // the effects have already been written.
-        if self.database.effects_exists(&transaction_digest)? {
-            let info = self.make_transaction_info(&transaction_digest).await?;
-            debug!("Transaction {transaction_digest:?} already executed");
-            tx_guard.release();
-            return Ok(info);
-        }
 
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
@@ -651,6 +648,18 @@ impl AuthorityState {
         Ok((temporary_store, signed_effects))
     }
 
+    pub async fn check_tx_already_executed(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<Option<TransactionInfoResponse>> {
+        if self.database.effects_exists(digest)? {
+            debug!("Transaction {digest:?} already executed");
+            Ok(Some(self.make_transaction_info(digest).await?))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn index_tx(
         &self,
         indexes: &IndexStore,
@@ -758,49 +767,6 @@ impl AuthorityState {
     pub fn unixtime_now_ms() -> u64 {
         let ts_ms = Utc::now().timestamp_millis();
         u64::try_from(ts_ms).expect("Travelling in time machine")
-    }
-
-    /// Check if we need to submit this transaction to consensus. We usually do, unless (i) we already
-    /// processed the transaction and we can immediately return the effects, or (ii) we already locked
-    /// all shared-objects of the transaction and can (re-)attempt execution.
-    #[instrument(level = "debug", name = "prepare_certificate", skip_all)]
-    pub async fn try_skip_consensus(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<Option<TransactionInfoResponse>, SuiError> {
-        // Ensure the input is a shared object certificate
-        fp_ensure!(
-            certificate.contains_shared_object(),
-            SuiError::NotASharedObjectTransaction
-        );
-
-        // If we already executed this transaction, return the signed effects.
-        let digest = certificate.digest();
-        if self.database.effects_exists(digest)? {
-            debug!("Shared-object transaction {digest:?} already executed");
-            return self.make_transaction_info(digest).await.map(Some);
-        }
-
-        // If we already assigned locks to this transaction, we can try to execute it immediately.
-        // This can happen to transaction previously submitted to consensus that failed execution
-        // due to missing dependencies.
-        if self.transaction_shared_locks_exist(&certificate).await? {
-            // Attempt to execute the transaction. This will only succeed if the authority
-            // already executed all its dependencies and if the locks are correctly attributed to
-            // the transaction (ie. this transaction is the next to be executed).
-            debug!("Shared-locks already assigned to {digest:?} - executing now");
-
-            let tx_guard = self.acquire_tx_guard(digest, &certificate).await?;
-
-            return self
-                .process_certificate(tx_guard, certificate)
-                .await
-                .map(Some);
-        }
-
-        // If we didn't already attributed shared locks to this transaction, it needs to go
-        // through consensus.
-        Ok(None)
     }
 
     pub async fn handle_transaction_info_request(
@@ -1437,7 +1403,7 @@ impl AuthorityState {
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.
-    async fn transaction_shared_locks_exist(
+    pub async fn transaction_shared_locks_exist(
         &self,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
@@ -1503,6 +1469,7 @@ impl ExecutionState for AuthorityState {
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
 
+    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(name = "handle_consensus_transaction", level = "debug", skip_all)]
     async fn handle_consensus_transaction(
         &self,
@@ -1522,11 +1489,12 @@ impl ExecutionState for AuthorityState {
                 let shared_locks = self.transaction_shared_locks_exist(&certificate).await?;
 
                 // If we already executed this transaction, return the signed effects.
+                // This is not an optimization, and is critical for safety. It is to ensure that
+                // we don't end up re-assigning shared object locks after they are unlocked when
+                // the transaction was committed.
                 let digest = certificate.digest();
-                if self.database.effects_exists(digest)? {
-                    debug!(?digest, "Shared-object transaction already executed");
-                    let info = self.make_transaction_info(digest).await?;
-                    return Ok(bincode::serialize(&info).expect("Failed to serialize tx info"));
+                if let Some(response) = self.check_tx_already_executed(digest).await? {
+                    return Ok(bincode::serialize(&response).expect("Failed to serialize tx info"));
                 }
 
                 // If we didn't already assigned shared-locks to this transaction, we do it now.

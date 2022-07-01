@@ -772,11 +772,6 @@ impl PartialEq for SignedTransaction {
 
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ConfirmationTransaction {
-    pub certificate: CertifiedTransaction,
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
     pub account: SuiAddress,
@@ -1340,12 +1335,6 @@ impl Display for CertifiedTransaction {
         )?;
         write!(writer, "{}", &self.data.kind)?;
         write!(f, "{}", writer)
-    }
-}
-
-impl ConfirmationTransaction {
-    pub fn new(certificate: CertifiedTransaction) -> Self {
-        Self { certificate }
     }
 }
 

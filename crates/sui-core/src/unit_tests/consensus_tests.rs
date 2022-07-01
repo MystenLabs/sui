@@ -151,7 +151,6 @@ async fn submit_transaction_to_consensus() {
 
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
-        state_guard.clone(),
         consensus_address.clone(),
         committee,
         tx_consensus_listener,
