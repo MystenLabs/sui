@@ -18,7 +18,6 @@ export function parseImageURL(data: any): string {
         data?.display ||
         data?.contents?.display;
 
-    // When url undefined return blank string:
     if (!url) return '';
 
     if (findIPFSvalue(url)) return url;
