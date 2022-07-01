@@ -410,7 +410,8 @@ where
             .download_object_from_authorities(*object_id)
             .await?
             .into_object()?;
-        debug!(?object_id, ?object, "Fetched object from validators");
+        let obj_ref = object.compute_object_reference();
+        debug!(?object_id, ?obj_ref, "Fetched object from validators");
         Ok(object)
     }
 
