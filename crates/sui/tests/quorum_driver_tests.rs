@@ -88,7 +88,9 @@ async fn test_benchmark() {
     let txs: Vec<_> = gas_objects.into_iter().map(|gas| {
         make_counter_increment_transaction(gas.compute_object_reference(), package_ref, counter_id)
     }).collect();
-    // This is the total number of transactions in flight
+
+    // number of conucrrent workers. This is also the total number of 
+    // transactions in flight
     let num_workers = 1000;
     let tx_per_worker = txs.len() / num_workers;
     let partitioned: Vec<Vec<TransactionEnvelope<_>>> = txs.chunks(tx_per_worker).map(|s| s.into()).collect();
