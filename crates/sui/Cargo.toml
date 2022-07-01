@@ -45,9 +45,9 @@ tempfile = "3.3.0"
 futures = "0.3.21"
 jsonrpsee = { version = "0.13.1", features = ["full"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"}
-test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 rand = "0.7.3"
 move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
+test-utils = { path = "../test-utils" }

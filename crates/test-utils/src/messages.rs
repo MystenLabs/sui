@@ -16,6 +16,7 @@ use sui_types::messages::{
 use sui_types::object::Object;
 use sui_types::{base_types::SuiAddress, crypto::Signature};
 use sui_types::{crypto::KeyPair, messages::CallArg};
+use sui_types::base_types::ObjectID;
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
@@ -141,6 +142,62 @@ pub fn make_transfer_sui_transaction(gas_object: Object, recipient: SuiAddress) 
         sender,
         None,
         gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    Transaction::new(data, signature)
+}
+
+pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
+    let (sender, keypair) = test_keys().pop().unwrap();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../sui_programmability/examples/basics");
+    let build_config = BuildConfig::default();
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let all_module_bytes = modules
+        .iter()
+        .map(|m| {
+            let mut module_bytes = Vec::new();
+            m.serialize(&mut module_bytes).unwrap();
+            module_bytes
+        })
+        .collect();
+    let data = TransactionData::new_module(
+        sender,
+        gas_object,
+        all_module_bytes,
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    Transaction::new(data, signature)
+}
+
+pub fn make_counter_create_transaction(gas_object: ObjectRef, package_ref: ObjectRef) -> Transaction {
+    let (sender, keypair) = test_keys().pop().unwrap();
+    let data = TransactionData::new_move_call(
+        sender,
+        package_ref,
+        "counter".parse().unwrap(),
+        "create".parse().unwrap(),
+        Vec::new(),
+        gas_object,
+        vec![],
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    Transaction::new(data, signature)
+}
+
+pub fn make_counter_increment_transaction(gas_object: ObjectRef, package_ref: ObjectRef, counter_id: ObjectID) -> Transaction {
+    let (sender, keypair) = test_keys().pop().unwrap();
+    let data = TransactionData::new_move_call(
+        sender,
+        package_ref,
+        "counter".parse().unwrap(),
+        "increment".parse().unwrap(),
+        Vec::new(),
+        gas_object,
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
         MAX_GAS,
     );
     let signature = Signature::new(&data, &keypair);

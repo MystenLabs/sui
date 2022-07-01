@@ -10,6 +10,7 @@ members = [
     "crates/sui-config",
     "crates/sui-core",
     "crates/sui-faucet",
+    "crates/sui-benchmark",
     "crates/sui-framework",
     "crates/sui-framework-build",
     "crates/sui-gateway",

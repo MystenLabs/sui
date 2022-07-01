@@ -410,8 +410,7 @@ where
             .download_object_from_authorities(*object_id)
             .await?
             .into_object()?;
-        let obj_ref = object.compute_object_reference();
-        debug!(?object_id, ?obj_ref, "Fetched object from validators");
+        debug!(?object_id, ?object, "Fetched object from validators");
         Ok(object)
     }
 
@@ -831,9 +830,10 @@ where
                     return Ok(id);
                 }
             }
-            Err(anyhow!(
-                "No non-argument gas objects found with value >= budget {budget}"
-            ))
+            return Err(anyhow!(
+                "No non-argument gas objects found with value >= budget {}",
+                budget
+            ));
         }
     }
 

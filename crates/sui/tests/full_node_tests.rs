@@ -3,7 +3,6 @@
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
 use futures::{future, StreamExt};
@@ -11,8 +10,7 @@ use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
-use move_package::BuildConfig;
-use serde_json::json;
+use test_utils::network::{publish_package_and_make_counter, increment_counter, wait_for_all_txes};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
@@ -20,7 +18,6 @@ use tracing::info;
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::authority::AuthorityState;
-use sui_json::SuiJsonValue;
 use sui_json_rpc_api::rpc_types::{
     SplitCoinResponse, SuiEventEnvelope, SuiEventFilter, TransactionResponse,
 };
@@ -30,7 +27,7 @@ use sui_json_rpc_api::rpc_types::{
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionInfoRequest},
 };
@@ -108,66 +105,6 @@ async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>)
     wait_for_all_txes(vec![wait_digest], state).await
 }
 
-async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
-    let mut wait_digests: HashSet<_> = wait_digests.iter().collect();
-
-    let mut timeout = Box::pin(sleep(Duration::from_millis(15_000)));
-
-    let mut max_seq = Some(0);
-
-    let mut stream = Box::pin(
-        state
-            .handle_batch_streaming(BatchInfoRequest {
-                start: max_seq,
-                length: 1000,
-            })
-            .await
-            .unwrap(),
-    );
-
-    loop {
-        tokio::select! {
-            _ = &mut timeout => panic!("wait_for_tx timed out"),
-
-            items = &mut stream.next() => {
-                match items {
-                    // Upon receiving a batch
-                    Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(batch)) )) => {
-                        max_seq = Some(batch.batch.next_sequence_number);
-                        info!(?max_seq, "Received Batch");
-                    }
-                    // Upon receiving a transaction digest we store it, if it is not processed already.
-                    Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
-                        info!(?digest, "Received Transaction");
-                        if wait_digests.remove(&digest.transaction) {
-                            info!(?digest, "Digest found");
-                        }
-                        if wait_digests.is_empty() {
-                            info!(?digest, "all digests found");
-                            break;
-                        }
-                    },
-
-                    Some(Err( err )) => panic!("{}", err),
-                    None => {
-                        info!(?max_seq, "Restarting Batch");
-                        stream = Box::pin(
-                                state
-                                    .handle_batch_streaming(BatchInfoRequest {
-                                        start: max_seq,
-                                        length: 1000,
-                                    })
-                                    .await
-                                    .unwrap(),
-                            );
-
-                    }
-                }
-            },
-        }
-    }
-}
-
 #[tokio::test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
@@ -193,137 +130,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
-    info!(?sender, "publish_basics_package");
-
-    let transaction = {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("../../sui_programmability/examples/basics");
-
-        let build_config = BuildConfig::default();
-        let modules = sui_framework::build_move_package(&path, build_config).unwrap();
-
-        let all_module_bytes = modules
-            .iter()
-            .map(|m| {
-                let mut module_bytes = Vec::new();
-                m.serialize(&mut module_bytes).unwrap();
-                module_bytes
-            })
-            .collect();
-
-        let data = context
-            .gateway
-            .publish(sender, all_module_bytes, None, 50000)
-            .await
-            .unwrap();
-
-        let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-        Transaction::new(data, signature)
-    };
-
-    let resp = context
-        .gateway
-        .execute_transaction(transaction)
-        .await
-        .unwrap();
-
-    if let TransactionResponse::PublishResponse(resp) = resp {
-        let package_ref = resp.package.to_object_ref();
-        info!(?package_ref, "package created");
-        package_ref
-    } else {
-        panic!()
-    }
-}
-
-async fn move_transaction(
-    context: &WalletContext,
-    module: &'static str,
-    function: &'static str,
-    package_ref: ObjectRef,
-    arguments: Vec<SuiJsonValue>,
-    sender: SuiAddress,
-    gas_object: Option<ObjectID>,
-) -> TransactionResponse {
-    info!(?package_ref, ?arguments, "move_transaction");
-
-    let data = context
-        .gateway
-        .move_call(
-            sender,
-            package_ref.0,
-            module.into(),
-            function.into(),
-            vec![], // type_args
-            arguments,
-            gas_object,
-            50000,
-        )
-        .await
-        .unwrap();
-
-    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-    let tx = Transaction::new(data, signature);
-
-    context.gateway.execute_transaction(tx).await.unwrap()
-}
-
-async fn publish_package_and_make_counter(
-    context: &WalletContext,
-    sender: SuiAddress,
-) -> (ObjectRef, ObjectID) {
-    let package_ref = publish_basics_package(context, sender).await;
-
-    info!(?package_ref);
-
-    let create_shared_obj_resp = move_transaction(
-        context,
-        "counter",
-        "create",
-        package_ref,
-        vec![],
-        sender,
-        None,
-    )
-    .await;
-
-    let counter_id = if let TransactionResponse::EffectResponse(effects) = create_shared_obj_resp {
-        effects.effects.created[0].clone().reference.object_id
-    } else {
-        panic!()
-    };
-    info!(?counter_id);
-    (package_ref, counter_id)
-}
-
-async fn increment_counter(
-    context: &WalletContext,
-    sender: SuiAddress,
-    gas_object: Option<ObjectID>,
-    package_ref: ObjectRef,
-    counter_id: ObjectID,
-) -> TransactionDigest {
-    let resp = move_transaction(
-        context,
-        "counter",
-        "increment",
-        package_ref,
-        vec![SuiJsonValue::new(json!(counter_id.to_hex_literal())).unwrap()],
-        sender,
-        gas_object,
-    )
-    .await;
-
-    let digest = if let TransactionResponse::EffectResponse(effects) = resp {
-        effects.certificate.transaction_digest
-    } else {
-        panic!()
-    };
-
-    info!(?digest);
-    digest
-}
 
 #[tokio::test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
