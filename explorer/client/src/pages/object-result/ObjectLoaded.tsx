@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useState, useCallback } from 'react';
+import ReactJson from 'react-json-view';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
@@ -82,6 +83,15 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
     const isPublisherGenesis =
         data.objType === 'Move Package' && data?.publisherAddress === 'Genesis';
+
+    const structProperties = Object.entries(viewedData.data?.contents)
+        .filter(([_, value]) => typeof value == 'object')
+        .filter(([key, _]) => key !== 'id');
+
+    let structPropertiesDisplay: any[] = [];
+    if (structProperties.length > 0) {
+        structPropertiesDisplay = Object.values(structProperties);
+    }
 
     return (
         <>
@@ -255,6 +265,25 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         </>
                     )}
                     {}
+                    {structProperties.length > 0 &&
+                        structPropertiesDisplay.map((itm, index) => (
+                            <div key={index}>
+                                <div className={styles.propertybox}>
+                                    <div>
+                                        <p>{itm[0]}</p>
+                                    </div>
+                                </div>
+                                <div className={styles.jsondata}>
+                                    <div>
+                                        <ReactJson
+                                            src={itm[1]}
+                                            collapsed={2}
+                                            name={false}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     {data.objType !== 'Move Package' ? (
                         <h2
                             className={styles.clickableheader}
