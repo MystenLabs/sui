@@ -114,6 +114,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             validator_set: vec![ValidatorInfo {
                 public_key: *get_key_pair().1.public_key_bytes(),
                 stake: 1,
+                delegation: 1,
                 network_address: "/dns/localhost/tcp/8080/http".parse().unwrap(),
             }],
             ..Default::default()
