@@ -11,7 +11,7 @@ use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_json_rpc_api::{
-    QuorumDriverApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
+    RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
     WalletSyncApiClient,
 };
 use sui_types::sui_serde::Base64;

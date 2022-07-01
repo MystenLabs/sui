@@ -29,9 +29,9 @@ pub mod rpc_types;
 
 type GatewayTxSeqNumber = u64;
 
-#[open_rpc(namespace = "sui", tag = "Quorum Driver API")]
+#[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
 #[rpc(server, client, namespace = "sui")]
-pub trait QuorumDriverApi {
+pub trait RpcGatewayApi {
     /// Execute the transaction using the transaction data, signature and public key.
     #[method(name = "executeTransaction")]
     async fn execute_transaction(
