@@ -28,8 +28,8 @@ import { loadNetworkFromStorage } from '_redux/slices/app';
 const App = () => {
     const dispatch = useAppDispatch();
     useEffect(() => {
-        dispatch(loadAccountFromStorage());
         dispatch(loadNetworkFromStorage());
+        dispatch(loadAccountFromStorage());
     }, [dispatch]);
     const isPopup = useAppSelector(
         (state) => state.app.appType === AppType.popup
