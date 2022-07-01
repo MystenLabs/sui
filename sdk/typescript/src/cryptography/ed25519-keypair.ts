@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
+import bip39 from 'bip39-light';
+import createHmac from 'create-hmac';
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { PublicKey } from './publickey';
@@ -14,6 +16,14 @@ export interface Ed25519KeypairData {
   publicKey: Uint8Array;
   secretKey: Uint8Array;
 }
+
+/**
+ * Derive Path data
+ */
+interface Keys {
+  key: Buffer;
+  chainCode: Buffer;
+};
 
 /**
  * An Ed25519 Keypair used for signing transactions.
@@ -77,6 +87,76 @@ export class Ed25519Keypair implements Keypair {
    */
   static fromSeed(seed: Uint8Array): Ed25519Keypair {
     return new Ed25519Keypair(nacl.sign.keyPair.fromSeed(seed));
+  }
+
+  /**
+   * Test Derive Path from path string
+   *
+   * @param path path string (`m/44'/784'/0'/0'/0'`)
+   */
+  static isValidPath = (path: string): boolean => {
+    if (!new RegExp("^m\\/44+'\\/784+'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(path)) {
+        return false;
+    }
+    return !path
+        .split('/')
+        .slice(1)
+        .map((val: string): string => val.replace("'", ''))
+        .some(isNaN as any);
+  };
+
+  private static CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
+    const indexBuffer = Buffer.allocUnsafe(4);
+    indexBuffer.writeUInt32BE(index, 0);
+
+    const data = Buffer.concat([Buffer.alloc(1, 0), key, indexBuffer]);
+
+    const I = createHmac('sha512', chainCode)
+        .update(data)
+        .digest();
+    const IL = I.slice(0, 32);
+    const IR = I.slice(32);
+    return {
+        key: IL,
+        chainCode: IR,
+    };
+  };
+
+  /**
+   * Generate a keypair from mnemonics.
+   *
+   * @param path path string (`m/44'/784'/0'/0'/0'`)
+   * @param mnemonics: mnemonics is a word seed phrase
+   */
+  static fromDerivePath(path: string, mnemonics: string): Ed25519Keypair {
+    if (!Ed25519Keypair.isValidPath(path)) {
+      throw new Error('Invalid derivation path');
+    }
+
+    const normalizeMnemonics = mnemonics
+        .trim()
+        .split(/\s+/)
+        .map((part) => part.toLowerCase())
+        .join(' ');
+    const seed = bip39.mnemonicToSeed(normalizeMnemonics);
+
+    const hmac = createHmac('sha512', 'ed25519 seed');
+    const I = hmac.update(seed).digest();
+    const key = I.slice(0, 32);
+    const chainCode = I.slice(32);
+
+    const segments = path
+        .split('/')
+        .slice(1)
+        .map((val: string): string => val.replace("'", ''))
+        .map(el => parseInt(el, 10));
+    
+    const node = segments.reduce(
+          (parentKeys, segment) => Ed25519Keypair.CKDPriv(parentKeys, segment + 0x80000000),
+          { key, chainCode },
+      )
+
+    return Ed25519Keypair.fromSeed(node.key);
   }
 
   /**
