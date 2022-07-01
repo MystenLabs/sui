@@ -22,11 +22,13 @@ import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { loadAccountFromStorage } from '_redux/slices/account';
+import { loadNetworkFromStorage } from '_redux/slices/app';
 
 const App = () => {
     const dispatch = useAppDispatch();
     useEffect(() => {
         dispatch(loadAccountFromStorage());
+        dispatch(loadNetworkFromStorage());
     }, [dispatch]);
     const isPopup = useAppSelector(
         (state) => state.app.appType === AppType.popup
