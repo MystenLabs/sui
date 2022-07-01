@@ -3,7 +3,7 @@
 
 import nacl from 'tweetnacl';
 import bip39 from 'bip39-light';
-import createHmac from 'create-hmac';
+import { derivePath } from "ed25519-hd-key";
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { PublicKey } from './publickey';
@@ -16,14 +16,6 @@ export interface Ed25519KeypairData {
   publicKey: Uint8Array;
   secretKey: Uint8Array;
 }
-
-/**
- * Derive Path data
- */
-interface Keys {
-  key: Buffer;
-  chainCode: Buffer;
-};
 
 /**
  * An Ed25519 Keypair used for signing transactions.
@@ -105,23 +97,6 @@ export class Ed25519Keypair implements Keypair {
         .some(isNaN as any);
   };
 
-  private static CKDPriv = ({ key, chainCode }: Keys, index: number): Keys => {
-    const indexBuffer = Buffer.allocUnsafe(4);
-    indexBuffer.writeUInt32BE(index, 0);
-
-    const data = Buffer.concat([Buffer.alloc(1, 0), key, indexBuffer]);
-
-    const I = createHmac('sha512', chainCode)
-        .update(data)
-        .digest();
-    const IL = I.slice(0, 32);
-    const IR = I.slice(32);
-    return {
-        key: IL,
-        chainCode: IR,
-    };
-  };
-
   /**
    * Generate a keypair from mnemonics.
    *
@@ -138,25 +113,11 @@ export class Ed25519Keypair implements Keypair {
         .split(/\s+/)
         .map((part) => part.toLowerCase())
         .join(' ');
+
     const seed = bip39.mnemonicToSeed(normalizeMnemonics);
+    const { key } = derivePath(path, seed.toString('hex'));
 
-    const hmac = createHmac('sha512', 'ed25519 seed');
-    const I = hmac.update(seed).digest();
-    const key = I.slice(0, 32);
-    const chainCode = I.slice(32);
-
-    const segments = path
-        .split('/')
-        .slice(1)
-        .map((val: string): string => val.replace("'", ''))
-        .map(el => parseInt(el, 10));
-    
-    const node = segments.reduce(
-          (parentKeys, segment) => Ed25519Keypair.CKDPriv(parentKeys, segment + 0x80000000),
-          { key, chainCode },
-      )
-
-    return Ed25519Keypair.fromSeed(node.key);
+    return Ed25519Keypair.fromSeed(key);
   }
 
   /**

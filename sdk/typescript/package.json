@@ -54,7 +54,6 @@
   "devDependencies": {
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
-    "@types/create-hmac": "^1.1.0",
     "@types/mocha": "^9.1.0",
     "husky": "^7.0.4",
     "mockttp": "^2.7.0",
@@ -70,6 +69,7 @@
     "bn.js": "^5.2.0",
     "buffer": "^6.0.3",
     "cross-fetch": "^3.1.5",
+    "ed25519-hd-key": "^1.2.0",
     "jayson": "^3.6.6",
     "js-sha3": "^0.8.0",
     "lossless-json": "^1.0.5",
