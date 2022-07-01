@@ -611,3 +611,19 @@ impl Default for ObjectFormatOptions {
         }
     }
 }
+
+impl Display for ObjectRead {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Deleted(oref) => {
+                write!(f, "ObjectRead::Deleted ({:?})", oref)
+            }
+            Self::NotExists(id) => {
+                write!(f, "ObjectRead::NotExists ({:?})", id)
+            }
+            Self::Exists(oref, _, _) => {
+                write!(f, "ObjectRead::Exists ({:?})", oref)
+            }
+        }
+    }
+}
