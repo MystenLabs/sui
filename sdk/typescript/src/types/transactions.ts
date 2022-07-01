@@ -92,6 +92,7 @@ export type TransactionEffects = {
 export type TransactionEffectsResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
+  timestamp_ms: number;
 };
 
 export type GatewayTxSeqNumber = number;
