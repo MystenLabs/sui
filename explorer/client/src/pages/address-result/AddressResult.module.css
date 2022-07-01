@@ -3,7 +3,7 @@
 }
 
 .results h1 {
-    @apply border-0 border-b border-solid border-sui-grey-45 mt-0 pb-[1vh] mb-[1vh] 
+    @apply border-0 border-b border-solid border-sui-grey-45 mt-0 pb-[1vh] mb-0
   text-lg font-semibold;
 }
 

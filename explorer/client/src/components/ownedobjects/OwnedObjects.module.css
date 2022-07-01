@@ -1,3 +1,19 @@
+.layout {
+    @apply flex flex-wrap mt-0;
+}
+
+.layout > div {
+    @apply sm:w-[40vw];
+}
+
+.objectbox > div {
+    @apply py-1 px-1;
+}
+
+.layout > div:first-child {
+    @apply pr-[4vw] mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
+}
+
 .ownedobjects {
     @apply w-[100%] lg:flex lg:flex-wrap lg:justify-between;
 }
@@ -8,10 +24,6 @@
 
 .objectbox {
     @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[21.8vw];
-}
-
-.objectbox > div {
-    @apply py-1 px-1;
 }
 
 .objectbox > div:first-child > div {

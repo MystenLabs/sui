@@ -178,7 +178,7 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
         });
 
     return (
-        <div>
+        <div className={styles.layout}>
             {coin_results.length > 0 && (
                 <div>
                     <h2>Coins</h2>
