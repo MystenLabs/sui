@@ -76,7 +76,7 @@ Contrary to many traditional blockchains, Sui does not make strong synchrony ass
 
 ### Efficient local read operations
 
-The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
+The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
 
 In traditional blockchains, families are ordered with respect to each other to totally order transactions. This then requires querying a massive blob for the precise information needed. Disk I/O thus becomes a performance bottleneck, and some blockchains [now require SSD drives](https://www.usenix.org/system/files/conference/hotstorage18/hotstorage18-paper-raju.pdf) on their validators as a result.
 
