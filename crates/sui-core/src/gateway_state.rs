@@ -16,6 +16,7 @@ use move_core_types::identifier::Identifier;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
 };
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
@@ -548,7 +549,8 @@ where
 
         self.sync_input_objects_with_authorities(&transaction)
             .await?;
-
+        self.download_object_from_authorities(SUI_SYSTEM_STATE_OBJECT_ID)
+            .await?;
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.store,
             &transaction,
