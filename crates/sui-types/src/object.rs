@@ -500,6 +500,20 @@ impl Object {
         }
     }
 
+    pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
+            has_public_transfer: true,
+            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+        });
+        Self {
+            owner: Owner::ObjectOwner(owner.into()),
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
         // For testing, we provide sufficient gas by default.
         Self::with_id_owner_gas_for_testing(id, owner, GAS_VALUE_FOR_TESTING)
