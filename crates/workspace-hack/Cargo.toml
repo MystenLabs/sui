@@ -401,7 +401,7 @@ rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
 ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
-scopeguard = { version = "1", features = ["use_std"] }
+scopeguard = { version = "1", default-features = false }
 sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
 sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
@@ -457,7 +457,6 @@ tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
-temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -1005,7 +1004,7 @@ ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 schemars_derive = { version = "0.8", default-features = false }
-scopeguard = { version = "1", features = ["use_std"] }
+scopeguard = { version = "1", default-features = false }
 sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
 sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
@@ -1073,7 +1072,6 @@ tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
-temp_testdir = { version = "0.2", default-features = false }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }

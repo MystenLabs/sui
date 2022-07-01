@@ -9,8 +9,6 @@ publish = false
 
 [dependencies]
 bcs = "0.1.3"
-anyhow = { version = "1.0.58", features = ["backtrace"] }
-base64 = "0.13.0"
 smallvec = "1.8.0"
 num_enum = "0.5.7"
 once_cell = "1.11.0"
@@ -19,7 +17,6 @@ sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-cli = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
 move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
@@ -27,6 +24,7 @@ move-stdlib = { git = "https://github.com/move-language/move", rev = "ae62d5f195
 move-unit-test = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
+
 workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]

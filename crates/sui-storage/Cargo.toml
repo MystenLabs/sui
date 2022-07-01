@@ -7,13 +7,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.58"
 async-trait = "0.1.53"
 enum_dispatch = "^0.3"
 fdlimit = "0.2.1"
 futures = "0.3.21"
 flexstr = "^0.9"
-rand = "0.7.3"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.80"
 tokio = { version = "1.17.0", features = ["full", "tracing"] }
@@ -23,16 +21,15 @@ tracing = "0.1.34"
 sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "sqlite" ] }
 strum = "^0.24"
 strum_macros = "^0.24"
-thiserror = "1.0.30"
 
 sui-types = { path = "../sui-types" }
-
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"}
-workspace-hack = { path = "../workspace-hack"}
-
 move-core-types = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae", features = ["address20"] }
 
+workspace-hack = { path = "../workspace-hack"}
+
 [dev-dependencies]
+anyhow = "1.0.58"
 bcs = "0.1.3"
 tempfile = "3.3.0"
 num_cpus = "1.13.1"
