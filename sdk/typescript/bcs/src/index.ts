@@ -825,6 +825,6 @@ export function decodeStr(data: string, encoding: string): Uint8Array {
         .map(el => String.fromCharCode(el))
         .join("");
     },
-    (str: string) => true
+    (_str: string) => true
   );
 })();
