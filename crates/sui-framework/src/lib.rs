@@ -14,6 +14,7 @@ pub mod natives;
 pub use sui_framework_build::build_move_stdlib_modules as get_move_stdlib_modules;
 pub use sui_framework_build::build_sui_framework_modules as get_sui_framework_modules;
 pub use sui_framework_build::{build_framework, build_move_package, verify_modules};
+use sui_types::sui_serde::{Base64, Encoding};
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
@@ -81,7 +82,7 @@ pub fn build_move_package_to_base64(
     is_framework: bool,
 ) -> Result<Vec<String>, SuiError> {
     build_move_package_to_bytes(path, is_framework)
-        .map(|mods| mods.iter().map(base64::encode).collect::<Vec<_>>())
+        .map(|mods| mods.iter().map(Base64::encode).collect::<Vec<_>>())
 }
 
 /// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.

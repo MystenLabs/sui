@@ -12,7 +12,6 @@ arc-swap = "1.5.0"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_yaml = "0.8.23"
-base64ct = { version = "1.5.1", features = ["alloc"] }
 rand = "0.7.3"
 dirs = "4.0.0"
 multiaddr = "0.14.0"
@@ -26,7 +25,6 @@ move-binary-format = { git = "https://github.com/move-language/move", rev = "ae6
 move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
 
 sui-framework = { path = "../sui-framework" }
-
 sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}
