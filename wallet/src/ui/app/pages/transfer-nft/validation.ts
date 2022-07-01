@@ -25,9 +25,13 @@ export function createValidationSchema(
         amount: Yup.number()
             .integer()
             .required()
-            .test('nft-gas-balance-chec', `Insufficient balance to cover gas fee`, (amount) => {
-                return gasBalance >= BigInt(amount || 0);
-            })
+            .test(
+                'nft-gas-balance-chec',
+                `Insufficient balance to cover gas fee`,
+                (amount) => {
+                    return gasBalance >= BigInt(amount || 0);
+                }
+            )
             .label('Amount'),
     });
 }
