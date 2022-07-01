@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject, isSuiMovePackage } from '@mysten/sui.js';
+import {
+    hasPublicTransfer,
+    isSuiMoveObject,
+    isSuiMovePackage,
+} from '@mysten/sui.js';
 import cl from 'classnames';
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,10 +22,9 @@ import st from './SuiObject.module.scss';
 
 export type SuiObjectProps = {
     obj: SuiObjectType;
-    sendNFT?: boolean | 'unavaliable';
 };
 
-function SuiObject({ obj, sendNFT }: SuiObjectProps) {
+function SuiObject({ obj }: SuiObjectProps) {
     const { objectId } = obj.reference;
     const shortId = useMiddleEllipsis(objectId);
     const objType =
@@ -31,6 +34,7 @@ function SuiObject({ obj, sendNFT }: SuiObjectProps) {
     const suiMoveObjectFields = isSuiMoveObject(obj.data)
         ? obj.data.fields
         : null;
+    const sendNFT = hasPublicTransfer(obj);
 
     const sendUrl = useMemo(
         () => `/send-nft?${new URLSearchParams({ objectId }).toString()}`,
