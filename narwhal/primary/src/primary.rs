@@ -3,21 +3,22 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_remover::DeleteBatchResult,
-    block_synchronizer::BlockSynchronizer,
+    block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
     block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
-    garbage_collector::GarbageCollector,
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     helper::Helper,
+    metrics::{initialise_metrics, PrimaryMetrics},
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
+    state_handler::StateHandler,
     synchronizer::Synchronizer,
     BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
 };
 use async_trait::async_trait;
-use config::{Parameters, SharedCommittee, WorkerId};
+use config::{Committee, Parameters, SharedCommittee, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
@@ -34,25 +35,32 @@ use std::{
 use store::Store;
 use thiserror::Error;
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     Batch, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, CertificateDigest, Empty,
-    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, WorkerToPrimary,
+    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ShutdownToken, WorkerToPrimary,
     WorkerToPrimaryServer,
 };
+pub use types::{ConsensusPrimaryMessage, PrimaryMessage, PrimaryWorkerMessage};
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-use crate::{
-    block_synchronizer::handler::BlockSynchronizerHandler,
-    metrics::{initialise_metrics, PrimaryMetrics},
-};
-pub use types::{PrimaryMessage, PrimaryWorkerMessage};
+/// Message to reconfigure tasks.
+#[derive(Clone, Debug)]
+pub enum Reconfigure<PublicKey: VerifyingKey> {
+    /// Indicates the committee has been updated.
+    NewCommittee(Committee<PublicKey>),
+    /// Indicate a shutdown.
+    Shutdown(ShutdownToken),
+}
 
 /// The messages sent by the workers to their primary.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -102,12 +110,15 @@ impl Primary {
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate<PublicKey>>,
-        rx_consensus: Receiver<Certificate<PublicKey>>,
+        rx_consensus: Receiver<ConsensusPrimaryMessage<PublicKey>>,
         dag: Option<Arc<Dag<PublicKey>>>,
         network_model: NetworkModel,
-        tx_committed_certificates: Sender<Certificate<PublicKey>>,
+        tx_committed_certificates: Sender<ConsensusPrimaryMessage<PublicKey>>,
         registry: &Registry,
     ) -> JoinHandle<()> {
+        let initial_committee = Reconfigure::NewCommittee((&*committee).clone());
+        let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
         let (tx_parents, rx_parents) = channel(CHANNEL_CAPACITY);
@@ -199,13 +210,14 @@ impl Primary {
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
         let primary_handle = Core::spawn(
             name.clone(),
-            committee.clone(),
+            (&*committee).clone(),
             header_store.clone(),
             certificate_store.clone(),
             synchronizer,
             signature_service.clone(),
             consensus_round.clone(),
             parameters.gc_depth,
+            tx_reconfigure.subscribe(),
             /* rx_primaries */ rx_primary_messages,
             /* rx_header_waiter */ rx_headers_loopback,
             /* rx_certificate_waiter */ rx_certificates_loopback,
@@ -214,9 +226,6 @@ impl Primary {
             /* tx_proposer */ tx_parents,
             node_metrics,
         );
-
-        // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
-        GarbageCollector::spawn(&name, &committee, consensus_round.clone(), rx_consensus);
 
         // Receives batch digests from other workers. They are only used to validate headers.
         PayloadReceiver::spawn(
@@ -237,7 +246,8 @@ impl Primary {
         // underlying batches and their transactions.
         BlockWaiter::spawn(
             name.clone(),
-            committee.clone(),
+            (&*committee).clone(),
+            tx_reconfigure.subscribe(),
             rx_get_block_commands,
             rx_batches,
             block_synchronizer_handler.clone(),
@@ -249,12 +259,13 @@ impl Primary {
         // Orchestrates the removal of blocks across the primary and worker nodes.
         BlockRemover::spawn(
             name.clone(),
-            committee.clone(),
+            (&*committee).clone(),
             certificate_store.clone(),
             header_store,
             payload_store.clone(),
             dag.clone(),
             PrimaryToWorkerNetwork::default(),
+            tx_reconfigure.subscribe(),
             rx_block_removal_commands,
             rx_batch_removal,
             tx_committed_certificates,
@@ -264,7 +275,8 @@ impl Primary {
         // them from the primary peers by synchronizing also their batches.
         BlockSynchronizer::spawn(
             name.clone(),
-            committee.clone(),
+            (&*committee).clone(),
+            tx_reconfigure.subscribe(),
             rx_block_synchronizer_commands,
             rx_certificate_responses,
             rx_payload_availability_responses,
@@ -279,13 +291,14 @@ impl Primary {
         // re-schedule execution of the header once we have all missing data.
         HeaderWaiter::spawn(
             name.clone(),
-            committee.clone(),
+            (&*committee).clone(),
             certificate_store.clone(),
             payload_store.clone(),
             consensus_round.clone(),
             parameters.gc_depth,
             parameters.sync_retry_delay,
             parameters.sync_retry_nodes,
+            tx_reconfigure.subscribe(),
             /* rx_synchronizer */ rx_sync_headers,
             /* tx_core */ tx_headers_loopback,
         );
@@ -293,9 +306,11 @@ impl Primary {
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
         CertificateWaiter::spawn(
+            (&*committee).clone(),
             certificate_store.clone(),
-            consensus_round,
+            consensus_round.clone(),
             parameters.gc_depth,
+            tx_reconfigure.subscribe(),
             /* rx_synchronizer */ rx_sync_certificates,
             /* tx_core */ tx_certificates_loopback,
         );
@@ -304,11 +319,12 @@ impl Primary {
         // digests from our workers and sends it back to the `Core`.
         Proposer::spawn(
             name.clone(),
-            committee.clone(),
+            (&*committee).clone(),
             signature_service,
             parameters.header_size,
             parameters.max_header_delay,
             network_model,
+            tx_reconfigure.subscribe(),
             /* rx_core */ rx_parents,
             /* rx_workers */ rx_our_digests,
             /* tx_core */ tx_headers,
@@ -318,9 +334,10 @@ impl Primary {
         // from other primaries.
         Helper::spawn(
             name.clone(),
-            committee.clone(),
+            (&*committee).clone(),
             certificate_store,
             payload_store,
+            rx_reconfigure,
             rx_helper_requests,
         );
 
@@ -338,6 +355,15 @@ impl Primary {
                 endpoint_metrics,
             );
         }
+
+        // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
+        StateHandler::spawn(
+            name.clone(),
+            committee.clone(),
+            consensus_round,
+            rx_consensus,
+            tx_reconfigure,
+        );
 
         // NOTE: This log entry is used to compute performance.
         info!(

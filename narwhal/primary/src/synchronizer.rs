@@ -34,17 +34,24 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
         tx_certificate_waiter: Sender<Certificate<PublicKey>>,
     ) -> Self {
-        Self {
+        let mut synchronizer = Self {
             name,
             certificate_store,
             payload_store,
             tx_header_waiter,
             tx_certificate_waiter,
-            genesis: Certificate::genesis(committee)
-                .into_iter()
-                .map(|x| (x.digest(), x))
-                .collect(),
-        }
+            genesis: Vec::default(),
+        };
+        synchronizer.update_genesis(committee);
+        synchronizer
+    }
+
+    /// Update the genesis (called upon reconfiguration).
+    pub fn update_genesis(&mut self, committee: &Committee<PublicKey>) {
+        self.genesis = Certificate::genesis(committee)
+            .into_iter()
+            .map(|x| (x.digest(), x))
+            .collect();
     }
 
     /// Returns `true` if we have all transactions of the payload. If we don't, we return false,

@@ -1,6 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, PayloadToken};
+use crate::{
+    common::create_db_stores,
+    helper::Helper,
+    primary::{PrimaryMessage, Reconfigure},
+    PayloadToken,
+};
 use bincode::Options;
 use config::WorkerId;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
@@ -15,7 +20,10 @@ use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
     resolve_name_and_committee, temp_dir, PrimaryToPrimaryMockServer, CERTIFICATES_CF, PAYLOAD_CF,
 };
-use tokio::{sync::mpsc::channel, time::timeout};
+use tokio::{
+    sync::{mpsc::channel, watch},
+    time::timeout,
+};
 use tracing_test::traced_test;
 use types::{BatchDigest, Certificate, CertificateDigest};
 
@@ -25,14 +33,17 @@ async fn test_process_certificates_stream_mode() {
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
     Helper::spawn(
         name.clone(),
-        committee.clone(),
+        (&*committee).clone(),
         certificate_store.clone(),
         payload_store.clone(),
+        rx_reconfigure,
         rx_primaries,
     );
 
@@ -96,14 +107,17 @@ async fn test_process_certificates_batch_mode() {
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
     Helper::spawn(
         name.clone(),
-        committee.clone(),
+        (&*committee).clone(),
         certificate_store.clone(),
         payload_store.clone(),
+        rx_reconfigure,
         rx_primaries,
     );
 
@@ -188,14 +202,17 @@ async fn test_process_payload_availability_success() {
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
     Helper::spawn(
         name.clone(),
-        committee.clone(),
+        (&*committee).clone(),
         certificate_store.clone(),
         payload_store.clone(),
+        rx_reconfigure,
         rx_primaries,
     );
 
@@ -300,14 +317,17 @@ async fn test_process_payload_availability_when_failures() {
 
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
     Helper::spawn(
         name.clone(),
-        committee.clone(),
+        (&*committee).clone(),
         certificate_store.clone(),
         payload_store.clone(),
+        rx_reconfigure,
         rx_primaries,
     );
 

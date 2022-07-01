@@ -6,6 +6,7 @@ use crate::{
         DeleteBatchMessage, DeleteBatchResult, RemoveBlocksResponse, RequestKey,
     },
     common::create_db_stores,
+    primary::Reconfigure,
     PrimaryWorkerMessage,
 };
 use bincode::deserialize;
@@ -23,11 +24,14 @@ use test_utils::{
     resolve_name_and_committee, PrimaryToWorkerMockServer,
 };
 use tokio::{
-    sync::mpsc::{channel, Sender},
+    sync::{
+        mpsc::{channel, Sender},
+        watch,
+    },
     task::JoinHandle,
     time::{sleep, timeout},
 };
-use types::{BatchDigest, Certificate};
+use types::{BatchDigest, Certificate, ConsensusPrimaryMessage};
 
 #[tokio::test]
 async fn test_successful_blocks_delete() {
@@ -41,18 +45,21 @@ async fn test_successful_blocks_delete() {
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     // AND a Dag with genesis populated
     let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
     populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
         name.clone(),
-        committee.clone(),
+        (&*committee).clone(),
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
         PrimaryToWorkerNetwork::default(),
+        rx_reconfigure,
         rx_commands,
         rx_delete_batches,
         tx_removed_certificates,
@@ -183,8 +190,12 @@ async fn test_successful_blocks_delete() {
     // ensure deleted certificates have been populated to output channel
     let mut total_deleted = 0;
     while let Ok(Some(c)) = timeout(Duration::from_secs(1), rx_removed_certificates.recv()).await {
+        let certificate = match c {
+            ConsensusPrimaryMessage::Sequenced(c) => c,
+            _ => panic!("Unexpected protocol message"),
+        };
         assert!(
-            block_ids.contains(&c.digest()),
+            block_ids.contains(&certificate.digest()),
             "Deleted certificate not found"
         );
         total_deleted += 1;
@@ -205,18 +216,21 @@ async fn test_timeout() {
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     // AND a Dag with genesis populated
     let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
     populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
         name.clone(),
-        committee.clone(),
+        (&*committee).clone(),
         certificate_store.clone(),
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
         PrimaryToWorkerNetwork::default(),
+        rx_reconfigure,
         rx_commands,
         rx_delete_batches,
         tx_removed_certificates,
@@ -338,18 +352,21 @@ async fn test_unlocking_pending_requests() {
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
+    let (_, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
+
     // AND a Dag with genesis populated
     let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
     populate_genesis(&dag, &committee).await;
 
     let mut remover = BlockRemover {
         name,
-        committee,
+        committee: (&*committee).clone(),
         certificate_store: certificate_store.clone(),
         header_store: header_store.clone(),
         payload_store: payload_store.clone(),
         dag: Some(dag.clone()),
         worker_network: PrimaryToWorkerNetwork::default(),
+        rx_reconfigure,
         rx_commands,
         pending_removal_requests: HashMap::new(),
         map_tx_removal_results: HashMap::new(),

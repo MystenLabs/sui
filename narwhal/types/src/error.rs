@@ -62,4 +62,7 @@ pub enum DagError {
 
     #[error("Invalid epoch (expected {expected}, received {received})")]
     InvalidEpoch { expected: Epoch, received: Epoch },
+
+    #[error("System shutting down")]
+    ShuttingDown,
 }

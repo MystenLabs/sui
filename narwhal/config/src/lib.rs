@@ -300,7 +300,7 @@ pub struct PrimaryAddresses {
     pub worker_to_primary: Multiaddr,
 }
 
-#[derive(Clone, Serialize, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Eq, Hash, PartialEq, Debug)]
 pub struct WorkerAddresses {
     /// Address to receive client transactions (WAN).
     pub transactions: Multiaddr,
@@ -310,7 +310,7 @@ pub struct WorkerAddresses {
     pub primary_to_worker: Multiaddr,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Authority {
     /// The voting power of this authority.
     pub stake: Stake,
@@ -322,7 +322,7 @@ pub struct Authority {
 
 pub type SharedCommittee<PK> = Arc<Committee<PK>>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Committee<PublicKey> {
     /// The authorities of epoch.
     #[serde(bound(
@@ -331,13 +331,28 @@ pub struct Committee<PublicKey> {
     ))]
     pub authorities: ArcSwap<BTreeMap<PublicKey, Authority>>,
     /// The epoch number of this committee
-    pub epoch: Epoch,
+    pub epoch: ArcSwap<Epoch>,
+}
+
+impl<PublicKey: VerifyingKey> std::fmt::Display for Committee<PublicKey> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Committee E{}: {:?}",
+            self.epoch(),
+            self.authorities
+                .load()
+                .keys()
+                .map(|x| { x.encode_base64().get(0..16).unwrap().to_string() })
+                .collect::<Vec<_>>()
+        )
+    }
 }
 
 impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the number of authorities.
     pub fn epoch(&self) -> Epoch {
-        self.epoch
+        *self.epoch.load().clone()
     }
 
     /// Returns the number of authorities.
@@ -449,8 +464,14 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
             .collect()
     }
 
+    pub fn update_committee(&self, new_committee: Self) {
+        self.epoch.store(new_committee.epoch.load_full());
+        self.authorities
+            .store(new_committee.authorities.load_full());
+    }
+
     /// Update the networking information of some of the primaries. The arguments are a full vector of
-    /// authorities which Public key and Stake must match the one stored in the current Comitttee. Any discrepancy
+    /// authorities which Public key and Stake must match the one stored in the current Committee. Any discrepancy
     /// will generate no update and return a vector of errors.
     pub fn update_primary_network_info(
         &self,
@@ -516,6 +537,15 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
             }
         });
         errors.map(Err).unwrap_or(Ok(()))
+    }
+}
+
+impl<PublicKey: VerifyingKey> Clone for Committee<PublicKey> {
+    fn clone(&self) -> Self {
+        Self {
+            authorities: ArcSwap::new(self.authorities.load().clone()),
+            epoch: ArcSwap::new(Arc::new(self.epoch())),
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::dag::Dag;
@@ -75,7 +76,7 @@ async fn test_rounds_errors() {
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
     let no_name_committee = config::Committee {
-        epoch: Epoch::default(),
+        epoch: ArcSwap::new(Arc::new(Epoch::default())),
         authorities: {
             let no_name_authorities = committee
                 .authorities

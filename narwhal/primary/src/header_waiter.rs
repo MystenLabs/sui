@@ -1,8 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage};
-use config::{SharedCommittee, WorkerId};
+use crate::primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage, Reconfigure};
+use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{
     future::{try_join_all, BoxFuture},
@@ -20,7 +20,10 @@ use std::{
 };
 use store::Store;
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error};
@@ -49,7 +52,7 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// The name of this authority.
     name: PublicKey,
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: Committee<PublicKey>,
     /// The persistent storage for parent Certificates.
     certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The persistent storage for payload markers from workers.
@@ -63,6 +66,8 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// Determine with how many nodes to sync when re-trying to send sync-request.
     sync_retry_nodes: usize,
 
+    /// Watch channel to reconfigure the committee.
+    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
     /// Receives sync commands from the `Synchronizer`.
     rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
     /// Loops back to the core headers for which we got all parents and batches.
@@ -85,13 +90,14 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
+        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
         tx_core: Sender<Header<PublicKey>>,
     ) {
@@ -105,6 +111,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                 gc_depth,
                 sync_retry_delay,
                 sync_retry_nodes,
+                rx_reconfigure,
                 rx_synchronizer,
                 tx_core,
                 primary_network: Default::default(),
@@ -116,6 +123,15 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
             .run()
             .await;
         });
+    }
+
+    /// Update the committee and cleanup internal state.
+    fn update_committee(&mut self, committee: Committee<PublicKey>) {
+        self.pending.clear();
+        self.batch_requests.clear();
+        self.parent_requests.clear();
+
+        self.committee = committee;
     }
 
     /// Helper function. It waits for particular data to become available in the storage
@@ -185,6 +201,9 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                                     .worker(&self.name, &worker_id)
                                     .expect("Author of valid header is not in the committee")
                                     .primary_to_worker;
+
+                                // TODO [issue #423]: This network transmission needs to be reliable. The worker may crash-recover
+                                // or a committee change may change the worker's IP address.
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
                                 self.worker_network.send(address, &message).await;
                             }
@@ -245,7 +264,9 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                         for x in &header.parents {
                             let _ = self.parent_requests.remove(x);
                         }
-                        self.tx_core.send(header).await.expect("Failed to send header");
+                        if self.tx_core.send(header).await.is_err() {
+                           debug!("{}", DagError::ShuttingDown)
+                        }
                     },
                     Ok(None) => {
                         // This request has been canceled.
@@ -284,6 +305,18 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                     }
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));
+                },
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        Reconfigure::NewCommittee(new_committee) => {
+                            self.update_committee(new_committee);
+                        },
+                        Reconfigure::Shutdown(_token) => return
+                    }
                 }
             }
 

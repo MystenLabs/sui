@@ -12,6 +12,8 @@ async fn propose_empty() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
     let (_tx_parents, rx_parents) = channel(1);
     let (_tx_our_digests, rx_our_digests) = channel(1);
     let (tx_headers, mut rx_headers) = channel(1);
@@ -19,11 +21,12 @@ async fn propose_empty() {
     // Spawn the proposer.
     Proposer::spawn(
         name,
-        committee(None),
+        (&*committee(None)).clone(),
         signature_service,
         /* header_size */ 1_000,
         /* max_header_delay */ Duration::from_millis(20),
         NetworkModel::PartiallySynchronous,
+        rx_reconfigure,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
@@ -42,6 +45,8 @@ async fn propose_payload() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
     let (_tx_parents, rx_parents) = channel(1);
     let (tx_our_digests, rx_our_digests) = channel(1);
     let (tx_headers, mut rx_headers) = channel(1);
@@ -49,12 +54,13 @@ async fn propose_payload() {
     // Spawn the proposer.
     Proposer::spawn(
         name.clone(),
-        committee(None),
+        (&*committee(None)).clone(),
         signature_service,
         /* header_size */ 32,
         /* max_header_delay */
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         NetworkModel::PartiallySynchronous,
+        rx_reconfigure,
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,

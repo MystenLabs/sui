@@ -230,7 +230,7 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Header<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}: B{}({}, {}, {})",
+            "{}: B{}({}, E{}, {}B)",
             self.id,
             self.round,
             self.author.encode_base64(),
@@ -257,7 +257,6 @@ impl<PublicKey: VerifyingKey> PartialEq for Header<PublicKey> {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
-
 pub struct Vote<PublicKey: VerifyingKey> {
     pub id: HeaderDigest,
     pub round: Round,
@@ -350,7 +349,7 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Vote<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}: V{}({}, {}, {})",
+            "{}: V{}({}, {}, E{})",
             self.digest(),
             self.round,
             self.author.encode_base64(),
@@ -499,7 +498,7 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Certificate<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}: C{}({}, {}, {})",
+            "{}: C{}({}, {}, E{})",
             self.digest(),
             self.round(),
             self.origin().encode_base64(),

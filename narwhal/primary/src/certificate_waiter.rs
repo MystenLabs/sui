@@ -1,7 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+use crate::primary::Reconfigure;
+use config::Committee;
 use crypto::traits::VerifyingKey;
 use futures::{
     future::try_join_all,
@@ -15,7 +16,10 @@ use std::{
     },
 };
 use store::Store;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::{
+    mpsc::{channel, Receiver, Sender},
+    watch,
+};
 use tracing::error;
 use types::{
     error::{DagError, DagResult},
@@ -25,12 +29,16 @@ use types::{
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
 /// for further processing.
 pub struct CertificateWaiter<PublicKey: VerifyingKey> {
+    /// The committee information.
+    committee: Committee<PublicKey>,
     /// The persistent storage.
     store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
+    /// Watch channel notifying of epoch changes, it is only used for cleanup.
+    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
     /// Receives sync commands from the `Synchronizer`.
     rx_synchronizer: Receiver<Certificate<PublicKey>>,
     /// Loops back to the core certificates for which we got all parents.
@@ -43,23 +51,27 @@ pub struct CertificateWaiter<PublicKey: VerifyingKey> {
 
 impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
     pub fn spawn(
+        committee: Committee<PublicKey>,
         store: Store<CertificateDigest, Certificate<PublicKey>>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
+        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_synchronizer: Receiver<Certificate<PublicKey>>,
         tx_core: Sender<Certificate<PublicKey>>,
     ) {
         tokio::spawn(async move {
             Self {
+                committee,
                 store,
                 consensus_round,
                 gc_depth,
+                rx_reconfigure,
                 rx_synchronizer,
                 tx_core,
                 pending: HashMap::new(),
             }
             .run()
-            .await
+            .await;
         });
     }
 
@@ -88,9 +100,12 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
         loop {
             tokio::select! {
                 Some(certificate) = self.rx_synchronizer.recv() => {
-                    let header_id = certificate.header.id;
+                    if certificate.epoch() < self.committee.epoch() {
+                        continue;
+                    }
 
                     // Ensure we process only once this certificate.
+                    let header_id = certificate.header.id;
                     if self.pending.contains_key(&header_id) {
                         continue;
                     }
@@ -120,6 +135,18 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                         panic!("Storage failure: killing node.");
                     }
                 },
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow_and_update().clone();
+                    match message {
+                        Reconfigure::NewCommittee(committee) => {
+                            self.committee = committee;
+                            self.pending.clear();
+                        },
+                        Reconfigure::Shutdown(_token) => ()
+                    }
+
+                }
             }
 
             // Cleanup internal state. Deliver the certificates waiting on garbage collected ancestors.

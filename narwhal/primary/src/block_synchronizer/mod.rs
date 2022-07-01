@@ -6,10 +6,10 @@ use crate::{
         responses::{CertificatesResponse, PayloadAvailabilityResponse, RequestID},
         PendingIdentifier::{Header, Payload},
     },
-    primary::PrimaryMessage,
+    primary::{PrimaryMessage, Reconfigure},
     utils, PayloadToken, PrimaryWorkerMessage, CHANNEL_CAPACITY,
 };
-use config::{BlockSynchronizerParameters, SharedCommittee, WorkerId};
+use config::{BlockSynchronizerParameters, Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Hash};
 use futures::{
     future::{join_all, BoxFuture},
@@ -25,7 +25,10 @@ use std::{
 use store::Store;
 use thiserror::Error;
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
     time::{sleep, timeout},
 };
 use tracing::{debug, error, instrument, trace, warn};
@@ -146,7 +149,10 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
     name: PublicKey,
 
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: Committee<PublicKey>,
+
+    /// Watch channel to reconfigure the committee.
+    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
 
     /// Receive the commands for the synchronizer
     rx_commands: Receiver<Command<PublicKey>>,
@@ -191,7 +197,8 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
+        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_commands: Receiver<Command<PublicKey>>,
         rx_certificate_responses: Receiver<CertificatesResponse<PublicKey>>,
         rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse<PublicKey>>,
@@ -204,6 +211,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             Self {
                 name,
                 committee,
+                rx_reconfigure,
                 rx_commands,
                 rx_certificate_responses,
                 rx_payload_availability_responses,
@@ -233,7 +241,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         // processing.
         let mut waiting = FuturesUnordered::new();
 
-        loop {
+        let shutdown_token = loop {
             tokio::select! {
                 Some(command) = self.rx_commands.recv() => {
                     match command {
@@ -291,8 +299,21 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                         },
                     }
                 }
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        Reconfigure::NewCommittee(new_committee) => {
+                            self.committee = new_committee;
+                        },
+                        Reconfigure::Shutdown(token) => break token
+                    }
+                }
             }
-        }
+        };
+        drop(shutdown_token)
     }
 
     async fn notify_requestors_for_result(
@@ -747,7 +768,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn wait_for_certificate_responses(
         fetch_certificates_timeout: Duration,
         request_id: RequestID,
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
         block_ids: Vec<CertificateDigest>,
         primaries_sent_requests_to: Vec<PublicKey>,
         mut receiver: Receiver<CertificatesResponse<PublicKey>>,

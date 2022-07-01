@@ -22,6 +22,8 @@ async fn process_header() {
 
     let committee = committee(None);
 
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -59,13 +61,14 @@ async fn process_header() {
     // Spawn the core.
     Core::spawn(
         name,
-        committee,
+        (&*committee).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
         /* gc_depth */ 50,
+        rx_reconfigure,
         /* rx_primaries */ rx_primary_messages,
         /* rx_header_waiter */ rx_headers_loopback,
         /* rx_certificate_waiter */ rx_certificates_loopback,
@@ -107,6 +110,8 @@ async fn process_header_missing_parent() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
+    let (_, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -134,13 +139,14 @@ async fn process_header_missing_parent() {
     // Spawn the core.
     Core::spawn(
         name.clone(),
-        committee(None),
+        (&*committee(None)).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
         /* gc_depth */ 50,
+        rx_reconfigure,
         /* rx_primaries */ rx_primary_messages,
         /* rx_header_waiter */ rx_headers_loopback,
         /* rx_certificate_waiter */ rx_certificates_loopback,
@@ -170,14 +176,6 @@ async fn process_header_missing_parent() {
 
     // Ensure the header is not stored.
     assert!(header_store.read(id).await.unwrap().is_none());
-
-    let mut m = HashMap::new();
-    m.insert("epoch", "0");
-    m.insert("reason", "missing_parents");
-    assert_eq!(
-        metrics.headers_suspended.get_metric_with(&m).unwrap().get(),
-        1
-    );
 }
 
 #[tokio::test]
@@ -186,6 +184,8 @@ async fn process_header_missing_payload() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
+    let (_, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -213,13 +213,14 @@ async fn process_header_missing_payload() {
     // Spawn the core.
     Core::spawn(
         name.clone(),
-        committee(None),
+        (&*committee(None)).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
         /* gc_depth */ 50,
+        rx_reconfigure,
         /* rx_primaries */ rx_primary_messages,
         /* rx_header_waiter */ rx_headers_loopback,
         /* rx_certificate_waiter */ rx_certificates_loopback,
@@ -259,14 +260,6 @@ async fn process_header_missing_payload() {
 
     // Ensure the header is not stored.
     assert!(header_store.read(id).await.unwrap().is_none());
-
-    let mut m = HashMap::new();
-    m.insert("epoch", "0");
-    m.insert("reason", "missing_payload");
-    assert_eq!(
-        metrics.headers_suspended.get_metric_with(&m).unwrap().get(),
-        1
-    );
 }
 
 #[tokio::test]
@@ -277,6 +270,8 @@ async fn process_votes() {
 
     let committee = committee(None);
 
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -304,13 +299,14 @@ async fn process_votes() {
     // Spawn the core.
     Core::spawn(
         name.clone(),
-        committee.clone(),
+        (&*committee).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
         /* gc_depth */ 50,
+        rx_reconfigure,
         /* rx_primaries */ rx_primary_messages,
         /* rx_header_waiter */ rx_headers_loopback,
         /* rx_certificate_waiter */ rx_certificates_loopback,
@@ -365,6 +361,8 @@ async fn process_certificates() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(3);
@@ -392,13 +390,14 @@ async fn process_certificates() {
     // Spawn the core.
     Core::spawn(
         name,
-        committee(None),
+        (&*committee(None)).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
         /* gc_depth */ 50,
+        rx_reconfigure,
         /* rx_primaries */ rx_primary_messages,
         /* rx_header_waiter */ rx_headers_loopback,
         /* rx_certificate_waiter */ rx_certificates_loopback,
@@ -420,7 +419,7 @@ async fn process_certificates() {
 
     // Ensure the core sends the parents of the certificates to the proposer.
     let received = rx_parents.recv().await.unwrap();
-    assert_eq!(received, (certificates.clone(), 1));
+    assert_eq!(received, (certificates.clone(), 1, 0));
 
     // Ensure the core sends the certificates to the consensus.
     for x in certificates.clone() {
@@ -445,4 +444,154 @@ async fn process_certificates() {
             .get(),
         3
     );
+}
+
+#[tokio::test]
+async fn shutdown_core() {
+    let mut keys = keys(None);
+    let _ = keys.pop().unwrap(); // Skip the header' author.
+    let kp = keys.pop().unwrap();
+    let name = kp.public().clone();
+    let signature_service = SignatureService::new(kp);
+
+    let committee = committee(None);
+
+    let (tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
+    let (tx_sync_headers, _rx_sync_headers) = channel(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
+    let (_tx_primary_messages, rx_primary_messages) = channel(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
+    let (_tx_headers, rx_headers) = channel(1);
+    let (tx_consensus, _rx_consensus) = channel(1);
+    let (tx_parents, _rx_parents) = channel(1);
+
+    // Create test stores.
+    let (header_store, certificates_store, payload_store) = create_db_stores();
+
+    // Make a synchronizer for the core.
+    let synchronizer = Synchronizer::new(
+        name.clone(),
+        &committee,
+        certificates_store.clone(),
+        payload_store,
+        /* tx_header_waiter */ tx_sync_headers,
+        /* tx_certificate_waiter */ tx_sync_certificates,
+    );
+
+    // Spawn the core.
+    let handle = Core::spawn(
+        name,
+        (&*committee).clone(),
+        header_store,
+        certificates_store,
+        synchronizer,
+        signature_service,
+        /* consensus_round */ Arc::new(AtomicU64::new(0)),
+        /* gc_depth */ 50,
+        rx_reconfigure,
+        /* rx_primaries */ rx_primary_messages,
+        /* rx_header_waiter */ rx_headers_loopback,
+        /* rx_certificate_waiter */ rx_certificates_loopback,
+        /* rx_proposer */ rx_headers,
+        tx_consensus,
+        /* tx_proposer */ tx_parents,
+        Arc::new(PrimaryMetrics::new(&Registry::new())),
+    );
+
+    // Shutdown the core.
+    let (token, _rx) = channel(1);
+    let shutdown = Reconfigure::Shutdown(token);
+    tx_reconfigure.send(shutdown).unwrap();
+    assert!(handle.await.is_ok());
+}
+
+#[tokio::test]
+async fn reconfigure_core() {
+    let mut keys = keys(None);
+    let _ = keys.pop().unwrap(); // Skip the header' author.
+    let kp = keys.pop().unwrap();
+    let name = kp.public().clone();
+    let mut signature_service = SignatureService::new(kp);
+
+    // Make the current and new committee.
+    let committee = committee(None);
+    let new_committee = test_utils::committee(None);
+    new_committee.epoch.swap(Arc::new(1));
+
+    // All the channels to interface with the core.
+    let (tx_reconfigure, rx_reconfigure) =
+        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
+    let (tx_sync_headers, _rx_sync_headers) = channel(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
+    let (tx_primary_messages, rx_primary_messages) = channel(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
+    let (_tx_headers, rx_headers) = channel(1);
+    let (tx_consensus, _rx_consensus) = channel(1);
+    let (tx_parents, _rx_parents) = channel(1);
+
+    // Create test stores.
+    let (header_store, certificates_store, payload_store) = create_db_stores();
+
+    // Make the vote we expect to receive.
+    let header = test_utils::header_with_epoch(&new_committee);
+    let expected = Vote::new(&header, &name, &mut signature_service).await;
+
+    // Spawn a listener to receive the vote.
+    let address = new_committee
+        .primary(&header.author)
+        .unwrap()
+        .primary_to_primary;
+    let mut handle = PrimaryToPrimaryMockServer::spawn(address);
+
+    // Make a synchronizer for the core.
+    let synchronizer = Synchronizer::new(
+        name.clone(),
+        &committee,
+        certificates_store.clone(),
+        payload_store,
+        /* tx_header_waiter */ tx_sync_headers,
+        /* tx_certificate_waiter */ tx_sync_certificates,
+    );
+
+    // Spawn the core.
+    Core::spawn(
+        name,
+        (&*committee).clone(),
+        header_store.clone(),
+        certificates_store.clone(),
+        synchronizer,
+        signature_service,
+        /* consensus_round */ Arc::new(AtomicU64::new(0)),
+        /* gc_depth */ 50,
+        rx_reconfigure,
+        /* rx_primaries */ rx_primary_messages,
+        /* rx_header_waiter */ rx_headers_loopback,
+        /* rx_certificate_waiter */ rx_certificates_loopback,
+        /* rx_proposer */ rx_headers,
+        tx_consensus,
+        /* tx_proposer */ tx_parents,
+        Arc::new(PrimaryMetrics::new(&Registry::new())),
+    );
+
+    // Change committee
+    let message = Reconfigure::NewCommittee((&*new_committee).clone());
+    tx_reconfigure.send(message).unwrap();
+
+    // Send a header to the core.
+    let message = PrimaryMessage::Header(header.clone());
+    tx_primary_messages.send(message).await.unwrap();
+
+    // Ensure the listener correctly received the vote.
+    let received = handle.recv().await.unwrap();
+    match received.deserialize().unwrap() {
+        PrimaryMessage::Vote(x) => assert_eq!(x, expected),
+        x => panic!("Unexpected message: {:?}", x),
+    }
+
+    // Ensure the header is correctly stored.
+    let stored = header_store.read(header.id).await.unwrap();
+    assert_eq!(stored, Some(header));
 }

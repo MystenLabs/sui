@@ -1,15 +1,28 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{CertificateDigest, Round};
+use crate::{Certificate, CertificateDigest, Round};
+use config::Committee;
 use crypto::traits::VerifyingKey;
 use std::{collections::HashMap, ops::RangeInclusive};
 use store::{
     rocks::{DBMap, TypedStoreError},
     traits::Map,
 };
+use tokio::sync::mpsc;
 
 /// A global sequence number assigned to every certificate.
 pub type SequenceNumber = u64;
+
+/// Shutdown token dropped when a task is properly shut down.
+pub type ShutdownToken = mpsc::Sender<()>;
+
+/// Message send by the consensus to the primary.
+#[derive(Debug)]
+pub enum ConsensusPrimaryMessage<PublicKey: VerifyingKey> {
+    Sequenced(Certificate<PublicKey>),
+    Committee(Committee<PublicKey>),
+    Shutdown(ShutdownToken),
+}
 
 /// Convenience type to propagate store errors.
 pub type StoreResult<T> = Result<T, TypedStoreError>;

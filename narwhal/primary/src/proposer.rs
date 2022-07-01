@@ -1,16 +1,22 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NetworkModel;
-use config::{SharedCommittee, WorkerId};
+use crate::{primary::Reconfigure, NetworkModel};
+use config::{Committee, Epoch, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
 use std::cmp::Ordering;
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::{
+        mpsc::{Receiver, Sender},
+        watch,
+    },
     time::{sleep, Duration, Instant},
 };
 use tracing::debug;
-use types::{BatchDigest, Certificate, Header, Round};
+use types::{
+    error::{DagError, DagResult},
+    BatchDigest, Certificate, Header, Round,
+};
 
 #[cfg(test)]
 #[path = "tests/proposer_tests.rs"]
@@ -21,7 +27,7 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: Committee<PublicKey>,
     /// Service to sign headers.
     signature_service: SignatureService<PublicKey::Sig>,
     /// The size of the headers' payload.
@@ -31,8 +37,10 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     /// The network model in which the node operates.
     network_model: NetworkModel,
 
+    /// Watch channel to reconfigure the committee.
+    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
     /// Receives the parents to include in the next header (along with their round number).
-    rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round)>,
+    rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
     rx_workers: Receiver<(BatchDigest, WorkerId)>,
     /// Sends newly created headers to the `Core`.
@@ -54,12 +62,13 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
         signature_service: SignatureService<PublicKey::Sig>,
         header_size: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
-        rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round)>,
+        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
     ) {
@@ -72,6 +81,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                 header_size,
                 max_header_delay,
                 network_model,
+                rx_reconfigure,
                 rx_core,
                 rx_workers,
                 tx_core,
@@ -86,7 +96,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         });
     }
 
-    async fn make_header(&mut self) {
+    async fn make_header(&mut self) -> DagResult<()> {
         // Make a new header.
         let header = Header::new(
             self.name.clone(),
@@ -97,7 +107,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
             &mut self.signature_service,
         )
         .await;
-        debug!("Created {:?}", header);
+        debug!("Created {header:?}");
 
         #[cfg(feature = "benchmark")]
         for digest in header.payload.keys() {
@@ -109,9 +119,17 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         self.tx_core
             .send(header)
             .await
-            .expect("Failed to send header");
+            .map_err(|_| DagError::ShuttingDown)
     }
 
+    /// Update the committee and cleanup internal state.
+    fn update_committee(&mut self, committee: Committee<PublicKey>) {
+        self.committee = committee;
+        self.round = 0;
+        self.last_parents = Certificate::genesis(&self.committee);
+    }
+
+    // Main loop listening to incoming messages.
     /// Update the last leader certificate. This is only relevant in partial synchrony.
     fn update_leader(&mut self) -> bool {
         let leader_name = self.committee.leader(self.round as usize);
@@ -206,7 +224,11 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                 debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.
-                self.make_header().await;
+                match self.make_header().await {
+                    Err(e @ DagError::ShuttingDown) => debug!("{e}"),
+                    Err(e) => panic!("Unexpected error: {e}"),
+                    Ok(()) => (),
+                }
                 self.payload_size = 0;
 
                 // Reschedule the timer.
@@ -215,7 +237,30 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
             }
 
             tokio::select! {
-                Some((parents, round)) = self.rx_core.recv() => {
+                Some((parents, round, epoch)) = self.rx_core.recv() => {
+                    // If the core already moved to the next epoch we should pull the next
+                    // committee as well.
+                    match epoch.cmp(&self.committee.epoch()) {
+                        Ordering::Greater => {
+                            let message = self.rx_reconfigure.borrow_and_update().clone();
+                            match message  {
+                                Reconfigure::NewCommittee(new_committee) => {
+                                    self.update_committee(new_committee);
+                                },
+                                Reconfigure::Shutdown(_token) => return,
+                            }
+
+                        }
+                        Ordering::Less => {
+                            // We already updated committee but the core is slow. Ignore the parents
+                            // from older epochs.
+                            continue
+                        },
+                        Ordering::Equal => {
+                            // Nothing to do, we can proceed.
+                        }
+                    }
+
                     // Compare the parents' round number with our current round.
                     match round.cmp(&self.round) {
                         Ordering::Greater => {
@@ -226,6 +271,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                         },
                         Ordering::Less => {
                             // Ignore parents from older rounds.
+                            continue;
                         },
                         Ordering::Equal => {
                             // The core gives us the parents the first time they are enough to form a quorum.
@@ -238,12 +284,28 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                     // we ignore this check and advance anyway.
                     advance = self.ready();
                 }
+
+                // Receive digests from our workers.
                 Some((digest, worker_id)) = self.rx_workers.recv() => {
                     self.payload_size += Digest::from(digest).size();
                     self.digests.push((digest, worker_id));
                 }
+
+                // Check whether the timer expired.
                 () = &mut timer => {
                     // Nothing to do.
+                }
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        Reconfigure::NewCommittee(new_committee) => {
+                            self.update_committee(new_committee);
+                        },
+                        Reconfigure::Shutdown(_token) => return,
+                    }
                 }
             }
         }

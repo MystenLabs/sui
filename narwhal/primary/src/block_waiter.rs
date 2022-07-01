@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{block_synchronizer::handler::Handler, PrimaryWorkerMessage};
-use config::SharedCommittee;
+use crate::{block_synchronizer::handler::Handler, primary::Reconfigure, PrimaryWorkerMessage};
+use config::Committee;
 use crypto::{traits::VerifyingKey, Digest, Hash};
 use futures::{
     future::{try_join_all, BoxFuture},
@@ -17,13 +17,13 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::{
-    sync::{mpsc::Receiver, oneshot},
+    sync::{mpsc::Receiver, oneshot, watch},
     time::timeout,
 };
 use tracing::{debug, error, instrument, warn};
 use types::{
     BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
-    CertificateDigest, Header,
+    CertificateDigest, Header, ShutdownToken,
 };
 use Result::*;
 
@@ -112,8 +112,7 @@ type RequestKey = Vec<u8>;
 /// the result of it.
 ///
 /// ```rust
-/// # use tokio::sync::mpsc::{channel};
-/// # use tokio::sync::oneshot;
+/// # use tokio::sync::{mpsc::{channel}, watch, oneshot};
 /// # use arc_swap::ArcSwap;
 /// # use crypto::Hash;
 /// # use std::env::temp_dir;
@@ -121,7 +120,7 @@ type RequestKey = Vec<u8>;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
-/// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
+/// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}, Reconfigure};
 /// # use types::{BatchMessage, BatchDigest, CertificateDigest, Batch};
 /// # use mockall::*;
 /// # use crypto::traits::VerifyingKey;
@@ -155,7 +154,8 @@ type RequestKey = Vec<u8>;
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
 ///
 ///     let name = Ed25519PublicKey::default();
-///     let committee = Arc::new(Committee{ epoch: 0, authorities: ArcSwap::from_pointee(BTreeMap::new()) });
+///     let committee = Committee{ epoch: ArcSwap::new(Arc::new(0)), authorities: ArcSwap::from_pointee(BTreeMap::new()) };
+///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee(committee.clone()));
 ///
 ///     // A dummy certificate
 ///     let certificate = Certificate::<Ed25519PublicKey>::default();
@@ -165,6 +165,7 @@ type RequestKey = Vec<u8>;
 ///     BlockWaiter::spawn(
 ///         name,
 ///         committee,
+///         rx_reconfigure,
 ///         rx_commands,
 ///         rx_batches,
 ///         Arc::new(BlockSynchronizerHandler{}),
@@ -201,7 +202,7 @@ pub struct BlockWaiter<
     name: PublicKey,
 
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: Committee<PublicKey>,
 
     /// Receive all the requests to get a block
     rx_commands: Receiver<BlockCommand>,
@@ -215,6 +216,9 @@ pub struct BlockWaiter<
 
     /// Network driver allowing to send messages.
     worker_network: PrimaryToWorkerNetwork,
+
+    /// Watch channel to reconfigure the committee.
+    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
 
     /// The batch receive channel is listening for received
     /// messages for batches that have been requested
@@ -248,18 +252,20 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     // commands to fetch a block
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
+        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
     ) {
         tokio::spawn(async move {
-            Self {
+            let shutdown_token = Self {
                 name,
                 committee,
                 rx_commands,
                 pending_get_block: HashMap::new(),
                 worker_network: PrimaryToWorkerNetwork::default(),
+                rx_reconfigure,
                 rx_batch_receiver: batch_receiver,
                 tx_pending_batch: HashMap::new(),
                 tx_get_block_map: HashMap::new(),
@@ -268,10 +274,11 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             }
             .run()
             .await;
+            drop(shutdown_token);
         });
     }
 
-    async fn run(&mut self) {
+    async fn run(&mut self) -> ShutdownToken {
         let mut waiting_get_block = FuturesUnordered::new();
         let mut waiting_get_blocks = FuturesUnordered::new();
 
@@ -313,6 +320,19 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
                 },
                 Some(result) = waiting_get_blocks.next() => {
                     self.handle_get_blocks_waiting_result(result).await;
+                }
+
+                // Check whether the committee changed. If the network address of our workers changed upon trying
+                // to send them a request, we will timeout and the caller will have to retry.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        Reconfigure::NewCommittee(new_committee) => {
+                            self.committee = new_committee;
+                        }
+                        Reconfigure::Shutdown(token) => return token,
+                    }
                 }
             }
         }

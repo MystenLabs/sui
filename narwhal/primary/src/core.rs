@@ -4,11 +4,11 @@
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
     metrics::PrimaryMetrics,
-    primary::PrimaryMessage,
+    primary::{PrimaryMessage, Reconfigure},
     synchronizer::Synchronizer,
 };
 use async_recursion::async_recursion;
-use config::SharedCommittee;
+use config::{Committee, Epoch};
 use crypto::{traits::VerifyingKey, Hash as _, SignatureService};
 use network::{CancelHandler, PrimaryNetwork};
 use std::{
@@ -21,7 +21,10 @@ use std::{
 };
 use store::Store;
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::{
+        mpsc::{Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::{debug, error, instrument, warn};
@@ -39,7 +42,7 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: Committee<PublicKey>,
     /// The persistent storage keyed to headers.
     header_store: Store<HeaderDigest, Header<PublicKey>>,
     /// The persistent storage keyed to certificates.
@@ -53,6 +56,8 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// The depth of the garbage collector.
     gc_depth: Round,
 
+    /// Watch channel to reconfigure the committee.
+    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
     /// Receiver for dag messages (headers, votes, certificates).
     rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
     /// Receives loopback headers from the `HeaderWaiter`.
@@ -64,7 +69,7 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// Output all certificates to the consensus layer.
     tx_consensus: Sender<Certificate<PublicKey>>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round)>,
+    tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
 
     /// The last garbage collected round.
     gc_round: Round,
@@ -87,21 +92,23 @@ pub struct Core<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> Core<PublicKey> {
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
         header_store: Store<HeaderDigest, Header<PublicKey>>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         synchronizer: Synchronizer<PublicKey>,
         signature_service: SignatureService<PublicKey::Sig>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
+        rx_committee: watch::Receiver<Reconfigure<PublicKey>>,
         rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
         rx_header_waiter: Receiver<Header<PublicKey>>,
         rx_certificate_waiter: Receiver<Certificate<PublicKey>>,
         rx_proposer: Receiver<Header<PublicKey>>,
         tx_consensus: Sender<Certificate<PublicKey>>,
-        tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round)>,
+        tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -114,6 +121,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                 signature_service,
                 consensus_round,
                 gc_depth,
+                rx_reconfigure: rx_committee,
                 rx_primaries,
                 rx_header_waiter,
                 rx_certificate_waiter,
@@ -137,6 +145,14 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
     #[instrument(level = "debug", skip_all)]
     async fn process_own_header(&mut self, header: Header<PublicKey>) -> DagResult<()> {
+        if header.epoch < self.committee.epoch() {
+            debug!("Proposer outdated");
+            return Ok(());
+        }
+
+        // Update the committee now if the proposer already did so.
+        self.try_update_committee();
+
         // Reset the votes aggregator.
         self.current_header = header.clone();
         self.votes_aggregator = VotesAggregator::new();
@@ -148,6 +164,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             .into_iter()
             .map(|(_, x)| x.primary_to_primary)
             .collect();
+
         let message = PrimaryMessage::Header(header.clone());
         let handlers = self.network.broadcast(addresses, &message).await;
         self.cancel_handlers
@@ -363,9 +380,9 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         {
             // Send it to the `Proposer`.
             self.tx_proposer
-                .send((parents, certificate.round()))
+                .send((parents, certificate.round(), certificate.epoch()))
                 .await
-                .expect("Failed to send certificate");
+                .map_err(|_| DagError::ShuttingDown)?;
         }
 
         // Send it to the consensus layer.
@@ -380,6 +397,9 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     fn sanitize_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
+        if header.epoch > self.committee.epoch() {
+            self.try_update_committee();
+        }
         ensure!(
             self.committee.epoch() == header.epoch,
             DagError::InvalidEpoch {
@@ -401,6 +421,9 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     fn sanitize_vote(&mut self, vote: &Vote<PublicKey>) -> DagResult<()> {
+        if vote.epoch > self.committee.epoch() {
+            self.try_update_committee();
+        }
         ensure!(
             self.committee.epoch() == vote.epoch,
             DagError::InvalidEpoch {
@@ -426,6 +449,9 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     fn sanitize_certificate(&mut self, certificate: &Certificate<PublicKey>) -> DagResult<()> {
+        if certificate.epoch() > self.committee.epoch() {
+            self.try_update_committee();
+        }
         ensure!(
             self.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -440,6 +466,34 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
         // Verify the certificate (and the embedded header).
         certificate.verify(&self.committee).map_err(DagError::from)
+    }
+
+    /// If a new committee is available, update our internal state.
+    fn try_update_committee(&mut self) {
+        if self
+            .rx_reconfigure
+            .has_changed()
+            .expect("Reconfigure channel dropped")
+        {
+            let message = self.rx_reconfigure.borrow().clone();
+            if let Reconfigure::NewCommittee(new_committee) = message {
+                self.update_committee(new_committee);
+                // Mark the value as seen.
+                let _ = self.rx_reconfigure.borrow_and_update();
+            }
+        }
+    }
+
+    /// Update the committee and cleanup internal state.
+    fn update_committee(&mut self, committee: Committee<PublicKey>) {
+        tracing::info!("Committee updated to epoch {}", committee.epoch);
+        self.last_voted.clear();
+        self.processing.clear();
+        self.certificates_aggregators.clear();
+        self.cancel_handlers.clear();
+
+        self.committee = committee;
+        self.synchronizer.update_genesis(&self.committee);
     }
 
     // Main loop listening to incoming messages.
@@ -483,9 +537,23 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
                 // We also receive here our new headers created by the `Proposer`.
                 Some(header) = self.rx_proposer.recv() => self.process_own_header(header).await,
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        Reconfigure::NewCommittee(new_committee) => {
+                            self.update_committee(new_committee);
+                            Ok(())
+                        },
+                        Reconfigure::Shutdown(_token) => return
+                    }
+                }
             };
             match result {
                 Ok(()) => (),
+                Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                 Err(DagError::StoreError(e)) => {
                     error!("{e}");
                     panic!("Storage failure: killing node.");

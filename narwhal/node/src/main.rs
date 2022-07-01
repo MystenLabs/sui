@@ -205,7 +205,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     join_all(node_handles).await;
 
     // If this expression is reached, the program ends and all other tasks terminate.
-    unreachable!();
+    Ok(())
 }
 
 /// Receives an ordered list of certificates and apply any application-specific logic.

@@ -14,13 +14,13 @@ pub mod block_synchronizer;
 mod block_waiter;
 mod certificate_waiter;
 mod core;
-mod garbage_collector;
 mod grpc_server;
 mod header_waiter;
 mod helper;
 mod payload_receiver;
 mod primary;
 mod proposer;
+mod state_handler;
 mod synchronizer;
 mod utils;
 
@@ -39,7 +39,7 @@ pub use crate::{
     block_waiter::{BlockCommand, BlockWaiter},
     grpc_server::metrics::EndpointMetrics,
     primary::{
-        NetworkModel, PayloadToken, Primary, PrimaryWorkerMessage, WorkerPrimaryError,
+        NetworkModel, PayloadToken, Primary, PrimaryWorkerMessage, Reconfigure, WorkerPrimaryError,
         WorkerPrimaryMessage, CHANNEL_CAPACITY,
     },
 };

@@ -1,15 +1,18 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{primary::PrimaryMessage, PayloadToken};
-use config::{SharedCommittee, WorkerId};
+use crate::{
+    primary::{PrimaryMessage, Reconfigure},
+    PayloadToken,
+};
+use config::{Committee, WorkerId};
 use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use network::PrimaryNetwork;
 use store::{Store, StoreError};
 use thiserror::Error;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::{mpsc::Receiver, watch};
 use tracing::{error, instrument};
-use types::{BatchDigest, Certificate, CertificateDigest};
+use types::{BatchDigest, Certificate, CertificateDigest, ShutdownToken};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]
@@ -33,11 +36,13 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// The node's name
     name: PublicKey,
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: Committee<PublicKey>,
     /// The certificate persistent storage.
     certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
     /// The payloads (batches) persistent storage.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    /// Watch channel to reconfigure the committee.
+    rx_committee: watch::Receiver<Reconfigure<PublicKey>>,
     /// Input channel to receive requests.
     rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
     /// A network sender to reply to the sync requests.
@@ -47,57 +52,73 @@ pub struct Helper<PublicKey: VerifyingKey> {
 impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        rx_committee: watch::Receiver<Reconfigure<PublicKey>>,
         rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
     ) {
         tokio::spawn(async move {
-            Self {
+            let shutdown_token = Self {
                 name,
                 committee,
                 certificate_store,
                 payload_store,
+                rx_committee,
                 rx_primaries,
                 primary_network: PrimaryNetwork::default(),
             }
             .run()
             .await;
+            drop(shutdown_token);
         });
     }
 
-    async fn run(&mut self) {
-        while let Some(request) = self.rx_primaries.recv().await {
-            match request {
-                // The CertificatesRequest will find any certificates that exist in
-                // the data source (dictated by the digests parameter). The results
-                // will be emitted one by one to the consumer.
-                PrimaryMessage::CertificatesRequest(digests, origin) => {
-                    let _ = self.process_certificates(digests, origin, false).await;
-                }
-                // The CertificatesBatchRequest will find any certificates that exist in
-                // the data source (dictated by the digests parameter). The results will
-                // be sent though back to the consumer as a batch - one message.
-                PrimaryMessage::CertificatesBatchRequest {
-                    certificate_ids,
-                    requestor,
-                } => {
-                    let _ = self
-                        .process_certificates(certificate_ids, requestor, true)
-                        .await;
-                }
-                // A request that another primary sends us to ask whether we
-                // can serve batch data for the provided certificate_ids.
-                PrimaryMessage::PayloadAvailabilityRequest {
-                    certificate_ids,
-                    requestor,
-                } => {
-                    let _ = self
-                        .process_payload_availability(certificate_ids, requestor)
-                        .await;
-                }
-                _ => {
-                    panic!("Received unexpected message!");
+    async fn run(&mut self) -> ShutdownToken {
+        loop {
+            tokio::select! {
+                Some(request) = self.rx_primaries.recv() => match request {
+                    // The CertificatesRequest will find any certificates that exist in
+                    // the data source (dictated by the digests parameter). The results
+                    // will be emitted one by one to the consumer.
+                    PrimaryMessage::CertificatesRequest(digests, origin) => {
+                        let _ = self.process_certificates(digests, origin, false).await;
+                    }
+                    // The CertificatesBatchRequest will find any certificates that exist in
+                    // the data source (dictated by the digests parameter). The results will
+                    // be sent though back to the consumer as a batch - one message.
+                    PrimaryMessage::CertificatesBatchRequest {
+                        certificate_ids,
+                        requestor,
+                    } => {
+                        let _ = self
+                            .process_certificates(certificate_ids, requestor, true)
+                            .await;
+                    }
+                    // A request that another primary sends us to ask whether we
+                    // can serve batch data for the provided certificate_ids.
+                    PrimaryMessage::PayloadAvailabilityRequest {
+                        certificate_ids,
+                        requestor,
+                    } => {
+                        let _ = self
+                            .process_payload_availability(certificate_ids, requestor)
+                            .await;
+                    }
+                    _ => {
+                        panic!("Received unexpected message!");
+                    }
+                },
+
+                result = self.rx_committee.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_committee.borrow().clone();
+                    match message {
+                        Reconfigure::NewCommittee(new_committee) => {
+                            self.committee = new_committee;
+                        },
+                        Reconfigure::Shutdown(token) => return token
+                    }
                 }
             }
         }

@@ -94,7 +94,7 @@ impl<PublicKey: VerifyingKey> Configuration for NarwhalConfiguration<PublicKey> 
     ) -> Result<Response<Empty>, Status> {
         let new_network_info_request = request.into_inner();
         let epoch_number: u64 = new_network_info_request.epoch_number.into();
-        if epoch_number != self.committee.epoch {
+        if epoch_number != self.committee.epoch() {
             return Err(Status::invalid_argument(format!(
                 "Passed in epoch {epoch_number} does not match current epoch {}",
                 self.committee.epoch
