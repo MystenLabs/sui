@@ -17,6 +17,24 @@ pub fn test_gas_objects() -> Vec<Object> {
         .collect()
 }
 
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_gas_object() -> Object {
+    let gas_object_id = ObjectID::random();
+    let (owner, _) = test_keys().pop().unwrap();
+    Object::with_id_owner_for_testing(gas_object_id, owner)
+}
+
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_gas_objects(count: usize) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
+            let (owner, _) = test_keys().pop().unwrap();
+            Object::with_id_owner_for_testing(gas_object_id, owner)
+        })
+        .collect()
+}
+
 /// Make a few test gas objects with a specific owners.
 pub fn test_gas_objects_with_owners<O>(owners: O) -> Vec<Object>
 where
