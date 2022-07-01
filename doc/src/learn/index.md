@@ -16,6 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
+* Get ready to participate in [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/)!
 * The former `wallet` binary has been replaced with the [Sui CLI client](../build/cli-client.md) and combined with related functions.
 * [JSON-RPC PubSub](../build/pubsub.md) is supported by Sui [fullnode](../build/fullnode.md) to publish / subscribe using notifications via websocket.
 * [Docker Compose](../build/fullnode.md#using-docker-compose) enables simple creation of Sui Fullnodes using [Docker](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme).
