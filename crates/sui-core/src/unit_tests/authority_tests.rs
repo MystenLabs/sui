@@ -60,7 +60,8 @@ const MAX_GAS: u64 = 10000;
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
     assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
-    assert_eq!(o1.auth_sign_info.signatures, o2.auth_sign_info.signatures);
+    assert_eq!(o1.auth_sign_info.signatures(), o2.auth_sign_info.signatures());
+    assert_eq!(o1.auth_sign_info.authorities(), o2.auth_sign_info.authorities());
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -73,10 +74,8 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
     ) {
         (Some(cert1), Some(cert2)) => {
             assert_eq!(cert1.digest(), cert2.digest());
-            assert_eq!(
-                cert1.auth_sign_info.signatures,
-                cert2.auth_sign_info.signatures
-            );
+            assert_eq!(cert1.auth_sign_info.signatures(), cert2.auth_sign_info.signatures());
+            assert_eq!(cert1.auth_sign_info.authorities(), cert2.auth_sign_info.authorities()); 
         }
         (None, None) => (),
         _ => panic!("certificate structure between responses differs"),

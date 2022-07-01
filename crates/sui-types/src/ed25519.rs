@@ -540,6 +540,10 @@ impl<const STRONG_THRESHOLD: bool> Ed25519AuthorityQuorumSignInfo<STRONG_THRESHO
         self.signatures.iter().map(|(p, s)| *p).collect::<Vec<_>>()
     }
 
+    pub fn signatures(&self) -> Vec<&Ed25519AuthoritySignature> {
+        self.signatures.iter().map(|(_, s)| s).collect::<Vec<_>>()
+    }
+
     pub fn add_signature(&mut self, sig: Ed25519AuthoritySignature, pk: Ed25519PublicKeyBytes) {
         self.signatures.push((pk, sig));
     }

@@ -656,6 +656,10 @@ impl<const STRONG_THRESHOLD: bool> Bls12381AuthorityQuorumSignInfo<STRONG_THRESH
         self.authorities.clone()
     }
 
+    pub fn signatures(&self) -> &Option<Bls12381AuthoritySignature> {
+        &self.aggregated_signature
+    }
+
     pub fn add_signature(
         &mut self,
         signature: Bls12381AuthoritySignature,

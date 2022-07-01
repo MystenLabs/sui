@@ -35,8 +35,8 @@ pub mod sui_system_state;
 pub mod waypoint;
 
 // Only uncomment one 
-// pub mod ed25519;
-pub mod bls12381;
+pub mod ed25519;
+// pub mod bls12381;
 
 
 pub mod event_filter;
