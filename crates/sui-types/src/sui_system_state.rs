@@ -44,9 +44,9 @@ pub struct ValidatorMetadata {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
-    pub stake: Balance,
+    pub stake_amount: u64,
     pub delegation: u64,
-    pub pending_stake: MoveOption<Balance>,
+    pub pending_stake: u64,
     pub pending_withdraw: u64,
     pub pending_delegation: u64,
     pub pending_delegation_withdraw: u64,
