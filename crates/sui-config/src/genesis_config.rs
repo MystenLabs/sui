@@ -97,11 +97,8 @@ impl GenesisConfig {
             );
 
             for path in &self.move_packages {
-                let mut modules = sui_framework::build_move_package(
-                    path,
-                    move_package::BuildConfig::default(),
-                    false,
-                )?;
+                let mut modules =
+                    sui_framework::build_move_package(path, move_package::BuildConfig::default())?;
 
                 let package_id =
                     sui_adapter::adapter::generate_package_id(&mut modules, genesis_ctx)?;

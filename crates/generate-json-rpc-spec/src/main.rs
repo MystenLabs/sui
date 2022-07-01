@@ -9,6 +9,7 @@ use clap::ArgEnum;
 use clap::Parser;
 use hyper::body::Buf;
 use hyper::{Body, Client, Method, Request};
+use move_package::BuildConfig;
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -186,8 +187,13 @@ async fn create_response_sample() -> Result<
 async fn create_package_object_response(
     context: &mut WalletContext,
 ) -> Result<(GetObjectDataResponse, TransactionResponse), anyhow::Error> {
+    let package_path = ["sui_programmability", "examples", "move_tutorial"]
+        .into_iter()
+        .collect();
+    let build_config = BuildConfig::default();
     let result = SuiClientCommands::Publish {
-        path: "sui_programmability/examples/move_tutorial".to_string(),
+        package_path,
+        build_config,
         gas: None,
         gas_budget: 10000,
     }
@@ -237,9 +243,14 @@ async fn create_hero_response(
     coins: &[SuiObjectInfo],
 ) -> Result<(ObjectID, GetObjectDataResponse), anyhow::Error> {
     // Create hero response
+    let package_path = ["sui_programmability", "examples", "games"]
+        .into_iter()
+        .collect();
+    let build_config = BuildConfig::default();
     let result = SuiClientCommands::Publish {
-        path: "sui_programmability/examples/games".to_string(),
+        package_path,
         gas: None,
+        build_config,
         gas_budget: 10000,
     }
     .execute(context)

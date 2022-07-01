@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use move_binary_format::CompiledModule;
+use move_package::BuildConfig;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -15,8 +16,9 @@ fn main() {
     let sui_framwork_path = Path::new(env!("CARGO_MANIFEST_DIR"));
     let move_stdlib_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("deps/move-stdlib");
 
+    let sui_build_config = BuildConfig::default();
     let sui_framework =
-        sui_framework_build::build_sui_framework_modules(sui_framwork_path).unwrap();
+        sui_framework_build::build_move_package(sui_framwork_path, sui_build_config).unwrap();
     let move_stdlib = sui_framework_build::build_move_stdlib_modules(&move_stdlib_path).unwrap();
 
     serialize_modules_to_file(sui_framework, &out_dir.join("sui-framework")).unwrap();

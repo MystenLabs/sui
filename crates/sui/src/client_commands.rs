@@ -5,7 +5,7 @@ use core::fmt;
 use std::{
     collections::BTreeSet,
     fmt::{Debug, Display, Formatter, Write},
-    path::Path,
+    path::{Path, PathBuf},
     time::Instant,
 };
 
@@ -13,6 +13,7 @@ use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
 use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
+use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
 use sui_json_rpc_api::rpc_types::{
@@ -76,8 +77,18 @@ pub enum SuiClientCommands {
     #[clap(name = "publish")]
     Publish {
         /// Path to directory containing a Move package
-        #[clap(long)]
-        path: String,
+        #[clap(
+            long = "path",
+            short = 'p',
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: BuildConfig,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -267,14 +278,15 @@ impl SuiClientCommands {
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
             SuiClientCommands::Publish {
-                path,
+                package_path,
                 gas,
+                build_config,
                 gas_budget,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_modules = build_move_package_to_bytes(Path::new(&path), false)?;
+                let compiled_modules = build_move_package_to_bytes(&package_path, build_config)?;
                 let data = context
                     .gateway
                     .publish(sender, compiled_modules, gas, gas_budget)
