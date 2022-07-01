@@ -20,11 +20,27 @@ describe('serde', () => {
     });
 
     test('it should serde structs', () => {
-        bcs.registerAddressType('address', 20);
+        bcs.registerAddressType('address', 20, 'hex');
         bcs.registerStructType('Beep', { id: 'address', value: 'u64' });
 
+        let bytes = bcs.ser('Beep', { id: '0x45aacd9ed90a5a8e211502ac3fa898a3819f23b2', value: 10000000 }).toBytes();
+        let struct = bcs.de('Beep', bytes);
 
-        let struct = { id: '' }
+        assert(struct.id === '45aacd9ed90a5a8e211502ac3fa898a3819f23b2');
+        assert(struct.value.toString(10) === '10000000');
+    });
+
+    test('it should serde enums', () => {
+        bcs.registerAddressType('address', 20, 'hex');
+        bcs.registerEnumType('Enum', {
+            with_value: 'address',
+            no_value: null
+        });
+
+        let addr = '45aacd9ed90a5a8e211502ac3fa898a3819f23b2';
+
+        assert(addr === bcs.de('Enum', bcs.ser('Enum', { with_value: addr }).toBytes()).with_value);
+        assert('no_value' in bcs.de('Enum', bcs.ser('Enum', { no_value: null }).toBytes()));
     });
 });
 
