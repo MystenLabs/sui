@@ -17,8 +17,12 @@ class CommandMaker:
         return f'rm -r {PathMaker.logs_path()} ; mkdir -p {PathMaker.logs_path()}'
 
     @staticmethod
-    def compile():
-        return 'cargo build --quiet --release --features benchmark'
+    def compile(mem_profiling):
+        if mem_profiling:
+            features = "benchmark dhat-heap"
+        else:
+            features = "benchmark"
+        return ["cargo", "build", "--quiet", "--release", "--features", features]
 
     @staticmethod
     def generate_key(filename):

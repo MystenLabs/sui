@@ -216,6 +216,11 @@ class BenchParameters:
 
             self.duration = int(json['duration'])
 
+            if 'mem_profiling' in json:
+                self.mem_profile = bool(json['mem_profiling'])
+            else:
+                self.mem_profile = False
+
             self.runs = int(json['runs']) if 'runs' in json else 1
         except KeyError as e:
             raise ConfigError(f'Malformed bench parameters: missing key {e}')

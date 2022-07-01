@@ -26,6 +26,8 @@ They specify the number of primaries (`nodes`) and workers per primary (`workers
 
 The benchmarking script will deploy as many clients as workers and divide the input rate equally amongst each client. For instance, if you configure the testbed with four nodes, one worker per node, and an input rate of 1,000 tx/s (as in the example above), the scripts will deploy four clients each submitting transactions to one node at a rate of 250 tx/s. When the parameter `faults` is set to `f > 0`, the last `f` nodes and clients are not booted; the system will thus run with `n-f` nodes (and `n-f` clients).
 
+NOTE: To enable memory profiling with DHAT, add `        'mem_profiling': True,` to fabfile.py
+
 The nodes parameters determine the configuration for the primaries and workers:
 ```python
 node_params = {
