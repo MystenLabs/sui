@@ -23,6 +23,7 @@ export const DEFAULT_GAS_BUDGET_FOR_MERGE = 500;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
+export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
 
 // TODO use sdk
 export class Coin {

@@ -18,7 +18,7 @@ import st from './SuiObject.module.scss';
 
 export type SuiObjectProps = {
     obj: SuiObjectType;
-    sendNFT?: boolean;
+    sendNFT?: boolean | 'unavaliable';
 };
 
 function SuiObject({ obj, sendNFT }: SuiObjectProps) {

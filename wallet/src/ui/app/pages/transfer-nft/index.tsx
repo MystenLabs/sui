@@ -15,14 +15,17 @@ import {
     accountNftsSelector,
 } from '_redux/slices/account';
 import { transferSuiNFT } from '_redux/slices/sui-objects';
-import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import {
+    GAS_TYPE_ARG,
+    DEFAULT_NFT_TRANSFER_GAS_FEE,
+} from '_redux/slices/sui-objects/Coin';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 const initialValues = {
     to: '',
-    amount: 10000,
+    amount: DEFAULT_NFT_TRANSFER_GAS_FEE,
 };
 
 export type FormValues = typeof initialValues;
@@ -79,6 +82,7 @@ function TransferNFTPage() {
                     transferSuiNFT({
                         recipientAddress: to,
                         nftId: objectId,
+                        transferCost: DEFAULT_NFT_TRANSFER_GAS_FEE,
                     })
                 ).unwrap();
                 resetForm();
