@@ -34,9 +34,9 @@ module sui::validator {
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
         net_address: vector<u8>,
         /// Total amount of validator stake that would be active in the next epoch.
-        /// This only includes validator stake, and does not include delegation.
-        /// TODO: stake should include delegated stake: https://github.com/MystenLabs/sui/issues/2834
         next_epoch_stake: u64,
+        /// Total amount of delegated stake that would be active in the next epoch.
+        next_epoch_delegation: u64,
     }
 
     struct Validator has store {
@@ -90,6 +90,7 @@ module sui::validator {
                 name,
                 net_address,
                 next_epoch_stake: stake_amount,
+                next_epoch_delegation: 0,
             },
             stake_amount,
             delegation: 0,
@@ -163,17 +164,20 @@ module sui::validator {
         self.delegator_count = self.delegator_count + self.pending_delegator_count - self.pending_delegator_withdraw_count;
         self.pending_delegator_count = 0;
         self.pending_delegator_withdraw_count = 0;
+        assert!(self.delegation == self.metadata.next_epoch_delegation, 0);
     }
 
     public(friend) fun request_add_delegation(self: &mut Validator, delegate_amount: u64) {
         assert!(delegate_amount > 0, 0);
         self.pending_delegation = self.pending_delegation + delegate_amount;
         self.pending_delegator_count = self.pending_delegator_count + 1;
+        self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation + delegate_amount;
     }
 
     public(friend) fun request_remove_delegation(self: &mut Validator, delegate_amount: u64) {
         self.pending_delegation_withdraw = self.pending_delegation_withdraw + delegate_amount;
         self.pending_delegator_withdraw_count = self.pending_delegator_withdraw_count + 1;
+        self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - delegate_amount;
     }
 
     public fun metadata(self: &Validator): &ValidatorMetadata {

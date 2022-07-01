@@ -38,6 +38,7 @@ pub struct ValidatorMetadata {
     pub name: Vec<u8>,
     pub net_address: Vec<u8>,
     pub next_epoch_stake: u64,
+    pub next_epoch_delegation: u64,
 }
 
 /// Rust version of the Move sui::validator::Validator type
