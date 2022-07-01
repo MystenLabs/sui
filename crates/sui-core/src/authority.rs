@@ -518,6 +518,7 @@ impl AuthorityState {
         let transaction_digest = *certificate.digest();
 
         if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+            tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
