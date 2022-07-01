@@ -549,8 +549,13 @@ where
 
         self.sync_input_objects_with_authorities(&transaction)
             .await?;
+
+        // Getting the latest system state for gas information
+        // TODO: once we figure out a better way to sync system state and epoch information (like pubsub or epoch change callback)
+        // we don't need to download every time to get latest information like gas_price
         self.download_object_from_authorities(SUI_SYSTEM_STATE_OBJECT_ID)
             .await?;
+
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.store,
             &transaction,
