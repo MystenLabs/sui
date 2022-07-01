@@ -28,9 +28,9 @@
   "author": "Damir Shamanaev <damirka.ru@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mystenlabs/sui.io/issues"
+    "url": "https://github.com/mystenlabs/sui/issues"
   },
-  "homepage": "https://github.com/mystenlabs/sui.io#readme",
+  "homepage": "https://github.com/mystenlabs/sui#readme",
   "dependencies": {
     "bn.js": "^5.2.1"
   },
