@@ -116,7 +116,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
 /// Make a transaction to publish a test move contracts package.
 pub fn create_publish_move_package_transaction(gas_object: Object, path: PathBuf) -> Transaction {
     let build_config = BuildConfig::default();
-    let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
 
     let all_module_bytes = modules
         .iter()
