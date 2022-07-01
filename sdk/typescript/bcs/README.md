@@ -4,20 +4,21 @@ This library implements [Binary Canonical Serialization (BCS)](https://github.co
 
 ## Feature set
 
-- Move's primitive types de/serialization: u8, u32, u64, u128, bool
+- Move's primitive types de/serialization: u8, u64, u128, bool
 - Ability to define custom types such as `vector` or `struct`
 - Extendable and allows registering any custom types (e.g. vectors of structs)
+- Custom addresses length. Example: `BCS.registerAddressType('Address', 20, 'hex')` - 20 bytes;
 
 ## Examples
 
 ### Working with primitive types
 
-To deserialize data, use a `MoveBCS.de(type: string, data: string)`. Type parameter is a name of the type; data is a BCS encoded as hex.
+To deserialize data, use a `BCS.de(type: string, data: string)`. Type parameter is a name of the type; data is a BCS encoded as hex.
 
 ```js
 import { BCS } from '@mysten/bcs';
 
-// MoveBCS has a set of built ins:
+// BCS has a set of built ins:
 // U8, U32, U64, U128, BOOL, STRING
 console.assert(BCS.U64 === 'u64');
 console.assert(BCS.BOOL === 'bool');
@@ -42,6 +43,8 @@ let str = BCS.de(BCS.STRING, hex('0a68656c6c6f5f6d6f7665')); // hello_move
 To serialize any type, use `BCS.ser(type: string, data: any)`. Type parameter is a name of the type to serialize, data is any data, depending on the type (can be object for structs or string for big integers - such as `u128`).
 
 ```js
+import { BCS } from '@mysten/bcs';
+
 let bcs_u8 = BCS.ser('u8', 255).toBytes(); // uint Array
 
 console.assert(BCS.util.toHex(bcs_u8) === 'ff');
@@ -53,9 +56,9 @@ console.assert(BCS.util.toHex(bcs_ascii) === '0a68656c6c6f5f6d6f7665');
 
 ### Adding custom types
 
-TBD
-
 ```js
+import { BCS } from '@mysten/bcs';
+
 // Move / Rust struct
 // struct Coin {
 //   value: u64,
