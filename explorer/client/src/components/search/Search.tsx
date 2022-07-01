@@ -50,7 +50,7 @@ function Search() {
             <input
                 className={styles.searchtextdesktop}
                 id="searchText"
-                placeholder="Search by Addresses / Objects / Transactions / Epochs"
+                placeholder="Search by Addresses / Objects / Transactions"
                 value={input}
                 onChange={handleTextChange}
                 autoFocus
