@@ -8,21 +8,6 @@
 
 /* Array of bytes to Base64 string decoding */
 
-// function b64ToUint6(nChr: number) {
-//   return nChr > 64 && nChr < 91 ?
-//       nChr - 65
-//     : nChr > 96 && nChr < 123 ?
-//       nChr - 71
-//     : nChr > 47 && nChr < 58 ?
-//       nChr + 4
-//     : nChr === 43 ?
-//       62
-//     : nChr === 47 ?
-//       63
-//     :
-//       0;
-// }
-
 function b64ToUint6(nChr: number) {
   return nChr > 64 && nChr < 91
     ? nChr - 65
@@ -65,19 +50,6 @@ export function fromB64(sBase64: string, nBlocksSize?: number): Uint8Array {
 
 /* Base64 string to array encoding */
 
-// function uint6ToB64(nUint6: number) {
-//   return nUint6 < 26
-//     ? nUint6 + 65
-//     : nUint6 < 52
-//         ? nUint6 + 71
-//         : nUint6 < 62
-//             ? nUint6 - 4
-//             : nUint6 === 62
-//                 ? 43
-//                 : nUint6 === 63
-//                     ? 47
-//                     : 65;
-// }
 function uint6ToB64(nUint6: number) {
   return nUint6 < 26
     ? nUint6 + 65
