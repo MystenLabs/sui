@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import Browser from 'webextension-polyfill';
 
 import { AppType } from './AppType';
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
@@ -35,7 +36,7 @@ export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
         dispatch(getTransactionsByAddress());
         dispatch(fetchAllOwnedObjects());
         // Set persistent network state
-        chrome.storage.local.set({ sui_Env: networkName });
+        Browser.storage.local.set({ sui_Env: networkName });
     }
 );
 
@@ -44,11 +45,10 @@ export const loadNetworkFromStorage = createAsyncThunk<
     void,
     AppThunkConfig
 >('loadNetworkFromStorage', async (_, { dispatch }) => {
-    chrome.storage.local.get(['sui_Env'], function (result) {
-        if (result.sui_Env) {
-            dispatch(changeRPCNetwork(result.sui_Env));
-        }
-    });
+    const result = await Browser.storage.local.get(['sui_Env']);
+    if (result.sui_Env) {
+        await dispatch(changeRPCNetwork(result.sui_Env));
+    }
 });
 
 const slice = createSlice({
