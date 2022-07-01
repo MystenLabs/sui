@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 const NODE_SYNC_QUEUE_LEN: usize = 500;
 
@@ -54,9 +54,9 @@ impl EffectsStakeMap {
     pub fn voters(&self, digest: &TransactionEffectsDigest) -> BTreeSet<AuthorityName> {
         self.effects_vote_map
             .get(digest)
-            .unwrap_or(HashMap::new())
+            .unwrap_or(&HashMap::new())
             .iter()
-            .map(|(a, s)| *a)
+            .map(|(a, _)| *a)
             .collect()
     }
 

@@ -1528,9 +1528,7 @@ where
         self.quorum_once_with_timeout(
             &[],
             Some(authorities),
-            |authority, client| {
-                Box::pin(async move { client.handle_checkpoint(request.clone()).await })
-            },
+            |_, client| Box::pin(async move { client.handle_checkpoint(request.clone()).await }),
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
         )
@@ -1547,7 +1545,7 @@ where
         self.quorum_once_with_timeout(
             &[],
             Some(authorities),
-            |authority, client| {
+            |_, client| {
                 Box::pin(async move {
                     let resp = client.handle_checkpoint(request.clone()).await?;
 
