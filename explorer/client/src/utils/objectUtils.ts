@@ -21,7 +21,6 @@ export function parseImageURL(data: any): string {
     // When url undefined return blank string:
     if (!url) return '';
 
-    //Strings representing IPFS values are valid:
     if (findIPFSvalue(url)) return url;
 
     //String respresenting true http/https URLs are valid:
