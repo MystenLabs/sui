@@ -19,7 +19,7 @@ use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
 use sui_json_rpc_api::keystore::{KeystoreType, SuiKeystore};
-use sui_json_rpc_api::QuorumDriverApiServer;
+use sui_json_rpc_api::RpcGatewayApiServer;
 use sui_json_rpc_api::RpcReadApiServer;
 use sui_json_rpc_api::RpcTransactionBuilderServer;
 use sui_json_rpc_api::WalletSyncApiServer;
