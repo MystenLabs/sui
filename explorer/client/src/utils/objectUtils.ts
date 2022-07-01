@@ -7,16 +7,28 @@ import {
     type ObjectOwner,
 } from '@mysten/sui.js';
 
+import { findIPFSvalue } from './stringUtils';
+
 import type { GetObjectDataResponse } from '@mysten/sui.js';
 
 export function parseImageURL(data: any): string {
-    return (
+    const url =
         data?.url ||
         // TODO: Remove Legacy format
         data?.display ||
-        data?.contents?.display ||
-        ''
-    );
+        data?.contents?.display;
+
+    if (!url) return '';
+
+    if (findIPFSvalue(url)) return url;
+
+    // String respresenting true http/https URLs are valid:
+    try {
+        new URL(url);
+        return url;
+    } catch {
+        return '';
+    }
 }
 
 export function parseObjectType(data: GetObjectDataResponse): string {
