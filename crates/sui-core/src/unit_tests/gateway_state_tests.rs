@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_package::BuildConfig;
 use serde_json::json;
 use std::{collections::HashSet, path::Path};
 
@@ -140,7 +141,8 @@ async fn test_publish() {
     let mut path = env!("CARGO_MANIFEST_DIR").to_owned();
     path.push_str("/src/unit_tests/data/object_owner/");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&path), false).unwrap();
+    let compiled_modules =
+        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
     let data = gateway
         .publish(
             addr1,
@@ -533,7 +535,8 @@ async fn test_get_owner_object() {
     path.push_str("/src/unit_tests/data/object_owner/");
 
     // Publish object_owner package
-    let compiled_modules = build_move_package_to_bytes(Path::new(&path), false).unwrap();
+    let compiled_modules =
+        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
     let data = gateway
         .publish(
             addr1,

@@ -4,6 +4,7 @@
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, time::Duration};
 
 use anyhow::anyhow;
+use move_package::BuildConfig;
 use serde_json::{json, Value};
 
 use sui::client_commands::SwitchResponse;
@@ -561,11 +562,12 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let gas_obj_id = object_refs.first().unwrap().object_id;
 
     // Provide path to well formed package sources
-    let mut path = TEST_DATA_DIR.to_owned();
-    path.push_str("dummy_modules_publish");
-
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_publish");
+    let build_config = BuildConfig::default();
     let resp = SuiClientCommands::Publish {
-        path,
+        package_path,
+        build_config,
         gas: Some(gas_obj_id),
         gas_budget: 1000,
     }

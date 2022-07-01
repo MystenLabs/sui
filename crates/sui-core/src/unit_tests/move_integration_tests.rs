@@ -508,7 +508,7 @@ pub async fn build_and_try_publish_test_package(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
     path.push(test_dir);
-    let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
 
     let all_module_bytes = modules
         .iter()

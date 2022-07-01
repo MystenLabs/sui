@@ -23,6 +23,8 @@ workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 test-fuzz = "3.0.2"
+move-package = { git = "https://github.com/move-language/move", rev = "ae62d5f1955a9b92c3ddd31d3cc4467f9aff76ae" }
+workspace-hack = { path = "../workspace-hack"}
 
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
