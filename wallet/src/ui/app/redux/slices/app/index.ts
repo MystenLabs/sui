@@ -43,7 +43,7 @@ export const loadNetworkFromStorage = createAsyncThunk<
     void,
     void,
     AppThunkConfig
->('loadNetworkFromStorage', async (_, { extra: { api }, dispatch }) => {
+>('loadNetworkFromStorage', async (_, { dispatch }) => {
     chrome.storage.local.get(['sui_Env'], function (result) {
         if (result.sui_Env) {
             dispatch(changeRPCNetwork(result.sui_Env));
