@@ -112,8 +112,8 @@
         "fileName": "build/move"
       },
       {
-        "label": "Create Sui Wallet",
-        "fileName": "build/wallet"
+        "label": "Use Sui CLI",
+        "fileName": "build/cli-client"
       },
       {
         "label": "Program with Objects",
