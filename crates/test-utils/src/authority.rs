@@ -67,11 +67,7 @@ pub fn test_authority_aggregator(
     config: &NetworkConfig,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
-    let voting_rights: BTreeMap<_, _> = validators_info
-        .iter()
-        .map(|config| (config.public_key(), config.stake()))
-        .collect();
-    let committee = Committee::new(0, voting_rights).unwrap();
+    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
