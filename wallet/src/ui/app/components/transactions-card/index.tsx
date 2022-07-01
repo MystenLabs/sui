@@ -28,7 +28,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                     {useMiddleEllipsis(txn.txId || '', 20)}
                 </ExplorerLink>
             </div>
-            <div>TxType: Call </div>
+            <div>TxType: {txn.kind} </div>
             <div>
                 {' '}
                 Gas : {txn.txGas} | Status:{' '}
