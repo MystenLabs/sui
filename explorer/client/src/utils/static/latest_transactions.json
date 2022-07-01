@@ -7,16 +7,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4="
-        },
-        {
-            "From": "senderAddress",
-            "To": "receiverAddress",
-            "kind": "Transfer",
-            "seq": 7787,
-            "status": "failure",
-            "txGas": 41,
-            "txId": "GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -25,7 +17,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "YHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -34,7 +27,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "YHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -43,7 +37,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZITP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -52,7 +47,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZITP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZJTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -61,16 +57,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZJTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
-        },
-        {
-            "From": "senderAddress",
-            "To": "receiverAddress",
-            "kind": "Transfer",
-            "seq": 7787,
-            "status": "success",
-            "txGas": 41,
-            "txId": "ZKTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZKTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
 
         {
@@ -80,7 +68,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZLTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZLTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -89,7 +78,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZMTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZMTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -98,7 +88,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZNTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZNTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -107,7 +98,8 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZOTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZOTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
         },
         {
             "From": "senderAddress",
@@ -116,7 +108,28 @@
             "seq": 7787,
             "status": "success",
             "txGas": 41,
-            "txId": "ZPTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8="
+            "txId": "ZPTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693989999
+        },
+        {
+            "From": "senderAddress",
+            "To": "receiverAddress",
+            "kind": "Transfer",
+            "seq": 7787,
+            "status": "failure",
+            "txGas": 41,
+            "txId": "GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=",
+            "timestamp_ms": 1735693927000
+        },
+        {
+            "From": "senderAddress",
+            "To": "receiverAddress",
+            "kind": "Transfer",
+            "seq": 7787,
+            "status": "success",
+            "txGas": 41,
+            "txId": "Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=",
+            "timestamp_ms": 1734220800000
         }
     ]
 }
