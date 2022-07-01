@@ -97,6 +97,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 ValidatorInfo {
                     public_key,
                     stake,
+                    delegation: 0, // no delegation yet at genesis
                     network_address,
                 }
             })
