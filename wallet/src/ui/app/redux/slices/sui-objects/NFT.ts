@@ -36,15 +36,13 @@ export class ExampleNFT {
     public static async TransferNFT(
         signer: RawSigner,
         nftId: string,
-        recipientID: string
+        recipientID: string,
+        transferCost: number
     ): Promise<TransactionResponse> {
-        return await signer.executeMoveCall({
-            packageObjectId: '0x2',
-            module: 'devnet_nft',
-            function: 'transfer',
-            typeArguments: [],
-            arguments: [nftId, recipientID],
-            gasBudget: 10000,
+        return await signer.transferObject({
+            objectId: nftId,
+            gasBudget: transferCost,
+            recipient: recipientID,
         });
     }
 }
