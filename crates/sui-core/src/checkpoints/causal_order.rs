@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
-    error::SuiResult,
+    error::{SuiError, SuiResult},
     messages::TransactionEffects,
 };
 use typed_store::Map;
@@ -49,13 +49,18 @@ pub trait EffectsStore {
 
         // Ensure all transactions included are executed (static property). This should be true since we should not
         // be signing a checkpoint unless we have processed all transactions within it.
-        debug_assert!(effects.iter().all(|e| e.is_some()));
+        if effects.iter().any(|e| e.is_none()) {
+            return Err(SuiError::from(
+                "Cannot causally order checkpoint with unexecuted transactions.",
+            ));
+        }
 
         // Include in the checkpoint the computed effects,  rather than the effects provided.
         // (Which could have been provided by < f+1 byz validators and be incorrect).
         let digests = effects
             .iter()
             .map(|e| {
+                // We have checked above all transactions have effects so unwrap is ok.
                 let e = &e.as_ref().unwrap();
                 ExecutionDigests::new(e.transaction_digest, e.digest())
             })
@@ -97,103 +102,74 @@ pub trait EffectsStore {
             })
             .collect();
 
-        // Set of starting transactions that depend only on previously
-        // checkpointed objects.
-        let initial_transactions: BTreeSet<_> = effect_map
-            .iter()
-            .filter_map(|(d, e)| {
-                // All dependencies must be in checkpoint.
-                if e.dependencies
-                    .iter()
-                    .all(|d| !tx_not_in_checkpoint.contains(d))
-                {
-                    Some(d)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
         // Build a forward index of transactions. This will allow us to start with the initial
         // and then sequenced trasnactions and efficiently determine which other transactions
         // become candidates for sequencing.
         let mut forward_index: BTreeMap<&TransactionDigest, Vec<&TransactionDigest>> =
             BTreeMap::new();
+
+        // Keep track of the in-degree to facilitate topological sort.
+        let mut in_degree: HashMap<&TransactionDigest, usize> = HashMap::new();
+        let mut to_visit: BTreeSet<_> = effect_map.keys().collect();
+
         for (d, effect) in &effect_map {
+            let entry = in_degree.entry(d).or_default();
+
             for dep in &effect.dependencies {
                 // We only record the dependencies not in a checkpoint, as the ones
                 // in a checkpoint are already satisfied presumably.
                 if tx_not_in_checkpoint.contains(dep) {
                     forward_index.entry(dep).or_default().push(d);
+
+                    // We record a dependency from within the tx not in a checkpoint
+                    *entry += 1;
                 }
+            }
+
+            // If it has a dependency it cannot be a starting item for the topological
+            // sort.
+            if *entry > 0 {
+                to_visit.remove(d);
             }
         }
 
-        // Define the master sequence, to contain the initial transactions
-        // by transaction digest order.
-        let mut master_sequence: Vec<&TransactionDigest> =
-            initial_transactions.iter().cloned().collect();
-        // A set mirroring the contents of the mater sequence for quick lookup
-        let mut master_set = initial_transactions.clone();
-        // The transactions that just became executed.
-        let mut candidates = initial_transactions;
+        // This implements the topological sort
+        // TODO: implement an order that allows for parallel execution,
+        //       ie orders first items that are indepedent.
 
-        // Trace forward the executed transactions, starting from the initial set, and adding more
-        // trasnactions as all their dependencies become executed. The candidates represent executed
-        // transactions that need to have subsequent transactions depending on them examined to
-        // determine if all their dependencies are executed. If so they are sequenced, and also added
-        // to the candidate set to be examiner once.
-        while !candidates.is_empty() {
-            // we continue while we can make progress
+        let mut final_sequence = Vec::new();
+        while let Some(&item) = to_visit.iter().next() {
+            // simulate pop_first
+            to_visit.remove(item);
+            final_sequence.push(item);
+            forward_index
+                .entry(item)
+                .or_default()
+                .iter()
+                .for_each(|&child| {
+                    if !effect_map.contains_key(child) {
+                        // The child is in the extra executed tx but not in the checkpoint.
+                        // so we skip it, as it must not be inlcuded in the sequennce.
+                        return;
+                    }
 
-            // Take a transaction
-            let next_transaction = *candidates.iter().next().unwrap();
-            candidates.remove(next_transaction);
-
-            // If nothing depends on this tx move on to the next
-            let forward_deps = forward_index.get(next_transaction);
-            if forward_deps.is_none() {
-                continue;
-            }
-
-            // Check all transactions that depend on it, to see if all
-            // dependencies are  satisfied.
-            for dep in forward_deps.unwrap() {
-                // If the forward dependency is not included in the current checkpoint, ignore.
-                if !effect_map.contains_key(*dep) {
-                    continue;
-                }
-
-                // We have already included this into the candidate set once.
-                if master_set.contains(dep) {
-                    continue;
-                }
-
-                if effect_map
-                    .get(*dep)
-                    .unwrap()
-                    .dependencies
-                    .iter()
-                    // All dependencies sequenced in the master seq or in previous checkpoint
-                    .filter(|item| tx_not_in_checkpoint.contains(*item))
-                    .all(|item| master_set.contains(item))
-                {
-                    // It seems like all dependencies are satisfied for dep, so sequence it.
-                    master_sequence.push(dep);
-                    master_set.insert(dep);
-                    candidates.insert(dep);
-                }
-            }
+                    if let Entry::Occupied(mut entry) = in_degree.entry(child) {
+                        *entry.get_mut() -= 1;
+                        if *entry.get() == 0 {
+                            to_visit.insert(child);
+                        }
+                    }
+                });
         }
 
-        // NOTE: not all transactions have to be seqeunced into the checkpoint. In particular if a
+        // NOTE: not all transactions have to be sequenced into the checkpoint. In particular if a
         // byzantine node includes some transaction into their proposal but not its previous dependencies
         // they may not be checkpointed. That is ok, since we promise finality only if >2/3 honest
         // eventually include a transactions in a proposal, which means that at leats 1 honest will
         // include it in a proposal and honest nodes include full causal sequences in proposals.
 
         // Map transaction digest back to correct execution digest.
-        Ok(master_sequence
+        Ok(final_sequence
             .iter()
             .map(|d| **digest_map.get(*d).unwrap())
             .collect())
@@ -365,9 +341,9 @@ mod tests {
         // TEST 2
         // The two transactions are recorded as new so they are re-ordered and sequenced
         let x = effect_map.causal_order_from_effects(&input[..2], &mut cps);
-        assert!(x.clone().unwrap().len() == 2);
+        assert_eq!(x.clone().unwrap().len(), 2);
         // Its in the correct order
-        assert!(x.unwrap() == vec![input[1], input[0]]);
+        assert_eq!(x.unwrap(), vec![input[1], input[0]]);
 
         // TEST3
         // Skip t2. and order [t3, t1]
