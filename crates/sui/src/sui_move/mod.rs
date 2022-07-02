@@ -7,6 +7,7 @@ use move_unit_test::UnitTestingConfig;
 use std::path::PathBuf;
 
 pub mod build;
+pub mod new;
 pub mod unit_test;
 
 pub fn execute_move_command(
@@ -57,7 +58,7 @@ pub fn execute_move_command(
 
             Ok(())
         }
-        PackageCommand::New { .. } => unimplemented!("'new' command not yet supported"),
+        PackageCommand::New { name } => new::execute(&package_path, &name),
         PackageCommand::Info => unimplemented!("'info' command not yet supported"),
         PackageCommand::ErrMapGen { .. } => unimplemented!("'errmap' command not yet supported"),
         PackageCommand::Prove { .. } => unimplemented!("'prove' command not yet supported"),
