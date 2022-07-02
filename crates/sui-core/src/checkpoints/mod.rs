@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod causal_order_effects;
 pub mod proposal;
 pub mod reconstruction;
 
