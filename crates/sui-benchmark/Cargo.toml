@@ -30,7 +30,7 @@ sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 
-move-core-types = { git = "https://github.com/awelc/move", rev = "8a5950f256b6d558b4dee1844a561e8ddd146432", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "95999a9818091e382fb1c6016e68829f1dfc3127", features = ["address20"] }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "node" }
 
 workspace-hack = { path = "../workspace-hack"}
