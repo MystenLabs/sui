@@ -5,7 +5,10 @@
 use config::WorkerId;
 use primary::WorkerPrimaryMessage;
 use store::Store;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    task::JoinHandle,
+};
 use tracing::error;
 use types::{serialized_batch_digest, BatchDigest, SerializedBatchMessage};
 
@@ -28,7 +31,7 @@ impl Processor {
         tx_digest: Sender<WorkerPrimaryMessage>,
         // Whether we are processing our own batches or the batches of other nodes.
         own_digest: bool,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             while let Some(batch) = rx_batch.recv().await {
                 // Hash the batch.
@@ -54,6 +57,6 @@ impl Processor {
                     }
                 }
             }
-        });
+        })
     }
 }

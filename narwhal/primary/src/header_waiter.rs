@@ -24,6 +24,7 @@ use tokio::{
         mpsc::{channel, Receiver, Sender},
         watch,
     },
+    task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error};
@@ -100,7 +101,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
         rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
         tx_core: Sender<Header<PublicKey>>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 name,
@@ -122,7 +123,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     /// Update the committee and cleanup internal state.

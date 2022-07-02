@@ -16,9 +16,12 @@ use std::{
     },
 };
 use store::Store;
-use tokio::sync::{
-    mpsc::{channel, Receiver, Sender},
-    watch,
+use tokio::{
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
+    task::JoinHandle,
 };
 use tracing::error;
 use types::{
@@ -58,7 +61,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
         rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_synchronizer: Receiver<Certificate<PublicKey>>,
         tx_core: Sender<Certificate<PublicKey>>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 committee,
@@ -72,7 +75,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     /// Helper function. It waits for particular data to become available in the storage and then

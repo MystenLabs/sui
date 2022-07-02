@@ -10,6 +10,7 @@ use tokio::{
         mpsc::{Receiver, Sender},
         watch,
     },
+    task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::debug;
@@ -71,7 +72,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
-    ) {
+    ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
         tokio::spawn(async move {
             Self {
@@ -93,7 +94,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     async fn make_header(&mut self) -> DagResult<()> {

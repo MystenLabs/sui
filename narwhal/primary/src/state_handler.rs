@@ -9,7 +9,10 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
-use tokio::sync::{mpsc::Receiver, watch};
+use tokio::{
+    sync::{mpsc::Receiver, watch},
+    task::JoinHandle,
+};
 use types::{Certificate, Round};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
@@ -37,7 +40,7 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
         consensus_round: Arc<AtomicU64>,
         rx_consensus: Receiver<ConsensusPrimaryMessage<PublicKey>>,
         tx_reconfigure: watch::Sender<Reconfigure<PublicKey>>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 name,
@@ -50,7 +53,7 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     async fn handle_sequenced(&mut self, certificate: Certificate<PublicKey>) {

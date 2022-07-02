@@ -29,6 +29,7 @@ use tokio::{
         mpsc::{channel, Receiver, Sender},
         watch,
     },
+    task::JoinHandle,
     time::{sleep, timeout},
 };
 use tracing::{debug, error, instrument, trace, warn};
@@ -206,7 +207,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         parameters: BlockSynchronizerParameters,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 name,
@@ -228,7 +229,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     pub async fn run(&mut self) {

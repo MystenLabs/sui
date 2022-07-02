@@ -115,7 +115,7 @@ impl Primary {
         network_model: NetworkModel,
         tx_committed_certificates: Sender<ConsensusPrimaryMessage<PublicKey>>,
         registry: &Registry,
-    ) -> JoinHandle<()> {
+    ) -> Vec<JoinHandle<()>> {
         let initial_committee = Reconfigure::NewCommittee((&*committee).clone());
         let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
 
@@ -208,7 +208,7 @@ impl Primary {
         let signature_service = SignatureService::new(signer);
 
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
-        let primary_handle = Core::spawn(
+        let core_handle = Core::spawn(
             name.clone(),
             (&*committee).clone(),
             header_store.clone(),
@@ -228,7 +228,7 @@ impl Primary {
         );
 
         // Receives batch digests from other workers. They are only used to validate headers.
-        PayloadReceiver::spawn(
+        let payload_receiver_handle = PayloadReceiver::spawn(
             payload_store.clone(),
             /* rx_workers */ rx_others_digests,
         );
@@ -244,7 +244,7 @@ impl Primary {
 
         // Retrieves a block's data by contacting the worker nodes that contain the
         // underlying batches and their transactions.
-        BlockWaiter::spawn(
+        let block_waiter_handle = BlockWaiter::spawn(
             name.clone(),
             (&*committee).clone(),
             tx_reconfigure.subscribe(),
@@ -257,7 +257,7 @@ impl Primary {
         let internal_consensus = dag.is_none();
 
         // Orchestrates the removal of blocks across the primary and worker nodes.
-        BlockRemover::spawn(
+        let block_remover_handle = BlockRemover::spawn(
             name.clone(),
             (&*committee).clone(),
             certificate_store.clone(),
@@ -273,7 +273,7 @@ impl Primary {
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
-        BlockSynchronizer::spawn(
+        let block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
             (&*committee).clone(),
             tx_reconfigure.subscribe(),
@@ -289,7 +289,7 @@ impl Primary {
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
         // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
-        HeaderWaiter::spawn(
+        let header_waiter_handle = HeaderWaiter::spawn(
             name.clone(),
             (&*committee).clone(),
             certificate_store.clone(),
@@ -305,7 +305,7 @@ impl Primary {
 
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
-        CertificateWaiter::spawn(
+        let certificate_waiter_handle = CertificateWaiter::spawn(
             (&*committee).clone(),
             certificate_store.clone(),
             consensus_round.clone(),
@@ -317,7 +317,7 @@ impl Primary {
 
         // When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
         // digests from our workers and sends it back to the `Core`.
-        Proposer::spawn(
+        let proposer_handle = Proposer::spawn(
             name.clone(),
             (&*committee).clone(),
             signature_service,
@@ -332,7 +332,7 @@ impl Primary {
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests
         // from other primaries.
-        Helper::spawn(
+        let helper_handle = Helper::spawn(
             name.clone(),
             (&*committee).clone(),
             certificate_store,
@@ -357,7 +357,7 @@ impl Primary {
         }
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
-        StateHandler::spawn(
+        let state_handler_handle = StateHandler::spawn(
             name.clone(),
             committee.clone(),
             consensus_round,
@@ -375,7 +375,18 @@ impl Primary {
                 .primary_to_primary
         );
 
-        primary_handle
+        vec![
+            core_handle,
+            payload_receiver_handle,
+            block_synchronizer_handle,
+            block_waiter_handle,
+            block_remover_handle,
+            header_waiter_handle,
+            certificate_waiter_handle,
+            proposer_handle,
+            helper_handle,
+            state_handler_handle,
+        ]
     }
 }
 

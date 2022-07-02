@@ -113,7 +113,7 @@ impl Node {
         tx_confirmation: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
-    ) -> SubscriberResult<JoinHandle<()>>
+    ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
         Keys: KeyPair<PubKey = PublicKey> + Signer<PublicKey::Sig> + Send + 'static,
@@ -145,7 +145,7 @@ impl Node {
         };
 
         // Spawn the primary.
-        let primary_handle = Primary::spawn(
+        let primary_handles = Primary::spawn(
             name.clone(),
             keypair,
             committee.clone(),
@@ -161,7 +161,7 @@ impl Node {
             registry,
         );
 
-        Ok(primary_handle)
+        Ok(primary_handles)
     }
 
     /// Spawn the consensus core and the client executing transactions.
@@ -243,13 +243,14 @@ impl Node {
         let mut handles = Vec::new();
 
         for id in ids {
-            handles.push(Worker::spawn(
+            let worker_handles = Worker::spawn(
                 name.clone(),
                 id,
                 committee.clone(),
                 parameters.clone(),
                 store.batch_store.clone(),
-            ));
+            );
+            handles.extend(worker_handles);
         }
         handles
     }

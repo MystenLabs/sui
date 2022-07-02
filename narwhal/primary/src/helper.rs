@@ -10,7 +10,10 @@ use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use network::PrimaryNetwork;
 use store::{Store, StoreError};
 use thiserror::Error;
-use tokio::sync::{mpsc::Receiver, watch};
+use tokio::{
+    sync::{mpsc::Receiver, watch},
+    task::JoinHandle,
+};
 use tracing::{error, instrument};
 use types::{BatchDigest, Certificate, CertificateDigest, ShutdownToken};
 
@@ -57,7 +60,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_committee: watch::Receiver<Reconfigure<PublicKey>>,
         rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let shutdown_token = Self {
                 name,
@@ -71,7 +74,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
             .run()
             .await;
             drop(shutdown_token);
-        });
+        })
     }
 
     async fn run(&mut self) -> ShutdownToken {

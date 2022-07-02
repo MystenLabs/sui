@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{quorum_waiter::QuorumWaiterMessage, worker::WorkerMessage};
 use crypto::traits::VerifyingKey;
-
 use multiaddr::Multiaddr;
 use network::WorkerNetwork;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto as _;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
+    task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 #[cfg(feature = "benchmark")]
@@ -49,7 +49,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         rx_transaction: Receiver<Transaction>,
         tx_message: Sender<QuorumWaiterMessage<PublicKey>>,
         workers_addresses: Vec<(PublicKey, Multiaddr)>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 batch_size,
@@ -63,7 +63,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     /// Main loop receiving incoming transactions and creating batches.

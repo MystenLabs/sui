@@ -153,7 +153,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
         ("primary", Some(sub_matches)) => {
             registry = primary_metrics_registry(keypair.public().clone());
 
-            let handle = Node::spawn_primary(
+            Node::spawn_primary(
                 keypair,
                 committee,
                 &store,
@@ -163,8 +163,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 tx_transaction_confirmation,
                 &registry,
             )
-            .await?;
-            vec![handle]
+            .await?
         }
 
         // Spawn a single worker.

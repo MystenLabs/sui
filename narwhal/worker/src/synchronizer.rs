@@ -13,6 +13,7 @@ use std::{
 use store::{Store, StoreError};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
+    task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error};
@@ -67,7 +68,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         sync_retry_nodes: usize,
         rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
         tx_primary: Sender<WorkerPrimaryMessage>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 name,
@@ -85,7 +86,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     /// Helper function. It waits for a batch to become available in the storage

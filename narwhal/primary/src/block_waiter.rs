@@ -18,6 +18,7 @@ use std::{
 };
 use tokio::{
     sync::{mpsc::Receiver, oneshot, watch},
+    task::JoinHandle,
     time::timeout,
 };
 use tracing::{debug, error, instrument, warn};
@@ -257,7 +258,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let shutdown_token = Self {
                 name,
@@ -275,7 +276,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             .run()
             .await;
             drop(shutdown_token);
-        });
+        })
     }
 
     async fn run(&mut self) -> ShutdownToken {

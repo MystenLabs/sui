@@ -6,7 +6,10 @@ use config::{SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use network::WorkerNetwork;
 use store::Store;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    task::JoinHandle,
+};
 use tracing::{error, trace, warn};
 use types::{BatchDigest, SerializedBatchMessage};
 
@@ -37,7 +40,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
         rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 id,
@@ -49,7 +52,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     async fn run(&mut self) {

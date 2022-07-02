@@ -57,7 +57,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         committee: SharedCommittee<PublicKey>,
         parameters: Parameters,
         store: Store<BatchDigest, SerializedBatchMessage>,
-    ) -> JoinHandle<()> {
+    ) -> Vec<JoinHandle<()>> {
         // Define a worker instance.
         let worker = Self {
             name,
@@ -69,9 +69,9 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
 
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
-        worker.handle_primary_messages(tx_primary.clone());
-        worker.handle_clients_transactions(tx_primary.clone());
-        worker.handle_workers_messages(tx_primary);
+        let primary_flow_handles = worker.handle_primary_messages(tx_primary.clone());
+        let client_flow_handles = worker.handle_clients_transactions(tx_primary.clone());
+        let worker_flow_handles = worker.handle_workers_messages(tx_primary);
 
         // The `PrimaryConnector` allows the worker to send messages to its primary.
         let handle = PrimaryConnector::spawn(
@@ -94,11 +94,18 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
                 .transactions
         );
 
-        handle
+        let mut handles = vec![handle];
+        handles.extend(primary_flow_handles);
+        handles.extend(client_flow_handles);
+        handles.extend(worker_flow_handles);
+        handles
     }
 
     /// Spawn all tasks responsible to handle messages from our primary.
-    fn handle_primary_messages(&self, tx_primary: Sender<WorkerPrimaryMessage>) {
+    fn handle_primary_messages(
+        &self,
+        tx_primary: Sender<WorkerPrimaryMessage>,
+    ) -> Vec<JoinHandle<()>> {
         let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
 
         // Receive incoming messages from our primary.
@@ -114,7 +121,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
 
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
-        Synchronizer::spawn(
+        let handle = Synchronizer::spawn(
             self.name.clone(),
             self.id,
             self.committee.clone(),
@@ -130,10 +137,15 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             "Worker {} listening to primary messages on {}",
             self.id, address
         );
+
+        vec![handle]
     }
 
     /// Spawn all tasks responsible to handle clients transactions.
-    fn handle_clients_transactions(&self, tx_primary: Sender<WorkerPrimaryMessage>) {
+    fn handle_clients_transactions(
+        &self,
+        tx_primary: Sender<WorkerPrimaryMessage>,
+    ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
         let (tx_quorum_waiter, rx_quorum_waiter) = channel(CHANNEL_CAPACITY);
         let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
@@ -152,7 +164,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
-        BatchMaker::spawn(
+        let batch_maker_handle = BatchMaker::spawn(
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
             /* rx_transaction */ rx_batch_maker,
@@ -167,7 +179,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
         // the batch to the `Processor`.
-        QuorumWaiter::spawn(
+        let quorum_waiter_handle = QuorumWaiter::spawn(
             self.committee.clone(),
             /* stake */ self.committee.stake(&self.name),
             /* rx_message */ rx_quorum_waiter,
@@ -176,7 +188,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
 
         // The `Processor` hashes and stores the batch. It then forwards the batch's digest to the `PrimaryConnector`
         // that will send it to our primary machine.
-        Processor::spawn(
+        let processor_handle = Processor::spawn(
             self.id,
             self.store.clone(),
             /* rx_batch */ rx_processor,
@@ -188,10 +200,15 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             "Worker {} listening to client transactions on {}",
             self.id, address
         );
+
+        vec![batch_maker_handle, quorum_waiter_handle, processor_handle]
     }
 
     /// Spawn all tasks responsible to handle messages from other workers.
-    fn handle_workers_messages(&self, tx_primary: Sender<WorkerPrimaryMessage>) {
+    fn handle_workers_messages(
+        &self,
+        tx_primary: Sender<WorkerPrimaryMessage>,
+    ) -> Vec<JoinHandle<()>> {
         let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
         let (tx_client_helper, rx_client_helper) = channel(CHANNEL_CAPACITY);
         let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
@@ -213,7 +230,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         .spawn(address.clone(), self.parameters.max_concurrent_requests);
 
         // The `Helper` is dedicated to reply to batch requests from other workers.
-        Helper::spawn(
+        let helper_handle = Helper::spawn(
             self.id,
             self.committee.clone(),
             self.store.clone(),
@@ -223,7 +240,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
 
         // This `Processor` hashes and stores the batches we receive from the other workers. It then forwards the
         // batch's digest to the `PrimaryConnector` that will send it to our primary.
-        Processor::spawn(
+        let processor_handle = Processor::spawn(
             self.id,
             self.store.clone(),
             /* rx_batch */ rx_processor,
@@ -235,6 +252,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             "Worker {} listening to worker messages on {}",
             self.id, address
         );
+
+        vec![helper_handle, processor_handle]
     }
 }
 

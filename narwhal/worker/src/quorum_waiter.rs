@@ -5,7 +5,10 @@ use config::{SharedCommittee, Stake};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::CancelHandler;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    task::JoinHandle,
+};
 use types::SerializedBatchMessage;
 
 #[cfg(test)]
@@ -39,7 +42,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
         stake: Stake,
         rx_message: Receiver<QuorumWaiterMessage<PublicKey>>,
         tx_batch: Sender<Vec<u8>>,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 committee,
@@ -49,7 +52,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
             }
             .run()
             .await;
-        });
+        })
     }
 
     /// Helper function. It waits for a future to complete and then delivers a value.
