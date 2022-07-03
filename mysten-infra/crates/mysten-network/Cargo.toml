@@ -6,17 +6,17 @@ edition = "2021"
 publish = false
 
 [dependencies]
-anyhow = "1.0.56"
+anyhow = "1.0.58"
 bincode = "1.3.3"
 bytes = "1.1.0"
 multiaddr = "0.14.0"
 futures = "0.3.21"
-serde = { version = "1.0.137", features = ["derive"] }
-tokio = { version = "1.17.0", features = ["sync", "rt", "macros"] }
-tokio-stream = { version = "0.1", features = ["net"] }
+serde = { version = "1.0.138", features = ["derive"] }
+tokio = { version = "1.19.2", features = ["sync", "rt", "macros"] }
+tokio-stream = { version = "0.1.9", features = ["net"] }
 tonic = { version = "0.7.2", features = ["transport"] }
 tonic-health = "0.6.0"
-tower = { version = "0.4.12", features = ["full"] }
-tower-http = { version = "0.3.3", features = ["trace", "set-header", "propagate-header"] }
-tracing = "0.1.34"
+tower = { version = "0.4.13", features = ["full"] }
+tower-http = { version = "0.3.4", features = ["trace", "set-header", "propagate-header"] }
+tracing = "0.1.35"
 once_cell = "1.12.0"
