@@ -300,7 +300,7 @@ where
         let key_buf = be_fix_int_ser(key)?;
         let value_buf = bincode::serialize(value)?;
 
-        let _ = self.rocksdb.put_cf(&self.cf(), &key_buf, &value_buf)?;
+        self.rocksdb.put_cf(&self.cf(), &key_buf, &value_buf)?;
         Ok(())
     }
 
@@ -308,7 +308,7 @@ where
     fn remove(&self, key: &K) -> Result<(), TypedStoreError> {
         let key_buf = be_fix_int_ser(key)?;
 
-        let _ = self.rocksdb.delete_cf(&self.cf(), &key_buf)?;
+        self.rocksdb.delete_cf(&self.cf(), &key_buf)?;
         Ok(())
     }
 
@@ -397,7 +397,7 @@ where
     }
 }
 
-impl<'a, J, K, U, V> TryExtend<(J, U)> for DBMap<K, V>
+impl<J, K, U, V> TryExtend<(J, U)> for DBMap<K, V>
 where
     J: Borrow<K>,
     U: Borrow<V>,

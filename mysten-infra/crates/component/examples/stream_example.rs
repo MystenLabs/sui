@@ -79,7 +79,7 @@ impl MockTcpStreamComponent {
 
         loop {
             let mut buf = [0; 10];
-            let _len = match m_tcp.mock_read(&mut buf) {
+            match m_tcp.mock_read(&mut buf) {
                 Ok(_) => {} // process
                 Err(_) => {
                     let e = anyhow!("missing something required");
@@ -144,7 +144,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let supervisor = Supervisor::new(stream_component);
 
     // Spawn the supervisor to start the component and supervision.
-    let _ = match supervisor.spawn().await {
+    match supervisor.spawn().await {
         Ok(_) => {}
         Err(e) => println!("Got this error {:?}", e),
     };

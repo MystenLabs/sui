@@ -219,7 +219,7 @@ impl ClientCertVerifier for Psk {
     }
 }
 
-impl<'a> ServerCertVerifier for Psk {
+impl ServerCertVerifier for Psk {
     // Verifies this is a valid certificate self-signed by the public key we expect(in PSK)
     // 1. we check the equality of the certificate's public key with the key we expect
     // 2. we prepare arguments for webpki's certificate verification (following the rustls implementation)
