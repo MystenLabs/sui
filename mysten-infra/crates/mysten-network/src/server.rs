@@ -83,11 +83,10 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             builder = builder.tcp_nodelay(tcp_nodelay);
         }
 
-        let load_shed = if config.load_shed.unwrap_or_default() {
-            Some(tower::load_shed::LoadShedLayer::new())
-        } else {
-            None
-        };
+        let load_shed = config
+            .load_shed
+            .unwrap_or_default()
+            .then_some(tower::load_shed::LoadShedLayer::new());
 
         let metrics = MetricsHandler::new(metrics_provider);
 

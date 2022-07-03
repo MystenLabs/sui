@@ -151,11 +151,7 @@ impl TelemetryConfig {
 
         // tokio-console layer
         #[cfg(feature = "tokio-console")]
-        let tokio_console = if config.tokio_console {
-            Some(console_subscriber::spawn())
-        } else {
-            None
-        };
+        let tokio_console = config.tokio_console.then_some(console_subscriber::spawn());
 
         #[cfg(feature = "tokio-console")]
         let registry = registry.with(tokio_console);
@@ -204,11 +200,7 @@ impl TelemetryConfig {
         let registry = registry.with(jaeger_layer);
 
         // Setup formatter and optional storage layer
-        let json_storage_layer = if config.json_log_output {
-            Some(JsonStorageLayer)
-        } else {
-            None
-        };
+        let json_storage_layer = config.json_log_output.then_some(JsonStorageLayer);
 
         let registry = registry.with(json_storage_layer);
 
