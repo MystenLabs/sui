@@ -62,8 +62,10 @@ jobs:
         run: |
           cargo nextest run --all-features --profile ci
       - name: Doctests
+      # all-features activates tokio-console, which rustdoc requires tokio_unstable, see
+      # https://github.com/tokio-rs/console/tree/main/console-subscriber#enabling-tokio-instrumentation
         run: |
-          cargo test --doc --all-features
+          cargo test --doc
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
 
