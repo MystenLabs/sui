@@ -110,7 +110,6 @@ impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
     }
 
     // helper method to set directly values to the payload
-    #[allow(dead_code)]
     pub fn with_payload_batch(mut self, batch: Batch, worker_id: WorkerId) -> Self {
         if self.payload.is_none() {
             self.payload = Some(BTreeMap::new());
