@@ -3,7 +3,7 @@
 
 import nacl from 'tweetnacl';
 import bip39 from 'bip39-light';
-import { derivePath } from "ed25519-hd-key";
+import { derivePath } from 'ed25519-hd-key';
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { PublicKey } from './publickey';
@@ -87,14 +87,18 @@ export class Ed25519Keypair implements Keypair {
    * @param path path string (`m/44'/784'/0'/0'/0'`)
    */
   static isValidPath = (path: string): boolean => {
-    if (!new RegExp("^m\\/44+'\\/784+'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(path)) {
-        return false;
+    if (
+      !new RegExp("^m\\/44+'\\/784+'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(
+        path
+      )
+    ) {
+      return false;
     }
     return !path
-        .split('/')
-        .slice(1)
-        .map((val: string): string => val.replace("'", ''))
-        .some(isNaN as any);
+      .split('/')
+      .slice(1)
+      .map((val: string): string => val.replace("'", ''))
+      .some(isNaN as any);
   };
 
   /**
@@ -109,10 +113,10 @@ export class Ed25519Keypair implements Keypair {
     }
 
     const normalizeMnemonics = mnemonics
-        .trim()
-        .split(/\s+/)
-        .map((part) => part.toLowerCase())
-        .join(' ');
+      .trim()
+      .split(/\s+/)
+      .map(part => part.toLowerCase())
+      .join(' ');
 
     const seed = bip39.mnemonicToSeed(normalizeMnemonics);
     const { key } = derivePath(path, seed.toString('hex'));

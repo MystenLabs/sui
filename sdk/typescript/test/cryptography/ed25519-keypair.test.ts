@@ -50,7 +50,10 @@ describe('ed25519-keypair', () => {
   });
 
   it('generate keypair from from Derive Path', () => {
-    const keypair = Ed25519Keypair.fromDerivePath(`m/44'/784'/0'/0'/0'`, 'shoot island position soft burden budget tooth cruel issue economy destroy above');
+    const keypair = Ed25519Keypair.fromDerivePath(
+      `m/44'/784'/0'/0'/0'`,
+      'shoot island position soft burden budget tooth cruel issue economy destroy above'
+    );
     expect(keypair.getPublicKey().toBase64()).toEqual(
       'MxHmoZrcHAalCeW/Rk6dTsxzA58xGslAuxGJb4L7ZTM='
     );
