@@ -188,11 +188,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         for object_id in object_ids {
             test_adapter.enumerate_fake(object_id);
         }
-        let output = if output.is_empty() {
-            None
-        } else {
-            Some(output)
-        };
+        let output = (!output.is_empty()).then_some(output);
         (test_adapter, output)
     }
 
@@ -221,11 +217,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .iter()
             .find_map(|id| {
                 let package = self.storage.get_object(id).unwrap().data.try_as_package()?;
-                if package.serialized_module_map().get(&module_name).is_some() {
-                    Some(*id)
-                } else {
-                    None
-                }
+                package
+                    .serialized_module_map()
+                    .get(&module_name)
+                    .map(|_v| *id)
             })
             .unwrap();
         let package_addr = NumericalAddress::new(created_package.into_bytes(), NumberFormat::Hex);
@@ -615,11 +610,7 @@ impl<'a> SuiTestAdapter<'a> {
             write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
         }
 
-        if out.is_empty() {
-            None
-        } else {
-            Some(out)
-        }
+        (!out.is_empty()).then_some(out)
     }
 
     fn list_events(&self, events: &[Event]) -> String {

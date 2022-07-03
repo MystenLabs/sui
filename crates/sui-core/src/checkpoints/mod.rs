@@ -347,16 +347,14 @@ impl CheckpointStore {
         // If a checkpoint is found, and if requested, return the list of transaction digest in it.
         let detail = if let &AuthenticatedCheckpoint::None = &checkpoint {
             None
-        } else if detail {
-            Some(CheckpointContents::new(
+        } else {
+            detail.then_some(CheckpointContents::new(
                 self.checkpoint_contents
                     .iter()
                     .skip_to(&(seq, 0))?
                     .take_while(|((k, _), _)| *k == seq)
                     .map(|(_, digest)| digest),
             ))
-        } else {
-            None
         };
 
         Ok(CheckpointResponse {
@@ -382,15 +380,7 @@ impl CheckpointStore {
             .multi_get(candidate_contents.transactions.iter())?
             .into_iter()
             .zip(candidate_contents.transactions.iter())
-            .filter_map(
-                |(opt_seq, tx)| {
-                    if opt_seq.is_none() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            );
+            .filter_map(|(opt_seq, tx)| opt_seq.is_none().then_some(tx));
 
         // Make sure that all transactions in the checkpoint have been executed locally.
         self.check_checkpoint_transactions(new_transactions.clone(), &effects_store)?;
@@ -440,11 +430,8 @@ impl CheckpointStore {
                 &self.fragments,
                 self.fragments.iter().filter_map(|(k, v)| {
                     // Delete all keys for checkpoints smaller than what we are committing now.
-                    if *v.proposer.summary.sequence_number() <= checkpoint_sequence_number {
-                        Some(k)
-                    } else {
-                        None
-                    }
+                    (*v.proposer.summary.sequence_number() <= checkpoint_sequence_number)
+                        .then_some(k)
                 }),
             )?
             .delete_batch(&self.local_fragments, self.local_fragments.keys())?;
@@ -872,13 +859,7 @@ impl CheckpointStore {
         let tx_to_execute = extra_tx
             .iter()
             .zip(transactions)
-            .filter_map(|(opt_seq, digest)| {
-                if opt_seq.is_none() {
-                    Some(*digest)
-                } else {
-                    None
-                }
-            });
+            .filter_map(|(opt_seq, digest)| opt_seq.is_none().then_some(*digest));
 
         let pending_tx: Vec<_> = tx_to_execute
             .map(|digest| (digest.transaction, None))
@@ -936,7 +917,7 @@ impl CheckpointStore {
             transactions_with_seq
                 .iter()
                 .zip(transactions.iter())
-                .filter_map(|(opt, tx)| if opt.is_some() { Some(tx) } else { None }),
+                .filter_map(|(opt, tx)| opt.map(|_v| tx)),
         )?;
 
         // Now write the checkpoint data to the database
@@ -994,15 +975,7 @@ impl CheckpointStore {
         let already_in_checkpoint_tx = transactions
             .iter()
             .zip(&in_checkpoint)
-            .filter_map(
-                |((_seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            )
+            .filter_map(|((_seq, tx), in_chk)| in_chk.map(|_v| tx))
             .count();
 
         if already_in_checkpoint_tx != 0 {
@@ -1018,13 +991,7 @@ impl CheckpointStore {
             transactions
                 .iter()
                 .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some((tx, (in_chk.unwrap().0, *seq)))
-                    } else {
-                        None
-                    }
-                }),
+                .filter_map(|((seq, tx), in_chk)| in_chk.map(|_v| (tx, (in_chk.unwrap().0, *seq)))),
         )?;
 
         // Update the checkpoint local sequence number
@@ -1033,13 +1000,7 @@ impl CheckpointStore {
             transactions
                 .iter()
                 .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(((in_chk.unwrap().0, *seq), tx))
-                    } else {
-                        None
-                    }
-                }),
+                .filter_map(|((seq, tx), in_chk)| in_chk.map(|_v| ((in_chk.unwrap().0, *seq), tx))),
         )?;
 
         // If the transactions processed did not belong to a checkpoint yet, we add them to the list
@@ -1049,13 +1010,7 @@ impl CheckpointStore {
             transactions
                 .iter()
                 .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_none() {
-                        Some((tx, seq))
-                    } else {
-                        None
-                    }
-                }),
+                .filter_map(|((seq, tx), in_chk)| in_chk.is_none().then_some((tx, seq))),
         )?;
 
         // Write to the database.

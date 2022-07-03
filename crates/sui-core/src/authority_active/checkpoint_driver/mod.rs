@@ -446,13 +446,7 @@ where
             let available_authorities: BTreeSet<_> = checkpoint
                 .signatory_authorities(committee)
                 .filter_map(|x| match x {
-                    Ok(&a) => {
-                        if a != self_name {
-                            Some(Ok(a))
-                        } else {
-                            None
-                        }
-                    }
+                    Ok(&a) => (a != self_name).then_some(Ok(a)),
                     Err(e) => Some(Err(e)),
                 })
                 .collect::<SuiResult<_>>()?;

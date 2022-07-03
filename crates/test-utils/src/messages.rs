@@ -68,15 +68,13 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
         genesis_objects
             .iter()
-            .find_map(|o| match o.data.try_as_package() {
-                Some(p) => {
-                    if p.serialized_module_map().keys().any(|name| name == module) {
-                        Some(o.compute_object_reference())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+            .find_map(|o| {
+                o.data.try_as_package().and_then(|p| {
+                    p.serialized_module_map()
+                        .keys()
+                        .any(|name| name == module)
+                        .then_some(o.compute_object_reference())
+                })
             })
             .unwrap()
     }

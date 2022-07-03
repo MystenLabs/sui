@@ -75,19 +75,16 @@ impl SuiNode {
                 committee.epoch,
                 config.public_key(),
                 secret.clone(),
-            )?)))
-        } else {
-            None
-        };
+            )?)));
 
-        let index_store = if config.consensus_config().is_some() {
-            None
-        } else {
-            Some(Arc::new(IndexStore::open(
-                config.db_path().join("indexes"),
-                None,
-            )))
-        };
+        let index_store =
+            config
+                .consensus_config()
+                .is_none()
+                .then_some(Arc::new(IndexStore::open(
+                    config.db_path().join("indexes"),
+                    None,
+                )));
 
         let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
 

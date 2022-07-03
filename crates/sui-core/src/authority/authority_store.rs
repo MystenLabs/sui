@@ -920,11 +920,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object))| {
-                    if new_object.is_owned_or_quasi_shared() {
-                        Some(*object_ref)
-                    } else {
-                        None
-                    }
+                    new_object.is_owned_or_quasi_shared().then_some(*object_ref)
                 })
                 .collect();
 
@@ -1058,13 +1054,9 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             // Make the max possible entry for this object ID.
             .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
 
-        Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
-            if obj_ref.0 == object_id {
-                Some((obj_ref, tx_digest))
-            } else {
-                None
-            }
-        }))
+        Ok(iterator
+            .next()
+            .filter(|(obj_ref, _tx_digest)| (obj_ref.0 == object_id)))
     }
 
     /// Remove the shared objects locks.

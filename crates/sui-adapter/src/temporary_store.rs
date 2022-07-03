@@ -224,22 +224,22 @@ impl<S> TemporaryStore<S> {
                 .deleted
                 .iter()
                 .filter_map(|(id, (version, kind))| {
-                    if kind != &DeleteKind::Wrap {
-                        Some((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
-                    } else {
-                        None
-                    }
+                    (kind != &DeleteKind::Wrap).then_some((
+                        *id,
+                        *version,
+                        ObjectDigest::OBJECT_DIGEST_DELETED,
+                    ))
                 })
                 .collect(),
             wrapped: self
                 .deleted
                 .iter()
                 .filter_map(|(id, (version, kind))| {
-                    if kind == &DeleteKind::Wrap {
-                        Some((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
-                    } else {
-                        None
-                    }
+                    (kind == &DeleteKind::Wrap).then_some((
+                        *id,
+                        *version,
+                        ObjectDigest::OBJECT_DIGEST_WRAPPED,
+                    ))
                 })
                 .collect(),
             gas_object: updated_gas_object_info,

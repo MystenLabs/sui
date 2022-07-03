@@ -198,11 +198,7 @@ impl RpcModuleDocBuilder {
         tag: Option<String>,
         is_pubsub: bool,
     ) {
-        let description = if doc.trim().is_empty() {
-            None
-        } else {
-            Some(doc.trim().to_string())
-        };
+        let description = (!doc.trim().is_empty()).then_some(doc.trim().to_string());
         let name = format!("{}_{}", namespace, name);
         let mut tags = tag
             .map(|t| Tag {

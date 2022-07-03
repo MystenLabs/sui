@@ -176,14 +176,11 @@ impl SingleTransactionKind {
                 // to achieve consistent publish results.
                 let compiled_modules = modules
                     .iter()
-                    .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
-                        Ok(m) => Some(m),
                         // We will ignore this error here and simply let latter execution
                         // to discover this error again and fail the transaction.
                         // It's preferable to let transaction fail and charge gas when
                         // malformed package is provided.
-                        Err(_) => None,
-                    })
+                    .filter_map(|bytes| CompiledModule::deserialize(bytes).ok())
                     .collect::<Vec<_>>();
                 Transaction::input_objects_in_compiled_modules(&compiled_modules)
             }
@@ -1229,11 +1226,7 @@ impl InputObjects {
             .filter_map(|(object_kind, object)| match object_kind {
                 InputObjectKind::MovePackage(_) => None,
                 InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
+                    (!object.is_immutable()).then_some(*object_ref)
                 }
                 InputObjectKind::SharedMoveObject(_) => None,
             })
@@ -1268,11 +1261,7 @@ impl InputObjects {
             .filter_map(|(kind, object)| match kind {
                 InputObjectKind::MovePackage(_) => None,
                 InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
+                    (!object.is_immutable()).then_some(*object_ref)
                 }
                 InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
             })

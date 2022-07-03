@@ -470,16 +470,16 @@ impl AuthorityState {
             .filter_map(|(object_id, version, _)| {
                 if !shared_locks.contains_key(object_id) {
                     Some(SuiError::SharedObjectLockNotSetObject)
-                } else if shared_locks[object_id] != *version {
-                    Some(SuiError::UnexpectedSequenceNumber {
-                        object_id: *object_id,
-                        // This sequence number is the one attributed by consensus.
-                        expected_sequence: shared_locks[object_id],
-                        // This sequence number is the one we currently have in the database.
-                        given_sequence: *version,
-                    })
                 } else {
-                    None
+                    (shared_locks[object_id] != *version).then_some(
+                        SuiError::UnexpectedSequenceNumber {
+                            object_id: *object_id,
+                            // This sequence number is the one attributed by consensus.
+                            expected_sequence: shared_locks[object_id],
+                            // This sequence number is the one we currently have in the database.
+                            given_sequence: *version,
+                        },
+                    )
                 }
             })
             .collect();
@@ -822,7 +822,6 @@ impl AuthorityState {
                             Some(format) => object.get_layout(format, &self.module_cache)?,
                             None => None,
                         };
-
                         Some(ObjectResponse {
                             object,
                             lock,
