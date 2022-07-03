@@ -13,7 +13,7 @@ async fn propose_empty() {
     let signature_service = SignatureService::new(kp);
 
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
+        watch::channel(Reconfigure::NewCommittee((*committee(None)).clone()));
     let (_tx_parents, rx_parents) = channel(1);
     let (_tx_our_digests, rx_our_digests) = channel(1);
     let (tx_headers, mut rx_headers) = channel(1);
@@ -21,7 +21,7 @@ async fn propose_empty() {
     // Spawn the proposer.
     Proposer::spawn(
         name,
-        (&*committee(None)).clone(),
+        (*committee(None)).clone(),
         signature_service,
         /* header_size */ 1_000,
         /* max_header_delay */ Duration::from_millis(20),
@@ -46,7 +46,7 @@ async fn propose_payload() {
     let signature_service = SignatureService::new(kp);
 
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
+        watch::channel(Reconfigure::NewCommittee((*committee(None)).clone()));
     let (_tx_parents, rx_parents) = channel(1);
     let (tx_our_digests, rx_our_digests) = channel(1);
     let (tx_headers, mut rx_headers) = channel(1);
@@ -54,7 +54,7 @@ async fn propose_payload() {
     // Spawn the proposer.
     Proposer::spawn(
         name.clone(),
-        (&*committee(None)).clone(),
+        (*committee(None)).clone(),
         signature_service,
         /* header_size */ 32,
         /* max_header_delay */

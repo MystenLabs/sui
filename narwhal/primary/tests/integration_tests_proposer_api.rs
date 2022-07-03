@@ -82,7 +82,7 @@ async fn test_rounds_errors() {
                 .authorities
                 .load()
                 .iter()
-                .filter_map(|(pk, a)| *pk != name.then_some((pk.clone(), a.clone())))
+                .filter_map(|(pk, a)| (*pk != name).then_some((pk.clone(), a.clone())))
                 .collect::<BTreeMap<_, _>>();
 
             arc_swap::ArcSwap::from_pointee(no_name_authorities)

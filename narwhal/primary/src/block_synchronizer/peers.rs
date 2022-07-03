@@ -121,7 +121,7 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
 
         peer.assign_values(value);
 
-        self.peers.insert((&peer.name).clone(), peer);
+        self.peers.insert(peer.name.clone(), peer);
 
         self.delete_values_from_peers(id);
     }

@@ -23,7 +23,7 @@ async fn process_header() {
     let committee = committee(None);
 
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
+        watch::channel(Reconfigure::NewCommittee((*committee).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -61,7 +61,7 @@ async fn process_header() {
     // Spawn the core.
     Core::spawn(
         name,
-        (&*committee).clone(),
+        (*committee).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -110,8 +110,7 @@ async fn process_header_missing_parent() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
-    let (_, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
+    let (_, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee((*committee(None)).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -139,7 +138,7 @@ async fn process_header_missing_parent() {
     // Spawn the core.
     Core::spawn(
         name.clone(),
-        (&*committee(None)).clone(),
+        (*committee(None)).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -184,8 +183,7 @@ async fn process_header_missing_payload() {
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
-    let (_, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
+    let (_, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee((*committee(None)).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -213,7 +211,7 @@ async fn process_header_missing_payload() {
     // Spawn the core.
     Core::spawn(
         name.clone(),
-        (&*committee(None)).clone(),
+        (*committee(None)).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -271,7 +269,7 @@ async fn process_votes() {
     let committee = committee(None);
 
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
+        watch::channel(Reconfigure::NewCommittee((*committee).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -299,7 +297,7 @@ async fn process_votes() {
     // Spawn the core.
     Core::spawn(
         name.clone(),
-        (&*committee).clone(),
+        (*committee).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -362,7 +360,7 @@ async fn process_certificates() {
     let signature_service = SignatureService::new(kp);
 
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee(None)).clone()));
+        watch::channel(Reconfigure::NewCommittee((*committee(None)).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(3);
@@ -390,7 +388,7 @@ async fn process_certificates() {
     // Spawn the core.
     Core::spawn(
         name,
-        (&*committee(None)).clone(),
+        (*committee(None)).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -457,7 +455,7 @@ async fn shutdown_core() {
     let committee = committee(None);
 
     let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
+        watch::channel(Reconfigure::NewCommittee((*committee).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (_tx_primary_messages, rx_primary_messages) = channel(1);
@@ -483,7 +481,7 @@ async fn shutdown_core() {
     // Spawn the core.
     let handle = Core::spawn(
         name,
-        (&*committee).clone(),
+        (*committee).clone(),
         header_store,
         certificates_store,
         synchronizer,
@@ -522,7 +520,7 @@ async fn reconfigure_core() {
 
     // All the channels to interface with the core.
     let (tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee((&*committee).clone()));
+        watch::channel(Reconfigure::NewCommittee((*committee).clone()));
     let (tx_sync_headers, _rx_sync_headers) = channel(1);
     let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
     let (tx_primary_messages, rx_primary_messages) = channel(1);
@@ -559,7 +557,7 @@ async fn reconfigure_core() {
     // Spawn the core.
     Core::spawn(
         name,
-        (&*committee).clone(),
+        (*committee).clone(),
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -577,7 +575,7 @@ async fn reconfigure_core() {
     );
 
     // Change committee
-    let message = Reconfigure::NewCommittee((&*new_committee).clone());
+    let message = Reconfigure::NewCommittee((*new_committee).clone());
     tx_reconfigure.send(message).unwrap();
 
     // Send a header to the core.
