@@ -291,7 +291,7 @@ fn test_insert_batch() {
         .batch()
         .insert_batch(&db, keys_vals.clone())
         .expect("Failed to batch insert");
-    let _ = insert_batch.write().expect("Failed to execute batch");
+    insert_batch.write().expect("Failed to execute batch");
     for (k, v) in keys_vals {
         let val = db.get(&k).expect("Failed to get inserted key");
         assert_eq!(Some(v), val);
@@ -315,7 +315,7 @@ fn test_insert_batch_across_cf() {
         .insert_batch(&db_cf_2, keys_vals_2.clone())
         .expect("Failed to batch insert");
 
-    let _ = batch.write().expect("Failed to execute batch");
+    batch.write().expect("Failed to execute batch");
     for (k, v) in keys_vals_1 {
         let val = db_cf_1.get(&k).expect("Failed to get inserted key");
         assert_eq!(Some(v), val);
@@ -364,7 +364,7 @@ fn test_delete_batch() {
         .delete_batch(&db, deletion_keys)
         .expect("Failed to batch delete");
 
-    let _ = delete_batch.write().expect("Failed to execute batch");
+    delete_batch.write().expect("Failed to execute batch");
 
     for k in db.keys() {
         assert_eq!(k % 2, 0);
@@ -387,7 +387,7 @@ fn test_delete_range() {
         .delete_range(&db, &50, &100)
         .expect("Failed to delete range");
 
-    let _ = delete_range_batch.write().expect("Failed to execute batch");
+    delete_range_batch.write().expect("Failed to execute batch");
 
     for k in 0..50 {
         assert!(db.contains_key(&k).expect("Failed to query legal key"),);
@@ -413,7 +413,7 @@ fn test_clear() {
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
-    let _ = insert_batch.write().expect("Failed to execute batch");
+    insert_batch.write().expect("Failed to execute batch");
 
     // Check we have multiple entries
     assert!(db.iter().count() > 1);
@@ -445,7 +445,7 @@ fn test_is_empty() {
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
-    let _ = insert_batch.write().expect("Failed to execute batch");
+    insert_batch.write().expect("Failed to execute batch");
 
     // Check we have multiple entries and not empty
     assert!(db.iter().count() > 1);
