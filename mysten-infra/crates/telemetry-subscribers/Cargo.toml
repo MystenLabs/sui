@@ -23,7 +23,7 @@ once_cell = "1.12.0"
 crossterm = "0.24.0"
 
 [features]
-default = ["jaeger", "tokio-console", "chrome"]
+default = ["jaeger", "chrome"]
 tokio-console = ["console-subscriber"]
 jaeger = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-jaeger"]
 chrome = ["tracing-chrome"]
