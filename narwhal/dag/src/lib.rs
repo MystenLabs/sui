@@ -302,7 +302,7 @@ mod tests {
             value in any::<u64>(),
             compressible in any::<bool>(),
         ) -> Node<u64> {
-            let parents = prior_round.iter().zip(picks).flat_map(|(parent, pick)| if pick { Some(parent.clone()) } else { None }).collect();
+            let parents = prior_round.iter().zip(picks).flat_map(|(parent, pick)| pick.then_some(parent.clone())).collect();
             Node::new(value, compressible, parents)
         }
     }

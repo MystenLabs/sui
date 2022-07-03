@@ -201,13 +201,8 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
             // yet this can't be a take_while because the DAG removal may be non-contiguous.
             //
             // Hence we rely on removals cleaning the secondary index.
-            let mut strong_reference_rounds = range.flat_map(|((_key, round), val)| {
-                if self.contains(*val) {
-                    Some(round)
-                } else {
-                    None
-                }
-            });
+            let mut strong_reference_rounds =
+                range.flat_map(|((_key, round), val)| self.contains(*val).then_some(round));
 
             let earliest = strong_reference_rounds.next().cloned();
             let latest = strong_reference_rounds.last().cloned().or(earliest);

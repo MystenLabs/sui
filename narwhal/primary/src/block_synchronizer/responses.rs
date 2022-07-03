@@ -64,7 +64,7 @@ impl<PublicKey: VerifyingKey> PayloadAvailabilityResponse<PublicKey> {
     pub fn available_block_ids(&self) -> Vec<CertificateDigest> {
         self.block_ids
             .iter()
-            .filter_map(|(id, available)| if *available { Some(*id) } else { None })
+            .filter_map(|(id, available)| available.then_some(*id))
             .collect()
     }
 }

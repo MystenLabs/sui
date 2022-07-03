@@ -327,7 +327,7 @@ mod tests {
             digest in arb_test_digest(),
             compressible in any::<bool>(),
         ) -> TestNode {
-            let parents = pot_parents.iter().zip(picks).flat_map(|(parent, pick)| if pick { Some(*parent) } else { None }).collect();
+            let parents = pot_parents.iter().zip(picks).flat_map(|(parent, pick)| pick.then_some(*parent)).collect();
             TestNode{
                 parents,
                 compressible,
