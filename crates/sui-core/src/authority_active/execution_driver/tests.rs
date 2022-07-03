@@ -77,7 +77,7 @@ async fn pending_exec_storage_notify() {
         .add_pending_certificates(
             certs
                 .into_iter()
-                .map(|cert| (*cert.digest(), cert))
+                .map(|cert| (*cert.digest(), Some(cert)))
                 .collect(),
         )
         .expect("Storage is ok");
@@ -163,7 +163,7 @@ async fn pending_exec_full() {
         .add_pending_certificates(
             certs
                 .into_iter()
-                .map(|cert| (*cert.digest(), cert))
+                .map(|cert| (*cert.digest(), Some(cert)))
                 .collect(),
         )
         .expect("Storage is ok");

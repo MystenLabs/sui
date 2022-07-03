@@ -24,7 +24,12 @@ impl PendCertificateForExecution for AuthorityState {
         &self,
         certs: Vec<(TransactionDigest, CertifiedTransaction)>,
     ) -> SuiResult<()> {
-        self.database.add_pending_certificates(certs)
+        self.database.add_pending_certificates(
+            certs
+                .into_iter()
+                .map(|(digest, cert)| (digest, Some(cert)))
+                .collect(),
+        )
     }
 }
 
