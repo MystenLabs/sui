@@ -417,6 +417,8 @@ where
     }
 
     // Download the certificate and effects specified in digests.
+    // TODO: In checkpoint mode, we don't need to download a cert, a transaction will do.
+    // Transactions are not currently persisted anywhere, however (validators delete them eagerly).
     async fn download_cert_and_effects(
         &self,
         peer: Option<&AuthorityName>,
