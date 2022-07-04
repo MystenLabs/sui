@@ -25,6 +25,7 @@ config = { path = "../config" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
 types = { path = "../types" }
+prometheus = "0.13.1"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

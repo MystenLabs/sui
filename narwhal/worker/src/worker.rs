@@ -12,7 +12,7 @@ use crypto::traits::VerifyingKey;
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
 use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
-use std::{net::Ipv4Addr, pin::Pin};
+use std::{net::Ipv4Addr, pin::Pin, sync::Arc};
 use store::Store;
 use tokio::{
     sync::mpsc::{channel, Sender},
@@ -33,6 +33,7 @@ pub mod worker_tests;
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
+use crate::metrics::{Metrics, WorkerMetrics};
 pub use types::WorkerMessage;
 
 pub struct Worker<PublicKey: VerifyingKey> {
@@ -57,6 +58,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         committee: SharedCommittee<PublicKey>,
         parameters: Parameters,
         store: Store<BatchDigest, SerializedBatchMessage>,
+        metrics: Metrics,
     ) -> Vec<JoinHandle<()>> {
         // Define a worker instance.
         let worker = Self {
@@ -67,9 +69,12 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             store,
         };
 
+        let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
+
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
-        let primary_flow_handles = worker.handle_primary_messages(tx_primary.clone());
+
+        let primary_flow_handles = worker.handle_primary_messages(tx_primary.clone(), node_metrics);
         let client_flow_handles = worker.handle_clients_transactions(tx_primary.clone());
         let worker_flow_handles = worker.handle_workers_messages(tx_primary);
 
@@ -105,6 +110,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     fn handle_primary_messages(
         &self,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        node_metrics: Arc<WorkerMetrics>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
 
@@ -131,6 +137,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             self.parameters.sync_retry_nodes,
             /* rx_message */ rx_synchronizer,
             tx_primary,
+            node_metrics,
         );
 
         info!(

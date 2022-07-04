@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crypto::traits::KeyPair;
+use prometheus::Registry;
 use test_utils::{committee, keys};
 use tokio::sync::mpsc::channel;
 
@@ -18,6 +19,8 @@ async fn propose_empty() {
     let (_tx_our_digests, rx_our_digests) = channel(1);
     let (tx_headers, mut rx_headers) = channel(1);
 
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
     // Spawn the proposer.
     Proposer::spawn(
         name,
@@ -30,6 +33,7 @@ async fn propose_empty() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        metrics,
     );
 
     // Ensure the proposer makes a correct empty header.
@@ -51,6 +55,8 @@ async fn propose_payload() {
     let (tx_our_digests, rx_our_digests) = channel(1);
     let (tx_headers, mut rx_headers) = channel(1);
 
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
     // Spawn the proposer.
     Proposer::spawn(
         name.clone(),
@@ -64,6 +70,7 @@ async fn propose_payload() {
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
         /* tx_core */ tx_headers,
+        metrics,
     );
 
     // Send enough digests for the header payload.

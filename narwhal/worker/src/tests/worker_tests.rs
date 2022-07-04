@@ -6,6 +6,7 @@ use super::*;
 use crypto::traits::KeyPair;
 use futures::StreamExt;
 use primary::WorkerPrimaryMessage;
+use prometheus::Registry;
 use std::time::Duration;
 use store::rocks;
 use test_utils::{
@@ -32,9 +33,19 @@ async fn handle_clients_transactions() {
     )
     .unwrap();
     let store = Store::new(db);
+    let metrics = Metrics {
+        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+    };
 
     // Spawn a `Worker` instance.
-    Worker::spawn(name.clone(), id, committee.clone(), parameters, store);
+    Worker::spawn(
+        name.clone(),
+        id,
+        committee.clone(),
+        parameters,
+        store,
+        metrics,
+    );
 
     // Spawn a network listener to receive our batch's digest.
     let batch = batch();
@@ -98,8 +109,19 @@ async fn handle_client_batch_request() {
         )
         .await;
 
+    let metrics = Metrics {
+        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+    };
+
     // Spawn a `Worker` instance.
-    Worker::spawn(name.clone(), id, committee.clone(), parameters, store);
+    Worker::spawn(
+        name.clone(),
+        id,
+        committee.clone(),
+        parameters,
+        store,
+        metrics,
+    );
 
     // Spawn a client to ask for batches and receive the reply.
     tokio::task::yield_now().await;

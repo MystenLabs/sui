@@ -8,7 +8,7 @@ use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashSet},
     ops::RangeInclusive,
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
 use thiserror::Error;
 use tokio::{
@@ -21,7 +21,7 @@ use tokio::{
 use tracing::instrument;
 use types::{Certificate, CertificateDigest, Round};
 
-use crate::DEFAULT_CHANNEL_SIZE;
+use crate::{metrics::ConsensusMetrics, DEFAULT_CHANNEL_SIZE};
 
 #[cfg(any(test))]
 #[path = "tests/dag_tests.rs"]
@@ -46,6 +46,9 @@ struct InnerDag<PublicKey: VerifyingKey> {
 
     /// Secondary index: An authority-aware map of the DAG's veertex Certificates
     vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
+
+    /// Metrics handler
+    metrics: Arc<ConsensusMetrics>,
 }
 
 /// The publicly exposed Dag handle, to which one can send commands
@@ -97,12 +100,14 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         rx_commands: Receiver<DagCommand<PublicKey>>,
         dag: NodeDag<Certificate<PublicKey>>,
         vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
+        metrics: Arc<ConsensusMetrics>,
     ) -> Self {
         let mut idg = InnerDag {
             rx_primary,
             rx_commands,
             dag,
             vertices,
+            metrics,
         };
         let genesis = Certificate::genesis(committee);
         for cert in genesis.into_iter() {
@@ -162,6 +167,9 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
             self.dag.try_insert(certificate)?;
             vertices.insert((origin, round), digest);
         }
+
+        self.update_metrics();
+
         Ok(())
     }
 
@@ -281,12 +289,28 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         }
         Ok(())
     }
+
+    /// Updates the dag-related metrics
+    fn update_metrics(&self) {
+        let vertices = self.vertices.read().unwrap();
+
+        self.metrics
+            .external_consensus_dag_vertices_elements
+            .with_label_values(&[])
+            .set(vertices.len() as i64);
+
+        self.metrics
+            .external_consensus_dag_size
+            .with_label_values(&[])
+            .set(self.dag.size() as i64)
+    }
 }
 
 impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     pub fn new(
         committee: &Committee<PublicKey>,
         rx_primary: Receiver<Certificate<PublicKey>>,
+        metrics: Arc<ConsensusMetrics>,
     ) -> (JoinHandle<()>, Self) {
         let (tx_commands, rx_commands) = tokio::sync::mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let mut idg = InnerDag::new(
@@ -295,6 +319,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
             rx_commands,
             /* dag */ NodeDag::new(),
             /* vertices */ RwLock::new(BTreeMap::new()),
+            metrics,
         );
 
         let handle = tokio::spawn(async move { idg.run().await });

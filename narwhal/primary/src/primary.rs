@@ -224,7 +224,7 @@ impl Primary {
             /* rx_proposer */ rx_headers,
             tx_consensus,
             /* tx_proposer */ tx_parents,
-            node_metrics,
+            node_metrics.clone(),
         );
 
         // Receives batch digests from other workers. They are only used to validate headers.
@@ -301,6 +301,7 @@ impl Primary {
             tx_reconfigure.subscribe(),
             /* rx_synchronizer */ rx_sync_headers,
             /* tx_core */ tx_headers_loopback,
+            node_metrics.clone(),
         );
 
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
@@ -328,6 +329,7 @@ impl Primary {
             /* rx_core */ rx_parents,
             /* rx_workers */ rx_our_digests,
             /* tx_core */ tx_headers,
+            node_metrics,
         );
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests

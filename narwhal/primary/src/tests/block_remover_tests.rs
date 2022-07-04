@@ -11,13 +11,14 @@ use crate::{
 };
 use bincode::deserialize;
 use config::{Committee, WorkerId};
-use consensus::dag::Dag;
+use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
 use futures::{
     future::{join_all, try_join_all},
     stream::FuturesUnordered,
 };
 use network::PrimaryToWorkerNetwork;
+use prometheus::Registry;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
@@ -48,7 +49,8 @@ async fn test_successful_blocks_delete() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(Reconfigure::NewCommittee((*committee).clone()));
     // AND a Dag with genesis populated
-    let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
@@ -219,7 +221,8 @@ async fn test_timeout() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(Reconfigure::NewCommittee((*committee).clone()));
     // AND a Dag with genesis populated
-    let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
     BlockRemover::spawn(
@@ -355,7 +358,8 @@ async fn test_unlocking_pending_requests() {
     let (_, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee((*committee).clone()));
 
     // AND a Dag with genesis populated
-    let dag = Arc::new(Dag::new(&committee, rx_consensus).1);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
     let mut remover = BlockRemover {

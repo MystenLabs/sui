@@ -1,10 +1,10 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{primary::Reconfigure, NetworkModel};
+use crate::{metrics::PrimaryMetrics, primary::Reconfigure, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
-use std::cmp::Ordering;
+use std::{cmp::Ordering, sync::Arc};
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -57,6 +57,8 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     digests: Vec<(BatchDigest, WorkerId)>,
     /// Keeps track of the size (in bytes) of batches' digests that we received so far.
     payload_size: usize,
+    /// Metrics handler
+    metrics: Arc<PrimaryMetrics>,
 }
 
 impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
@@ -72,6 +74,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
+        metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
         tokio::spawn(async move {
@@ -91,6 +94,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                 last_leader: None,
                 digests: Vec::with_capacity(2 * header_size),
                 payload_size: 0,
+                metrics,
             }
             .run()
             .await;
@@ -222,6 +226,10 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
 
                 // Advance to the next round.
                 self.round += 1;
+                self.metrics
+                    .current_round
+                    .with_label_values(&[&self.committee.epoch.to_string()])
+                    .set(self.round as i64);
                 debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.

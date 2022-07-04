@@ -10,6 +10,7 @@
 pub mod bullshark;
 pub mod consensus;
 pub mod dag;
+pub mod metrics;
 pub mod subscriber;
 pub mod tusk;
 mod utils;

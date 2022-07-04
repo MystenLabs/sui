@@ -1,11 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::Parameters;
-use consensus::dag::Dag;
+use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::traits::KeyPair;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use prometheus::default_registry;
+use prometheus::{default_registry, Registry};
 use std::{sync::Arc, time::Duration};
 use test_utils::{committee, keys, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -31,6 +31,7 @@ async fn test_new_epoch() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
         name.clone(),
@@ -42,7 +43,10 @@ async fn test_new_epoch() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
+        /* dag */
+        Some(Arc::new(
+            Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
+        )),
         NetworkModel::Asynchronous,
         tx_feedback,
         default_registry(),
@@ -99,6 +103,7 @@ async fn test_new_network_info() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
         name.clone(),
@@ -110,7 +115,10 @@ async fn test_new_network_info() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
+        /* dag */
+        Some(Arc::new(
+            Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
+        )),
         NetworkModel::Asynchronous,
         /* tx_committed_certificates */ tx_feedback,
         default_registry(),

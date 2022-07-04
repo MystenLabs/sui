@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::{
+    metrics::ConsensusMetrics,
     tusk::{tusk_tests::*, Tusk},
     Consensus, ConsensusOutput, ConsensusSyncRequest, SubscriberHandler,
 };
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair, Hash};
+use prometheus::Registry;
 use std::collections::{BTreeSet, VecDeque};
 use test_utils::{keys, make_consensus_store, mock_committee};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -65,6 +67,7 @@ pub async fn spawn_node(
         store: consensus_store.clone(),
         gc_depth: 50,
     };
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     Consensus::spawn(
         committee,
         consensus_store.clone(),
@@ -72,6 +75,7 @@ pub async fn spawn_node(
         tx_primary,
         tx_output,
         tusk,
+        metrics,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 

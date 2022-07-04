@@ -1,11 +1,11 @@
-use std::sync::Once;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::EndpointMetrics;
 use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    HistogramVec, IntCounterVec, Registry,
+    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
 };
+use std::sync::Once;
 
 #[derive(Clone)]
 pub(crate) struct Metrics {
@@ -56,6 +56,12 @@ pub struct PrimaryMetrics {
     pub batches_received: IntCounterVec,
     /// Latency to perform a garbage collection in core module
     pub gc_core_latency: HistogramVec,
+    /// The current Narwhal round
+    pub current_round: IntGaugeVec,
+    /// Latency to perform a garbage collection in header_waiter
+    pub gc_header_waiter_latency: HistogramVec,
+    /// Number of elements in pending list of header_waiter
+    pub pending_elements_header_waiter: IntGaugeVec,
 }
 
 impl PrimaryMetrics {
@@ -70,7 +76,7 @@ impl PrimaryMetrics {
             .unwrap(),
             headers_suspended: register_int_counter_vec_with_registry!(
                 "headers_suspended",
-                "Number of headers that node suspended their processing",
+                "Number of headers that node suspended processing for",
                 &["epoch", "reason"],
                 registry
             )
@@ -91,7 +97,7 @@ impl PrimaryMetrics {
             .unwrap(),
             certificates_suspended: register_int_counter_vec_with_registry!(
                 "certificates_suspended",
-                "Number of certificates that node suspended their processing",
+                "Number of certificates that node suspended processing of",
                 &["epoch", "reason"],
                 registry
             )
@@ -106,6 +112,27 @@ impl PrimaryMetrics {
             gc_core_latency: register_histogram_vec_with_registry!(
                 "gc_core_latency",
                 "Latency of a the garbage collection process for core module",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            current_round: register_int_gauge_vec_with_registry!(
+                "current_round",
+                "Current round the node is in",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            gc_header_waiter_latency: register_histogram_vec_with_registry!(
+                "gc_header_waiter_latency",
+                "Latency of a the garbage collection process for header module",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            pending_elements_header_waiter: register_int_gauge_vec_with_registry!(
+                "pending_elements_header_waiter",
+                "Number of pending elements in header waiter",
                 &["epoch"],
                 registry
             )

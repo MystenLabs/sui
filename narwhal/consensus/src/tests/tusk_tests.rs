@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use crate::Consensus;
+use crate::{metrics::ConsensusMetrics, Consensus};
 use crypto::ed25519::Ed25519PublicKey;
 #[allow(unused_imports)]
 use crypto::traits::KeyPair;
+use prometheus::Registry;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
 use store::{reopen, rocks, rocks::DBMap};
@@ -76,6 +77,8 @@ async fn commit_one() {
         store: store.clone(),
         gc_depth: 50,
     };
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
     Consensus::spawn(
         mock_committee(&keys[..]),
         store,
@@ -83,6 +86,7 @@ async fn commit_one() {
         tx_primary,
         tx_output,
         tusk,
+        metrics,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -132,6 +136,8 @@ async fn dead_node() {
         store: store.clone(),
         gc_depth: 50,
     };
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
     Consensus::spawn(
         mock_committee(&keys[..]),
         store,
@@ -139,6 +145,7 @@ async fn dead_node() {
         tx_primary,
         tx_output,
         tusk,
+        metrics,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -232,6 +239,8 @@ async fn not_enough_support() {
         store: store.clone(),
         gc_depth: 50,
     };
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
     Consensus::spawn(
         mock_committee(&keys[..]),
         store,
@@ -239,6 +248,7 @@ async fn not_enough_support() {
         tx_primary,
         tx_output,
         tusk,
+        metrics,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 
@@ -306,6 +316,7 @@ async fn missing_leader() {
         store: store.clone(),
         gc_depth: 50,
     };
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     Consensus::spawn(
         mock_committee(&keys[..]),
         store,
@@ -313,6 +324,7 @@ async fn missing_leader() {
         tx_primary,
         tx_output,
         tusk,
+        metrics,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 

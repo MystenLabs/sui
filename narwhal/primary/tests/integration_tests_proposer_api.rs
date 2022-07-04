@@ -3,7 +3,7 @@
 use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
-use consensus::dag::Dag;
+use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::{
     ed25519::Ed25519PublicKey,
     traits::{KeyPair, ToFromBytes},
@@ -11,7 +11,7 @@ use crypto::{
 };
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use prometheus::default_registry;
+use prometheus::{default_registry, Registry};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -89,6 +89,8 @@ async fn test_rounds_errors() {
         },
     };
 
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
     Primary::spawn(
         name.clone(),
         keypair,
@@ -101,7 +103,7 @@ async fn test_rounds_errors() {
         /* rx_consensus */ rx_feedback,
         /* external_consensus */
         Some(Arc::new(
-            Dag::new(&no_name_committee, rx_new_certificates).1,
+            Dag::new(&no_name_committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
         tx_feedback,
@@ -157,7 +159,8 @@ async fn test_rounds_return_successful_response() {
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
     // AND setup the DAG
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 
     Primary::spawn(
         name.clone(),
@@ -228,8 +231,9 @@ async fn test_node_read_causal_signed_certificates() {
     let mut collection_ids: Vec<CertificateDigest> = Vec::new();
 
     // Make the Dag
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 
     // No need to populate genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -321,6 +325,7 @@ async fn test_node_read_causal_signed_certificates() {
     };
     let keypair_2 = k.pop().unwrap();
     let name_2 = keypair_2.public().clone();
+    let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
@@ -334,7 +339,9 @@ async fn test_node_read_causal_signed_certificates() {
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
-        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
+        Some(Arc::new(
+            Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
+        )),
         NetworkModel::Asynchronous,
         tx_feedback_2,
         default_registry(),

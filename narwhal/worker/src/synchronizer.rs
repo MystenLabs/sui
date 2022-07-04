@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::WorkerMetrics;
 use config::{SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
@@ -8,6 +9,7 @@ use network::WorkerNetwork;
 use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
 use std::{
     collections::HashMap,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use store::{Store, StoreError};
@@ -55,6 +57,8 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     pending: HashMap<BatchDigest, (Round, Sender<()>, u128)>,
     // Output channel to send out the batch requests.
     tx_primary: Sender<WorkerPrimaryMessage>,
+    // Metrics handler
+    metrics: Arc<WorkerMetrics>,
 }
 
 impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
@@ -68,6 +72,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         sync_retry_nodes: usize,
         rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -83,6 +88,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                 round: Round::default(),
                 pending: HashMap::new(),
                 tx_primary,
+                metrics,
             }
             .run()
             .await;
@@ -235,6 +241,11 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
 
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));
+
+                    // Report list of pending elements
+                    self.metrics.pending_elements_worker_synchronizer
+                    .with_label_values(&[&self.committee.epoch.to_string()])
+                    .set(self.pending.len() as i64);
                 },
             }
         }

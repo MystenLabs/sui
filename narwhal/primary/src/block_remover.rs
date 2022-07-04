@@ -94,10 +94,12 @@ pub struct DeleteBatchMessage {
 /// # use tempfile::tempdir;
 /// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken, Reconfigure};
 /// # use types::{BatchDigest, Certificate, CertificateDigest, HeaderDigest, Header};
+/// # use prometheus::Registry;
+/// # use consensus::metrics::ConsensusMetrics;
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
-/// const CERTIFICATES_CF: &str = "certificates";
+///     const CERTIFICATES_CF: &str = "certificates";
 ///     const HEADERS_CF: &str = "headers";
 ///     const PAYLOAD_CF: &str = "payload";
 ///
@@ -123,9 +125,10 @@ pub struct DeleteBatchMessage {
 ///     let name = Ed25519PublicKey::default();
 ///     let committee = Committee{ epoch: ArcSwap::new(Arc::new(0)), authorities: ArcSwap::from_pointee(BTreeMap::new()) };
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee(committee.clone()));
+///     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 ///     // A dag with genesis for the committee
 ///     let (tx_new_certificates, rx_new_certificates) = channel(1);
-///     let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
+///     let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 ///     // Populate genesis in the Dag
 ///     join_all(
 ///       Certificate::genesis(&committee)

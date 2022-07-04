@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{ConsensusOutput, SequenceNumber};
+use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
 use config::SharedCommittee;
 use crypto::{traits::VerifyingKey, Hash};
 use std::{cmp::max, collections::HashMap, sync::Arc};
@@ -27,10 +27,12 @@ pub struct ConsensusState<PublicKey: VerifyingKey> {
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag<PublicKey>,
+    /// Metrics handler
+    pub metrics: Arc<ConsensusMetrics>,
 }
 
 impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
-    pub fn new(genesis: Vec<Certificate<PublicKey>>) -> Self {
+    pub fn new(genesis: Vec<Certificate<PublicKey>>, metrics: Arc<ConsensusMetrics>) -> Self {
         let genesis = genesis
             .into_iter()
             .map(|x| (x.origin(), (x.digest(), x)))
@@ -46,6 +48,7 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
                 .iter()
                 .cloned()
                 .collect::<HashMap<_, HashMap<_, _>>>(),
+            metrics,
         }
     }
 
@@ -59,6 +62,11 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
         let last_committed_round = *std::iter::Iterator::max(self.last_committed.values()).unwrap();
         self.last_committed_round = last_committed_round;
 
+        self.metrics
+            .last_committed_round
+            .with_label_values(&[])
+            .set(last_committed_round as i64);
+
         // We purge all certificates past the gc depth
         self.dag.retain(|r, _| r + gc_depth >= last_committed_round);
         for (name, round) in &self.last_committed {
@@ -70,6 +78,11 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
                 !authorities.is_empty()
             });
         }
+
+        self.metrics
+            .consensus_dag_size
+            .with_label_values(&[])
+            .set(self.dag.len() as i64);
     }
 }
 
@@ -103,6 +116,9 @@ pub struct Consensus<PublicKey: VerifyingKey, ConsensusProtocol> {
 
     /// The consensus protocol to run.
     protocol: ConsensusProtocol,
+
+    /// Metrics handler
+    metrics: Arc<ConsensusMetrics>,
 }
 
 impl<PublicKey, Protocol> Consensus<PublicKey, Protocol>
@@ -117,6 +133,7 @@ where
         tx_primary: Sender<ConsensusPrimaryMessage<PublicKey>>,
         tx_output: Sender<ConsensusOutput<PublicKey>>,
         protocol: Protocol,
+        metrics: Arc<ConsensusMetrics>,
     ) -> JoinHandle<StoreResult<()>> {
         tokio::spawn(async move {
             let consensus_index = store.read_last_consensus_index()?;
@@ -128,6 +145,7 @@ where
                 genesis,
                 consensus_index,
                 protocol,
+                metrics,
             }
             .run()
             .await
@@ -136,7 +154,7 @@ where
 
     async fn run(&mut self) -> StoreResult<()> {
         // The consensus state (everything else is immutable).
-        let mut state = ConsensusState::new(self.genesis.clone());
+        let mut state = ConsensusState::new(self.genesis.clone(), self.metrics.clone());
 
         // Listen to incoming certificates.
         while let Some(certificate) = self.rx_primary.recv().await {

@@ -1,7 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, SharedCommittee, WorkerId};
-use consensus::{bullshark::Bullshark, dag::Dag, Consensus, SubscriberHandler};
+use consensus::{
+    bullshark::Bullshark, dag::Dag, metrics::ConsensusMetrics, Consensus, SubscriberHandler,
+};
 use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
 use primary::{NetworkModel, PayloadToken, Primary};
@@ -21,7 +23,7 @@ use types::{
     BatchDigest, Certificate, CertificateDigest, ConsensusPrimaryMessage, ConsensusStore, Header,
     HeaderDigest, Round, SequenceNumber, SerializedBatchMessage,
 };
-use worker::Worker;
+use worker::{metrics::initialise_metrics, Worker};
 
 pub mod metrics;
 
@@ -127,7 +129,8 @@ impl Node {
 
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Tusk");
-            let (_handle, dag) = Dag::new(&committee, rx_new_certificates);
+            let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
+            let (_handle, dag) = Dag::new(&committee, rx_new_certificates, consensus_metrics);
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
             Self::spawn_consensus(
@@ -139,6 +142,7 @@ impl Node {
                 rx_new_certificates,
                 tx_consensus.clone(),
                 tx_confirmation,
+                registry,
             )
             .await?;
             (None, NetworkModel::PartiallySynchronous)
@@ -174,6 +178,7 @@ impl Node {
         rx_new_certificates: Receiver<Certificate<PublicKey>>,
         tx_feedback: Sender<ConsensusPrimaryMessage<PublicKey>>,
         tx_confirmation: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
+        registry: &Registry,
     ) -> SubscriberResult<()>
     where
         PublicKey: VerifyingKey,
@@ -182,6 +187,7 @@ impl Node {
         let (tx_sequence, rx_sequence) = channel(Self::CHANNEL_CAPACITY);
         let (tx_consensus_to_client, rx_consensus_to_client) = channel(Self::CHANNEL_CAPACITY);
         let (tx_client_to_consensus, rx_client_to_consensus) = channel(Self::CHANNEL_CAPACITY);
+        let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark {
@@ -196,6 +202,7 @@ impl Node {
             /* tx_primary */ tx_feedback,
             /* tx_output */ tx_sequence,
             ordering_engine,
+            consensus_metrics.clone(),
         );
 
         // The subscriber handler receives the ordered sequence from consensus and feed them
@@ -238,9 +245,11 @@ impl Node {
         // The configuration parameters.
         parameters: Parameters,
         // The prometheus metrics Registry
-        _registry: &Registry,
+        registry: &Registry,
     ) -> Vec<JoinHandle<()>> {
         let mut handles = Vec::new();
+
+        let metrics = initialise_metrics(registry);
 
         for id in ids {
             let worker_handles = Worker::spawn(
@@ -249,6 +258,7 @@ impl Node {
                 committee.clone(),
                 parameters.clone(),
                 store.batch_store.clone(),
+                metrics.clone(),
             );
             handles.extend(worker_handles);
         }

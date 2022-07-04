@@ -1,7 +1,10 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage, Reconfigure};
+use crate::{
+    metrics::PrimaryMetrics,
+    primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage, Reconfigure},
+};
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{
@@ -86,6 +89,8 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// List of digests (headers or tx batch) that are waiting to be processed.
     /// Their processing will resume when we get all their dependencies.
     pending: HashMap<HeaderDigest, (Round, Sender<()>)>,
+    /// Metrics handler
+    metrics: Arc<PrimaryMetrics>,
 }
 
 impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
@@ -101,6 +106,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
         rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
         tx_core: Sender<Header<PublicKey>>,
+        metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -120,6 +126,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                 parent_requests: HashMap::new(),
                 batch_requests: HashMap::new(),
                 pending: HashMap::new(),
+                metrics,
             }
             .run()
             .await;
@@ -324,6 +331,8 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
             // Cleanup internal state.
             let round = self.consensus_round.load(Ordering::Relaxed);
             if round > self.gc_depth {
+                let now = Instant::now();
+
                 let mut gc_round = round - self.gc_depth;
 
                 for (r, handler) in self.pending.values() {
@@ -334,7 +343,18 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                 self.pending.retain(|_, (r, _)| r > &mut gc_round);
                 self.batch_requests.retain(|_, r| r > &mut gc_round);
                 self.parent_requests.retain(|_, (r, _)| r > &mut gc_round);
+
+                self.metrics
+                    .gc_header_waiter_latency
+                    .with_label_values(&[&self.committee.epoch.to_string()])
+                    .observe(now.elapsed().as_secs_f64());
             }
+
+            // measure the pending elements
+            self.metrics
+                .pending_elements_header_waiter
+                .with_label_values(&[&self.committee.epoch.to_string()])
+                .set(self.pending.len() as i64);
         }
     }
 }

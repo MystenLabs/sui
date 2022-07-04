@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, WorkerId};
-use consensus::dag::Dag;
+use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     traits::KeyPair,
@@ -9,7 +9,7 @@ use crypto::{
 };
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
-use prometheus::default_registry;
+use prometheus::{default_registry, Registry};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
@@ -29,7 +29,10 @@ use types::{
     ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, SerializedBatchMessage,
     ValidatorClient,
 };
-use worker::{Worker, WorkerMessage};
+use worker::{
+    metrics::{Metrics, WorkerMetrics},
+    Worker, WorkerMessage,
+};
 
 #[tokio::test]
 async fn test_get_collections() {
@@ -100,6 +103,7 @@ async fn test_get_collections() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
         name.clone(),
@@ -111,11 +115,18 @@ async fn test_get_collections() {
         store.payload_store.clone(),
         /* tx_consensus */ tx_new_certificates,
         /* rx_consensus */ rx_feedback,
-        /* dag */ Some(Arc::new(Dag::new(&committee, rx_new_certificates).1)),
+        /* dag */
+        Some(Arc::new(
+            Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
+        )),
         NetworkModel::Asynchronous,
         tx_feedback,
         default_registry(),
     );
+
+    let metrics = Metrics {
+        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+    };
 
     // Spawn a `Worker` instance.
     Worker::spawn(
@@ -124,6 +135,7 @@ async fn test_get_collections() {
         committee.clone(),
         parameters.clone(),
         store.batch_store.clone(),
+        metrics,
     );
 
     // Wait for tasks to start
@@ -218,7 +230,8 @@ async fn test_remove_collections() {
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
     // No need to populate genesis in the Dag
 
     // Generate headers
@@ -312,6 +325,10 @@ async fn test_remove_collections() {
         "Certificate should still exist"
     );
 
+    let metrics = Metrics {
+        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+    };
+
     // Spawn a `Worker` instance.
     Worker::spawn(
         name.clone(),
@@ -319,6 +336,7 @@ async fn test_remove_collections() {
         committee.clone(),
         parameters.clone(),
         store.batch_store.clone(),
+        metrics,
     );
 
     // Test remove no collections
@@ -399,7 +417,8 @@ async fn test_read_causal_signed_certificates() {
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 
     // No need to  genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -491,6 +510,7 @@ async fn test_read_causal_signed_certificates() {
     };
     let keypair_2 = k.pop().unwrap();
     let name_2 = keypair_2.public().clone();
+    let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
@@ -504,7 +524,9 @@ async fn test_read_causal_signed_certificates() {
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
-        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
+        Some(Arc::new(
+            Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
+        )),
         NetworkModel::Asynchronous,
         tx_feedback_2,
         default_registry(),
@@ -585,7 +607,8 @@ async fn test_read_causal_unsigned_certificates() {
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let dag = Arc::new(Dag::new(&committee, rx_new_certificates).1);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 
     // No need to genesis in the Dag
     let genesis_certs = Certificate::genesis(&committee);
@@ -672,6 +695,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+    let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
@@ -685,7 +709,9 @@ async fn test_read_causal_unsigned_certificates() {
         /* tx_consensus */ tx_new_certificates_2,
         /* rx_consensus */ rx_feedback_2,
         /* external_consensus */
-        Some(Arc::new(Dag::new(&committee, rx_new_certificates_2).1)),
+        Some(Arc::new(
+            Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
+        )),
         NetworkModel::Asynchronous,
         tx_feedback_2,
         default_registry(),
@@ -807,6 +833,7 @@ async fn test_get_collections_with_missing_certificates() {
     // Spawn the primary 1 (which will be the one that we'll interact with)
     let (tx_new_certificates_1, rx_new_certificates_1) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_1, rx_feedback_1) = channel(CHANNEL_CAPACITY);
+    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
         name_1.clone(),
@@ -819,11 +846,17 @@ async fn test_get_collections_with_missing_certificates() {
         /* tx_consensus */ tx_new_certificates_1,
         /* rx_consensus */ rx_feedback_1,
         /* external_consensus */
-        Some(Arc::new(Dag::new(&committee, rx_new_certificates_1).1)),
+        Some(Arc::new(
+            Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
+        )),
         NetworkModel::Asynchronous,
         tx_feedback_1,
         default_registry(),
     );
+
+    let metrics_1 = Metrics {
+        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+    };
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
@@ -832,6 +865,7 @@ async fn test_get_collections_with_missing_certificates() {
         committee.clone(),
         parameters.clone(),
         store_primary_1.batch_store,
+        metrics_1,
     );
 
     // Spawn the primary 2 - a peer to fetch missing certificates from
@@ -855,6 +889,10 @@ async fn test_get_collections_with_missing_certificates() {
         default_registry(),
     );
 
+    let metrics_2 = Metrics {
+        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+    };
+
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
         name_2,
@@ -862,6 +900,7 @@ async fn test_get_collections_with_missing_certificates() {
         committee.clone(),
         parameters.clone(),
         store_primary_2.batch_store,
+        metrics_2,
     );
 
     // Wait for tasks to start

@@ -155,7 +155,9 @@ impl<PublicKey: VerifyingKey> Tusk<PublicKey> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metrics::ConsensusMetrics;
     use crypto::traits::KeyPair;
+    use prometheus::Registry;
     use rand::Rng;
     use std::collections::BTreeSet;
     use test_utils::{make_consensus_store, mock_committee};
@@ -183,8 +185,11 @@ mod tests {
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
+        let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
         let consensus_index = 0;
-        let mut state = ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])));
+        let mut state =
+            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
         let mut tusk = Tusk {
             committee,
             store,
@@ -232,7 +237,10 @@ mod tests {
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
-        let mut state = ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])));
+        let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+
+        let mut state =
+            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
         let consensus_index = 0;
         let mut tusk = Tusk {
             committee,
