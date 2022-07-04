@@ -28,7 +28,7 @@ use std::string::ToString;
 use std::time::Duration;
 use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
@@ -528,6 +528,9 @@ where
         Ok(accumulated_state)
     }
 
+    // Repeatedly calls the provided closure on a randomly selected validator until it succeeds.
+    // Once all validators have been attempted, starts over at the beginning. Intended for cases
+    // that must eventually succeed as long as the network is up (or comes back up) eventually.
     async fn quorum_once_inner<'a, S, FMap>(
         &'a self,
         // try these authorities first
@@ -544,6 +547,7 @@ where
         FMap: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, S, SuiError>,
         S: Send,
     {
+        let mut delay = Duration::from_secs(1);
         loop {
             let authorities_shuffled = self.committee.shuffle_by_stake().filter(|a| {
                 // preferences will usually be small so linear search probably ok.
@@ -570,8 +574,10 @@ where
             }
             info!(
                 ?authority_errors,
-                "quorum_once_with_timeout failed on all authorities, retrying"
+                "quorum_once_with_timeout failed on all authorities, retrying in {:?}", delay
             );
+            sleep(delay).await;
+            delay = std::cmp::min(delay * 2, Duration::from_secs(5 * 60));
         }
     }
 

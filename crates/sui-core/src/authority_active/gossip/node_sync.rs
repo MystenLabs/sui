@@ -55,8 +55,8 @@ impl EffectsStakeMap {
         self.effects_vote_map
             .get(digest)
             .unwrap_or(&HashMap::new())
-            .iter()
-            .map(|(a, _)| *a)
+            .keys()
+            .cloned()
             .collect()
     }
 
