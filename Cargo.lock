@@ -6372,7 +6372,6 @@ dependencies = [
  "clap 3.1.18",
  "colored",
  "futures",
- "hex",
  "jemalloc-ctl",
  "jemallocator",
  "jsonrpsee",

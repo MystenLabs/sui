@@ -18,6 +18,7 @@
 // ./bench microbench local-single-validator-thread latency
 
 use clap::*;
+use std::time::Duration;
 use sui_benchmark::benchmark::{
     bench_types, run_benchmark, validator_preparer::VALIDATOR_BINARY_NAME,
 };
@@ -52,18 +53,26 @@ fn main() {
     set_global_default(subscriber).expect("Failed to set subscriber");
     let benchmark = bench_types::Benchmark::parse();
     running_mode_pre_check(&benchmark);
+
+    #[cfg(not(target_env = "msvc"))]
+    std::thread::spawn(|| {
+        loop {
+            // many statistics are cached and only updated when the epoch is advanced.
+            epoch::advance().unwrap();
+
+            let allocated = stats::allocated::read().unwrap() / (1024 * 1024);
+            let resident = stats::resident::read().unwrap() / (1024 * 1024);
+            println!(
+                "Jemalloc: {} MB allocated / {} MB resident",
+                allocated, resident
+            );
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    });
+
     let r = run_benchmark(benchmark);
     println!("{}", r);
 
-    // many statistics are cached and only updated when the epoch is advanced.
-    epoch::advance().unwrap();
-
-    let allocated = stats::allocated::read().unwrap() / (1024 * 1024);
-    let resident = stats::resident::read().unwrap() / (1024 * 1024);
-    println!(
-        "Jemalloc: {} MB allocated / {} MB resident",
-        allocated, resident
-    );
 }
 
 fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {
