@@ -60,7 +60,7 @@ In addition, to conduct advanced work such as altering Sui itself, also obtain:
 To develop in Sui, you will need the Sui binaries. After installing `cargo`, run:
 
 ```shell
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-json-rpc
+$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "devnet" sui sui-gateway
 ```
 
 This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
