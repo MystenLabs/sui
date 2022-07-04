@@ -136,16 +136,31 @@ export type SplitCoinResponse = {
   updatedGas: SuiObject;
 };
 
+export type PublishResponse = {
+  certificate: CertifiedTransaction;
+  createdObjects: SuiObject[];
+  package: SuiPackage;
+  updatedGas: SuiObject;
+}
+
+export type SuiPackage = {
+  digest: string;
+  objectId: string;
+  version: number;
+}
+
 export type TransactionResponse =
   | {
       EffectResponse: TransactionEffectsResponse;
-      // TODO: Add Publish Response
     }
   | {
       SplitCoinResponse: SplitCoinResponse;
     }
   | {
       MergeCoinResponse: MergeCoinResponse;
+    }
+  | {
+      PublishResponse: PublishResponse;
     };
 
 /* -------------------------------------------------------------------------- */
