@@ -19,14 +19,13 @@ bench_params = {
     'rate': 50_000,
     'tx_size': 512,
     'faults': 0,
-    'duration': 20,
+    'duration': 300,
+    'mem_profiling': False    
 }
 ```
 They specify the number of primaries (`nodes`) and workers per primary (`workers`) to deploy, the input rate (transactions per second, or tx/s) at which the clients submit transactions to the system (`rate`), the size of each transaction in bytes (`tx_size`), the number of faulty nodes ('faults`), and the duration of the benchmark in seconds (`duration`). The minimum transaction size is 9 bytes; this ensures the transactions of a client are all different.
 
 The benchmarking script will deploy as many clients as workers and divide the input rate equally amongst each client. For instance, if you configure the testbed with four nodes, one worker per node, and an input rate of 1,000 tx/s (as in the example above), the scripts will deploy four clients each submitting transactions to one node at a rate of 250 tx/s. When the parameter `faults` is set to `f > 0`, the last `f` nodes and clients are not booted; the system will thus run with `n-f` nodes (and `n-f` clients).
-
-NOTE: To enable memory profiling with DHAT, add `        'mem_profiling': True,` to fabfile.py
 
 The nodes parameters determine the configuration for the primaries and workers:
 ```python
@@ -111,6 +110,20 @@ Here is sample output:
 -----------------------------------------
 ```
 The 'Consensus TPS' and 'Consensus latency' report the average throughput and latency without considering the client, respectively. The consensus latency thus refers to the time elapsed between the block's creation and its commit. In contrast, `End-to-end TPS` and `End-to-end latency` report the performance of the whole system, starting from when the client submits the transaction. The end-to-end latency is often called 'client-perceived latency'. To accurately measure this value without degrading performance, the client periodically submits 'sample' transactions that are tracked across all the modules until they get committed into a block; the benchmark scripts use sample transactions to estimate the end-to-end latency.
+
+### Memory/Allocation Profiling
+
+There is an option to run the benchmark in memory allocation profiling mode.  This slows down the benchmark,
+replacing the global allocator with one which profiles allocations.  It requires the `dhat-heap` compiler feature
+to be turned on.  To enable memory profiling mode, set the following benchmark options:
+
+* `'mem_profiling': True`
+* `duration`: This should be set to 5 minutes or longer
+
+`dhat-heap-*.json` files will be written to the benchmark dir, one for each primary.  
+You might not get files for all primaries as some primaries might die with a panic (see https://github.com/nnethercote/dhat-rs/issues/19).
+
+To view the profiling information, use the [hosted viewer](https://nnethercote.github.io/dh_view/dh_view.html) or see [the viewing instructions](https://docs.rs/dhat/latest/dhat/index.html#viewing) for details.
 
 ## AWS Benchmarks
 This repo integrates various Python scripts to deploy and benchmark the codebase on [Amazon Web Services (AWS)](https://aws.amazon.com). They are particularly useful to run benchmarks in the WAN, across multiple data centers. This section provides a step-by-step tutorial explaining how to use them.

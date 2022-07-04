@@ -47,10 +47,6 @@ serde_yaml = "0.8.26"
 structopt = "0.3.26"
 test_utils = { path = "../test_utils" }
 
-# Needed for memory/performance profiling
-[profile.release]
-debug = 1
-
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
 dhat-heap = []    # if you are doing heap profiling

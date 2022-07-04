@@ -28,6 +28,7 @@ tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = "0.7.2"
 tower = "0.4.13"
 tracing = "0.1.35"
+dhat = "0.3"
 
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
@@ -58,3 +59,4 @@ telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git"
 
 [features]
 benchmark = []
+dhat-heap = []    # if you are doing heap profiling

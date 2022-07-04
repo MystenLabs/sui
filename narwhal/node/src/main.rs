@@ -34,10 +34,6 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    #[cfg(feature = "dhat-heap")]
-    #[allow(unused)]
-    let profiler = dhat::Profiler::new_heap();
-
     let matches = App::new(crate_name!())
         .version(crate_version!())
         .about("A research implementation of Narwhal and Tusk.")
@@ -126,6 +122,7 @@ async fn main() -> Result<()> {
         ("run", Some(sub_matches)) => run(sub_matches).await?,
         _ => unreachable!(),
     }
+    println!("Exiting main()...");
     Ok(())
 }
 
