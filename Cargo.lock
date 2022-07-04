@@ -408,7 +408,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.28.4",
  "rustc-demangle",
 ]
 
@@ -4362,6 +4362,15 @@ name = "object"
 version = "0.28.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e42c982f2d955fac81dd7e1d0e1426a7d702acd9c98d19ab01083a6a0328c424"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
 dependencies = [
  "memchr",
 ]
@@ -8672,7 +8681,7 @@ dependencies = [
  "num_cpus",
  "num_enum",
  "num_enum_derive",
- "object",
+ "object 0.29.0",
  "once_cell",
  "oorandom",
  "opaque-debug 0.3.0",
