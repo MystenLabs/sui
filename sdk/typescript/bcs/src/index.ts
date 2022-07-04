@@ -11,9 +11,9 @@
  * @property {BcsReader}
  */
 
-import * as BN from "bn.js";
-import { toB64, fromB64 } from "./b64";
-import { toHEX, fromHEX } from "./hex";
+import * as BN from 'bn.js';
+import { toB64, fromB64 } from './b64';
+import { toHEX, fromHEX } from './hex';
 
 // Re-export all encoding dependencies.
 export { toB64, fromB64, fromHEX, toHEX };
@@ -102,7 +102,7 @@ export class BcsReader {
   read64(): BN {
     let value1 = this.read32();
     let value2 = this.read32();
-    let result = value2.toString(16) + value1.toString(16).padStart(8, "0");
+    let result = value2.toString(16) + value1.toString(16).padStart(8, '0');
 
     return new BN.BN(result, 16);
   }
@@ -113,7 +113,7 @@ export class BcsReader {
   read128(): BN {
     let value1 = this.read64();
     let value2 = this.read64();
-    let result = value2.toString(16) + value1.toString(16).padStart(8, "0");
+    let result = value2.toString(16) + value1.toString(16).padStart(8, '0');
 
     return new BN.BN(result, 16);
   }
@@ -189,10 +189,10 @@ export class BcsWriter {
    */
   static toBN(number: number | BN | bigint | string): BN {
     switch (typeof number) {
-      case "boolean":
+      case 'boolean':
         number = +number;
         return new BN.BN(number.toString());
-      case "bigint":
+      case 'bigint':
         return new BN.BN(number.toString());
       default:
         return new BN.BN(number);
@@ -243,7 +243,7 @@ export class BcsWriter {
    */
   write64(value: bigint | BN): this {
     BcsWriter.toBN(value)
-      .toArray("le", 8)
+      .toArray('le', 8)
       .forEach(el => this.write8(el));
 
     return this;
@@ -257,7 +257,7 @@ export class BcsWriter {
    */
   write128(value: bigint | BN): this {
     BcsWriter.toBN(value)
-      .toArray("le", 16)
+      .toArray('le', 16)
       .forEach(el => this.write8(el));
 
     return this;
@@ -362,7 +362,7 @@ function ulebDecode(
 
   return {
     value: total,
-    length: len
+    length: len,
   };
 }
 
@@ -383,14 +383,14 @@ export interface TypeInterface {
  */
 export class bcs {
   // Prefefined types constants
-  static readonly U8: string = "u8";
-  static readonly U32: string = "u32";
-  static readonly U64: string = "u64";
-  static readonly U128: string = "u128";
-  static readonly BOOL: string = "bool";
-  static readonly VECTOR: string = "vector";
-  static readonly ADDRESS: string = "address";
-  static readonly STRING: string = "string";
+  static readonly U8: string = 'u8';
+  static readonly U32: string = 'u32';
+  static readonly U64: string = 'u64';
+  static readonly U128: string = 'u128';
+  static readonly BOOL: string = 'bool';
+  static readonly VECTOR: string = 'vector';
+  static readonly ADDRESS: string = 'address';
+  static readonly STRING: string = 'string';
 
   private static types: Map<string, TypeInterface> = new Map();
 
@@ -428,7 +428,11 @@ export class bcs {
    * @param encoding Optional - encoding to use if data is of type String
    * @return Deserialized data.
    */
-  public static de(type: string, data: Uint8Array|string, encoding?: string): any {
+  public static de(
+    type: string,
+    data: Uint8Array | string,
+    encoding?: string
+  ): any {
     if (typeof data == 'string') {
       if (encoding) {
         data = decodeStr(data, encoding);
@@ -496,7 +500,7 @@ export class bcs {
       },
       _decodeRaw(reader) {
         return decodeCb(reader);
-      }
+      },
     });
 
     return this;
@@ -516,17 +520,17 @@ export class bcs {
   public static registerAddressType(
     name: string,
     length: number,
-    encoding: string | void = "hex"
+    encoding: string | void = 'hex'
   ): typeof bcs {
     switch (encoding) {
-      case "base64":
+      case 'base64':
         return this.registerType(
           name,
           (writer, data: string) =>
             fromB64(data).reduce((writer, el) => writer.write8(el), writer),
           reader => toB64(reader.readBytes(length))
         );
-      case "hex":
+      case 'hex':
         return this.registerType(
           name,
           (writer, data: string) =>
@@ -534,7 +538,7 @@ export class bcs {
           reader => toHEX(reader.readBytes(length))
         );
       default:
-        throw new Error("Unsupported encoding! Use either hex or base64");
+        throw new Error('Unsupported encoding! Use either hex or base64');
     }
   }
 
@@ -724,7 +728,7 @@ export class bcs {
           [invariant]:
             invariantType !== null
               ? bcs.getTypeInterface(invariantType)._decodeRaw(reader)
-              : true
+              : true,
         };
       }
     );
@@ -754,13 +758,13 @@ export class bcs {
  */
 export function encodeStr(data: Uint8Array, encoding: string): string {
   switch (encoding) {
-    case "base64":
+    case 'base64':
       return toB64(data);
-    case "hex":
+    case 'hex':
       return toHEX(data);
     default:
       throw new Error(
-        "Unsupported encoding, supported values are: base64, hex"
+        'Unsupported encoding, supported values are: base64, hex'
       );
   }
 }
@@ -774,13 +778,13 @@ export function encodeStr(data: Uint8Array, encoding: string): string {
  */
 export function decodeStr(data: string, encoding: string): Uint8Array {
   switch (encoding) {
-    case "base64":
+    case 'base64':
       return fromB64(data);
-    case "hex":
+    case 'hex':
       return fromHEX(data);
     default:
       throw new Error(
-        "Unsupported encoding, supported values are: base64, hex"
+        'Unsupported encoding, supported values are: base64, hex'
       );
   }
 }
@@ -817,7 +821,7 @@ export function decodeStr(data: string, encoding: string): Uint8Array {
   bcs.registerType(
     bcs.BOOL,
     (writer: BcsWriter, data) => writer.write8(data),
-    (reader: BcsReader) => reader.read8().toString(10) === "1",
+    (reader: BcsReader) => reader.read8().toString(10) === '1',
     (_bool: boolean) => true
   );
 
@@ -831,7 +835,7 @@ export function decodeStr(data: string, encoding: string): Uint8Array {
       return reader
         .readVec(reader => reader.read8())
         .map(el => String.fromCharCode(el))
-        .join("");
+        .join('');
     },
     (_str: string) => true
   );
