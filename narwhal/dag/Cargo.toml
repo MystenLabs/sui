@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 crypto  = { path = "../crypto" }
 dashmap = "5.3.4"
-either = "1.6.1"
+either = "1.7.0"
 itertools = "0.10.3"
 rayon = "1.5.3"
 serde = "1.0.138"
