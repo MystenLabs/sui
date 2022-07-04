@@ -325,7 +325,7 @@ where
         // These optimizations may well be worth it at some point if we are trying to get latency
         // down.
 
-        match mode {
+        let authorities_with_cert = match mode {
             SyncMode::Follow => {
                 let peer = peer.ok_or_else(|| SuiError::GenericAuthorityError {
                     error: "peer should be provided in SyncMode::Follow".into(),
@@ -357,6 +357,8 @@ where
                 }
 
                 trace!(?digests, ?peer, "digests are now final");
+
+                Some(self.effects_stake.lock().unwrap().voters(&digests.effects))
             }
             SyncMode::Checkpoint => {
                 trace!(
@@ -364,12 +366,15 @@ where
                     ?peer,
                     "skipping finality check, syncing from checkpoint."
                 );
+                None
             }
-        }
+        };
 
         // Download the cert and effects now that we have established finality and we know that the
         // effects digest is correct.
-        let (cert, effects) = self.download_cert_and_effects(peer, &digests).await?;
+        let (cert, effects) = self
+            .download_cert_and_effects(authorities_with_cert, &digests)
+            .await?;
 
         // we're done downloading at this point, so we no longer need to prevent other tasks from
         // starting.
@@ -421,7 +426,7 @@ where
     // Transactions are not currently persisted anywhere, however (validators delete them eagerly).
     async fn download_cert_and_effects(
         &self,
-        peer: Option<&AuthorityName>,
+        authorities_with_cert: Option<BTreeSet<AuthorityName>>,
         digests: &ExecutionDigests,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
         let digest = digests.transaction;
@@ -434,14 +439,18 @@ where
         if let Some(tx) = tx {
             let aggregator = self.aggregator.clone();
             let digests = *digests;
-            let peer = peer.cloned();
             let node_sync_store = self.node_sync_store.clone();
-            let authorities = self.effects_stake.lock().unwrap().voters(&digests.effects);
             tokio::task::spawn(async move {
                 if let Err(error) = tx.send(
-                    Self::download_impl(authorities, aggregator, &digests, node_sync_store).await,
+                    Self::download_impl(
+                        authorities_with_cert,
+                        aggregator,
+                        &digests,
+                        node_sync_store,
+                    )
+                    .await,
                 ) {
-                    error!(?digest, ?peer, ?error, "Could not broadcast cert response");
+                    error!(?digest, ?error, "Could not broadcast cert response");
                 }
             });
         }
@@ -463,7 +472,7 @@ where
     }
 
     async fn download_impl(
-        authorities: BTreeSet<AuthorityName>,
+        authorities: Option<BTreeSet<AuthorityName>>,
         aggregator: Arc<AuthorityAggregator<A>>,
         digests: &ExecutionDigests,
         node_sync_store: Arc<NodeSyncStore>,
@@ -471,7 +480,7 @@ where
         let digest = digests.transaction;
 
         let (cert, effects) = aggregator
-            .handle_transaction_and_effects_info_request(digests, &authorities, None)
+            .handle_transaction_and_effects_info_request(digests, authorities.as_ref(), None)
             .await?;
 
         node_sync_store.store_cert_and_effects(&digest, &(cert, effects))?;
