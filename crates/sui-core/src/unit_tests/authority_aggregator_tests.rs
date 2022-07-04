@@ -8,8 +8,8 @@ use signature::Signer;
 
 use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
-use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
+use sui_types::crypto::{get_key_pair, PublicKeyBytes};
 
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};

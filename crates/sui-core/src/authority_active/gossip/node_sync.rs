@@ -8,7 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, BTreeSet, HashMap};
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 const NODE_SYNC_QUEUE_LEN: usize = 500;
 
@@ -48,6 +48,16 @@ impl EffectsStakeMap {
             effects_stake_map: HashMap::new(),
             effects_vote_map: HashMap::new(),
         }
+    }
+
+    // Get the set of authorities who voted for a digest.
+    pub fn voters(&self, digest: &TransactionEffectsDigest) -> BTreeSet<AuthorityName> {
+        self.effects_vote_map
+            .get(digest)
+            .unwrap_or(&HashMap::new())
+            .keys()
+            .cloned()
+            .collect()
     }
 
     /// Note that a given effects digest has been attested by a validator, and return true if the
@@ -330,10 +340,11 @@ where
             let digests = *digests;
             let peer = *peer;
             let node_sync_store = self.node_sync_store.clone();
+            let authorities = self.effects_stake.lock().unwrap().voters(&digests.effects);
             tokio::task::spawn(async move {
-                if let Err(error) =
-                    tx.send(Self::download_impl(peer, aggregator, &digests, node_sync_store).await)
-                {
+                if let Err(error) = tx.send(
+                    Self::download_impl(authorities, aggregator, &digests, node_sync_store).await,
+                ) {
                     error!(?digest, ?peer, ?error, "Could not broadcast cert response");
                 }
             });
@@ -356,29 +367,16 @@ where
     }
 
     async fn download_impl(
-        peer: AuthorityName,
+        authorities: BTreeSet<AuthorityName>,
         aggregator: Arc<AuthorityAggregator<A>>,
         digests: &ExecutionDigests,
         node_sync_store: Arc<NodeSyncStore>,
     ) -> SuiResult {
         let digest = digests.transaction;
 
-        // TODO: should we suggest that we try peer first?
-        let resp = aggregator
-            .handle_transaction_and_effects_info_request(digests)
+        let (cert, effects) = aggregator
+            .handle_transaction_and_effects_info_request(digests, &authorities, None)
             .await?;
-
-        let cert = resp.certified_transaction.ok_or_else(|| {
-            info!(?digest, ?peer, "validator did not return cert");
-            SuiError::GenericAuthorityError {
-                error: format!("validator did not return cert for {:?}", digest),
-            }
-        })?;
-
-        let effects = resp.signed_effects.ok_or_else(|| {
-            info!(?digest, ?peer, "validator did not return effects");
-            SuiError::ByzantineAuthoritySuspicion { authority: peer }
-        })?;
 
         node_sync_store.store_cert_and_effects(&digest, &(cert, effects))?;
 
