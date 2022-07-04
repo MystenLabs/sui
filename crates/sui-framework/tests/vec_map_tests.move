@@ -57,6 +57,27 @@ module sui::vec_map_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = 4)]
+    fun disjoint_union_key_overlap() {
+        let m1 = vec_map::singleton(1, true);
+        let m2 = vec_map::singleton(1, false);
+        vec_map::disjoint_union(&mut m1, &mut m2)
+    }
+
+    #[test]
+    fun disjoint_union() {
+        let m1 = vec_map::singleton(1, true);
+        let m2 = vec_map::singleton(2, false);
+        vec_map::disjoint_union(&mut m1, &mut m2);
+
+        assert!(vec_map::size(&m1) == 2, 0);
+        assert!(vec_map::contains(&m1, &1), 1);
+        assert!(vec_map::contains(&m1, &2), 2);
+
+        assert!(vec_map::is_empty(&m2), 3);
+    }
+
+    #[test]
     fun smoke() {
         let m = vec_map::empty();
         let i = 0;

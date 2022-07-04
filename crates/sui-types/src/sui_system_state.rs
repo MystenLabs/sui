@@ -25,10 +25,22 @@ pub struct SystemParameters {
 }
 
 /// Rust version of the Move Std::Option::Option type.
-/// Putting it in this file because it's only used here.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct MoveOption<T> {
     pub vec: Vec<T>,
+}
+
+/// Rust version of the Move sui::vec_map::Entry type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct MoveVecMapEntry<K, V> {
+    pub key: K,
+    pub value: V,
+}
+
+/// Rust version of the Move sui::vec_map::VecMap type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct MoveVecMap<K, V> {
+    pub contents: Vec<MoveVecMapEntry<K, V>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -61,10 +73,10 @@ pub struct ValidatorSet {
     pub validator_stake: u64,
     pub delegation_stake: u64,
     pub quorum_stake_threshold: u64,
-    pub active_validators: Vec<Validator>,
-    pub pending_validators: Vec<Validator>,
-    pub pending_removals: Vec<u64>,
-    pub next_epoch_validators: Vec<ValidatorMetadata>,
+    pub active_validators: MoveVecMap<AccountAddress, Validator>,
+    pub pending_validators: MoveVecMap<AccountAddress, Validator>,
+    pub pending_removals: Vec<AccountAddress>,
+    pub next_epoch_validators: MoveVecMap<AccountAddress, ValidatorMetadata>,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type

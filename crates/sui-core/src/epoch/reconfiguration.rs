@@ -95,8 +95,10 @@ where
         let next_epoch = sui_system_state.epoch + 1;
         let next_epoch_validators = &sui_system_state.validators.next_epoch_validators;
         let votes = next_epoch_validators
+            .contents
             .iter()
-            .map(|metadata| {
+            .map(|entry| {
+                let metadata = &entry.value;
                 (
                     PublicKeyBytes::try_from(metadata.pubkey_bytes.as_ref())
                         .expect("Validity of public key bytes should be verified on-chain"),

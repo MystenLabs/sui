@@ -9,6 +9,7 @@ module sui::validator_set_tests {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::validator_set;
+    use sui::vec_map;
 
     #[test]
     fun test_validator_set_flow() {
@@ -19,7 +20,7 @@ module sui::validator_set_tests {
         let (_ctx4, validator4) = create_validator(@0x4, 4);
 
         // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[validator1]);
+        let validator_set = validator_set::new(vec_map::singleton(validator::sui_address(&validator1), validator1));
         assert!(validator_set::total_validator_candidate_count(&validator_set) == 1, 0);
         assert!(validator_set::validator_stake(&validator_set) == 100, 0);
 

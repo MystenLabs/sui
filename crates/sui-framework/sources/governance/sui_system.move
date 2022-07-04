@@ -13,6 +13,7 @@ module sui::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::validator_set::{Self, ValidatorSet};
+    use sui::vec_map::VecMap;
 
     friend sui::genesis;
 
@@ -55,8 +56,8 @@ module sui::sui_system {
     /// Create a new SuiSystemState object and make it shared.
     /// This function will be called only once in Genesis.
     public(friend) fun create(
-        validators: vector<Validator>,
         sui_supply: Supply<SUI>,
+        validators: VecMap<address,Validator>,
         storage_fund: Balance<SUI>,
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
@@ -167,7 +168,7 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         let amount = coin::value(&delegate_stake);
-        validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
+        validator_set::request_add_delegation(&mut self.validators, &validator_address, amount);
 
         // Delegation starts from the next epoch.
         let starting_epoch = self.epoch + 1;
@@ -181,7 +182,7 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         let amount = locked_coin::value(&delegate_stake);
-        validator_set::request_add_delegation(&mut self.validators, validator_address, amount);
+        validator_set::request_add_delegation(&mut self.validators, &validator_address, amount);
 
         // Delegation starts from the next epoch.
         let starting_epoch = self.epoch + 1;
@@ -195,7 +196,7 @@ module sui::sui_system {
     ) {
         validator_set::request_remove_delegation(
             &mut self.validators,
-            delegation::validator(delegation),
+            &delegation::validator(delegation),
             delegation::delegate_amount(delegation),
         );
         delegation::undelegate(delegation, self.epoch, ctx)

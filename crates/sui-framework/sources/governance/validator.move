@@ -123,12 +123,23 @@ module sui::validator {
     }
 
     /// Add stake to an active validator. The new stake is added to the pending_stake field,
-    /// which will be processed at the end of epoch.
+    /// which will be processed at the end of epoch. Also update the metadata for this validator
+    // in the next epoch
     public(friend) fun request_add_stake(
         self: &mut Validator,
+        next_epoch_metadata: &mut ValidatorMetadata,
         new_stake: Balance<SUI>,
     ) {
-        let new_stake_value = balance::value(&new_stake);
+        let stake_amount = add_stake(self, new_stake);
+        next_epoch_metadata.next_epoch_stake = stake_amount
+    }
+
+    /// Add stake to an active validator. The new stake is added to the pending_stake field,
+    /// which will be processed at the end of epoch.
+    public(friend) fun add_stake(
+        self: &mut Validator,
+        new_stake: Balance<SUI>,
+    ): u64 {
         let pending_stake = if (option::is_some(&self.pending_stake)) {
             let pending_stake = option::extract(&mut self.pending_stake);
             balance::join(&mut pending_stake, new_stake);
@@ -136,22 +147,28 @@ module sui::validator {
         } else {
             new_stake
         };
+        let stake_amount = balance::value(&pending_stake);
         option::fill(&mut self.pending_stake, pending_stake);
-        self.metadata.next_epoch_stake = self.metadata.next_epoch_stake + new_stake_value;
+        self.metadata.next_epoch_stake = stake_amount;
+        stake_amount
     }
 
     /// Withdraw stake from an active validator. Since it's active, we need
     /// to add it to the pending withdraw amount and process it at the end
     /// of epoch. We also need to make sure there is sufficient amount to withdraw such that the validator's
     /// stake still satisfy the minimum requirement.
+    /// Returns the new stake amount for `self`
     public(friend) fun request_withdraw_stake(
         self: &mut Validator,
+        next_epoch_metadata: &mut ValidatorMetadata,
         withdraw_amount: u64,
         min_validator_stake: u64,
     ) {
         assert!(self.metadata.next_epoch_stake >= withdraw_amount + min_validator_stake, 0);
         self.pending_withdraw = self.pending_withdraw + withdraw_amount;
-        self.metadata.next_epoch_stake = self.metadata.next_epoch_stake - withdraw_amount;
+        let stake_amount = self.metadata.next_epoch_stake - withdraw_amount;
+        self.metadata.next_epoch_stake = stake_amount;
+        next_epoch_metadata.next_epoch_stake = stake_amount
     }
 
     /// Process pending stake and pending withdraws.
@@ -176,19 +193,29 @@ module sui::validator {
         self.pending_delegator_withdraw_count = 0;
     }
 
-    public(friend) fun request_add_delegation(self: &mut Validator, delegate_amount: u64) {
+    public(friend) fun request_add_delegation(
+        self: &mut Validator, next_epoch_metadata: &mut ValidatorMetadata, delegate_amount: u64
+    ) {
         assert!(delegate_amount > 0, 0);
         self.pending_delegation = self.pending_delegation + delegate_amount;
         self.pending_delegator_count = self.pending_delegator_count + 1;
+        next_epoch_metadata.next_epoch_stake = next_epoch_metadata.next_epoch_stake + delegate_amount
     }
 
-    public(friend) fun request_remove_delegation(self: &mut Validator, delegate_amount: u64) {
+    public(friend) fun request_remove_delegation(
+        self: &mut Validator, next_epoch_metadata: &mut ValidatorMetadata, delegate_amount: u64
+    ) {
         self.pending_delegation_withdraw = self.pending_delegation_withdraw + delegate_amount;
         self.pending_delegator_withdraw_count = self.pending_delegator_withdraw_count + 1;
+        next_epoch_metadata.next_epoch_stake = next_epoch_metadata.next_epoch_stake + delegate_amount
     }
 
     public fun metadata(self: &Validator): &ValidatorMetadata {
         &self.metadata
+    }
+
+    public fun metadata_next_epoch_stake(self: &ValidatorMetadata): u64 {
+        self.next_epoch_stake
     }
 
     public fun sui_address(self: &Validator): address {

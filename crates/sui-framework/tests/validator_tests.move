@@ -51,16 +51,19 @@ module sui::validator_tests {
             x"FFFF",
             init_stake,
         );
+        let metadata = *validator::metadata(&validator);
 
         let new_stake = coin::into_balance(coin::mint_for_testing(30, ctx));
-        validator::request_add_stake(&mut validator, new_stake);
+        validator::request_add_stake(&mut validator, &mut metadata, new_stake);
 
         assert!(validator::stake_amount(&validator) == 10, 0);
         assert!(validator::pending_stake_amount(&validator) == 30, 0);
+        assert!(validator::metadata_next_epoch_stake(&metadata) == 30, 0);
 
-        validator::request_withdraw_stake(&mut validator, 5, 35);
+        validator::request_withdraw_stake(&mut validator, &mut metadata, 5, 35);
         assert!(validator::stake_amount(&validator) == 10, 0);
         assert!(validator::pending_stake_amount(&validator) == 30, 0);
+        assert!(validator::metadata_next_epoch_stake(&metadata) == 30, 0);
         assert!(validator::pending_withdraw(&validator) == 5, 0);
 
         // Calling `adjust_stake` will withdraw the coin and transfer to sender.
@@ -68,6 +71,7 @@ module sui::validator_tests {
 
         assert!(validator::stake_amount(&validator) == 35, 0);
         assert!(validator::pending_stake_amount(&validator) == 0, 0);
+        assert!(validator::metadata_next_epoch_stake(&metadata) == 0, 0);
         assert!(validator::pending_withdraw(&validator) == 0, 0);
 
         test_scenario::next_tx(scenario, &sender);
