@@ -40,6 +40,10 @@ move-package = { git = "https://github.com/move-language/move", rev = "95999a981
 
 workspace-hack = { path = "../workspace-hack"}
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { version = "^0.5", features = ["profiling"] }
+jemalloc-ctl = "^0.5"
+
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.21"

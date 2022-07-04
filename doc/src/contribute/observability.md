@@ -214,7 +214,7 @@ Jemalloc has a memory profiling mode which can be enabled at runtime with enviro
 
 * See https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling
 * Also see https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174
-* Example: set `JE_MALLOC_CONF` or `_RJEM_MALLOC_CONF` to:
+* Example: set `JE_MALLOC_CONF` or `JEMALLOC_SYS_WITH_MALLOC_CONF` to:
       prof:true,lg_prof_interval:24,lg_prof_sample:19
 * The above means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
    and dump out profile every 2^24 or 16MB of memory allocated.
