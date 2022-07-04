@@ -37,6 +37,13 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
+export interface PublishTransaction {
+  packages: string[],
+  gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
+
 ///////////////////////////////
 // Exported Abstracts
 /**
