@@ -9,6 +9,8 @@ use crate::{
 };
 use async_trait::async_trait;
 
+use tokio_stream::{wrappers::ReceiverStream, Stream, StreamExt};
+
 use std::collections::{hash_map, BTreeSet, HashMap};
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
@@ -16,6 +18,7 @@ use sui_types::{
     committee::{Committee, StakeUnit},
     error::{SuiError, SuiResult},
     messages::{CertifiedTransaction, SignedTransactionEffects},
+    messages_checkpoint::CheckpointContents,
 };
 
 use std::ops::Deref;
@@ -159,14 +162,44 @@ where
 
 struct DigestsMessage {
     digests: ExecutionDigests,
-    peer: AuthorityName,
-    tx: oneshot::Sender<SuiResult>,
+    peer: Option<AuthorityName>,
+    tx: Option<oneshot::Sender<SuiResult>>,
+}
+
+impl DigestsMessage {
+    fn new_for_ckpt(digests: &ExecutionDigests) -> Self {
+        Self {
+            digests: *digests,
+            peer: None,
+            tx: None,
+        }
+    }
+
+    fn new(
+        digests: &ExecutionDigests,
+        peer: AuthorityName,
+        tx: oneshot::Sender<SuiResult>,
+    ) -> Self {
+        Self {
+            digests: *digests,
+            peer: Some(peer),
+            tx: Some(tx),
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub enum SyncMode {
+    /// In follow mode, wait for 2f+1 votes for a tx before executing
+    Follow,
+    /// In checkpoint mode, all txes are known to be final.
+    Checkpoint,
 }
 
 /// NodeSyncState is shared by any number of NodeSyncDigestHandler's, and receives DigestsMessage
 /// messages from those handlers, waits for finality of TXes, and then downloads and applies those
 /// TXes locally.
-struct NodeSyncState<A> {
+pub struct NodeSyncState<A> {
     committee: Arc<Committee>,
     effects_stake: Mutex<EffectsStakeMap>,
     state: Arc<AuthorityState>,
@@ -184,26 +217,70 @@ impl<A> NodeSyncState<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    fn start(self, mut receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
+    pub fn new(
+        state: Arc<AuthorityState>,
+        aggregator: Arc<AuthorityAggregator<A>>,
+        node_sync_store: Arc<NodeSyncStore>,
+    ) -> Self {
+        let committee = state.committee.load().deref().clone();
+        Self {
+            committee,
+            effects_stake: Mutex::new(EffectsStakeMap::new()),
+            state,
+            aggregator,
+            node_sync_store,
+            pending_downloads: Waiter::new(),
+            pending_txes: Waiter::new(),
+        }
+    }
+
+    fn start(self, receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
         let state = Arc::new(self);
         tokio::spawn(async move {
-            // this pattern for limiting concurrency is from
-            // https://github.com/tokio-rs/tokio/discussions/2648
-            let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
+            state
+                .handle_stream(SyncMode::Follow, ReceiverStream::new(receiver))
+                .await
+        })
+    }
 
-            while let Some(DigestsMessage { digests, peer, tx }) = receiver.recv().await {
-                let state = state.clone();
-                let limit = limit.clone();
-                tokio::spawn(async move {
-                    // hold semaphore permit until task completes. unwrap ok because we never close
-                    // the semaphore in this context.
-                    let permit = limit.acquire_owned().await.unwrap();
+    pub async fn sync_checkpoint(self, checkpoint_contents: &CheckpointContents) -> SuiResult {
+        let stream = tokio_stream::iter(
+            checkpoint_contents
+                .transactions
+                .iter()
+                .map(DigestsMessage::new_for_ckpt),
+        );
+        let state = Arc::new(self);
+        state.handle_stream(SyncMode::Checkpoint, stream).await;
+        Ok(())
+    }
 
-                    let res = state.process_digest(peer, digests, permit).await;
-                    if let Err(error) = &res {
-                        error!(?digests, ?peer, "process_digest failed: {}", error);
-                    }
+    async fn handle_stream(
+        self: Arc<Self>,
+        mode: SyncMode,
+        stream: impl Stream<Item = DigestsMessage>,
+    ) {
+        // this pattern for limiting concurrency is from
+        // https://github.com/tokio-rs/tokio/discussions/2648
+        let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
+        let mut stream = Box::pin(stream);
 
+        while let Some(DigestsMessage { digests, peer, tx }) = stream.next().await {
+            let state = self.clone();
+            let limit = limit.clone();
+            tokio::spawn(async move {
+                // hold semaphore permit until task completes. unwrap ok because we never close
+                // the semaphore in this context.
+                let permit = limit.acquire_owned().await.unwrap();
+
+                let res = state
+                    .process_digest(mode, peer.as_ref(), digests, permit)
+                    .await;
+                if let Err(error) = &res {
+                    error!(?digests, ?peer, "process_digest failed: {}", error);
+                }
+
+                if let Some(tx) = tx {
                     // Send status back to follower so that it knows whether to advance
                     // the watermark.
                     if tx.send(res).is_err() {
@@ -216,14 +293,15 @@ where
                             "could not send process_digest response to caller",
                         );
                     }
-                });
-            }
-        })
+                }
+            });
+        }
     }
 
     async fn process_digest(
         &self,
-        peer: AuthorityName,
+        mode: SyncMode,
+        peer: Option<&AuthorityName>,
         digests: ExecutionDigests,
         permit: OwnedSemaphorePermit,
     ) -> SuiResult {
@@ -247,36 +325,51 @@ where
         // These optimizations may well be worth it at some point if we are trying to get latency
         // down.
 
-        // Check if the tx is final.
-        let stake = self.committee.weight(&peer);
-        let quorum_threshold = self.committee.quorum_threshold();
-        let is_final = self.effects_stake.lock().unwrap().note_effects_digest(
-            &peer,
-            stake,
-            quorum_threshold,
-            &digests.effects,
-        );
+        match mode {
+            SyncMode::Follow => {
+                let peer = peer.ok_or_else(|| SuiError::GenericAuthorityError {
+                    error: "peer should be provided in SyncMode::Follow".into(),
+                })?;
+                // Check if the tx is final.
+                let stake = self.committee.weight(peer);
+                let quorum_threshold = self.committee.quorum_threshold();
 
-        if !is_final {
-            // we won't be downloading anything, so release the permit
-            std::mem::drop(permit);
+                let is_final = self.effects_stake.lock().unwrap().note_effects_digest(
+                    peer,
+                    stake,
+                    quorum_threshold,
+                    &digests.effects,
+                );
 
-            // wait until the tx becomes final before returning, so that the follower doesn't mark
-            // this tx as finished prematurely.
-            let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
-            return rx
-                .recv()
-                .await
-                .map_err(|e| SuiError::GenericAuthorityError {
-                    error: format!("{:?}", e),
-                });
+                if !is_final {
+                    // we won't be downloading anything, so release the permit
+                    std::mem::drop(permit);
+
+                    // wait until the tx becomes final before returning, so that the follower doesn't mark
+                    // this tx as finished prematurely.
+                    let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
+                    return rx
+                        .recv()
+                        .await
+                        .map_err(|e| SuiError::GenericAuthorityError {
+                            error: format!("{:?}", e),
+                        });
+                }
+
+                trace!(?digests, ?peer, "digests are now final");
+            }
+            SyncMode::Checkpoint => {
+                trace!(
+                    ?digests,
+                    ?peer,
+                    "skipping finality check, syncing from checkpoint."
+                );
+            }
         }
-
-        trace!(?digests, ?peer, "digests are now final");
 
         // Download the cert and effects now that we have established finality and we know that the
         // effects digest is correct.
-        let (cert, effects) = self.download_cert_and_effects(&peer, &digests).await?;
+        let (cert, effects) = self.download_cert_and_effects(peer, &digests).await?;
 
         // we're done downloading at this point, so we no longer need to prevent other tasks from
         // starting.
@@ -326,7 +419,7 @@ where
     // Download the certificate and effects specified in digests.
     async fn download_cert_and_effects(
         &self,
-        peer: &AuthorityName,
+        peer: Option<&AuthorityName>,
         digests: &ExecutionDigests,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
         let digest = digests.transaction;
@@ -339,7 +432,7 @@ where
         if let Some(tx) = tx {
             let aggregator = self.aggregator.clone();
             let digests = *digests;
-            let peer = *peer;
+            let peer = peer.cloned();
             let node_sync_store = self.node_sync_store.clone();
             let authorities = self.effects_stake.lock().unwrap().voters(&digests.effects);
             tokio::task::spawn(async move {
@@ -402,16 +495,7 @@ impl NodeSyncDigestHandler {
     {
         let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
 
-        let committee = state.committee.load().deref().clone();
-        let sync_state = NodeSyncState {
-            committee,
-            effects_stake: Mutex::new(EffectsStakeMap::new()),
-            state,
-            aggregator,
-            node_sync_store,
-            pending_downloads: Waiter::new(),
-            pending_txes: Waiter::new(),
-        };
+        let sync_state = NodeSyncState::new(state, aggregator, node_sync_store);
 
         let _sync_join_handle = Arc::new(sync_state.start(receiver));
 
@@ -430,11 +514,7 @@ where
     async fn handle_digest(&self, follower: &Follower<A>, digests: ExecutionDigests) -> SuiResult {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(DigestsMessage {
-                digests,
-                peer: follower.peer_name,
-                tx,
-            })
+            .send(DigestsMessage::new(&digests, follower.peer_name, tx))
             .await
             .map_err(|e| SuiError::GenericAuthorityError {
                 error: e.to_string(),
