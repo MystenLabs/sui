@@ -1553,7 +1553,12 @@ impl ExecutionState for AuthorityState {
                 if let Some(checkpoint) = &self.checkpoints {
                     let mut checkpoint = checkpoint.lock();
                     checkpoint
-                        .handle_internal_fragment(seq, *fragment, &self.committee.load(), self)
+                        .handle_internal_fragment(
+                            seq,
+                            *fragment,
+                            &self.committee.load(),
+                            self.database.clone(),
+                        )
                         .map_err(|e| SuiError::from(&e.to_string()[..]))?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
