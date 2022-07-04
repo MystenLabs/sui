@@ -34,7 +34,7 @@ export { toB64, fromB64, fromHEX, toHEX };
  * let field4 = reader.read64();
  * // ....
  *
- * Reading vectors is another deal in BCS. To read a vector, you first need to read
+ * Reading vectors is another deal in bcs. To read a vector, you first need to read
  * its length using {@link readULEB}. Here's an example:
  * @example
  * // data encoded: { field: [1, 2, 3, 4, 5] }
@@ -302,7 +302,7 @@ export class BcsWriter {
 
   /**
    * Get underlying buffer taking only value bytes (in case initial buffer size was bigger).
-   * @returns {Uint8Array} Resulting BCS.
+   * @returns {Uint8Array} Resulting bcs.
    */
   toBytes(): Uint8Array {
     return new Uint8Array(this.dataView.buffer.slice(0, this.bytePosition));
@@ -370,7 +370,7 @@ function ulebDecode(
  * Set of methods that allows data encoding/decoding as standalone
  * BCS value or a part of a composed structure/vector.
  */
-interface TypeInterface {
+export interface TypeInterface {
   encode: (data: any, size: number) => BcsWriter;
   decode: (data: Uint8Array) => any;
 
@@ -381,7 +381,7 @@ interface TypeInterface {
 /**
  * BCS implementation for Move types and few additional built-ins.
  */
-export class BCS {
+export class bcs {
   // Prefefined types constants
   static readonly U8: string = "u8";
   static readonly U32: string = "u32";
@@ -395,16 +395,16 @@ export class BCS {
   private static types: Map<string, TypeInterface> = new Map();
 
   /**
-   * Serialize data into BCS.
+   * Serialize data into bcs.
    *
    * @example
-   * BCS.registerVectorType('vector<u8>', 'u8');
+   * bcs.registerVectorType('vector<u8>', 'u8');
    *
    * let serialized = BCS
    *   .set('vector<u8>', [1,2,3,4,5,6])
    *   .toBytes();
    *
-   * console.assert(BCS.util.toHex(serialized) === '06010203040506');
+   * console.assert(toHex(serialized) === '06010203040506');
    *
    * @param type Name of the type to serialize (must be registered).
    * @param data Data to serialize.
@@ -419,15 +419,24 @@ export class BCS {
    * Deserialize BCS into a JS type.
    *
    * @example
-   * // use util to form an Uint8Array buffer
-   * let data = BCS.de(BCS.U32, new Uint8Array([255, 255, 255, 255]));
-   * console.assert(data.toString() == '4294967295');
+   * let num = bcs.ser('u64', '4294967295').toString('hex');
+   * let deNum = bcs.de('u64', num, 'hex');
+   * console.assert(deNum.toString(10) === '4294967295');
    *
    * @param type Name of the type to deserialize (must be registered).
    * @param data Data to deserialize.
+   * @param encoding Optional - encoding to use if data is of type String
    * @return Deserialized data.
    */
-  public static de(type: string, data: Uint8Array): any {
+  public static de(type: string, data: Uint8Array|string, encoding?: string): any {
+    if (typeof data == 'string') {
+      if (encoding) {
+        data = decodeStr(data, encoding);
+      } else {
+        throw new Error('To pass a string to `bcs.de`, specify encoding');
+      }
+    }
+
     return this.getTypeInterface(type).decode(data);
   }
 
@@ -450,12 +459,12 @@ export class BCS {
    *
    * @example
    * // our type would be a string that consists only of numbers
-   * BCS.registerType('number_string',
+   * bcs.registerType('number_string',
    *    (writer, data) => writer.writeVec(data, (w, el) => w.write8(el)),
    *    (reader) => reader.readVec((r) => r.read8()).join(''), // read each value as u8
    *    (value) => /[0-9]+/.test(value) // test that it has at least one digit
    * );
-   * console.log(Array.from(BCS.set('number_string', '12345').toBytes()) == [5,1,2,3,4,5]);
+   * console.log(Array.from(bcs.ser('number_string', '12345').toBytes()) == [5,1,2,3,4,5]);
    *
    * @param name
    * @param encodeCb Callback to encode a value.
@@ -467,7 +476,7 @@ export class BCS {
     encodeCb: (writer: BcsWriter, data: any) => BcsWriter,
     decodeCb: (reader: BcsReader) => any,
     validateCb: (data: any) => boolean = () => true
-  ): typeof BCS {
+  ): typeof bcs {
     this.types.set(name, {
       encode(data, size = 1024) {
         return this._encodeRaw(new BcsWriter(size), data);
@@ -496,8 +505,8 @@ export class BCS {
   /**
    * Register an address type which is a sequence of U8s of specified length.
    * @example
-   * BCS.registerAddressType('address', 20);
-   * let addr = BCS.de('address', 'ca27601ec5d915dd40d42e36c395d4a156b24026');
+   * bcs.registerAddressType('address', 20);
+   * let addr = bcs.de('address', 'ca27601ec5d915dd40d42e36c395d4a156b24026');
    *
    * @param name Name of the address type.
    * @param length Byte length of the address.
@@ -508,7 +517,7 @@ export class BCS {
     name: string,
     length: number,
     encoding: string | void = "hex"
-  ): typeof BCS {
+  ): typeof bcs {
     switch (encoding) {
       case "base64":
         return this.registerType(
@@ -530,34 +539,30 @@ export class BCS {
   }
 
   /**
-   * Register custom vector type inside the BCS.
+   * Register custom vector type inside the bcs.
    *
    * @example
-   * BCS.registerVectorType('vector<u8>', 'u8');
-   * let array = BCS.de('vector<u8>', new Uint8Array([6,1,2,3,4,5,6])); // [1,2,3,4,5,6];
-   * let again = BCS.set('vector<u8>', [1,2,3,4,5,6]).toBytes();
+   * bcs.registerVectorType('vector<u8>', 'u8');
+   * let array = bcs.de('vector<u8>', '06010203040506', 'hex'); // [1,2,3,4,5,6];
+   * let again = bcs.ser('vector<u8>', [1,2,3,4,5,6]).toString('hex');
    *
-   * BCS.registerVectorType('vector<u8>', 'u8', 'hex');
-   * let array =
-   *
-   * @param name Name of the type to register.
-   * @param elementType Name of the inner type of the vector.
-   * @param encoding Either 'base64' or 'hex' to enable string<->vector conversions
+   * @param name Name of the type to register
+   * @param elementType Name of the inner type of the vector
    * @return Returns self for chaining.
    */
   public static registerVectorType(
     name: string,
     elementType: string
-  ): typeof BCS {
+  ): typeof bcs {
     return this.registerType(
       name,
       (writer: BcsWriter, data: any[]) =>
         writer.writeVec(data, (writer, el) => {
-          return BCS.getTypeInterface(elementType)._encodeRaw(writer, el);
+          return bcs.getTypeInterface(elementType)._encodeRaw(writer, el);
         }),
       (reader: BcsReader) =>
         reader.readVec(reader => {
-          return BCS.getTypeInterface(elementType)._decodeRaw(reader);
+          return bcs.getTypeInterface(elementType)._decodeRaw(reader);
         })
     );
   }
@@ -578,15 +583,15 @@ export class BCS {
    * //   is_locked: bool,
    * // }
    *
-   * BCS.registerStructType('Coin', {
-   *   value: BCS.U64,
-   *   owner: BCS.STRING,
-   *   is_locked: BCS.BOOL
+   * bcs.registerStructType('Coin', {
+   *   value: bcs.U64,
+   *   owner: bcs.STRING,
+   *   is_locked: bcs.BOOL
    * });
    *
    * // Created in Rust with diem/bcs
    * // let rust_bcs_str = '80d1b105600000000e4269672057616c6c65742047757900';
-   * let rust_bcs_str = [ // using an Array here as BCS works with Uint8Buffer
+   * let rust_bcs_str = [ // using an Array here as BCS works with Uint8Array
    *  128, 209, 177,   5,  96,  0,  0,
    *    0,  14,  66, 105, 103, 32, 87,
    *   97, 108, 108, 101, 116, 32, 71,
@@ -594,7 +599,7 @@ export class BCS {
    * ];
    *
    * // Let's encode the value as well
-   * let test_set = BCS.set('Coin', {
+   * let test_set = bcs.ser('Coin', {
    *   owner: 'Big Wallet Guy',
    *   value: '412412400000',
    *   is_locked: false,
@@ -609,7 +614,7 @@ export class BCS {
   public static registerStructType(
     name: string,
     fields: { [key: string]: string }
-  ): typeof BCS {
+  ): typeof bcs {
     let struct = Object.freeze(fields); // Make sure the order doesn't get changed
 
     // IMPORTANT: we need to store canonical order of fields for each registered
@@ -627,7 +632,7 @@ export class BCS {
         }
         for (let key of canonicalOrder) {
           if (key in data) {
-            BCS.getTypeInterface(struct[key])._encodeRaw(writer, data[key]);
+            bcs.getTypeInterface(struct[key])._encodeRaw(writer, data[key]);
           } else {
             throw new Error(
               `Struct ${name} requires field ${key}:${struct[key]}`
@@ -639,7 +644,7 @@ export class BCS {
       (reader: BcsReader) => {
         let result: { [key: string]: any } = {};
         for (let key of canonicalOrder) {
-          result[key] = BCS.getTypeInterface(struct[key])._decodeRaw(reader);
+          result[key] = bcs.getTypeInterface(struct[key])._decodeRaw(reader);
         }
         return result;
       }
@@ -649,24 +654,21 @@ export class BCS {
   /**
    * Safe method to register custom enum type where each invariant holds the value of another type.
    * @example
-   * BCS.registerStructType('Coin', { value: 'u64' });
-   * BCS.registerVectorType('vector<Coin>', 'Coin');
-   * BCS.registerEnumType('MyEnum', {
+   * bcs.registerStructType('Coin', { value: 'u64' });
+   * bcs.registerVectorType('vector<Coin>', 'Coin');
+   * bcs.registerEnumType('MyEnum', {
    *  single: 'Coin',
    *  multi: 'vector<Coin>'
    * });
    *
-   * let example1 = Buffer.from('AICWmAAAAAAA', 'base64');
-   * let example2 = Buffer.from('AQIBAAAAAAAAAAIAAAAAAAAA', 'base64');
-   *
    * console.log(
-   *  BCS.de('MyEnum', new Uint8Array(example1)), // { single: { value: 10000000 } }
-   *  BCS.de('MyEnum', new Uint8Array(example2))  // { multi: [ { value: 1 }, { value: 2 } ] }
-   * }
+   *  bcs.de('MyEnum', 'AICWmAAAAAAA', 'base64'), // { single: { value: 10000000 } }
+   *  bcs.de('MyEnum', 'AQIBAAAAAAAAAAIAAAAAAAAA', 'base64')  // { multi: [ { value: 1 }, { value: 2 } ] }
+   * )
    *
    * // and serialization
-   * BCS.set('MyEnum', { single: { value: 10000000 } }).toBytes();
-   * BCS.set('MyEnum', { multi: [ { value: 1 }, { value: 2 } ] });
+   * bcs.ser('MyEnum', { single: { value: 10000000 } }).toBytes();
+   * bcs.ser('MyEnum', { multi: [ { value: 1 }, { value: 2 } ] });
    *
    * @param name
    * @param variants
@@ -704,7 +706,7 @@ export class BCS {
 
         // Allow empty Enum values!
         return invariantType !== null
-          ? BCS.getTypeInterface(invariantType)._encodeRaw(writer, data[key])
+          ? bcs.getTypeInterface(invariantType)._encodeRaw(writer, data[key])
           : writer;
       },
       (reader: BcsReader) => {
@@ -721,15 +723,21 @@ export class BCS {
         return {
           [invariant]:
             invariantType !== null
-              ? BCS.getTypeInterface(invariantType)._decodeRaw(reader)
+              ? bcs.getTypeInterface(invariantType)._decodeRaw(reader)
               : true
         };
       }
     );
   }
-
+  /**
+   * Get a set of encoders/decoders for specific type.
+   * Mainly used to define custom type de/serialization logic.
+   *
+   * @param type
+   * @returns {TypeInterface}
+   */
   static getTypeInterface(type: string): TypeInterface {
-    let typeInterface = BCS.types.get(type);
+    let typeInterface = bcs.types.get(type);
     if (typeInterface === undefined) {
       throw new Error(`Type ${type} is not registered`);
     }
@@ -778,43 +786,43 @@ export function decodeStr(data: string, encoding: string): Uint8Array {
 }
 
 (function registerPrimitives(): void {
-  BCS.registerType(
-    BCS.U8,
+  bcs.registerType(
+    bcs.U8,
     (writer: BcsWriter, data) => writer.write8(data),
     (reader: BcsReader) => reader.read8(),
     u8 => u8 < 256
   );
 
-  BCS.registerType(
-    BCS.U32,
+  bcs.registerType(
+    bcs.U32,
     (writer: BcsWriter, data) => writer.write32(data),
     (reader: BcsReader) => reader.read32(),
     u32 => u32 < 4294967296
   );
 
-  BCS.registerType(
-    BCS.U64,
+  bcs.registerType(
+    bcs.U64,
     (writer: BcsWriter, data) => writer.write64(data),
     (reader: BcsReader) => reader.read64(),
     _u64 => true
   );
 
-  BCS.registerType(
-    BCS.U128,
+  bcs.registerType(
+    bcs.U128,
     (writer: BcsWriter, data: BN | bigint) => writer.write128(data),
     (reader: BcsReader) => reader.read128(),
     _u128 => true
   );
 
-  BCS.registerType(
-    BCS.BOOL,
+  bcs.registerType(
+    bcs.BOOL,
     (writer: BcsWriter, data) => writer.write8(data),
     (reader: BcsReader) => reader.read8().toString(10) === "1",
     (_bool: boolean) => true
   );
 
-  BCS.registerType(
-    BCS.STRING,
+  bcs.registerType(
+    bcs.STRING,
     (writer: BcsWriter, data: string) =>
       writer.writeVec(Array.from(data), (writer, el) =>
         writer.write8(el.charCodeAt(0))
