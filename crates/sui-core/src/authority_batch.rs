@@ -284,6 +284,9 @@ impl crate::authority::AuthorityState {
 
                 Some((Ok(BatchInfoResponseItem(item)), local_state))
             } else {
+                // Release memory now that the historical items have been processed.
+                local_state.items = VecDeque::new();
+
                 // When there are no more historical items, maybe subscribe
                 if !local_state.should_subscribe {
                     None
