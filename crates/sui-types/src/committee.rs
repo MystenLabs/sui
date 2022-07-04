@@ -8,6 +8,7 @@ use ed25519_dalek::PublicKey;
 use itertools::Itertools;
 use rand_latest::rngs::OsRng;
 use rand_latest::seq::SliceRandom;
+use roaring::RoaringBitmap;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
@@ -24,6 +25,8 @@ pub struct Committee {
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, PublicKey>,
+    #[serde(skip)]
+    index_map: HashMap<AuthorityName, usize>
 }
 
 impl Committee {
@@ -61,12 +64,34 @@ impl Committee {
             // e.g. when a new validator is registering themself on-chain.
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
+        let index_map: HashMap<_, _> = voting_rights.iter()
+            .enumerate()
+            .map(|(index, (addr, _) )| (*addr, index))
+            .collect(); 
+
         Ok(Committee {
             epoch,
             voting_rights,
             total_votes,
             expanded_keys,
+            index_map
         })
+    }
+
+    pub fn authorities_from_bitmap<'a>(&'a self, bitmap: &'a RoaringBitmap) -> impl Iterator<Item = &AuthorityName> {
+        self.voting_rights
+            .iter()
+            .enumerate()    
+            .filter(|&(i, _)| bitmap.contains(i as u32) == true)
+            .map(|(_, (name, _))| name)
+    }
+
+    pub fn authority_index(&self, author: &AuthorityName) -> usize {
+        self.index_map[author]
+    }
+
+    pub fn authority_by_index(&self, index: usize) -> &AuthorityName {
+        &self.voting_rights[index].0
     }
 
     pub fn epoch(&self) -> EpochId {

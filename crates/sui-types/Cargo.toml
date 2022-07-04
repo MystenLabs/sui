@@ -33,6 +33,7 @@ schemars ="0.8.10"
 tonic = "0.7"
 strum = "^0.24"
 strum_macros = "^0.24"
+roaring = "0.9.0"
 
 # This version is incompatible with ed25519-dalek
 rand_latest = { version = "0.8.5", package = "rand" }

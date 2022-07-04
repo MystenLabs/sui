@@ -10,10 +10,10 @@ use move_core_types::account_address::AccountAddress;
 use schemars::JsonSchema;
 use serde;
 use serde::de::{Deserializer, Error};
-use serde::ser::Serializer;
+use serde::ser::{Serializer, Error as SerError};
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::{DeserializeAs, SerializeAs};
+use serde_with::{DeserializeAs, SerializeAs, Bytes};
 
 use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
 
@@ -23,6 +23,14 @@ where
     D: Deserializer<'de>,
 {
     D::Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
+}
+
+fn to_custom_ser_error<S, E>(e: E) -> S::Error
+where
+    E: Debug,
+    S: Serializer,
+{
+    S::Error::custom(format!("byte serialization failed, cause by: {:?}", e))
 }
 
 /// Use with serde_as to encode/decode bytes to/from Base64/Hex for human-readable serializer and deserializer
@@ -178,6 +186,30 @@ impl Base64 {
 
     pub fn encoded(&self) -> String {
         self.0.clone()
+    }
+}
+
+pub struct SuiBitmap;
+
+impl SerializeAs<roaring::RoaringBitmap> for SuiBitmap {
+    fn serialize_as<S>(source: &roaring::RoaringBitmap, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut bytes = vec![];
+        
+        source.serialize_into(&mut bytes).map_err(to_custom_ser_error::<S, _>)?;
+        Bytes::serialize_as(&bytes, serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
+    fn deserialize_as<D>(deserializer: D) -> Result<roaring::RoaringBitmap, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+       let bytes: Vec<u8> = Bytes::deserialize_as(deserializer)?;
+       roaring::RoaringBitmap::deserialize_from(&bytes[..]).map_err(to_custom_error::<'de, D, _>)
     }
 }
 

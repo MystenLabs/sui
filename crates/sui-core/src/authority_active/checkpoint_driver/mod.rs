@@ -441,7 +441,7 @@ where
             // TODO: clean up the errors to get here only when the error is
             //       "No checkpoint set at this sequence."
             let available_authorities: BTreeSet<_> = checkpoint
-                .signatory_authorities()
+                .signatory_authorities(committee)
                 .filter(|a| **a != self_name)
                 .cloned()
                 .collect();
@@ -481,7 +481,7 @@ where
     // We use the latest available authorities not the authorities that signed the checkpoint
     // since these might be gone after the epoch they were active.
     let available_authorities: BTreeSet<_> = latest_known_checkpoint
-        .signatory_authorities()
+        .signatory_authorities(&net.committee)
         .cloned()
         .collect();
 
