@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs, fromB64, toB64 } from './../src/index';
+import { bcs, fromB64 } from './../src/index';
 import { BN } from 'bn.js';
 
 describe('Move bcs', () => {
