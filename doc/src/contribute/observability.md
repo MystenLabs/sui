@@ -207,3 +207,24 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 3. Clone the console repo and `cargo run` to launch the console.
 
 > **Note:** Adding Tokio-console support may significantly slow down Sui validators/gateways.
+
+### Memory Profiling
+
+Jemalloc has a memory profiling mode which can be enabled at runtime with environment vars.
+
+* See https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling
+* Also see https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174
+* Example: set `JE_MALLOC_CONF` or `_RJEM_MALLOC_CONF` to:
+      prof:true,lg_prof_interval:24,lg_prof_sample:19
+* The above means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
+   and dump out profile every 2^24 or 16MB of memory allocated.
+
+To view the profile files:
+1. `brew install jemalloc libunwind gprof2dot`
+2. Start `./sui node --config-path ....`
+3. In the same `target/release` dir, run `jeprof --text sui-node jeprof.66*.heap` where 66 is the starting PID of the current sui-node process
+
+If the profiling does not create `.heap` files, check your env vars.  There is a log line dumped at the
+start of sui-node, that should look like this:
+
+   INFO sui_node: Default Jemalloc conf: prof:true,lg_prof_interval:24,lg_prof_sample:19
