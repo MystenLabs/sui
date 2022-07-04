@@ -797,7 +797,7 @@ jsonrpsee-client-transport = { version = "0.13", default-features = false, featu
 jsonrpsee-core = { version = "0.13", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "http-helpers", "hyper", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing", "wasm-bindgen-futures"] }
 jsonrpsee-http-client = { version = "0.13", features = ["hyper-rustls", "tls"] }
 jsonrpsee-http-server = { version = "0.13", default-features = false }
-jsonrpsee-proc-macros = { version = "0.13", default-features = false }
+jsonrpsee-proc-macros = { version = "0.14", default-features = false }
 jsonrpsee-types = { version = "0.13", default-features = false }
 jsonrpsee-wasm-client = { version = "0.13", default-features = false }
 jsonrpsee-ws-client = { version = "0.13", features = ["tls"] }
