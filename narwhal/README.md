@@ -1,7 +1,7 @@
 # Narwhal and Tusk
 
 [![build status](https://img.shields.io/github/workflow/status/mystenlabs/narwhal/Rust/main?style=flat-square&logo=github)](https://github.com/mystenlabs/narwhal/actions)
-[![rustc](https://img.shields.io/badge/rustc-1.60+-blue?style=flat-square&logo=rust)](https://www.rust-lang.org)
+[![rustc](https://img.shields.io/badge/rustc-1.62+-blue?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![license](https://img.shields.io/badge/license-Apache-blue.svg?style=flat-square)](LICENSE)
 [![Narwhal Rust Crates Documentation (main)](https://img.shields.io/badge/docs-main-0f0)](https://mystenlabs.github.io/narwhal/)
 [![codecov](https://codecov.io/gh/MystenLabs/narwhal/branch/main/graph/badge.svg?token=C4bY6ovBlx)](https://codecov.io/gh/MystenLabs/narwhal)

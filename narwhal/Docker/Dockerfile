@@ -6,7 +6,7 @@ ARG BUILD_MODE="release"
 #################################################################
 # Stage 0
 #################################################################
-FROM rust:1.60-slim-bullseye as chef
+FROM rust:1.62-slim-bullseye as chef
 WORKDIR "$WORKDIR/narwhal"
 ARG BUILD_MODE
 
