@@ -230,7 +230,7 @@ jsonrpsee-http-server = { version = "0.13", default-features = false }
 jsonrpsee-types = { version = "0.13", default-features = false }
 jsonrpsee-wasm-client = { version = "0.13", default-features = false }
 jsonrpsee-ws-client = { version = "0.13", features = ["tls"] }
-jsonrpsee-ws-server = { version = "0.13", default-features = false }
+jsonrpsee-ws-server = { version = "0.14", default-features = false }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
@@ -801,7 +801,7 @@ jsonrpsee-proc-macros = { version = "0.13", default-features = false }
 jsonrpsee-types = { version = "0.13", default-features = false }
 jsonrpsee-wasm-client = { version = "0.13", default-features = false }
 jsonrpsee-ws-client = { version = "0.13", features = ["tls"] }
-jsonrpsee-ws-server = { version = "0.13", default-features = false }
+jsonrpsee-ws-server = { version = "0.14", default-features = false }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
