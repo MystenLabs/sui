@@ -1276,7 +1276,7 @@ fn test_fragment_full_flow() {
                 seq.clone(),
                 fragment,
                 &committee,
-                &PendCertificateForExecutionNoop
+                PendCertificateForExecutionNoop
             )
             .is_ok());
         cps0.attempt_to_construct_checkpoint(&committee).unwrap();
@@ -1306,7 +1306,7 @@ fn test_fragment_full_flow() {
             seq.clone(),
             fragment.clone(),
             &committee,
-            &PendCertificateForExecutionNoop,
+            PendCertificateForExecutionNoop,
         );
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
@@ -1327,7 +1327,7 @@ fn test_fragment_full_flow() {
             seq.clone(),
             fragment.clone(),
             &committee,
-            &PendCertificateForExecutionNoop,
+            PendCertificateForExecutionNoop,
         );
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
@@ -1523,7 +1523,7 @@ pub async fn checkpoint_tests_setup(
                         seq.clone(),
                         msg.clone(),
                         &c,
-                        &PendCertificateForExecutionNoop,
+                        PendCertificateForExecutionNoop,
                     ) {
                         println!("Error: {:?}", err);
                     }
@@ -1531,7 +1531,7 @@ pub async fn checkpoint_tests_setup(
                     seq.clone(),
                     msg.clone(),
                     &c,
-                    authority.as_ref(),
+                    authority.database.clone(),
                 ) {
                     println!("Error: {:?}", err);
                 }

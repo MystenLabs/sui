@@ -537,12 +537,12 @@ impl CheckpointStore {
     /// This function should be called by the consensus output, it is idempotent,
     /// and if called again with the same sequence number will do nothing. However,
     /// fragments should be provided in seq increasing order.
-    pub fn handle_internal_fragment<P: PendCertificateForExecution>(
+    pub fn handle_internal_fragment(
         &mut self,
         seq: ExecutionIndices,
         fragment: CheckpointFragment,
         committee: &Committee,
-        handle_pending_cert: &P,
+        handle_pending_cert: impl PendCertificateForExecution,
     ) -> Result<(), FragmentInternalError> {
         // Ensure we have not already processed this fragment.
         if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
@@ -559,11 +559,11 @@ impl CheckpointStore {
 
         // Schedule for execution all the certificates that are included here.
         handle_pending_cert
-            .pending_execution(
+            .add_pending_certificates(
                 fragment
                     .certs
                     .iter()
-                    .map(|(digest, cert)| (digest.transaction, cert.clone()))
+                    .map(|(digest, cert)| (digest.transaction, Some(cert.clone())))
                     .collect(),
             )
             .map_err(|_err| {

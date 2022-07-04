@@ -1,11 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::debug;
 use typed_store::Map;
 
-use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
+use crate::authority::AuthorityStore;
+use crate::authority_client::AuthorityAPI;
 
 use super::{gossip::LocalConfirmationTransactionHandler, ActiveAuthority};
 
@@ -13,23 +15,18 @@ use super::{gossip::LocalConfirmationTransactionHandler, ActiveAuthority};
 pub(crate) mod tests;
 
 pub trait PendCertificateForExecution {
-    fn pending_execution(
+    fn add_pending_certificates(
         &self,
-        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()>;
 }
 
-impl PendCertificateForExecution for AuthorityState {
-    fn pending_execution(
+impl PendCertificateForExecution for Arc<AuthorityStore> {
+    fn add_pending_certificates(
         &self,
-        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()> {
-        self.database.add_pending_certificates(
-            certs
-                .into_iter()
-                .map(|(digest, cert)| (digest, Some(cert)))
-                .collect(),
-        )
+        self.as_ref().add_pending_certificates(certs)
     }
 }
 
@@ -37,9 +34,9 @@ impl PendCertificateForExecution for AuthorityState {
 /// we do not care about certificates actually being executed.
 pub struct PendCertificateForExecutionNoop;
 impl PendCertificateForExecution for PendCertificateForExecutionNoop {
-    fn pending_execution(
+    fn add_pending_certificates(
         &self,
-        _certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+        _certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()> {
         Ok(())
     }
