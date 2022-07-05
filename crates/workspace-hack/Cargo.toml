@@ -225,7 +225,7 @@ json = { version = "0.12", default-features = false }
 jsonrpsee = { version = "0.13", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
 jsonrpsee-client-transport = { version = "0.13", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
 jsonrpsee-core = { version = "0.13", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "http-helpers", "hyper", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { version = "0.13", features = ["hyper-rustls", "tls"] }
+jsonrpsee-http-client = { version = "0.14", features = ["hyper-rustls", "tls"] }
 jsonrpsee-http-server = { version = "0.13", default-features = false }
 jsonrpsee-types = { version = "0.13", default-features = false }
 jsonrpsee-wasm-client = { version = "0.13", default-features = false }
@@ -795,7 +795,7 @@ json = { version = "0.12", default-features = false }
 jsonrpsee = { version = "0.13", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
 jsonrpsee-client-transport = { version = "0.13", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
 jsonrpsee-core = { version = "0.13", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "http-helpers", "hyper", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { version = "0.13", features = ["hyper-rustls", "tls"] }
+jsonrpsee-http-client = { version = "0.14", features = ["hyper-rustls", "tls"] }
 jsonrpsee-http-server = { version = "0.13", default-features = false }
 jsonrpsee-proc-macros = { version = "0.13", default-features = false }
 jsonrpsee-types = { version = "0.13", default-features = false }
