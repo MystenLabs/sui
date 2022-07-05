@@ -32,9 +32,13 @@
 use arc_swap::ArcSwap;
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
-use sui_types::{base_types::AuthorityName, error::SuiResult};
+use sui_types::{
+    base_types::AuthorityName,
+    error::{SuiError, SuiResult},
+};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -47,7 +51,9 @@ use gossip::{gossip_process, node_sync_process};
 
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
-use checkpoint_driver::checkpoint_process;
+use checkpoint_driver::{
+    checkpoint_process, get_latest_proposal_and_checkpoint_from_all, sync_to_checkpoint,
+};
 
 pub mod execution_driver;
 
@@ -106,6 +112,7 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
+    checkpoint_config: CheckpointProcessControl,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -114,6 +121,7 @@ impl<A> ActiveAuthority<A> {
         node_sync_store: Arc<NodeSyncStore>,
         follower_store: Arc<FollowerStore>,
         net: AuthorityAggregator<A>,
+        checkpoint_config: CheckpointProcessControl,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -128,12 +136,18 @@ impl<A> ActiveAuthority<A> {
             node_sync_store,
             follower_store,
             net: ArcSwap::from(Arc::new(net)),
+            checkpoint_config,
         })
+    }
+
+    fn net(&self) -> Arc<AuthorityAggregator<A>> {
+        self.net.load().clone()
     }
 
     pub fn new_with_ephemeral_storage(
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
+        checkpoint_config: CheckpointProcessControl,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
         let follower_db_path = working_dir.path().join("follower_db");
@@ -142,7 +156,13 @@ impl<A> ActiveAuthority<A> {
         let follower_store =
             Arc::new(FollowerStore::open(&follower_db_path).expect("cannot open db"));
         let node_sync_store = Arc::new(NodeSyncStore::open(&sync_db_path).expect("cannot open db"));
-        Self::new(authority, node_sync_store, follower_store, net)
+        Self::new(
+            authority,
+            node_sync_store,
+            follower_store,
+            net,
+            checkpoint_config,
+        )
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -199,6 +219,7 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
+            checkpoint_config: self.checkpoint_config.clone(),
         }
     }
 }
@@ -225,6 +246,33 @@ where
         tokio::task::spawn(async move {
             checkpoint_process(&self, &checkpoint_process_control, metrics).await;
         })
+    }
+
+    pub async fn sync_to_latest_checkpoint(&self) -> SuiResult {
+        let checkpoint_store =
+            self.state
+                .checkpoints
+                .clone()
+                .ok_or(SuiError::UnsupportedFeatureError {
+                    error: "Checkpoint not supported".to_owned(),
+                })?;
+
+        let (checkpoint_summary, _) = get_latest_proposal_and_checkpoint_from_all(
+            self.net(),
+            self.checkpoint_config.extra_time_after_quorum,
+            self.checkpoint_config.timeout_until_quorum,
+        )
+        .await?;
+
+        let checkpoint_summary = match checkpoint_summary {
+            Some(c) => c,
+            None => {
+                info!(name = ?self.state.name, "no checkpoints found");
+                return Ok(());
+            }
+        };
+
+        sync_to_checkpoint(self, checkpoint_store, checkpoint_summary).await
     }
 
     /// Spawn gossip process

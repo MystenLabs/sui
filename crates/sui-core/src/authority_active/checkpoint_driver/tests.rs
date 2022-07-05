@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority_active::ActiveAuthority, authority_client::LocalAuthorityClient,
+    authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    authority_client::LocalAuthorityClient,
     checkpoints::checkpoint_tests::TestSetup, safe_client::SafeClient,
 };
 
@@ -108,6 +109,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
                 ActiveAuthority::new_with_ephemeral_storage(
                     inner_state.authority.clone(),
                     inner_agg,
+                    Default::default(),
                 )
                 .unwrap(),
             );
@@ -117,7 +119,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
             // Spin the checkpoint service.
             active_state
-                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+                .spawn_checkpoint_process_with_config(Default::default(), CheckpointMetrics::new_for_tests())
                 .await;
         });
     }
@@ -201,6 +203,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
                 ActiveAuthority::new_with_ephemeral_storage(
                     inner_state.authority.clone(),
                     inner_agg,
+                    Default::default(),
                 )
                 .unwrap(),
             );
@@ -210,7 +213,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
             // Spin the gossip service.
             active_state
-                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+                .spawn_checkpoint_process_with_config(CheckpointProcessControl::default()), CheckpointMetrics::new_for_tests())
                 .await;
         });
     }
@@ -294,15 +297,16 @@ async fn test_empty_checkpoint() {
                 ActiveAuthority::new_with_ephemeral_storage(
                     inner_state.authority.clone(),
                     inner_agg,
+                    Default::default(),
                 )
                 .unwrap(),
             );
 
             active_state.clone().spawn_execute_process().await;
 
-            // Spin the gossip service.
+            // Spawn the checkpointing service.
             active_state
-                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+                .spawn_checkpoint_process_with_config(CheckpointProcessControl::default(), CheckpointMetrics::new_for_tests())
                 .await;
         });
     }
