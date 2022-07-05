@@ -1738,9 +1738,9 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "dyn-clone"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21e50f3adc76d6a43f5ed73b698a87d0760ca74617f60f7c3b879003536fdd28"
+checksum = "140206b78fb2bc3edbcfc9b5ccbd0b30699cfe8d348b8b31b330e47df5291a5a"
 
 [[package]]
 name = "ed25519"
@@ -4264,9 +4264,9 @@ dependencies = [
 
 [[package]]
 name = "num-complex"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97fbc387afefefd5e9e39493299f3069e14a140dd34dc19b4c1c1a8fddb6a790"
+checksum = "7ae39348c8bc5fbd7f40c727a9925f03517afd2ab27d46702108b6a7e5414c19"
 dependencies = [
  "num-traits 0.2.15",
 ]
@@ -4991,7 +4991,7 @@ dependencies = [
  "lazy_static 1.4.0",
  "memchr",
  "parking_lot 0.12.1",
- "protobuf",
+ "protobuf 2.27.1",
  "thiserror",
 ]
 
@@ -5086,6 +5086,26 @@ name = "protobuf"
 version = "2.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
+
+[[package]]
+name = "protobuf"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ee4a7d8b91800c8f167a6268d1a1026607368e1adc84e98fe044aeb905302f7"
+dependencies = [
+ "once_cell",
+ "protobuf-support",
+ "thiserror",
+]
+
+[[package]]
+name = "protobuf-support"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ca157fe12fc7ee2e315f2f735e27df41b3d97cdd70ea112824dac1ffb08ee1c"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "ptree"
@@ -8112,9 +8132,9 @@ checksum = "6a89911bd99e5f3659ec4acf9c4d93b0a90fe4a2a11f15328472058edc5261be"
 
 [[package]]
 name = "web-sys"
-version = "0.3.57"
+version = "0.3.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b17e741662c70c8bd24ac5c5b18de314a2c26c32bf8346ee1e6f53de919c283"
+checksum = "2fed94beee57daf8dd7d51f2b15dc2bcde92d7a72304cdf662a4371008b71b90"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -8744,7 +8764,7 @@ dependencies = [
  "prost-build",
  "prost-derive",
  "prost-types",
- "protobuf",
+ "protobuf 3.1.0",
  "ptree",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
@@ -9184,7 +9204,7 @@ dependencies = [
  "prost-build",
  "prost-derive",
  "prost-types",
- "protobuf",
+ "protobuf 2.27.1",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
  "quote 0.6.13",
