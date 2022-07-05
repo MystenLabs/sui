@@ -127,7 +127,7 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
     for trait_item in &mut trait_data.items {
         if let TraitItem::Method(method) = trait_item {
             let (method_name, returns, is_pubsub) =
-                if let Some(attr) = find_attr(&method.attrs, "method").cloned() {
+                if let Some(attr) = find_attr(&method.attrs, "method") {
                     let token: TokenStream = attr.tokens.clone().into();
                     let returns = match &method.sig.output {
                         syn::ReturnType::Default => None,
@@ -138,7 +138,7 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
                         returns,
                         false,
                     )
-                } else if let Some(attr) = find_attr(&method.attrs, "subscription").cloned() {
+                } else if let Some(attr) = find_attr(&method.attrs, "subscription") {
                     let token: TokenStream = attr.tokens.clone().into();
                     let attribute = parse::<SubscriptionNamedAttribute>(token)?;
                     (attribute.value.value(), Some(attribute.item), true)
