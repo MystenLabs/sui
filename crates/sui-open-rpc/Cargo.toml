@@ -8,6 +8,6 @@ edition = "2021"
 
 [dependencies]
 schemars = "0.8.10"
-serde = "1.0.136"
+serde = "1.0.138"
 
 workspace-hack = { path = "../workspace-hack"}
