@@ -140,7 +140,8 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
         typeof obj.newTransferObject === "function" &&
         typeof obj.newMoveCall === "function" &&
         typeof obj.newMergeCoin === "function" &&
-        typeof obj.newSplitCoin === "function"
+        typeof obj.newSplitCoin === "function" &&
+        typeof obj.newPublish === "function"
     )
 }
 

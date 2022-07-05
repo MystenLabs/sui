@@ -69,4 +69,9 @@ export interface TxnDataSerializer {
     signerAddress: SuiAddress,
     txn: SplitCoinTransaction
   ): Promise<Base64DataBuffer>;
+
+  newPublish(
+    signerAddress: SuiAddress,
+    txn: PublishTransaction
+  ): Promise<Base64DataBuffer>;
 }
