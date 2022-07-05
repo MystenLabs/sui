@@ -14,7 +14,7 @@ use sui_node::SuiNode;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     crypto::get_key_pair_from_rng,
-    messages::{CallArg, ExecutionStatus, ObjectArg},
+    messages::{CallArg, ExecutionStatus, ObjectArg, Transaction},
 };
 use test_utils::transaction::publish_counter_package;
 use test_utils::{
@@ -25,7 +25,7 @@ use test_utils::{
     messages::{move_transaction, test_transactions},
     objects::test_gas_objects,
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
 use typed_store::Map;
 
 /// Helper function determining whether the checkpoint store of an authority contains the input
@@ -73,7 +73,7 @@ async fn execute_transactions(
     aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
     transactions: &[Transaction],
 ) {
-    for transaction in &transactions {
+    for transaction in transactions {
         let (_, effects) = aggregator
             .clone()
             .execute_transaction(transaction)
@@ -126,6 +126,17 @@ async fn wait_for_advance_to_next_checkpoint(
         })
         .all(|sequence| sequence >= 1);
     assert!(ok);
+
+    for node in handles {
+        for digest in transaction_digests.iter() {
+            assert!(node
+                .state()
+                .check_tx_already_executed(digest)
+                .await
+                .unwrap()
+                .is_some());
+        }
+    }
 }
 
 #[tokio::test]
@@ -311,4 +322,41 @@ async fn checkpoint_with_shared_objects() {
     transaction_digests.insert(*increment_counter_transaction.digest());
 
     wait_for_advance_to_next_checkpoint(&handles, &transaction_digests).await;
+}
+
+// Check that a disconnected validator syncs all certs in past checkpoints as soon as it is able.
+// This test should fail if sync_checkpoint_certs in checkpoint_driver/mod.rs is commented out.
+#[tokio::test]
+async fn checkpoint_catchup() {
+    telemetry_subscribers::init_for_testing();
+    // Make a few test transactions.
+    let total_transactions = 3;
+    let mut rng = StdRng::from_seed([0; 32]);
+    let keys = (0..total_transactions).map(|_| get_key_pair_from_rng(&mut rng).1);
+    let (transactions, input_objects) = test_transactions(keys);
+    let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
+
+    // Spawn a quorum of authorities.
+    let configs = test_authority_configs();
+    let handles = spawn_test_authorities(input_objects, &configs).await;
+
+    // Make an authority's aggregator.
+    let aggregator = test_authority_aggregator(&configs);
+
+    let (first, rest) = handles[..].split_at(1);
+
+    // halt first validator so it can't process txes
+    first[0].state().halt_validator_for_testing();
+
+    spawn_checkpoint_processes(&aggregator, rest).await;
+
+    execute_transactions(&aggregator, &transactions).await;
+
+    // Wait until all but one validator is caught up.
+    wait_for_advance_to_next_checkpoint(rest, &transaction_digests).await;
+
+    // now start the checkpoint process on the first validator and wait for it to sync.
+    first[0].state().unhalt_validator_for_testing();
+    spawn_checkpoint_processes(&aggregator, first).await;
+    wait_for_advance_to_next_checkpoint(first, &transaction_digests).await;
 }

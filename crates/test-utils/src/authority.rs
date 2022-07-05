@@ -33,6 +33,8 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     for config in configs.validator_configs.iter_mut() {
         // Disable gossip by default to reduce non-determinism.
         // TODO: Once this library is more broadly used, we can make this a config argument.
+        // Note: Enabling this will break checkpoint_catchup test, which needs a way to keep one
+        // authority behind the others.
         config.enable_gossip = false;
 
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
