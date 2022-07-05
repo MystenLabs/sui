@@ -2418,6 +2418,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
+name = "half"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c207b0ee023c7fce79daf01828163aaf53a1ddd0be8b1ef9541da7d41f6fa63a"
+
+[[package]]
 name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5800,7 +5806,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
 dependencies = [
- "half",
+ "half 1.8.2",
  "serde 1.0.138",
 ]
 
@@ -7547,9 +7553,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-bunyan-formatter"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd99ff040622c69c0fc4bd3ea5fe16630ce46400a79bd41339391b2d416ea24c"
+checksum = "a788f2119fde477cd33823330c14004fa8cdac6892fd6f12181bbda9dbf14fc9"
 dependencies = [
  "gethostname",
  "log",
@@ -8539,7 +8545,7 @@ dependencies = [
  "guppy-workspace-hack",
  "h2",
  "hakari",
- "half",
+ "half 2.0.0",
  "hashbrown 0.11.2",
  "hashbrown 0.12.1",
  "hashlink",
@@ -9088,7 +9094,7 @@ dependencies = [
  "getrandom 0.2.6",
  "glob",
  "h2",
- "half",
+ "half 1.8.2",
  "hashbrown 0.11.2",
  "hashbrown 0.12.1",
  "hdrhistogram",
