@@ -12,9 +12,10 @@ instead use the `main` branch.
 To immediately get started using Sui:
 
 1. Meet the [prerequisites](#prerequisites).
-2. Install the [binaries](#binaries).
-3. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
-4. Optionally, download the [source code](#source-code) to have local
+1. Install the [binaries](#binaries).
+1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
+1. Request [SUI tokens](#sui-tokens) to evaluate DevNet and Sui Wallet
+1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
 
 > **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account
