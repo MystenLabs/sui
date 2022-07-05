@@ -7,12 +7,15 @@ branch and therefore will contain updates not yet found in `devnet`. The instruc
 recommend use of `devnet` as the latest stable release. To [contribute to Sui](../contribute/index.md),
 instead use the `main` branch.
 
+## Summary
+
 To immediately get started using Sui:
 
 1. Meet the [prerequisites](#prerequisites).
-2. Install the [binaries](#binaries).
-3. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
-4. Optionally, download the [source code](#source-code) to have local
+1. Install the [binaries](#binaries).
+1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
+1. Request [SUI tokens](#sui-tokens) to evaluate DevNet and Sui Wallet
+1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
 
 > **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account
@@ -85,6 +88,23 @@ $ cargo install --git https://github.com/move-language/move move-analyzer
 Then follow the Visual Studio Marketplace instructions to install the [Move Analyzer extension](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer). (The `cargo install` command for the language server is broken there; hence, we include the correct command above.)
 
 See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [Awesome Move](https://github.com/MystenLabs/awesome-move) docs.
+
+## SUI tokens
+
+To [experiment with DevNet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
+
+To request SUI test tokens:
+
+1. Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
+1. Identify your address through either the Sui Wallet Browser Extension or by running the command:
+   ```shell
+   $ sui client active-address
+   ```
+1. Request tokens in the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) channel using the syntax: `!faucet <YOUR_ADDRESS>`, for example:
+      ```shell
+      !faucet 0xd72c2c90ed9d923cb0ed2ca91db5be9e1c9b5ccb
+      ```
+1. A bot on the channel will distribute tokens to you automatically.
 
 ## Source code
 
