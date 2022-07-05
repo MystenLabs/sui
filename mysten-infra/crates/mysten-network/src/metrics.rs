@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use once_cell::sync::Lazy;
 use std::time::Duration;
 use tonic::codegen::http::header::HeaderName;
 use tonic::codegen::http::{HeaderValue, Request, Response};
@@ -9,8 +8,7 @@ use tower_http::classify::GrpcFailureClass;
 use tower_http::trace::{OnFailure, OnRequest, OnResponse};
 use tracing::Span;
 
-pub(crate) static GRPC_ENDPOINT_PATH_HEADER: Lazy<HeaderName> =
-    Lazy::new(|| HeaderName::from_static("grpc-path-req"));
+pub(crate) static GRPC_ENDPOINT_PATH_HEADER: HeaderName = HeaderName::from_static("grpc-path-req");
 
 /// The trait to be implemented when want to be notified about
 /// a new request and related metrics around it. When a request
@@ -65,7 +63,7 @@ impl<B, M: MetricsCallbackProvider> OnResponse<B> for MetricsHandler<M> {
 
         let path: HeaderValue = response
             .headers()
-            .get(&*GRPC_ENDPOINT_PATH_HEADER)
+            .get(&GRPC_ENDPOINT_PATH_HEADER)
             .unwrap()
             .clone();
 
