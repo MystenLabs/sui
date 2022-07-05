@@ -10,10 +10,10 @@ use move_core_types::account_address::AccountAddress;
 use schemars::JsonSchema;
 use serde;
 use serde::de::{Deserializer, Error};
-use serde::ser::{Serializer, Error as SerError};
+use serde::ser::{Error as SerError, Serializer};
 use serde::Deserialize;
 use serde::Serialize;
-use serde_with::{DeserializeAs, SerializeAs, Bytes};
+use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
 
@@ -197,8 +197,10 @@ impl SerializeAs<roaring::RoaringBitmap> for SuiBitmap {
         S: Serializer,
     {
         let mut bytes = vec![];
-        
-        source.serialize_into(&mut bytes).map_err(to_custom_ser_error::<S, _>)?;
+
+        source
+            .serialize_into(&mut bytes)
+            .map_err(to_custom_ser_error::<S, _>)?;
         Bytes::serialize_as(&bytes, serializer)
     }
 }
@@ -208,8 +210,8 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for SuiBitmap {
     where
         D: Deserializer<'de>,
     {
-       let bytes: Vec<u8> = Bytes::deserialize_as(deserializer)?;
-       roaring::RoaringBitmap::deserialize_from(&bytes[..]).map_err(to_custom_error::<'de, D, _>)
+        let bytes: Vec<u8> = Bytes::deserialize_as(deserializer)?;
+        roaring::RoaringBitmap::deserialize_from(&bytes[..]).map_err(to_custom_error::<'de, D, _>)
     }
 }
 

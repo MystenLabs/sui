@@ -311,20 +311,23 @@ impl CertifiedCheckpointSummary {
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
             auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
-                                committee.epoch,
-                                &signed_checkpoints
-                                    .into_iter()
-                                    .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
-                                    .collect(),
-                                    &committee
-                                )?
+                committee.epoch,
+                &signed_checkpoints
+                    .into_iter()
+                    .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
+                    .collect(),
+                committee,
+            )?,
         };
 
         certified_checkpoint.verify(committee)?;
         Ok(certified_checkpoint)
     }
 
-    pub fn signatory_authorities<'a>(&'a self, committee: &'a Committee) -> impl Iterator<Item = &AuthorityName> {
+    pub fn signatory_authorities<'a>(
+        &'a self,
+        committee: &'a Committee,
+    ) -> impl Iterator<Item = &AuthorityName> {
         self.auth_signature.authorities(committee)
     }
 

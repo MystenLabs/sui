@@ -26,7 +26,7 @@ pub struct Committee {
     #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, PublicKey>,
     #[serde(skip)]
-    index_map: HashMap<AuthorityName, usize>
+    index_map: HashMap<AuthorityName, usize>,
 }
 
 impl Committee {
@@ -64,25 +64,29 @@ impl Committee {
             // e.g. when a new validator is registering themself on-chain.
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
-        let index_map: HashMap<_, _> = voting_rights.iter()
+        let index_map: HashMap<_, _> = voting_rights
+            .iter()
             .enumerate()
-            .map(|(index, (addr, _) )| (*addr, index))
-            .collect(); 
+            .map(|(index, (addr, _))| (*addr, index))
+            .collect();
 
         Ok(Committee {
             epoch,
             voting_rights,
             total_votes,
             expanded_keys,
-            index_map
+            index_map,
         })
     }
 
-    pub fn authorities_from_bitmap<'a>(&'a self, bitmap: &'a RoaringBitmap) -> impl Iterator<Item = &AuthorityName> {
+    pub fn authorities_from_bitmap<'a>(
+        &'a self,
+        bitmap: &'a RoaringBitmap,
+    ) -> impl Iterator<Item = &AuthorityName> {
         self.voting_rights
             .iter()
-            .enumerate()    
-            .filter(|&(i, _)| bitmap.contains(i as u32) == true)
+            .enumerate()
+            .filter(|&(i, _)| bitmap.contains(i as u32))
             .map(|(_, (name, _))| name)
     }
 

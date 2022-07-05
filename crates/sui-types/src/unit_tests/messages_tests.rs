@@ -130,6 +130,10 @@ fn test_certificates() {
         .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
         .unwrap()
         .unwrap();
+    println!(
+        "{:?}",
+        c.auth_sign_info.authorities(&committee).collect::<Vec<_>>()
+    );
     assert!(c.verify(&committee).is_ok());
     c.auth_sign_info.signatures.pop();
     assert!(c.verify(&committee).is_err());
@@ -144,4 +148,76 @@ fn test_certificates() {
         .is_err());
 
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
+}
+
+#[derive(Serialize, Deserialize)]
+struct Foo(String);
+impl BcsSignable for Foo {}
+
+#[test]
+fn test_authority_quorum_signature() {
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut authorities = BTreeMap::new();
+
+    // Test: new_with_signatures()
+
+    for _ in 0..5 {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        signatures.push((*sec.public_key_bytes(), sig));
+        authorities.insert(*sec.public_key_bytes(), 1);
+    }
+    let (_, sec) = get_key_pair();
+    authorities.insert(*sec.public_key_bytes(), 1);
+
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+
+    let mut quorum =
+        AuthorityStrongQuorumSignInfo::new_with_signatures(0, &signatures, &committee).unwrap();
+
+    let sig_clone = signatures.clone();
+    let mut alphabetical_authorities = sig_clone
+        .iter()
+        .map(|(pubx, _)| pubx)
+        .collect::<Vec<&AuthorityName>>();
+    alphabetical_authorities.sort();
+    assert_eq!(
+        quorum
+            .authorities(&committee)
+            .collect::<Vec<&AuthorityName>>(),
+        alphabetical_authorities
+    );
+
+    // Test: add_signature()
+
+    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+    quorum.add_signature(sig, *sec.public_key_bytes(), &committee);
+
+    signatures.push((*sec.public_key_bytes(), sig));
+    let sig_clone = signatures.clone();
+    let mut alphabetical_authorities = sig_clone
+        .iter()
+        .map(|(pubx, _)| pubx)
+        .collect::<Vec<&AuthorityName>>();
+    alphabetical_authorities.sort();
+    assert_eq!(
+        quorum
+            .authorities(&committee)
+            .collect::<Vec<&AuthorityName>>(),
+        alphabetical_authorities
+    );
+
+    // Test: reuse signatures
+    let mut obligation = VerificationObligation::default();
+    quorum.add_signature(sig, *sec.public_key_bytes(), &committee);
+
+    // Add the obligation of the authority signature verifications.
+    let value = Foo("some data".to_string());
+    let mut message: Vec<u8> = Vec::new();
+    value.write(&mut message);
+    let idx = obligation.add_message(message);
+
+    quorum.add_to_verification_obligation(&committee, &mut obligation, idx).unwrap();
+
+    assert!(obligation.verify_all().is_err());
 }

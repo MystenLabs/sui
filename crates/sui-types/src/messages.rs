@@ -1155,11 +1155,15 @@ impl CertifiedTransactionEffects {
         epoch: EpochId,
         effects: TransactionEffects,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-        committee: &Committee
+        committee: &Committee,
     ) -> SuiResult<Self> {
         Ok(Self {
             effects,
-            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(epoch, &signatures, committee)?,
+            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                epoch,
+                &signatures,
+                committee,
+            )?,
         })
     }
 
@@ -1277,14 +1281,18 @@ impl CertifiedTransaction {
         epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-        committee: &Committee
+        committee: &Committee,
     ) -> SuiResult<CertifiedTransaction> {
         Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(epoch, &signatures, committee)?,
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                epoch,
+                &signatures,
+                committee,
+            )?,
         })
     }
 
@@ -1329,15 +1337,11 @@ impl Display for CertifiedTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         writeln!(writer, "Transaction Hash: {:?}", self.digest())?;
-        // writeln!(
-        //     writer,
-        //     "Signed Authorities : {:?}",
-        //     self.auth_sign_info
-        //         .signatures
-        //         .iter()
-        //         .map(|(name, _)| name)
-        //         .collect::<Vec<_>>()
-        // )?;
+        writeln!(
+            writer,
+            "Signed Authorities Bitmap : {:?}",
+            self.auth_sign_info.signers_map
+        )?;
         write!(writer, "{}", &self.data.kind)?;
         write!(f, "{}", writer)
     }

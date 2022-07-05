@@ -15,6 +15,7 @@ use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
 use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
+use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -24,7 +25,6 @@ use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
-use roaring::RoaringBitmap;
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
@@ -511,8 +511,8 @@ pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
     pub signatures: Vec<AuthoritySignature>,
     #[schemars(with = "Base64")]
-    #[serde_as(as = "SuiBitmap")] 
-    pub signers_map: RoaringBitmap
+    #[serde_as(as = "SuiBitmap")]
+    pub signers_map: RoaringBitmap,
 }
 
 pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
@@ -534,21 +534,18 @@ static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, P
 impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
 
 impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
-
-    pub fn new(
-        epoch: EpochId
-    ) -> Self {
-        AuthorityQuorumSignInfo{
-            epoch: epoch,
+    pub fn new(epoch: EpochId) -> Self {
+        AuthorityQuorumSignInfo {
+            epoch,
             signatures: vec![],
-            signers_map: RoaringBitmap::new()
-        } 
+            signers_map: RoaringBitmap::new(),
+        }
     }
 
     pub fn new_with_signatures(
         epoch: EpochId,
         signatures: &Vec<(PublicKeyBytes, AuthoritySignature)>,
-        committee: &Committee
+        committee: &Committee,
     ) -> SuiResult<Self> {
         let mut sigs = Vec::new();
         let mut map = RoaringBitmap::new();
@@ -559,22 +556,35 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         for (pk, sig) in sorted_signatures {
             sigs.push(sig);
             map.insert(committee.authority_index(&pk) as u32);
-        };
+        }
 
         Ok(AuthorityQuorumSignInfo {
             epoch,
             signatures: sigs,
-            signers_map: map 
+            signers_map: map,
         })
     }
 
-    pub fn add_signature(&mut self, sig: AuthoritySignature, pk: PublicKeyBytes, committee: &Committee) {
-        self.signers_map.insert(committee.authority_index(&pk) as u32);
-        self.signatures.push(sig);
+    // This takes log(sig) time, do not use if necessary
+    pub fn add_signature(
+        &mut self,
+        sig: AuthoritySignature,
+        pk: PublicKeyBytes,
+        committee: &Committee,
+    ) {
+        let index = committee.authority_index(&pk) as u32;
+        self.signers_map.insert(index);
+        self.signatures
+            .insert((self.signers_map.rank(index) - 1) as usize, sig);
     }
 
-    pub fn authorities<'a>(&'a self, committee: &'a Committee) -> impl Iterator<Item = &AuthorityName>{
-        self.signers_map.iter().map(|i| committee.authority_by_index(i as usize))
+    pub fn authorities<'a>(
+        &'a self,
+        committee: &'a Committee,
+    ) -> impl Iterator<Item = &AuthorityName> {
+        self.signers_map
+            .iter()
+            .map(|i| committee.authority_by_index(i as usize))
     }
 
     pub fn add_to_verification_obligation(

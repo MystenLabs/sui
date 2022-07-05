@@ -1110,7 +1110,7 @@ where
                                             self.committee.epoch(),
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
-                                            &self.committee
+                                            &self.committee,
                                         )?);
                                 }
                             }
@@ -1373,7 +1373,7 @@ where
                     certificate.auth_sign_info.epoch,
                     effects,
                     signatures,
-                    &self.committee
+                    &self.committee,
                 );
             }
         }
