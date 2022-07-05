@@ -90,9 +90,9 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-To [experiment with DevNet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens.
+To [experiment with DevNet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
 
-To request test tokens:
+To request SUI test tokens:
 
 1. Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
 1. Identify your address through either the Sui Wallet Browser Extension or by running the command:
