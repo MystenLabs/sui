@@ -7,7 +7,10 @@ use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    authority_aggregator::AuthorityAggregator,
+    authority_client::NetworkAuthorityClient,
 };
+use sui_node::SuiNode;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     crypto::get_key_pair_from_rng,
@@ -41,6 +44,88 @@ fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<Transaction
         })
         .flat_map(|x| x.iter().map(|tx| tx.transaction).collect::<HashSet<_>>())
         .collect::<HashSet<_>>()
+}
+
+async fn spawn_checkpoint_processes(
+    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    handles: &[SuiNode],
+) {
+    // Start active part of each authority.
+    for authority in &handles {
+        let state = authority.state().clone();
+        let inner_agg = aggregator.clone();
+        let active_state =
+            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
+        let checkpoint_process_control = CheckpointProcessControl {
+            long_pause_between_checkpoints: Duration::from_millis(10),
+            ..CheckpointProcessControl::default()
+        };
+        let _active_authority_handle = active_state
+            .spawn_checkpoint_process_with_config(
+                checkpoint_process_control,
+                CheckpointMetrics::new_for_tests(),
+            )
+            .await;
+    }
+}
+
+async fn execute_transactions(
+    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    transactions: &[Transaction],
+) {
+    for transaction in &transactions {
+        let (_, effects) = aggregator
+            .clone()
+            .execute_transaction(transaction)
+            .await
+            .unwrap();
+
+        // If this check fails the transactions will not be included in the checkpoint.
+        assert!(matches!(
+            effects.effects.status,
+            ExecutionStatus::Success { .. }
+        ));
+
+        // Add some delay between transactions
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+async fn wait_for_advance_to_next_checkpoint(
+    handles: &[SuiNode],
+    transaction_digests: &HashSet<TransactionDigest>,
+) {
+    // Wait for the transactions to be executed and end up in a checkpoint.
+    let mut cnt = 0;
+    loop {
+        // Ensure all submitted transactions are in the checkpoint.
+        let ok = handles
+            .iter()
+            .map(|authority| transactions_in_checkpoint(&authority.state()))
+            .all(|digests| digests.is_superset(&transaction_digests));
+
+        match ok {
+            true => break,
+            false => tokio::time::sleep(Duration::from_secs(1)).await,
+        }
+        cnt += 1;
+        assert!(cnt <= 20);
+    }
+
+    // Ensure all authorities moved to the next checkpoint sequence number.
+    let ok = handles
+        .iter()
+        .map(|authority| {
+            authority
+                .state()
+                .checkpoints()
+                .unwrap()
+                .lock()
+                .get_locals()
+                .next_checkpoint
+        })
+        .all(|sequence| sequence >= 1);
+    assert!(ok);
 }
 
 #[tokio::test]
@@ -123,6 +208,7 @@ async fn sequence_fragments() {
 
 #[tokio::test]
 async fn end_to_end() {
+    telemetry_subscribers::init_for_testing();
     // Make a few test transactions.
     let total_transactions = 3;
     let mut rng = StdRng::from_seed([0; 32]);
@@ -137,70 +223,11 @@ async fn end_to_end() {
     // Make an authority's aggregator.
     let aggregator = test_authority_aggregator(&configs);
 
-    // Start active part of each authority.
-    for authority in &handles {
-        let state = authority.state().clone();
-        let inner_agg = aggregator.clone();
-        let active_state =
-            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
-        let checkpoint_process_control = CheckpointProcessControl {
-            long_pause_between_checkpoints: Duration::from_millis(10),
-            ..CheckpointProcessControl::default()
-        };
-        let _active_authority_handle = active_state
-            .spawn_checkpoint_process_with_config(
-                checkpoint_process_control,
-                CheckpointMetrics::new_for_tests(),
-            )
-            .await;
-    }
+    spawn_checkpoint_processes(&aggregator, &handles).await;
 
-    // Send the transactions for execution.
-    for transaction in &transactions {
-        let (_, effects) = aggregator
-            .clone()
-            .execute_transaction(transaction)
-            .await
-            .unwrap();
+    execute_transactions(&aggregator, &transactions).await;
 
-        // If this check fails the transactions will not be included in the checkpoint.
-        assert!(matches!(
-            effects.effects.status,
-            ExecutionStatus::Success { .. }
-        ));
-
-        // Add some delay between transactions
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-
-    // Wait for the transactions to be executed and end up in a checkpoint.
-    loop {
-        // Ensure all submitted transactions are in the checkpoint.
-        let ok = handles
-            .iter()
-            .map(|authority| transactions_in_checkpoint(&authority.state()))
-            .all(|digests| digests.is_superset(&transaction_digests));
-
-        match ok {
-            true => break,
-            false => tokio::time::sleep(Duration::from_millis(10)).await,
-        }
-    }
-
-    // Ensure all authorities moved to the next checkpoint sequence number.
-    let ok = handles
-        .iter()
-        .map(|authority| {
-            authority
-                .state()
-                .checkpoints()
-                .unwrap()
-                .lock()
-                .get_locals()
-                .next_checkpoint
-        })
-        .all(|sequence| sequence >= 1);
-    assert!(ok);
+    wait_for_advance_to_next_checkpoint(&handles, &transaction_digests).await;
 }
 
 #[tokio::test]
@@ -224,27 +251,7 @@ async fn checkpoint_with_shared_objects() {
     // Make an authority's aggregator.
     let aggregator = test_authority_aggregator(&configs);
 
-    // Start active part of each authority.
-    for authority in &handles {
-        let state = authority.state().clone();
-        let inner_agg = aggregator.clone();
-        let active_state =
-            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
-        let checkpoint_process_control = CheckpointProcessControl {
-            long_pause_between_checkpoints: Duration::from_millis(10),
-            ..CheckpointProcessControl::default()
-        };
-
-        println!("Start active execution process.");
-        active_state.clone().spawn_execute_process().await;
-
-        let _active_authority_handle = active_state
-            .spawn_checkpoint_process_with_config(
-                checkpoint_process_control,
-                CheckpointMetrics::new_for_tests(),
-            )
-            .await;
-    }
+    spawn_checkpoint_processes(&aggregator, &handles).await;
 
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
@@ -295,22 +302,7 @@ async fn checkpoint_with_shared_objects() {
     }
 
     // Now send a few single-writer transactions.
-    for transaction in &transactions {
-        let (_, effects) = aggregator
-            .clone()
-            .execute_transaction(transaction)
-            .await
-            .unwrap();
-
-        // If this check fails the transactions will not be included in the checkpoint.
-        assert!(matches!(
-            effects.effects.status,
-            ExecutionStatus::Success { .. }
-        ));
-
-        // Add some delay between transactions
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
+    execute_transactions(&aggregator, transactions).await;
 
     // Record the transactions digests we expect to see in the checkpoint. Note that there is also
     // an extra transaction to register the move module that we don't consider here.
@@ -318,35 +310,5 @@ async fn checkpoint_with_shared_objects() {
     transaction_digests.insert(*create_counter_transaction.digest());
     transaction_digests.insert(*increment_counter_transaction.digest());
 
-    // Wait for the transactions to be executed and end up in a checkpoint.
-    let mut cnt = 0;
-    loop {
-        // Ensure all submitted transactions are in the checkpoint.
-        let ok = handles
-            .iter()
-            .map(|authority| transactions_in_checkpoint(&authority.state()))
-            .all(|digests| digests.is_superset(&transaction_digests));
-
-        match ok {
-            true => break,
-            false => tokio::time::sleep(Duration::from_secs(1)).await,
-        }
-        cnt += 1;
-        assert!(cnt <= 20);
-    }
-
-    // Ensure all authorities moved to the next checkpoint sequence number.
-    let ok = handles
-        .iter()
-        .map(|authority| {
-            authority
-                .state()
-                .checkpoints()
-                .unwrap()
-                .lock()
-                .get_locals()
-                .next_checkpoint
-        })
-        .all(|sequence| sequence >= 1);
-    assert!(ok);
+    wait_for_advance_to_next_checkpoint(&handles, &transaction_digests).await;
 }

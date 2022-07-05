@@ -142,12 +142,7 @@ impl<A> ActiveAuthority<A> {
         let follower_store =
             Arc::new(FollowerStore::open(&follower_db_path).expect("cannot open db"));
         let node_sync_store = Arc::new(NodeSyncStore::open(&sync_db_path).expect("cannot open db"));
-        Self::new(
-            authority,
-            node_sync_store,
-            follower_store,
-            authority_clients,
-        )
+        Self::new(authority, node_sync_store, follower_store, net)
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
