@@ -6,7 +6,7 @@ use crypto::{traits::VerifyingKey, Hash};
 use dag::node_dag::{NodeDag, NodeDagError};
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     ops::RangeInclusive,
     sync::{Arc, RwLock},
 };
@@ -91,6 +91,10 @@ enum DagCommand<PublicKey: VerifyingKey> {
         Vec<CertificateDigest>,
         oneshot::Sender<Result<(), ValidatorDagError<PublicKey>>>,
     ),
+    NotifyRead(
+        CertificateDigest,
+        oneshot::Sender<Result<Certificate<PublicKey>, ValidatorDagError<PublicKey>>>,
+    ),
 }
 
 impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
@@ -118,6 +122,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     }
 
     async fn run(&mut self) {
+        let mut obligations = HashMap::<CertificateDigest, VecDeque<oneshot::Sender<_>>>::new();
         loop {
             tokio::select! {
                  Some(certificate) = self.rx_primary.recv() => {
@@ -127,7 +132,15 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
                 }
                 Some(command) = self.rx_commands.recv() => {
                     match command {
-                        DagCommand::Insert(cert, sender) => { let _ = sender.send(self.insert(cert)); },
+                        DagCommand::Insert(cert, sender) => {
+                            let _ = sender.send(self.insert(cert.clone()));
+                            let digest = cert.digest();
+                            if let Some(mut senders) = obligations.remove(&digest) {
+                                while let Some(s) = senders.pop_front() {
+                                    let _ = s.send(Ok(cert.clone()));
+                                }
+                            }
+                        },
                         DagCommand::Contains(dig, sender)=> {
                             let _ = sender.send(self.contains(dig));
                         },
@@ -144,6 +157,17 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
                         DagCommand::NodeReadCausal((pk, round), sender) => {
                             let res = self.node_read_causal(pk, round);
                             let _ = sender.send(res.map(|r| r.collect()));
+                        },
+                        DagCommand::NotifyRead(dig, sender) => {
+                            let res = self.dag.get(dig);
+                            if let Ok(node_ref) = res {
+                                let _ = sender.send(Ok((*node_ref.value()).clone()));
+                            } else {
+                                obligations
+                                    .entry(dig)
+                                    .or_insert_with(VecDeque::new)
+                                    .push_back(sender);
+                            }
                         },
                     }
                 }
@@ -448,5 +472,23 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
         receiver
             .await
             .expect("Failed to receive reply to Remove command from store")
+    }
+    /// Returns the certificate for the digest by waiting until it is
+    /// avaialable in the dag
+    pub async fn notify_read(
+        &self,
+        digest: CertificateDigest,
+    ) -> Result<Certificate<PublicKey>, ValidatorDagError<PublicKey>> {
+        let (sender, receiver) = oneshot::channel();
+        if let Err(e) = self
+            .tx_commands
+            .send(DagCommand::NotifyRead(digest, sender))
+            .await
+        {
+            panic!("Failed to send NotifyRead command: {e}");
+        }
+        receiver
+            .await
+            .expect("Failed to receive reply to NotifyRead command")
     }
 }

@@ -81,7 +81,7 @@ impl<T: Affiliated> NodeDag<T> {
     // Returns a strong (`Arc`) reference to the graph node.
     // This bumps the reference count to the vertex and may prevent it from being GC-ed off the graph.
     // This is not publicly accessible, so as to not let wandering references to DAG nodes prevent GC logic
-    pub(crate) fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, NodeDagError> {
+    pub fn get(&self, digest: T::TypedDigest) -> Result<NodeRef<T>, NodeDagError> {
         let node_ref = self
             .node_table
             .get(&digest)

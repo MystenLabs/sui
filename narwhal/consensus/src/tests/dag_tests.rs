@@ -41,6 +41,42 @@ async fn inner_dag_insert_one() {
         tx_cert.send(certificate).await.unwrap();
     }
 }
+#[tokio::test]
+async fn test_dag_read_notify() {
+    // Make certificates for rounds 1 to 4.
+    let keys: Vec<_> = test_utils::keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
+    let committee = mock_committee(&keys.clone()[..]);
+    let genesis_certs = Certificate::genesis(&committee);
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
+    let certs = certificates.clone().into_iter().map(|c| (c.digest(), c));
+    // set up a Dag
+    let (_tx_cert, rx_cert) = channel(1);
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    let arc = Arc::new(Dag::new(&committee, rx_cert, metrics));
+    let cloned = arc.clone();
+    let handle = tokio::spawn(async move {
+        let _ = &arc;
+        for (digest, cert) in certs {
+            match arc.1.notify_read(digest).await {
+                Ok(v) => assert_eq!(v, cert),
+                _ => panic!("Failed to read from store"),
+            }
+        }
+    });
+
+    // Feed the certificates to the Dag
+    while let Some(certificate) = certificates.pop_front() {
+        cloned.1.insert(certificate).await.unwrap();
+    }
+    assert!(handle.await.is_ok());
+}
 
 #[tokio::test]
 async fn test_dag_new_has_genesis_and_its_not_live() {
