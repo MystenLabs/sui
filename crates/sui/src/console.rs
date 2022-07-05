@@ -52,7 +52,7 @@ pub async fn start_console(
     writeln!(out)?;
 
     let mut shell = Shell::new(
-        "sui>-$ ".bold().green(),
+        "sui>-$ ",
         context,
         ClientCommandHandler,
         CommandStructure::from_clap(&install_shell_plugins(app)),

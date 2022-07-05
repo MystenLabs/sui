@@ -73,7 +73,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         }));
 
         loop {
-            write!(out, "{}", self.prompt)?;
+            write!(out, "{}", format!("{}", self.prompt).bold().green())?;
             out.flush()?;
 
             // Read a line
