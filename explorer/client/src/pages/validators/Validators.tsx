@@ -1,47 +1,48 @@
-import { Base64DataBuffer } from "@mysten/sui.js";
+import { Base64DataBuffer } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useState, useContext, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useState, useContext, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 
-import ErrorResult from "../../components/error-result/ErrorResult";
-import { NetworkContext } from "../../context";
+import ErrorResult from '../../components/error-result/ErrorResult';
+import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
-import { type DataType, getObjectDataWithPackageAddress } from "../object-result/ObjectResult";
+import {
+    type DataType,
+    getObjectDataWithPackageAddress,
+} from '../object-result/ObjectResult';
 
 import objStyles from '../object-result/ObjectResult.module.css';
 import txStyles from '../transaction-result/TransactionResult.module.css';
-
 
 const VALIDATORS_OBJECT_ID = '0x05';
 
 const DATATYPE_DEFAULT = { loadState: 'pending' };
 
-
 type ObjFields = {
-    type: string,
-    fields: any[keyof string]
-}
+    type: string;
+    fields: any[keyof string];
+};
 
 type ValidatorState = {
-    delegation_reward: number,
-    epoch: number,
-    id: { id: string, version: number },
-    parameters: ObjFields,
-    storage_fund: number,
-    treasury_cap: ObjFields,
+    delegation_reward: number;
+    epoch: number;
+    id: { id: string; version: number };
+    parameters: ObjFields;
+    storage_fund: number;
+    treasury_cap: ObjFields;
     validators: {
-        type: '0x2::validator_set::ValidatorSet'
+        type: '0x2::validator_set::ValidatorSet';
         fields: {
-            delegation_stake: number,
-            active_validators: ObjFields[],
-            next_epoch_validators: ObjFields[],
-            pending_removals: string,
-            pending_validators: string,
-            quorum_stake_threshold: number,
-            validator_stake: number
-        },
-    }
-}
+            delegation_stake: number;
+            active_validators: ObjFields[];
+            next_epoch_validators: ObjFields[];
+            pending_removals: string;
+            pending_validators: string;
+            quorum_stake_threshold: number;
+            validator_stake: number;
+        };
+    };
+};
 
 const textDecoder = new TextDecoder();
 
@@ -56,71 +57,83 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
     return (
         <>
             <div id="validators">
-                <h1 className={objStyles.clickableheader}>
-                    Validators
-                </h1>
+                <h1 className={objStyles.clickableheader}>Validators</h1>
 
                 <div id="activeset">
                     <h2>Active</h2>
 
                     {active_set.map((itm: any, i: number) => (
                         <div
-                        key={i}
-                        className={cl(
-                            txStyles.txcardgrid,
-                            itm.className
-                                ? txStyles[itm.className]
-                                : ''
-                        )}>
+                            key={i}
+                            className={cl(
+                                txStyles.txcardgrid,
+                                itm.className ? txStyles[itm.className] : ''
+                            )}
+                        >
+                            <div>
+                                <h3>
+                                    {textDecoder.decode(
+                                        new Base64DataBuffer(
+                                            itm.fields['metadata'].fields.name
+                                        ).getData()
+                                    )}
+                                </h3>
 
-                            <div>
-                            <h3>{textDecoder.decode(new Base64DataBuffer(itm.fields['metadata'].fields.name).getData())}
-                            </h3>
+                                <div>
+                                    <div>
+                                        <h4>Address</h4>
+                                        {
+                                            itm.fields['metadata'].fields
+                                                .sui_address
+                                        }
+                                    </div>
+                                    <div>
+                                        <h4>Stake</h4>
+                                        {itm.fields['stake']}
+                                    </div>
+                                </div>
 
-                            <div>
-                            <div>
-                                <h4>Address</h4>
-                                {itm.fields['metadata'].fields.sui_address}
-                            </div>
-                            <div>
-                                <h4>Stake</h4>
-                                {itm.fields['stake']}
-                            </div>
+                                <div>
+                                    <div>
+                                        <h5>Delegation</h5>
+                                        {itm.fields['delegation']}
+                                    </div>
+                                    <div>
+                                        <h5>Delegator Count</h5>
+                                        {itm.fields['delegator_count']}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div>
+                                        <h5>Pending Delegation</h5>
+                                        {itm.fields['pending_delegation']}
+                                    </div>
+                                    <div>
+                                        <h5>Pending Delegation Withdraw</h5>
+                                        {
+                                            itm.fields[
+                                                'pending_delegation_withdraw'
+                                            ]
+                                        }
+                                    </div>
+                                </div>
+                                <div>
+                                    <div>
+                                        <h5>Pending Delegators</h5>
+                                        {itm.fields['pending_delegator_count']}
+                                    </div>
+                                    <div>
+                                        <h5>Pending Delegator Withdraws</h5>
+                                        {
+                                            itm.fields[
+                                                'pending_delegator_withdraw_count'
+                                            ]
+                                        }
+                                    </div>
+                                </div>
                             </div>
 
-                            <div>
-                                <div>
-                                    <h5>Delegation</h5>
-                                    {itm.fields['delegation']}
-                                </div>
-                                <div>
-                                    <h5>Delegator Count</h5>
-                                    {itm.fields['delegator_count']}
-                                </div>
-                            </div>
-                            <div>
-                                <div>
-                                    <h5>Pending Delegation</h5>
-                                    {itm.fields['pending_delegation']}
-                                </div>
-                                <div>
-                                    <h5>Pending Delegation Withdraw</h5>
-                                    {itm.fields['pending_delegation_withdraw']}
-                                </div>
-                            </div>
-                            <div>
-                                <div>
-                                    <h5>Pending Delegators</h5>
-                                    {itm.fields['pending_delegator_count']}
-                                </div>
-                                <div>
-                                    <h5>Pending Delegator Withdraws</h5>
-                                    {itm.fields['pending_delegator_withdraw_count']}
-                                </div>
-                            </div>
-                            </div>
-
-                            <br/>
+                            <br />
                         </div>
                     ))}
                 </div>
@@ -128,7 +141,6 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
         </>
     );
 }
-
 
 const ValidatorsResultAPI = (): JSX.Element => {
     const [showObjectState, setObjectState] = useState(DATATYPE_DEFAULT);
@@ -157,7 +169,7 @@ const ValidatorsResultAPI = (): JSX.Element => {
         );
     }
     if (showObjectState.loadState === 'fail') {
-        return <Fail/>;
+        return <Fail />;
     }
 
     return <div>"Something went wrong"</div>;
@@ -165,15 +177,16 @@ const ValidatorsResultAPI = (): JSX.Element => {
 
 const Fail = (): JSX.Element => {
     return (
-        <ErrorResult
-            id={""}
-            errorMsg="Validator data could not be loaded"
-        />
+        <ErrorResult id={''} errorMsg="Validator data could not be loaded" />
     );
 };
 
 function instanceOfDataType(object: any): object is DataType {
-    return object !== undefined && object !== null && ['status', 'details'].every((x) => x in object);
+    return (
+        object !== undefined &&
+        object !== null &&
+        ['status', 'details'].every((x) => x in object)
+    );
 }
 
 const ValidatorResult = (): JSX.Element => {
@@ -186,9 +199,8 @@ const ValidatorResult = (): JSX.Element => {
     //return IS_STATIC_ENV ? (
     //    <ObjectResultStatic objID={VALIDATOR_OBJECT_ID} />
     //) : (
-        return <ValidatorsResultAPI/>
+    return <ValidatorsResultAPI />;
     //);
 };
 
-
-export { ValidatorResult }
+export { ValidatorResult };

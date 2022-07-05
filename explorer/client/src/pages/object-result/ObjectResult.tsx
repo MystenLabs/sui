@@ -45,7 +45,10 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
 };
 
 // Get the data for the object ID and address that publishes a Package
-export function getObjectDataWithPackageAddress(objID: string, network: string): Promise<DataType> {
+export function getObjectDataWithPackageAddress(
+    objID: string,
+    network: string
+): Promise<DataType> {
     return rpc(network)
         .getObject(objID as string)
         .then((objState) => {
