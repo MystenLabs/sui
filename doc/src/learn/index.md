@@ -16,6 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
+* Employ the enhanced [Move Visual Studio Code (VSCode) plugin](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) as described in the [related announcement](https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin).
 * Get ready to participate in [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/)!
 * The former `wallet` binary has been replaced with the [Sui CLI client](../build/cli-client.md) and combined with related functions.
 * [JSON-RPC PubSub](../build/pubsub.md) is supported by Sui [fullnode](../build/fullnode.md) to publish / subscribe using notifications via websocket.
