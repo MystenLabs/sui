@@ -30,9 +30,10 @@ use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
 };
+use std::collections::vec_deque::VecDeque;
 use std::ops::Deref;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet},
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -1029,9 +1030,15 @@ impl AuthorityState {
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
-            generate_genesis_system_object(&store, &move_vm, &committee, &mut genesis_ctx)
-                .await
-                .expect("Cannot generate genesis system object");
+            generate_genesis_system_object(
+                &store,
+                &move_vm,
+                &committee,
+                &mut genesis_ctx,
+                genesis.validator_set().to_vec(),
+            )
+            .await
+            .expect("Cannot generate genesis system object");
 
             store
                 .insert_new_epoch_info(EpochInfoLocals {

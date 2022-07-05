@@ -1586,15 +1586,16 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
 #[cfg(test)]
 pub async fn init_state() -> AuthorityState {
     let (committee, _, authority_key, store) = init_state_parameters();
+    let public_key = *authority_key.public_key_bytes();
     AuthorityState::new(
         committee,
-        *authority_key.public_key_bytes(),
+        public_key.clone(),
         Arc::pin(authority_key),
         store,
         None,
         None,
         None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
+        &sui_config::genesis::Genesis::get_genesis_with_validator(public_key),
         &prometheus::Registry::new(),
     )
     .await

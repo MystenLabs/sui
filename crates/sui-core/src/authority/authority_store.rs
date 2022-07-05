@@ -19,6 +19,7 @@ use sui_storage::{
 use tokio::sync::Notify;
 
 use std::sync::atomic::AtomicU64;
+use sui_config::ValidatorInfo;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
@@ -1482,6 +1483,7 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
     move_vm: &Arc<MoveVM>,
     committee: &Committee,
     genesis_ctx: &mut TxContext,
+    validator_set: Vec<ValidatorInfo>,
 ) -> SuiResult {
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
@@ -1501,6 +1503,10 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
         .collect();
     // TODO: Change voting_rights to use u64 instead of usize.
     let stakes: Vec<u64> = committee.stakes().collect();
+    let network_addrs: Vec<Vec<u8>> = validator_set
+        .into_iter()
+        .map(|i| i.network_address.to_vec())
+        .collect();
     adapter::execute(
         move_vm,
         &mut temporary_store,
@@ -1512,7 +1518,7 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
             // TODO: below is netaddress, for now just use names as we don't yet want to expose them.
-            CallArg::Pure(bcs::to_bytes(&names).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&network_addrs).unwrap()),
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
         ],
         &mut SuiGasStatus::new_unmetered(),

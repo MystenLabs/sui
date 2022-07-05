@@ -6,6 +6,7 @@ use anyhow::Context;
 use move_binary_format::CompiledModule;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fs, path::Path};
+use sui_types::crypto::PublicKeyBytes;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::TxContext,
@@ -55,6 +56,10 @@ impl Genesis {
 
     pub fn get_default_genesis() -> Self {
         Builder::new(sui_adapter::genesis::get_genesis_context()).build()
+    }
+
+    pub fn get_genesis_with_validator(public_key: PublicKeyBytes) -> Self {
+        Builder::new_with_validator(sui_adapter::genesis::get_genesis_context(), public_key).build()
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -186,6 +191,23 @@ impl Builder {
             genesis_ctx,
             validators: vec![],
         }
+    }
+
+    pub fn new_with_validator(genesis_ctx: TxContext, public_key: PublicKeyBytes) -> Self {
+        let arbitrary_network_address = "/dns/localhost/tcp/1000/http".parse().unwrap();
+        Self {
+            sui_framework: None,
+            move_framework: None,
+            move_modules: vec![],
+            objects: vec![],
+            genesis_ctx,
+            validators: vec![],
+        }
+        .add_validator(ValidatorInfo {
+            public_key,
+            stake: 1,
+            network_address: arbitrary_network_address,
+        })
     }
 
     pub fn sui_framework(mut self, sui_framework: Vec<CompiledModule>) -> Self {
