@@ -157,6 +157,7 @@ impl<PublicKey: VerifyingKey> Tusk<PublicKey> {
 mod tests {
     use super::*;
     use crate::metrics::ConsensusMetrics;
+    use arc_swap::ArcSwap;
     use crypto::traits::KeyPair;
     use prometheus::Registry;
     use rand::Rng;
@@ -175,7 +176,7 @@ mod tests {
             .map(|kp| kp.public().clone())
             .collect();
 
-        let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
+        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
@@ -189,12 +190,10 @@ mod tests {
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
         let consensus_index = 0;
-        let mut state = ConsensusState::new(
-            Certificate::genesis(&*mock_committee(&keys[..]).load()),
-            metrics,
-        );
+        let mut state =
+            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
         let mut tusk = Tusk {
-            committee,
+            committee: Arc::new(ArcSwap::from_pointee(committee)),
             store,
             gc_depth,
         };
@@ -228,24 +227,22 @@ mod tests {
             .map(|kp| kp.public().clone())
             .collect();
 
-        let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
+        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
         let (certificates, _next_parents) =
             test_utils::make_certificates(1..=rounds, &genesis, &keys, 0.333);
-        let committee = mock_committee(&keys);
+        let committee = Arc::new(ArcSwap::from_pointee(mock_committee(&keys)));
 
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(
-            Certificate::genesis(&*mock_committee(&keys[..]).load()),
-            metrics,
-        );
+        let mut state =
+            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
         let consensus_index = 0;
         let mut tusk = Tusk {
             committee,
