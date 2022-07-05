@@ -92,7 +92,7 @@ config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["h
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "fe7de29b59810d4515604af949cdcf1fb5a3720a", features = ["benchmark", "rand"] }
 console-api = { version = "0.3", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
-constant_time_eq = { version = "0.1", default-features = false }
+constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "2", default-features = false }
 crc-catalog = { version = "1", default-features = false }
@@ -644,7 +644,7 @@ config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["h
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "fe7de29b59810d4515604af949cdcf1fb5a3720a", features = ["benchmark", "rand"] }
 console-api = { version = "0.3", default-features = false, features = ["transport"] }
 console-subscriber = { version = "0.1", features = ["env-filter"] }
-constant_time_eq = { version = "0.1", default-features = false }
+constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "2", default-features = false }
 crc-catalog = { version = "1", default-features = false }

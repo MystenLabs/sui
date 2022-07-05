@@ -546,7 +546,7 @@ checksum = "db539cc2b5f6003621f1cd9ef92d7ded8ea5232c7de0f9faa2de251cd98730d4"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.2",
- "constant_time_eq",
+ "constant_time_eq 0.1.5",
 ]
 
 [[package]]
@@ -1071,6 +1071,12 @@ name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
+
+[[package]]
+name = "constant_time_eq"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b96535642698e10693d204abac955eb269a05ea99f8363ef70ab54cfe439337"
 
 [[package]]
 name = "core-foundation"
@@ -7547,9 +7553,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-bunyan-formatter"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd99ff040622c69c0fc4bd3ea5fe16630ce46400a79bd41339391b2d416ea24c"
+checksum = "a788f2119fde477cd33823330c14004fa8cdac6892fd6f12181bbda9dbf14fc9"
 dependencies = [
  "gethostname",
  "log",
@@ -8430,7 +8436,7 @@ dependencies = [
  "consensus",
  "console-api",
  "console-subscriber",
- "constant_time_eq",
+ "constant_time_eq 0.2.3",
  "core2",
  "crc",
  "crc-catalog",
@@ -9033,7 +9039,7 @@ dependencies = [
  "clap_lex",
  "cmake",
  "collectable",
- "constant_time_eq",
+ "constant_time_eq 0.1.5",
  "core2",
  "crc32fast",
  "criterion",
