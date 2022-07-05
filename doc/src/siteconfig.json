@@ -146,8 +146,8 @@
             "url": "/build/move"
           },
           {
-            "name": "Wallet Quick Start",
-            "url": "/build/wallet"
+            "name": "Sui CLI Quick Start",
+            "url": "/build/cli-client"
           }
         ]
       },

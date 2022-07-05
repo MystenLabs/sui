@@ -17,17 +17,21 @@ export function createValidationSchema(
             `NFT is owned by this address`,
             (value) => senderAddress !== value
         ).test(
-            'sender-address',
+            'nft-sender-address',
             // eslint-disable-next-line no-template-curly-in-string
-            `NFT address must be defferent from receiver address`,
+            `NFT address must be different from receiver address`,
             (value) => objectId !== value
         ),
         amount: Yup.number()
             .integer()
             .required()
-            .test('max', `Insufficient balance to cover gas fee`, (amount) => {
-                return gasBalance >= BigInt(amount || 0);
-            })
+            .test(
+                'nft-gas-balance-check',
+                `Insufficient balance to cover gas fee`,
+                (amount) => {
+                    return gasBalance >= BigInt(amount || 0);
+                }
+            )
             .label('Amount'),
     });
 }

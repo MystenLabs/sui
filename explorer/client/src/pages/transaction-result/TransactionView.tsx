@@ -15,6 +15,7 @@ import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
 import codestyle from '../../styles/bytecode.module.css';
+import { convertNumberToDate, timeAgo } from '../../utils/timeUtils';
 import { type DataType } from './TransactionResultType';
 
 import type {
@@ -29,6 +30,7 @@ import styles from './TransactionResult.module.css';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
+    timestamp_ms: number;
     gasFee: number;
     txError: string;
     mutated: SuiObjectRef[];
@@ -48,6 +50,15 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             value: txId,
             className: 'columnheader',
         },
+        ...(tx.timestamp_ms
+            ? [
+                  {
+                      label: 'Time',
+                      value: tx.timestamp_ms,
+                  },
+              ]
+            : []),
+
         {
             // May change later
             label: 'Status',
@@ -198,14 +209,20 @@ function formatByTransactionKind(
     }
 }
 
-function ItemView({ itm, text }: { itm: any; text: string }) {
+function ItemView({ itm, text }: { itm: any; text: string | number }) {
     switch (true) {
         case itm.label === 'Modules':
             return <div className={codestyle.code}>{itm.value}</div>;
+        case itm.label === 'Time':
+            return (
+                <>{`${timeAgo(text as number)} ago (${convertNumberToDate(
+                    text as number
+                )})`}</>
+            );
         case itm.link:
             return (
                 <Longtext
-                    text={text}
+                    text={text as string}
                     category={itm.category ? itm.category : 'unknown'}
                     isLink={true}
                 />
@@ -238,6 +255,17 @@ function SubListView({ itm, list }: { itm: any; list: any }) {
     );
 }
 
+const TestIDMatcher = (label: string) => {
+    switch (label) {
+        case 'Transaction ID':
+            return 'transactionID';
+        case 'Time':
+            return 'timestamp';
+        default:
+            return '';
+    }
+};
+
 function TransactionView({ txdata }: { txdata: DataType }) {
     return (
         <>
@@ -263,11 +291,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                                 ? styles[itm.classAttr]
                                                 : ''
                                         )}
-                                        id={
-                                            itm.label === 'Transaction ID'
-                                                ? 'transactionID'
-                                                : ''
-                                        }
+                                        id={TestIDMatcher(itm.label)}
                                     >
                                         {itm.list ? (
                                             <ul className={styles.listitems}>

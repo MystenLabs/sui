@@ -12,8 +12,8 @@ use sui_json_rpc_api::rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo,
     SuiTypeTag, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_json_rpc_api::QuorumDriverApiClient;
 use sui_json_rpc_api::RpcBcsApiClient;
+use sui_json_rpc_api::RpcGatewayApiClient;
 use sui_json_rpc_api::RpcTransactionBuilderClient;
 use sui_json_rpc_api::TransactionBytes;
 use sui_json_rpc_api::WalletSyncApiClient;

@@ -33,6 +33,7 @@ export type SuiMoveObject = {
   type: string;
   /** Fields and values stored inside the Move object */
   fields: ObjectContentFields;
+  has_public_transfer: boolean;
 };
 
 export type SuiMovePackage = {
@@ -164,6 +165,12 @@ export function getMoveObject(
     return undefined;
   }
   return suiObject.data as SuiMoveObject;
+}
+
+export function hasPublicTransfer(
+  data: GetObjectDataResponse | SuiObject
+): boolean {
+  return getMoveObject(data)?.has_public_transfer ?? false;
 }
 
 export function getMovePackageContent(

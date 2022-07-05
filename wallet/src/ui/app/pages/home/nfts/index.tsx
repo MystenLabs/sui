@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { hasPublicTransfer } from '@mysten/sui.js';
 
 import ObjectsLayout from '_components/objects-layout';
 import SuiObject from '_components/sui-object';
@@ -13,7 +14,7 @@ function NftsPage() {
             {nfts.map((anNft) => (
                 <SuiObject
                     obj={anNft}
-                    sendNFT={true}
+                    sendNFT={hasPublicTransfer(anNft)}
                     key={anNft.reference.objectId}
                 />
             ))}

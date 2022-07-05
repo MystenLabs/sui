@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod causal_order_effects;
 pub mod proposal;
 pub mod reconstruction;
 
@@ -333,7 +334,7 @@ impl CheckpointStore {
     }
 
     pub fn handle_past_checkpoint(
-        &mut self,
+        &self,
         detail: bool,
         seq: CheckpointSequenceNumber,
     ) -> Result<CheckpointResponse, SuiError> {

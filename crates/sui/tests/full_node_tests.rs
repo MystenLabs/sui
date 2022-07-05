@@ -201,7 +201,7 @@ async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> 
         path.push("../../sui_programmability/examples/basics");
 
         let build_config = BuildConfig::default();
-        let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+        let modules = sui_framework::build_move_package(&path, build_config).unwrap();
 
         let all_module_bytes = modules
             .iter()

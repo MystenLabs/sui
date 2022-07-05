@@ -24,7 +24,7 @@ A lot of transactions do not have complex interdependencies with other, arbitrar
 
 Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../build/objects.md) and leveraging [Move](../build/move.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
-This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it we allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
+This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
 
 ## A collaborative approach to transaction submission
 
@@ -76,7 +76,7 @@ Contrary to many traditional blockchains, Sui does not make strong synchrony ass
 
 ### Efficient local read operations
 
-The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
+The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
 
 In traditional blockchains, families are ordered with respect to each other to totally order transactions. This then requires querying a massive blob for the precise information needed. Disk I/O thus becomes a performance bottleneck, and some blockchains [now require SSD drives](https://www.usenix.org/system/files/conference/hotstorage18/hotstorage18-paper-raju.pdf) on their validators as a result.
 

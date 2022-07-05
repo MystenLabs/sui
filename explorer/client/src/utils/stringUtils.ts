@@ -20,12 +20,15 @@ export const handleCoinType = (str: string): string =>
         ? 'SUI'
         : str.match(/^([a-zA-Z0-9:]*)<([a-zA-Z0-9:]*)>$/)?.[2] || str;
 
+export const findIPFSvalue = (url: string): string | undefined =>
+    url.match(/^ipfs:\/\/(.*)/)?.[1];
+
 export function transformURL(url: string) {
-    const found = url.match(/^ipfs:\/\/(.*)/);
+    const found = findIPFSvalue(url);
     if (!found) {
         return url;
     }
-    return `https://ipfs.io/ipfs/${found[1]}`;
+    return `https://ipfs.io/ipfs/${found}`;
 }
 
 export function truncate(fullStr: string, strLen: number, separator?: string) {

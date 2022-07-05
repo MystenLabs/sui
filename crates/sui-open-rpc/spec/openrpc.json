@@ -85,7 +85,7 @@
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "Quorum Driver API"
+          "name": "Gateway Transaction Execution API"
         }
       ],
       "description": "Execute the transaction using the transaction data, signature and public key.",

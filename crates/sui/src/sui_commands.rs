@@ -5,9 +5,11 @@ use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
 use crate::keytool::KeyToolCommand;
-use crate::sui_move::MoveCommands;
+use crate::sui_move::execute_move_command;
 use anyhow::{anyhow, bail};
 use clap::*;
+use move_cli::package::cli::PackageCommand;
+use move_package::BuildConfig;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -93,15 +95,25 @@ pub enum SuiCommand {
     /// Tool to build and test Move applications.
     #[clap(name = "move")]
     Move {
-        /// Path to the Move project root.
-        #[clap(long, default_value = "./")]
-        path: String,
-        /// Whether we are building/testing the std/framework code.
-        #[clap(long)]
-        std: bool,
+        /// Path to a package which the command should be run with respect to.
+        #[clap(
+            long = "path",
+            short = 'p',
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+        /// Whether we are printing in base64.
+        // TODO add this as a custom command to Package Command
+        #[clap(long, global = true)]
+        dump_bytecode_as_base64: bool,
+        /// Package build options
+        #[clap(flatten)]
+        build_config: BuildConfig,
         /// Subcommands.
         #[clap(subcommand)]
-        cmd: MoveCommands,
+        cmd: PackageCommand,
     },
 }
 
@@ -344,7 +356,12 @@ impl SuiCommand {
                 }
                 Ok(())
             }
-            SuiCommand::Move { path, std, cmd } => cmd.execute(path.as_ref(), std),
+            SuiCommand::Move {
+                package_path,
+                dump_bytecode_as_base64,
+                build_config,
+                cmd,
+            } => execute_move_command(package_path, dump_bytecode_as_base64, build_config, cmd),
         }
     }
 }

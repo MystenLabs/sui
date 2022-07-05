@@ -14,6 +14,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use prometheus::Registry;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_network::{
@@ -160,7 +161,11 @@ pub struct ValidatorService {
 impl ValidatorService {
     /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
     /// and a consensus listener bridging the consensus node and the sui authority.
-    pub async fn new(config: &NodeConfig, state: Arc<AuthorityState>) -> Result<Self> {
+    pub async fn new(
+        config: &NodeConfig,
+        state: Arc<AuthorityState>,
+        prometheus_registry: &Registry,
+    ) -> Result<Self> {
         let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
         let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
 
@@ -179,6 +184,7 @@ impl ValidatorService {
             /* consensus */ true, // Indicate that we want to run consensus.
             /* execution_state */ state.clone(),
             /* tx_confirmation */ tx_consensus_to_sui,
+            prometheus_registry,
         )
         .await?;
         narwhal_node::Node::spawn_workers(
@@ -187,6 +193,7 @@ impl ValidatorService {
             consensus_config.narwhal_committee().to_owned(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
+            prometheus_registry,
         );
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the

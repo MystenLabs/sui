@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { DappTxApprovalPage } from './pages/dapp-tx-approval';
 import HomePage from './pages/home';
 import NftsPage from './pages/home/nfts';
 import SettingsPage from './pages/home/settings';
@@ -22,10 +23,12 @@ import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { loadAccountFromStorage } from '_redux/slices/account';
+import { loadNetworkFromStorage } from '_redux/slices/app';
 
 const App = () => {
     const dispatch = useAppDispatch();
     useEffect(() => {
+        dispatch(loadNetworkFromStorage());
         dispatch(loadAccountFromStorage());
     }, [dispatch]);
     const isPopup = useAppSelector(
@@ -60,6 +63,7 @@ const App = () => {
                 <Route path="backup" element={<BackupPage />} />
             </Route>
             <Route path="/connect/:requestID" element={<SiteConnectPage />} />
+            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
             <Route
                 path="*"
                 element={<Navigate to="/tokens" replace={true} />}

@@ -62,6 +62,7 @@ export const getDataOnTxDigests = (
                             txGas: getTotalGasUsed(txEff),
                             kind: txKind,
                             From: res.data.sender,
+                            timestamp_ms: txEff.timestamp_ms,
                             ...(recipient
                                 ? {
                                       To: recipient,

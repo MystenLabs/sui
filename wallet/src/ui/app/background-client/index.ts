@@ -1,12 +1,27 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { setPermissions } from '_redux/slices/permissions';
+import { lastValueFrom, take } from 'rxjs';
 
-import type { SuiAddress } from '@mysten/sui.js';
+import { createMessage } from '_messages';
+import { PortStream } from '_messaging/PortStream';
+import { isPermissionRequests } from '_payloads/permissions';
+import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import { setPermissions } from '_redux/slices/permissions';
+import { setTransactionRequests } from '_redux/slices/transaction-requests';
+
+import type { SuiAddress, TransactionResponse } from '@mysten/sui.js';
+import type { Message } from '_messages';
+import type {
+    GetPermissionRequests,
+    PermissionResponse,
+} from '_payloads/permissions';
+import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
+import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
 
 export class BackgroundClient {
+    private _portStream: PortStream | null = null;
     private _dispatch: AppDispatch | null = null;
     private _initialized = false;
 
@@ -16,8 +31,11 @@ export class BackgroundClient {
         }
         this._initialized = true;
         this._dispatch = dispatch;
-        // TODO: implement
-        return this.sendGetPermissionRequests().then(() => undefined);
+        this.createPortStream();
+        return Promise.all([
+            this.sendGetPermissionRequests(),
+            this.sendGetTransactionRequests(),
+        ]).then(() => undefined);
     }
 
     public sendPermissionResponse(
@@ -26,26 +44,86 @@ export class BackgroundClient {
         allowed: boolean,
         responseDate: string
     ) {
-        // TODO: implement
+        this.sendMessage(
+            createMessage<PermissionResponse>({
+                id,
+                type: 'permission-response',
+                accounts,
+                allowed,
+                responseDate,
+            })
+        );
     }
 
     public async sendGetPermissionRequests() {
-        // TODO: remove mock and implement
-        const id = /connect\/(.+)/.exec(window.location.hash)?.[1];
-        if (this._dispatch && id) {
-            this._dispatch(
-                setPermissions([
-                    {
-                        id,
-                        accounts: [],
-                        allowed: null,
-                        createdDate: new Date().toISOString(),
-                        favIcon: 'https://www.google.com/favicon.ico',
-                        origin: 'https://www.google.com',
-                        permissions: ['viewAccount'],
-                        responseDate: null,
-                    },
-                ])
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<GetPermissionRequests>({
+                    type: 'get-permission-requests',
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async sendTransactionRequestResponse(
+        txID: string,
+        approved: boolean,
+        txResult: TransactionResponse | undefined,
+        tsResultError: string | undefined
+    ) {
+        this.sendMessage(
+            createMessage<TransactionRequestResponse>({
+                type: 'transaction-request-response',
+                approved,
+                txID,
+                txResult,
+                tsResultError,
+            })
+        );
+    }
+
+    public async sendGetTransactionRequests() {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<GetTransactionRequests>({
+                    type: 'get-transaction-requests',
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    private handleIncomingMessage(msg: Message) {
+        if (!this._initialized || !this._dispatch) {
+            throw new Error(
+                'BackgroundClient is not initialized to handle incoming messages'
+            );
+        }
+        const { payload } = msg;
+        if (isPermissionRequests(payload)) {
+            this._dispatch(setPermissions(payload.permissions));
+        } else if (isGetTransactionRequestsResponse(payload)) {
+            this._dispatch(setTransactionRequests(payload.txRequests));
+        }
+    }
+
+    private createPortStream() {
+        this._portStream = PortStream.connectToBackgroundService(
+            'sui_ui<->background'
+        );
+        this._portStream.onDisconnect.subscribe(() => {
+            this.createPortStream();
+        });
+        this._portStream.onMessage.subscribe((msg) =>
+            this.handleIncomingMessage(msg)
+        );
+    }
+
+    private sendMessage(msg: Message) {
+        if (this._portStream?.connected) {
+            return this._portStream.sendMessage(msg);
+        } else {
+            throw new Error(
+                'Failed to send message to background service. Port not connected.'
             );
         }
     }

@@ -3,13 +3,14 @@
 
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
-import { useIntl } from 'react-intl';
 
 import AddressInput from '_components/address-input';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import NumberInput from '_components/number-input';
-import { balanceFormatOptions } from '_shared/formatting';
+import {
+    GAS_SYMBOL,
+    DEFAULT_NFT_TRANSFER_GAS_FEE,
+} from '_redux/slices/sui-objects/Coin';
 
 import type { FormValues } from '.';
 
@@ -31,10 +32,9 @@ function TransferNFTForm({
         isValid,
         values: { to, amount },
     } = useFormikContext<FormValues>();
-    const intl = useIntl();
+
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
-    const transferCost = 10000;
     useEffect(() => {
         onClearRef.current();
     }, [to, amount]);
@@ -52,30 +52,10 @@ function TransferNFTForm({
             </div>
 
             <div className={st.group}>
-                <label className={st.label}>Amount:</label>
-                <Field
-                    component={NumberInput}
-                    allowNegative={false}
-                    name="amount"
-                    value={transferCost}
-                    className={st.input}
-                    disabled={true}
-                />
-                <div className={st.muted}>
-                    Available balance:{' '}
-                    {intl.formatNumber(
-                        BigInt(gasBalance),
-                        balanceFormatOptions
-                    )}{' '}
-                </div>
-                <ErrorMessage
-                    className={st.error}
-                    name="amount"
-                    component="div"
-                />
+                * Total transaction fee estimate (gas cost):
+                {DEFAULT_NFT_TRANSFER_GAS_FEE} {GAS_SYMBOL}
             </div>
-
-            {BigInt(gasBalance) < transferCost && (
+            {BigInt(gasBalance) < DEFAULT_NFT_TRANSFER_GAS_FEE && (
                 <div className={st.error}>
                     * Insufficient balance to cover transfer cost
                 </div>

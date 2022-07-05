@@ -7,7 +7,10 @@ use nexlint_lints::{
     content::*,
     handle_lint_results,
     package::*,
-    project::{BannedDeps, BannedDepsConfig, DirectDepDups, DirectDepDupsConfig},
+    project::{
+        BannedDeps, BannedDepsConfig, DirectDepDups, DirectDepDupsConfig,
+        DirectDuplicateGitDependencies,
+    },
 };
 
 static LICENSE_HEADER: &str = "Copyright (c) 2022, Mysten Labs, Inc.\n\
@@ -41,6 +44,7 @@ pub fn run(args: Args) -> crate::Result<()> {
     let project_linters: &[&dyn ProjectLinter] = &[
         &DirectDepDups::new(&direct_dups_config),
         &BannedDeps::new(&banned_deps_config),
+        &DirectDuplicateGitDependencies,
     ];
 
     let package_linters: &[&dyn PackageLinter] = &[
