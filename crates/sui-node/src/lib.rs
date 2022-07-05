@@ -72,17 +72,14 @@ impl SuiNode {
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
-        let checkpoint_store = if config.consensus_config().is_some() {
-            Some(Arc::new(Mutex::new(CheckpointStore::open(
-                config.db_path().join("checkpoints"),
-                None,
-                committee.epoch,
-                config.public_key(),
-                secret.clone(),
-            )?)))
-        } else {
-            None
-        };
+
+        let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
+            config.db_path().join("checkpoints"),
+            None,
+            committee.epoch,
+            config.public_key(),
+            secret.clone(),
+        )?));
 
         let index_store = if config.consensus_config().is_some() {
             None
@@ -112,7 +109,7 @@ impl SuiNode {
                 store,
                 index_store.clone(),
                 event_store,
-                checkpoint_store,
+                Some(checkpoint_store),
                 genesis,
                 &prometheus_registry,
             )
@@ -192,6 +189,7 @@ impl SuiNode {
                         ),
                     )
                 } else {
+                    active_authority.sync_to_latest_checkpoint().await?;
                     (
                         Some(active_authority.spawn_node_sync_process().await),
                         None,
