@@ -125,12 +125,18 @@
         "name": "See what's New",
         "sublist": [
           {
-            "name": "Run a Fullnode",
-            "url": "/build/fullnode"
+            "name": "Use Move VSCode Plugin",
+            "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
+            "external": true
           },
           {
-            "name": "Program Sui Objects",
-            "url": "/build/programming-with-objects/index"
+            "name": "Join Incentivized Testnet",
+            "url": "https://sui.io/resources-sui/announcing-sui-incentivized-testnet/",
+            "external": true
+          },
+          {
+            "name": "Run a Fullnode",
+            "url": "/build/fullnode"
           },
           {
             "name": "Learn Sui Tokenomics",
@@ -142,12 +148,16 @@
         "name": "Get Started",
         "sublist": [
           {
-            "name": "Move Quick Start",
+            "name": "Create Smart Contracts",
             "url": "/build/move"
           },
           {
-            "name": "Sui CLI Quick Start",
+            "name": "Start Sui Network",
             "url": "/build/cli-client"
+          },
+          {
+            "name": "Program Sui Objects",
+            "url": "/build/programming-with-objects/index"
           }
         ]
       },
