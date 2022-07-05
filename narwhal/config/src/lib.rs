@@ -320,18 +320,15 @@ pub struct Authority {
     pub workers: HashMap<WorkerId, WorkerAddresses>,
 }
 
-pub type SharedCommittee<PK> = Arc<Committee<PK>>;
+pub type SharedCommittee<PK> = Arc<ArcSwap<Committee<PK>>>;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Committee<PublicKey> {
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Committee<PublicKey: VerifyingKey> {
     /// The authorities of epoch.
-    #[serde(bound(
-        serialize = "PublicKey:Ord + Serialize",
-        deserialize = "PublicKey:Ord + DeserializeOwned"
-    ))]
-    pub authorities: ArcSwap<BTreeMap<PublicKey, Authority>>,
+    #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
+    pub authorities: BTreeMap<PublicKey, Authority>,
     /// The epoch number of this committee
-    pub epoch: ArcSwap<Epoch>,
+    pub epoch: Epoch,
 }
 
 impl<PublicKey: VerifyingKey> std::fmt::Display for Committee<PublicKey> {
@@ -341,7 +338,6 @@ impl<PublicKey: VerifyingKey> std::fmt::Display for Committee<PublicKey> {
             "Committee E{}: {:?}",
             self.epoch(),
             self.authorities
-                .load()
                 .keys()
                 .map(|x| { x.encode_base64().get(0..16).unwrap().to_string() })
                 .collect::<Vec<_>>()
@@ -352,18 +348,17 @@ impl<PublicKey: VerifyingKey> std::fmt::Display for Committee<PublicKey> {
 impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the number of authorities.
     pub fn epoch(&self) -> Epoch {
-        *self.epoch.load().clone()
+        self.epoch
     }
 
     /// Returns the number of authorities.
     pub fn size(&self) -> usize {
-        self.authorities.load().len()
+        self.authorities.len()
     }
 
     /// Return the stake of a specific authority.
     pub fn stake(&self, name: &PublicKey) -> Stake {
         self.authorities
-            .load()
             .get(&name.clone())
             .map_or_else(|| 0, |x| x.stake)
     }
@@ -372,7 +367,7 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     pub fn quorum_threshold(&self) -> Stake {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
-        let total_votes: Stake = self.authorities.load().values().map(|x| x.stake).sum();
+        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
         2 * total_votes / 3 + 1
     }
 
@@ -380,13 +375,13 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     pub fn validity_threshold(&self) -> Stake {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        let total_votes: Stake = self.authorities.load().values().map(|x| x.stake).sum();
+        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
         (total_votes + 2) / 3
     }
 
     /// Returns a leader node in a round-robin fashion.
     pub fn leader(&self, seed: usize) -> PublicKey {
-        let mut keys: Vec<_> = self.authorities.load().keys().cloned().collect();
+        let mut keys: Vec<_> = self.authorities.keys().cloned().collect();
         keys.sort();
         keys[seed % self.size()].clone()
     }
@@ -394,7 +389,6 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the primary addresses of the target primary.
     pub fn primary(&self, to: &PublicKey) -> Result<PrimaryAddresses, ConfigError> {
         self.authorities
-            .load()
             .get(&to.clone())
             .map(|x| x.primary.clone())
             .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
@@ -403,7 +397,6 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the addresses of all primaries except `myself`.
     pub fn others_primaries(&self, myself: &PublicKey) -> Vec<(PublicKey, PrimaryAddresses)> {
         self.authorities
-            .load()
             .iter()
             .filter(|(name, _)| *name != myself)
             .map(|(name, authority)| (name.deref().clone(), authority.primary.clone()))
@@ -413,7 +406,6 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the addresses of a specific worker (`id`) of a specific authority (`to`).
     pub fn worker(&self, to: &PublicKey, id: &WorkerId) -> Result<WorkerAddresses, ConfigError> {
         self.authorities
-            .load()
             .iter()
             .find(|(name, _)| *name == to)
             .map(|(_, authority)| authority)
@@ -431,7 +423,6 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     pub fn our_workers(&self, myself: &PublicKey) -> Result<Vec<WorkerAddresses>, ConfigError> {
         let res = self
             .authorities
-            .load()
             .iter()
             .find(|(name, _)| *name == myself)
             .map(|(_, authority)| authority)
@@ -451,7 +442,6 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
         id: &WorkerId,
     ) -> Vec<(PublicKey, WorkerAddresses)> {
         self.authorities
-            .load()
             .iter()
             .filter(|(name, _)| *name != myself)
             .filter_map(|(name, authority)| {
@@ -464,88 +454,72 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
             .collect()
     }
 
-    pub fn update_committee(&self, new_committee: Self) {
-        self.epoch.store(new_committee.epoch.load_full());
-        self.authorities
-            .store(new_committee.authorities.load_full());
-    }
-
     /// Update the networking information of some of the primaries. The arguments are a full vector of
     /// authorities which Public key and Stake must match the one stored in the current Committee. Any discrepancy
     /// will generate no update and return a vector of errors.
     pub fn update_primary_network_info(
-        &self,
+        &mut self,
         mut new_info: BTreeMap<PublicKey, (Stake, PrimaryAddresses)>,
     ) -> Result<(), Vec<ComitteeUpdateError>> {
         let mut errors = None;
 
-        self.authorities.rcu(|table| {
-            let push_error_and_return = |acc, error| {
-                let mut error_table = if let Err(errors) = acc {
-                    errors
-                } else {
-                    Vec::new()
-                };
-                error_table.push(error);
-                Err(error_table)
+        let table = &self.authorities;
+        let push_error_and_return = |acc, error| {
+            let mut error_table = if let Err(errors) = acc {
+                errors
+            } else {
+                Vec::new()
             };
+            error_table.push(error);
+            Err(error_table)
+        };
 
-            let res = table
-                .iter()
-                .fold(Ok(BTreeMap::new()), |acc, (pk, authority)| {
-                    if let Some((stake, addresses)) = new_info.remove(pk) {
-                        if stake == authority.stake {
-                            match acc {
-                                // No error met yet, update the accumulator
-                                Ok(mut bmap) => {
-                                    let mut res = authority.clone();
-                                    res.primary = addresses;
-                                    bmap.insert(pk.clone(), res);
-                                    Ok(bmap)
-                                }
-                                // in error mode, continue
-                                _ => acc,
+        let res = table
+            .iter()
+            .fold(Ok(BTreeMap::new()), |acc, (pk, authority)| {
+                if let Some((stake, addresses)) = new_info.remove(pk) {
+                    if stake == authority.stake {
+                        match acc {
+                            // No error met yet, update the accumulator
+                            Ok(mut bmap) => {
+                                let mut res = authority.clone();
+                                res.primary = addresses;
+                                bmap.insert(pk.clone(), res);
+                                Ok(bmap)
                             }
-                        } else {
-                            // Stake does not match: create or append error
-                            push_error_and_return(
-                                acc,
-                                ComitteeUpdateError::DifferentStake(pk.to_string()),
-                            )
+                            // in error mode, continue
+                            _ => acc,
                         }
                     } else {
-                        // This key is absent from new information
+                        // Stake does not match: create or append error
                         push_error_and_return(
                             acc,
-                            ComitteeUpdateError::MissingFromUpdate(pk.to_string()),
+                            ComitteeUpdateError::DifferentStake(pk.to_string()),
                         )
                     }
-                });
-
-            // If there are elements left in new_info, they are not in the original table
-            // If new_info is empty, this is a no-op.
-            let res = new_info.iter().fold(res, |acc, (pk, _)| {
-                push_error_and_return(acc, ComitteeUpdateError::NotInCommittee(pk.to_string()))
+                } else {
+                    // This key is absent from new information
+                    push_error_and_return(
+                        acc,
+                        ComitteeUpdateError::MissingFromUpdate(pk.to_string()),
+                    )
+                }
             });
 
-            match res {
-                Ok(new_table) => Arc::new(new_table),
-                Err(errs) => {
-                    errors = Some(errs);
-                    table.clone()
-                }
-            }
+        // If there are elements left in new_info, they are not in the original table
+        // If new_info is empty, this is a no-op.
+        let res = new_info.iter().fold(res, |acc, (pk, _)| {
+            push_error_and_return(acc, ComitteeUpdateError::NotInCommittee(pk.to_string()))
         });
-        errors.map(Err).unwrap_or(Ok(()))
-    }
-}
 
-impl<PublicKey: VerifyingKey> Clone for Committee<PublicKey> {
-    fn clone(&self) -> Self {
-        Self {
-            authorities: ArcSwap::new(self.authorities.load().clone()),
-            epoch: ArcSwap::new(Arc::new(self.epoch())),
-        }
+        match res {
+            Ok(new_table) => self.authorities = new_table,
+            Err(errs) => {
+                errors = Some(errs);
+            }
+        };
+
+        errors.map(Err).unwrap_or(Ok(()))
     }
 }
 

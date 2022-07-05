@@ -69,6 +69,7 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
             // Trigger cleanup on the workers..
             let addresses = self
                 .committee
+                .load()
                 .our_workers(&self.name)
                 .expect("Our public key or worker id is not in the committee")
                 .into_iter()
@@ -80,7 +81,7 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
     }
 
     fn update_committee(&mut self, new_committee: Committee<PublicKey>) {
-        self.committee.update_committee(new_committee);
+        self.committee.swap(Arc::new(new_committee));
     }
 
     async fn run(&mut self) {

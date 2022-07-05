@@ -24,7 +24,7 @@ async fn inner_dag_insert_one() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&*committee.load());
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -34,7 +34,7 @@ async fn inner_dag_insert_one() {
     // set up a Dag
     let (tx_cert, rx_cert) = channel(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    Dag::new(&committee, rx_cert, metrics);
+    Dag::new(&*committee.load(), rx_cert, metrics);
 
     // Feed the certificates to the Dag
     while let Some(certificate) = certificates.pop_front() {
@@ -85,7 +85,7 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&*committee.load());
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -94,7 +94,7 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_, dag) = Dag::new(&committee, rx_cert, metrics);
+    let (_, dag) = Dag::new(&*committee.load(), rx_cert, metrics);
 
     for certificate in genesis.clone() {
         assert!(dag.contains(certificate).await);
@@ -136,7 +136,7 @@ async fn test_dag_compresses_empty_blocks() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&*committee.load());
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -145,7 +145,7 @@ async fn test_dag_compresses_empty_blocks() {
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_, dag) = Dag::new(&committee, rx_cert, metrics);
+    let (_, dag) = Dag::new(&*committee.load(), rx_cert, metrics);
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
@@ -204,7 +204,7 @@ async fn test_dag_rounds_after_compression() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&*committee.load());
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -213,7 +213,7 @@ async fn test_dag_rounds_after_compression() {
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_, dag) = Dag::new(&committee, rx_cert, metrics);
+    let (_, dag) = Dag::new(&*committee.load(), rx_cert, metrics);
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
@@ -253,7 +253,7 @@ async fn dag_mutation_failures() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&*committee.load());
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -263,7 +263,7 @@ async fn dag_mutation_failures() {
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_handle, dag) = Dag::new(&committee, rx_cert, metrics);
+    let (_handle, dag) = Dag::new(&*committee.load(), rx_cert, metrics);
     let mut certs_to_insert = certificates.clone();
     let mut certs_to_insert_in_reverse = certs_to_insert.clone();
     let mut certs_to_remove_before_insert = certs_to_insert.clone();
@@ -322,7 +322,7 @@ async fn dag_insert_one_and_rounds_node_read() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&*committee.load());
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -332,7 +332,7 @@ async fn dag_insert_one_and_rounds_node_read() {
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_handle, dag) = Dag::new(&committee, rx_cert, metrics);
+    let (_handle, dag) = Dag::new(&*committee.load(), rx_cert, metrics);
     let mut certs_to_insert = certificates.clone();
 
     // Feed the certificates to the Dag
@@ -370,7 +370,7 @@ async fn dag_insert_and_remove_reads() {
         .map(|kp| kp.public().clone())
         .collect();
     let committee = mock_committee(&keys.clone()[..]);
-    let mut genesis_certs = Certificate::genesis(&committee);
+    let mut genesis_certs = Certificate::genesis(&*committee.load());
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -380,7 +380,7 @@ async fn dag_insert_and_remove_reads() {
     // set up a Dag
     let (_tx_cert, rx_cert) = channel(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let (_handle, dag) = Dag::new(&committee, rx_cert, metrics);
+    let (_handle, dag) = Dag::new(&*committee.load(), rx_cert, metrics);
 
     // Feed the certificates to the Dag
     while let Some(certificate) = certificates.pop_front() {

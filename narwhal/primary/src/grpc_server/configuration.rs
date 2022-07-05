@@ -27,7 +27,7 @@ impl<PublicKey: VerifyingKey> NarwhalConfiguration<PublicKey> {
             .map_err(|_| Status::invalid_argument("Invalid public key: couldn't parse"))?;
 
         // ensure provided key is part of the committee
-        if self.committee.primary(&key).is_err() {
+        if self.committee.load().primary(&key).is_err() {
             return Err(Status::invalid_argument(
                 "Invalid public key: unknown authority",
             ));
@@ -94,10 +94,10 @@ impl<PublicKey: VerifyingKey> Configuration for NarwhalConfiguration<PublicKey> 
     ) -> Result<Response<Empty>, Status> {
         let new_network_info_request = request.into_inner();
         let epoch_number: u64 = new_network_info_request.epoch_number.into();
-        if epoch_number != self.committee.epoch() {
+        if epoch_number != self.committee.load().epoch() {
             return Err(Status::invalid_argument(format!(
                 "Passed in epoch {epoch_number} does not match current epoch {}",
-                self.committee.epoch
+                self.committee.load().epoch
             )));
         }
         let validators = new_network_info_request.validators;
@@ -137,9 +137,12 @@ impl<PublicKey: VerifyingKey> Configuration for NarwhalConfiguration<PublicKey> 
             };
             new_network_info.insert(public_key, (stake_weight, primary));
         }
-        self.committee
-            .update_primary_network_info(new_network_info)
-            .map_err(|err| Status::internal(format!("Could not update network info: {:?}", err)))?;
+        let mut new_committee = (**self.committee.load()).clone();
+        let res = new_committee.update_primary_network_info(new_network_info);
+        if res.is_ok() {
+            self.committee.swap(std::sync::Arc::new(new_committee));
+        }
+        res.map_err(|err| Status::internal(format!("Could not update network info: {:?}", err)))?;
 
         Ok(Response::new(Empty {}))
     }

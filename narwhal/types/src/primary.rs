@@ -375,7 +375,6 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
     pub fn genesis(committee: &Committee<PublicKey>) -> Vec<Self> {
         committee
             .authorities
-            .load()
             .keys()
             .map(|name| Self {
                 header: Header {

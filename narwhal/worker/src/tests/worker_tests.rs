@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use arc_swap::ArcSwap;
 use crypto::traits::KeyPair;
 use futures::StreamExt;
 use primary::WorkerPrimaryMessage;
@@ -41,7 +42,7 @@ async fn handle_clients_transactions() {
     Worker::spawn(
         name.clone(),
         id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters,
         store,
         metrics,
@@ -117,7 +118,7 @@ async fn handle_client_batch_request() {
     Worker::spawn(
         name.clone(),
         id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters,
         store,
         metrics,

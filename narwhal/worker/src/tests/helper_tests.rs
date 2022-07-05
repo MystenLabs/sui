@@ -2,7 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use arc_swap::ArcSwap;
 use crypto::traits::KeyPair;
+use std::sync::Arc;
 use store::rocks;
 use test_utils::{
     batch, committee, digest_batch, keys, serialize_batch_message, temp_dir,
@@ -37,7 +39,7 @@ async fn worker_batch_reply() {
     // Spawn an `Helper` instance.
     Helper::spawn(
         id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         store,
         rx_worker_request,
         rx_client_request,
@@ -81,7 +83,7 @@ async fn client_batch_reply() {
     // Spawn an `Helper` instance.
     Helper::spawn(
         id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         store,
         rx_worker_request,
         rx_client_request,

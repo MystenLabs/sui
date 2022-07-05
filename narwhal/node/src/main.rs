@@ -9,6 +9,7 @@
 )]
 
 use anyhow::{Context, Result};
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
@@ -126,9 +127,9 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 
     // Read the committee and node's keypair from file.
     let keypair = Ed25519KeyPair::import(key_file).context("Failed to load the node's keypair")?;
-    let committee = Arc::new(
+    let committee = Arc::new(ArcSwap::from_pointee(
         Committee::import(committee_file).context("Failed to load the committee information")?,
-    );
+    ));
 
     // Load default parameters if none are specified.
     let parameters = match parameters_file {

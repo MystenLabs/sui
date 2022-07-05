@@ -40,7 +40,7 @@ async fn simple_epoch_change() {
         Primary::spawn(
             name,
             signer,
-            Arc::new(committee_0.clone()),
+            Arc::new(ArcSwap::from_pointee(committee_0.clone())),
             parameters.clone(),
             store.header_store.clone(),
             store.certificate_store.clone(),
@@ -68,8 +68,11 @@ async fn simple_epoch_change() {
     // Move to the next epochs.
     for epoch in 1..=3 {
         // Move to the next epoch.
-        let new_committee = committee_0.clone();
-        new_committee.epoch.swap(Arc::new(epoch));
+        let new_committee = Committee {
+            epoch,
+            ..committee_0.clone()
+        };
+
         for tx in &tx_channels {
             tx.send(ConsensusPrimaryMessage::Committee(new_committee.clone()))
                 .await
@@ -99,14 +102,12 @@ async fn partial_committee_change() {
     let keys_0 = keys(None);
     let authorities_0: Vec<_> = keys_0.iter().map(|_| make_authority()).collect();
     let committee_0 = Committee {
-        epoch: ArcSwap::new(Arc::new(Epoch::default())),
-        authorities: ArcSwap::from_pointee(
-            keys_0
-                .iter()
-                .zip(authorities_0.clone().into_iter())
-                .map(|(kp, authority)| (kp.public().clone(), authority))
-                .collect(),
-        ),
+        epoch: Epoch::default(),
+        authorities: keys_0
+            .iter()
+            .zip(authorities_0.clone().into_iter())
+            .map(|(kp, authority)| (kp.public().clone(), authority))
+            .collect(),
     };
 
     // Spawn the committee of epoch 0.
@@ -126,7 +127,7 @@ async fn partial_committee_change() {
         Primary::spawn(
             name,
             signer,
-            Arc::new(committee_0.clone()),
+            Arc::new(ArcSwap::from_pointee(committee_0.clone())),
             parameters.clone(),
             store.header_store.clone(),
             store.certificate_store.clone(),
@@ -178,8 +179,8 @@ async fn partial_committee_change() {
         .collect();
 
     let committee_1 = Committee {
-        epoch: ArcSwap::new(Arc::new(Epoch::default() + 1)),
-        authorities: ArcSwap::from_pointee(authorities_1),
+        epoch: Epoch::default() + 1,
+        authorities: authorities_1,
     };
 
     // Spawn the committee of epoch 1 (only the node not already booted).
@@ -199,7 +200,7 @@ async fn partial_committee_change() {
         Primary::spawn(
             name,
             signer,
-            Arc::new(committee_1.clone()),
+            Arc::new(ArcSwap::from_pointee(committee_1.clone())),
             parameters.clone(),
             store.header_store.clone(),
             store.certificate_store.clone(),

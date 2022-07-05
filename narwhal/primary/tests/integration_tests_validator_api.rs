@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, WorkerId};
@@ -108,7 +109,7 @@ async fn test_get_collections() {
     Primary::spawn(
         name.clone(),
         signer,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
@@ -132,7 +133,7 @@ async fn test_get_collections() {
     Worker::spawn(
         name.clone(),
         worker_id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store.batch_store.clone(),
         metrics,
@@ -284,7 +285,7 @@ async fn test_remove_collections() {
     Primary::spawn(
         name.clone(),
         signer,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
@@ -333,7 +334,7 @@ async fn test_remove_collections() {
     Worker::spawn(
         name.clone(),
         worker_id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store.batch_store.clone(),
         metrics,
@@ -488,7 +489,7 @@ async fn test_read_causal_signed_certificates() {
     Primary::spawn(
         name_1.clone(),
         keypair_1,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
@@ -516,7 +517,7 @@ async fn test_read_causal_signed_certificates() {
     Primary::spawn(
         name_2.clone(),
         keypair_2,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,
@@ -635,7 +636,6 @@ async fn test_read_causal_unsigned_certificates() {
         &genesis,
         &committee
             .authorities
-            .load()
             .keys()
             .cloned()
             .collect::<Vec<Ed25519PublicKey>>(),
@@ -680,7 +680,7 @@ async fn test_read_causal_unsigned_certificates() {
     Primary::spawn(
         name_1.clone(),
         keypair_1,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
@@ -701,7 +701,7 @@ async fn test_read_causal_unsigned_certificates() {
     Primary::spawn(
         name_2.clone(),
         keypair_2,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,
@@ -838,7 +838,7 @@ async fn test_get_collections_with_missing_certificates() {
     Primary::spawn(
         name_1.clone(),
         keypair_1,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store_primary_1.header_store,
         store_primary_1.certificate_store,
@@ -862,7 +862,7 @@ async fn test_get_collections_with_missing_certificates() {
     Worker::spawn(
         name_1,
         worker_id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store_primary_1.batch_store,
         metrics_1,
@@ -875,7 +875,7 @@ async fn test_get_collections_with_missing_certificates() {
     Primary::spawn(
         name_2.clone(),
         keypair_2,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store_primary_2.header_store,
         store_primary_2.certificate_store,
@@ -897,7 +897,7 @@ async fn test_get_collections_with_missing_certificates() {
     Worker::spawn(
         name_2,
         worker_id,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store_primary_2.batch_store,
         metrics_2,

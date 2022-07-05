@@ -82,6 +82,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let handle = PrimaryConnector::spawn(
             worker
                 .committee
+                .load()
                 .primary(&worker.name)
                 .expect("Our public key is not in the committee")
                 .worker_to_primary,
@@ -94,6 +95,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             id,
             worker
                 .committee
+                .load()
                 .worker(&worker.name, &worker.id)
                 .expect("Our public key or worker id is not in the committee")
                 .transactions
@@ -117,6 +119,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // Receive incoming messages from our primary.
         let address = self
             .committee
+            .load()
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .primary_to_worker;
@@ -160,6 +163,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // We first receive clients' transactions from the network.
         let address = self
             .committee
+            .load()
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .transactions;
@@ -178,6 +182,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             /* tx_message */ tx_quorum_waiter,
             /* workers_addresses */
             self.committee
+                .load()
                 .others_workers(&self.name, &self.id)
                 .into_iter()
                 .map(|(name, addresses)| (name, addresses.worker_to_worker))
@@ -188,7 +193,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // the batch to the `Processor`.
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.committee.clone(),
-            /* stake */ self.committee.stake(&self.name),
+            /* stake */ self.committee.load().stake(&self.name),
             /* rx_message */ rx_quorum_waiter,
             /* tx_batch */ tx_processor,
         );
@@ -223,6 +228,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // Receive incoming messages from other workers.
         let address = self
             .committee
+            .load()
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .worker_to_worker;

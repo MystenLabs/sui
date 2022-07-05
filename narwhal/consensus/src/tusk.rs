@@ -10,7 +10,7 @@ use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Hash,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, ops::Deref, sync::Arc};
 use tracing::debug;
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, StoreResult};
 
@@ -60,11 +60,11 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
         if leader_round <= state.last_committed_round {
             return Ok(Vec::new());
         }
-        let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
-        {
-            Some(x) => x,
-            None => return Ok(Vec::new()),
-        };
+        let (leader_digest, leader) =
+            match Self::leader(self.committee.load().deref(), leader_round, &state.dag) {
+                Some(x) => x,
+                None => return Ok(Vec::new()),
+            };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
         let stake: Stake = state
@@ -73,13 +73,13 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.stake(&x.origin()))
+            .map(|(_, x)| self.committee.load().stake(&x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
         // the last committed leader, and commit all preceding leaders in the right order. Committing
         // a leader block means committing all its dependencies.
-        if stake < self.committee.validity_threshold() {
+        if stake < self.committee.load().validity_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
             return Ok(Vec::new());
         }
@@ -87,9 +87,10 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
         let mut sequence = Vec::new();
-        for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
-            .iter()
-            .rev()
+        for leader in
+            utils::order_leaders(self.committee.load().deref(), leader, state, Self::leader)
+                .iter()
+                .rev()
         {
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
@@ -174,7 +175,7 @@ mod tests {
             .map(|kp| kp.public().clone())
             .collect();
 
-        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+        let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
@@ -188,8 +189,10 @@ mod tests {
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
         let consensus_index = 0;
-        let mut state =
-            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
+        let mut state = ConsensusState::new(
+            Certificate::genesis(&*mock_committee(&keys[..]).load()),
+            metrics,
+        );
         let mut tusk = Tusk {
             committee,
             store,
@@ -225,7 +228,7 @@ mod tests {
             .map(|kp| kp.public().clone())
             .collect();
 
-        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+        let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
@@ -239,8 +242,10 @@ mod tests {
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state =
-            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
+        let mut state = ConsensusState::new(
+            Certificate::genesis(&*mock_committee(&keys[..]).load()),
+            metrics,
+        );
         let consensus_index = 0;
         let mut tusk = Tusk {
             committee,

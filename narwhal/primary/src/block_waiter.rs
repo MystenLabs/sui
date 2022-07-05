@@ -155,7 +155,7 @@ type RequestKey = Vec<u8>;
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
 ///
 ///     let name = Ed25519PublicKey::default();
-///     let committee = Committee{ epoch: ArcSwap::new(Arc::new(0)), authorities: ArcSwap::from_pointee(BTreeMap::new()) };
+///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee(committee.clone()));
 ///
 ///     // A dummy certificate

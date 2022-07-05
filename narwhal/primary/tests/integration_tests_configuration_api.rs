@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::Parameters;
@@ -36,7 +37,7 @@ async fn test_new_epoch() {
     Primary::spawn(
         name.clone(),
         signer,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
@@ -108,7 +109,7 @@ async fn test_new_network_info() {
     Primary::spawn(
         name.clone(),
         signer,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
@@ -130,7 +131,7 @@ async fn test_new_network_info() {
     // Test gRPC server with client call
     let mut client = connect_to_configuration_client(parameters.clone());
 
-    let public_keys: Vec<_> = committee.authorities.load().keys().cloned().collect();
+    let public_keys: Vec<_> = committee.authorities.keys().cloned().collect();
 
     let mut validators = Vec::new();
     for public_key in public_keys.iter() {

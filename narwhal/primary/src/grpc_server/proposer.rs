@@ -34,7 +34,7 @@ impl<PublicKey: VerifyingKey> NarwhalProposer<PublicKey> {
             .map_err(|_| Status::invalid_argument("Invalid public key: couldn't parse"))?;
 
         // ensure provided key is part of the committee
-        if self.committee.primary(&key).is_err() {
+        if self.committee.load().primary(&key).is_err() {
             return Err(Status::invalid_argument(
                 "Invalid public key: unknown authority",
             ));

@@ -88,8 +88,8 @@ class Demo:
             self.node_parameters.print(PathMaker.parameters_file())
 
             # Run the clients (they will wait for the nodes to be ready).
-            workers_addresses = committee.workers_addresses(self.faults)
-            rate_share = ceil(rate / committee.workers())
+            workers_addresses = committee.load().workers_addresses(self.faults)
+            rate_share = ceil(rate / committee.load().workers())
             for i, addresses in enumerate(workers_addresses):
                 for (id, address) in addresses:
                     cmd = CommandMaker.run_client(
@@ -102,7 +102,7 @@ class Demo:
                     self._background_run(cmd, log_file)
 
             # Run the primaries (except the faulty ones).
-            for i, address in enumerate(committee.primary_addresses(self.faults)):
+            for i, address in enumerate(committee.load().primary_addresses(self.faults)):
                 cmd = CommandMaker.run_no_consensus_primary(
                     PathMaker.key_file(i),
                     PathMaker.committee_file(),

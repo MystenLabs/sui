@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
-use config::SharedCommittee;
+use config::{Committee, SharedCommittee};
 use crypto::{traits::VerifyingKey, Hash};
 use std::{cmp::max, collections::HashMap, sync::Arc};
 use tokio::{
@@ -137,7 +137,8 @@ where
     ) -> JoinHandle<StoreResult<()>> {
         tokio::spawn(async move {
             let consensus_index = store.read_last_consensus_index()?;
-            let genesis = Certificate::genesis(&committee);
+            let committee: &Committee<PublicKey> = &committee.load();
+            let genesis = Certificate::genesis(committee);
             Self {
                 rx_primary,
                 tx_primary,

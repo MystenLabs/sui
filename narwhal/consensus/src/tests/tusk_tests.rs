@@ -55,7 +55,7 @@ async fn commit_one() {
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
-    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+    let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -118,7 +118,7 @@ async fn dead_node() {
     keys.sort(); // Ensure we don't remove one of the leaders.
     let _ = keys.pop().unwrap();
 
-    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+    let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -176,7 +176,7 @@ async fn not_enough_support() {
         .collect();
     keys.sort();
 
-    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+    let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -285,7 +285,7 @@ async fn missing_leader() {
         .collect();
     keys.sort();
 
-    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+    let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();

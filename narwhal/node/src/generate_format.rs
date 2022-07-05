@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use arc_swap::ArcSwap;
 use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerAddresses};
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
@@ -10,7 +9,7 @@ use crypto::{
 use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
-use std::{fs::File, io::Write, sync::Arc};
+use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
 
@@ -35,47 +34,46 @@ fn get_registry() -> Result<Registry> {
     // Trace the correspondng header
     let keys: Vec<_> = (0..4).map(|_| Ed25519KeyPair::generate(&mut rng)).collect();
     let committee = Committee {
-        epoch: ArcSwap::new(Arc::new(Epoch::default())),
-        authorities: arc_swap::ArcSwap::from_pointee(
-            keys.iter()
-                .enumerate()
-                .map(|(i, kp)| {
-                    let id = kp.public();
-                    let primary = PrimaryAddresses {
-                        primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
+        epoch: Epoch::default(),
+        authorities: keys
+            .iter()
+            .enumerate()
+            .map(|(i, kp)| {
+                let id = kp.public();
+                let primary = PrimaryAddresses {
+                    primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
+                        .parse()
+                        .unwrap(),
+                    worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 200 + i)
+                        .parse()
+                        .unwrap(),
+                };
+                let workers = vec![(
+                    0,
+                    WorkerAddresses {
+                        primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 300 + i)
                             .parse()
                             .unwrap(),
-                        worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 200 + i)
+                        transactions: format!("/ip4/127.0.0.1/tcp/{}/http", 400 + i)
                             .parse()
                             .unwrap(),
-                    };
-                    let workers = vec![(
-                        0,
-                        WorkerAddresses {
-                            primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 300 + i)
-                                .parse()
-                                .unwrap(),
-                            transactions: format!("/ip4/127.0.0.1/tcp/{}/http", 400 + i)
-                                .parse()
-                                .unwrap(),
-                            worker_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 500 + i)
-                                .parse()
-                                .unwrap(),
-                        },
-                    )]
-                    .into_iter()
-                    .collect();
-                    (
-                        id.clone(),
-                        Authority {
-                            stake: 1,
-                            primary,
-                            workers,
-                        },
-                    )
-                })
-                .collect(),
-        ),
+                        worker_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 500 + i)
+                            .parse()
+                            .unwrap(),
+                    },
+                )]
+                .into_iter()
+                .collect();
+                (
+                    id.clone(),
+                    Authority {
+                        stake: 1,
+                        primary,
+                        workers,
+                    },
+                )
+            })
+            .collect(),
     };
 
     let certificates: Vec<Certificate<Ed25519PublicKey>> = Certificate::genesis(&committee);

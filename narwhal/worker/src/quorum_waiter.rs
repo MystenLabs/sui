@@ -67,7 +67,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
             let mut wait_for_quorum: FuturesUnordered<_> = handlers
                 .into_iter()
                 .map(|(name, handler)| {
-                    let stake = self.committee.stake(&name);
+                    let stake = self.committee.load().stake(&name);
                     Self::waiter(handler, stake)
                 })
                 .collect();
@@ -78,7 +78,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
             let mut total_stake = self.stake;
             while let Some(stake) = wait_for_quorum.next().await {
                 total_stake += stake;
-                if total_stake >= self.committee.quorum_threshold() {
+                if total_stake >= self.committee.load().quorum_threshold() {
                     self.tx_batch
                         .send(batch)
                         .await

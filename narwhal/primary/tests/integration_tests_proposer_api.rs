@@ -76,17 +76,12 @@ async fn test_rounds_errors() {
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
     let no_name_committee = config::Committee {
-        epoch: ArcSwap::new(Arc::new(Epoch::default())),
-        authorities: {
-            let no_name_authorities = committee
-                .authorities
-                .load()
-                .iter()
-                .filter_map(|(pk, a)| (*pk != name).then_some((pk.clone(), a.clone())))
-                .collect::<BTreeMap<_, _>>();
-
-            arc_swap::ArcSwap::from_pointee(no_name_authorities)
-        },
+        epoch: Epoch::default(),
+        authorities: committee
+            .authorities
+            .iter()
+            .filter_map(|(pk, a)| (*pk != name).then_some((pk.clone(), a.clone())))
+            .collect::<BTreeMap<_, _>>(),
     };
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -94,7 +89,7 @@ async fn test_rounds_errors() {
     Primary::spawn(
         name.clone(),
         keypair,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store_primary.header_store,
         store_primary.certificate_store,
@@ -165,7 +160,7 @@ async fn test_rounds_return_successful_response() {
     Primary::spawn(
         name.clone(),
         keypair,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         parameters.clone(),
         store_primary.header_store,
         store_primary.certificate_store,
@@ -303,7 +298,7 @@ async fn test_node_read_causal_signed_certificates() {
     Primary::spawn(
         name_1.clone(),
         keypair_1,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
@@ -331,7 +326,7 @@ async fn test_node_read_causal_signed_certificates() {
     Primary::spawn(
         name_2.clone(),
         keypair_2,
-        committee.clone(),
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,

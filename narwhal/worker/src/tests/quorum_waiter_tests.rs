@@ -3,9 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
+use arc_swap::ArcSwap;
 use bytes::Bytes;
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use network::WorkerNetwork;
+use std::sync::Arc;
 use test_utils::{batch, committee, keys, WorkerToWorkerMockServer};
 use tokio::sync::mpsc::channel;
 
@@ -17,7 +19,12 @@ async fn wait_for_quorum() {
     let committee = committee(None);
 
     // Spawn a `QuorumWaiter` instance.
-    QuorumWaiter::spawn(committee.clone(), /* stake */ 1, rx_message, tx_batch);
+    QuorumWaiter::spawn(
+        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        /* stake */ 1,
+        rx_message,
+        tx_batch,
+    );
 
     // Make a batch.
     let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch());

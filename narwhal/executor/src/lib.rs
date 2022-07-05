@@ -129,8 +129,8 @@ impl Executor {
 
         // Spawn the batch loader.
         let worker_addresses = committee
-            .authorities
             .load()
+            .authorities
             .iter()
             .find(|(x, _)| *x == &name)
             .map(|(_, authority)| authority)

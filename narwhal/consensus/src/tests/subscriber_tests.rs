@@ -19,7 +19,7 @@ pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
         .into_iter()
         .map(|kp| kp.public().clone())
         .collect();
-    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+    let genesis = Certificate::genesis(&*mock_committee(&keys[..]).load())
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
