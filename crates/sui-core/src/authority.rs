@@ -1107,6 +1107,16 @@ impl AuthorityState {
         Ok(())
     }
 
+    // These functions are used by checkpoints_tests to prevent a validator from receiving TXes
+    // normally.
+    pub fn halt_validator_for_testing(&self) {
+        self.halted.store(true, Ordering::SeqCst);
+    }
+
+    pub fn unhalt_validator_for_testing(&self) {
+        self.halted.store(false, Ordering::SeqCst);
+    }
+
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
     }
@@ -1348,7 +1358,7 @@ impl AuthorityState {
             )
             .await;
 
-        debug!(digest = ?certificate.digest(), "commit_certificate finished");
+        debug!(peer = ?self.name, digest = ?certificate.digest(), "commit_certificate finished");
 
         res
 
