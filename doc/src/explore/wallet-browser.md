@@ -45,13 +45,17 @@ From a demo decentralized site, such as our demonstration [NFT dApp](https://git
 
 ### Transfer NFT
 
+Transfer your NFT to another address using the Sui Wallet Browser Extension:
+
 ![Transfer NFT](../../static/nft_transfer.gif "Transfer NFT")
 *Transfer your NFT to another address*
 
 ### Transfer token
 
+Transfer your token to another address on the Sui network using the Sui Wallet Browser Extension:
+
 ![Transfer token](../../static/nft_transfer.gif "Transfer token")
-*Transfer tokens on the Sui network to another address*
+*Transfer tokens to another address*
 
 ### View transaction history
 
