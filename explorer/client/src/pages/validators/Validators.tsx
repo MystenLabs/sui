@@ -125,48 +125,30 @@ function ValidatorElement({ itm }: { itm: Validator }): JSX.Element {
     return (
         <div>
             <h3>{textDecoder.decode(new Base64DataBuffer(name).getData())}</h3>
-
-            <div>
+                <h4>Stake</h4>
+                {itm.fields.stake} SUI
                 <h4>Address</h4>
                 {addr}
-            </div>
-            <div>
-                <h4>Stake</h4>
-                {itm.fields['stake']}
-            </div>
-
-            <div>
-                <h5>Pubkey</h5>
+                <h4>Pubkey</h4>
                 {pubkey}
-            </div>
-            <div>
                 <h5>Delegation</h5>
-                {itm.fields['delegation']}
-            </div>
-            <div>
+                {itm.fields.delegation}
                 <h5>Delegation Count</h5>
-                {itm.fields['delegation_count']
-                    ? itm.fields['delegation_count']
+                {itm.fields.delegation_count
+                    ? itm.fields.delegation_count
                     : 0}
-            </div>
-            <div>
-                <div>
-                    <h5>Pending Delegation</h5>
-                    {itm.fields['pending_delegation']}
-                </div>
-                <div>
-                    <h5>Pending Delegation Withdraw</h5>
-                    {itm.fields['pending_delegation_withdraw']}
-                </div>
-            </div>
+                <h5>Pending Delegation</h5>
+                {itm.fields.pending_delegation}
+                <h5>Pending Delegation Withdraw</h5>
+                {itm.fields.pending_delegation_withdraw}
             <div>
                 <div>
                     <h5>Pending Delegators</h5>
-                    {itm.fields['pending_delegator_count']}
+                    {itm.fields.pending_delegator_count}
                 </div>
                 <div>
                     <h5>Pending Delegator Withdraws</h5>
-                    {itm.fields['pending_delegator_withdraw_count']}
+                    {itm.fields.pending_delegator_withdraw_count}
                 </div>
             </div>
         </div>
