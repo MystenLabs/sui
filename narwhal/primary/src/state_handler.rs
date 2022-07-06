@@ -1,8 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::{ConsensusPrimaryMessage, PrimaryWorkerMessage, Reconfigure};
-use config::{Committee, SharedCommittee};
+use crate::primary::{ConsensusPrimaryMessage, PrimaryWorkerMessage};
+use config::SharedCommittee;
 use crypto::traits::VerifyingKey;
 use network::PrimaryToWorkerNetwork;
 use std::sync::{
@@ -13,7 +13,7 @@ use tokio::{
     sync::{mpsc::Receiver, watch},
     task::JoinHandle,
 };
-use types::{Certificate, Round};
+use types::{Certificate, Reconfigure, Round};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct StateHandler<PublicKey: VerifyingKey> {
@@ -80,10 +80,6 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
         }
     }
 
-    fn update_committee(&mut self, new_committee: Committee<PublicKey>) {
-        self.committee.swap(Arc::new(new_committee));
-    }
-
     async fn run(&mut self) {
         while let Some(message) = self.rx_consensus.recv().await {
             match message {
@@ -92,7 +88,7 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
                 }
                 ConsensusPrimaryMessage::Committee(committee) => {
                     // Update the committee.
-                    self.update_committee(committee.clone());
+                    self.committee.swap(Arc::new(committee.clone()));
 
                     // Trigger cleanup on the primary.
                     self.consensus_round.store(0, Ordering::Relaxed);

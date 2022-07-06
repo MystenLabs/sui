@@ -6,7 +6,7 @@ use crate::{
         responses::{CertificatesResponse, PayloadAvailabilityResponse, RequestID},
         PendingIdentifier::{Header, Payload},
     },
-    primary::{PrimaryMessage, Reconfigure},
+    primary::PrimaryMessage,
     utils, PayloadToken, PrimaryWorkerMessage, CHANNEL_CAPACITY,
 };
 use config::{BlockSynchronizerParameters, Committee, WorkerId};
@@ -33,7 +33,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 use tracing::{debug, error, instrument, trace, warn};
-use types::{BatchDigest, Certificate, CertificateDigest};
+use types::{BatchDigest, Certificate, CertificateDigest, Reconfigure};
 
 #[cfg(test)]
 #[path = "tests/block_synchronizer_tests.rs"]

@@ -3,14 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
+use crypto::traits::VerifyingKey;
 use primary::WorkerPrimaryMessage;
 use store::Store;
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::{
+        mpsc::{Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::error;
-use types::{serialized_batch_digest, BatchDigest, SerializedBatchMessage};
+use types::{serialized_batch_digest, BatchDigest, Reconfigure, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/processor_tests.rs"]
@@ -20,11 +24,13 @@ pub mod processor_tests;
 pub struct Processor;
 
 impl Processor {
-    pub fn spawn(
+    pub fn spawn<PublicKey: VerifyingKey>(
         // Our worker's id.
         id: WorkerId,
         // The persistent storage.
         store: Store<BatchDigest, SerializedBatchMessage>,
+        // Receive reconfiguration signals.
+        mut rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         // Input channel to receive batches.
         mut rx_batch: Receiver<SerializedBatchMessage>,
         // Output channel to send out batches' digests.
@@ -33,27 +39,40 @@ impl Processor {
         own_digest: bool,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            while let Some(batch) = rx_batch.recv().await {
-                // Hash the batch.
-                let res_digest = serialized_batch_digest(&batch);
+            loop {
+                tokio::select! {
+                    Some(batch) = rx_batch.recv() => {
+                        // Hash the batch.
+                        let res_digest = serialized_batch_digest(&batch);
 
-                match res_digest {
-                    Ok(digest) => {
-                        // Store the batch.
-                        store.write(digest, batch).await;
+                        match res_digest {
+                            Ok(digest) => {
+                                // Store the batch.
+                                store.write(digest, batch).await;
 
-                        // Deliver the batch's digest.
-                        let message = match own_digest {
-                            true => WorkerPrimaryMessage::OurBatch(digest, id),
-                            false => WorkerPrimaryMessage::OthersBatch(digest, id),
-                        };
-                        tx_digest
-                            .send(message)
-                            .await
-                            .expect("Failed to send digest");
-                    }
-                    Err(error) => {
-                        error!("Received invalid batch, serialization failure: {error}");
+                                // Deliver the batch's digest.
+                                let message = match own_digest {
+                                    true => WorkerPrimaryMessage::OurBatch(digest, id),
+                                    false => WorkerPrimaryMessage::OthersBatch(digest, id),
+                                };
+                                tx_digest
+                                    .send(message)
+                                    .await
+                                    .expect("Failed to send digest");
+                            }
+                            Err(error) => {
+                                error!("Received invalid batch, serialization failure: {error}");
+                            }
+                        }
+                    },
+
+                    // Trigger reconfigure.
+                    result = rx_reconfigure.changed() => {
+                        result.expect("Committee channel dropped");
+                        let message = rx_reconfigure.borrow().clone();
+                        if let Reconfigure::Shutdown(_token) = message {
+                            return;
+                        }
                     }
                 }
             }

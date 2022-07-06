@@ -1,10 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    primary::{PrimaryMessage, Reconfigure},
-    PayloadToken,
-};
+use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
 use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use network::PrimaryNetwork;
@@ -15,7 +12,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{error, instrument};
-use types::{BatchDigest, Certificate, CertificateDigest, ShutdownToken};
+use types::{BatchDigest, Certificate, CertificateDigest, Reconfigure, ShutdownToken};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]

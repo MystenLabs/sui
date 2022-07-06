@@ -1,4 +1,14 @@
 ---
+Authority:
+  STRUCT:
+    - stake: U32
+    - primary:
+        TYPENAME: PrimaryAddresses
+    - workers:
+        MAP:
+          KEY: U32
+          VALUE:
+            TYPENAME: WorkerAddresses
 Batch:
   NEWTYPESTRUCT:
     SEQ:
@@ -22,6 +32,15 @@ CertificateDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Committee:
+  STRUCT:
+    - authorities:
+        MAP:
+          KEY:
+            TYPENAME: Ed25519PublicKey
+          VALUE:
+            TYPENAME: Authority
+    - epoch: U64
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
 Ed25519Signature:
@@ -52,6 +71,10 @@ HeaderDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+PrimaryAddresses:
+  STRUCT:
+    - primary_to_primary: BYTES
+    - worker_to_primary: BYTES
 PrimaryWorkerMessage:
   ENUM:
     0:
@@ -64,14 +87,29 @@ PrimaryWorkerMessage:
       Cleanup:
         NEWTYPE: U64
     2:
+      Reconfigure:
+        NEWTYPE:
+          TYPENAME: PrimaryWorkerReconfigure
+    3:
       RequestBatch:
         NEWTYPE:
           TYPENAME: BatchDigest
-    3:
+    4:
       DeleteBatches:
         NEWTYPE:
           SEQ:
             TYPENAME: BatchDigest
+PrimaryWorkerReconfigure:
+  ENUM:
+    0:
+      NewCommittee:
+        NEWTYPE:
+          TYPENAME: Committee
+WorkerAddresses:
+  STRUCT:
+    - transactions: BYTES
+    - worker_to_worker: BYTES
+    - primary_to_worker: BYTES
 WorkerPrimaryError:
   ENUM:
     0:

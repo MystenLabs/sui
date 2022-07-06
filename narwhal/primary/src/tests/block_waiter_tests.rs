@@ -5,7 +5,6 @@ use crate::{
     block_waiter::{
         BatchResult, BlockError, BlockErrorKind, BlockResult, GetBlockResponse, GetBlocksResponse,
     },
-    primary::Reconfigure,
     BlockCommand, BlockWaiter, PrimaryWorkerMessage,
 };
 use bincode::deserialize;
@@ -25,7 +24,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, timeout, Duration},
 };
-use types::{Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest};
+use types::{Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest, Reconfigure};
 
 #[tokio::test]
 async fn test_successfully_retrieve_block() {

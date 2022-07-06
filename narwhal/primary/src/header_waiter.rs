@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     metrics::PrimaryMetrics,
-    primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage, Reconfigure},
+    primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage},
 };
 use config::{Committee, WorkerId};
 use crypto::traits::VerifyingKey;
@@ -33,7 +33,7 @@ use tokio::{
 use tracing::{debug, error};
 use types::{
     error::{DagError, DagResult},
-    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round,
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Reconfigure, Round,
 };
 
 #[cfg(test)]

@@ -6,7 +6,6 @@ use crate::{
         DeleteBatchMessage, DeleteBatchResult, RemoveBlocksResponse, RequestKey,
     },
     common::create_db_stores,
-    primary::Reconfigure,
     PrimaryWorkerMessage,
 };
 use bincode::deserialize;
@@ -32,7 +31,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, timeout},
 };
-use types::{BatchDigest, Certificate, ConsensusPrimaryMessage};
+use types::{BatchDigest, Certificate, ConsensusPrimaryMessage, Reconfigure};
 
 #[tokio::test]
 async fn test_successful_blocks_delete() {

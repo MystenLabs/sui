@@ -4,7 +4,6 @@ use crate::{
     common::{create_db_stores, worker_listener},
     header_waiter::{HeaderWaiter, WaiterMessage},
     metrics::PrimaryMetrics,
-    primary::Reconfigure,
     PrimaryWorkerMessage,
 };
 use core::sync::atomic::AtomicU64;
@@ -16,7 +15,7 @@ use tokio::{
     sync::{mpsc::channel, watch},
     time::timeout,
 };
-use types::{BatchDigest, Round};
+use types::{BatchDigest, Reconfigure, Round};
 
 #[tokio::test]
 async fn successfully_synchronize_batches() {

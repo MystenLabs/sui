@@ -4,7 +4,7 @@
 use crate::{
     aggregators::{CertificatesAggregator, VotesAggregator},
     metrics::PrimaryMetrics,
-    primary::{PrimaryMessage, Reconfigure},
+    primary::PrimaryMessage,
     synchronizer::Synchronizer,
 };
 use async_recursion::async_recursion;
@@ -31,7 +31,7 @@ use tracing::{debug, error, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    Certificate, CertificateDigest, Header, HeaderDigest, Round, Vote,
+    Certificate, CertificateDigest, Header, HeaderDigest, Reconfigure, Round, Vote,
 };
 
 #[cfg(test)]

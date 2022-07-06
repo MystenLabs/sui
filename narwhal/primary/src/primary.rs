@@ -18,7 +18,7 @@ use crate::{
     BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
 };
 use async_trait::async_trait;
-use config::{Committee, Parameters, SharedCommittee, WorkerId};
+use config::{Parameters, SharedCommittee, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
@@ -45,22 +45,13 @@ use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     Batch, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, CertificateDigest, Empty,
-    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ShutdownToken, WorkerToPrimary,
+    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, Reconfigure, WorkerToPrimary,
     WorkerToPrimaryServer,
 };
 pub use types::{ConsensusPrimaryMessage, PrimaryMessage, PrimaryWorkerMessage};
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
-
-/// Message to reconfigure tasks.
-#[derive(Clone, Debug)]
-pub enum Reconfigure<PublicKey: VerifyingKey> {
-    /// Indicates the committee has been updated.
-    NewCommittee(Committee<PublicKey>),
-    /// Indicate a shutdown.
-    Shutdown(ShutdownToken),
-}
 
 /// The messages sent by the workers to their primary.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]

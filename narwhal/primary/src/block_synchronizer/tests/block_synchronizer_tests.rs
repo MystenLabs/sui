@@ -6,7 +6,7 @@ use crate::{
         PendingIdentifier, RequestID, SyncError,
     },
     common::{create_db_stores, worker_listener},
-    primary::{PrimaryMessage, Reconfigure},
+    primary::PrimaryMessage,
     PrimaryWorkerMessage,
 };
 use bincode::deserialize;
@@ -28,6 +28,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, timeout},
 };
+use types::Reconfigure;
 
 use crypto::traits::KeyPair;
 use tracing::debug;

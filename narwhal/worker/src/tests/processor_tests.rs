@@ -5,13 +5,17 @@ use super::*;
 use crate::worker::WorkerMessage;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
 use store::rocks;
-use test_utils::{batch, temp_dir};
+use test_utils::{batch, committee, temp_dir};
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
 async fn hash_and_store() {
     let (tx_batch, rx_batch) = channel(1);
     let (tx_digest, mut rx_digest) = channel(1);
+
+    let committee = committee(None).clone();
+    let (_tx_reconfiguration, rx_reconfiguration) =
+        watch::channel(Reconfigure::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
@@ -27,6 +31,7 @@ async fn hash_and_store() {
     Processor::spawn(
         id,
         store.clone(),
+        rx_reconfiguration,
         rx_batch,
         tx_digest,
         /* own_batch */ true,

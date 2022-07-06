@@ -11,7 +11,10 @@ use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
-use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
+use types::{
+    Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
+    PrimaryWorkerReconfigure,
+};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(TracerConfig::default());
@@ -107,10 +110,13 @@ fn get_registry() -> Result<Registry> {
     let delete_batch =
         PrimaryWorkerMessage::<Ed25519PublicKey>::DeleteBatches(vec![BatchDigest([0u8; 32])]);
     let sync = PrimaryWorkerMessage::Synchronize(vec![BatchDigest([0u8; 32])], pk.clone());
+    let reconfigure =
+        PrimaryWorkerMessage::Reconfigure(PrimaryWorkerReconfigure::NewCommittee(committee));
     tracer.trace_value(&mut samples, &cleanup)?;
     tracer.trace_value(&mut samples, &request_batch)?;
     tracer.trace_value(&mut samples, &delete_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
+    tracer.trace_value(&mut samples, &reconfigure)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Batch>(&samples)?;

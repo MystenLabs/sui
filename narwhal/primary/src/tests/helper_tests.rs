@@ -1,11 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    common::create_db_stores,
-    helper::Helper,
-    primary::{PrimaryMessage, Reconfigure},
-    PayloadToken,
-};
+use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, PayloadToken};
 use bincode::Options;
 use config::WorkerId;
 use crypto::{ed25519::Ed25519PublicKey, Hash};
@@ -25,7 +20,7 @@ use tokio::{
     time::timeout,
 };
 use tracing_test::traced_test;
-use types::{BatchDigest, Certificate, CertificateDigest};
+use types::{BatchDigest, Certificate, CertificateDigest, Reconfigure};
 
 #[tokio::test]
 async fn test_process_certificates_stream_mode() {

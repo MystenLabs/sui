@@ -1,7 +1,7 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{metrics::PrimaryMetrics, primary::Reconfigure, NetworkModel};
+use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
 use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
@@ -16,7 +16,7 @@ use tokio::{
 use tracing::debug;
 use types::{
     error::{DagError, DagResult},
-    BatchDigest, Certificate, Header, Round,
+    BatchDigest, Certificate, Header, Reconfigure, Round,
 };
 
 #[cfg(test)]

@@ -14,12 +14,18 @@ use std::{
 };
 use store::{Store, StoreError};
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error};
-use types::{BatchDigest, Round, SerializedBatchMessage, WorkerMessage};
+use types::{
+    BatchDigest, PrimaryWorkerReconfigure, Reconfigure, Round, SerializedBatchMessage,
+    WorkerMessage,
+};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
@@ -55,9 +61,11 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// processing will resume when we get the missing batches in the store or we no longer need them.
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
     pending: HashMap<BatchDigest, (Round, Sender<()>, u128)>,
-    // Output channel to send out the batch requests.
+    /// Send reconfiguration update to other tasks.
+    tx_reconfigure: watch::Sender<Reconfigure<PublicKey>>,
+    /// Output channel to send out the batch requests.
     tx_primary: Sender<WorkerPrimaryMessage>,
-    // Metrics handler
+    /// Metrics handler
     metrics: Arc<WorkerMetrics>,
 }
 
@@ -71,6 +79,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
         rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
+        tx_reconfigure: watch::Sender<Reconfigure<PublicKey>>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
@@ -87,6 +96,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                 network: WorkerNetwork::default(),
                 round: Round::default(),
                 pending: HashMap::new(),
+                tx_reconfigure,
                 tx_primary,
                 metrics,
             }
@@ -190,6 +200,28 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                         }
                         self.pending.retain(|_, (r, _, _)| r > &mut gc_round);
                     },
+                    PrimaryWorkerMessage::Reconfigure(command) => {
+                        // Reconfigure this task and update the shared committee.
+                        let (token, mut rx) = channel(1);
+                        let (message, shutdown) = match command {
+                            PrimaryWorkerReconfigure::NewCommittee(new_committee) => {
+                                self.committee.swap(Arc::new(new_committee.clone()));
+                                self.pending.clear();
+                                self.round = 0;
+                                waiting.clear();
+
+                                (Reconfigure::NewCommittee(new_committee), false)
+                            }
+                            PrimaryWorkerReconfigure::Shutdown => {
+                                (Reconfigure::Shutdown(token), true)
+                            }
+                        };
+                        self.tx_reconfigure.send(message).expect("All tasks dropped");
+                        if shutdown {
+                            rx.recv().await;
+                            return;
+                        }
+                    }
                     PrimaryWorkerMessage::RequestBatch(digest) => {
                         self.handle_request_batch(digest).await;
                     },

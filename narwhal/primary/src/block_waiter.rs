@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{block_synchronizer::handler::Handler, primary::Reconfigure, PrimaryWorkerMessage};
+use crate::{block_synchronizer::handler::Handler, PrimaryWorkerMessage};
 use config::Committee;
 use crypto::{traits::VerifyingKey, Digest, Hash};
 use futures::{
@@ -24,7 +24,7 @@ use tokio::{
 use tracing::{debug, error, instrument, warn};
 use types::{
     BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
-    CertificateDigest, Header, ShutdownToken,
+    CertificateDigest, Header, Reconfigure, ShutdownToken,
 };
 use Result::*;
 
@@ -121,9 +121,10 @@ type RequestKey = Vec<u8>;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
-/// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}, Reconfigure};
+/// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
 /// # use types::{BatchMessage, BatchDigest, CertificateDigest, Batch};
 /// # use mockall::*;
+/// # use types::Reconfigure;
 /// # use crypto::traits::VerifyingKey;
 /// # use async_trait::async_trait;
 /// # use std::sync::Arc;

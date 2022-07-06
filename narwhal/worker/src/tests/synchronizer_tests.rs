@@ -20,7 +20,10 @@ async fn synchronize() {
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
+
     let committee = committee(None);
+    let (tx_reconfiguration, _rx_reconfiguration) =
+        watch::channel(Reconfigure::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();
@@ -38,6 +41,7 @@ async fn synchronize() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
+        tx_reconfiguration,
         tx_primary,
         metrics,
     );
@@ -66,7 +70,10 @@ async fn test_successful_request_batch() {
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
+
     let committee = committee(None);
+    let (tx_reconfiguration, _rx_reconfiguration) =
+        watch::channel(Reconfigure::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();
@@ -84,6 +91,7 @@ async fn test_successful_request_batch() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
+        tx_reconfiguration,
         tx_primary,
         metrics,
     );
@@ -124,7 +132,10 @@ async fn test_request_batch_not_found() {
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
+
     let committee = committee(None);
+    let (tx_reconfiguration, _rx_reconfiguration) =
+        watch::channel(Reconfigure::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();
@@ -142,6 +153,7 @@ async fn test_request_batch_not_found() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
+        tx_reconfiguration,
         tx_primary,
         metrics,
     );
@@ -181,7 +193,10 @@ async fn test_successful_batch_delete() {
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
     let id = 0;
+
     let committee = committee(None);
+    let (tx_reconfiguration, _rx_reconfiguration) =
+        watch::channel(Reconfigure::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();
@@ -199,6 +214,7 @@ async fn test_successful_batch_delete() {
         Duration::from_millis(1_000_000), // Ensure it is not triggered.
         /* sync_retry_nodes */ 3, // Not used in this test.
         rx_message,
+        tx_reconfiguration,
         tx_primary,
         metrics,
     );

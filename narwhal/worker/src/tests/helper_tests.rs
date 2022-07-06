@@ -2,9 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use arc_swap::ArcSwap;
 use crypto::traits::KeyPair;
-use std::sync::Arc;
 use store::rocks;
 use test_utils::{
     batch, committee, digest_batch, keys, serialize_batch_message, temp_dir,
@@ -19,7 +17,9 @@ async fn worker_batch_reply() {
     let (_tx_client_request, rx_client_request) = channel(1);
     let requestor = keys(None).pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee(None);
+    let committee = committee(None).clone();
+    let (_tx_reconfiguration, rx_reconfiguration) =
+        watch::channel(Reconfigure::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
@@ -39,8 +39,9 @@ async fn worker_batch_reply() {
     // Spawn an `Helper` instance.
     Helper::spawn(
         id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         store,
+        rx_reconfiguration,
         rx_worker_request,
         rx_client_request,
     );
@@ -63,7 +64,9 @@ async fn client_batch_reply() {
     let (_tx_worker_request, rx_worker_request) = channel(1);
     let (tx_client_request, rx_client_request) = channel(1);
     let id = 0;
-    let committee = committee(None);
+    let committee = committee(None).clone();
+    let (_tx_reconfiguration, rx_reconfiguration) =
+        watch::channel(Reconfigure::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
@@ -83,8 +86,9 @@ async fn client_batch_reply() {
     // Spawn an `Helper` instance.
     Helper::spawn(
         id,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
+        committee.clone(),
         store,
+        rx_reconfiguration,
         rx_worker_request,
         rx_client_request,
     );

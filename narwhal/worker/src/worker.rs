@@ -15,15 +15,18 @@ use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
 use std::{net::Ipv4Addr, pin::Pin, sync::Arc};
 use store::Store;
 use tokio::{
-    sync::mpsc::{channel, Sender},
+    sync::{
+        mpsc::{channel, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty, PrimaryToWorker,
-    PrimaryToWorkerServer, SerializedBatchMessage, Transaction, TransactionProto, Transactions,
-    TransactionsServer, WorkerToWorker, WorkerToWorkerServer,
+    PrimaryToWorkerServer, Reconfigure, SerializedBatchMessage, Transaction, TransactionProto,
+    Transactions, TransactionsServer, WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -62,9 +65,9 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     ) -> Vec<JoinHandle<()>> {
         // Define a worker instance.
         let worker = Self {
-            name,
+            name: name.clone(),
             id,
-            committee,
+            committee: committee.clone(),
             parameters,
             store,
         };
@@ -74,20 +77,19 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
 
-        let primary_flow_handles = worker.handle_primary_messages(tx_primary.clone(), node_metrics);
-        let client_flow_handles = worker.handle_clients_transactions(tx_primary.clone());
-        let worker_flow_handles = worker.handle_workers_messages(tx_primary);
+        let initial_committee = (*(&*(&*committee).load()).clone()).clone();
+        let (tx_reconfigure, rx_reconfigure) =
+            watch::channel(Reconfigure::NewCommittee(initial_committee.clone()));
+
+        let client_flow_handles =
+            worker.handle_clients_transactions(&tx_reconfigure, tx_primary.clone());
+        let worker_flow_handles =
+            worker.handle_workers_messages(&tx_reconfigure, tx_primary.clone());
+        let primary_flow_handles =
+            worker.handle_primary_messages(tx_reconfigure, tx_primary, node_metrics);
 
         // The `PrimaryConnector` allows the worker to send messages to its primary.
-        let handle = PrimaryConnector::spawn(
-            worker
-                .committee
-                .load()
-                .primary(&worker.name)
-                .expect("Our public key is not in the committee")
-                .worker_to_primary,
-            rx_primary,
-        );
+        let handle = PrimaryConnector::spawn(name, initial_committee, rx_reconfigure, rx_primary);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -111,6 +113,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle messages from our primary.
     fn handle_primary_messages(
         &self,
+        tx_reconfigure: watch::Sender<Reconfigure<PublicKey>>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         node_metrics: Arc<WorkerMetrics>,
     ) -> Vec<JoinHandle<()>> {
@@ -139,6 +142,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             self.parameters.sync_retry_delay,
             self.parameters.sync_retry_nodes,
             /* rx_message */ rx_synchronizer,
+            tx_reconfigure,
             tx_primary,
             node_metrics,
         );
@@ -154,6 +158,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle clients transactions.
     fn handle_clients_transactions(
         &self,
+        tx_reconfigure: &watch::Sender<Reconfigure<PublicKey>>,
         tx_primary: Sender<WorkerPrimaryMessage>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
@@ -176,24 +181,21 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
+            (*(&*(&*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
+            tx_reconfigure.subscribe(),
             /* rx_transaction */ rx_batch_maker,
             /* tx_message */ tx_quorum_waiter,
-            /* workers_addresses */
-            self.committee
-                .load()
-                .others_workers(&self.name, &self.id)
-                .into_iter()
-                .map(|(name, addresses)| (name, addresses.worker_to_worker))
-                .collect(),
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
         // the batch to the `Processor`.
         let quorum_waiter_handle = QuorumWaiter::spawn(
-            self.committee.clone(),
-            /* stake */ self.committee.load().stake(&self.name),
+            self.name.clone(),
+            self.id,
+            (*(&*(&*self.committee).load()).clone()).clone(),
+            tx_reconfigure.subscribe(),
             /* rx_message */ rx_quorum_waiter,
             /* tx_batch */ tx_processor,
         );
@@ -203,6 +205,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let processor_handle = Processor::spawn(
             self.id,
             self.store.clone(),
+            tx_reconfigure.subscribe(),
             /* rx_batch */ rx_processor,
             /* tx_digest */ tx_primary,
             /* own_batch */ true,
@@ -219,6 +222,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle messages from other workers.
     fn handle_workers_messages(
         &self,
+        tx_reconfigure: &watch::Sender<Reconfigure<PublicKey>>,
         tx_primary: Sender<WorkerPrimaryMessage>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
@@ -245,8 +249,9 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // The `Helper` is dedicated to reply to batch requests from other workers.
         let helper_handle = Helper::spawn(
             self.id,
-            self.committee.clone(),
+            (*(&*(&*self.committee).load()).clone()).clone(),
             self.store.clone(),
+            tx_reconfigure.subscribe(),
             /* rx_worker_request */ rx_worker_helper,
             /* rx_client_request */ rx_client_helper,
         );
@@ -256,6 +261,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let processor_handle = Processor::spawn(
             self.id,
             self.store.clone(),
+            tx_reconfigure.subscribe(),
             /* rx_batch */ rx_processor,
             /* tx_digest */ tx_primary,
             /* own_batch */ false,

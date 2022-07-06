@@ -1,32 +1,43 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use config::Committee;
+use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
 use primary::WorkerPrimaryMessage;
-use tokio::{sync::mpsc::Receiver, task::JoinHandle};
+use tokio::{
+    sync::{mpsc::Receiver, watch},
+    task::JoinHandle,
+};
 use tonic::transport::Channel;
-use types::{BincodeEncodedPayload, WorkerToPrimaryClient};
+use types::{BincodeEncodedPayload, Reconfigure, WorkerToPrimaryClient};
 
 // Send batches' digests to the primary.
-pub struct PrimaryConnector {
-    /// The primary network address.
-    _primary_address: Multiaddr,
+pub struct PrimaryConnector<PublicKey: VerifyingKey> {
+    /// Receive reconfiguration updates.
+    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
     /// Input channel to receive the messages to send to the primary.
     rx_digest: Receiver<WorkerPrimaryMessage>,
     /// A network sender to send the batches' digests to the primary.
     primary_client: PrimaryClient,
 }
 
-impl PrimaryConnector {
+impl<PublicKey: VerifyingKey> PrimaryConnector<PublicKey> {
     pub fn spawn(
-        primary_address: Multiaddr,
+        name: PublicKey,
+        committee: Committee<PublicKey>,
+        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_digest: Receiver<WorkerPrimaryMessage>,
     ) -> JoinHandle<()> {
+        let address = committee
+            .primary(&name)
+            .expect("Our public key is not in the committee")
+            .worker_to_primary;
         tokio::spawn(async move {
             Self {
-                _primary_address: primary_address.clone(),
+                rx_reconfigure,
                 rx_digest,
-                primary_client: PrimaryClient::new(primary_address),
+                primary_client: PrimaryClient::new(address),
             }
             .run()
             .await;
@@ -34,10 +45,22 @@ impl PrimaryConnector {
     }
 
     async fn run(&mut self) {
-        while let Some(digest) = self.rx_digest.recv().await {
-            // Send the digest through the network.
-            // We don't care about the error
-            let _ = self.primary_client.send(&digest).await;
+        loop {
+            tokio::select! {
+                // Send the digest through the network.
+                Some(digest) = self.rx_digest.recv() => {
+                    // We don't care about the error
+                    let _ = self.primary_client.send(&digest).await;
+                },
+                // Trigger reconfigure.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    if let Reconfigure::Shutdown(_token) = message {
+                        return;
+                    }
+                }
+            }
         }
     }
 }

@@ -557,13 +557,26 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
     },
 }
 
+/// Message to reconfigure worker tasks.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
+pub enum PrimaryWorkerReconfigure<PublicKey: VerifyingKey> {
+    /// Indicate the committee has been updated.
+    NewCommittee(Committee<PublicKey>),
+    /// Indicate a shutdown.
+    Shutdown,
+}
+
 /// The messages sent by the primary to its workers.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum PrimaryWorkerMessage<PublicKey> {
+#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
+pub enum PrimaryWorkerMessage<PublicKey: VerifyingKey> {
     /// The primary indicates that the worker need to sync the target missing batches.
     Synchronize(Vec<BatchDigest>, /* target */ PublicKey),
     /// The primary indicates a round update.
     Cleanup(Round),
+    /// Reconfigure the worker.
+    Reconfigure(PrimaryWorkerReconfigure<PublicKey>),
     /// The primary requests a batch from the worker
     RequestBatch(BatchDigest),
     /// Delete the batches, dictated from the provided vector of digest, from the worker node
