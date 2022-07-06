@@ -4,9 +4,20 @@
 
 use std::collections::BTreeMap;
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 use roaring::RoaringBitmap;
 
 use crate::crypto::get_key_pair;
+=======
+use crate::crypto::{get_key_pair, SuiKeypair};
+>>>>>>> f7077e07 (integrate narwhal crypto)
+=======
+use narwhal_crypto::traits::KeyPair;
+use roaring::RoaringBitmap;
+
+use crate::crypto::get_key_pair;
+>>>>>>> b1029574 (f)
 
 use super::*;
 
@@ -27,11 +38,11 @@ fn test_signed_values() {
     let (_, sec3) = get_key_pair();
 
     authorities.insert(
-        /* address */ *sec1.public_key_bytes(),
+        /* address */ sec1.public_key_bytes(),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ *sec2.public_key_bytes(),
+        /* address */ sec2.public_key_bytes(),
         /* voting right */ 0,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -48,7 +59,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec1.public_key_bytes(),
+        sec1.public_key_bytes(),
         &sec1,
     );
     assert!(v.verify(&committee).is_ok());
@@ -56,7 +67,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec2.public_key_bytes(),
+        sec2.public_key_bytes(),
         &sec2,
     );
     assert!(v.verify(&committee).is_err());
@@ -64,7 +75,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction,
-        *sec3.public_key_bytes(),
+        sec3.public_key_bytes(),
         &sec3,
     );
     assert!(v.verify(&committee).is_err());
@@ -72,7 +83,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         bad_transaction,
-        *sec1.public_key_bytes(),
+        sec1.public_key_bytes(),
         &sec1,
     );
     assert!(v.verify(&committee).is_err());
@@ -86,11 +97,11 @@ fn test_certificates() {
 
     let mut authorities = BTreeMap::new();
     authorities.insert(
-        /* address */ *sec1.public_key_bytes(),
+        /* address */ sec1.public_key_bytes(),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ *sec2.public_key_bytes(),
+        /* address */ sec2.public_key_bytes(),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -107,31 +118,35 @@ fn test_certificates() {
     let v1 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec1.public_key_bytes(),
+        sec1.public_key_bytes(),
         &sec1,
     );
     let v2 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec2.public_key_bytes(),
+        sec2.public_key_bytes(),
         &sec2,
     );
     let v3 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec3.public_key_bytes(),
+        sec3.public_key_bytes(),
         &sec3,
     );
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
-        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature)
+        .append(
+            v1.auth_sign_info.authority,
+            v1.auth_sign_info.signature.clone()
+        )
         .unwrap()
         .is_none());
     let mut c = builder
         .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
         .unwrap()
         .unwrap();
+
     assert!(c.verify(&committee).is_ok());
     c.auth_sign_info.signatures.pop();
     assert!(c.verify(&committee).is_err());
@@ -186,6 +201,7 @@ fn test_new_with_signatures() {
     );
 }
 
+<<<<<<< HEAD
 #[test]
 fn test_add_signatures() {
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
@@ -222,6 +238,11 @@ fn test_add_signatures() {
 }
 
 fn get_obligation_input<T>(value: &T) -> (VerificationObligation, usize)
+=======
+fn get_obligation_input<T>(
+    value: &T,
+) -> (VerificationObligation<AggregateAuthoritySignature>, usize)
+>>>>>>> b1029574 (f)
 where
     T: BcsSignable,
 {
@@ -243,8 +264,13 @@ fn test_handle_reject_malicious_signature() {
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+<<<<<<< HEAD
         authorities.insert(*sec.public_key_bytes(), 1);
         signatures.push((*sec.public_key_bytes(), sig));
+=======
+        authorities.insert(sec.public_key_bytes(), 1u64);
+        signatures.push((sec.public_key_bytes(), sig));
+>>>>>>> b1029574 (f)
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
@@ -312,9 +338,18 @@ fn test_reject_extra_public_key() {
     quorum.signers_map.insert(3);
 
     let (mut obligation, idx) = get_obligation_input(&message);
+<<<<<<< HEAD
     assert!(quorum
         .add_to_verification_obligation(&committee, &mut obligation, idx)
         .is_ok());
+=======
+    let verify = || -> SuiResult<()> {
+        quorum.add_to_verification_obligation(&committee, &mut obligation, idx)?;
+        obligation.verify_all()?;
+        Ok(())
+    };
+    assert!(verify().is_err());
+>>>>>>> b1029574 (f)
 }
 
 #[test]

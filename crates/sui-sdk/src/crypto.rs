@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, KeyPair, Signature};
+use sui_types::crypto::{get_key_pair, KeyPair, NarwhalKeypair, Signature};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]
@@ -85,7 +85,7 @@ impl SuiKeystore {
 
         let keys = keys
             .into_iter()
-            .map(|key| (SuiAddress::from(key.public_key_bytes()), key))
+            .map(|key| (SuiAddress::from(&key.public_key_bytes()), key))
             .collect();
 
         Ok(Self {

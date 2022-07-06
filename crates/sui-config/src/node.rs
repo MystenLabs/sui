@@ -6,6 +6,10 @@ use crate::Config;
 use anyhow::Result;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
+<<<<<<< HEAD
+=======
+use narwhal_config::SharedCommittee as ConsensusCommittee;
+>>>>>>> f7077e07 (integrate narwhal crypto)
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -13,6 +17,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::NarwhalKeypair;
+use sui_types::crypto::PublicKey;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -77,7 +83,7 @@ impl NodeConfig {
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {
-        *self.key_pair.public_key_bytes()
+        self.key_pair.public_key_bytes()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
@@ -108,6 +114,11 @@ pub struct ConsensusConfig {
     pub consensus_db_path: PathBuf,
 
     pub narwhal_config: ConsensusParameters,
+<<<<<<< HEAD
+=======
+
+    pub narwhal_committee: DebugIgnore<ConsensusCommittee<PublicKey>>,
+>>>>>>> f7077e07 (integrate narwhal crypto)
 }
 
 impl ConsensusConfig {
@@ -122,6 +133,13 @@ impl ConsensusConfig {
     pub fn narwhal_config(&self) -> &ConsensusParameters {
         &self.narwhal_config
     }
+<<<<<<< HEAD
+=======
+
+    pub fn narwhal_committee(&self) -> &ConsensusCommittee<PublicKey> {
+        &self.narwhal_committee
+    }
+>>>>>>> f7077e07 (integrate narwhal crypto)
 }
 
 /// Publicly known information about a validator

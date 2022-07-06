@@ -7,6 +7,13 @@ use crate::{
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
+<<<<<<< HEAD
+=======
+use arc_swap::ArcSwap;
+use debug_ignore::DebugIgnore;
+use narwhal_config::{Authority, Epoch, PrimaryAddresses, Stake, WorkerAddresses};
+use narwhal_crypto::traits::KeyPair;
+>>>>>>> b1029574 (f)
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
@@ -85,10 +92,15 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
         let validator_set = validators
             .iter()
+<<<<<<< HEAD
             .enumerate()
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
                 let public_key = *validator.key_pair.public_key_bytes();
+=======
+            .map(|validator| {
+                let public_key = validator.key_pair.public_key_bytes();
+>>>>>>> f7077e07 (integrate narwhal crypto)
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
 
@@ -124,10 +136,45 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             builder.build()
         };
 
+<<<<<<< HEAD
+=======
+        let narwhal_committee = validators
+            .iter()
+            .map(|validator| {
+                let name = validator.key_pair.public().clone();
+                let primary = PrimaryAddresses {
+                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                    worker_to_primary: validator.narwhal_worker_to_primary.clone(),
+                };
+                let workers = [(
+                    0, // worker_id
+                    WorkerAddresses {
+                        primary_to_worker: validator.narwhal_primary_to_worker.clone(),
+                        transactions: validator.narwhal_consensus_address.clone(),
+                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                    },
+                )]
+                .into_iter()
+                .collect();
+                let authority = Authority {
+                    stake: validator.stake as Stake, //TODO this should at least be the same size integer
+                    primary,
+                    workers,
+                };
+
+                (name, authority)
+            })
+            .collect::<BTreeMap<_, _>>();
+        let narwhal_committee = DebugIgnore(Arc::new(narwhal_config::Committee {
+            authorities: ArcSwap::from_pointee(narwhal_committee),
+            epoch: ArcSwap::from_pointee(genesis.epoch() as Epoch),
+        }));
+
+>>>>>>> b1029574 (f)
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
-                let public_key = validator.key_pair.public_key_bytes();
+                let public_key = &validator.key_pair.public_key_bytes();
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
