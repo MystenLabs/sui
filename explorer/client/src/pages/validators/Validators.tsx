@@ -213,9 +213,8 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
 
                 <div id="sysparams" className={txStyles.txcard}>
                     <h2>System Parameters</h2>
-
                 </div>
-                <br/>
+                <br />
             </div>
         </>
     );
