@@ -2,26 +2,28 @@
 title: Using the Sui Wallet Browser Extension
 ---
 
-Welcome to the [Sui Wallet Browser Chrome Extension](https://chrome.google.com/webstore/detail/sui-wallet/albddfdbohgeonpapellnjadnddglhgn?hl=en&authuser=0) covering its installation and use. The Sui Wallet Browser Extension acts as your portal to the Web3 world.
+Welcome to the [Sui Wallet Browser Chrome Extension](https://chrome.google.com/webstore/detail/sui-wallet/albddfdbohgeonpapellnjadnddglhgn?hl=en&authuser=0). This page covers the extension's installation and use. The Sui Wallet Browser Extension acts as your portal to the Web3 world.
 
 ## Features
 
 The Sui Wallet Browser Extension offers these features:
 
-* Create, import, and persistently store the mnemonics and the derived private key
+* Create, import, and persistently store the backup recovery passphrases (mnemonics) and the derived private key
+* Create NFTs
 * Transfer coins
 * See owned fungible tokens and NFTs
 * Display recent transactions
+* Auto split/merge coins if the address does not have a Coin object with the exact transfer amount
 * Go directly to the successful/failed transaction in the [Sui Explorer](https://explorer.devnet.sui.io/)
-* Try out our demonstration [NFT dApp](https://github.com/MystenLabs/sui/tree/main/wallet/examples/demo-nft-dapp) available [in the Cloud](http://sui-wallet-demo.s3-website-us-east-1.amazonaws.com/)
+* A demonstration [NFT dApp](https://github.com/MystenLabs/sui/tree/main/wallet/examples/demo-nft-dapp) available [in the Cloud](http://sui-wallet-demo.s3-website-us-east-1.amazonaws.com/)
 
-Note, the wallet will auto split/merge coins if the address does not have a Coin object with the exact transfer amount. See [Demos](#demos) for depictions of these features in play and [Use](#use) to find these features in navigation.
+See [Demos](#demos) for depictions of these features in play and [Use](#use) to find these features in navigation.
 
 ## Purpose
 
 Initially, the Sui Wallet Browser Extension is aimed at Sui developers for testing purposes. As such, the tokens are of no value (just like the rest of [DevNet](../explore/devnet.md)) and will disappear each time we reset the network. In time, the Sui Wallet Browser Extension will be production ready for real tokens.
 
-This browser extension is a pared-down version of the [Sui Wallet command line interface (CLI)](../build/cli-client.md) that provides greater ease of use for the most commonly used features. If you need more advanced features, such as merge/split coins or make arbitrary [Move](../build/move.md) calls, instead use the [Sui CLI client](../build/cli-client.md).
+This browser extension is a pared-down version of the [Sui CLI client)](../build/cli-client.md) that provides greater ease of use for the most commonly used features. If you need more advanced features, such as merging/splitting coins and making arbitrary [Move](../build/move.md) calls, instead use the [Sui CLI client](../build/cli-client.md).
 
 ## Demos
 
@@ -29,7 +31,7 @@ The following animated GIFs walk you through some of the most common workflows i
 
 ### Set up Wallet
 
-Install and configure the Sui Wallet Browser Extension (covered in detail below):
+Install and configure the Sui Wallet Browser Extension (covered in detail starting with [Install](#install)):
 
 ![Set up Wallet](../../static/onboarding.gif "Set up Wallet")
 *Set up the Sui Wallet Browser Extension*
@@ -77,7 +79,7 @@ To begin using the Sui Wallet Browser Extension:
 1. Accept the terms of service and click **Create**:
    ![Accept the terms of service for Sui Wallet](../../static/Sui-wallet-ToS.png "Accept ToS")
    *Accept the terms of service for Sui Wallet Browser Extension*
-1. View and capture the distinct Backup Recovery Passphrase (mnemonic) for the new wallet.
+1. View and capture the distinct mnemonic for the new wallet.
 1. Click **Done**.
 
 ## Configure
