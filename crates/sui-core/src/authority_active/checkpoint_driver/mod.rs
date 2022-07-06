@@ -442,9 +442,17 @@ where
             //       "No checkpoint set at this sequence."
             let available_authorities: BTreeSet<_> = checkpoint
                 .signatory_authorities(committee)
-                .filter(|a| **a != self_name)
-                .cloned()
-                .collect();
+                .filter_map(|x| match x {
+                    Ok(&a) => {
+                        if a != self_name {
+                            Some(Ok(a))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(e) => Some(Err(e)),
+                })
+                .collect::<SuiResult<_>>()?;
             if let Ok((_, contents)) = get_one_checkpoint_with_contents(
                 net.clone(),
                 &checkpoint.summary,
@@ -482,7 +490,9 @@ where
     // since these might be gone after the epoch they were active.
     let available_authorities: BTreeSet<_> = latest_known_checkpoint
         .signatory_authorities(&net.committee)
-        .cloned()
+        .collect::<SuiResult<BTreeSet<_>>>()?
+        .iter()
+        .map(|&&x| x)
         .collect();
 
     // Check if the latest checkpoint is merely a signed checkpoint, and if

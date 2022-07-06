@@ -17,6 +17,7 @@ use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
 
+#[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
 where
     E: Debug,
@@ -25,6 +26,7 @@ where
     D::Error::custom(format!("byte deserialization failed, cause by: {:?}", e))
 }
 
+#[inline]
 fn to_custom_ser_error<S, E>(e: E) -> S::Error
 where
     E: Debug,
@@ -189,6 +191,8 @@ impl Base64 {
     }
 }
 
+/// Serializes a bitmap according to the roaring bitmap on-disk standard.
+/// https://github.com/RoaringBitmap/RoaringFormatSpec
 pub struct SuiBitmap;
 
 impl SerializeAs<roaring::RoaringBitmap> for SuiBitmap {

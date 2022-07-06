@@ -79,23 +79,12 @@ impl Committee {
         })
     }
 
-    pub fn authorities_from_bitmap<'a>(
-        &'a self,
-        bitmap: &'a RoaringBitmap,
-    ) -> impl Iterator<Item = &AuthorityName> {
-        self.voting_rights
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| bitmap.contains(i as u32))
-            .map(|(_, (name, _))| name)
+    pub fn authority_index(&self, author: &AuthorityName) -> Option<u32> {
+        self.index_map.get(author).map(|i| *i as u32)
     }
 
-    pub fn authority_index(&self, author: &AuthorityName) -> usize {
-        self.index_map[author]
-    }
-
-    pub fn authority_by_index(&self, index: usize) -> &AuthorityName {
-        &self.voting_rights[index].0
+    pub fn authority_by_index(&self, index: u32) -> Option<&AuthorityName> {
+        self.voting_rights.get(index as usize).map(|(name, _)| name)
     }
 
     pub fn epoch(&self) -> EpochId {

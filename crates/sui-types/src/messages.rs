@@ -1160,9 +1160,7 @@ impl CertifiedTransactionEffects {
         Ok(Self {
             effects,
             auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch,
-                &signatures,
-                committee,
+                epoch, signatures, committee,
             )?,
         })
     }
@@ -1256,7 +1254,7 @@ impl<'a> SignatureAggregator<'a> {
         // Update certificate.
         self.partial
             .auth_sign_info
-            .add_signature(signature, authority, self.committee);
+            .add_signature(signature, authority, self.committee)?;
 
         if self.weight >= self.committee.quorum_threshold() {
             Ok(Some(self.partial.clone()))
@@ -1289,9 +1287,7 @@ impl CertifiedTransaction {
             data: transaction.data,
             tx_signature: transaction.tx_signature,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch,
-                &signatures,
-                committee,
+                epoch, signatures, committee,
             )?,
         })
     }

@@ -22,7 +22,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
@@ -544,19 +544,21 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 
     pub fn new_with_signatures(
         epoch: EpochId,
-        signatures: &Vec<(PublicKeyBytes, AuthoritySignature)>,
+        mut signatures: Vec<(PublicKeyBytes, AuthoritySignature)>,
         committee: &Committee,
     ) -> SuiResult<Self> {
-        let mut sigs = Vec::new();
         let mut map = RoaringBitmap::new();
 
-        let mut sorted_signatures = signatures.clone();
-        sorted_signatures.sort_by_key(|(a, _)| *a);
+        signatures.sort_by_key(|(public_key, _)| *public_key);
 
-        for (pk, sig) in sorted_signatures {
-            sigs.push(sig);
-            map.insert(committee.authority_index(&pk) as u32);
+        for (pk, _) in &signatures {
+            map.insert(
+                committee
+                    .authority_index(pk)
+                    .ok_or(SuiError::UnknownSigner)? as u32,
+            );
         }
+        let sigs: Vec<AuthoritySignature> = signatures.into_iter().map(|(_, sig)| sig).collect();
 
         Ok(AuthorityQuorumSignInfo {
             epoch,
@@ -565,26 +567,31 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         })
     }
 
-    // This takes log(sig) time, do not use if necessary
+    // This takes log(sig) time, do not use if not necessary
     pub fn add_signature(
         &mut self,
         sig: AuthoritySignature,
         pk: PublicKeyBytes,
         committee: &Committee,
-    ) {
-        let index = committee.authority_index(&pk) as u32;
+    ) -> SuiResult<()> {
+        let index = committee
+            .authority_index(&pk)
+            .ok_or(SuiError::UnknownSigner)? as u32;
         self.signers_map.insert(index);
         self.signatures
             .insert((self.signers_map.rank(index) - 1) as usize, sig);
+        Ok(())
     }
 
     pub fn authorities<'a>(
         &'a self,
         committee: &'a Committee,
-    ) -> impl Iterator<Item = &AuthorityName> {
-        self.signers_map
-            .iter()
-            .map(|i| committee.authority_by_index(i as usize))
+    ) -> impl Iterator<Item = SuiResult<&AuthorityName>> {
+        self.signers_map.iter().map(|i| {
+            committee
+                .authority_by_index(i)
+                .ok_or(SuiError::InvalidAuthenticator)
+        })
     }
 
     pub fn add_to_verification_obligation(
@@ -600,9 +607,14 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                 expected_epoch: committee.epoch()
             }
         );
+        fp_ensure!(
+            self.signatures.len() as u64 == self.signers_map.len(),
+            SuiError::InvalidAuthorityBitmap {
+                error: "Authority bitmap and signatures have different lengths".to_string()
+            }
+        );
 
         let mut weight = 0;
-        let mut used_authorities = HashSet::new();
 
         // Create obligations for the committee signatures
         for signature in self.signatures.iter() {
@@ -611,14 +623,10 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         }
 
         for authority_index in self.signers_map.iter() {
-            let authority = committee.authority_by_index(authority_index as usize);
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or(SuiError::UnknownSigner)?;
 
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
             // Update weight.
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);

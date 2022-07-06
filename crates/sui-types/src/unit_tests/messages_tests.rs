@@ -4,6 +4,8 @@
 
 use std::collections::BTreeMap;
 
+use roaring::RoaringBitmap;
+
 use crate::crypto::get_key_pair;
 
 use super::*;
@@ -130,10 +132,6 @@ fn test_certificates() {
         .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
         .unwrap()
         .unwrap();
-    println!(
-        "{:?}",
-        c.auth_sign_info.authorities(&committee).collect::<Vec<_>>()
-    );
     assert!(c.verify(&committee).is_ok());
     c.auth_sign_info.signatures.pop();
     assert!(c.verify(&committee).is_err());
@@ -155,11 +153,9 @@ struct Foo(String);
 impl BcsSignable for Foo {}
 
 #[test]
-fn test_authority_quorum_signature() {
+fn test_new_with_signatures() {
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities = BTreeMap::new();
-
-    // Test: new_with_signatures()
 
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
@@ -171,9 +167,9 @@ fn test_authority_quorum_signature() {
     authorities.insert(*sec.public_key_bytes(), 1);
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
-
-    let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, &signatures, &committee).unwrap();
+    let quorum =
+        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures.clone(), &committee)
+            .unwrap();
 
     let sig_clone = signatures.clone();
     let mut alphabetical_authorities = sig_clone
@@ -184,40 +180,192 @@ fn test_authority_quorum_signature() {
     assert_eq!(
         quorum
             .authorities(&committee)
-            .collect::<Vec<&AuthorityName>>(),
+            .collect::<SuiResult<Vec<&AuthorityName>>>()
+            .unwrap(),
         alphabetical_authorities
     );
+}
 
-    // Test: add_signature()
+#[test]
+fn test_add_signatures() {
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut authorities = BTreeMap::new();
+    let mut quorum = AuthorityStrongQuorumSignInfo::new(0);
 
-    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-    quorum.add_signature(sig, *sec.public_key_bytes(), &committee);
+    for _ in 0..5 {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        signatures.push((*sec.public_key_bytes(), sig));
+        authorities.insert(*sec.public_key_bytes(), 1);
+    }
 
-    signatures.push((*sec.public_key_bytes(), sig));
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+
+    for (name, sig) in &signatures {
+        assert!(quorum.add_signature(*sig, *name, &committee).is_ok());
+    }
+
     let sig_clone = signatures.clone();
     let mut alphabetical_authorities = sig_clone
         .iter()
         .map(|(pubx, _)| pubx)
         .collect::<Vec<&AuthorityName>>();
     alphabetical_authorities.sort();
+
     assert_eq!(
         quorum
             .authorities(&committee)
-            .collect::<Vec<&AuthorityName>>(),
+            .collect::<SuiResult<Vec<&AuthorityName>>>()
+            .unwrap(),
         alphabetical_authorities
     );
+}
 
-    // Test: reuse signatures
+fn get_obligation_input<T>(value: &T) -> (VerificationObligation, usize)
+where
+    T: BcsSignable,
+{
     let mut obligation = VerificationObligation::default();
-    quorum.add_signature(sig, *sec.public_key_bytes(), &committee);
 
     // Add the obligation of the authority signature verifications.
-    let value = Foo("some data".to_string());
-    let mut message: Vec<u8> = Vec::new();
-    value.write(&mut message);
-    let idx = obligation.add_message(message);
+    let mut sign_message: Vec<u8> = Vec::new();
+    value.write(&mut sign_message);
+    let idx = obligation.add_message(sign_message);
+    (obligation, idx)
+}
 
-    quorum.add_to_verification_obligation(&committee, &mut obligation, idx).unwrap();
+#[test]
+fn test_handle_reject_malicious_signature() {
+    let message: messages_tests::Foo = Foo("some data".to_string());
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut authorities = BTreeMap::new();
 
+    for _ in 0..5 {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        authorities.insert(*sec.public_key_bytes(), 1);
+        signatures.push((*sec.public_key_bytes(), sig));
+    }
+
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let mut quorum =
+        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+    {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&message, &sec);
+        let sigs_len = quorum.signatures.len();
+        quorum.signatures[sigs_len - 1] = sig;
+    }
+    let (mut obligation, idx) = get_obligation_input(&message);
+    assert!(quorum
+        .add_to_verification_obligation(&committee, &mut obligation, idx)
+        .is_ok());
     assert!(obligation.verify_all().is_err());
+}
+
+#[test]
+fn test_bitmap_out_of_range() {
+    let message: messages_tests::Foo = Foo("some data".to_string());
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut authorities = BTreeMap::new();
+    for _ in 0..5 {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        authorities.insert(*sec.public_key_bytes(), 1);
+        signatures.push((*sec.public_key_bytes(), sig));
+    }
+
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let mut quorum =
+        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+
+    // Insert outside of range
+    quorum.signers_map.insert(10);
+
+    let (mut obligation, idx) = get_obligation_input(&message);
+    assert!(quorum
+        .add_to_verification_obligation(&committee, &mut obligation, idx)
+        .is_err());
+}
+
+#[test]
+fn test_reject_extra_public_key() {
+    let message: messages_tests::Foo = Foo("some data".to_string());
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut authorities = BTreeMap::new();
+    for _ in 0..5 {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        authorities.insert(*sec.public_key_bytes(), 1);
+        signatures.push((*sec.public_key_bytes(), sig));
+    }
+
+    signatures.sort_by_key(|k| k.0);
+
+    let mut used_signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    used_signatures.push(signatures[0]);
+    used_signatures.push(signatures[1]);
+    used_signatures.push(signatures[2]);
+
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let mut quorum =
+        AuthorityStrongQuorumSignInfo::new_with_signatures(0, used_signatures, &committee).unwrap();
+
+    quorum.signers_map.insert(3);
+
+    let (mut obligation, idx) = get_obligation_input(&message);
+    assert!(quorum
+        .add_to_verification_obligation(&committee, &mut obligation, idx)
+        .is_err());
+}
+
+#[test]
+fn test_reject_reuse_signatures() {
+    let message: messages_tests::Foo = Foo("some data".to_string());
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut authorities = BTreeMap::new();
+    for i in 0..5 {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        authorities.insert(*sec.public_key_bytes(), 1);
+        signatures.push((*sec.public_key_bytes(), sig));
+    }
+
+    let mut used_signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    used_signatures.push(signatures[0]);
+    used_signatures.push(signatures[0]);
+    used_signatures.push(signatures[1]);
+    used_signatures.push(signatures[2]);
+
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let mut quorum =
+        AuthorityStrongQuorumSignInfo::new_with_signatures(0, used_signatures, &committee).unwrap();
+
+    let (mut obligation, idx) = get_obligation_input(&message);
+    assert!(quorum
+        .add_to_verification_obligation(&committee, &mut obligation, idx)
+        .is_err());
+}
+
+#[test]
+fn test_empty_bitmap() {
+    let message: messages_tests::Foo = Foo("some data".to_string());
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+    let mut authorities = BTreeMap::new();
+    for i in 0..5 {
+        let (_, sec) = get_key_pair();
+        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        authorities.insert(*sec.public_key_bytes(), 1);
+        signatures.push((*sec.public_key_bytes(), sig));
+    }
+
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+    let mut quorum =
+        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+    quorum.signers_map = RoaringBitmap::new();
+
+    let (mut obligation, idx) = get_obligation_input(&message);
+    assert!(quorum
+        .add_to_verification_obligation(&committee, &mut obligation, idx)
+        .is_err());
 }

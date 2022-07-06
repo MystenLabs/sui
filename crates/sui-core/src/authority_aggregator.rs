@@ -359,8 +359,10 @@ where
             .certificate
             .auth_sign_info
             .authorities(&self.committee)
-            .map(|name| *name)
-            .collect();
+            .collect::<SuiResult<HashSet<_>>>()?
+            .iter()
+            .map(|&&name| name)
+            .collect::<HashSet<_>>();
 
         // Sample a `retries` number of distinct authorities by stake.
         let mut source_authorities: Vec<AuthorityName> = Vec::new();
