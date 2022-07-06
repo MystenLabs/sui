@@ -32,11 +32,12 @@ colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003", features = ["address20"] }
-move-prover = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
-move-cli = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
-move-package = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f", features = ["address20"] }
+move-prover = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-cli = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-package = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
 workspace-hack = { path = "../workspace-hack"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -51,6 +52,6 @@ typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7d
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 rand = "0.7.3"
-move-package = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-package = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
