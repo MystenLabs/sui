@@ -8,7 +8,6 @@ use ed25519_dalek::PublicKey;
 use itertools::Itertools;
 use rand_latest::rngs::OsRng;
 use rand_latest::seq::SliceRandom;
-use roaring::RoaringBitmap;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};

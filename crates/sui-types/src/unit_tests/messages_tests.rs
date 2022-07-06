@@ -302,10 +302,8 @@ fn test_reject_extra_public_key() {
 
     signatures.sort_by_key(|k| k.0);
 
-    let mut used_signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    used_signatures.push(signatures[0]);
-    used_signatures.push(signatures[1]);
-    used_signatures.push(signatures[2]);
+    let mut used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
+        vec![signatures[0], signatures[1], signatures[2], signatures[3]];
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
@@ -324,21 +322,18 @@ fn test_reject_reuse_signatures() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities = BTreeMap::new();
-    for i in 0..5 {
+    for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
         authorities.insert(*sec.public_key_bytes(), 1);
         signatures.push((*sec.public_key_bytes(), sig));
     }
 
-    let mut used_signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    used_signatures.push(signatures[0]);
-    used_signatures.push(signatures[0]);
-    used_signatures.push(signatures[1]);
-    used_signatures.push(signatures[2]);
+    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
+        vec![signatures[0], signatures[1], signatures[2], signatures[3]];
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
-    let mut quorum =
+    let quorum =
         AuthorityStrongQuorumSignInfo::new_with_signatures(0, used_signatures, &committee).unwrap();
 
     let (mut obligation, idx) = get_obligation_input(&message);
@@ -352,7 +347,7 @@ fn test_empty_bitmap() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities = BTreeMap::new();
-    for i in 0..5 {
+    for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
         authorities.insert(*sec.public_key_bytes(), 1);
