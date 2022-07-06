@@ -12,10 +12,10 @@ The Sui Wallet Browser Extension offers these features:
 * Transfer coins
 * See owned fungible tokens and NFTs
 * Display recent transactions
-* Go directly to the successful/failed transaction in the Sui Explorer
+* Go directly to the successful/failed transaction in the [Sui Explorer](https://explorer.devnet.sui.io/)
 * Try out our demonstration [NFT dApp](https://github.com/MystenLabs/sui/tree/main/wallet/examples/demo-nft-dapp) available [in the Cloud](http://sui-wallet-demo.s3-website-us-east-1.amazonaws.com/)
 
-Note, the wallet will auto split/merge coins if the address does not have a Coin object with the exact transfer amount. See the [Use](#use) section for guidance on employing these features.
+Note, the wallet will auto split/merge coins if the address does not have a Coin object with the exact transfer amount. See [Demos](#demos) for depictions of these features in play and [Use](#use) to find these features in navigation.
 
 ## Purpose
 
@@ -51,9 +51,9 @@ From a demo decentralized site, such as our demonstration [NFT dApp](https://git
 ![Transfer token](../../static/nft_transfer.gif "Transfer token")
 *Transfer tokens on the Sui network to another address*
 
-### Transaction history and settings
+### View transaction history
 
-View your recent transactions, also connected to Sui Explorer, where you can see more details about the corresponding transaction:
+View your recent transactions and visit [Sui Explorer](https://explorer.devnet.sui.io/), where you can see more details about the corresponding transaction:
 
 ![Transaction history and settings](../../static/txn_history_and_settings.gif "Transaction history and settings")
 *Under the *Settings* tab, view your account on Sui Explorer*
