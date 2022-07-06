@@ -10,13 +10,14 @@ const cl = classnames.bind(st);
 type LogoProps = {
     size?: 'normal' | 'big' | 'bigger' | 'huge';
     txt?: boolean;
+    className?: string;
 };
 
-const Logo = ({ size = 'normal', txt = false }: LogoProps) => {
+const Logo = ({ size = 'normal', txt = false, className }: LogoProps) => {
     return (
-        <div className={cl('container')}>
+        <div className={cl('container', className)}>
             <span className={cl('image', size)} />
-            {txt ? <span className={cl('txt', size)}>SUI wallet</span> : null}
+            {txt ? <span className={cl('txt', size)}>sui</span> : null}
         </div>
     );
 };

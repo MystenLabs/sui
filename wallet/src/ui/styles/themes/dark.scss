@@ -1,8 +1,12 @@
 @use '_variables/colors' as c-var;
+@use '_variables/shadows';
 @use '_values/colors' as c-val;
 
 $values: (
     c-var.$background: linear-gradient(180deg, #041429 0%, #041630 19.83%),
     c-var.$background-color: #041429,
     c-var.$text-on-background: c-val.$white,
+    c-var.$main-content-background: #0d1f36,
+    c-var.$text-on-main-content-background: c-val.$white,
+    shadows.$main-content: 0 0 49px rgb(103 103 103 / 13%),
 );

@@ -8,8 +8,8 @@ import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 import Header from '_components/header';
 import Loading from '_components/loading';
 import Logo from '_components/logo';
-import NetworkSwitch from '_components/network-switch';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
+import PageLayout from '_pages/layout';
 import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
 
 import st from './Home.module.scss';
@@ -34,19 +34,27 @@ const HomePage = () => {
     }, [guardChecking, dispatch]);
 
     return (
-        <Loading loading={guardChecking}>
-            <div className={st.container}>
-                <div className={st['outer-container']}>
-                    <Logo txt={true} />
-                    <NetworkSwitch />
+        <PageLayout limitToPopUpSize={true}>
+            <Loading loading={guardChecking}>
+                <div className={st.container}>
+                    <div className={st.header}>
+                        <Logo className={st.logo} txt={true} />
+                    </div>
+                    <div className={st.content}>
+                        <Header />
+                        <Outlet />
+                    </div>
                 </div>
-                <div className={st['inner-container']}>
-                    <Header />
-                    <Outlet />
-                </div>
-            </div>
-        </Loading>
+            </Loading>
+        </PageLayout>
     );
 };
 
 export default HomePage;
+export { default as NftsPage } from './nfts';
+export { default as SettingsPage } from './settings';
+export { default as TokensPage } from './tokens';
+export { default as TransactionDetailsPage } from './transaction-details';
+export { default as TransactionsPage } from './transactions';
+export { default as TransferCoinPage } from './transfer-coin';
+export { default as TransferNFTPage } from './transfer-nft';

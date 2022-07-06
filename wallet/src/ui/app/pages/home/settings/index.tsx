@@ -10,6 +10,7 @@ import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import ExternalLink from '_components/external-link';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import Network from '_components/network-switch';
 import { useAppDispatch } from '_hooks';
 import { logout } from '_redux/slices/account';
 import { mintDemoNFT } from '_redux/slices/sui-objects';
@@ -57,6 +58,9 @@ function SettingsPage() {
     }, [mintStatus]);
     return (
         <div className={st.container}>
+            <div className={(st.item, st.network)}>
+                <Network />
+            </div>
             <div className={st.item}>
                 <ExplorerLink
                     className="btn"
