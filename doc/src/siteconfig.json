@@ -125,9 +125,8 @@
         "name": "See what's New",
         "sublist": [
           {
-            "name": "Use Wallet Browser Extension",
-            "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
-            "external": true
+            "name": "Try Sui Wallet Browser Extension",
+            "url": "/explore/wallet-browser",
           },
           {
             "name": "Use Move VSCode Plugin",
@@ -176,7 +175,15 @@
           {
             "name": "Sui Compared to other Blockchains",
             "url": "/learn/sui-compared"
-          }
+          },
+          {
+            "name": "Why Move?",
+            "url": "/learn/why-move"
+          },
+          {
+            "name": "How Sui Move and Core Move differ",
+            "url": "/learn/sui-move-diffs"
+          },
         ]
       },
       {
