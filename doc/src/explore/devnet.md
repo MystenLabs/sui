@@ -24,7 +24,7 @@ We provide the following tools for users to interact with the Sui Devnet:
 
 ### Set up environment
 
-You may simply [install Sui](../build/install.md) and then request test tokens as described below. To use the Sui DevNet, you will need:
+You may simply [install Sui](../build/install.md) and then request test tokens as described in the install docs. To use the Sui DevNet, you will need:
 
 1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 1. the [`git` command line interface](https://git-scm.com/download/).
@@ -51,12 +51,13 @@ Now [set up your Sui CLI client and connect to DevNet](../build/cli-client.md#co
 
 ### Request gas tokens
 
-Request gas tokens by posting your address in the [#devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
-
-You can find your address by running:
-```shell
-$ sui client active-address
-```
+1. Join [Discord](https://discord.gg/sui) If you haven’t already.
+1. Find your address by running:
+   ```shell
+   $ sui client active-address
+   ```
+1. Request tokens in the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130)
+   channel per the [SUI tokens](../build/install.md#sui-tokens) install documentation.
 
 ### Mint an example NFT
 
