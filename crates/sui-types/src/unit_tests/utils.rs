@@ -3,7 +3,7 @@
 
 use crate::{
     committee::Committee,
-    crypto::{get_key_pair_from_rng, KeyPair},
+    crypto::{get_key_pair_from_rng, KeyPair, SuiKeypair},
 };
 use std::collections::BTreeMap;
 
@@ -24,7 +24,7 @@ where
     for _ in 0..num {
         let (_, inner_authority_key) = get_key_pair_from_rng(rand);
         authorities.insert(
-            /* address */ *inner_authority_key.public_key_bytes(),
+            /* address */ inner_authority_key.public_key_bytes(),
             /* voting right */ 1,
         );
         keys.push(inner_authority_key);

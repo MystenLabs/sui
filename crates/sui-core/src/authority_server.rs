@@ -22,7 +22,7 @@ use sui_network::{
     tonic,
 };
 
-use sui_types::{error::*, messages::*};
+use sui_types::{crypto::KeyPair, crypto::SuiKeypair, error::*, messages::*};
 use tokio::{
     sync::mpsc::{channel, Sender},
     task::JoinHandle,

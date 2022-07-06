@@ -24,6 +24,7 @@ use sui_json_rpc_api::client::SuiRpcClient;
 use sui_json_rpc_api::keystore::{KeystoreType, SuiKeystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
+use sui_types::crypto::SuiKeypair;
 use tracing::info;
 
 #[derive(Parser)]

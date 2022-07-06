@@ -4,7 +4,7 @@
 //! A secret seed value, useful for deterministic private key and SuiAddress generation.
 
 use crate::base_types::SuiAddress;
-use crate::crypto::{KeyPair, Signable, Signature};
+use crate::crypto::{KeyPair, Signable, Signature, SuiKeypair};
 use crate::error::SuiError;
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore};

@@ -24,7 +24,8 @@ use sui_json_rpc_api::RpcReadApiServer;
 use sui_json_rpc_api::RpcTransactionBuilderServer;
 use sui_json_rpc_api::WalletSyncApiServer;
 use sui_swarm::memory::Swarm;
-use sui_types::base_types::SuiAddress;
+use sui_types::{base_types::SuiAddress, crypto::SuiKeypair};
+
 const NUM_VALIDAOTR: usize = 4;
 
 pub async fn start_test_network(

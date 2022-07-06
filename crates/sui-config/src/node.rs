@@ -8,13 +8,14 @@ use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use narwhal_config::SharedCommittee as ConsensusCommittee;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::PublicKey;
+use sui_types::crypto::SuiKeypair;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -79,7 +80,7 @@ impl NodeConfig {
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {
-        *self.key_pair.public_key_bytes()
+        self.key_pair.public_key_bytes()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
@@ -111,7 +112,7 @@ pub struct ConsensusConfig {
 
     pub narwhal_config: ConsensusParameters,
 
-    pub narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
+    pub narwhal_committee: DebugIgnore<ConsensusCommittee<PublicKey>>,
 }
 
 impl ConsensusConfig {
@@ -127,7 +128,7 @@ impl ConsensusConfig {
         &self.narwhal_config
     }
 
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
+    pub fn narwhal_committee(&self) -> &ConsensusCommittee<PublicKey> {
         &self.narwhal_committee
     }
 }

@@ -1488,7 +1488,7 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
         AuthorityTemporaryStore::new(store.clone(), InputObjects::new(vec![]), genesis_digest);
     let mut pubkeys = Vec::new();
     for name in committee.names() {
-        pubkeys.push(committee.public_key(name)?.to_bytes().to_vec());
+        pubkeys.push(committee.public_key(name)?.as_ref().to_vec());
     }
     // TODO: May use separate sui address than derived from pubkey.
     let sui_addresses: Vec<AccountAddress> = committee

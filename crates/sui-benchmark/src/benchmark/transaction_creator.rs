@@ -7,7 +7,9 @@ use rayon::prelude::*;
 use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
-    crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature},
+    crypto::{
+        get_key_pair, AuthoritySignature, KeyPair, Signature, SuiAuthoritySignature, SuiKeypair,
+    },
     messages::*,
     object::Object,
     SUI_FRAMEWORK_ADDRESS,
@@ -68,7 +70,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             .key_pair();
         let pubx = secx.public_key_bytes();
         let sig = AuthoritySignature::new(&certificate.data, secx);
-        certificate.auth_sign_info.signatures.push((*pubx, sig));
+        certificate.auth_sign_info.signatures.push((pubx, sig));
     }
     certificate
 }

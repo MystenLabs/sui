@@ -6,7 +6,7 @@ use super::{base_types::*, batch::*, committee::Committee, error::*, event::Even
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable,
-    EmptySignInfo, Signable, Signature, VerificationObligation,
+    EmptySignInfo, Signable, Signature, SuiAuthoritySignature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::CheckpointFragment;
