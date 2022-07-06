@@ -1,3 +1,6 @@
+@use './themes';
+@use '_variables' as v;
+
 @import url('bootstrap-icons');
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
@@ -7,7 +10,10 @@ body {
     min-height: 0;
     margin: 0;
     padding: 0;
-    background-color: #e1e1e1;
+
+    /* to allow gradient color to work and show at least solid color when over-scroll */
+    background: v.use(v.$colors-background);
+    background-color: v.use(v.$colors-background-color);
     color: black;
     scroll-behavior: smooth;
 }

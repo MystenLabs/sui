@@ -31,7 +31,12 @@
             "_messages": ["./src/shared/messaging/messages/"],
             "_messages/*": ["./src/shared/messaging/messages/*"],
             "_payloads": ["./src/shared/messaging/messages/payloads/"],
-            "_payloads/*": ["./src/shared/messaging/messages/payloads/*"]
+            "_payloads/*": ["./src/shared/messaging/messages/payloads/*"],
+            "_styles/*": ["./src/ui/styles/*"],
+            "_variables": ["./src/ui/styles/variables"],
+            "_variables/*": ["./src/ui/styles/variables/*"],
+            "_values": ["./src/ui/styles/values"],
+            "_values/*": ["./src/ui/styles/values/*"]
         }
     },
     "include": ["../../src"],
