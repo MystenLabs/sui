@@ -16,6 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
+* Install the [Sui Wallet Browser Extension](../explore/wallet-browser.md) to create NFTs, transfer coins, and carry out common transactions in a Chrome tab.
 * If your application is written in JavaScript or TypeScript, follow the [TypeScript SDK documentation](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
 * Employ the enhanced [Move Visual Studio Code (VSCode) plugin](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) as described in the [related announcement](https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin).
 * Get ready to participate in [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/)!
