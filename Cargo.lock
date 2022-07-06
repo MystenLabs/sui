@@ -312,6 +312,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atoi"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c57d12312ff59c811c0643f4d80830505833c9ffaebd193d819392b265be8e"
+dependencies = [
+ "num-traits 0.2.15",
+]
+
+[[package]]
 name = "atomicwrites"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -878,9 +887,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.2.0"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a37c35f1112dad5e6e0b1adaff798507497a18fceeb30cceb3bae7d1427b9213"
+checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
 dependencies = [
  "os_str_bytes",
 ]
@@ -1112,7 +1121,16 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49fc9a695bca7f35f5f4c15cddc84415f66a74ea78eef08e90c5024f2b540e23"
 dependencies = [
- "crc-catalog",
+ "crc-catalog 1.1.1",
+]
+
+[[package]]
+name = "crc"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53757d12b596c16c78b83458d732a5d1a17ab3f53f2f7412f6fb57cc8a140ab3"
+dependencies = [
+ "crc-catalog 2.1.0",
 ]
 
 [[package]]
@@ -1120,6 +1138,12 @@ name = "crc-catalog"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccaeedb56da03b09f598226e25e80088cb4cd25f316e6e4df7d695f0feeb1403"
+
+[[package]]
+name = "crc-catalog"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d0165d2900ae6778e36e80bbc4da3b5eefccee9ba939761f9c2882a5d9af3ff"
 
 [[package]]
 name = "crc32fast"
@@ -2445,6 +2469,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashlink"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d452c155cb93fecdfb02a73dd57b5d8e442c2063bd7aac72f1bc5e4263a43086"
+dependencies = [
+ "hashbrown 0.12.1",
+]
+
+[[package]]
 name = "hdrhistogram"
 version = "7.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2813,9 +2846,9 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "jsonrpsee"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1f2ab5a60e558e74ea93bcf5164ebc47939a7fff8938fa9b5233bbc63e16061"
+checksum = "11e017217fcd18da0a25296d3693153dd19c8a6aadab330b3595285d075385d1"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -2831,9 +2864,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26d682f4a55081a2be3e639280c640523070e4aeb8ee2fd8dd9168fdae57a9db"
+checksum = "ce395539a14d3ad4ec1256fde105abd36a2da25d578a291cabe98f45adfdb111"
 dependencies = [
  "anyhow",
  "futures-channel",
@@ -2856,9 +2889,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e27462b21279edf9a6a91f46ffbe125e9cdc58b901d2e08bf59b31a47d7d0ab"
+checksum = "16efcd4477de857d4a2195a45769b2fe9ebb54f3ef5a4221d3b014a4fe33ec0b"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.2",
@@ -2868,8 +2901,10 @@ dependencies = [
  "futures-channel",
  "futures-timer",
  "futures-util",
+ "globset",
  "hyper",
  "jsonrpsee-types",
+ "lazy_static 1.4.0",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rustc-hash",
@@ -2879,14 +2914,15 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "unicase",
  "wasm-bindgen-futures",
 ]
 
 [[package]]
 name = "jsonrpsee-http-client"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1da5ba164b7bb9d2780672be409f8b9f8001bd6fdd80880dc17feb7d309a8d64"
+checksum = "5fc1d8c0e4f455c47df21f8a29f4bbbcb75eb71bfee919b92e92502b48358392"
 dependencies = [
  "async-trait",
  "hyper",
@@ -2903,28 +2939,26 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-server"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7178f16eabd7154c094e24d295b9ee355ec1e5f24c328759c56255ff7bbd4548"
+checksum = "bdd69efeb3ce2cba767f126872f4eeb4624038a29098e75d77608b2b4345ad03"
 dependencies = [
  "futures-channel",
  "futures-util",
- "globset",
  "hyper",
  "jsonrpsee-core",
  "jsonrpsee-types",
- "lazy_static 1.4.0",
+ "serde 1.0.138",
  "serde_json",
  "tokio",
  "tracing",
- "unicase",
 ]
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b8d7f449cab3b747f12c3efc27f5cad537f3b597c6a3838b0fac628f4bf730a"
+checksum = "874cf3f6a027cebf36cae767feca9aa2e8a8f799880e49eb5540819fcbd8eada"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2 1.0.40",
@@ -2934,9 +2968,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fd11763134104122ddeb0f97e4bbe393058017dfb077db63fbf44b4dd0dd86e"
+checksum = "3bcf76cd316f5d3ad48138085af1f45e2c58c98e02f0779783dbb034d43f7c86"
 dependencies = [
  "anyhow",
  "beef",
@@ -2948,9 +2982,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-wasm-client"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "128e3bfeb362bccff6ba9526a8354b943c84a38eb5ba92297e6aef846d165004"
+checksum = "d1fcb257e9b60de22ec3c151106ad1e089ab1c0691d25e3282f1cc7a0c7ba651"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -2959,9 +2993,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76f15180afb3761c7a3a32c0a8b680788176dcfdfe725b24c1758c90b1d1595b"
+checksum = "ee043cb5dd0d51d3eb93432e998d5bae797691a7b10ec4a325e036bcdb48c48a"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -2970,9 +3004,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-server"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfb6c21556c551582b56e4e8e6e6249b0bbdb69bb7fa39efe9b9a6b54af9f206"
+checksum = "2bd2e4d266774a671f8def3794255b28eddd09b18d76e0b913fa439f34588c0a"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2981,6 +3015,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "tokio",
+ "tokio-stream",
  "tokio-util",
  "tracing",
 ]
@@ -6138,8 +6173,8 @@ version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "551873805652ba0d912fec5bbb0f8b4cdd96baf8e2ebf5970e5671092966019b"
 dependencies = [
- "sqlx-core",
- "sqlx-macros",
+ "sqlx-core 0.5.13",
+ "sqlx-macros 0.5.13",
 ]
 
 [[package]]
@@ -6149,11 +6184,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e48c61941ccf5ddcada342cd59e3e5173b007c509e1e8e990dafc830294d9dc5"
 dependencies = [
  "ahash",
- "atoi",
+ "atoi 0.4.0",
  "bitflags",
  "byteorder",
  "bytes",
- "crc",
+ "crc 2.1.0",
  "crossbeam-queue",
  "either",
  "event-listener",
@@ -6163,7 +6198,7 @@ dependencies = [
  "futures-executor",
  "futures-intrusive",
  "futures-util",
- "hashlink",
+ "hashlink 0.7.0",
  "hex",
  "indexmap",
  "itoa 1.0.2",
@@ -6178,13 +6213,58 @@ dependencies = [
  "sha2 0.10.2",
  "smallvec",
  "sqlformat",
- "sqlx-rt",
+ "sqlx-rt 0.5.13",
  "stringprep",
  "thiserror",
  "tokio-stream",
  "url",
  "webpki 0.21.4",
  "webpki-roots 0.21.1",
+]
+
+[[package]]
+name = "sqlx-core"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b69bf218860335ddda60d6ce85ee39f6cf6e5630e300e19757d1de15886a093"
+dependencies = [
+ "ahash",
+ "atoi 1.0.0",
+ "bitflags",
+ "byteorder",
+ "bytes",
+ "crc 3.0.0",
+ "crossbeam-queue",
+ "either",
+ "event-listener",
+ "flume",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-intrusive",
+ "futures-util",
+ "hashlink 0.8.0",
+ "hex",
+ "indexmap",
+ "itoa 1.0.2",
+ "libc",
+ "libsqlite3-sys",
+ "log",
+ "memchr",
+ "once_cell",
+ "paste",
+ "percent-encoding",
+ "rustls 0.20.6",
+ "rustls-pemfile",
+ "sha2 0.10.2",
+ "smallvec",
+ "sqlformat",
+ "sqlx-rt 0.6.0",
+ "stringprep",
+ "thiserror",
+ "tokio-stream",
+ "url",
+ "webpki-roots 0.22.3",
 ]
 
 [[package]]
@@ -6200,8 +6280,27 @@ dependencies = [
  "proc-macro2 1.0.40",
  "quote 1.0.20",
  "sha2 0.10.2",
- "sqlx-core",
- "sqlx-rt",
+ "sqlx-core 0.5.13",
+ "sqlx-rt 0.5.13",
+ "syn 1.0.96",
+ "url",
+]
+
+[[package]]
+name = "sqlx-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40c63177cf23d356b159b60acd27c54af7423f1736988502e36bae9a712118f"
+dependencies = [
+ "dotenv",
+ "either",
+ "heck 0.4.0",
+ "once_cell",
+ "proc-macro2 1.0.40",
+ "quote 1.0.20",
+ "sha2 0.10.2",
+ "sqlx-core 0.6.0",
+ "sqlx-rt 0.6.0",
  "syn 1.0.96",
  "url",
 ]
@@ -6215,6 +6314,17 @@ dependencies = [
  "once_cell",
  "tokio",
  "tokio-rustls 0.22.0",
+]
+
+[[package]]
+name = "sqlx-rt"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "874e93a365a598dc3dadb197565952cb143ae4aa716f7bcc933a8d836f6bf89f"
+dependencies = [
+ "once_cell",
+ "tokio",
+ "tokio-rustls 0.23.4",
 ]
 
 [[package]]
@@ -8365,7 +8475,7 @@ dependencies = [
  "async-stream",
  "async-stream-impl",
  "async-trait",
- "atoi",
+ "atoi 0.4.0",
  "atomicwrites",
  "atty",
  "autocfg",
@@ -8432,8 +8542,8 @@ dependencies = [
  "console-subscriber",
  "constant_time_eq",
  "core2",
- "crc",
- "crc-catalog",
+ "crc 2.1.0",
+ "crc-catalog 1.1.1",
  "crc32fast",
  "criterion",
  "criterion-plot",
@@ -8542,7 +8652,7 @@ dependencies = [
  "half",
  "hashbrown 0.11.2",
  "hashbrown 0.12.1",
- "hashlink",
+ "hashlink 0.7.0",
  "hdrhistogram",
  "heck 0.3.3",
  "heck 0.4.0",
@@ -8834,9 +8944,9 @@ dependencies = [
  "spin 0.9.3",
  "sqlformat",
  "sqlx",
- "sqlx-core",
- "sqlx-macros",
- "sqlx-rt",
+ "sqlx-core 0.5.13",
+ "sqlx-macros 0.6.0",
+ "sqlx-rt 0.5.13",
  "stable_deref_trait",
  "static_assertions",
  "stringprep",
