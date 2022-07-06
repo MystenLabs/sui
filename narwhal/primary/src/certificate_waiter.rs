@@ -146,7 +146,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                             self.committee = committee;
                             self.pending.clear();
                         },
-                        Reconfigure::Shutdown(_token) => ()
+                        Reconfigure::Shutdown(_token) => return
                     }
 
                 }
