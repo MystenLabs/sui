@@ -22,6 +22,17 @@ Initially, the Sui Wallet Browser Extension is aimed at Sui developers for testi
 
 This browser extension is a pared-down version of the [Sui Wallet command line interface (CLI)](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md) that provides greater ease of use for the most commonly used features. If you need more advanced features, such as merge/split coins or make arbitrary [Move](https://github.com/MystenLabs/sui/blob/main/doc/src/build/move.md) calls, instead use the [Wallet CLI](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md).
 
+## Demos
+
+The following animated GIFs walk you through some of the most common workflows in the Sui Wallet Browser Extension.
+
+### Create NFT
+
+From a demo decentralized site, you can connect the demo site to your wallet and create a custom NFT:
+
+![Create NFTs](../../static/create_NFT.gif "Create NFTs")
+*Create NFTs in Sui Wallet by connecting to an external site*
+
 
 ## Install
 
