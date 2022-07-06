@@ -161,6 +161,10 @@
     ],
     "explore": [
       {
+        "label": "Wallet in Browser",
+        "fileName": "explore/wallet-browser"
+      },
+      {
         "label": "DevNet",
         "fileName": "explore/devnet"
       },
