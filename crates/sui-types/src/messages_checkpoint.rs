@@ -360,11 +360,6 @@ impl CertifiedCheckpointSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    pub transactions: BTreeSet<ExecutionDigests>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OrderedCheckpointContents {
     pub transactions: Vec<ExecutionDigests>,
 }
 
@@ -376,7 +371,7 @@ impl CheckpointContents {
         T: Iterator<Item = ExecutionDigests>,
     {
         CheckpointContents {
-            transactions: contents.collect(),
+            transactions: contents.collect::<BTreeSet<_>>().into_iter().collect(),
         }
     }
 
@@ -437,6 +432,7 @@ impl CheckpointFragment {
 mod tests {
     use rand::prelude::StdRng;
     use rand::SeedableRng;
+    use std::collections::BTreeSet;
 
     use super::*;
     use crate::utils::make_committee_key;

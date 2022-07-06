@@ -14,7 +14,6 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
-use sui_types::messages_checkpoint::OrderedCheckpointContents;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     batch::TxSequenceNumber,
@@ -386,20 +385,27 @@ impl CheckpointStore {
             .filter_map(
                 |(opt_seq, tx)| {
                     if opt_seq.is_none() {
-                        Some(*tx)
+                        Some(tx)
                     } else {
                         None
                     }
                 },
             );
-        let filtered_contents = CheckpointContents::new(new_transactions);
+
+        // Make sure that all transactions in the checkpoint have been executed locally.
+        self.check_checkpoint_transactions(new_transactions.clone(), &effects_store)?;
+        // Create a causal order of all transactions in the checkpoint.
+        let ordered_contents = CheckpointContents {
+            transactions: effects_store.get_complete_causal_order(new_transactions, self)?,
+        };
+
         let summary =
-            CheckpointSummary::new(epoch, sequence_number, &filtered_contents, previous_digest);
+            CheckpointSummary::new(epoch, sequence_number, &ordered_contents, previous_digest);
 
         let checkpoint = AuthenticatedCheckpoint::Signed(
             SignedCheckpointSummary::new_from_summary(summary, self.name, &*self.secret),
         );
-        self.handle_internal_set_checkpoint(&checkpoint, &filtered_contents, effects_store)
+        self.handle_internal_set_checkpoint(&checkpoint, &ordered_contents, effects_store)
     }
 
     /// Call this function internally to update the latest checkpoint.
@@ -419,12 +425,6 @@ impl CheckpointStore {
         debug_assert!(self.next_checkpoint() == checkpoint_sequence_number);
 
         self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
-
-        let ordered_effects =
-            effects_store.get_complete_causal_order(contents.transactions.iter(), self)?;
-        let ordered_contents = OrderedCheckpointContents {
-            transactions: ordered_effects,
-        };
 
         // Make a DB batch
         let batch = self.checkpoints.batch();
@@ -450,7 +450,7 @@ impl CheckpointStore {
             .delete_batch(&self.local_fragments, self.local_fragments.keys())?;
 
         // Update the transactions databases.
-        let transactions: Vec<_> = contents.transactions.iter().cloned().collect();
+        let transactions: Vec<_> = contents.transactions.to_vec();
         self.update_new_checkpoint_inner(checkpoint_sequence_number, &transactions, batch)
     }
 
@@ -706,10 +706,15 @@ impl CheckpointStore {
                 fragment.diff.swap()
             };
 
-            if let Ok(contents) = reconstructed
-                .global
-                .checkpoint_items(&diff, our_proposal.transactions.transactions.clone())
-            {
+            if let Ok(contents) = reconstructed.global.checkpoint_items(
+                &diff,
+                our_proposal
+                    .transactions
+                    .transactions
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ) {
                 let contents = CheckpointContents::new(contents.into_iter());
                 return Ok(contents);
             }
@@ -861,7 +866,7 @@ impl CheckpointStore {
     fn check_checkpoint_transactions<'a>(
         &self,
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
-        pending_execution: &(impl PendCertificateForExecution),
+        pending_execution: &impl PendCertificateForExecution,
     ) -> SuiResult {
         let extra_tx = self.extra_transactions.multi_get(transactions.clone())?;
         let tx_to_execute = extra_tx
