@@ -122,7 +122,6 @@ async fn main() -> Result<()> {
         ("run", Some(sub_matches)) => run(sub_matches).await?,
         _ => unreachable!(),
     }
-    println!("Exiting main()...");
     Ok(())
 }
 

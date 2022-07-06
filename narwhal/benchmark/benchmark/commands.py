@@ -19,10 +19,10 @@ class CommandMaker:
     @staticmethod
     def compile(mem_profiling):
         if mem_profiling:
-            features = "benchmark dhat-heap"
+            params = ["--profile", "bench-profiling", "--features", "benchmark dhat-heap"]
         else:
-            features = "benchmark"
-        return ["cargo", "build", "--quiet", "--release", "--features", features]
+            params = ["--release", "--features", "benchmark"]
+        return ["cargo", "build", "--quiet"] + params
 
     @staticmethod
     def generate_key(filename):

@@ -4,13 +4,12 @@ use config::{Parameters, SharedCommittee, WorkerId};
 use consensus::{
     bullshark::Bullshark, dag::Dag, metrics::ConsensusMetrics, Consensus, SubscriberHandler,
 };
-use crypto::traits::{EncodeDecodeBase64, KeyPair, Signer, VerifyingKey};
+use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
 use primary::{NetworkModel, PayloadToken, Primary};
 use prometheus::Registry;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 use store::{
     reopen,
     rocks::{open_cf, DBMap},
@@ -157,6 +156,7 @@ impl Node {
         // Put name of primary in heap profile to distinguish diff primaries
         #[cfg(feature = "dhat-heap")]
         let profiler = {
+            use crypto::traits::EncodeDecodeBase64;
             let heap_file = format!("dhat-heap-{}.json", name.encode_base64());
             Arc::new(
                 dhat::Profiler::builder()
@@ -188,6 +188,9 @@ impl Node {
         // but at least 2 primaries should complete and dump their profiles.
         #[cfg(feature = "dhat-heap")]
         {
+            use std::time::Duration;
+
+            #[allow(clippy::redundant_clone)]
             let profiler2 = profiler.clone();
             std::thread::spawn(|| {
                 std::thread::sleep(Duration::from_secs(240));
