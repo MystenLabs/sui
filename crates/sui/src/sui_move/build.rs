@@ -28,10 +28,10 @@ impl Build {
         // find manifest file directory from a given path or (if missing) from current dir
         if dump_bytecode_as_base64 {
             let compiled_modules =
-                sui_framework::build_move_package_to_base64(&rerooted_path, build_config)?;
+                sui_framework::build_move_package_to_base64(rerooted_path, build_config)?;
             println!("{:?}", compiled_modules);
         } else {
-            sui_framework::build_and_verify_package(&rerooted_path, build_config)?;
+            sui_framework::build_and_verify_package(rerooted_path, build_config)?;
         }
         Ok(())
     }
