@@ -5,7 +5,7 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::{PublicKeyBytes, SuiAuthoritySignature};
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointRequest, CheckpointRequestType,
     CheckpointResponse, CheckpointSequenceNumber,

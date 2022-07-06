@@ -5,7 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
-use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable};
+use crate::crypto::{
+    AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable, SuiAuthoritySignature,
+};
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
@@ -434,6 +436,7 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
+    use crate::crypto::SuiKeypair;
     use crate::utils::make_committee_key;
 
     // TODO use the file name as a seed
@@ -452,7 +455,7 @@ mod tests {
         let set = CheckpointContents::new(set.iter().cloned());
 
         let mut proposal =
-            SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
+            SignedCheckpointSummary::new(committee.epoch, 1, name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.verify().is_ok());
@@ -482,7 +485,7 @@ mod tests {
             .map(|k| {
                 let name = k.public_key_bytes();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 
@@ -502,7 +505,7 @@ mod tests {
                 let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 

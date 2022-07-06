@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::crypto::get_key_pair;
+use crate::crypto::{get_key_pair, SuiKeypair};
 
 use super::*;
 
@@ -25,11 +25,11 @@ fn test_signed_values() {
     let (_, sec3) = get_key_pair();
 
     authorities.insert(
-        /* address */ *sec1.public_key_bytes(),
+        /* address */ sec1.public_key_bytes(),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ *sec2.public_key_bytes(),
+        /* address */ sec2.public_key_bytes(),
         /* voting right */ 0,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -46,7 +46,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec1.public_key_bytes(),
+        sec1.public_key_bytes(),
         &sec1,
     );
     assert!(v.verify(&committee).is_ok());
@@ -54,7 +54,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec2.public_key_bytes(),
+        sec2.public_key_bytes(),
         &sec2,
     );
     assert!(v.verify(&committee).is_err());
@@ -62,7 +62,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction,
-        *sec3.public_key_bytes(),
+        sec3.public_key_bytes(),
         &sec3,
     );
     assert!(v.verify(&committee).is_err());
@@ -70,7 +70,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         bad_transaction,
-        *sec1.public_key_bytes(),
+        sec1.public_key_bytes(),
         &sec1,
     );
     assert!(v.verify(&committee).is_err());
@@ -84,11 +84,11 @@ fn test_certificates() {
 
     let mut authorities = BTreeMap::new();
     authorities.insert(
-        /* address */ *sec1.public_key_bytes(),
+        /* address */ sec1.public_key_bytes(),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ *sec2.public_key_bytes(),
+        /* address */ sec2.public_key_bytes(),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -105,25 +105,28 @@ fn test_certificates() {
     let v1 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec1.public_key_bytes(),
+        sec1.public_key_bytes(),
         &sec1,
     );
     let v2 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec2.public_key_bytes(),
+        sec2.public_key_bytes(),
         &sec2,
     );
     let v3 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec3.public_key_bytes(),
+        sec3.public_key_bytes(),
         &sec3,
     );
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
-        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature)
+        .append(
+            v1.auth_sign_info.authority,
+            v1.auth_sign_info.signature.clone()
+        )
         .unwrap()
         .is_none());
     let mut c = builder
