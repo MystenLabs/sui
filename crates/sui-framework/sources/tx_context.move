@@ -128,4 +128,12 @@ module sui::tx_context {
     #[test_only]
     /// Test-only function for creating a new signer from `signer_address`.
     native fun new_signer_from_address(signer_address: address): signer;
-}
+
+    // Cost calibration functions
+    #[test_only]
+    public fun calibrate_derive_id(tx_hash: vector<u8>, ids_created: u64) {
+        derive_id(tx_hash, ids_created);
+    }
+    #[test_only]
+    public fun calibrate_derive_id_nop(_tx_hash: vector<u8>, _ids_created: u64) {
+    }}
