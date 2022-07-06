@@ -18,8 +18,6 @@ use tracing::{debug, instrument};
 
 use crate::authority::SuiDataStore;
 
-// TODO: read this from onchain source (e.g. SystemState)
-const STORAGE_GAS_PRICE: u64 = 1;
 pub struct InputObjects {
     objects: Vec<(InputObjectKind, Object)>,
 }
@@ -155,11 +153,17 @@ where
         let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
             object_id: gas_payment_id,
         })?;
-        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
+
+        //TODO: cache this storage_gas_price in memory
+        let storage_gas_price = store
+            .get_sui_system_state_object()?
+            .parameters
+            .storage_gas_price;
+
+        let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
         gas::check_gas_balance(&gas_object, gas_budget, gas_price)?;
-        // TODO: Pass in real computation gas unit price and storage gas unit price.
         let gas_status =
-            gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)?;
+            gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
         Ok(gas_status)
     }
 }
