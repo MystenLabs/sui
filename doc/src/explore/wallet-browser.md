@@ -130,3 +130,8 @@ The Sui Wallet Browser Extension lets you:
    ![Access settings](../../static/settings.png "Access wallet settings")
    *Access settings for the Sui Wallet Browser Extension*
 * Go to the [Sui Explorer](https://explorer.devnet.sui.io/) view of the current transaction by clicking the external link icon at the bottom right.
+
+## Contribute
+
+If you want to experiment with and contribute to the Sui Wallet Browser Extension, you can find its source and README at:
+https://github.com/MystenLabs/sui/tree/main/wallet 
