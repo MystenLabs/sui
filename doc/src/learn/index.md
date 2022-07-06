@@ -23,7 +23,7 @@ Find the latest updates to these contents in this section:
 * [Docker Compose](../build/fullnode.md#using-docker-compose) enables simple creation of Sui Fullnodes using [Docker](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme).
 * [Run a fullnode](../build/fullnode.md) in Sui to have your own local copy of full blockchain state, contribute to Sui, and qualify to be a potential validator.
 * [Programming with objects](../build/programming-with-objects/index.md) tutorial series offers detailed guidance on manipulating Sui objects, from creation and storage through wrapping and using child objects.
-* Sui [version 0.3.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.3.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
+* Sui [version 0.5.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.5.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
 * [Sui tokenomics](../learn/tokenomics/index.md) are now fully explained.
 
 For a complete view of all changes in the Sui `devnet` branch, see:
