@@ -76,25 +76,27 @@ impl JsonRpcServerBuilder {
         use_websocket: bool,
         prometheus_registry: &prometheus::Registry,
     ) -> anyhow::Result<Self> {
+        let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
+            Ok(value) => {
+                let owned_list: Vec<String> = value
+                    .split(',')
+                    .into_iter()
+                    .map(|s| s.into())
+                    .collect::<Vec<_>>();
+                AccessControlBuilder::default().set_allowed_origins(&owned_list)?
+            }
+            _ => AccessControlBuilder::default(),
+        }
+        .build();
+        info!(?acl);
+
         let server_builder = if use_websocket {
             ServerBuilder::WsBuilder(
                 WsServerBuilder::default()
+                    .set_access_control(acl)
                     .set_middleware(ApiMetrics::WebsocketMetrics(WebsocketMetrics {})),
             )
         } else {
-            let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
-                Ok(value) => {
-                    let owned_list: Vec<String> = value
-                        .split(',')
-                        .into_iter()
-                        .map(|s| s.into())
-                        .collect::<Vec<_>>();
-                    AccessControlBuilder::default().set_allowed_origins(&owned_list)?
-                }
-                _ => AccessControlBuilder::default(),
-            }
-            .build();
-            info!(?acl);
             ServerBuilder::HttpBuilder(
                 HttpServerBuilder::default()
                     .set_access_control(acl)
