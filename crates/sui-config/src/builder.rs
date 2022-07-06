@@ -9,7 +9,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use debug_ignore::DebugIgnore;
-use narwhal_config::{Authority, PrimaryAddresses, Stake, WorkerAddresses};
+use narwhal_config::{Authority, Epoch, PrimaryAddresses, Stake, WorkerAddresses};
 use rand::rngs::OsRng;
 use std::{
     collections::BTreeMap,
@@ -159,8 +159,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             })
             .collect::<BTreeMap<_, _>>();
         let narwhal_committee = DebugIgnore(Arc::new(narwhal_config::Committee {
-            authorities: ArcSwap::new(Arc::new(narwhal_committee)),
-            epoch: genesis.epoch(),
+            authorities: ArcSwap::from_pointee(narwhal_committee),
+            epoch: ArcSwap::from_pointee(genesis.epoch() as Epoch),
         }));
 
         let validator_configs = validators

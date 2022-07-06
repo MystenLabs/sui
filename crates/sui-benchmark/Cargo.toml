@@ -10,7 +10,7 @@ edition = "2021"
 rayon = "1.5.3"
 anyhow = { version = "1.0.57", features = ["backtrace"] }
 futures = "0.3.21"
-serde = { version = "1.0.137", features = ["derive"] }
+serde = { version = "1.0.138", features = ["derive"] }
 serde_json = "1.0.80"
 tempfile = "3.3.0"
 tokio = { version = "1.18.2", features = ["full"] }
@@ -31,7 +31,7 @@ sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "95999a9818091e382fb1c6016e68829f1dfc3127", features = ["address20"] }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "3cf68183b22acfe014118ef2713d5094159f2f4d", package = "node" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "fe7de29b59810d4515604af949cdcf1fb5a3720a", package = "node" }
 
 workspace-hack = { path = "../workspace-hack"}
 

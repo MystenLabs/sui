@@ -26,4 +26,9 @@ module sui::epoch_time_lock {
         let EpochTimeLock { epoch } = lock;
         assert!(tx_context::epoch(ctx) >= epoch, EEPOCH_STILL_LOCKED);
     }
+
+    /// Getter for the epoch number.
+    public fun epoch(lock: &EpochTimeLock): u64 {
+        lock.epoch
+    }
 }

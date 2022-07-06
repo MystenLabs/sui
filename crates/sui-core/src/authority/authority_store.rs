@@ -290,6 +290,8 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     /// Add a number of certificates to the pending transactions as well as the
     /// certificates structure if they are not already executed.
+    /// Certificates are optional, and if not provided, they will be eventually
+    /// downloaded in the execution driver.
     ///
     /// This function may be run concurrently: it increases atomically an internal index
     /// by the number of certificates passed, and then records the certificates and their
@@ -298,11 +300,11 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// the same certificate may be written twice (but that is OK since it is valid.)
     pub fn add_pending_certificates(
         &self,
-        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()> {
         let first_index = self
             .next_pending_seq
-            .fetch_add(certs.len() as u64, std::sync::atomic::Ordering::Relaxed);
+            .fetch_add(certs.len() as u64, Ordering::Relaxed);
 
         let batch = self.pending_execution.batch();
         let batch = batch.insert_batch(
@@ -314,7 +316,9 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         )?;
         let batch = batch.insert_batch(
             &self.certificates,
-            certs.iter().map(|(digest, cert)| (digest, cert)),
+            certs
+                .into_iter()
+                .filter_map(|(digest, cert_opt)| cert_opt.map(|cert| (digest, cert))),
         )?;
         batch.write()?;
 
@@ -1148,7 +1152,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
 
         // Schedule the certificate for execution
-        self.add_pending_certificates(vec![(transaction_digest, certificate.clone())])?;
+        self.add_pending_certificates(vec![(transaction_digest, Some(certificate.clone()))])?;
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.
 
@@ -1301,6 +1305,13 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(transaction)
     }
 
+    pub fn multi_get_certified_transaction(
+        &self,
+        transaction_digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CertifiedTransaction>>> {
+        Ok(self.certificates.multi_get(transaction_digests)?)
+    }
+
     pub fn insert_new_epoch_info(&self, epoch_info: EpochInfoLocals) -> SuiResult {
         self.epochs
             .insert(&epoch_info.committee.epoch(), &epoch_info)?;
@@ -1310,6 +1321,22 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn get_last_epoch_info(&self) -> SuiResult<EpochInfoLocals> {
         // unwrap safe since we guarantee to insert an epoch entry at genesis.
         Ok(self.epochs.iter().skip_to_last().next().unwrap().1)
+    }
+
+    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState>
+    where
+        S: Eq + Serialize + for<'de> Deserialize<'de>,
+    {
+        let sui_system_object = self
+            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
+            .expect("Sui System State object must always exist");
+        let move_object = sui_system_object
+            .data
+            .try_as_move()
+            .expect("Sui System State object must be a Move object");
+        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+            .expect("Sui System State object deserialization cannot fail");
+        Ok(result)
     }
 
     #[cfg(test)]

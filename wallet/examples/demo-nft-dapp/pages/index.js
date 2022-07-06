@@ -11,39 +11,63 @@ const DEFAULT_DESCRIPTION = 'An example NFT created by demo Dapp';
 const DEFAULT_URL =
     'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty';
 
+const useSuiWallet = () => {
+    const [wallet, setWallet] = useState(null);
+    const [loaded, setLoaded] = useState(false);
+
+    useEffect(() => {
+        const cb = () => {
+            setLoaded(true);
+            setWallet(window.suiWallet);
+        };
+        if (window.suiWallet) {
+            cb();
+            return;
+        }
+        window.addEventListener('load', cb);
+        return () => {
+            window.removeEventListener('load', cb);
+        };
+    }, []);
+    return wallet || (loaded ? false : null);
+};
+
 export default function Home() {
     const [walletInstalled, setWalletInstalled] = useState(null);
     const [connected, setConnected] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const [msgNotice, setMsgNotice] = useState(null);
     const [account, setAccount] = useState(null);
+    const suiWallet = useSuiWallet();
     useEffect(() => {
-        const suiWallet = window.suiWallet;
-        setWalletInstalled(!!suiWallet);
+        setWalletInstalled(suiWallet && true);
         if (suiWallet) {
             suiWallet.hasPermissions().then(setConnected, setMsgNotice);
         }
-    }, []);
+    }, [suiWallet]);
     const onConnectClick = useCallback(async () => {
+        if (!suiWallet) {
+            return;
+        }
         setConnecting(true);
         try {
-            await window.suiWallet.requestPermissions();
+            await suiWallet.requestPermissions();
             setConnected(true);
         } catch (e) {
             setMsgNotice(e);
         } finally {
             setConnecting(false);
         }
-    }, []);
+    }, [suiWallet]);
     useEffect(() => {
-        if (connected) {
-            window.suiWallet
+        if (connected && suiWallet) {
+            suiWallet
                 .getAccounts()
                 .then((accounts) => setAccount(accounts[0]), setMsgNotice);
         } else {
             setAccount(null);
         }
-    }, [connected]);
+    }, [connected, suiWallet]);
     useEffect(() => {
         let timeout;
         if (msgNotice) {
@@ -61,7 +85,7 @@ export default function Home() {
         const desc = (descRef.current?.value || DEFAULT_DESCRIPTION).trim();
         const url = (urlRef.current?.value || DEFAULT_URL).trim();
         try {
-            const result = await window.suiWallet.executeMoveCall({
+            const result = await suiWallet.executeMoveCall({
                 packageObjectId: '0x2',
                 module: 'devnet_nft',
                 function: 'mint',
@@ -85,7 +109,7 @@ export default function Home() {
         } finally {
             setCreating(false);
         }
-    }, []);
+    }, [suiWallet]);
     return (
         <div className={styles.container}>
             <Head>
