@@ -1,0 +1,8 @@
+@use '_variables/colors' as c-var;
+@use '_values/colors' as c-val;
+
+$values: (
+    c-var.$background: c-val.$gray-40,
+    c-var.$background-color: c-val.$gray-40,
+    c-var.$text-on-background: c-val.$gray-95,
+);
