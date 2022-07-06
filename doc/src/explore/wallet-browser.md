@@ -29,7 +29,7 @@ The following animated GIFs walk you through some of the most common workflows i
 
 ### Create NFT
 
-From a demo decentralized site, such as our demonstration [NFT dApp], you can connect to your wallet and create a custom NFT:
+From a demo decentralized site, such as our demonstration [NFT dApp](https://github.com/MystenLabs/sui/tree/main/wallet/examples/demo-nft-dapp) available [in the Cloud](http://sui-wallet-demo.s3-website-us-east-1.amazonaws.com/), you can connect to your wallet and create a custom NFT:
 
 ![Create NFTs](../../static/create_NFT.gif "Create NFTs")
 *Create NFTs in Sui Wallet by connecting to an external site*
