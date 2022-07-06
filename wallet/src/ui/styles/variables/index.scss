@@ -1,4 +1,5 @@
 @forward './colors' as colors-*;
+@forward './shadows' as shadows-*;
 
 @function use($variable) {
     @return var(#{$variable});

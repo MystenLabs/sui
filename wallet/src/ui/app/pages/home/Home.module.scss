@@ -1,58 +1,35 @@
-.logo {
-    width: 60px;
-}
+@use '_variables' as v;
 
 .container {
     display: flex;
     flex-flow: column nowrap;
-    width: 400px;
-    padding-bottom: 12px;
-    min-height: 450px;
-
-    :global(.is-popup) & {
-        min-height: 400px;
-        width: 350px;
-        padding-bottom: 0;
-    }
+    flex-grow: 1;
+    width: 100%;
+    max-height: 100%;
 }
 
-.outer-container {
+.header {
     display: flex;
     flex-flow: row nowrap;
     align-items: center;
-    padding: 8px 12px;
-    justify-content: space-between;
+    padding: 0 15px;
+    justify-content: center;
+    min-height: 52px;
 }
 
-.inner-container {
+.content {
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
-    background-color: #d1d9e1;
-    padding: 22px;
-    border-radius: 2px;
-    flex: 1;
-    box-shadow: 0 0 3px 0 #365876;
-
-    :global(.is-popup) & {
-        padding: 12px;
-        box-shadow: none;
-    }
+    background: v.use(v.$colors-main-content-background);
+    padding: 25px;
+    border-radius: 20px 20px 0 0;
+    flex-grow: 1;
+    box-shadow: v.use(v.$shadows-main-content);
+    overflow: auto;
+    max-height: 100%;
 }
 
-.network {
-    display: flex;
-    flex-flow: row nowrap;
-    align-items: center;
-    margin-left: 10px;
-}
-
-.network-icon {
-    font-size: 10px;
-}
-
-.network-name {
-    color: #000;
-    font-weight: 300;
-    margin-left: 4px;
+.logo {
+    color: v.use(v.$colors-text-on-background);
 }

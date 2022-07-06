@@ -11,7 +11,7 @@ import type { TxResultState } from '_redux/slices/txresults';
 
 import st from './Transactions.module.scss';
 
-function TransactionPage() {
+function TransactionsPage() {
     const dispatch = useAppDispatch();
     const txByAddress: TxResultState[] = useAppSelector(
         ({ txresults }) => txresults.latestTx
@@ -33,4 +33,4 @@ function TransactionPage() {
     ) : null;
 }
 
-export default memo(TransactionPage);
+export default memo(TransactionsPage);

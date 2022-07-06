@@ -24,6 +24,10 @@ body {
     flex-flow: column nowrap;
 }
 
+* {
+    box-sizing: border-box;
+}
+
 .btn {
     padding: 15px;
     border-radius: 4px;
