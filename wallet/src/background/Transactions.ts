@@ -6,14 +6,15 @@ import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
 
 import { Window } from './Window';
-
-import type { TransactionRequest } from '_payloads/transactions';
+import { Base64DataBuffer } from '@mysten/sui.js';
+import type { TransactionBytesRequest, TransactionRequest } from '_payloads/transactions';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
 
 type Transaction = TransactionRequest['tx'];
 
 const TX_STORE_KEY = 'transactions';
+const TX_BYTES_STORE_KEY = 'transactions-bytes';
 
 function openTxWindow(txRequestID: string) {
     return new Window(
@@ -73,6 +74,55 @@ class Transactions {
         );
     }
 
+    public async executeTransactionBytes(
+        txBytes: Base64DataBuffer,
+        connection: ContentScriptConnection
+    ) {
+        const txBytesRequest = this.createTransactionBytesRequest(
+            txBytes,
+            connection.origin,
+            connection.originFavIcon
+        );
+        await this.storeTransactionBytesRequest(txBytesRequest);
+        // TODO(ggao), need to pop up a different window?
+        const popUp = openTxWindow(txBytesRequest.id);
+        const popUpClose = (await popUp.show()).pipe(
+            take(1),
+            map<number, false>(() => false)
+        );
+        const txResponseMessage = this._txResponseMessages.pipe(
+            filter((msg) => msg.txID === txBytesRequest.id),
+            take(1)
+        );
+        return lastValueFrom(
+            race(popUpClose, txResponseMessage).pipe(
+                take(1),
+                map(async (response) => {
+                    if (response) {
+                        const { approved, txResult, tsResultError } = response;
+                        if (approved) {
+                            txBytesRequest.approved = approved;
+                            txBytesRequest.txResult = txResult;
+                            txBytesRequest.txResultError = tsResultError;
+                            await this.storeTransactionBytesRequest(txBytesRequest);
+                            if (tsResultError) {
+                                throw new Error(
+                                    `Serialized transaction failed with the following error. ${tsResultError}`
+                                );
+                            }
+                            if (!txResult) {
+                                throw new Error(`Serialized transaction result is empty`);
+                            }
+                            return txResult;
+                        }
+                    }
+                    await this.removeTransactionBytesRequest(txBytesRequest.id);
+                    throw new Error('Serialized transaction rejected from user');
+                })
+            )
+        );
+    }
+
     public async getTransactionRequests(): Promise<
         Record<string, TransactionRequest>
     > {
@@ -122,6 +172,47 @@ class Transactions {
         const txs = await this.getTransactionRequests();
         delete txs[txID];
         await this.saveTransactionRequests(txs);
+    }
+
+    private createTransactionBytesRequest(
+        txBytes: Base64DataBuffer,
+        origin: string,
+        originFavIcon?: string
+    ): TransactionBytesRequest {
+        return {
+            id: uuidV4(),
+            txBytes,
+            approved: null,
+            origin,
+            originFavIcon,
+            createdDate: new Date().toISOString(),
+        };
+    }
+
+    private async saveTransactionBytesRequests(
+        txBytesRequests: Record<string, TransactionBytesRequest>
+    ) {
+        await Browser.storage.local.set({ [TX_BYTES_STORE_KEY]: txBytesRequests });
+    }
+
+    public async getTransactionBytesRequests(): Promise<
+        Record<string, TransactionBytesRequest>
+    > {
+        return (await Browser.storage.local.get({ [TX_BYTES_STORE_KEY]: {} }))[
+            TX_BYTES_STORE_KEY
+        ];
+    }
+
+    private async storeTransactionBytesRequest(txBytesRequest: TransactionBytesRequest) {
+        const tx_bytes_requests = await this.getTransactionBytesRequests();
+        tx_bytes_requests[txBytesRequest.id] = txBytesRequest;
+        await this.saveTransactionBytesRequests(tx_bytes_requests);
+    }
+
+    private async removeTransactionBytesRequest(txBytesID: string) {
+        const tx_bytes_requests = await this.getTransactionBytesRequests();
+        delete tx_bytes_requests[txBytesID];
+        await this.saveTransactionBytesRequests(tx_bytes_requests);
     }
 }
 

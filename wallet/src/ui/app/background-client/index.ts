@@ -7,8 +7,10 @@ import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import { isGetTransactionBytesRequestsResponse } from '_payloads/transactions/ui/GetTransactionBytesRequestsResponse';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
+import { setTransactionBytesRequests } from '_redux/slices/transaction-bytes-requests';
 
 import type { SuiAddress, TransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
@@ -17,6 +19,7 @@ import type {
     PermissionResponse,
 } from '_payloads/permissions';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
+import type { GetTransactionBytesRequests } from '_payloads/transactions/ui/GetTransactionBytesRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
 
@@ -35,6 +38,7 @@ export class BackgroundClient {
         return Promise.all([
             this.sendGetPermissionRequests(),
             this.sendGetTransactionRequests(),
+            this.sendGetTransactionBytesRequest(),
         ]).then(() => undefined);
     }
 
@@ -92,6 +96,16 @@ export class BackgroundClient {
         );
     }
 
+    public async sendGetTransactionBytesRequest() {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<GetTransactionBytesRequests>({
+                    type: 'get-transaction-bytes-requests',
+                })
+            ).pipe(take(1))
+        );
+    }
+
     private handleIncomingMessage(msg: Message) {
         if (!this._initialized || !this._dispatch) {
             throw new Error(
@@ -103,6 +117,8 @@ export class BackgroundClient {
             this._dispatch(setPermissions(payload.permissions));
         } else if (isGetTransactionRequestsResponse(payload)) {
             this._dispatch(setTransactionRequests(payload.txRequests));
+        } else if (isGetTransactionBytesRequestsResponse(payload)) {
+            this._dispatch(setTransactionBytesRequests(payload.txBytesRequests));
         }
     }
 

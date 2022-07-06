@@ -8,7 +8,7 @@ import {
     isAcquirePermissionsRequest,
     isHasPermissionRequest,
 } from '_payloads/permissions';
-import { isExecuteTransactionRequest } from '_payloads/transactions';
+import { isExecuteTransactionRequest, isExecuteTransactionBytesRequest } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
 
@@ -102,6 +102,36 @@ export class ContentScriptConnection extends Connection {
                     const result = await Transactions.executeTransaction(
                         payload.transaction,
                         this
+                    );
+                    this.send(
+                        createMessage<ExecuteTransactionResponse>(
+                            { type: 'execute-transaction-response', result },
+                            msg.id
+                        )
+                    );
+                } catch (e) {
+                    this.sendError(
+                        {
+                            error: true,
+                            code: -1,
+                            message: (e as Error).message,
+                        },
+                        msg.id
+                    );
+                }
+            } else {
+                this.sendNotAllowedError(msg.id);
+            }
+        } else if (isExecuteTransactionBytesRequest(payload)) {
+            const allowed = await Permissions.hasPermissions(this.origin, [
+                'viewAccount',
+                'suggestTransactions',
+            ]);
+            if (allowed) {
+                try {
+                    const result = await Transactions.executeTransactionBytes(
+                        payload.transaction_bytes,
+                        this,
                     );
                     this.send(
                         createMessage<ExecuteTransactionResponse>(

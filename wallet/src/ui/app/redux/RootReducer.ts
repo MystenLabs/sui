@@ -7,6 +7,7 @@ import account from './slices/account';
 import app from './slices/app';
 import permissions from './slices/permissions';
 import suiObjects from './slices/sui-objects';
+import transactionBytesRequests from './slices/transaction-bytes-requests';
 import transactionRequests from './slices/transaction-requests';
 import transactions from './slices/transactions';
 import txresults from './slices/txresults';
@@ -19,6 +20,7 @@ const rootReducer = combineReducers({
     txresults,
     permissions,
     transactionRequests,
+    transactionBytesRequests,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

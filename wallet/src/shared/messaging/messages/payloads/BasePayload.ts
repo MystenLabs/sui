@@ -13,10 +13,13 @@ export type PayloadType =
     | 'has-permissions-response'
     | 'acquire-permissions-request'
     | 'acquire-permissions-response'
+    | 'execute-transaction-bytes-request'
     | 'execute-transaction-request'
     | 'execute-transaction-response'
     | 'get-transaction-requests'
     | 'get-transaction-requests-response'
+    | 'get-transaction-bytes-requests'
+    | 'get-transaction-bytes-requests-response'
     | 'transaction-request-response';
 
 export interface BasePayload {

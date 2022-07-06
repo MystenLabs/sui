@@ -8,6 +8,7 @@ import {
     isPermissionResponse,
 } from '_payloads/permissions';
 import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
+import { isGetTransactionBytesRequests } from '_payloads/transactions/ui/GetTransactionBytesRequests';
 import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
@@ -15,8 +16,9 @@ import Transactions from '_src/background/Transactions';
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { Permission, PermissionRequests } from '_payloads/permissions';
-import type { TransactionRequest } from '_payloads/transactions';
+import type { TransactionRequest, TransactionBytesRequest } from '_payloads/transactions';
 import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import type { GetTransactionBytesRequestsResponse } from '_payloads/transactions/ui/GetTransactionBytesRequestsResponse';
 
 export class UiConnection extends Connection {
     public static readonly CHANNEL: PortChannelName = 'sui_ui<->background';
@@ -33,6 +35,11 @@ export class UiConnection extends Connection {
         } else if (isTransactionRequestResponse(payload)) {
             Transactions.handleMessage(payload);
         } else if (isGetTransactionRequests(payload)) {
+            this.sendTransactionRequests(
+                Object.values(await Transactions.getTransactionRequests()),
+                id
+            );
+        } else if (isGetTransactionBytesRequests(payload)) {
             this.sendTransactionRequests(
                 Object.values(await Transactions.getTransactionRequests()),
                 id
@@ -61,6 +68,21 @@ export class UiConnection extends Connection {
                 {
                     type: 'get-transaction-requests-response',
                     txRequests,
+                },
+                requestID
+            )
+        );
+    }
+
+    private sendTransactionBytesRequests(
+        txBytesRequests: TransactionBytesRequest[],
+        requestID: string
+    ) {
+        this.send(
+            createMessage<GetTransactionBytesRequestsResponse>(
+                {
+                    type: 'get-transaction-bytes-requests-response',
+                    txBytesRequests,
                 },
                 requestID
             )

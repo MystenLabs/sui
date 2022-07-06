@@ -8,7 +8,7 @@ import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload } from '_payloads';
 import { ALL_PERMISSION_TYPES } from '_payloads/permissions';
 
-import type { SuiAddress, MoveCallTransaction } from '@mysten/sui.js';
+import type { Base64DataBuffer, SuiAddress, MoveCallTransaction } from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -22,6 +22,7 @@ import type {
 import type {
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
+    ExecuteTransactionBytesRequest,
 } from '_payloads/transactions';
 import type { Observable } from 'rxjs';
 
@@ -91,6 +92,16 @@ export class DAppInterface {
             this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
                 transaction,
+            }),
+            (response) => response.result
+        );
+    }
+
+    public executeSerializedMoveCall(transaction_bytes: Base64DataBuffer) {
+        return mapToPromise(
+            this.send<ExecuteTransactionBytesRequest, ExecuteTransactionResponse>({
+                type: 'execute-transaction-bytes-request',
+                transaction_bytes,
             }),
             (response) => response.result
         );
