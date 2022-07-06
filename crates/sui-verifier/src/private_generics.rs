@@ -20,6 +20,11 @@ use crate::{format_signature_token, verification_failure};
 /// For example, with `transfer::transfer<T>(...)`, either:
 /// - `T` must be a type declared in the current module or
 /// - `T` must have `store`
+///
+/// Similarly, `event::emit` is also "private" to the module. Unlike the `transfer` functions, there
+/// is no relaxation for `store`
+/// Concretely, with `event::emit<T>(...)`:
+/// - `T` must be a type declared in the current module
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     let view = &BinaryIndexedView::Module(module);
     // do not need to check the sui::transfer module itself
@@ -98,7 +103,7 @@ fn verify_private_transfer(
         // should be unreachable
         // these are private and the module itself is skipped
         "transfer_internal" | "delete_child_object_internal" => {
-            debug_assert!(false);
+            debug_assert!(false, "internal error. Unexpected private function");
             return Ok(());
         }
         // unknown function, so a bug in the implementation here
@@ -114,8 +119,7 @@ fn verify_private_transfer(
             .has_store();
         if !has_store && !is_defined_in_current_module(view, type_arg) {
             return Err(format!(
-                "Invalid call to '{}::transfer::{}'. \
-                Invalid transfer of object of type '{}'. \
+                "Invalid call to '{}::transfer::{}' on an object of type '{}'. \
                 The transferred object's type must be defined in the current module, \
                 or must have the 'store' type ability",
                 SUI_FRAMEWORK_ADDRESS,
@@ -145,7 +149,7 @@ fn verify_private_event_emit(
     for type_arg in type_arguments {
         if !is_defined_in_current_module(view, type_arg) {
             return Err(format!(
-                "Invalid call to '{}::event::{}'. Invalid event type '{}'. \
+                "Invalid call to '{}::event::{}' with an event type '{}'. \
                 The event's type must be defined in the current module",
                 SUI_FRAMEWORK_ADDRESS,
                 fident,
