@@ -6,8 +6,14 @@ use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
+<<<<<<< HEAD
 use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable};
 use crate::error::SuiResult;
+=======
+use crate::crypto::{
+    AuthoritySignInfo, AuthorityWeakQuorumSignInfo, PublicKey, Signable, SuiAuthoritySignature,
+};
+>>>>>>> f7077e07 (integrate narwhal crypto)
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
@@ -474,6 +480,7 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
+    use narwhal_crypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
     use std::collections::BTreeSet;
@@ -497,7 +504,7 @@ mod tests {
         let set = CheckpointContents::new(set.iter().cloned());
 
         let mut proposal =
-            SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
+            SignedCheckpointSummary::new(committee.epoch, 1, name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.verify(&committee, Some(&set)).is_ok());
@@ -554,7 +561,7 @@ mod tests {
             .map(|k| {
                 let name = k.public_key_bytes();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 
@@ -572,7 +579,7 @@ mod tests {
                 let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 

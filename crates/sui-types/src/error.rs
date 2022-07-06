@@ -76,6 +76,8 @@ pub enum SuiError {
         parent_id: ObjectID,
     },
 
+    #[error("Imported Keypair is not valid: {}", error)]
+    InvalidKeypair { error: String },
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },

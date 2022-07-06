@@ -228,6 +228,7 @@ impl Encoding for Hex {
         format!("0x{}", encode_bytes_hex(&data).to_lowercase())
     }
 }
+
 impl Encoding for Base64 {
     fn decode(s: &str) -> Result<Vec<u8>, anyhow::Error> {
         base64ct::Base64::decode_vec(s).map_err(|e| anyhow!(e))

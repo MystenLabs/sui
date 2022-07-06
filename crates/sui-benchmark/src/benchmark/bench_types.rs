@@ -41,7 +41,7 @@ pub struct Benchmark {
     /// Use Move orders
     #[clap(long, global = true)]
     pub use_native: bool,
-    #[clap(long, default_value = "2000", global = true)]
+    #[clap(long, default_value = "1", global = true)]
     pub batch_size: usize,
 
     #[clap(
@@ -90,7 +90,7 @@ pub enum RunningMode {
 pub enum MicroBenchmarkType {
     Throughput {
         /// Number of transactions to be sent in the benchmark
-        #[clap(long, default_value = "100000")]
+        #[clap(long, default_value = "10000")]
         num_transactions: usize,
     },
     Latency {

@@ -36,7 +36,7 @@ use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::{NarwhalKeypair, PublicKeyBytes, ToFromBytes};
 
 pub mod metrics;
 
@@ -125,6 +125,7 @@ impl SuiNode {
 
         let should_start_follower = is_node || config.enable_gossip;
 
+<<<<<<< HEAD
         let (gossip_handle, execute_driver_handle, checkpoint_process_handle) =
             if should_start_follower {
                 let mut net_config = mysten_network::config::Config::new();
@@ -160,6 +161,32 @@ impl SuiNode {
                         let client = NetworkAuthorityClient::new(channel);
                         authority_clients.insert(validator.public_key(), client);
                     }
+=======
+        let gossip_handle = if should_start_follower {
+            let mut net_config = mysten_network::config::Config::new();
+            net_config.connect_timeout = Some(Duration::from_secs(5));
+            net_config.request_timeout = Some(Duration::from_secs(5));
+            net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+
+            let mut authority_clients = BTreeMap::new();
+
+            let sui_system_state = state.get_sui_system_state_object().await?;
+
+            if config.enable_reconfig && sui_system_state.epoch > 0 {
+                // Create NetworkAuthorityClient with this epoch's network information
+                let epoch_validators = &sui_system_state.validators.active_validators;
+
+                for validator in epoch_validators {
+                    let net_addr: &[u8] = &validator.metadata.net_address.clone();
+                    let str_addr = std::str::from_utf8(net_addr)?;
+                    let address: Multiaddr = str_addr.parse()?;
+                    //let address = Multiaddr::try_from(net_addr)?;
+                    let channel = net_config.connect_lazy(&address)?;
+                    let client = NetworkAuthorityClient::new(channel);
+                    let name: &[u8] = &validator.metadata.name;
+                    let public_key_bytes = PublicKeyBytes::from_bytes(name)?;
+                    authority_clients.insert(public_key_bytes, client);
+>>>>>>> 6afefb91 (f)
                 }
                 let net = AuthorityAggregator::new(
                     state.clone_committee(),

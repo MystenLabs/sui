@@ -9,7 +9,7 @@ use std::str::FromStr;
 use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
-use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair};
+use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair, SuiAuthoritySignature};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,
@@ -300,19 +300,6 @@ fn test_signature_serde_not_human_readable() {
 }
 
 #[test]
-fn test_signature_serde_human_readable() {
-    let (_, key) = get_key_pair();
-    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
-    let serialized = serde_json::to_string(&sig).unwrap();
-    assert_eq!(
-        format!("\"{}\"", Base64::encode_string(sig.as_ref())),
-        serialized
-    );
-    let deserialized: AuthoritySignature = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(deserialized, sig);
-}
-
-#[test]
 fn test_object_id_from_empty_string() {
     assert!(ObjectID::try_from("".to_string()).is_err());
     assert!(ObjectID::from_str("").is_err());
@@ -355,7 +342,8 @@ fn derive_sample_address() -> (SuiAddress, KeyPair) {
         92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
         105, 254, 59, 163,
-    ]);
+    ])
+    .unwrap();
     (address, pub_key)
 }
 

@@ -23,7 +23,11 @@ use sui_network::{
     tonic,
 };
 
-use sui_types::{error::*, messages::*};
+use sui_types::{
+    crypto::{KeyPair, NarwhalKeypair},
+    error::*,
+    messages::*,
+};
 use tokio::{
     sync::mpsc::{channel, Sender},
     task::JoinHandle,
@@ -173,8 +177,17 @@ impl ValidatorService {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+<<<<<<< HEAD
         let consensus_keypair = config.key_pair().make_narwhal_keypair();
         let consensus_name = consensus_keypair.public().clone();
+=======
+        let consensus_keypair = config.key_pair().copy();
+<<<<<<< HEAD
+        let consensus_name = consensus_keypair.name.clone();
+>>>>>>> b1029574 (f)
+=======
+        let consensus_name = consensus_keypair.public().clone();
+>>>>>>> 6afefb91 (f)
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
             consensus_keypair,
