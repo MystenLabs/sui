@@ -35,6 +35,7 @@ module sui::NativesCalibrationTests {
         id: VersionedID,
     }
 
+
     // =================================================================
     // Natives in the `event` module
     // =================================================================
@@ -68,6 +69,7 @@ module sui::NativesCalibrationTests {
             trials = trials - 1;
         }
     }
+
 
     // =================================================================
     // Natives in the `transfer` module
@@ -165,8 +167,6 @@ module sui::NativesCalibrationTests {
     // TBD
 
 
-
-
     // =================================================================
     // Natives in the `id` module
     // =================================================================
@@ -196,8 +196,6 @@ module sui::NativesCalibrationTests {
             trials = trials - 1;
         }
     }
-
-
 
     // =================================================================
     // id::get_versioned_id
@@ -241,10 +239,6 @@ module sui::NativesCalibrationTests {
     }
 
 
-
-
-
-
     // =================================================================
     // Natives in the `tx_context` module
     // =================================================================
@@ -276,6 +270,7 @@ module sui::NativesCalibrationTests {
             trials = trials - 1;
         }
     }
+
 
     // =================================================================
     // These calibrate the `Pop` bytecode instruction because it is needed
