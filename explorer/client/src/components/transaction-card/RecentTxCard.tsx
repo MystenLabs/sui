@@ -6,6 +6,7 @@ import { useEffect, useState, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
+import TableCard from '../../components/table/TableCard';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import {
@@ -103,11 +104,70 @@ function LatestTxView({
     results: { loadState: string; latestTx: TxnData[] };
 }) {
     const [network] = useContext(NetworkContext);
+     const testTableData = {
+            data: results.latestTx.map((txn) => ({
+                date: `7s ago`,
+                transactionId: [
+                    {
+                        url: txn.txId,
+                        name: truncate(txn.txId, TRUNCATE_LENGTH),
+                        category: 'transactions',
+                        isLink: true,
+                        copy: false,
+                    },
+                ],
+                addresses: [
+                    {
+                        url: txn.From,
+                        name: truncate(txn.From, TRUNCATE_LENGTH),
+                        category: 'addresses',
+                        isLink: true,
+                        copy: false,
+                    },
+                    ...(txn.To ? [{
+                        url: txn.To,
+                        name: truncate(txn.To, TRUNCATE_LENGTH),
+                        category: 'addresses',
+                        isLink: true,
+                        copy: false,
+                    }] : [])
+                ],
+                txTypes: {
+                    txTypeName: txn.kind,
+                    status: txn.status,
+                },
+
+                gas: txn.txGas,
+            })),
+            columns: [
+                {
+                    headerLabel: 'Date',
+                    accessorKey: 'date',
+                },
+                {
+                    headerLabel: 'Type',
+                    accessorKey: 'txTypes',
+                },
+                {
+                    headerLabel: 'Transactions ID',
+                    accessorKey: 'transactionId',
+                },
+                {
+                    headerLabel: 'Addresses',
+                    accessorKey: 'addresses',
+                },
+                  {
+                    headerLabel: 'Gas',
+                    accessorKey: 'gas',
+                },
+            ],
+        }
     return (
         <div className={styles.txlatestesults}>
             <div className={styles.txcardgrid}>
                 <h3>Latest Transactions on {network}</h3>
             </div>
+            <TableCard tabledata={testTableData} />
             <div className={styles.transactioncard}>
                 <div>
                     <div

@@ -1,0 +1,23 @@
+.content{
+    @apply container overflow-x-auto   text-left text-gray-500;
+}
+.table{
+    @apply w-full text-sm text-left text-gray-500 dark:text-gray-400;
+}
+
+.table th {
+    @apply text-left font-normal uppercase text-gray-700;
+}
+.table tbody tr{
+    @apply space-y-10 mt-10;
+}
+
+.addresses{
+    @apply flex flex-wrap;
+}
+.addresses svg {
+    @apply mr-1;
+}
+.tableSpacing{
+    @apply pb-2 pt-2;
+}
