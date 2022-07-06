@@ -76,8 +76,11 @@ The Sui Wallet Browser Extension lets you:
    ![Transfer NFTs](../../static/NFT-transfer.png "Send tokens")
    *Send NFTs with the Sui Wallet Browser Extension*
 * View _recent transactions_ by clicking the **Arrow** icon at the top:
-   ![View recent transactions](../../static/NFT-transfer.png "View recent transactions")
+   ![View recent transactions](../../static/txn-history.png "View recent transactions")
    *View recent transactions in the Sui Wallet Browser Extension*
+* Sign transactions through a framework connecting Sui wallet to other DApps:
+   ![Sign transactions](../../static/txn-signing.png "View recent transactions")
+   *Sign transactions in the Sui Wallet Browser Extension*
 * From the **Settings (gear)** menu, you may:
     * View your account on the Sui Explorer
     * Mint Demo NFTs
