@@ -113,7 +113,7 @@ The Sui Wallet Browser Extension lets you:
 * Send coins by clicking **Send** in the _Tokens_ tab:
    ![Send tokens](../../static/token-transfer.png "Send tokens")
    *Send tokens with the Sui Wallet Browser Extension*
-* Transfer NFTs by clicking **Send NFT** on the _NFT_ tab:
+* Transfer NFTs by clicking **Send** on the _NFT_ tab:
    ![Transfer NFTs](../../static/NFT-transfer.png "Send tokens")
    *Send NFTs with the Sui Wallet Browser Extension*
 * View _recent transactions_ by clicking the **Arrow** icon at the top:
