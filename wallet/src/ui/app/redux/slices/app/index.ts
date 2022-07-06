@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import Browser from 'webextension-polyfill';
 
 import { AppType } from './AppType';
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
@@ -34,8 +35,21 @@ export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
         dispatch(setNetworkSelector(true));
         dispatch(getTransactionsByAddress());
         dispatch(fetchAllOwnedObjects());
+        // Set persistent network state
+        Browser.storage.local.set({ sui_Env: networkName });
     }
 );
+
+export const loadNetworkFromStorage = createAsyncThunk<
+    void,
+    void,
+    AppThunkConfig
+>('loadNetworkFromStorage', async (_, { dispatch }) => {
+    const result = await Browser.storage.local.get(['sui_Env']);
+    if (result.sui_Env) {
+        await dispatch(changeRPCNetwork(result.sui_Env));
+    }
+});
 
 const slice = createSlice({
     name: 'app',

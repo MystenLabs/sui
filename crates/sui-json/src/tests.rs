@@ -291,7 +291,9 @@ fn test_basic_args_linter_pure_args() {
 fn test_basic_args_linter_top_level() {
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/nfts");
-    let compiled_modules = sui_framework::build_and_verify_user_package(&path).unwrap();
+    let compiled_modules =
+        sui_framework::build_and_verify_package(&path, move_package::BuildConfig::default())
+            .unwrap();
     let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
     let example_package = example_package.data.try_as_package().unwrap();
 

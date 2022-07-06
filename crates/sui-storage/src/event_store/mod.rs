@@ -12,19 +12,24 @@
 //!
 
 use async_trait::async_trait;
+use enum_dispatch::enum_dispatch;
+use futures::prelude::stream::BoxStream;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
 use serde_json::Value;
 use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::error::SuiError;
 use sui_types::event::{EventEnvelope, EventType};
+use tokio_stream::StreamExt;
 
 pub mod sql;
+pub use sql::SqlEventStore;
 
 use flexstr::SharedStr;
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredEvent {
     /// UTC timestamp in milliseconds
     timestamp: u64,
@@ -57,7 +62,7 @@ pub struct StoredEvent {
 /// Enum for different types of values returnable from events in the EventStore
 // This is distinct from MoveValue because we want to explicitly represent (and translate)
 // blobs and strings, allowing us to use more efficient representations.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EventValue {
     Move(MoveValue),
     /// Efficient string representation, no allocation for small strings
@@ -72,23 +77,24 @@ pub enum EventValue {
 /// Thus, all different kinds of events fit on a timeline, and one should be able to query for
 /// different types of events that happen over that timeline.
 #[async_trait]
-trait EventStore {
-    type EventIt: IntoIterator<Item = StoredEvent>;
-
+#[enum_dispatch]
+pub trait EventStore {
     /// Adds events to the EventStore.
-    /// Semantics: events are appended, no deduplication is done.
+    /// Semantics: events are appended.  The sequence number must be nondecreasing - EventEnvelopes
+    /// which have sequence numbers below the current one will be skipped.  This feature
+    /// is intended for deduplication.
     async fn add_events(
         &self,
         events: &[EventEnvelope],
         checkpoint_num: u64,
-    ) -> Result<(), EventStoreError>;
+    ) -> Result<(), SuiError>;
 
     /// Queries for events emitted by a given transaction, returned in order emitted
     /// NOTE: Not all events come from transactions
     async fn events_for_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Queries for all events of a certain EventType within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in descending time.
@@ -98,7 +104,7 @@ trait EventStore {
         end_time: u64,
         event_type: EventType,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Generic event iteration bounded by time.  Return in ingestion order.
     /// start_time is inclusive and end_time is exclusive.
@@ -107,16 +113,15 @@ trait EventStore {
         start_time: u64,
         end_time: u64,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Generic event iteration bounded by checkpoint number.  Return in ingestion order.
     /// Checkpoint numbers are inclusive on both ends.
-    async fn events_by_checkpoint(
+    fn events_by_checkpoint(
         &self,
         start_checkpoint: u64,
         end_checkpoint: u64,
-        limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<StreamedResult, SuiError>;
 
     /// Queries all Move events belonging to a certain Module ID within a given time window.
     /// Will return at most limit of the most recent events within the window, sorted in descending time.
@@ -126,18 +131,38 @@ trait EventStore {
         end_time: u64,
         module: ModuleId,
         limit: usize,
-    ) -> Result<Self::EventIt, EventStoreError>;
+    ) -> Result<Vec<StoredEvent>, SuiError>;
 }
 
-#[derive(Debug)]
-pub enum EventStoreError {
-    GenericError(Box<dyn std::error::Error>),
-    SqlError(sqlx::Error),
-    LimitTooHigh(usize),
+/// EventStoreType contains different implementations of EventStores, but implements the EventStore trait.
+/// It allows fast inlineable static calls without needing generics.
+#[enum_dispatch(EventStore)]
+pub enum EventStoreType {
+    SqlEventStore,
 }
 
-impl From<sqlx::Error> for EventStoreError {
-    fn from(err: sqlx::Error) -> Self {
-        EventStoreError::SqlError(err)
+/// A wrapper around streaming results which makes them easier to deal with
+// TODO: make it generic for non events
+pub struct StreamedResult<'s> {
+    inner: BoxStream<'s, Result<StoredEvent, SuiError>>,
+}
+
+impl<'s> StreamedResult<'s> {
+    pub fn new(stream: BoxStream<'s, Result<StoredEvent, SuiError>>) -> Self {
+        Self { inner: stream }
+    }
+
+    /// Pulls out a chunk of up to max_items items
+    /// NOTE: if there are no more items in the stream, then empty chunk is returned
+    pub async fn next_chunk(&mut self, max_items: usize) -> Result<Vec<StoredEvent>, SuiError> {
+        let mut items = Vec::new();
+        while let Some(res) = self.inner.next().await {
+            match res {
+                Err(e) => return Err(e),
+                Ok(event) if items.len() < max_items => items.push(event),
+                _ => break,
+            }
+        }
+        Ok(items)
     }
 }

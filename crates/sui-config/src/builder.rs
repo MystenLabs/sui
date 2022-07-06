@@ -7,12 +7,12 @@ use crate::{
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
+use arc_swap::ArcSwap;
 use debug_ignore::DebugIgnore;
-use narwhal_config::{
-    Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
-};
+use narwhal_config::{Authority, Epoch, PrimaryAddresses, Stake, WorkerAddresses};
 use rand::rngs::OsRng;
 use std::{
+    collections::BTreeMap,
     num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
@@ -157,10 +157,11 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
                 (name, authority)
             })
-            .collect();
-        let narwhal_committee = DebugIgnore(ConsensusCommittee {
-            authorities: narwhal_committee,
-        });
+            .collect::<BTreeMap<_, _>>();
+        let narwhal_committee = DebugIgnore(Arc::new(narwhal_config::Committee {
+            authorities: ArcSwap::from_pointee(narwhal_committee),
+            epoch: ArcSwap::from_pointee(genesis.epoch() as Epoch),
+        }));
 
         let validator_configs = validators
             .into_iter()
@@ -189,9 +190,11 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
                     json_rpc_address: utils::available_local_socket_address(),
+                    websocket_address: None,
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_gossip: true,
+                    enable_reconfig: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })

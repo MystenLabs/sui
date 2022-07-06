@@ -121,6 +121,7 @@ MoveObject:
   STRUCT:
     - type_:
         TYPENAME: StructTag
+    - has_public_transfer: BOOL
     - contents: BYTES
 MovePackage:
   STRUCT:
@@ -235,9 +236,9 @@ SignedBatch:
 SingleTransactionKind:
   ENUM:
     0:
-      TransferCoin:
+      TransferObject:
         NEWTYPE:
-          TYPENAME: TransferCoin
+          TYPENAME: TransferObject
     1:
       Publish:
         NEWTYPE:
@@ -285,7 +286,7 @@ TransactionKind:
         NEWTYPE:
           SEQ:
             TYPENAME: SingleTransactionKind
-TransferCoin:
+TransferObject:
   STRUCT:
     - recipient:
         TYPENAME: SuiAddress

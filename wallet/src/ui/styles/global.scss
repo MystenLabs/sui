@@ -29,6 +29,10 @@ body {
     cursor: pointer;
     color: black;
 
+    &.link {
+        background-color: transparent;
+    }
+
     &:visited,
     &:active {
         color: inherit;

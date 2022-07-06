@@ -31,7 +31,7 @@ impl NetworkConfig {
     }
 
     pub fn committee(&self) -> Committee {
-        self.genesis.committee()
+        self.genesis.committee().unwrap()
     }
 
     pub fn into_validator_configs(self) -> Vec<NodeConfig> {
@@ -68,9 +68,11 @@ impl NetworkConfig {
             network_address: utils::new_network_address(),
             metrics_address: utils::available_local_socket_address(),
             json_rpc_address: utils::available_local_socket_address(),
+            websocket_address: Some(utils::available_local_socket_address()),
             consensus_config: None,
             enable_event_processing: true,
             enable_gossip: true,
+            enable_reconfig: false,
             genesis: validator_config.genesis.clone(),
         }
     }

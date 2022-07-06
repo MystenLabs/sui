@@ -44,7 +44,7 @@ use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority_client::AuthorityAPI, gateway_state::GatewayMetrics,
 };
 use tokio::time::Instant;
 
@@ -110,6 +110,7 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
+    pub gateway_metrics: GatewayMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -117,15 +118,15 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         follower_store: Arc<FollowerStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
+        gateway_metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
                 committee
-                    .voting_rights
-                    .iter()
-                    .map(|(name, _)| (*name, AuthorityHealth::default()))
+                    .names()
+                    .map(|name| (*name, AuthorityHealth::default()))
                     .collect(),
             )),
             state: authority,
@@ -133,17 +134,25 @@ impl<A> ActiveAuthority<A> {
             net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
                 committee,
                 authority_clients,
+                gateway_metrics.clone(),
             ))),
+            gateway_metrics,
         })
     }
 
     pub fn new_with_ephemeral_follower_store(
         authority: Arc<AuthorityState>,
         authority_clients: BTreeMap<AuthorityName, A>,
+        gateway_metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
         let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
-        Self::new(authority, follower_store, authority_clients)
+        Self::new(
+            authority,
+            follower_store,
+            authority_clients,
+            gateway_metrics,
+        )
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -199,6 +208,7 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
+            gateway_metrics: self.gateway_metrics.clone(),
         }
     }
 }
@@ -234,7 +244,7 @@ where
         // Number of tasks at most "degree" and no more than committee - 1
         // (validators do not follow themselves for gossip)
         let committee = self.state.committee.load().deref().clone();
-        let target_num_tasks = usize::min(committee.voting_rights.len() - 1, degree);
+        let target_num_tasks = usize::min(committee.num_members() - 1, degree);
 
         tokio::task::spawn(async move {
             gossip_process(&self, target_num_tasks).await;
@@ -249,7 +259,7 @@ where
         // nodes follow all validators to ensure they can eventually determine
         // finality of certs. We need to follow 2f+1 _honest_ validators to
         // eventually find finality, therefore we must follow all validators.
-        let target_num_tasks = committee.voting_rights.len();
+        let target_num_tasks = committee.num_members();
 
         tokio::task::spawn(async move {
             node_sync_process(&self, target_num_tasks, node_sync_store).await;

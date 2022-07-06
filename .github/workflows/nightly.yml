@@ -3,6 +3,7 @@ name: nightly
 on:
   schedule:
     - cron: '0 0 * * *'  # every day at midnight
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -89,3 +90,32 @@ jobs:
           cargo hakari disable
           cargo hakari remove-deps -y
           RUSTC_BOOTSTRAP=1 cargo udeps
+
+  report-status:
+    name: Report Status
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [beta, release, cargo-udeps]
+    steps:
+      - uses: technote-space/workflow-conclusion-action@v3
+
+      - name: Post to slack
+        uses: slackapi/slack-github-action@v1.19.0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
+        with:
+          channel-id: 'build-failures-sui'
+          payload: |
+            {
+              "text": "Workflow ${{ github.workflow }} failed\nLogs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Workflow ${{ github.workflow }} failed\nLogs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }

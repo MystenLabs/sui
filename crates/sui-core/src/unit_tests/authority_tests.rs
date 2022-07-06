@@ -203,7 +203,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, 10);
-        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
@@ -1345,6 +1345,7 @@ async fn test_genesis_sui_sysmtem_state_object() {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
     let move_object = sui_system_object.data.try_as_move().unwrap();
     let _sui_system_state = bcs::from_bytes::<SuiSystemState>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemState::type_());
@@ -1570,7 +1571,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     // Create a random directory to store the DB
 
@@ -1592,8 +1593,9 @@ pub async fn init_state() -> AuthorityState {
         store,
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
+        &prometheus::Registry::new(),
     )
     .await
 }
@@ -1790,7 +1792,7 @@ async fn shared_object() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
-        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
 

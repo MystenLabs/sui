@@ -20,5 +20,3 @@ export * from './signers/signer-with-provider';
 
 export * from './types';
 export * from './index.guard';
-
-export * as BCS from './bcs';

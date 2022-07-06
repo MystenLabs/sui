@@ -16,13 +16,20 @@ const NetworkSelector = () => {
     const dispatch = useAppDispatch();
     const netWorks = useMemo(
         () =>
-            Object.keys(API_ENV).map((itm) => ({
-                style: {
-                    color: API_ENV_TO_INFO[itm as keyof typeof API_ENV].color,
-                },
-                ...API_ENV_TO_INFO[itm as keyof typeof API_ENV],
-                networkName: itm,
-            })),
+            Object.keys(API_ENV)
+                .filter(
+                    (env) =>
+                        process.env.SHOW_STAGING !== 'false' ||
+                        env !== API_ENV.staging
+                )
+                .map((itm) => ({
+                    style: {
+                        color: API_ENV_TO_INFO[itm as keyof typeof API_ENV]
+                            .color,
+                    },
+                    ...API_ENV_TO_INFO[itm as keyof typeof API_ENV],
+                    networkName: itm,
+                })),
         []
     );
 

@@ -16,7 +16,7 @@
 }
 
 .txid {
-    @apply col-span-5;
+    @apply col-span-3;
 }
 
 .txadd {
@@ -24,12 +24,9 @@
 }
 
 .txtype,
-.txstatus {
+.txstatus,
+.txage {
     @apply col-span-2;
-}
-
-.txadd a {
-    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
 }
 
 .failure {

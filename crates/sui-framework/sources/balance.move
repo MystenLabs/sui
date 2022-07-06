@@ -1,18 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// A storable handler for `Coin` balances.
-/// Allows separation of the transferable `Coin` type and the storable
-/// `Balance` eliminating the need to create new IDs for each application
-/// that needs to hold coins.
+/// A storable handler for Balances in general. Is used in the `Coin`
+/// module to allow balance operations and can be used to implement
+/// custom coins with `Supply` and `Balance`s.
 module sui::balance {
-    friend sui::coin;
-    friend sui::sui_system;
-
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
+
+    /// For when an overflow is happening on Supply operations.
+    const EOverflow: u64 = 1;
+
     /// For when trying to withdraw more than there is.
-    const ENotEnough: u64 = 0;
+    const ENotEnough: u64 = 2;
+
+    /// A Supply of T. Used for minting and burning.
+    /// Wrapped into a `TreasuryCap` in the `Coin` module.
+    struct Supply<phantom T> has store {
+        value: u64
+    }
 
     /// Storable balance - an inner struct of a Coin type.
     /// Can be used to store coins which don't need to have the
@@ -27,15 +33,41 @@ module sui::balance {
         self.value
     }
 
+    /// Get the `Supply` value.
+    public fun supply_value<T>(supply: &Supply<T>): u64 {
+        supply.value
+    }
+
+    /// Create a new supply for type T.
+    public fun create_supply<T: drop>(_witness: T): Supply<T> {
+        Supply { value: 0 }
+    }
+
+    /// Increase supply by `value` and create a new `Balance<T>` with this value.
+    public fun increase_supply<T>(self: &mut Supply<T>, value: u64): Balance<T> {
+        assert!(value < (18446744073709551615u64 - self.value), EOverflow);
+        self.value = self.value + value;
+        Balance { value }
+    }
+
+    /// Burn a Balance<T> and decrease Supply<T>.
+    public fun decrease_supply<T>(self: &mut Supply<T>, balance: Balance<T>): u64 {
+        let Balance { value } = balance;
+        assert!(self.value >= value, EOverflow);
+        self.value = self.value - value;
+        value
+    }
+
     /// Create a zero `Balance` for type `T`.
     public fun zero<T>(): Balance<T> {
         Balance { value: 0 }
     }
 
     /// Join two balances together.
-    public fun join<T>(self: &mut Balance<T>, balance: Balance<T>) {
+    public fun join<T>(self: &mut Balance<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
         self.value = self.value + value;
+        value
     }
 
     /// Split a `Balance` and take a sub balance from it.
@@ -51,29 +83,17 @@ module sui::balance {
         let Balance { value: _ } = balance;
     }
 
-    /// Can only be called by sui::coin.
-    /// Create a `Balance` with a predefined value; required for minting new `Coin`s.
-    public(friend) fun create_with_value<T>(value: u64): Balance<T> {
-        Balance { value }
-    }
-
-    /// Can only be called by sui::coin.
-    /// Destroy a `Balance` returning its value. Required for burning `Coin`s
-    public(friend) fun destroy<T>(self: Balance<T>): u64 {
-        let Balance { value } = self;
-        value
-    }
-
     #[test_only]
     /// Create a `Balance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): Balance<T> {
-        create_with_value(value)
+        Balance { value }
     }
 
     #[test_only]
     /// Destroy a `Balance` with any value in it for testing purposes.
     public fun destroy_for_testing<T>(self: Balance<T>): u64 {
-        destroy(self)
+        let Balance { value } = self;
+        value
     }
 }
 

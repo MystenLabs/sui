@@ -5,7 +5,7 @@ import {
     getTransactionDigest,
     getTransactions,
     getTransactionKindName,
-    getTransferCoinTransaction,
+    getTransferObjectTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
 } from '@mysten/sui.js';
@@ -65,14 +65,14 @@ export const getTransactionsByAddress = createAsyncThunk<
         }
         // Get all transactions txId for address
         const transactions: GetTxnDigestsResponse = (
-            await api.instance.getTransactionsForAddress(address)
+            await api.instance.fullNode.getTransactionsForAddress(address)
         ).filter((tx) => tx);
 
         if (!transactions || !transactions.length) {
             return [];
         }
         //getTransactionWithEffectsBatch
-        const resp = await api.instance
+        const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
             .then((txEffs: TransactionEffectsResponse[]) => {
                 return (
@@ -92,7 +92,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
                             const recipient =
-                                getTransferCoinTransaction(txn)?.recipient;
+                                getTransferObjectTransaction(txn)?.recipient;
 
                             return {
                                 seq,

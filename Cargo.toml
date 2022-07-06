@@ -5,6 +5,7 @@ members = [
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
+    "crates/sui-benchmark",
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",

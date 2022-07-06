@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { DappTxApprovalPage } from './pages/dapp-tx-approval';
 import HomePage from './pages/home';
 import NftsPage from './pages/home/nfts';
 import SettingsPage from './pages/home/settings';
@@ -14,16 +15,20 @@ import BackupPage from './pages/initialize/backup';
 import CreatePage from './pages/initialize/create';
 import ImportPage from './pages/initialize/import';
 import SelectPage from './pages/initialize/select';
+import SiteConnectPage from './pages/site-connect';
 import TransactionDetailsPage from './pages/transaction-details';
 import TransferCoinPage from './pages/transfer-coin';
+import TransferNFTPage from './pages/transfer-nft';
 import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { loadAccountFromStorage } from '_redux/slices/account';
+import { loadNetworkFromStorage } from '_redux/slices/app';
 
 const App = () => {
     const dispatch = useAppDispatch();
     useEffect(() => {
+        dispatch(loadNetworkFromStorage());
         dispatch(loadAccountFromStorage());
     }, [dispatch]);
     const isPopup = useAppSelector(
@@ -44,6 +49,7 @@ const App = () => {
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
+                <Route path="send-nft" element={<TransferNFTPage />} />
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
@@ -56,6 +62,8 @@ const App = () => {
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
             </Route>
+            <Route path="/connect/:requestID" element={<SiteConnectPage />} />
+            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
             <Route
                 path="*"
                 element={<Navigate to="/tokens" replace={true} />}

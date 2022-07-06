@@ -201,16 +201,8 @@ module sui::test_scenario {
             sender,
             last_tx_start_index(scenario)
         );
-        let object_opt: Option<T> = find_object_by_id_in_inventory(inventory, &id);
-
-        let objects = if (option::is_some(&object_opt)) {
-            let object = option::extract(&mut object_opt);
-            vector::singleton(object)
-        } else {
-            vector[]
-        };
-        option::destroy_none(object_opt);
-        remove_unique_object_from_inventory(scenario, objects)
+        let object_opt = find_object_by_id_in_inventory(inventory, &id);
+        remove_unique_object_from_inventory(scenario, option::to_vec(object_opt))
     }
 
     /// This function tells you whether calling `take_owned_by_id` would succeed.
@@ -244,14 +236,7 @@ module sui::test_scenario {
             last_tx_start_index(scenario),
         );
         let child_object_opt = find_object_by_id_in_inventory(objects, &child_id);
-        let child_objects = if (option::is_some(&child_object_opt)) {
-            let child_object = option::extract(&mut child_object_opt);
-            vector::singleton(child_object)
-        } else {
-            vector[]
-        };
-        option::destroy_none(child_object_opt);
-        remove_unique_object_from_inventory(scenario, child_objects)
+        remove_unique_object_from_inventory(scenario, option::to_vec(child_object_opt))
     }
 
     /// Return `t` to the global object pool maintained by `scenario`.

@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::ident_str;
+use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::authority::AuthorityTemporaryStore;
@@ -19,7 +21,7 @@ use sui_types::{
     gas::{self, SuiGasStatus},
     messages::{
         CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
-        TransactionData, TransactionEffects, TransferCoin, TransferSui,
+        TransactionData, TransactionEffects, TransferObject, TransferSui,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
@@ -115,7 +117,7 @@ fn execute_transaction<S: BackingPackageStore>(
         // once across single tx, we should be able to run them in parallel.
         for single_tx in transaction_data.kind.into_single_transactions() {
             result = match single_tx {
-                SingleTransactionKind::TransferCoin(TransferCoin {
+                SingleTransactionKind::TransferObject(TransferObject {
                     recipient,
                     object_ref,
                 }) => {
@@ -125,7 +127,7 @@ fn execute_transaction<S: BackingPackageStore>(
                         .get(&object_ref.0)
                         .unwrap()
                         .clone();
-                    transfer_coin(temporary_store, object, recipient)
+                    transfer_object(temporary_store, object, tx_ctx.sender(), recipient)
                 }
                 SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
                     let gas_object = temporary_store
@@ -239,16 +241,20 @@ fn execute_transaction<S: BackingPackageStore>(
     (cost_summary, result)
 }
 
-fn transfer_coin<S>(
+fn transfer_object<S>(
     temporary_store: &mut AuthorityTemporaryStore<S>,
     mut object: Object,
+    sender: SuiAddress,
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
     object.transfer_and_increment_version(recipient)?;
     temporary_store.log_event(Event::TransferObject {
+        package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+        transaction_module: Identifier::from(ident_str!("native")),
+        sender,
+        recipient: Owner::AddressOwner(recipient),
         object_id: object.id(),
         version: object.version(),
-        destination_addr: recipient,
         type_: TransferType::Coin,
     });
     temporary_store.write_object(object);
@@ -287,8 +293,7 @@ fn transfer_sui<S>(
 
         // Creat a new gas coin with the amount.
         let new_object = Object::new_move(
-            MoveObject::new(
-                GasCoin::type_(),
+            MoveObject::new_gas_coin(
                 bcs::to_bytes(&GasCoin::new(
                     tx_ctx.fresh_id(),
                     OBJECT_START_VERSION,

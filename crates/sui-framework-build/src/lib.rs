@@ -9,11 +9,8 @@ use std::{collections::HashSet, path::Path};
 use sui_types::error::{SuiError, SuiResult};
 use sui_verifier::verifier as sui_bytecode_verifier;
 
-pub fn build_sui_framework_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
-    let modules = build_framework(lib_dir)?;
-    verify_modules(&modules)?;
-    Ok(modules)
-}
+const SUI_PACKAGE_NAME: &str = "Sui";
+const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";
 
 pub fn build_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     let denylist = vec![
@@ -23,7 +20,8 @@ pub fn build_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule
         #[cfg(not(test))]
         ident_str!("debug").to_owned(),
     ];
-    let modules: Vec<CompiledModule> = build_framework(lib_dir)?
+    let build_config = BuildConfig::default();
+    let modules: Vec<CompiledModule> = build_move_package(lib_dir, build_config)?
         .into_iter()
         .filter(|m| !denylist.contains(&m.self_id().name().to_owned()))
         .collect();
@@ -43,22 +41,11 @@ pub fn verify_modules(modules: &[CompiledModule]) -> SuiResult {
     Ok(())
     // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
 }
-
-pub fn build_framework(framework_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
-    let build_config = BuildConfig {
-        dev_mode: false,
-        ..Default::default()
-    };
-    build_move_package(framework_dir, build_config, true)
-}
-
 /// Given a `path` and a `build_config`, build the package in that path.
-/// If we are building the Sui framework, `is_framework` will be true;
-/// Otherwise `is_framework` should be false (e.g. calling from client).
+/// If we are building the Sui framework, we skip the check that the addresses should be 0
 pub fn build_move_package(
     path: &Path,
     build_config: BuildConfig,
-    is_framework: bool,
 ) -> SuiResult<Vec<CompiledModule>> {
     match build_config.compile_package_no_exit(path, &mut Vec::new()) {
         Err(error) => Err(SuiError::ModuleBuildFailure {
@@ -66,6 +53,9 @@ pub fn build_move_package(
         }),
         Ok(package) => {
             let compiled_modules = package.root_modules_map();
+            let package_name = package.compiled_package_info.package_name.as_str();
+            let is_framework =
+                package_name == SUI_PACKAGE_NAME || package_name == MOVE_STDLIB_PACKAGE_NAME;
             if !is_framework {
                 if let Some(m) = compiled_modules
                     .iter_modules()
