@@ -13,7 +13,7 @@ use ed25519_dalek::Verifier;
 use narwhal_crypto::ed25519::{
     Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
 };
-use narwhal_crypto::traits::{KeyPair as NarwhalKeypair, SigningKey, ToFromBytes};
+use narwhal_crypto::traits::{KeyPair as NarwhalKeypair, SigningKey, ToFromBytes, Authenticator};
 use rand::rngs::OsRng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,10 @@ use signature::Signature as NativeSignature;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
+// Question: Should we change this to newtype?
+
 pub type KeyPair = Ed25519KeyPair;
+
 pub type PublicKey = Ed25519PublicKey;
 pub type PrivateKey = Ed25519PrivateKey;
 
@@ -365,22 +368,23 @@ pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
 pub struct EmptySignInfo {}
 impl AuthoritySignInfoTrait for EmptySignInfo {}
 
-#[derive(Clone, Debug, Eq, Serialize, Deserialize)]
-pub struct AuthoritySignInfo {
+#[derive(Clone, Debug, Eq, Serialize)]
+pub struct AuthoritySignInfo<S: Authenticator - DeserializedOwned>
+{
     pub epoch: EpochId,
     pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
+    pub signature: S,
 }
-impl AuthoritySignInfoTrait for AuthoritySignInfo {}
+impl<S: Authenticator> AuthoritySignInfoTrait for AuthoritySignInfo<S> {}
 
-impl Hash for AuthoritySignInfo {
+impl<S: Authenticator> Hash for AuthoritySignInfo<S> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.epoch.hash(state);
         self.authority.hash(state);
     }
 }
 
-impl PartialEq for AuthoritySignInfo {
+impl<S: Authenticator> PartialEq for AuthoritySignInfo<S> {
     fn eq(&self, other: &Self) -> bool {
         // We do not compare the signature, because there can be multiple
         // valid signatures for the same epoch and authority.
@@ -388,11 +392,11 @@ impl PartialEq for AuthoritySignInfo {
     }
 }
 
-impl AuthoritySignInfo {
+impl<S: Authenticator> AuthoritySignInfo<S> {
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
-        obligation: &mut VerificationObligation,
+        obligation: &mut VerificationObligation<S>,
         message_index: usize,
     ) -> SuiResult<()> {
         obligation
@@ -411,14 +415,16 @@ impl AuthoritySignInfo {
 /// the quorum is valid when the total stake is at least the validity threshold (f+1) of
 /// the committee.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
+pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool, S> 
+    where S: Authenticator
+{
     pub epoch: EpochId,
     #[schemars(with = "Base64")]
-    pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    pub signatures: Vec<(AuthorityName, S)>,
 }
 
-pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
-pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
+pub type AuthorityStrongQuorumSignInfo<S> = AuthorityQuorumSignInfo<true, S>;
+pub type AuthorityWeakQuorumSignInfo<S> = AuthorityQuorumSignInfo<false, S>;
 
 // Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
 // or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
@@ -433,13 +439,13 @@ pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
 static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
 static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
 
-impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
+impl<const S: bool, Sig: Authenticator> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S, Sig> {}
 
-impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
+impl<const STRONG_THRESHOLD: bool, S: Authenticator> AuthorityQuorumSignInfo<STRONG_THRESHOLD, S> {
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
-        obligation: &mut VerificationObligation,
+        obligation: &mut VerificationObligation<S>,
         message_index: usize,
     ) -> SuiResult<()> {
         // Check epoch
@@ -485,10 +491,12 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 }
 
 mod private {
+    use narwhal_crypto::traits::Authenticator;
+
     pub trait SealedAuthoritySignInfoTrait {}
     impl SealedAuthoritySignInfoTrait for super::EmptySignInfo {}
-    impl SealedAuthoritySignInfoTrait for super::AuthoritySignInfo {}
-    impl<const S: bool> SealedAuthoritySignInfoTrait for super::AuthorityQuorumSignInfo<S> {}
+    impl<S: Authenticator> SealedAuthoritySignInfoTrait for super::AuthoritySignInfo<S> {}
+    impl<const S: bool, Sig: Authenticator> SealedAuthoritySignInfoTrait for super::AuthorityQuorumSignInfo<S, Sig> {}
 }
 
 /// Something that we know how to hash and sign.
@@ -531,7 +539,7 @@ where
     }
 }
 
-pub type PubKeyLookup = HashMap<PublicKeyBytes, PublicKey>;
+pub type PubKeyLookup<P> = HashMap<PublicKeyBytes, P>;
 
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
@@ -541,16 +549,18 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
 }
 
 #[derive(Default)]
-pub struct VerificationObligation {
-    lookup: PubKeyLookup,
+pub struct VerificationObligation<S>
+    where S: Authenticator
+{
+    lookup: PubKeyLookup<S::PubKey>,
     messages: Vec<Vec<u8>>,
     pub message_index: Vec<usize>,
-    pub signatures: Vec<AuthoritySignature>, // Change to AggregatedAuthenticator. Then make Ed25519Signature implement AggregatedAuthenticator.
-    pub public_keys: Vec<PublicKey>,
+    pub signatures: Vec<S>, // Change to AggregatedAuthenticator. Then make Ed25519Signature implement AggregatedAuthenticator.
+    pub public_keys: Vec<S::PubKey>,
 }
 
-impl VerificationObligation {
-    pub fn new(lookup: PubKeyLookup) -> VerificationObligation {
+impl<S: Authenticator> VerificationObligation<S> {
+    pub fn new(lookup: PubKeyLookup<S::PubKey>) -> VerificationObligation<S> {
         VerificationObligation {
             lookup,
             ..Default::default()
@@ -576,7 +586,7 @@ impl VerificationObligation {
         idx
     }
 
-    pub fn verify_all(self) -> SuiResult<PubKeyLookup> {
+    pub fn verify_all(self) -> SuiResult<PubKeyLookup<S::PubKey>> {
         let messages_inner: Vec<_> = self
             .message_index
             .iter()

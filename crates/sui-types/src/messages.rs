@@ -6,7 +6,7 @@ use super::{base_types::*, batch::*, committee::Committee, error::*, event::Even
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable,
-    EmptySignInfo, Signable, Signature, SuiAuthoritySignature, VerificationObligation,
+    EmptySignInfo, Signable, Signature, SuiAuthoritySignature, VerificationObligation, AccountSignature,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::CheckpointFragment;
@@ -525,7 +525,7 @@ pub struct TransactionEnvelope<S> {
 impl<S> TransactionEnvelope<S> {
     fn add_sender_sig_to_verification_obligation(
         &self,
-        obligation: &mut VerificationObligation,
+        obligation: &mut VerificationObligation<AccountSignature>,
     ) -> SuiResult<()> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
@@ -674,7 +674,7 @@ impl PartialEq for Transaction {
 impl Eq for Transaction {}
 
 /// A transaction that is signed by a sender and also by an authority.
-pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
+pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo<AuthoritySignature>>;
 
 impl SignedTransaction {
     /// Use signing key to create a signed object.
@@ -770,7 +770,7 @@ impl PartialEq for SignedTransaction {
     }
 }
 
-pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
+pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo<AuthoritySignature>>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmationTransaction {
@@ -1134,7 +1134,7 @@ pub struct TransactionEffectsEnvelope<S> {
 }
 
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
-pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
+pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo<AuthoritySignature>>;
 
 impl SignedTransactionEffects {
     pub fn digest(&self) -> [u8; 32] {
@@ -1148,7 +1148,7 @@ impl PartialEq for SignedTransactionEffects {
     }
 }
 
-pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo<AuthoritySignature>>;
 
 impl CertifiedTransactionEffects {
     pub fn new(
@@ -1303,7 +1303,7 @@ impl CertifiedTransaction {
     fn add_to_verification_obligation(
         &self,
         committee: &Committee,
-        obligation: &mut VerificationObligation,
+        obligation: &mut VerificationObligation<AuthoritySignature>,
     ) -> SuiResult<()> {
         // Add the obligation of the sender signature verification.
         self.add_sender_sig_to_verification_obligation(obligation)?;
