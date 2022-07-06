@@ -302,7 +302,7 @@ fn test_reject_extra_public_key() {
 
     signatures.sort_by_key(|k| k.0);
 
-    let mut used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
+    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
         vec![signatures[0], signatures[1], signatures[2], signatures[3]];
 
     let committee = Committee::new(0, authorities.clone()).unwrap();

@@ -280,7 +280,7 @@ where
         committee.epoch(),
         transaction.unwrap().to_transaction(),
         votes,
-        &committee,
+        committee,
     )
     .unwrap()
 }
