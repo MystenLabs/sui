@@ -13,14 +13,15 @@ The Sui Wallet Browser Extension offers these features:
 * See owned fungible tokens and NFTs
 * Display recent transactions
 * Go directly to the successful/failed transaction in the Sui Explorer
+* Try out our demonstration [NFT dApp](https://github.com/MystenLabs/sui/tree/main/wallet/examples/demo-nft-dapp) available [in the Cloud](http://sui-wallet-demo.s3-website-us-east-1.amazonaws.com/)
 
 Note, the wallet will auto split/merge coins if the address does not have a Coin object with the exact transfer amount. See the [Use](#use) section for guidance on employing these features.
 
 ## Purpose
 
-Initially, the Sui Wallet Browser Extension is aimed at Sui developers for testing purposes. As such, the tokens are of no value (just like the rest of [DevNet](https://github.com/MystenLabs/sui/blob/main/doc/src/explore/devnet.md)) and will disappear each time we reset the network. In time, the Sui Wallet Browser Extension will be production ready for real tokens.
+Initially, the Sui Wallet Browser Extension is aimed at Sui developers for testing purposes. As such, the tokens are of no value (just like the rest of [DevNet](devnet.md)) and will disappear each time we reset the network. In time, the Sui Wallet Browser Extension will be production ready for real tokens.
 
-This browser extension is a pared-down version of the [Sui Wallet command line interface (CLI)](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md) that provides greater ease of use for the most commonly used features. If you need more advanced features, such as merge/split coins or make arbitrary [Move](https://github.com/MystenLabs/sui/blob/main/doc/src/build/move.md) calls, instead use the [Wallet CLI](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md).
+This browser extension is a pared-down version of the [Sui Wallet command line interface (CLI)](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md) that provides greater ease of use for the most commonly used features. If you need more advanced features, such as merge/split coins or make arbitrary [Move](../build/move.md) calls, instead use the [Sui CLI client](../build/cli-client.md).
 
 ## Demos
 
@@ -28,7 +29,7 @@ The following animated GIFs walk you through some of the most common workflows i
 
 ### Create NFT
 
-From a demo decentralized site, you can connect the demo site to your wallet and create a custom NFT:
+From a demo decentralized site, such as our demonstration [NFT dApp](https://github.com/MystenLabs/sui/tree/main/wallet/examples/demo-nft-dapp) available [in the Cloud](http://sui-wallet-demo.s3-website-us-east-1.amazonaws.com/), you can connect to your wallet and create a custom NFT:
 
 ![Create NFTs](../../static/create_NFT.gif "Create NFTs")
 *Create NFTs in Sui Wallet by connecting to an external site*
