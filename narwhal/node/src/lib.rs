@@ -8,7 +8,6 @@ use crypto::traits::{KeyPair, Signer, VerifyingKey};
 use executor::{ExecutionState, Executor, SerializedTransaction, SubscriberResult};
 use primary::{NetworkModel, PayloadToken, Primary};
 use prometheus::Registry;
-use std::path::Path;
 use std::sync::Arc;
 use store::{
     reopen,
@@ -157,6 +156,8 @@ impl Node {
         #[cfg(feature = "dhat-heap")]
         let profiler = {
             use crypto::traits::EncodeDecodeBase64;
+            use std::path::Path;
+
             let heap_file = format!("dhat-heap-{}.json", name.encode_base64());
             Arc::new(
                 dhat::Profiler::builder()
