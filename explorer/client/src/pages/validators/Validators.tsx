@@ -159,13 +159,23 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
     const contents = data.data['contents'] as ValidatorState;
     console.log(contents);
 
-    let active_set = contents.validators.fields.active_validators;
-    let next_epoch_set = contents.validators.fields.next_epoch_validators;
+    const active_set = contents.validators.fields.active_validators;
+    const next_epoch_set = contents.validators.fields.next_epoch_validators;
+
+    const totalStake = contents.validators.fields.validator_stake;
+    const quorumStake = contents.validators.fields.quorum_stake_threshold;
 
     return (
         <>
             <div id="validators">
                 <h1 className={objStyles.clickableheader}>Validators</h1>
+
+                <div className={txStyles.txcard}>
+                    <h3>Total Stake</h3>
+                    {totalStake}
+                    <h3>Quorum Stake</h3>
+                    {quorumStake}
+                </div>
 
                 <div id="activeset" className={txStyles.txcard}>
                     <h2>Active</h2>
@@ -200,6 +210,12 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
                         </div>
                     ))}
                 </div>
+
+                <div id="sysparams" className={txStyles.txcard}>
+                    <h2>System Parameters</h2>
+
+                </div>
+                <br/>
             </div>
         </>
     );
