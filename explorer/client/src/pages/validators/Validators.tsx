@@ -23,19 +23,58 @@ type ObjFields = {
     fields: any[keyof string];
 };
 
+type SystemParams = {
+    type: "0x2::sui_system::SystemParameters",
+    fields: {
+        max_validator_candidate_count: number
+        min_validator_stake: bigint
+    }
+}
+
+
+type Validator = {
+    type: '0x2::validator::Validator',
+    fields: {
+        delegation: bigint,
+        delegation_count: number,
+        metadata: ValidatorMetadata,
+        pending_delegation: bigint,
+        pending_delegation_withdraw: bigint,
+        pending_delegator_count: number,
+        pending_delegator_withdraw_count: number,
+        pending_stake: {
+            type: '0x1::option::Option<0x2::balance::Balance<0x2::sui::SUI>>',
+            fields: any[keyof string]
+        },
+        pending_withdraw: bigint,
+        stake: bigint
+    }
+}
+
+type ValidatorMetadata = {
+    type: '0x2::validator::ValidatorMetadata',
+    fields: {
+        name: string,
+        net_address: string,
+        next_epoch_stake: number
+        pubkey_bytes: string,
+        sui_address: string,
+    }
+}
+
 type ValidatorState = {
     delegation_reward: number;
     epoch: number;
     id: { id: string; version: number };
-    parameters: ObjFields;
+    parameters: SystemParams;
     storage_fund: number;
     treasury_cap: ObjFields;
     validators: {
         type: '0x2::validator_set::ValidatorSet';
         fields: {
             delegation_stake: number;
-            active_validators: ObjFields[];
-            next_epoch_validators: ObjFields[];
+            active_validators: Validator[];
+            next_epoch_validators: Validator[];
             pending_removals: string;
             pending_validators: string;
             quorum_stake_threshold: number;
@@ -46,6 +85,96 @@ type ValidatorState = {
 
 const textDecoder = new TextDecoder();
 
+function ValidatorMetadataElement({ meta }: {meta: ValidatorMetadata}): JSX.Element {
+    if (!meta)
+        return <></>;
+
+    console.log('meta', meta);
+
+    const name = meta ? meta.fields.name : 'unknown';
+    const addr = meta ? meta.fields.sui_address : 'unknown';
+    const pubkey = meta ? meta.fields.pubkey_bytes : '';
+
+    return (
+        <div>
+            <h3>
+                {textDecoder.decode(
+                    new Base64DataBuffer(name).getData()
+                )}
+            </h3>
+            <h4>Address</h4>
+            {addr}
+            <h4>Pubkey</h4>
+            {pubkey}
+        </div>
+    )
+}
+
+function ValidatorElement({ itm }: {itm: Validator}): JSX.Element {
+    if (!itm.fields.metadata)
+        return <></>;
+
+    console.log('meta', itm.fields.metadata);
+
+    const name = itm.fields.metadata ? itm.fields.metadata.fields.name : 'unknown';
+    const addr = itm.fields.metadata ? itm.fields.metadata.fields.sui_address : 'unknown';
+    const pubkey = itm.fields.metadata ? itm.fields.metadata.fields.pubkey_bytes : '';
+    return (
+    <div>
+        <h3>
+            {textDecoder.decode(
+                new Base64DataBuffer(name).getData()
+            )}
+        </h3>
+
+        <div>
+            <h4>Address</h4>
+            {addr}
+        </div>
+        <div>
+            <h4>Stake</h4>
+            {itm.fields['stake']}
+        </div>
+
+        <div>
+            <h5>Pubkey</h5>
+            {pubkey}
+        </div>
+        <div>
+            <h5>Delegation</h5>
+            {itm.fields['delegation']}
+        </div>
+        <div>
+            <h5>Delegation Count</h5>
+            {itm.fields['delegation_count'] ? itm.fields['delegation_count'] : 0}
+        </div>
+        <div>
+            <div>
+                <h5>Pending Delegation</h5>
+                {itm.fields['pending_delegation']}
+            </div>
+            <div>
+                <h5>Pending Delegation Withdraw</h5>
+                {itm.fields['pending_delegation_withdraw']}
+            </div>
+        </div>
+        <div>
+            <div>
+                <h5>Pending Delegators</h5>
+                {itm.fields['pending_delegator_count']}
+            </div>
+            <div>
+                <h5>Pending Delegator Withdraws</h5>
+                {
+                    itm.fields[
+                        'pending_delegator_withdraw_count'
+                    ]
+                }
+            </div>
+        </div>
+    </div>)
+}
+
 function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
     console.log('validator object loaded', data);
 
@@ -53,6 +182,7 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
     console.log(contents);
 
     let active_set = contents.validators.fields.active_validators;
+    let next_epoch_set = contents.validators.fields.next_epoch_validators;
 
     return (
         <>
@@ -70,67 +200,24 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
                                 itm.className ? txStyles[itm.className] : ''
                             )}
                         >
-                                    <h3>
-                                        {textDecoder.decode(
-                                            new Base64DataBuffer(
-                                                itm.fields['metadata'].fields.name
-                                            ).getData()
-                                        )}
-                                    </h3>
+                            <ValidatorElement itm={itm}/>
+                            <br />
+                        </div>
+                    ))}
+                </div>
 
-                                    <div>
-                                        <h4>Address</h4>
-                                        {
-                                            itm.fields['metadata'].fields
-                                                .sui_address
-                                        }
-                                    </div>
-                                    <div>
-                                        <h4>Stake</h4>
-                                        {itm.fields['stake']}
-                                    </div>
+                <div id="nextepochset" className={txStyles.txcard}>
+                    <h2>Next Epoch</h2>
 
-                                    <div>
-                                        <h5>Pubkey</h5>
-                                        {itm.fields['metadata'].fields['pubkey_bytes']}
-                                    </div>
-                                    <div>
-                                        <h5>Delegation</h5>
-                                        {itm.fields['delegation']}
-                                    </div>
-                                    <div>
-                                        <h5>Delegator Count</h5>
-                                        {itm.fields['delegator_count']}
-                                    </div>
-                                <div>
-                                    <div>
-                                        <h5>Pending Delegation</h5>
-                                        {itm.fields['pending_delegation']}
-                                    </div>
-                                    <div>
-                                        <h5>Pending Delegation Withdraw</h5>
-                                        {
-                                            itm.fields[
-                                                'pending_delegation_withdraw'
-                                            ]
-                                        }
-                                    </div>
-                                </div>
-                                <div>
-                                    <div>
-                                        <h5>Pending Delegators</h5>
-                                        {itm.fields['pending_delegator_count']}
-                                    </div>
-                                    <div>
-                                        <h5>Pending Delegator Withdraws</h5>
-                                        {
-                                            itm.fields[
-                                                'pending_delegator_withdraw_count'
-                                            ]
-                                        }
-                                    </div>
-                                </div>
-
+                    {next_epoch_set.map((itm: any, i: number) => (
+                        <div
+                            key={i}
+                            className={cl(
+                                txStyles.txcardgrid,
+                                itm.className ? txStyles[itm.className] : ''
+                            )}
+                        >
+                            <ValidatorMetadataElement meta={itm}/>
                             <br />
                         </div>
                     ))}
