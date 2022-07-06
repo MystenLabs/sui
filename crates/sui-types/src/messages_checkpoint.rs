@@ -363,6 +363,11 @@ pub struct CheckpointContents {
     pub transactions: BTreeSet<ExecutionDigests>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OrderedCheckpointContents {
+    pub transactions: Vec<ExecutionDigests>,
+}
+
 impl BcsSignable for CheckpointContents {}
 
 impl CheckpointContents {

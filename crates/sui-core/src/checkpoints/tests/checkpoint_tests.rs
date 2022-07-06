@@ -31,14 +31,15 @@ use sui_types::crypto::KeyPair;
 pub struct TestCausalOrderPendCertNoop;
 
 impl CausalOrder for TestCausalOrderPendCertNoop {
-    fn get_complete_causal_order(
+    fn get_complete_causal_order<'a>(
         &self,
-        transactions: &[ExecutionDigests],
+        transactions: impl Iterator<Item = &'a ExecutionDigests>,
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
-        Ok(transactions.to_vec())
+        Ok(transactions.cloned().collect())
     }
 }
+
 impl PendCertificateForExecution for TestCausalOrderPendCertNoop {
     fn add_pending_certificates(
         &self,

@@ -14,6 +14,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
+use sui_types::messages_checkpoint::OrderedCheckpointContents;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     batch::TxSequenceNumber,
@@ -417,9 +418,13 @@ impl CheckpointStore {
         debug_assert!(self.checkpoints.get(&checkpoint_sequence_number)?.is_none());
         debug_assert!(self.next_checkpoint() == checkpoint_sequence_number);
 
-        self.check_checkpoint_transactions(contents.transactions.iter(), effects_store)?;
+        self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
 
-        // TODO: Here we create causal order contents.
+        let ordered_effects =
+            effects_store.get_complete_causal_order(contents.transactions.iter(), self)?;
+        let ordered_contents = OrderedCheckpointContents {
+            transactions: ordered_effects,
+        };
 
         // Make a DB batch
         let batch = self.checkpoints.batch();
@@ -856,7 +861,7 @@ impl CheckpointStore {
     fn check_checkpoint_transactions<'a>(
         &self,
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
-        pending_execution: impl PendCertificateForExecution,
+        pending_execution: &(impl PendCertificateForExecution),
     ) -> SuiResult {
         let extra_tx = self.extra_transactions.multi_get(transactions.clone())?;
         let tx_to_execute = extra_tx
@@ -889,7 +894,7 @@ impl CheckpointStore {
         effects_store: impl PendCertificateForExecution,
     ) -> Result<(), SuiError> {
         // Ensure we have processed all transactions contained in this checkpoint.
-        self.check_checkpoint_transactions(transactions.iter(), effects_store)?;
+        self.check_checkpoint_transactions(transactions.iter(), &effects_store)?;
 
         let batch = self.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
