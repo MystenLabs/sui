@@ -427,10 +427,10 @@ impl AuthorityState {
         self.process_certificate(tx_guard, certificate).await
     }
 
-    async fn acquire_tx_guard<'a>(
+    async fn acquire_tx_guard<'a, 'b>(
         &'a self,
-        digest: &TransactionDigest,
-        cert: &CertifiedTransaction,
+        digest: &'b TransactionDigest,
+        cert: &'b CertifiedTransaction,
     ) -> SuiResult<CertTxGuard<'a>> {
         match self.database.wal.begin_tx(digest, cert).await? {
             Some(g) => Ok(g),
