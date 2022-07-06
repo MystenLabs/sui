@@ -173,7 +173,7 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
                 <div className={txStyles.txcard}>
                     <h3>Total Stake</h3>
                     {totalStake}
-                    <h3>Quorum Stake</h3>
+                    <h3>Qourum Stake</h3>
                     {quorumStake}
                 </div>
 
@@ -213,8 +213,9 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
 
                 <div id="sysparams" className={txStyles.txcard}>
                     <h2>System Parameters</h2>
+
                 </div>
-                <br />
+                <br/>
             </div>
         </>
     );
