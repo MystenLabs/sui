@@ -125,22 +125,20 @@ function ValidatorElement({ itm }: { itm: Validator }): JSX.Element {
     return (
         <div>
             <h3>{textDecoder.decode(new Base64DataBuffer(name).getData())}</h3>
-                <h4>Stake</h4>
-                {itm.fields.stake} SUI
-                <h4>Address</h4>
-                {addr}
-                <h4>Pubkey</h4>
-                {pubkey}
-                <h5>Delegation</h5>
-                {itm.fields.delegation}
-                <h5>Delegation Count</h5>
-                {itm.fields.delegation_count
-                    ? itm.fields.delegation_count
-                    : 0}
-                <h5>Pending Delegation</h5>
-                {itm.fields.pending_delegation}
-                <h5>Pending Delegation Withdraw</h5>
-                {itm.fields.pending_delegation_withdraw}
+            <h4>Stake</h4>
+            {itm.fields.stake} SUI
+            <h4>Address</h4>
+            {addr}
+            <h4>Pubkey</h4>
+            {pubkey}
+            <h5>Delegation</h5>
+            {itm.fields.delegation}
+            <h5>Delegation Count</h5>
+            {itm.fields.delegation_count ? itm.fields.delegation_count : 0}
+            <h5>Pending Delegation</h5>
+            {itm.fields.pending_delegation}
+            <h5>Pending Delegation Withdraw</h5>
+            {itm.fields.pending_delegation_withdraw}
             <div>
                 <div>
                     <h5>Pending Delegators</h5>
