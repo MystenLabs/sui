@@ -417,7 +417,7 @@ impl CheckpointStore {
         debug_assert!(self.checkpoints.get(&checkpoint_sequence_number)?.is_none());
         debug_assert!(self.next_checkpoint() == checkpoint_sequence_number);
 
-        self.check_checkpoint_transactions(contents, effects_store)?;
+        self.check_checkpoint_transactions(contents.transactions.iter(), effects_store)?;
 
         // TODO: Here we create causal order contents.
 
@@ -853,31 +853,15 @@ impl CheckpointStore {
         Ok(proposal_and_transactions)
     }
 
-    /// Returns whether a list of transactions is fully executed.
-    pub fn all_checkpoint_transactions_executed(
+    fn check_checkpoint_transactions<'a>(
         &self,
-        transactions: &CheckpointContents,
-    ) -> SuiResult<bool> {
-        // TODO: What mechanisms are there to ensure these not-yet-executed transactions
-        // will eventually be executed?
-        Ok(self
-            .extra_transactions
-            .multi_get(transactions.transactions.iter())?
-            .iter()
-            .all(|opt| opt.is_some()))
-    }
-
-    fn check_checkpoint_transactions(
-        &self,
-        transactions: &CheckpointContents,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         pending_execution: impl PendCertificateForExecution,
     ) -> SuiResult {
-        let extra_tx = self
-            .extra_transactions
-            .multi_get(transactions.transactions.iter())?;
+        let extra_tx = self.extra_transactions.multi_get(transactions.clone())?;
         let tx_to_execute = extra_tx
             .iter()
-            .zip(transactions.transactions.iter())
+            .zip(transactions)
             .filter_map(|(opt_seq, digest)| {
                 if opt_seq.is_none() {
                     Some(*digest)
@@ -902,15 +886,10 @@ impl CheckpointStore {
         &mut self,
         seq: CheckpointSequenceNumber,
         transactions: &[ExecutionDigests],
+        effects_store: impl PendCertificateForExecution,
     ) -> Result<(), SuiError> {
         // Ensure we have processed all transactions contained in this checkpoint.
-        if !self.all_checkpoint_transactions_executed(&CheckpointContents::new(
-            transactions.iter().cloned(),
-        ))? {
-            return Err(SuiError::from(
-                "Checkpoint contains unexecuted transactions.",
-            ));
-        }
+        self.check_checkpoint_transactions(transactions.iter(), effects_store)?;
 
         let batch = self.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
@@ -935,36 +914,7 @@ impl CheckpointStore {
             });
         }
 
-        // Process transactions not already in a checkpoint
-        // A malicious validator could include in the proposal some transactions
-        // that are already checkpointed. Since we do not check fragments for
-        // such a condition, we filter them here.
-        // TODO: consider whether we should check this condition and reject
-        //       fragments that contain transactions already checkpointed.
-        let new_transactions = self
-            .transactions_to_checkpoint
-            .multi_get(transactions.iter())?
-            .into_iter()
-            .zip(transactions.iter())
-            .filter_map(
-                |(opt_seq, tx)| {
-                    if opt_seq.is_none() {
-                        Some(*tx)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect::<Vec<_>>();
-
-        // TODO: Issue #2039
-        // After we have performed all checks to ensure that there are no duplicate
-        // transactions in checkpoints, the checkpoint is complere and causally
-        // ordered we can refactor the code below, as all transactions are
-        // new transactions.
-        debug_assert!(new_transactions.len() == transactions.len());
-
-        let transactions_with_seq = self.extra_transactions.multi_get(new_transactions.iter())?;
+        let transactions_with_seq = self.extra_transactions.multi_get(transactions.iter())?;
 
         // Debug check that we only make a checkpoint if we have processed all the checkpointed
         // transactions and their history.
@@ -975,13 +925,13 @@ impl CheckpointStore {
             &self.extra_transactions,
             transactions_with_seq
                 .iter()
-                .zip(new_transactions.iter())
+                .zip(transactions.iter())
                 .filter_map(|(opt, tx)| if opt.is_some() { Some(tx) } else { None }),
         )?;
 
         // Now write the checkpoint data to the database
 
-        let checkpoint_data: Vec<_> = new_transactions
+        let checkpoint_data: Vec<_> = transactions
             .iter()
             .zip(transactions_with_seq.iter())
             .map(|(tx, opt)| {
