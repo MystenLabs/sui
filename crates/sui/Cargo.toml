@@ -43,7 +43,7 @@ workspace-hack = { path = "../workspace-hack"}
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.21"
-jsonrpsee = { version = "0.13.1", features = ["full"] }
+jsonrpsee = { version = "0.14.0", features = ["full"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4"}
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
