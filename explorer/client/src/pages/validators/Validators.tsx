@@ -59,7 +59,7 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
             <div id="validators">
                 <h1 className={objStyles.clickableheader}>Validators</h1>
 
-                <div id="activeset">
+                <div id="activeset" className={txStyles.txcard}>
                     <h2>Active</h2>
 
                     {active_set.map((itm: any, i: number) => (
@@ -70,16 +70,14 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
                                 itm.className ? txStyles[itm.className] : ''
                             )}
                         >
-                            <div>
-                                <h3>
-                                    {textDecoder.decode(
-                                        new Base64DataBuffer(
-                                            itm.fields['metadata'].fields.name
-                                        ).getData()
-                                    )}
-                                </h3>
+                                    <h3>
+                                        {textDecoder.decode(
+                                            new Base64DataBuffer(
+                                                itm.fields['metadata'].fields.name
+                                            ).getData()
+                                        )}
+                                    </h3>
 
-                                <div>
                                     <div>
                                         <h4>Address</h4>
                                         {
@@ -91,9 +89,11 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
                                         <h4>Stake</h4>
                                         {itm.fields['stake']}
                                     </div>
-                                </div>
 
-                                <div>
+                                    <div>
+                                        <h5>Pubkey</h5>
+                                        {itm.fields['metadata'].fields['pubkey_bytes']}
+                                    </div>
                                     <div>
                                         <h5>Delegation</h5>
                                         {itm.fields['delegation']}
@@ -102,7 +102,6 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
                                         <h5>Delegator Count</h5>
                                         {itm.fields['delegator_count']}
                                     </div>
-                                </div>
                                 <div>
                                     <div>
                                         <h5>Pending Delegation</h5>
@@ -131,7 +130,6 @@ function ValidatorObjectLoaded({ data }: { data: DataType }): JSX.Element {
                                         }
                                     </div>
                                 </div>
-                            </div>
 
                             <br />
                         </div>
