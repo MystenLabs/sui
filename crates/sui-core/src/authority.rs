@@ -581,7 +581,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(
-        AuthorityTemporaryStore<AuthorityStore>,
+        AuthorityTemporaryStore<Arc<AuthorityStore>>,
         SignedTransactionEffects,
     )> {
         let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
@@ -1368,7 +1368,7 @@ impl AuthorityState {
     #[instrument(name = "commit_certificate", level = "debug", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
-        temporary_store: AuthorityTemporaryStore<AuthorityStore>,
+        temporary_store: AuthorityTemporaryStore<Arc<AuthorityStore>>,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
