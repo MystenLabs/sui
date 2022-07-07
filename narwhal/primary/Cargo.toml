@@ -26,19 +26,19 @@ thiserror = "1.0.31"
 tokio = { version = "1.19.2", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = "0.7.2"
-tower = "0.4.12"
-tracing = "0.1.34"
+tower = "0.4.13"
+tracing = "0.1.35"
 
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "16f00004fc7673f84b40615be19f907a0b3e1d5b" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "16f00004fc7673f84b40615be19f907a0b3e1d5b" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 prometheus = "0.13.1"
-once_cell = "1.12.1"
+once_cell = "1.13.0"
 
 [dev-dependencies]
 arc-swap = { version = "1.5.0", features = ["serde"] }

@@ -15,14 +15,14 @@ cfg-if = "1.0.0"
 clap = "2.34"
 futures = "0.3.21"
 rand = "0.7.3"
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "16f00004fc7673f84b40615be19f907a0b3e1d5b" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
 thiserror = "1.0.31"
 tokio = { version = "1.19.2", features = ["full"] }
 tokio-stream = "0.1.9"
 tokio-util = { version = "0.7.3", features = ["codec"] }
-tracing = "0.1.34"
+tracing = "0.1.35"
 tracing-log = "0.1.3"
-tracing-subscriber = { version = "0.3.11", features = ["time", "env-filter"] }
+tracing-subscriber = { version = "0.3.14", features = ["time", "env-filter"] }
 url = "2.2.2"
 
 config = { path = "../config" }

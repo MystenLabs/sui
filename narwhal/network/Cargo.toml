@@ -14,14 +14,14 @@ rand = { version = "0.7.3", features = ["small_rng"] }
 thiserror = "1.0.31"
 tokio = { version = "1.19.2", features = ["rt", "net", "sync", "macros", "time"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
-tracing = "0.1.34"
+tracing = "0.1.35"
 types = { path = "../types" }
 crypto = { path = "../crypto" }
 tonic = { version = "0.7.2", features = ["tls"] }
 backoff = { version = "0.4.0", features = ["tokio"] }
 multiaddr = "0.14.0"
 
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "16f00004fc7673f84b40615be19f907a0b3e1d5b" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
