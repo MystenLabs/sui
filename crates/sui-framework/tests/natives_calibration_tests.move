@@ -14,8 +14,7 @@
 
 #[test_only]
 module sui::NativesCalibrationTests {
-    use sui::id::{Self};
-    use sui::id::{VersionedID};
+    use sui::id::{Self, VersionedID};
 
     use sui::test_scenario;
     use sui::transfer;
