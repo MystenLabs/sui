@@ -107,33 +107,36 @@ pub enum SuiCommand {
 }
 
 impl SuiCommand {
-    pub async fn execute(self) -> Result<(), anyhow::Error> {
+    pub fn execute(self) -> Result<(), anyhow::Error> {
         match self {
             SuiCommand::Start { config } => {
-                // Load the config of the Sui authority.
-                let network_config_path = config
-                    .clone()
-                    .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
-                let network_config: NetworkConfig = PersistedConfig::read(&network_config_path)
-                    .map_err(|err| {
-                        err.context(format!(
-                            "Cannot open Sui network config file at {:?}",
-                            network_config_path
-                        ))
-                    })?;
+                let f = async {
+                    // Load the config of the Sui authority.
+                    let network_config_path = config
+                        .clone()
+                        .unwrap_or(sui_config_dir()?.join(SUI_NETWORK_CONFIG));
+                    let network_config: NetworkConfig = PersistedConfig::read(&network_config_path)
+                        .map_err(|err| {
+                            err.context(format!(
+                                "Cannot open Sui network config file at {:?}",
+                                network_config_path
+                            ))
+                        })?;
 
-                let mut swarm =
-                    Swarm::builder().from_network_config(sui_config_dir()?, network_config);
-                swarm.launch().await?;
+                    let mut swarm =
+                        Swarm::builder().from_network_config(sui_config_dir()?, network_config);
+                    swarm.launch().await?;
 
-                let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
-                loop {
-                    for node in swarm.validators_mut() {
-                        node.health_check().await?;
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                    loop {
+                        for node in swarm.validators_mut() {
+                            node.health_check().await?;
+                        }
+
+                        interval.tick().await;
                     }
-
-                    interval.tick().await;
-                }
+                };
+                futures::executor::block_on(f)
             }
             SuiCommand::Network {
                 config,
@@ -314,36 +317,42 @@ impl SuiCommand {
                 cmd.execute(keystore)
             }
             SuiCommand::Console { config } => {
-                let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config)?;
-                let mut context = WalletContext::new(&config)?;
-                sync_accounts(&mut context).await?;
-                start_console(context, &mut stdout(), &mut stderr()).await
+                let f = async {
+                    let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                    prompt_if_no_config(&config)?;
+                    let mut context = WalletContext::new(&config)?;
+                    sync_accounts(&mut context).await?;
+                    start_console(context, &mut stdout(), &mut stderr()).await
+                };
+                futures::executor::block_on(f)
             }
             SuiCommand::Client { config, cmd, json } => {
-                let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config)?;
-                let mut context = WalletContext::new(&config)?;
+                let f = async {
+                    let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                    prompt_if_no_config(&config)?;
+                    let mut context = WalletContext::new(&config)?;
 
-                if let Some(cmd) = cmd {
-                    // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.
-                    if !matches!(
-                        cmd,
-                        SuiClientCommands::Switch {
-                            gateway: Some(_),
-                            ..
+                    if let Some(cmd) = cmd {
+                        // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.
+                        if !matches!(
+                            cmd,
+                            SuiClientCommands::Switch {
+                                gateway: Some(_),
+                                ..
+                            }
+                        ) {
+                            sync_accounts(&mut context).await?;
                         }
-                    ) {
-                        sync_accounts(&mut context).await?;
+                        cmd.execute(&mut context).await?.print(!json);
+                    } else {
+                        // Print help
+                        let mut app: Command = SuiCommand::command();
+                        app.build();
+                        app.find_subcommand_mut("client").unwrap().print_help()?;
                     }
-                    cmd.execute(&mut context).await?.print(!json);
-                } else {
-                    // Print help
-                    let mut app: Command = SuiCommand::command();
-                    app.build();
-                    app.find_subcommand_mut("client").unwrap().print_help()?;
-                }
-                Ok(())
+                    Ok::<(), anyhow::Error>(())
+                };
+                futures::executor::block_on(f)
             }
             SuiCommand::Move {
                 package_path,

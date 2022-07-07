@@ -33,5 +33,5 @@ async fn main() {
     if let Some(git_rev) = option_env!("GIT_REVISION") {
         debug!("Sui CLI built at git revision {git_rev}");
     }
-    exit_main!(cmd.execute().await);
+    exit_main!(cmd.execute());
 }
