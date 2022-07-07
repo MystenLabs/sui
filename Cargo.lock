@@ -677,6 +677,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytemuck"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c53dfa917ec274df8ed3c572698f381a24eef2efba9492d797301b72b6db408a"
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5426,6 +5432,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "retain_mut"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
+
+[[package]]
 name = "ring"
 version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5438,6 +5450,17 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "roaring"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd539cab4e32019956fe7e0cf160bb6d4802f4be2b52c4253d76d3bb0f85a5f7"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "retain_mut",
 ]
 
 [[package]]
@@ -6852,6 +6875,7 @@ dependencies = [
  "opentelemetry",
  "rand 0.7.3",
  "rand 0.8.5",
+ "roaring",
  "schemars",
  "serde 1.0.138",
  "serde-name",
@@ -8400,6 +8424,7 @@ dependencies = [
  "bstr",
  "bumpalo",
  "bytecode-interpreter-crypto",
+ "bytemuck",
  "byteorder",
  "bytes",
  "bzip2-sys",
@@ -8774,7 +8799,9 @@ dependencies = [
  "regex-syntax",
  "remove_dir_all",
  "reqwest",
+ "retain_mut",
  "ring",
+ "roaring",
  "rocksdb",
  "rust-ini",
  "rustc-demangle",
