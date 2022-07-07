@@ -1,104 +1,21 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
-
+use crate::authority::SuiDataStore;
 use prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
-use sui_types::base_types::TransactionDigest;
+use std::collections::HashSet;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
     fp_ensure,
     gas::{self, SuiGasStatus},
-    messages::{InputObjectKind, SingleTransactionKind, TransactionData, TransactionEnvelope},
+    messages::{
+        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, TransactionEnvelope,
+    },
     object::{Object, Owner},
 };
-use tracing::{debug, instrument};
-
-use crate::authority::SuiDataStore;
-
-pub struct InputObjects {
-    objects: Vec<(InputObjectKind, Object)>,
-}
-
-impl InputObjects {
-    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
-        Self { objects }
-    }
-
-    pub fn len(&self) -> usize {
-        self.objects.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.objects.is_empty()
-    }
-
-    pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
-        let owned_objects: Vec<_> = self
-            .objects
-            .iter()
-            .filter_map(|(object_kind, object)| match object_kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(_) => None,
-            })
-            .collect();
-
-        debug!(
-            num_mutable_objects = owned_objects.len(),
-            "Checked locks and found mutable objects"
-        );
-
-        owned_objects
-    }
-
-    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
-        self.objects
-            .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
-            .map(|(_, obj)| obj.compute_object_reference())
-            .collect()
-    }
-
-    pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
-        self.objects
-            .iter()
-            .map(|(_, obj)| obj.previous_transaction)
-            .collect()
-    }
-
-    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
-        self.objects
-            .iter()
-            .filter_map(|(kind, object)| match kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
-            })
-            .collect()
-    }
-
-    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
-        self.objects
-            .into_iter()
-            .map(|(_, object)| (object.id(), object))
-            .collect()
-    }
-}
+use tracing::instrument;
 
 #[instrument(level = "trace", skip_all)]
 pub async fn check_transaction_input<S, T>(
