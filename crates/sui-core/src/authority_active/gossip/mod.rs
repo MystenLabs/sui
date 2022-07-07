@@ -3,7 +3,7 @@
 
 use crate::{
     authority::AuthorityState,
-    authority_aggregator::{AuthorityAggregator, ConfirmationTransactionHandler},
+    authority_aggregator::{AuthorityAggregator, CertificateHandler},
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
 };
@@ -26,8 +26,7 @@ use sui_types::{
     batch::{TxSequenceNumber, UpdateItem},
     error::{SuiError, SuiResult},
     messages::{
-        BatchInfoRequest, BatchInfoResponseItem, ConfirmationTransaction, TransactionInfoRequest,
-        TransactionInfoResponse,
+        BatchInfoRequest, BatchInfoResponseItem, TransactionInfoRequest, TransactionInfoResponse,
     },
 };
 use tracing::{debug, error, info, trace};
@@ -40,6 +39,7 @@ pub(crate) mod tests;
 
 mod node_sync;
 use node_sync::NodeSyncDigestHandler;
+use sui_types::messages::CertifiedTransaction;
 
 struct Follower<A> {
     peer_name: AuthorityName,
@@ -205,14 +205,17 @@ async fn wait_for_one_gossip_task_to_finish<A>(
     peer_names.remove(&finished_name);
 }
 
-pub struct LocalConfirmationTransactionHandler {
+pub struct LocalCertificateHandler {
     pub state: Arc<AuthorityState>,
 }
 
 #[async_trait]
-impl ConfirmationTransactionHandler for LocalConfirmationTransactionHandler {
-    async fn handle(&self, cert: ConfirmationTransaction) -> SuiResult<TransactionInfoResponse> {
-        self.state.handle_confirmation_transaction(cert).await
+impl CertificateHandler for LocalCertificateHandler {
+    async fn handle(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> SuiResult<TransactionInfoResponse> {
+        self.state.handle_certificate(certificate).await
     }
 
     fn destination_name(&self) -> String {
@@ -274,9 +277,9 @@ impl GossipDigestHandler {
             follower
                 .aggregator
                 .sync_authority_source_to_destination(
-                    ConfirmationTransaction { certificate },
+                    certificate,
                     follower.peer_name,
-                    &LocalConfirmationTransactionHandler {
+                    &LocalCertificateHandler {
                         state: follower.state.clone(),
                     },
                 )
