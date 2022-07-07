@@ -470,7 +470,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         let mut used_authorities = HashSet::new();
 
         let pk_index = obligation.public_keys.len();
-        obligation.public_keys.push(Vec::new());
 
         // Create obligations for the committee signatures
         for authority in self.authorities.iter() {
