@@ -997,7 +997,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "arc-swap",
  "crypto 0.1.0 (git+https://github.com/punwai/narwhal-1)",
@@ -1054,7 +1054,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "arc-swap",
  "bincode",
@@ -1372,7 +1372,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -1491,7 +1491,7 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "arc-swap",
  "crypto 0.1.0 (git+https://github.com/punwai/narwhal-1)",
@@ -1990,7 +1990,7 @@ dependencies = [
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "async-trait",
  "bincode",
@@ -4231,7 +4231,7 @@ dependencies = [
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "async-trait",
  "backoff",
@@ -4341,7 +4341,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -5103,7 +5103,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -7981,7 +7981,7 @@ dependencies = [
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "base64",
  "bincode",
@@ -8530,7 +8530,7 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9537,7 +9537,7 @@ dependencies = [
 [[package]]
 name = "workspace-hack"
 version = "0.1.0"
-source = "git+https://github.com/punwai/narwhal-1#14367e174b6790ec37960d010ccb52ac12a85f22"
+source = "git+https://github.com/punwai/narwhal-1#feb0fa6fa6ce8a9ef98a8e9fcdca84f89c9c4a3b"
 dependencies = [
  "adler",
  "ahash",
