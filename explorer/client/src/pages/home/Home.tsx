@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
@@ -74,9 +74,14 @@ function HomeAPI() {
         );
     }
     return (
-        <div data-testid="home-page" id="home" className={styles.home}>
-            <LastestTxCard count={results.count} />
-            <TxCountCard count={results.count} />
+        <div data-testid="home-page" id="home" className={cl([styles.home, styles.container])}>
+            <div >
+                <LastestTxCard count={results.count} />
+            </div>
+            <div >
+                <TxCountCard count={results.count} />
+            </div>
+            
         </div>
     );
 }

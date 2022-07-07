@@ -29,7 +29,7 @@ import type {
 
 import styles from './RecentTxCard.module.css';
 
-const TRUNCATE_LENGTH = 25;
+const TRUNCATE_LENGTH = 10;
 
 const initState: { loadState: string; latestTx: TxnData[] } = {
     loadState: 'pending',
@@ -106,7 +106,7 @@ function LatestTxView({
     const [network] = useContext(NetworkContext);
      const testTableData = {
             data: results.latestTx.map((txn) => ({
-                date: `7s ago`,
+                date: `${timeAgo(txn.timestamp_ms, undefined,true)} `,
                 transactionId: [
                     {
                         url: txn.txId,
