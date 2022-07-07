@@ -2445,6 +2445,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashlink"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d452c155cb93fecdfb02a73dd57b5d8e442c2063bd7aac72f1bc5e4263a43086"
+dependencies = [
+ "hashbrown 0.12.1",
+]
+
+[[package]]
 name = "hdrhistogram"
 version = "7.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3141,9 +3150,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8015d95cb7b2ddd3c0d32ca38283ceb1eea09b4713ee380bceb942d85a244228"
+checksum = "c84e6fe5655adc6ce00787cf7dcaf8dc4f998a0565d23eafc207a8b08ca3349a"
 dependencies = [
  "hashbrown 0.11.2",
 ]
@@ -4813,9 +4822,9 @@ dependencies = [
 
 [[package]]
 name = "plotters-backend"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d88417318da0eaf0fdcdb51a0ee6c3bed624333bff8f946733049380be67ac1c"
+checksum = "193228616381fecdc1224c62e96946dfbc73ff4384fba576e052ff8c1bea8142"
 
 [[package]]
 name = "plotters-svg"
@@ -6166,7 +6175,7 @@ dependencies = [
  "futures-executor",
  "futures-intrusive",
  "futures-util",
- "hashlink",
+ "hashlink 0.7.0",
  "hex",
  "indexmap",
  "itoa 1.0.2",
@@ -8545,7 +8554,7 @@ dependencies = [
  "half",
  "hashbrown 0.11.2",
  "hashbrown 0.12.1",
- "hashlink",
+ "hashlink 0.8.0",
  "hdrhistogram",
  "heck 0.3.3",
  "heck 0.4.0",
