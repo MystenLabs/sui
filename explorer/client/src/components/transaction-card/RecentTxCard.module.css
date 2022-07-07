@@ -19,7 +19,7 @@ div.txcardgrid > div:first-child {
 }
 
 .txlatestesults {
-    @apply w-11/12 md:w-10/12 max-w-[1200px] mx-auto mb-[2rem] mt-10 m-auto;
+    @apply mx-auto mb-[2rem] mt-10 m-auto;
 }
 
 div.txadd {
@@ -68,4 +68,11 @@ div.txadd {
 
 .success {
     @apply text-green-400;
+}
+
+.recenttTxFooter {
+    @apply flex justify-between text-xs text-gray-500 capitalize items-center;
+}
+.recenttTxFooter a {
+    @apply text-gray-700 font-semibold;
 }

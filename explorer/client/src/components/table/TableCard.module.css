@@ -1,23 +1,29 @@
-.content{
+.content {
     @apply container overflow-x-auto   text-left text-gray-500;
 }
-.table{
-    @apply w-full text-sm text-left text-gray-500 dark:text-gray-400;
+.table {
+    @apply w-full text-sm text-left text-gray-500 dark:text-gray-400 overflow-x-auto min-w-max;
 }
 
 .table th {
-    @apply text-left font-normal uppercase text-gray-700;
+    @apply text-left font-normal uppercase text-gray-500;
 }
-.table tbody tr{
+
+.table td {
+    @apply pr-5;
+}
+.table tbody tr {
     @apply space-y-10 mt-10;
 }
 
-.addresses{
+.addresses {
     @apply flex flex-wrap;
 }
+
 .addresses svg {
     @apply mr-1;
 }
-.tableSpacing{
+
+.tableSpacing {
     @apply pb-2 pt-2;
 }

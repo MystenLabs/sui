@@ -2,6 +2,6 @@ div.home {
     @apply bg-[#f8f8f8] min-h-screen;
 }
 
-div.container{
-    @apply mx-auto grid md:grid-cols-2 grid-cols-1;
+div.container {
+    @apply mx-auto grid md:grid-cols-2 grid-cols-1 max-w-[1440px];
 }

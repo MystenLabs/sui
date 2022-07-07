@@ -12,10 +12,7 @@ import { ReactComponent as ContentForwardArrow } from '../../assets/SVGIcons/for
 import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/success.svg';
 import Longtext from '../../components/longtext/Longtext';
 
-import type {
-    ExecutionStatusType,
-    TransactionKindName
-} from '@mysten/sui.js';
+import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
 import styles from './TableCard.module.css';
 
@@ -27,7 +24,7 @@ type Link = {
     isLink?: boolean;
 };
 
-type TableColumn =  {
+type TableColumn = {
     headerLabel: string;
     accessorKey: string;
 };
@@ -35,13 +32,19 @@ type TableColumn =  {
 // type Links = [Link, Link?];
 type Links = Link[];
 
-type TxType =  {
-     [key: string]: string | number | boolean |  Links  | {
+// support multiple types with sepcial handling for 'addresses'/links and status
+type TxType = {
+    [key: string]:
+        | string
+        | number
+        | boolean
+        | Links
+        | {
               txTypeName: TransactionKindName | undefined;
               status: ExecutionStatusType;
           };
- } 
-  
+};
+
 function TableCard({
     tabledata,
 }: {
@@ -60,6 +63,7 @@ function TableCard({
                 id: column.accessorKey,
                 cell: (info: any) => {
                     const content = info.getValue();
+                    // default types
                     if (
                         typeof content === 'string' ||
                         typeof content === 'number' ||
@@ -67,35 +71,38 @@ function TableCard({
                     ) {
                         return info.getValue();
                     }
-    
-                    if (Array.isArray(content)) { 
-                       
-                        return  <section
-                            className={styles.addresses}
-                        >{ content.map((itm, idx) => (
-                                <div key={idx + itm.url}>
-                                    <Longtext
-                                        text={itm.url}
-                                        alttext={itm.name}
-                                        category={itm.category || 'unknown'}
-                                        isLink={itm?.isLink}
-                                        isCopyButton={itm?.copy}
-                                    />
-                                    {idx !== content.length - 1 && (
-                                        <ContentForwardArrow />
-                                    )}
-                                </div>
-                            )
-                        )}</section>;
+
+                    // handle multple links in one cell
+                    if (Array.isArray(content)) {
+                        return (
+                            <section className={styles.addresses}>
+                                {content.map((itm, idx) => (
+                                    <div key={idx + itm.url}>
+                                        <Longtext
+                                            text={itm.url}
+                                            alttext={itm.name}
+                                            category={itm.category || 'unknown'}
+                                            isLink={itm?.isLink}
+                                            isCopyButton={itm?.copy}
+                                        />
+                                        {idx !== content.length - 1 && (
+                                            <ContentForwardArrow />
+                                        )}
+                                    </div>
+                                ))}
+                            </section>
+                        );
                     }
+                    // Special handling for status
                     if (typeof content === 'object' && content !== null) {
                         return (
                             <>
-                                {content.status === 'success' ?
+                                {content.status === 'success' ? (
                                     <ContentSuccessStatus />
-                                : <ContentFailedStatus/>
-                                }
-                               {' '} {content.txTypeName}
+                                ) : (
+                                    <ContentFailedStatus />
+                                )}{' '}
+                                {content.txTypeName}
                             </>
                         );
                     }
@@ -138,7 +145,10 @@ function TableCard({
                     {table.getRowModel().rows.map((row) => (
                         <tr key={row.id}>
                             {row.getVisibleCells().map((cell) => (
-                                <td key={cell.id} className={styles.tableSpacing}>
+                                <td
+                                    key={cell.id}
+                                    className={styles.tableSpacing}
+                                >
                                     {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext()
@@ -149,7 +159,6 @@ function TableCard({
                     ))}
                 </tbody>
             </table>
-            <div className="h-4" />
         </div>
     );
 }

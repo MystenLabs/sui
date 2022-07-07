@@ -34,6 +34,7 @@ export const convertNumberToDate = (epochMilliSecs: number | null): string => {
     )}:${stdToN(date.getUTCSeconds(), 2)} UTC`;
 };
 
+// TODO - this need a bit of modification to account for multiple display formate types
 export const timeAgo = (
     epochMilliSecs: number | null | undefined,
     timeNow?: number,
@@ -43,7 +44,7 @@ export const timeAgo = (
 
     //In static mode the time is fixed at 1 Jan 2025 01:13:10 UTC for testing purposes
     timeNow = timeNow ? timeNow : IS_STATIC_ENV ? 1735693990000 : Date.now();
-   
+
     const timeLabel = {
         year: {
             full: 'year',
@@ -71,7 +72,6 @@ export const timeAgo = (
         },
     };
     const dateKeyType = shortenTimeLabel ? 'short' : 'full';
-    
 
     let timeUnit: [string, number][];
     let timeCol = timeNow - epochMilliSecs;
@@ -94,8 +94,9 @@ export const timeAgo = (
     }
 
     const convertAmount = (amount: number, label: string) => {
-        if (amount > 1) return `${amount} ${label}s`;
-        if (amount === 1) return `${amount} ${label}`;
+        const spacing = shortenTimeLabel ? '' : ' ';
+        if (amount > 1) return `${amount}${spacing}${label}${!shortenTimeLabel ? 's' : ''}`;
+        if (amount === 1) return `${amount}${spacing}${label}`;
         return '';
     };
 

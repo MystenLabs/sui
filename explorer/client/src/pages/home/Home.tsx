@@ -74,14 +74,16 @@ function HomeAPI() {
         );
     }
     return (
-        <div data-testid="home-page" id="home" className={cl([styles.home, styles.container])}>
-            <div >
+        <div
+            data-testid="home-page"
+            id="home"
+            className={cl([styles.home, styles.container])}
+        >
+            <div>
                 <LastestTxCard count={results.count} />
-            </div>
-            <div >
                 <TxCountCard count={results.count} />
             </div>
-            
+            <div></div>
         </div>
     );
 }
