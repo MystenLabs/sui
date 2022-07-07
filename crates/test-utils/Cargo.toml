@@ -28,7 +28,7 @@ sui-node = { path = "../sui-node" }
 sui-swarm = { path = "../sui-swarm" }
 sui-types = { path = "../sui-types" }
 
-move-package = { git = "https://github.com/move-language/move", rev = "95999a9818091e382fb1c6016e68829f1dfc3127" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "95999a9818091e382fb1c6016e68829f1dfc3127", features = ["address20"] }
+move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
 
 workspace-hack = { path = "../workspace-hack"}
