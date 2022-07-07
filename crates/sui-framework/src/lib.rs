@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
-use move_cli::package::cli::UnitTestResult;
+use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use num_enum::TryFromPrimitive;
@@ -120,7 +120,7 @@ pub fn run_move_unit_tests(
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
-    move_cli::package::cli::run_move_unit_tests(
+    move_cli::base::test::run_move_unit_tests(
         path,
         build_config,
         UnitTestingConfig {
@@ -129,6 +129,7 @@ pub fn run_move_unit_tests(
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
         compute_coverage,
+        &mut std::io::stdout(),
     )
 }
 
