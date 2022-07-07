@@ -406,9 +406,14 @@ impl AuthoritySignInfo {
     ) -> SuiResult<()> {
         obligation
             .public_keys
+            .get(message_index)
+            .ok_or(SuiError::InvalidAddress)?
             .push(committee.public_key(&self.authority)?);
-        obligation.signatures.push(self.signature.clone());
-        obligation.message_index.push(message_index);
+        obligation
+            .signatures
+            .get(message_index)
+            .ok_or(SuiError::InvalidAddress)?
+            .add_signature(self.signature.clone());
         Ok(())
     }
 }
@@ -424,6 +429,7 @@ pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
     #[schemars(with = "Base64")]
     pub authorities: Vec<AuthorityName>,
+    #[schemars(with = "Base64")]
     pub signature: AggregateAuthoritySignature
 }
 
@@ -560,7 +566,6 @@ where
 {
     lookup: PubKeyLookup<S::PubKey>,
     messages: Vec<Vec<u8>>,
-    pub message_index: Vec<usize>,
     pub signatures: Vec<S>, // Change to AggregatedAuthenticator. Then make Ed25519Signature implement AggregatedAuthenticator.
     pub public_keys: Vec<Vec<S::PubKey>>,
 }
@@ -589,10 +594,9 @@ impl<S: AggregateAuthenticator> VerificationObligation<S>
 
     /// Add a new message to the list of messages to be verified.
     /// Returns the index of the message.
-    pub fn add_message(&mut self, message: Vec<u8>) -> usize {
-        let idx = self.messages.len();
+    pub fn add_message(&mut self, message: Vec<u8>) {
+        self.signatures.push(S::default());
         self.messages.push(message);
-        idx
     }
 
     pub fn verify_all(self) -> SuiResult<PubKeyLookup<S::PubKey>> {
