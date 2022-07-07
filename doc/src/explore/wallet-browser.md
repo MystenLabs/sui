@@ -54,7 +54,7 @@ Transfer your NFT to another address using the Sui Wallet Browser Extension:
 
 Transfer your token to another address on the Sui network using the Sui Wallet Browser Extension:
 
-![Transfer token](../../static/nft_transfer.gif "Transfer token")
+![Transfer token](../../static/token_transfer.gif "Transfer token")
 *Transfer tokens to another address*
 
 ### View transaction history
