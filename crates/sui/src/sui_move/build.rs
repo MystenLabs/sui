@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 #[derive(Parser)]
 pub struct Build {
     #[clap(flatten)]
-    pub new: build::Build,
+    pub build: build::Build,
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
