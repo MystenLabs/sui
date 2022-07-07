@@ -175,26 +175,26 @@ impl ValidatorService {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.key_pair().make_narwhal_keypair();
         let consensus_name = consensus_keypair.name.clone();
-        let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
-        narwhal_node::Node::spawn_primary(
-            consensus_keypair,
-            consensus_config.narwhal_committee().to_owned(),
-            &consensus_store,
-            consensus_config.narwhal_config().to_owned(),
-            /* consensus */ true, // Indicate that we want to run consensus.
-            /* execution_state */ state.clone(),
-            /* tx_confirmation */ tx_consensus_to_sui,
-            prometheus_registry,
-        )
-        .await?;
-        narwhal_node::Node::spawn_workers(
-            consensus_name,
-            /* ids */ vec![0], // We run a single worker with id '0'.
-            consensus_config.narwhal_committee().to_owned(),
-            &consensus_store,
-            consensus_config.narwhal_config().to_owned(),
-            prometheus_registry,
-        );
+        // let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
+        // narwhal_node::Node::spawn_primary(
+        //     consensus_keypair,
+        //     consensus_config.narwhal_committee().to_owned(),
+        //     &consensus_store,
+        //     consensus_config.narwhal_config().to_owned(),
+        //     /* consensus */ true, // Indicate that we want to run consensus.
+        //     /* execution_state */ state.clone(),
+        //     /* tx_confirmation */ tx_consensus_to_sui,
+        //     prometheus_registry,
+        // )
+        // .await?;
+        // narwhal_node::Node::spawn_workers(
+        //     consensus_name,
+        //     /* ids */ vec![0], // We run a single worker with id '0'.
+        //     consensus_config.narwhal_committee().to_owned(),
+        //     &consensus_store,
+        //     consensus_config.narwhal_config().to_owned(),
+        //     prometheus_registry,
+        // );
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.
