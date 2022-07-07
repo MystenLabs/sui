@@ -574,7 +574,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         pk: PublicKeyBytes,
         committee: &Committee,
     ) -> SuiResult<()> {
-        println!("{:?}", committee.index_map);
         let index = committee
             .authority_index(&pk)
             .ok_or(SuiError::UnknownSigner)? as u32;
