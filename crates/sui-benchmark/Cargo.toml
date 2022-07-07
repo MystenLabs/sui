@@ -35,5 +35,9 @@ narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "fe7de29b5
 
 workspace-hack = { path = "../workspace-hack"}
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { version = "^0.5", features = ["profiling"] }
+jemalloc-ctl = "^0.5"
+
 [features]
 benchmark = ["narwhal-node/benchmark"]

@@ -49,24 +49,27 @@ async fn main() -> Result<()> {
         config.network_address = listen_address;
     }
 
-    use jemalloc_ctl::config;
-    let malloc_conf = config::malloc_conf::mib().unwrap();
-    info!("Default Jemalloc conf: {}", malloc_conf.read().unwrap());
+    #[cfg(not(target_env = "msvc"))]
+    {
+        use jemalloc_ctl::config;
+        let malloc_conf = config::malloc_conf::mib().unwrap();
+        info!("Default Jemalloc conf: {}", malloc_conf.read().unwrap());
 
-    std::thread::spawn(|| {
-        loop {
-            // many statistics are cached and only updated when the epoch is advanced.
-            epoch::advance().unwrap();
+        std::thread::spawn(|| {
+            loop {
+                // many statistics are cached and only updated when the epoch is advanced.
+                epoch::advance().unwrap();
 
-            let allocated = stats::allocated::read().unwrap() / (1024 * 1024);
-            let resident = stats::resident::read().unwrap() / (1024 * 1024);
-            info!(
-                "Jemalloc: {} MB allocated / {} MB resident",
-                allocated, resident
-            );
-            std::thread::sleep(Duration::from_secs(60));
-        }
-    });
+                let allocated = stats::allocated::read().unwrap() / (1024 * 1024);
+                let resident = stats::resident::read().unwrap() / (1024 * 1024);
+                info!(
+                    "Jemalloc: {} MB allocated / {} MB resident",
+                    allocated, resident
+                );
+                std::thread::sleep(Duration::from_secs(60));
+            }
+        });
+    }
 
     let node = sui_node::SuiNode::start(&config).await?;
     node.wait().await?;

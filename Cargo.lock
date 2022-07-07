@@ -6440,6 +6440,8 @@ dependencies = [
  "bcs",
  "clap 3.1.18",
  "futures",
+ "jemalloc-ctl",
+ "jemallocator",
  "move-core-types",
  "multiaddr",
  "node",

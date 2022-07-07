@@ -31,7 +31,7 @@ mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94
 workspace-hack = { path = "../workspace-hack"}
 
 [profile.release]
-debug = 1
+debug = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }

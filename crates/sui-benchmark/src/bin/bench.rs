@@ -72,7 +72,6 @@ fn main() {
 
     let r = run_benchmark(benchmark);
     println!("{}", r);
-
 }
 
 fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {
