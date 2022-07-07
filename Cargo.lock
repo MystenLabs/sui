@@ -3141,9 +3141,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8015d95cb7b2ddd3c0d32ca38283ceb1eea09b4713ee380bceb942d85a244228"
+checksum = "c84e6fe5655adc6ce00787cf7dcaf8dc4f998a0565d23eafc207a8b08ca3349a"
 dependencies = [
  "hashbrown 0.11.2",
 ]
@@ -4813,9 +4813,9 @@ dependencies = [
 
 [[package]]
 name = "plotters-backend"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d88417318da0eaf0fdcdb51a0ee6c3bed624333bff8f946733049380be67ac1c"
+checksum = "193228616381fecdc1224c62e96946dfbc73ff4384fba576e052ff8c1bea8142"
 
 [[package]]
 name = "plotters-svg"
@@ -4859,7 +4859,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d86de6de25020a36c6d3643a86d9a6a9f552107c0559c60ea03551b5e16c032"
 dependencies = [
  "predicates-core",
- "termtree",
+ "termtree 0.2.4",
 ]
 
 [[package]]
@@ -7035,6 +7035,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
 
 [[package]]
+name = "termtree"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
+
+[[package]]
 name = "test-fuzz"
 version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8864,7 +8870,7 @@ dependencies = [
  "tempfile",
  "tera",
  "termcolor",
- "termtree",
+ "termtree 0.4.0",
  "test-fuzz",
  "test-fuzz-internal",
  "test-fuzz-macro",
@@ -9251,7 +9257,7 @@ dependencies = [
  "synstructure",
  "tempfile",
  "termcolor",
- "termtree",
+ "termtree 0.2.4",
  "textwrap 0.11.0",
  "textwrap 0.15.0",
  "thiserror",
