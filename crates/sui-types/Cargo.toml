@@ -41,12 +41,12 @@ rand_latest = { version = "0.8.5", package = "rand" }
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5be9046d6b8f7563740f4d03bba10550d3628672", package = "executor" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5be9046d6b8f7563740f4d03bba10550d3628672", package = "crypto" }

@@ -14,14 +14,14 @@ clap = { version = "3.1.8", features = ["derive"] }
 once_cell = "1.11.0"
 rand = "0.7.3"
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003", features = ["address20"] }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
 
 sui-framework = { path = "../sui-framework" }
 sui-types = { path = "../sui-types" }
