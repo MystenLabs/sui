@@ -94,7 +94,7 @@ console-api = { version = "0.3", default-features = false, features = ["transpor
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
-crc = { version = "2", default-features = false }
+crc = { version = "3", default-features = false }
 crc-catalog = { version = "1", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
@@ -646,7 +646,7 @@ console-api = { version = "0.3", default-features = false, features = ["transpor
 console-subscriber = { version = "0.1", features = ["env-filter"] }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
-crc = { version = "2", default-features = false }
+crc = { version = "3", default-features = false }
 crc-catalog = { version = "1", default-features = false }
 crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
