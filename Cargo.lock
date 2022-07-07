@@ -312,6 +312,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atoi"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c57d12312ff59c811c0643f4d80830505833c9ffaebd193d819392b265be8e"
+dependencies = [
+ "num-traits 0.2.15",
+]
+
+[[package]]
 name = "atomicwrites"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2279,9 +2288,9 @@ dependencies = [
 
 [[package]]
 name = "gloo-net"
-version = "0.2.0"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6d37f728c2b2b8c568bd2efb34ce9087e347c182db68f101a969b4fe23054d5"
+checksum = "351e6f94c76579cc9f9323a15f209086fc7bd428bff4288723d3a417851757b2"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -6175,7 +6184,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e48c61941ccf5ddcada342cd59e3e5173b007c509e1e8e990dafc830294d9dc5"
 dependencies = [
  "ahash",
- "atoi",
+ "atoi 0.4.0",
  "bitflags",
  "byteorder",
  "bytes",
@@ -8392,7 +8401,7 @@ dependencies = [
  "async-stream",
  "async-stream-impl",
  "async-trait",
- "atoi",
+ "atoi 1.0.0",
  "atomicwrites",
  "atty",
  "autocfg",
