@@ -9,9 +9,8 @@ edition = "2021"
 [dependencies]
 arc-swap = "1.5.0"
 tokio = { version = "1.18.2", features = ["full"] }
-tracing = "0.1.34"
+tracing = "0.1.35"
 
 sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }
-
 workspace-hack = { path = "../workspace-hack"}
