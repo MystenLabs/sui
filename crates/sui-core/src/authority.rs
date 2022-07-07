@@ -78,8 +78,7 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
-mod temporary_store;
-pub use temporary_store::AuthorityTemporaryStore;
+pub use sui_adapter::temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::{
