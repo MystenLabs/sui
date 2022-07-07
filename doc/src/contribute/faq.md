@@ -55,22 +55,22 @@ There is no relationship between Sui/Mysten and Aptos. The similarity is that th
 
 ### Can I buy the Sui token?
 
-We will have a public token for the Sui mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
+We will have a public token for the Sui Mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
 
 ### Will the token name be SUI?
 
 Yes, the token name will be SUI.
 
 
-### When is the Sui devnet/testnet/mainnet launching?
+### When is the Sui Devnet/Testnet/Mainnet launching?
 
-We have launched our [Sui DevNet](../explore/devnet.md) in May 2022. A testnet is coming in a few months. 
+We have launched our [Sui Devnet](../explore/devnet.md) in May 2022. A Testnet is coming in a few months. 
 
 See our roadmap: \
 [https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap) 
 
 
-### Is there some kind of waitlist for the testnet?
+### Is there some kind of waitlist for the Testnet?
 
 No. More information is forthcoming.
 
@@ -135,17 +135,17 @@ See the instructions to [run a Sui Fullnode](../build/fullnode.md).
 
 ### Can I run a Sui validator node?
 
-We have a public [Sui DevNet](../explore/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
+We have a public [Sui Devnet](../explore/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
 
 You may also run a local, non-networked Sui node for development using the [Sui CLI client](../build/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../build/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
 
-Soon we will have a TestNet that allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, 
+Soon we will have a Testnet that allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, 
 
-### What does a local node do and what are the hardware requirements to run it? How is it different from a testnet node?
+### What does a local node do and what are the hardware requirements to run it? How is it different from a Testnet node?
 
 A local node allows you to immediately start building software using Move for Sui, and can be run on commodity hardware. See the [Sui Fullnode](../build/fullnode.md) documentation for system requirements.
 
-A testnet node will be part of a live network of validators.
+A Testnet node will be part of a live network of validators.
 
 
 ## Technology
