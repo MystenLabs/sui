@@ -16,16 +16,15 @@ serde = { version = "1.0.138", features = ["derive"] }
 serde_json = "1.0.80"
 serde_with = { version = "1.14.0", features = ["hex"] }
 colored = "2.0.0"
-either = "1.6.1"
+either = "1.7.0"
 itertools = "0.10.3"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003", features = ["address20"] }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
-
-workspace-hack = { path = "../workspace-hack" }
+workspace-hack = { path = "../workspace-hack"}
