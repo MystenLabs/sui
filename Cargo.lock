@@ -6926,6 +6926,7 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "tonic",
+ "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=94d7da89f6a52d7f60a9802b0a03147a9c89c3e4)",
  "workspace-hack 0.1.0",
  "zeroize",

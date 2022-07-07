@@ -1,29 +1,28 @@
-use std::iter;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use super::*;
 use crate::epoch::EpochInfoLocals;
 use crate::gateway_state::GatewayTxSeqNumber;
-use crate::transaction_input_checker::InputObjects;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::iter;
 use std::path::Path;
+use std::sync::atomic::AtomicU64;
 use sui_storage::{
     default_db_options,
     mutex_table::{LockGuard, MutexTable},
     write_ahead_log::DBWriteAheadLog,
     LockService,
 };
-use tokio::sync::Notify;
-
-use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::{Owner, OBJECT_START_VERSION};
+use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};

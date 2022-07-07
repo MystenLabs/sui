@@ -37,7 +37,6 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::{adapter::new_move_vm, genesis};
-use sui_core::transaction_input_checker::InputObjects;
 use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
@@ -48,7 +47,7 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
     event::Event,
     gas,
-    messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
+    messages::{ExecutionStatus, InputObjects, Transaction, TransactionData, TransactionEffects},
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
