@@ -159,10 +159,11 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 (name, authority)
             })
             .collect::<BTreeMap<_, _>>();
-        let narwhal_committee = DebugIgnore(Arc::new(narwhal_config::Committee {
-            authorities: ArcSwap::from_pointee(narwhal_committee),
-            epoch: ArcSwap::from_pointee(genesis.epoch() as Epoch),
-        }));
+        let narwhal_committee =
+            DebugIgnore(Arc::new(ArcSwap::from_pointee(narwhal_config::Committee {
+                authorities: narwhal_committee,
+                epoch: genesis.epoch() as Epoch,
+            })));
 
         let validator_configs = validators
             .into_iter()

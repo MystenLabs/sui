@@ -22,6 +22,6 @@ sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
-workspace-hack = { path = "../workspace-hack"}
 
 move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+workspace-hack = { path = "../workspace-hack"}
