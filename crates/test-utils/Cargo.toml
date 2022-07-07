@@ -30,5 +30,4 @@ sui-types = { path = "../sui-types" }
 
 move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
-
 workspace-hack = { path = "../workspace-hack"}

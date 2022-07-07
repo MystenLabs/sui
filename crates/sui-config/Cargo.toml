@@ -17,10 +17,10 @@ dirs = "4.0.0"
 multiaddr = "0.14.0"
 once_cell = "1.11.0"
 debug-ignore = { version = "1.0.2", features = ["serde"] }
-tracing = "0.1.34"
+tracing = "0.1.35"
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "fe7de29b59810d4515604af949cdcf1fb5a3720a", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "fe7de29b59810d4515604af949cdcf1fb5a3720a", package = "crypto" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "5be9046d6b8f7563740f4d03bba10550d3628672", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5be9046d6b8f7563740f4d03bba10550d3628672", package = "crypto" }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
 move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
 

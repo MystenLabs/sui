@@ -13,7 +13,7 @@ axum = "0.5.11"
 clap = { version = "3.1.17", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = { version = "1.18.2", features = ["full"] }
-tracing = "0.1.34"
+tracing = "0.1.35"
 serde = { version = "1.0.138", features = ["derive"] }
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
@@ -24,7 +24,6 @@ sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
-
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]

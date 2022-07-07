@@ -10,7 +10,7 @@ edition = "2021"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 async-trait = "0.1.53"
 serde = { version = "1.0.138", features = ["derive"] }
-tracing = "0.1.34"
+tracing = "0.1.35"
 tokio = { version = "1.18.2", features = ["full"] }
 futures = "0.3.21"
 prometheus = "0.13.1"
@@ -26,8 +26,8 @@ sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-node = { path = "../sui-node" }
 
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
-workspace-hack = { path = "../workspace-hack"}
 move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
