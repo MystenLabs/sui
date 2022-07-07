@@ -32,9 +32,10 @@ members = [
     "crates/x",
 ]
 
+# Debug symbols are really important for profiling
 [profile.release]
-debug = false
-strip = "debuginfo"
+debug = true
+# strip = "debuginfo"
 
 [profile.bench]
 debug = true

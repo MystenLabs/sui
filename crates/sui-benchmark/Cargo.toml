@@ -34,5 +34,9 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5be9046d6b8f7563740f4d03bba10550d3628672", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { version = "^0.5", features = ["profiling"] }
+jemalloc-ctl = "^0.5"
+
 [features]
 benchmark = ["narwhal-node/benchmark"]
