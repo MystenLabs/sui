@@ -38,6 +38,10 @@ move-cli = { git = "https://github.com/move-language/move", rev = "f07e99473e6ed
 move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
 workspace-hack = { path = "../workspace-hack"}
 
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = { version = "^0.5", features = ["profiling"] }
+jemalloc-ctl = "^0.5"
+
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.21"
