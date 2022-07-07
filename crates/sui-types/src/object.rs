@@ -291,14 +291,16 @@ impl Owner {
     }
 
     pub fn is_immutable(&self) -> bool {
-        self == &Owner::Immutable
+        matches!(self, Owner::Immutable)
     }
 
+    /// Is owned by an address or an object
+    /// In the object case, it might be owned by an address owned object, a shared object, or
+    /// another object owned object.
+    /// If the root of this ownership is a shared object, we refer to these objects as
+    /// "quasi-shared", as they are not shared themselves, but behave similarly in some cases
     pub fn is_owned_or_quasi_shared(&self) -> bool {
-        match self {
-            Owner::AddressOwner(_) | Owner::ObjectOwner(_) => true,
-            Owner::Shared | Owner::Immutable => false,
-        }
+        matches!(self, Owner::AddressOwner(_) | Owner::ObjectOwner(_))
     }
 
     pub fn is_shared(&self) -> bool {
