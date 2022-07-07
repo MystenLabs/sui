@@ -289,6 +289,12 @@ export function getMergeCoinResponse(
   return 'MergeCoinResponse' in data ? data.MergeCoinResponse : undefined;
 }
 
+export function getPublishResponse(
+  data: TransactionResponse
+): PublishResponse | undefined {
+  return 'PublishResponse' in data ? data.PublishResponse : undefined;
+}
+
 /**
  * Get the updated coin after a merge.
  * @param data the response for executing a merge coin transaction
