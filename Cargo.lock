@@ -2279,9 +2279,9 @@ dependencies = [
 
 [[package]]
 name = "gloo-net"
-version = "0.2.0"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6d37f728c2b2b8c568bd2efb34ce9087e347c182db68f101a969b4fe23054d5"
+checksum = "351e6f94c76579cc9f9323a15f209086fc7bd428bff4288723d3a417851757b2"
 dependencies = [
  "futures-channel",
  "futures-core",
