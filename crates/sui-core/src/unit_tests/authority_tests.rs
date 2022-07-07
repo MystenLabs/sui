@@ -471,9 +471,6 @@ pub async fn send_and_confirm_transaction(
 
     // Collect signatures from a quorum of authorities
     let committee = authority.committee.load();
-    println!("{:?}", committee.voting_rights);
-    println!("{:?}", committee.index_map);
-    println!("{:?}", vote.auth_sign_info.authority);
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     let certificate = builder
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
@@ -525,7 +522,6 @@ async fn test_publish_dependent_module_ok() {
         bytes
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
-    println!("{:?}", authority.committee.load().index_map);
 
     let data = TransactionData::new_module(
         sender,
