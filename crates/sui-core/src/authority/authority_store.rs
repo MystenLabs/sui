@@ -816,7 +816,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         let owned_inputs: Vec<_> = active_inputs
             .iter()
-            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned())
+            .filter(|(id, _, _)| objects.get(id).unwrap().is_owned_or_quasi_shared())
             .cloned()
             .collect();
 
@@ -921,7 +921,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             let new_locks_to_init: Vec<_> = written
                 .iter()
                 .filter_map(|(_, (object_ref, new_object))| {
-                    if new_object.is_owned() {
+                    if new_object.is_owned_or_quasi_shared() {
                         Some(*object_ref)
                     } else {
                         None

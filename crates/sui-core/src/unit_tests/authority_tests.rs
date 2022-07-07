@@ -461,6 +461,37 @@ async fn test_immutable_gas() {
     ));
 }
 
+// This test attempts to use an immutable gas object to pay for gas.
+// We expect it to fail early during transaction handle phase.
+#[tokio::test]
+async fn test_objected_owned_gas() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let parent_object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, parent_object_id)]).await;
+    let child_object_id = ObjectID::random();
+    let child_object = Object::with_object_owner_for_testing(child_object_id, parent_object_id);
+    authority_state
+        .insert_genesis_object(child_object.clone())
+        .await;
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        child_object.compute_object_reference(),
+        10000,
+    );
+    let signature = Signature::new(&data, &sender_key);
+    let transfer_transaction = Transaction::new(data, signature);
+    let result = authority_state
+        .handle_transaction(transfer_transaction.clone())
+        .await;
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
+}
+
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     transaction: Transaction,
