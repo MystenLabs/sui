@@ -28,7 +28,7 @@ type TableColumn = {
     headerLabel: string;
     accessorKey: string;
 };
-// TODO: update state to use Tuple type
+// TODO: update Link to use Tuple type
 // type Links = [Link, Link?];
 type Links = Link[];
 
@@ -39,6 +39,7 @@ type TxType = {
         | number
         | boolean
         | Links
+        | React.ReactElement
         | {
               txTypeName: TransactionKindName | undefined;
               status: ExecutionStatusType;
@@ -53,9 +54,8 @@ function TableCard({
         columns: TableColumn[];
     };
 }) {
-    // Make some columns!
     const data = useMemo(() => tabledata.data, [tabledata.data]);
-
+    // Use Columns to create a table
     const columns = useMemo(
         () =>
             tabledata.columns.map((column) => ({
@@ -95,6 +95,10 @@ function TableCard({
                     }
                     // Special handling for status
                     if (typeof content === 'object' && content !== null) {
+                        // TODO: Not sure to allow HTML elements in the table
+                        // Handle HTML elements
+                        if (!content.txTypeName) return <>{content}</>;
+
                         return (
                             <>
                                 {content.status === 'success' ? (
@@ -147,7 +151,7 @@ function TableCard({
                             {row.getVisibleCells().map((cell) => (
                                 <td
                                     key={cell.id}
-                                    className={styles.tableSpacing}
+                                    className={styles.tablespacing}
                                 >
                                     {flexRender(
                                         cell.column.columnDef.cell,

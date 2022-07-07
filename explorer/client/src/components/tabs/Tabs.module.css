@@ -1,10 +1,13 @@
 .tabs {
     @apply w-full;
 }
+
 .tablist {
     @apply m-0 p-0 block mb-3 w-full transition-all duration-200 ease-in-out;
+
     border-bottom: 1px solid #f0f1f2;
 }
+
 .tab {
     @apply list-none capitalize font-normal text-lg text-gray-500 font-sans mr-5 inline-block w-auto cursor-pointer pt-1 pb-1;
 }
@@ -12,6 +15,7 @@
 .tab-content {
     @apply w-full mt-20;
 }
+
 .selected {
     border-bottom: 1px solid #767a81;
 

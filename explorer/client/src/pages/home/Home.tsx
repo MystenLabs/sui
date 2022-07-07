@@ -4,8 +4,8 @@ import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
+import SuiNetworkStats from '../../components/network-stats/SuiNetworkStats';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
-import TxCountCard from '../../components/transaction-count/TxCountCard';
 import { NetworkContext } from '../../context';
 import {
     DefaultRpcClient as rpc,
@@ -27,7 +27,7 @@ function HomeStatic() {
     return (
         <div data-testid="home-page" id="home" className={styles.home}>
             <LastestTxCard count={count} />
-            <TxCountCard count={count} />
+            <SuiNetworkStats count={count} />
         </div>
     );
 }
@@ -79,11 +79,13 @@ function HomeAPI() {
             id="home"
             className={cl([styles.home, styles.container])}
         >
-            <div>
+            <section className="left-item">
                 <LastestTxCard count={results.count} />
-                <TxCountCard count={results.count} />
-            </div>
-            <div></div>
+                <SuiNetworkStats count={results.count} />
+            </section>
+            <section className="right-item">
+                <LastestTxCard count={results.count} />
+            </section>
         </div>
     );
 }

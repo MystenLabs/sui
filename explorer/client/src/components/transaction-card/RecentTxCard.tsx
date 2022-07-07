@@ -33,7 +33,11 @@ import styles from './RecentTxCard.module.css';
 
 const TRUNCATE_LENGTH = 10;
 
-const initState: { loadState: string; latestTx: TxnData[], totalTxcount?: number} = {
+const initState: {
+    loadState: string;
+    latestTx: TxnData[];
+    totalTxcount?: number;
+} = {
     loadState: 'pending',
     latestTx: [],
     totalTxcount: 0,
@@ -174,7 +178,7 @@ function LatestTxView({
             <Tabs selected={0}>
                 <div title="Transactions">
                     <TableCard tabledata={testTableData} />
-                    <section className={styles.recenttTxFooter}>
+                    <section className={styles.recenttxfooter}>
                         <Longtext
                             text=""
                             category="transactions"
@@ -236,7 +240,7 @@ function LatestTxCardAPI({ count }: { count: number }) {
                 setResults({
                     loadState: 'loaded',
                     latestTx: resp,
-                    totalTxcount: count
+                    totalTxcount: count,
                 });
             })
             .catch((err) => {
@@ -277,11 +281,7 @@ function LatestTxCardAPI({ count }: { count: number }) {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
-    return (
-        <>
-            <LatestTxView results={results} />
-        </>
-    );
+    return <LatestTxView results={results} />;
 }
 
 const LatestTxCard = ({ count }: { count: number }) =>

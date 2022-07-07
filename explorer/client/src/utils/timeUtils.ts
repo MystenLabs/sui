@@ -63,8 +63,8 @@ export const timeAgo = (
             short: 'h',
         },
         min: {
-            full: 'minute',
-            short: 'min',
+            full: 'min',
+            short: 'm',
         },
         sec: {
             full: 'sec',
@@ -95,7 +95,8 @@ export const timeAgo = (
 
     const convertAmount = (amount: number, label: string) => {
         const spacing = shortenTimeLabel ? '' : ' ';
-        if (amount > 1) return `${amount}${spacing}${label}${!shortenTimeLabel ? 's' : ''}`;
+        if (amount > 1)
+            return `${amount}${spacing}${label}${!shortenTimeLabel ? 's' : ''}`;
         if (amount === 1) return `${amount}${spacing}${label}`;
         return '';
     };

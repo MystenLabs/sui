@@ -1,6 +1,7 @@
 .content {
     @apply container overflow-x-auto   text-left text-gray-500;
 }
+
 .table {
     @apply w-full text-sm text-left text-gray-500 dark:text-gray-400 overflow-x-auto min-w-max;
 }
@@ -12,6 +13,7 @@
 .table td {
     @apply pr-5;
 }
+
 .table tbody tr {
     @apply space-y-10 mt-10;
 }
@@ -24,6 +26,6 @@
     @apply mr-1;
 }
 
-.tableSpacing {
+.tablespacing {
     @apply pb-2 pt-2;
 }

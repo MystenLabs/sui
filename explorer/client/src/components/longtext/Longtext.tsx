@@ -64,7 +64,7 @@ function Longtext({
     }
 
     if (showIconButton) {
-        iconButton = <ContentForwardArrowDark />; 
+        iconButton = <ContentForwardArrowDark />;
     }
 
     const navigateUnknown = useCallback(() => {
@@ -105,8 +105,7 @@ function Longtext({
                     className={styles.longtext}
                     to={`/${category}/${encodeURIComponent(text)}`}
                 >
-                    {alttext ? alttext : text}{' '}
-                    {iconButton}
+                    {alttext ? alttext : text} {iconButton}
                 </Link>
             );
         }

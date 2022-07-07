@@ -10,4 +10,4 @@ export const numberSuffix = (num: number): string => {
         return (num / 1000).toFixed(1) + 'K';
     }
     return num.toString();
-}
+};
