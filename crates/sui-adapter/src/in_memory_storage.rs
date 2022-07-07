@@ -1,10 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
-    error::SuiResult,
+    error::{SuiError, SuiResult},
     object::Object,
     storage::{BackingPackageStore, DeleteKind},
 };
@@ -22,6 +23,38 @@ impl BackingPackageStore for InMemoryStorage {
     }
 }
 
+impl BackingPackageStore for &mut InMemoryStorage {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        (**self).get_package(package_id)
+    }
+}
+
+impl ModuleResolver for InMemoryStorage {
+    type Error = SuiError;
+
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self
+            .get_package(&ObjectID::from(*module_id.address()))?
+            .and_then(|package| {
+                package
+                    .data
+                    .try_as_package()
+                    .unwrap()
+                    .serialized_module_map()
+                    .get(module_id.name().as_str())
+                    .cloned()
+            }))
+    }
+}
+
+impl ModuleResolver for &mut InMemoryStorage {
+    type Error = SuiError;
+
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        (**self).get_module(module_id)
+    }
+}
+
 impl InMemoryStorage {
     pub fn new(objects: Vec<Object>) -> Self {
         let mut persistent = BTreeMap::new();
@@ -33,6 +66,14 @@ impl InMemoryStorage {
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
         self.persistent.get(id)
+    }
+
+    pub fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<&Object>> {
+        let mut result = Vec::new();
+        for id in objects {
+            result.push(self.get_object(id));
+        }
+        result
     }
 
     pub fn insert_object(&mut self, object: Object) {
