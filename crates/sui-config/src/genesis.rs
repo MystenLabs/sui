@@ -3,10 +3,27 @@
 
 use crate::ValidatorInfo;
 use anyhow::Context;
+use anyhow::Result;
 use move_binary_format::CompiledModule;
+use move_core_types::ident_str;
+use move_core_types::language_storage::ModuleId;
+use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashSet;
 use std::{fs, path::Path};
+use sui_adapter::adapter;
+use sui_adapter::adapter::MoveVM;
+use sui_adapter::in_memory_storage::InMemoryStorage;
+use sui_adapter::temporary_store::TemporaryStore;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::TransactionDigest;
+use sui_types::gas::SuiGasStatus;
+use sui_types::messages::CallArg;
+use sui_types::messages::InputObjects;
+use sui_types::messages::Transaction;
 use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::MOVE_STDLIB_ADDRESS;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
     base_types::TxContext,
     committee::{Committee, EpochId},
@@ -17,27 +34,17 @@ use tracing::{info, trace};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Genesis {
-    modules: Vec<Vec<CompiledModule>>,
     objects: Vec<Object>,
-    genesis_ctx: TxContext,
     validator_set: Vec<ValidatorInfo>,
 }
 
 impl Genesis {
-    pub fn modules(&self) -> &[Vec<CompiledModule>] {
-        &self.modules
-    }
-
     pub fn objects(&self) -> &[Object] {
         &self.objects
     }
 
-    pub fn genesis_ctx(&self) -> &TxContext {
-        &self.genesis_ctx
-    }
-
     pub fn epoch(&self) -> EpochId {
-        self.genesis_ctx.epoch()
+        0
     }
 
     pub fn validator_set(&self) -> &[ValidatorInfo] {
@@ -82,29 +89,12 @@ impl Serialize for Genesis {
 
         #[derive(Serialize)]
         struct RawGeneis<'a> {
-            modules: Vec<Vec<Vec<u8>>>,
             objects: &'a [Object],
-            genesis_ctx: &'a TxContext,
             validator_set: &'a [ValidatorInfo],
         }
 
-        let mut vec_serialized_modules = Vec::new();
-        for modules in &self.modules {
-            let mut serialized_modules = Vec::new();
-            for module in modules {
-                let mut buf = Vec::new();
-                module
-                    .serialize(&mut buf)
-                    .map_err(|e| Error::custom(e.to_string()))?;
-                serialized_modules.push(buf);
-            }
-            vec_serialized_modules.push(serialized_modules);
-        }
-
         let raw_genesis = RawGeneis {
-            modules: vec_serialized_modules,
             objects: &self.objects,
-            genesis_ctx: &self.genesis_ctx,
             validator_set: &self.validator_set,
         };
 
@@ -128,9 +118,7 @@ impl<'de> Deserialize<'de> for Genesis {
 
         #[derive(Deserialize)]
         struct RawGeneis {
-            modules: Vec<Vec<Vec<u8>>>,
             objects: Vec<Object>,
-            genesis_ctx: TxContext,
             validator_set: Vec<ValidatorInfo>,
         }
 
@@ -145,21 +133,8 @@ impl<'de> Deserialize<'de> for Genesis {
         let raw_genesis: RawGeneis =
             bcs::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))?;
 
-        let mut modules = Vec::new();
-        for serialized_modules in raw_genesis.modules {
-            let mut vec_modules = Vec::new();
-            for buf in serialized_modules {
-                let module =
-                    CompiledModule::deserialize(&buf).map_err(|e| Error::custom(e.to_string()))?;
-                vec_modules.push(module);
-            }
-            modules.push(vec_modules);
-        }
-
         Ok(Genesis {
-            modules,
             objects: raw_genesis.objects,
-            genesis_ctx: raw_genesis.genesis_ctx,
             validator_set: raw_genesis.validator_set,
         })
     }
@@ -211,11 +186,6 @@ impl Builder {
         self
     }
 
-    // pub fn add_account(mut self, config: AccountConfig) -> Self {
-    //     self.accounts.push(config);
-    //     self
-    // }
-
     pub fn add_validator(mut self, validator: ValidatorInfo) -> Self {
         self.validators.push(validator);
         self
@@ -224,52 +194,190 @@ impl Builder {
     pub fn build(self) -> Genesis {
         let mut modules = Vec::new();
         let objects = self.objects;
+        let mut genesis_ctx = self.genesis_ctx;
 
         // Load Move Framework
         info!("Loading Move framework lib from {:?}", self.move_framework);
         let move_modules = self
             .move_framework
             .unwrap_or_else(sui_framework::get_move_stdlib);
-        // let move_framework =
-        //     Object::new_package(move_modules.clone(), TransactionDigest::genesis());
         modules.push(move_modules);
-        // objects.push(move_framework);
 
         // Load Sui Framework
         info!("Loading Sui framework lib from {:?}", self.sui_framework);
         let sui_modules = self
             .sui_framework
             .unwrap_or_else(sui_framework::get_sui_framework);
-        // let sui_framework = Object::new_package(sui_modules.clone(), TransactionDigest::genesis());
         modules.push(sui_modules);
-        // objects.push(sui_framework);
 
         // add custom modules
         modules.extend(self.move_modules);
 
+        let objects =
+            create_genesis_objects(&mut genesis_ctx, &modules, &objects, &self.validators);
+
         Genesis {
-            modules,
             objects,
-            genesis_ctx: self.genesis_ctx,
             validator_set: self.validators,
         }
     }
 }
 
+fn create_genesis_objects(
+    genesis_ctx: &mut TxContext,
+    modules: &[Vec<CompiledModule>],
+    input_objects: &[Object],
+    validators: &[ValidatorInfo],
+) -> Vec<Object> {
+    let mut store = InMemoryStorage::new(Vec::new());
+
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let move_vm = adapter::new_move_vm(native_functions.clone())
+        .expect("We defined natives to not fail here");
+
+    for modules in modules {
+        process_package(
+            &mut store,
+            &native_functions,
+            genesis_ctx,
+            modules.to_owned(),
+        )
+        .unwrap();
+    }
+
+    for object in input_objects {
+        store.insert_object(object.to_owned());
+    }
+
+    generate_genesis_system_object(&mut store, &move_vm, validators, genesis_ctx).unwrap();
+
+    store
+        .into_inner()
+        .into_iter()
+        .map(|(_id, object)| object)
+        .collect()
+}
+
+fn process_package(
+    store: &mut InMemoryStorage,
+    // mv: &MoveVM,
+    native_functions: &NativeFunctionTable,
+    ctx: &mut TxContext,
+    modules: Vec<CompiledModule>,
+) -> Result<()> {
+    let inputs = Transaction::input_objects_in_compiled_modules(&modules);
+    let ids: Vec<_> = inputs.iter().map(|kind| kind.object_id()).collect();
+    let input_objects = store.get_objects(&ids[..]);
+    // When publishing genesis packages, since the std framework packages all have
+    // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
+    // them as dependencies even though they are not. Hence input_objects contain objects
+    // that don't exist on-chain because they are yet to be published.
+    #[cfg(debug_assertions)]
+    {
+        let to_be_published_addresses: HashSet<_> = modules
+            .iter()
+            .map(|module| *module.self_id().address())
+            .collect();
+        assert!(
+            // An object either exists on-chain, or is one of the packages to be published.
+            inputs
+                .iter()
+                .zip(input_objects.iter())
+                .all(|(kind, obj_opt)| obj_opt.is_some()
+                    || to_be_published_addresses.contains(&kind.object_id()))
+        );
+    }
+    let filtered = inputs
+        .into_iter()
+        .zip(input_objects.into_iter())
+        .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object.to_owned())))
+        .collect::<Vec<_>>();
+
+    debug_assert!(ctx.digest() == TransactionDigest::genesis());
+    let mut temporary_store =
+        TemporaryStore::new(&store, InputObjects::new(filtered), ctx.digest());
+    let package_id = ObjectID::from(*modules[0].self_id().address());
+    let natives = native_functions.clone();
+    let mut gas_status = SuiGasStatus::new_unmetered();
+    let vm = adapter::verify_and_link(
+        &temporary_store,
+        &modules,
+        package_id,
+        natives,
+        &mut gas_status,
+    )?;
+    adapter::store_package_and_init_modules(
+        &mut temporary_store,
+        &vm,
+        modules,
+        ctx,
+        &mut gas_status,
+    )?;
+
+    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+
+    store.finish(written, deleted);
+
+    Ok(())
+}
+
+pub fn generate_genesis_system_object(
+    store: &mut InMemoryStorage,
+    move_vm: &MoveVM,
+    committee: &[ValidatorInfo],
+    genesis_ctx: &mut TxContext,
+) -> Result<()> {
+    let genesis_digest = genesis_ctx.digest();
+    let mut temporary_store =
+        TemporaryStore::new(&store, InputObjects::new(vec![]), genesis_digest);
+
+    let mut pubkeys = Vec::new();
+    let mut sui_addresses = Vec::new();
+    let mut network_addresses = Vec::new();
+    let mut names = Vec::new();
+    let mut stakes = Vec::new();
+
+    for (i, validator) in committee.iter().enumerate() {
+        pubkeys.push(validator.public_key());
+        sui_addresses.push(validator.sui_address());
+        network_addresses.push(validator.network_address());
+        // TODO: Allow config to specify human readable validator names.
+        names.push(format!("validator-{i}").into_bytes());
+        stakes.push(validator.stake());
+    }
+
+    adapter::execute(
+        move_vm,
+        &mut temporary_store,
+        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),
+        &ident_str!("create").to_owned(),
+        vec![],
+        vec![
+            CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&names).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
+        ],
+        &mut SuiGasStatus::new_unmetered(),
+        genesis_ctx,
+    )?;
+
+    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+
+    store.finish(written, deleted);
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
-    use super::Genesis;
+    use super::Builder;
 
     #[test]
     fn roundtrip() {
-        let sui_lib = sui_framework::get_sui_framework();
-
-        let genesis = Genesis {
-            modules: vec![sui_lib],
-            objects: vec![],
-            genesis_ctx: sui_adapter::genesis::get_genesis_context(),
-            validator_set: vec![],
-        };
+        let genesis = Builder::new(sui_adapter::genesis::get_genesis_context()).build();
 
         let s = serde_yaml::to_string(&genesis).unwrap();
         let from_s = serde_yaml::from_str(&s).unwrap();

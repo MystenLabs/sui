@@ -13,7 +13,7 @@ use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
-    gas::{MAX_GAS_BUDGET, MIN_GAS_BUDGET},
+    gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
     messages::Transaction,
 };
 

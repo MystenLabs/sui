@@ -15,12 +15,8 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
-use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::{
-    account_address::AccountAddress, ident_str, language_storage::ModuleId,
-    resolver::ModuleResolver,
-};
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
@@ -30,7 +26,7 @@ use prometheus::{
 };
 use std::ops::Deref;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -52,7 +48,6 @@ use sui_types::{
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_ensure,
-    gas::SuiGasStatus,
     messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
     storage::{BackingPackageStore, DeleteKind, Storage},
@@ -89,10 +84,6 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
-
-use self::authority_store::{
-    generate_genesis_system_object, store_package_and_init_modules_for_genesis,
-};
 
 pub mod authority_notifier;
 
@@ -977,24 +968,10 @@ impl AuthorityState {
             .database_is_empty()
             .expect("Database read should not fail.")
         {
-            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
-            for genesis_modules in genesis.modules() {
-                store_package_and_init_modules_for_genesis(
-                    &store,
-                    &native_functions,
-                    &mut genesis_ctx,
-                    genesis_modules.to_owned(),
-                )
-                .await
-                .expect("We expect publishing the Genesis packages to not fail");
-            }
             store
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
-            generate_genesis_system_object(&store, &move_vm, &committee, &mut genesis_ctx)
-                .await
-                .expect("Cannot generate genesis system object");
 
             store
                 .insert_new_epoch_info(EpochInfoLocals {
