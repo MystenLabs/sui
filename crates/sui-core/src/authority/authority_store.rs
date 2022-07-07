@@ -658,7 +658,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// version, and then writes locks, objects, certificates, parents atomically.
     pub async fn update_state<BackingPackageStore>(
         &self,
-        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        temporary_store: TemporaryStore<BackingPackageStore>,
         certificate: &CertifiedTransaction,
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
@@ -694,7 +694,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Persist temporary storage to DB for genesis modules
     pub async fn update_objects_state_for_genesis<BackingPackageStore>(
         &self,
-        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        temporary_store: TemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
@@ -723,7 +723,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ) -> SuiResult {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
+            TemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
         for (_, object) in mutated_objects {
             temporary_store.write_object(object);
         }
@@ -756,7 +756,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     async fn sequence_tx<BackingPackageStore>(
         &self,
         write_batch: DBBatch,
-        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        temporary_store: TemporaryStore<BackingPackageStore>,
         transaction_digest: &TransactionDigest,
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
@@ -805,7 +805,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     async fn batch_update_objects<BackingPackageStore>(
         &self,
         mut write_batch: DBBatch,
-        temporary_store: AuthorityTemporaryStore<BackingPackageStore>,
+        temporary_store: TemporaryStore<BackingPackageStore>,
         transaction_digest: TransactionDigest,
         update_type: UpdateType,
     ) -> SuiResult<Option<TxSequenceNumber>> {
@@ -1480,7 +1480,7 @@ pub async fn store_package_and_init_modules_for_genesis<
 
     debug_assert!(ctx.digest() == TransactionDigest::genesis());
     let mut temporary_store =
-        AuthorityTemporaryStore::new(store.clone(), InputObjects::new(filtered), ctx.digest());
+        TemporaryStore::new(store.clone(), InputObjects::new(filtered), ctx.digest());
     let package_id = ObjectID::from(*modules[0].self_id().address());
     let natives = native_functions.clone();
     let mut gas_status = SuiGasStatus::new_unmetered();
@@ -1511,7 +1511,7 @@ pub async fn generate_genesis_system_object<S: Eq + Serialize + for<'de> Deseria
 ) -> SuiResult {
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
-        AuthorityTemporaryStore::new(store.clone(), InputObjects::new(vec![]), genesis_digest);
+        TemporaryStore::new(store.clone(), InputObjects::new(vec![]), genesis_digest);
     let mut pubkeys = Vec::new();
     for name in committee.names() {
         pubkeys.push(committee.public_key(name)?.to_bytes().to_vec());
