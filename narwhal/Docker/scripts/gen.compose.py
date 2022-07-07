@@ -154,7 +154,7 @@ services:
   gateway:
     image: nginx:latest
     depends_on:
-      - loki
+      - read
     entrypoint:
       - sh
       - -euc

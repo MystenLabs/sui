@@ -15,11 +15,9 @@ else
   if [[ "$NODE_TYPE" = "primary" ]]; then
     # Clean up only the primary node's data
     rm -r "/validators/validator-$VALIDATOR_ID/db-primary"
-    rm -r "/validators/validator-$VALIDATOR_ID/logs/log-primary.txt"
   elif [[ "$NODE_TYPE" = "worker" ]]; then
     # Clean up only the specific worker's node data
     rm -r "/validators/validator-$VALIDATOR_ID/db-worker-${WORKER_ID}"
-    rm -r "/validators/validator-$VALIDATOR_ID/logs/log-worker-${WORKER_ID}.txt"
   fi
 fi
 
@@ -32,7 +30,7 @@ if [[ "$NODE_TYPE" = "primary" ]]; then
   --committee $COMMITTEE_PATH \
   --store "/validators/validator-$VALIDATOR_ID/db-primary" \
   --parameters $PARAMETERS_PATH \
-  primary $CONSENSUS_DISABLED >> "/home/logs/log-primary.txt" 2>&1
+  primary $CONSENSUS_DISABLED
 elif [[ "$NODE_TYPE" = "worker" ]]; then
   echo "Bootstrapping new worker node with id $WORKER_ID"
 
@@ -41,7 +39,7 @@ elif [[ "$NODE_TYPE" = "worker" ]]; then
   --committee $COMMITTEE_PATH \
   --store "/validators/validator-$VALIDATOR_ID/db-worker-$WORKER_ID" \
   --parameters $PARAMETERS_PATH \
-  worker --id $WORKER_ID >> "/home/logs/log-worker-$WORKER_ID.txt" 2>&1
+  worker --id $WORKER_ID
 else
   echo "Unknown provided value for parameter: NODE_TYPE=$NODE_TYPE"
   exit 1

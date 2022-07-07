@@ -36,23 +36,14 @@ since the narwhal node binary needs to be built from the source code.) And then 
 a cluster for *four nodes* by doing the necessary setup for `primary` and `worker` nodes. Each
 `primary` node will be connected to *one worker* node.
 
-The logs for each validator (primary & worker nodes) can be found in the `logs` folder under the corresponding
-validator folder.
-
-> **Note**: You will find across the codebase the name *Authority* when we describe
-> the entity participating in the Narwhal protocol that verifies and signs the produced headers. An 
-> authority is composed of a `primary` node and one or more `worker` nodes. Since Authority is not a widely
-> used term, we are referring instead to our *primary + worker* node pairs as **Validator**.
-
-The `logs` folder is created once the node is bootstrapped via `docker-compose`. 
-For example, for the primary node of the validator-0, the logs will be found in
-the folder `validators/validator-0/logs` with the name `log-primary.txt`. To monitor
-the logging of a node in real time, simply `tail` the log:
+The logs from the `primary` and `worker` nodes are available via
 ```
-$ tail -f validators/validator-0/logs/log-primary.txt
+docker-compose logs primary_<num>
+
+docker-compose logs worker_<num>
 ```
 
-By default, the production (release) version of the Narwhal node will be compiled when the Docker image is being built.
+	By default, the production (release) version of the Narwhal node will be compiled when the Docker image is being built.
 To build the Docker image with the development version of Narwhal, which will lead to smaller compile times and
 smaller binary (and image) size, you run the `docker-compose` command as:
 ```
@@ -222,6 +213,10 @@ storing for use via Grafana and other services (alertmanager, scripts).
 Loki is a log collector and processor.  It is exposed as a datasource
 in Grafana and makes the logs easily searchable.
 	- https://grafana.com/oss/loki/
+
+Currently there are no Loki dashboards defined, however you can
+browse the logs via the "Explorer", selecting the Loki datasource.
+
 
 ## Troubleshooting
 
