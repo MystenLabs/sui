@@ -84,6 +84,10 @@ impl InMemoryStorage {
         &self.persistent
     }
 
+    pub fn into_inner(self) -> BTreeMap<ObjectID, Object> {
+        self.persistent
+    }
+
     pub fn finish(
         &mut self,
         written: BTreeMap<ObjectID, (ObjectRef, Object)>,
