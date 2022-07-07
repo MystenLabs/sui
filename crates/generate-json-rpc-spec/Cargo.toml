@@ -24,4 +24,4 @@ sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
 workspace-hack = { path = "../workspace-hack"}
 
-move-package = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-package = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
