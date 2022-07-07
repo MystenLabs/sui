@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
 use crate::crypto::{
-    AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable, SuiAuthoritySignature,
+    AuthoritySignInfo, AuthorityWeakQuorumSignInfo, PublicKey, Signable, SuiAuthoritySignature,
 };
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
@@ -214,7 +214,7 @@ pub struct CheckpointSummaryEnvelope<S> {
     pub auth_signature: S,
 }
 
-pub type SignedCheckpointSummary = CheckpointSummaryEnvelope<AuthoritySignInfo<AuthoritySignature>>;
+pub type SignedCheckpointSummary = CheckpointSummaryEnvelope<AuthoritySignInfo>;
 
 impl SignedCheckpointSummary {
     /// Create a new signed checkpoint proposal for this authority
@@ -291,7 +291,7 @@ impl SignedCheckpointSummary {
 // or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
-pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo<AuthoritySignature>>;
+pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
 
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
