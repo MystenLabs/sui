@@ -108,7 +108,10 @@ To request SUI test tokens:
 
 ## Source code
 
-If you need to download and understand the Sui source code, clone the Sui repository:
+If you need to download and understand the Sui source code:
+https://github.com/MystenLabs/sui
+
+Clone the Sui repository:
 
 ```shell
 $ git clone https://github.com/MystenLabs/sui.git --branch devnet
@@ -122,14 +125,19 @@ You can start exploring Sui's source code by looking into the following primary 
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
-And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
+## Rustdoc
+
+See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
 * https://mystenlabs.github.io/sui/ - the Sui blockchain
 * https://mystenlabs.github.io/narwhal/ - the Narwhal and Tusk consensus engine
 * https://mystenlabs.github.io/mysten-infra/ - Mysten Labs infrastructure
 
+## Help
+
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
-> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our devnet. If you want to run network locally using the latest version and don't need to interact with our devnet, you could switch to `main` branch.
+> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our devnet. If you want to run network locally using the latest version and don't need to interact with our devnet, you should switch to `main` branch.
+ 
 ## Next steps
 
 Continue your journey through:
