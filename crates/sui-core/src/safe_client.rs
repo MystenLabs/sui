@@ -391,21 +391,15 @@ where
         Ok(transaction_info)
     }
 
-    fn verify_authenticated_checkpoint(
+    fn verify_checkpoint_sequence(
         &self,
         expected_seq: Option<CheckpointSequenceNumber>,
         checkpoint: &AuthenticatedCheckpoint,
     ) -> SuiResult {
         let observed_seq = match checkpoint {
             AuthenticatedCheckpoint::None => None,
-            AuthenticatedCheckpoint::Signed(s) => {
-                s.verify()?;
-                Some(*s.summary.sequence_number())
-            }
-            AuthenticatedCheckpoint::Certified(c) => {
-                c.verify(&self.committee)?;
-                Some(*c.summary.sequence_number())
-            }
+            AuthenticatedCheckpoint::Signed(s) => Some(*s.summary.sequence_number()),
+            AuthenticatedCheckpoint::Certified(c) => Some(*c.summary.sequence_number()),
         };
 
         match (expected_seq, observed_seq) {
@@ -429,17 +423,30 @@ where
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
+        let detail = request.detail;
         let req_type = request.request_type.clone();
 
         let resp = self.authority_client.handle_checkpoint(request).await?;
 
+        // Verify signatures
+        resp.verify(&self.committee)?;
+
+        // Verify detail was returned if requested.
+        let contents = match (detail, resp.detail) {
+            (false, Some(_)) | (true, None) => {
+                return Err(SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                });
+            }
+            (false, None) => None,
+            (true, Some(contents)) => Some(contents),
+        };
+
+        // Verify response data was correct for request
         match req_type {
             CheckpointRequestType::LatestCheckpointProposal => {
                 if let AuthorityCheckpointInfo::Proposal { current, previous } = &resp.info {
-                    if let Some(current) = current {
-                        current.verify()?;
-                    }
-                    self.verify_authenticated_checkpoint(None, previous)?;
+                    self.verify_checkpoint_sequence(None, previous)?;
                     Ok(resp)
                 } else {
                     Err(SuiError::ByzantineAuthoritySuspicion {
@@ -449,7 +456,7 @@ where
             }
             CheckpointRequestType::PastCheckpoint(seq) => {
                 if let AuthorityCheckpointInfo::Past(past) = &resp.info {
-                    self.verify_authenticated_checkpoint(Some(seq), past)?;
+                    self.verify_checkpoint_sequence(Some(seq), past)?;
                     Ok(resp)
                 } else {
                     Err(SuiError::ByzantineAuthoritySuspicion {

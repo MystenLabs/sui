@@ -119,6 +119,23 @@ pub struct CheckpointResponse {
     pub detail: Option<CheckpointContents>,
 }
 
+impl CheckpointResponse {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        match &self.info {
+            AuthorityCheckpointInfo::Success => Ok(()),
+            AuthorityCheckpointInfo::Proposal { current, previous } => {
+                if let Some(current) = current {
+                    current.verify(committee, self.detail.as_ref())?;
+                    // detail pertains to the current proposal, not the previous
+                    previous.verify(committee, None)?;
+                }
+                Ok(())
+            }
+            AuthorityCheckpointInfo::Past(ckpt) => ckpt.verify(committee, self.detail.as_ref()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
     // Denotes success of he operation with no return
@@ -156,6 +173,14 @@ impl AuthenticatedCheckpoint {
             Self::Signed(s) => &s.summary,
             Self::Certified(c) => &c.summary,
             Self::None => unreachable!(),
+        }
+    }
+
+    pub fn verify(&self, committee: &Committee, detail: Option<&CheckpointContents>) -> SuiResult {
+        match self {
+            Self::Signed(s) => s.verify(committee, detail),
+            Self::Certified(c) => c.verify(committee, detail),
+            Self::None => Ok(()),
         }
     }
 }
@@ -253,32 +278,39 @@ impl SignedCheckpointSummary {
         &self.auth_signature.authority
     }
 
-    /// Checks that the signature on the digest is correct
-    pub fn verify(&self) -> Result<(), SuiError> {
+    /// Checks that the signature on the digest is correct, and verify the contents as well if
+    /// provided.
+    pub fn verify(
+        &self,
+        committee: &Committee,
+        contents: Option<&CheckpointContents>,
+    ) -> Result<(), SuiError> {
         fp_ensure!(
             self.summary.epoch == self.auth_signature.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
+        fp_ensure!(
+            committee.weight(&self.auth_signature.authority) > 0,
+            SuiError::UnknownSigner
+        );
         self.auth_signature
             .signature
             .verify(&self.summary, self.auth_signature.authority)?;
-        Ok(())
-    }
 
-    // Check that the digest and transactions are correctly signed
-    pub fn verify_with_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
-        self.verify()?;
-        let recomputed = CheckpointSummary::new(
-            self.summary.epoch,
-            *self.summary.sequence_number(),
-            contents,
-            self.summary.previous_digest,
-        );
+        if let Some(contents) = contents {
+            let recomputed = CheckpointSummary::new(
+                self.summary.epoch,
+                *self.summary.sequence_number(),
+                contents,
+                self.summary.previous_digest,
+            );
 
-        fp_ensure!(
-            recomputed == self.summary,
-            SuiError::from("Transaction digest mismatch")
-        );
+            fp_ensure!(
+                recomputed == self.summary,
+                SuiError::from("Transaction digest mismatch")
+            );
+        }
+
         Ok(())
     }
 }
@@ -322,7 +354,7 @@ impl CertifiedCheckpointSummary {
             )?,
         };
 
-        certified_checkpoint.verify(committee)?;
+        certified_checkpoint.verify(committee, None)?;
         Ok(certified_checkpoint)
     }
 
@@ -334,7 +366,11 @@ impl CertifiedCheckpointSummary {
     }
 
     /// Check that a certificate is valid, and signed by a quorum of authorities
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
+    pub fn verify(
+        &self,
+        committee: &Committee,
+        contents: Option<&CheckpointContents>,
+    ) -> Result<(), SuiError> {
         fp_ensure!(
             self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the committee")
@@ -346,20 +382,21 @@ impl CertifiedCheckpointSummary {
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
         obligation.verify_all()?;
-        Ok(())
-    }
 
-    /// Check the certificate and whether it matches with a set of transactions.
-    pub fn verify_with_transactions(
-        &self,
-        committee: &Committee,
-        contents: &CheckpointContents,
-    ) -> Result<(), SuiError> {
-        self.verify(committee)?;
-        fp_ensure!(
-            contents.digest() == self.summary.content_digest,
-            SuiError::from("Transaction digest mismatch")
-        );
+        if let Some(contents) = contents {
+            let recomputed = CheckpointSummary::new(
+                self.summary.epoch,
+                *self.summary.sequence_number(),
+                contents,
+                self.summary.previous_digest,
+            );
+
+            fp_ensure!(
+                recomputed == self.summary,
+                SuiError::from("Transaction digest mismatch")
+            );
+        }
+
         Ok(())
     }
 }
@@ -403,17 +440,10 @@ pub struct CheckpointFragment {
 }
 
 impl CheckpointFragment {
-    pub fn verify(&self, _committee: &Committee) -> Result<(), SuiError> {
+    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
         // Check the signatures of proposer and other
-        self.proposer.verify()?;
-        self.other.verify()?;
-
-        // Check the proposers are authorities
-        fp_ensure!(
-            _committee.weight(self.proposer.authority()) > 0
-                && _committee.weight(self.other.authority()) > 0,
-            SuiError::from("Authorities not in the committee")
-        );
+        self.proposer.verify(committee, None)?;
+        self.other.verify(committee, None)?;
 
         // Check consistency between checkpoint summary and waypoints.
         fp_ensure!(
@@ -469,18 +499,45 @@ mod tests {
             SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
-        assert!(proposal.verify().is_ok());
-        assert!(proposal.verify_with_transactions(&set).is_ok());
+        assert!(proposal.verify(&committee, Some(&set)).is_ok());
 
         // Error on different transactions
         let contents = CheckpointContents {
             transactions: [ExecutionDigests::random()].into_iter().collect(),
         };
-        assert!(proposal.verify_with_transactions(&contents).is_err());
+        assert!(proposal.verify(&committee, Some(&contents)).is_err());
 
         // Modify the proposal, and observe the signature fail
         proposal.summary.sequence_number = 2;
-        assert!(proposal.verify().is_err());
+        assert!(proposal.verify(&committee, None).is_err());
+    }
+
+    #[test]
+    fn test_signed_checkpoint() {
+        let mut rng = StdRng::from_seed(RNG_SEED);
+        let (keys, committee) = make_committee_key(&mut rng);
+        let (_, committee2) = make_committee_key(&mut rng);
+
+        let set = [ExecutionDigests::random()];
+        let set = CheckpointContents::new(set.iter().cloned());
+
+        let signed_checkpoints: Vec<_> = keys
+            .iter()
+            .map(|k| {
+                let name = k.public_key_bytes();
+
+                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+            })
+            .collect();
+
+        signed_checkpoints
+            .iter()
+            .for_each(|c| c.verify(&committee, None).expect("signature ok"));
+
+        // fails when not signed by member of committee
+        signed_checkpoints
+            .iter()
+            .for_each(|c| assert!(c.verify(&committee2, None).is_err()));
     }
 
     #[test]
@@ -504,9 +561,7 @@ mod tests {
             .expect("Cert is OK");
 
         // Signature is correct on proposal, and with same transactions
-        assert!(checkpoint_cert
-            .verify_with_transactions(&committee, &set)
-            .is_ok());
+        assert!(checkpoint_cert.verify(&committee, Some(&set)).is_ok());
 
         // Make a bad proposal
         let signed_checkpoints: Vec<_> = keys
