@@ -20,7 +20,7 @@ function Tabs({ title, children, selected }: Props) {
     return (
         <div className={styles.tabs}>
             <ul className={styles.tablist}>
-                {children.map((elem, index) => {
+                {[...(Array.isArray(children) ? children :  [children])].map((elem, index) => {
                     return (
                         <li
                             className={cl([

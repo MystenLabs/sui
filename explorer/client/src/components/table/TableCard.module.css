@@ -1,17 +1,18 @@
 .content {
-    @apply container overflow-x-auto   text-left text-gray-500;
+    @apply container overflow-x-auto text-left text-[#4E555D];
 }
 
 .table {
-    @apply w-full text-sm text-left text-gray-500 dark:text-gray-400 overflow-x-auto min-w-max;
+    @apply w-full text-sm text-left text-[#4E555D]  overflow-x-auto min-w-max;
+    border-bottom: 1px solid #f0f1f2;
 }
 
 .table th {
-    @apply text-left font-normal uppercase text-gray-500;
+    @apply text-left font-normal uppercase text-[#767A81];
 }
 
 .table td {
-    @apply pr-5;
+    @apply pr-5 text-[#4E555D];
 }
 
 .table tbody tr {
@@ -29,3 +30,4 @@
 .tablespacing {
     @apply pb-2 pt-2;
 }
+

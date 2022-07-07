@@ -5,6 +5,7 @@ import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import SuiNetworkStats from '../../components/network-stats/SuiNetworkStats';
+import TopValidatorsCard from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
 import {
@@ -84,7 +85,7 @@ function HomeAPI() {
                 <SuiNetworkStats count={results.count} />
             </section>
             <section className="right-item">
-                <LastestTxCard count={results.count} />
+                <TopValidatorsCard />
             </section>
         </div>
     );
