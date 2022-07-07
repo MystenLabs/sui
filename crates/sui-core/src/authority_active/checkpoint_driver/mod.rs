@@ -445,10 +445,18 @@ where
         }
         Action::NewCert => {
             let available_authorities: BTreeSet<_> = checkpoint
-                .signatory_authorities()
-                .filter(|a| **a != self_name)
-                .cloned()
-                .collect();
+                .signatory_authorities(committee)
+                .filter_map(|x| match x {
+                    Ok(&a) => {
+                        if a != self_name {
+                            Some(Ok(a))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(e) => Some(Err(e)),
+                })
+                .collect::<SuiResult<_>>()?;
             let (_, contents) = get_one_checkpoint_with_contents(
                 active_authority.net.load().clone(),
                 checkpoint.summary.sequence_number,
@@ -485,8 +493,10 @@ where
     // We use the latest available authorities not the authorities that signed the checkpoint
     // since these might be gone after the epoch they were active.
     let available_authorities: BTreeSet<_> = latest_known_checkpoint
-        .signatory_authorities()
-        .cloned()
+        .signatory_authorities(&net.committee)
+        .collect::<SuiResult<BTreeSet<_>>>()?
+        .iter()
+        .map(|&&x| x)
         .collect();
 
     // Check if the latest checkpoint is merely a signed checkpoint, and if
