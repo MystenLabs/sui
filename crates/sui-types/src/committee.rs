@@ -25,7 +25,7 @@ pub struct Committee {
     #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, PublicKey>,
     #[serde(skip)]
-    pub index_map: HashMap<AuthorityName, usize>,
+    index_map: HashMap<AuthorityName, usize>,
     #[serde(skip)]
     loaded: bool,
 }
