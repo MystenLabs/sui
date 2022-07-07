@@ -10,16 +10,15 @@ use std::{
 
 use parking_lot::Mutex;
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests, TransactionDigest},
+    base_types::{AuthorityName, ExecutionDigests},
     error::SuiError,
-    messages::{CertifiedTransaction, ConfirmationTransaction, TransactionInfoRequest},
+    messages::{CertifiedTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
         CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
         CheckpointResponse, CheckpointSequenceNumber, SignedCheckpointSummary,
     },
 };
-use tokio::time::timeout;
 
 use crate::{
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
@@ -742,101 +741,4 @@ where
     fragment.certs = diff_certs;
 
     Ok(fragment)
-}
-
-/// Sync to a transaction certificate
-pub async fn sync_digest<A>(
-    name: AuthorityName,
-    net: Arc<AuthorityAggregator<A>>,
-    cert_digest: TransactionDigest,
-    timeout_period: Duration,
-) -> Result<(), SuiError>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    let mut source_authorities: BTreeSet<AuthorityName> = net.committee.names().copied().collect();
-    source_authorities.remove(&name);
-
-    // Now try to update the destination authority sequentially using
-    // the source authorities we have sampled.
-    debug_assert!(!source_authorities.is_empty());
-    for source_authority in source_authorities {
-        // Note: here we could improve this function by passing into the
-        //       `sync_authority_source_to_destination` call a cache of
-        //       certificates and parents to avoid re-downloading them.
-
-        let client = net.clone_client(&source_authority);
-        let sync_fut = async {
-            let response = client
-                .handle_transaction_info_request(TransactionInfoRequest::from(cert_digest))
-                .await?;
-
-            // If we have cert, use that cert to sync
-            if let Some(cert) = response.certified_transaction {
-                net.sync_certificate_to_authority_with_timeout(
-                    ConfirmationTransaction::new(cert.clone()),
-                    name,
-                    // Ok to have a fixed, and rather long timeout, since the future is controlled,
-                    // and interrupted by a global timeout as well, that can be controlled.
-                    Duration::from_secs(60),
-                    3,
-                )
-                .await?;
-
-                return Result::<(), SuiError>::Ok(());
-            }
-
-            // If we have a transaction, make a cert and sync
-            if let Some(transaction) = response.signed_transaction {
-                // Make a cert afresh
-                let (cert, _effects) = net
-                    .execute_transaction(&transaction.to_transaction())
-                    .await
-                    .map_err(|_e| SuiError::AuthorityUpdateFailure)?;
-
-                // Make sure the cert is syned with this authority
-                net.sync_certificate_to_authority_with_timeout(
-                    ConfirmationTransaction::new(cert.clone()),
-                    name,
-                    // Ok to have a fixed, and rather long timeout, since the future is controlled,
-                    // and interrupted by a global timeout as well, that can be controlled.
-                    Duration::from_secs(60),
-                    3,
-                )
-                .await?;
-
-                return Result::<(), SuiError>::Ok(());
-            }
-
-            Err(SuiError::AuthorityUpdateFailure)
-        };
-
-        // Be careful.  timeout() returning OK just means the Future completed.
-        if let Ok(inner_res) = timeout(timeout_period, sync_fut).await {
-            match inner_res {
-                Ok(_) => {
-                    // If the updates succeeds we return, since there is no need
-                    // to try other sources.
-                    return Ok(());
-                }
-                // Getting here means the sync_authority_source fn finished within timeout but errored out.
-                Err(_err) => {
-                    warn!("Failed sync with {:?}", source_authority);
-                }
-            }
-        } else {
-            warn!("Timeout exceeded");
-        }
-
-        // If we are here it means that the update failed, either due to the
-        // source being faulty or the destination being faulty.
-        //
-        // TODO: We should probably be keeping a record of suspected faults
-        // upon failure to de-prioritize authorities that we have observed being
-        // less reliable.
-    }
-
-    // Eventually we should add more information to this error about the destination
-    // and maybe event the certificate.
-    Err(SuiError::AuthorityUpdateFailure)
 }
