@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_cli::package::cli::{PackageCommand, UnitTestResult};
+use clap::Parser;
+use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
 use std::path::PathBuf;
@@ -10,46 +11,34 @@ pub mod build;
 pub mod new;
 pub mod unit_test;
 
+#[derive(Parser)]
+pub enum Command {
+    Build(build::Build),
+    New(new::New),
+    Test(unit_test::Test),
+}
+
 pub fn execute_move_command(
-    package_path: PathBuf,
-    dump_bytecode_as_base64: bool,
+    package_path: Option<PathBuf>,
     build_config: BuildConfig,
-    command: PackageCommand,
+    command: Command,
 ) -> anyhow::Result<()> {
     match command {
-        PackageCommand::Build => {
-            build::execute(&package_path, dump_bytecode_as_base64, build_config)
-        }
-        PackageCommand::UnitTest {
-            instruction_execution_bound,
-            filter,
-            list,
-            num_threads,
-            report_statistics,
-            report_storage_on_error,
-            check_stackless_vm,
-            verbose_mode,
-            compute_coverage,
-        } => {
+        Command::Build(c) => c.execute(package_path, build_config),
+        Command::Test(c) => {
             let unit_test_config = UnitTestingConfig {
-                instruction_execution_bound,
-                filter,
-                list,
-                num_threads,
-                report_statistics,
-                report_storage_on_error,
-                check_stackless_vm,
-                verbose: verbose_mode,
+                instruction_execution_bound: c.test.instruction_execution_bound,
+                filter: c.test.filter.clone(),
+                list: c.test.list,
+                num_threads: c.test.num_threads,
+                report_statistics: c.test.report_statistics,
+                report_storage_on_error: c.test.report_storage_on_error,
+                check_stackless_vm: c.test.check_stackless_vm,
+                verbose: c.test.verbose_mode,
 
                 ..UnitTestingConfig::default_with_bound(None)
             };
-            let result = unit_test::execute(
-                &package_path,
-                dump_bytecode_as_base64,
-                build_config,
-                unit_test_config,
-                compute_coverage,
-            )?;
+            let result = c.execute(package_path, build_config, unit_test_config)?;
 
             // Return a non-zero exit code if any test failed
             if let UnitTestResult::Failure = result {
@@ -58,15 +47,6 @@ pub fn execute_move_command(
 
             Ok(())
         }
-        PackageCommand::New { name } => new::execute(&package_path, &name),
-        PackageCommand::Info => unimplemented!("'info' command not yet supported"),
-        PackageCommand::ErrMapGen { .. } => unimplemented!("'errmap' command not yet supported"),
-        PackageCommand::Prove { .. } => unimplemented!("'prove' command not yet supported"),
-        PackageCommand::CoverageReport { .. } => {
-            unimplemented!("'coverage' command not yet supported")
-        }
-        PackageCommand::BytecodeView { .. } => {
-            unimplemented!("'disassemble' command not yet supported")
-        }
+        Command::New(c) => c.execute(package_path),
     }
 }
