@@ -41,18 +41,17 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     let start = SuiCommand::Start {
         config: Some(config),
     }
-    .execute()
-    .await;
+    .execute();
     assert!(matches!(start, Err(..)));
     // Genesis
-    SuiCommand::Genesis {
+    let gen = SuiCommand::Genesis {
         working_dir: Some(working_dir.to_path_buf()),
         write_config: None,
         force: false,
         from_config: None,
     }
-    .execute()
-    .await?;
+    .execute();
+    assert!(gen.is_ok());
 
     // Get all the new file names
     let files = read_dir(working_dir)?
@@ -93,8 +92,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         force: false,
         from_config: None,
     }
-    .execute()
-    .await;
+    .execute();
     assert!(matches!(result, Err(..)));
 
     temp_dir.close()?;
