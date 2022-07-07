@@ -20,8 +20,8 @@ either = "1.6.1"
 itertools = "0.10.3"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+move-core-types = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662", features = ["address20"] }
+move-bytecode-utils = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }

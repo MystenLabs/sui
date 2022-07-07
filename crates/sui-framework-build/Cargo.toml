@@ -12,10 +12,10 @@ publish = false
 sui-types = { path = "../sui-types" }
 sui-verifier = { path = "../../crates/sui-verifier" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
-move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+move-binary-format = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-bytecode-verifier = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-compiler = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-core-types = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662", features = ["address20"] }
+move-package = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
 
 workspace-hack = { path = "../workspace-hack"}

@@ -17,14 +17,14 @@ once_cell = "1.11.0"
 sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-cli = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
-move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+move-binary-format = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-cli = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-core-types = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662", features = ["address20"] }
+move-package = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-stdlib = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-unit-test = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-vm-runtime = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-vm-types = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
 
 workspace-hack = { path = "../workspace-hack"}
 
@@ -32,8 +32,8 @@ workspace-hack = { path = "../workspace-hack"}
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 sui-framework-build = { path = "../sui-framework-build" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
-move-package = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
+move-binary-format = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
+move-package = { git = "https://github.com/awelc/move", rev = "38650f9a95c1d2d325352e841f0201eeba1dc662" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["move-cli", "move-unit-test"]
