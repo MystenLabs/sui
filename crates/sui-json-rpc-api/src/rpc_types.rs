@@ -991,12 +991,8 @@ impl Display for SuiCertifiedTransaction {
         writeln!(writer, "Transaction Signature: {:?}", self.tx_signature)?;
         writeln!(
             writer,
-            "Signed Authorities : {:?}",
-            self.auth_sign_info
-                .signatures
-                .iter()
-                .map(|(name, _)| name)
-                .collect::<Vec<_>>()
+            "Signed Authorities Bitmap: {:?}",
+            self.auth_sign_info.signers_map
         )?;
         write!(writer, "{}", &self.data)?;
         write!(f, "{}", writer)
