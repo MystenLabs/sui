@@ -22,7 +22,7 @@ use sui_types::{
 
 use crate::gateway_state::GatewayMetrics;
 use crate::{
-    authority::AuthorityTemporaryStore, authority_active::ActiveAuthority,
+    authority::TemporaryStore, authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::CheckpointLocals, epoch::reconfiguration::CHECKPOINT_COUNT_PER_EPOCH,
     execution_engine,
@@ -128,7 +128,7 @@ async fn test_start_epoch_change() {
     // Test that for certificates that have finished execution and is about to write effects,
     // they will also fail to get a ticket for the commit.
     let tx_digest = *transaction.digest();
-    let mut temporary_store = AuthorityTemporaryStore::new(
+    let mut temporary_store = TemporaryStore::new(
         state.database.clone(),
         InputObjects::new(
             transaction

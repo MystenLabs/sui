@@ -78,7 +78,7 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
-pub use sui_adapter::temporary_store::AuthorityTemporaryStore;
+pub use sui_adapter::temporary_store::TemporaryStore;
 
 mod authority_store;
 pub use authority_store::{
@@ -581,7 +581,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(
-        AuthorityTemporaryStore<Arc<AuthorityStore>>,
+        TemporaryStore<Arc<AuthorityStore>>,
         SignedTransactionEffects,
     )> {
         let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
@@ -620,7 +620,7 @@ impl AuthorityState {
 
         let transaction_dependencies = input_objects.transaction_dependencies();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
+            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
         let (effects, _execution_error) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
@@ -1368,7 +1368,7 @@ impl AuthorityState {
     #[instrument(name = "commit_certificate", level = "debug", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
-        temporary_store: AuthorityTemporaryStore<Arc<AuthorityStore>>,
+        temporary_store: TemporaryStore<Arc<AuthorityStore>>,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {

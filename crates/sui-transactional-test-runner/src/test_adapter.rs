@@ -37,7 +37,7 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::{adapter::new_move_vm, genesis};
-use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
+use sui_core::{authority::TemporaryStore, execution_engine};
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
     base_types::{
@@ -470,7 +470,7 @@ impl<'a> SuiTestAdapter<'a> {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
+            TemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
         let (
             TransactionEffects {
                 status,

@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
 
-use crate::authority::AuthorityTemporaryStore;
+use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
@@ -33,7 +33,7 @@ use tracing::{debug, instrument, trace};
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     shared_object_refs: Vec<ObjectRef>,
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
@@ -85,7 +85,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 }
 
 fn charge_gas_for_object_read<S>(
-    temporary_store: &AuthorityTemporaryStore<S>,
+    temporary_store: &TemporaryStore<S>,
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
     // Charge gas for reading all objects from the DB.
@@ -101,7 +101,7 @@ fn charge_gas_for_object_read<S>(
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
@@ -242,7 +242,7 @@ fn execute_transaction<S: BackingPackageStore>(
 }
 
 fn transfer_object<S>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     mut object: Object,
     sender: SuiAddress,
     recipient: SuiAddress,
@@ -270,7 +270,7 @@ fn transfer_object<S>(
 /// We make sure that the gas object's version is not incremented after this function call, because
 /// when we charge gas later, its version will be officially incremented.
 fn transfer_sui<S>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     mut object: Object,
     recipient: SuiAddress,
     amount: Option<u64>,
