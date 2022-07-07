@@ -11,6 +11,7 @@ pub mod build;
 pub mod coverage;
 pub mod disassemble;
 pub mod new;
+pub mod prove;
 pub mod unit_test;
 
 #[derive(Parser)]
@@ -19,6 +20,7 @@ pub enum Command {
     Coverage(coverage::Coverage),
     Disassemble(disassemble::Disassemble),
     New(new::New),
+    Prove(prove::Prove),
     Test(unit_test::Test),
 }
 
@@ -31,6 +33,8 @@ pub fn execute_move_command(
         Command::Build(c) => c.execute(package_path, build_config),
         Command::Coverage(c) => c.execute(package_path, build_config),
         Command::Disassemble(c) => c.execute(package_path, build_config),
+        Command::New(c) => c.execute(package_path),
+        Command::Prove(c) => c.execute(package_path, build_config),
         Command::Test(c) => {
             let unit_test_config = UnitTestingConfig {
                 instruction_execution_bound: c.test.instruction_execution_bound,
@@ -53,6 +57,5 @@ pub fn execute_move_command(
 
             Ok(())
         }
-        Command::New(c) => c.execute(package_path),
     }
 }
