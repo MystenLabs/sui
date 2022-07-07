@@ -5,6 +5,7 @@ use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
+use crate::sui_serde::SuiBitmap;
 use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
@@ -14,13 +15,14 @@ use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
 use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
+use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
@@ -503,10 +505,14 @@ impl AuthoritySignInfo {
 /// at least the quorum threshold (2f+1) of the committee; when STRONG_THRESHOLD is false,
 /// the quorum is valid when the total stake is at least the validity threshold (f+1) of
 /// the committee.
+#[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
-    pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    pub signatures: Vec<AuthoritySignature>,
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "SuiBitmap")]
+    pub signers_map: RoaringBitmap,
 }
 
 pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
@@ -528,6 +534,67 @@ static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, P
 impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
 
 impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
+    pub fn new(epoch: EpochId) -> Self {
+        AuthorityQuorumSignInfo {
+            epoch,
+            signatures: vec![],
+            signers_map: RoaringBitmap::new(),
+        }
+    }
+
+    pub fn new_with_signatures(
+        epoch: EpochId,
+        mut signatures: Vec<(PublicKeyBytes, AuthoritySignature)>,
+        committee: &Committee,
+    ) -> SuiResult<Self> {
+        let mut map = RoaringBitmap::new();
+
+        signatures.sort_by_key(|(public_key, _)| *public_key);
+
+        for (pk, _) in &signatures {
+            map.insert(
+                committee
+                    .authority_index(pk)
+                    .ok_or(SuiError::UnknownSigner)? as u32,
+            );
+        }
+        let sigs: Vec<AuthoritySignature> = signatures.into_iter().map(|(_, sig)| sig).collect();
+
+        Ok(AuthorityQuorumSignInfo {
+            epoch,
+            signatures: sigs,
+            signers_map: map,
+        })
+    }
+
+    // This takes log(sig) time, do not use if not necessary
+    pub fn add_signature(
+        &mut self,
+        sig: AuthoritySignature,
+        pk: PublicKeyBytes,
+        committee: &Committee,
+    ) -> SuiResult<()> {
+        println!("{:?}", committee.index_map);
+        let index = committee
+            .authority_index(&pk)
+            .ok_or(SuiError::UnknownSigner)? as u32;
+        self.signers_map.insert(index);
+        self.signatures
+            .insert((self.signers_map.rank(index) - 1) as usize, sig);
+        Ok(())
+    }
+
+    pub fn authorities<'a>(
+        &'a self,
+        committee: &'a Committee,
+    ) -> impl Iterator<Item = SuiResult<&AuthorityName>> {
+        self.signers_map.iter().map(|i| {
+            committee
+                .authority_by_index(i)
+                .ok_or(SuiError::InvalidAuthenticator)
+        })
+    }
+
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
@@ -541,18 +608,26 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                 expected_epoch: committee.epoch()
             }
         );
+        fp_ensure!(
+            self.signatures.len() as u64 == self.signers_map.len(),
+            SuiError::InvalidAuthorityBitmap {
+                error: "Authority bitmap and signatures have different lengths".to_string()
+            }
+        );
 
         let mut weight = 0;
-        let mut used_authorities = HashSet::new();
 
         // Create obligations for the committee signatures
-        for (authority, signature) in self.signatures.iter() {
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
+        for signature in self.signatures.iter() {
+            obligation.signatures.push(signature.0);
+            obligation.message_index.push(message_index);
+        }
+
+        for authority_index in self.signers_map.iter() {
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or(SuiError::UnknownSigner)?;
+
             // Update weight.
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
@@ -561,8 +636,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             obligation
                 .public_keys
                 .push(committee.public_key(authority)?);
-            obligation.signatures.push(signature.0);
-            obligation.message_index.push(message_index);
         }
 
         let threshold = if STRONG_THRESHOLD {

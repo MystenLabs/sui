@@ -19,11 +19,15 @@ pub type StakeUnit = u64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     pub epoch: EpochId,
-    voting_rights: Vec<(AuthorityName, StakeUnit)>,
+    pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, PublicKey>,
+    #[serde(skip)]
+    pub index_map: HashMap<AuthorityName, usize>,
+    #[serde(skip)]
+    loaded: bool,
 }
 
 impl Committee {
@@ -55,18 +59,61 @@ impl Committee {
 
         voting_rights.sort_by_key(|(a, _)| *a);
         let total_votes = voting_rights.iter().map(|(_, votes)| *votes).sum();
-        let expanded_keys: HashMap<_, _> = voting_rights
-            .iter()
-            // TODO: Verify all code path to make sure we always have valid public keys.
-            // e.g. when a new validator is registering themself on-chain.
-            .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
-            .collect();
+
+        let (expanded_keys, index_map) = Self::load_inner(&voting_rights);
+
         Ok(Committee {
             epoch,
             voting_rights,
             total_votes,
             expanded_keys,
+            index_map,
+            loaded: true,
         })
+    }
+
+    // We call this if these have not yet been computed
+    pub fn load_inner(
+        voting_rights: &[(AuthorityName, StakeUnit)],
+    ) -> (
+        HashMap<AuthorityName, PublicKey>,
+        HashMap<AuthorityName, usize>,
+    ) {
+        let expanded_keys: HashMap<AuthorityName, PublicKey> = voting_rights
+            .iter()
+            // TODO: Verify all code path to make sure we always have valid public keys.
+            // e.g. when a new validator is registering themself on-chain.
+            .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
+            .collect();
+
+        let index_map: HashMap<AuthorityName, usize> = voting_rights
+            .iter()
+            .enumerate()
+            .map(|(index, (addr, _))| (*addr, index))
+            .collect();
+        (expanded_keys, index_map)
+    }
+
+    pub fn reload_fields(&mut self) {
+        let (expanded_keys, index_map) = Committee::load_inner(&self.voting_rights);
+        self.expanded_keys = expanded_keys;
+        self.index_map = index_map;
+        self.loaded = true;
+    }
+
+    pub fn authority_index(&self, author: &AuthorityName) -> Option<u32> {
+        if !self.loaded {
+            return self
+                .voting_rights
+                .iter()
+                .position(|(a, _)| a == author)
+                .map(|i| i as u32);
+        }
+        self.index_map.get(author).map(|i| *i as u32)
+    }
+
+    pub fn authority_by_index(&self, index: u32) -> Option<&AuthorityName> {
+        self.voting_rights.get(index as usize).map(|(name, _)| name)
     }
 
     pub fn epoch(&self) -> EpochId {
