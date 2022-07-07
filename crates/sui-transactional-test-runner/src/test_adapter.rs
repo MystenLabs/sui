@@ -3,7 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
-use crate::{args::*, in_memory_storage::InMemoryStorage};
+use crate::args::*;
 use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
@@ -36,8 +36,10 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_adapter::in_memory_storage::InMemoryStorage;
+use sui_adapter::temporary_store::TemporaryStore;
 use sui_adapter::{adapter::new_move_vm, genesis};
-use sui_core::{authority::TemporaryStore, execution_engine};
+use sui_core::execution_engine;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
     base_types::{
