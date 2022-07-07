@@ -8,7 +8,8 @@ import type { BasePayload, Payload } from '_payloads';
 
 export interface ExecuteTransactionRequest extends BasePayload {
     type: 'execute-transaction-request';
-    transaction: MoveCallTransaction;
+    transaction?: MoveCallTransaction;
+    transactionBytes?: Uint8Array;
 }
 
 export function isExecuteTransactionRequest(
