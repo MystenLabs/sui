@@ -13,5 +13,4 @@ move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = 
 move-core-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a", features = ["address20"] }
 
 sui-types = { path = "../sui-types" }
-
 workspace-hack = { path = "../workspace-hack"}
