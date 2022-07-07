@@ -6,6 +6,7 @@ use super::base_types::*;
 use crate::crypto::PublicKey;
 use crate::error::{SuiError, SuiResult};
 use itertools::Itertools;
+use narwhal_crypto::traits::VerifyingKey;
 use rand_latest::rngs::OsRng;
 use rand_latest::seq::SliceRandom;
 use serde::{Deserialize, Serialize};

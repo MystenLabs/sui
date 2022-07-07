@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use curve25519_dalek::ristretto::RistrettoPoint;
 
 use crate::committee::StakeUnit;
+use crate::crypto::PublicKey;
 use crate::{base_types::AuthorityName, committee::Committee};
 
 #[cfg(test)]
