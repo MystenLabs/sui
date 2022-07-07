@@ -15,7 +15,7 @@ use sui_types::{
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
     gas::SuiGasStatus,
-    messages::{ConfirmationTransaction, SignatureAggregator, Transaction, TransactionData},
+    messages::{SignatureAggregator, Transaction, TransactionData},
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -119,9 +119,7 @@ async fn test_start_epoch_change() {
     let certificate = cert.unwrap();
     assert_eq!(
         state
-            .handle_confirmation_transaction(ConfirmationTransaction {
-                certificate: certificate.clone()
-            })
+            .handle_certificate(certificate.clone())
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd

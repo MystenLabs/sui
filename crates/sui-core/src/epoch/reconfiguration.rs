@@ -14,7 +14,7 @@ use sui_network::tonic;
 use sui_types::committee::Committee;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{ConfirmationTransaction, SignedTransaction};
+use sui_types::messages::SignedTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::sui_system_state::SuiSystemState;
 use typed_store::Map;
@@ -146,7 +146,7 @@ where
                 .await
             {
                 self.state
-                    .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+                    .handle_certificate(certificate)
                     .await
                     .expect("Executing the special cert cannot fail");
                 break;
