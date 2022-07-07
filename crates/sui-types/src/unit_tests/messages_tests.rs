@@ -314,7 +314,7 @@ fn test_reject_extra_public_key() {
     let (mut obligation, idx) = get_obligation_input(&message);
     assert!(quorum
         .add_to_verification_obligation(&committee, &mut obligation, idx)
-        .is_err());
+        .is_ok());
 }
 
 #[test]
@@ -330,7 +330,7 @@ fn test_reject_reuse_signatures() {
     }
 
     let used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
-        vec![signatures[0], signatures[1], signatures[2], signatures[3]];
+        vec![signatures[0], signatures[1], signatures[2], signatures[2]];
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
