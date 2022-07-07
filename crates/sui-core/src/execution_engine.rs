@@ -247,7 +247,8 @@ fn transfer_object<S>(
     sender: SuiAddress,
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
-    object.transfer_and_increment_version(recipient)?;
+    object.ensure_public_transfer_eligible()?;
+    object.transfer_and_increment_version(recipient);
     temporary_store.log_event(Event::TransferObject {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("native")),
@@ -280,7 +281,8 @@ fn transfer_sui<S>(
 
     if let Some(amount) = amount {
         // Deduct the amount from the gas coin and update it.
-        let mut gas_coin = GasCoin::try_from(&object)?;
+        let mut gas_coin = GasCoin::try_from(&object)
+            .expect("gas object is transferred, so already checked to be a SUI coin");
         gas_coin.0.balance.withdraw(amount)?;
         let move_object = object
             .data
@@ -312,7 +314,7 @@ fn transfer_sui<S>(
     } else {
         // If amount is not specified, we simply transfer the entire coin object.
         // We don't want to increment the version number yet because latter gas charge will do it.
-        object.transfer_without_version_change(recipient)?;
+        object.transfer_without_version_change(recipient);
     }
 
     // TODO: Emit a new event type for this.
