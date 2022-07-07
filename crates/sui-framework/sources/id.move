@@ -160,4 +160,31 @@ module sui::id {
 
     /// Convert raw bytes into an address
     native fun bytes_to_address(bytes: vector<u8>): address;
+
+    // Cost calibration functions
+    #[test_only]
+    public fun calibrate_bytes_to_address(bytes: vector<u8>) {
+        bytes_to_address(bytes);
+    }
+    #[test_only]
+    public fun calibrate_bytes_to_address_nop(_bytes: vector<u8>) {
+    }
+
+    #[test_only]
+    public fun calibrate_get_versioned_id<T: key>(obj: &T) {
+        get_versioned_id(obj);
+    }
+    #[test_only]
+    public fun calibrate_get_versioned_id_nop<T: key>(_obj: &T) {
+    }
+
+    // TBD
+
+    // #[test_only]
+    // public fun calibrate_delete_id<VersionedID>(id: VersionedID) {
+    //     delete_id(id);
+    // }
+    // #[test_only]
+    // public fun calibrate_delete_id_nop<VersionedID>(_id: VersionedID) {
+    // }
 }
