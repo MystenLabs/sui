@@ -258,7 +258,6 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                                 },
                                 Reconfigure::Shutdown(_token) => return,
                             }
-
                         }
                         Ordering::Less => {
                             // We already updated committee but the core is slow. Ignore the parents
@@ -277,6 +276,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                             // late (or just joined the network).
                             self.round = round;
                             self.last_parents = parents;
+
                         },
                         Ordering::Less => {
                             // Ignore parents from older rounds.

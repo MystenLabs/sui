@@ -339,6 +339,19 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     async fn process_certificate(&mut self, certificate: Certificate<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", certificate);
 
+        // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
+        // parents or payload (which we may not have yet).
+        //
+        // Since our certificate is well-signed, it shows a majority of honest signers stand at round r,
+        // so to make a successful proposal, our proposer must use parents at least at round r-1.
+        //
+        // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
+        let minimal_round_for_parents = certificate.round().saturating_sub(1);
+        self.tx_proposer
+            .send((vec![], minimal_round_for_parents, certificate.epoch()))
+            .await
+            .map_err(|_| DagError::ShuttingDown)?;
+
         // Process the header embedded in the certificate if we haven't already voted for it (if we already
         // voted, it means we already processed it). Since this header got certified, we are sure that all
         // the data it refers to (ie. its payload and its parents) are available. We can thus continue the
