@@ -24,7 +24,7 @@ A lot of transactions do not have complex interdependencies with other, arbitrar
 
 Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../build/objects.md) and leveraging [Move](../build/move.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
-This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it we allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
+This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
 
 ## A collaborative approach to transaction submission
 
@@ -76,7 +76,7 @@ Contrary to many traditional blockchains, Sui does not make strong synchrony ass
 
 ### Efficient local read operations
 
-The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/build/wallet.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
+The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
 
 In traditional blockchains, families are ordered with respect to each other to totally order transactions. This then requires querying a massive blob for the precise information needed. Disk I/O thus becomes a performance bottleneck, and some blockchains [now require SSD drives](https://www.usenix.org/system/files/conference/hotstorage18/hotstorage18-paper-raju.pdf) on their validators as a result.
 
@@ -112,7 +112,7 @@ The downside of allowing head-of-line blocking on the sender for these simple tr
 
 Sui can make total queries more difficult than in traditional blockchains since it does not always impose total order of transactions. Total queries are fairly rare with respect to local reads (see above) but useful in some scenarios. For example, a new validator joins the network and needs to download the total state to disk, or an auditor wishes to audit the entire blockchain.
 
-Sui mitigates this with checkpoints. A checkpoint is established every time an increment is added to a blockchain resulting from a certified transaction. Blocks work much like a [write ahead log](https://en.wikipedia.org/wiki/Write-ahead_logging) that stores state prior to full execution of a program. The calls in that program represent a smart contract in a blockchain. A block contains not only the transactions but also commitments to the state of the blockchain before and after the transactions.
+Sui mitigates this with checkpoints. A checkpoint is established every time an increment is added to a blockchain resulting from a certified transaction. Checkpoints work much like a [write ahead log](https://en.wikipedia.org/wiki/Write-ahead_logging) that stores state prior to full execution of a program. The calls in that program represent a smart contract in a blockchain. A checkpoint contains not only the transactions but also commitments to the state of the blockchain before and after the transactions.
 
 Sui uses the state commitment that arrives upon epoch change. Sui requires a single answer from the multiple validators and leverages an accessory protocol to derive the hash representing the state of the blockchain. This protocol consumes little bandwidth and does not impede the ingestion of transactions. Validators produce checkpoints at every epoch change. Sui requires the validators to also produce checkpoints even more frequently. So users may use these checkpoints to audit the blockchain with some effort.
 

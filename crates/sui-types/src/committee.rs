@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::error::SuiResult;
+use crate::error::{SuiError, SuiResult};
 use ed25519_dalek::PublicKey;
 use itertools::Itertools;
-use rand::distributions::{Distribution, Uniform};
-use rand::rngs::OsRng;
+use rand_latest::rngs::OsRng;
+use rand_latest::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
@@ -19,28 +19,101 @@ pub type StakeUnit = u64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     pub epoch: EpochId,
-    pub voting_rights: BTreeMap<AuthorityName, StakeUnit>,
+    pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, PublicKey>,
+    #[serde(skip)]
+    index_map: HashMap<AuthorityName, usize>,
+    #[serde(skip)]
+    loaded: bool,
 }
 
 impl Committee {
-    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, StakeUnit>) -> Self {
-        let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
-        let expanded_keys: HashMap<_, _> = voting_rights
+    pub fn new(
+        epoch: EpochId,
+        voting_rights: BTreeMap<AuthorityName, StakeUnit>,
+    ) -> SuiResult<Self> {
+        let mut voting_rights: Vec<(AuthorityName, StakeUnit)> =
+            voting_rights.iter().map(|(a, s)| (*a, *s)).collect();
+
+        fp_ensure!(
+            // Actual committee size is enforced in sui_system.move.
+            // This is just to ensure that choose_multiple_weighted can't fail.
+            voting_rights.len() < u32::MAX.try_into().unwrap(),
+            SuiError::InvalidCommittee("committee has too many members".into())
+        );
+
+        fp_ensure!(
+            !voting_rights.is_empty(),
+            SuiError::InvalidCommittee("committee has 0 members".into())
+        );
+
+        fp_ensure!(
+            voting_rights.iter().any(|(_, s)| *s != 0),
+            SuiError::InvalidCommittee(
+                "at least one committee member must have non-zero stake.".into()
+            )
+        );
+
+        voting_rights.sort_by_key(|(a, _)| *a);
+        let total_votes = voting_rights.iter().map(|(_, votes)| *votes).sum();
+
+        let (expanded_keys, index_map) = Self::load_inner(&voting_rights);
+
+        Ok(Committee {
+            epoch,
+            voting_rights,
+            total_votes,
+            expanded_keys,
+            index_map,
+            loaded: true,
+        })
+    }
+
+    // We call this if these have not yet been computed
+    pub fn load_inner(
+        voting_rights: &[(AuthorityName, StakeUnit)],
+    ) -> (
+        HashMap<AuthorityName, PublicKey>,
+        HashMap<AuthorityName, usize>,
+    ) {
+        let expanded_keys: HashMap<AuthorityName, PublicKey> = voting_rights
             .iter()
             // TODO: Verify all code path to make sure we always have valid public keys.
             // e.g. when a new validator is registering themself on-chain.
             .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
             .collect();
-        Committee {
-            epoch,
-            voting_rights,
-            total_votes,
-            expanded_keys,
+
+        let index_map: HashMap<AuthorityName, usize> = voting_rights
+            .iter()
+            .enumerate()
+            .map(|(index, (addr, _))| (*addr, index))
+            .collect();
+        (expanded_keys, index_map)
+    }
+
+    pub fn reload_fields(&mut self) {
+        let (expanded_keys, index_map) = Committee::load_inner(&self.voting_rights);
+        self.expanded_keys = expanded_keys;
+        self.index_map = index_map;
+        self.loaded = true;
+    }
+
+    pub fn authority_index(&self, author: &AuthorityName) -> Option<u32> {
+        if !self.loaded {
+            return self
+                .voting_rights
+                .iter()
+                .position(|(a, _)| a == author)
+                .map(|i| i as u32);
         }
+        self.index_map.get(author).map(|i| *i as u32)
+    }
+
+    pub fn authority_by_index(&self, index: u32) -> Option<&AuthorityName> {
+        self.voting_rights.get(index as usize).map(|(name, _)| name)
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -56,21 +129,29 @@ impl Committee {
 
     /// Samples authorities by weight
     pub fn sample(&self) -> &AuthorityName {
-        // Uniform number [0, total_votes) non-inclusive of the upper bound
-        let between = Uniform::from(0..self.total_votes);
-        // OsRng implements CryptoRng and is secure
-        let mut _random = between.sample(&mut OsRng);
-        for (auth, weight) in &self.voting_rights {
-            if *weight > _random {
-                return auth;
-            }
-            _random -= *weight;
-        }
-        unreachable!();
+        // unwrap safe unless committee is empty
+        self.choose_multiple_weighted(1).next().unwrap()
+    }
+
+    fn choose_multiple_weighted(&self, count: usize) -> impl Iterator<Item = &AuthorityName> {
+        // unwrap is safe because we validate the committee composition in `new` above.
+        // See https://docs.rs/rand/latest/rand/distributions/weighted/enum.WeightedError.html
+        // for possible errors.
+        self.voting_rights[..]
+            .choose_multiple_weighted(&mut OsRng, count, |(_, weight)| *weight as f64)
+            .unwrap()
+            .map(|(a, _)| a)
+    }
+
+    pub fn shuffle_by_stake(&self) -> impl Iterator<Item = &AuthorityName> {
+        self.choose_multiple_weighted(self.voting_rights.len())
     }
 
     pub fn weight(&self, author: &AuthorityName) -> StakeUnit {
-        *self.voting_rights.get(author).unwrap_or(&0)
+        match self.voting_rights.binary_search_by_key(author, |(a, _)| *a) {
+            Err(_) => 0,
+            Ok(idx) => self.voting_rights[idx].1,
+        }
     }
 
     pub fn quorum_threshold(&self) -> StakeUnit {
@@ -110,7 +191,7 @@ impl Committee {
         debug_assert!(threshold < self.total_votes);
 
         let items = items
-            .map(|(a, v)| (v, self.voting_rights[a.borrow()], *a.borrow()))
+            .map(|(a, v)| (v, self.weight(a.borrow()), *a.borrow()))
             .sorted();
         let mut total = 0;
         for (v, s, a) in items {
@@ -120,6 +201,28 @@ impl Committee {
             }
         }
         unreachable!();
+    }
+
+    pub fn num_members(&self) -> usize {
+        self.voting_rights.len()
+    }
+
+    pub fn members(&self) -> impl Iterator<Item = &(AuthorityName, StakeUnit)> {
+        self.voting_rights.iter()
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &AuthorityName> {
+        self.voting_rights.iter().map(|(name, _)| name)
+    }
+
+    pub fn stakes(&self) -> impl Iterator<Item = StakeUnit> + '_ {
+        self.voting_rights.iter().map(|(_, stake)| *stake)
+    }
+
+    pub fn authority_exists(&self, name: &AuthorityName) -> bool {
+        self.voting_rights
+            .binary_search_by_key(name, |(a, _)| *a)
+            .is_ok()
     }
 }
 

@@ -68,7 +68,7 @@
       "name": "sui_executeTransaction",
       "tags": [
         {
-          "name": "Quorum Driver API"
+          "name": "Gateway Transaction Execution API"
         }
       ],
       "description": "Execute the transaction using the transaction data, signature and public key.",
@@ -104,27 +104,306 @@
       }
     },
     {
-      "name": "sui_getObject",
+      "name": "sui_getEventsByEventType",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Event Read API"
         }
       ],
-      "description": "Return the object information for a specified object",
       "params": [
         {
-          "name": "object_id",
+          "name": "event_type",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/ObjectID"
+            "type": "string"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       ],
       "result": {
-        "name": "GetObjectDataResponse",
+        "name": "Vec<SuiEventEnvelope>",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByModule",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByObject",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByOwner",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsBySender",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "sender",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "count",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "start_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "end_time",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getEventsByTransaction",
+      "tags": [
+        {
+          "name": "Event Read API"
+        }
+      ],
+      "params": [
+        {
+          "name": "digest",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<SuiEventEnvelope>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/EventEnvelope"
+          }
         }
       }
     },
@@ -167,61 +446,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiObjectInfo>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/ObjectInfo"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getObjectsOwnedByAddress",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return the list of objects owned by an address.",
-      "params": [
-        {
-          "name": "address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiObjectInfo>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/ObjectInfo"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getObjectsOwnedByObject",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "object_id",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
           }
         }
       ],
@@ -330,47 +554,6 @@
       }
     },
     {
-      "name": "sui_getRecentTransactions",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "count",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
       "name": "sui_getTotalTransactionNumber",
       "tags": [
         {
@@ -385,48 +568,6 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
-        }
-      }
-    },
-    {
-      "name": "sui_getTotalTransactionNumber",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [],
-      "result": {
-        "name": "u64",
-        "required": true,
-        "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        }
-      }
-    },
-    {
-      "name": "sui_getTransaction",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "digest",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionEffectsResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/TransactionEffectsResponse"
         }
       }
     },
@@ -467,6 +608,57 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getTransactionsByMoveFunction",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "function",
+          "schema": {
+            "type": "string"
           }
         }
       ],
@@ -545,56 +737,6 @@
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<(GatewayTxSeqNumber,TransactionDigest)>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              {
-                "$ref": "#/components/schemas/TransactionDigest"
-              }
-            ],
-            "maxItems": 2,
-            "minItems": 2
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getTransactionsInRange",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "params": [
-        {
-          "name": "start",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
           }
         }
       ],
@@ -953,10 +1095,40 @@
       }
     },
     {
+      "name": "sui_subscribeEvent",
+      "tags": [
+        {
+          "name": "Event Subscription"
+        },
+        {
+          "name": "Websocket"
+        },
+        {
+          "name": "PubSub"
+        }
+      ],
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiEventEnvelope",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/EventEnvelope"
+        }
+      }
+    },
+    {
       "name": "sui_syncAccountState",
       "tags": [
         {
-          "name": "Quorum Driver API"
+          "name": "Wallet Sync API"
         }
       ],
       "description": "Synchronize client state with validators.",
@@ -978,13 +1150,13 @@
       }
     },
     {
-      "name": "sui_transferCoin",
+      "name": "sui_transferObject",
       "tags": [
         {
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a transaction to transfer a Sui coin from one address to another.",
+      "description": "Create a transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
       "params": [
         {
           "name": "signer",
@@ -1091,11 +1263,12 @@
   "components": {
     "schemas": {
       "AuthorityQuorumSignInfo": {
-        "description": "Represents at least a quorum (could be more) of authority signatures.",
+        "description": "Represents at least a quorum (could be more) of authority signatures. STRONG_THRESHOLD indicates whether to use the quorum threshold for quorum check. When STRONG_THRESHOLD is true, the quorum is valid when the total stake is at least the quorum threshold (2f+1) of the committee; when STRONG_THRESHOLD is false, the quorum is valid when the total stake is at least the validity threshold (f+1) of the committee.",
         "type": "object",
         "required": [
           "epoch",
-          "signatures"
+          "signatures",
+          "signers_map"
         ],
         "properties": {
           "epoch": {
@@ -1106,18 +1279,11 @@
           "signatures": {
             "type": "array",
             "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/PublicKeyBytes"
-                },
-                {
-                  "$ref": "#/components/schemas/AuthoritySignature"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
+              "$ref": "#/components/schemas/AuthoritySignature"
             }
+          },
+          "signers_map": {
+            "$ref": "#/components/schemas/Base64"
           }
         }
       },
@@ -1224,6 +1390,9 @@
                 "required": [
                   "bcs",
                   "fields",
+                  "packageId",
+                  "sender",
+                  "transactionModule",
                   "type"
                 ],
                 "properties": {
@@ -1232,6 +1401,15 @@
                   },
                   "fields": {
                     "$ref": "#/components/schemas/MoveStruct"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   },
                   "type": {
                     "type": "string"
@@ -1251,11 +1429,15 @@
               "publish": {
                 "type": "object",
                 "required": [
-                  "packageId"
+                  "packageId",
+                  "sender"
                 ],
                 "properties": {
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   }
                 }
               }
@@ -1272,17 +1454,29 @@
               "transferObject": {
                 "type": "object",
                 "required": [
-                  "destinationAddr",
                   "objectId",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule",
                   "type",
                   "version"
                 ],
                 "properties": {
-                  "destinationAddr": {
-                    "$ref": "#/components/schemas/SuiAddress"
-                  },
                   "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   },
                   "type": {
                     "$ref": "#/components/schemas/TransferType"
@@ -1303,7 +1497,27 @@
             ],
             "properties": {
               "deleteObject": {
-                "$ref": "#/components/schemas/ObjectID"
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "packageId",
+                  "sender",
+                  "transactionModule"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  }
+                }
               }
             },
             "additionalProperties": false
@@ -1316,13 +1530,37 @@
             ],
             "properties": {
               "newObject": {
-                "$ref": "#/components/schemas/ObjectID"
+                "type": "object",
+                "required": [
+                  "objectId",
+                  "packageId",
+                  "recipient",
+                  "sender",
+                  "transactionModule"
+                ],
+                "properties": {
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "packageId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "recipient": {
+                    "$ref": "#/components/schemas/Owner"
+                  },
+                  "sender": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "transactionModule": {
+                    "type": "string"
+                  }
+                }
               }
             },
             "additionalProperties": false
           },
           {
-            "description": "Epooch change",
+            "description": "Epoch change",
             "type": "object",
             "required": [
               "epochChange"
@@ -1351,6 +1589,226 @@
             },
             "additionalProperties": false
           }
+        ]
+      },
+      "EventEnvelope": {
+        "type": "object",
+        "required": [
+          "event",
+          "timestamp"
+        ],
+        "properties": {
+          "event": {
+            "description": "Specific event type",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Event"
+              }
+            ]
+          },
+          "timestamp": {
+            "description": "UTC timestamp in milliseconds since epoch (1/1/1970)",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "txDigest": {
+            "description": "Transaction digest of associated transaction, if any",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionDigest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "EventFilter": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Package"
+            ],
+            "properties": {
+              "Package": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Module"
+            ],
+            "properties": {
+              "Module": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Move StructTag string value of the event type e.g. `0x2::devnet_nft::MintNFTEvent`",
+            "type": "object",
+            "required": [
+              "MoveEventType"
+            ],
+            "properties": {
+              "MoveEventType": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "MoveEventField"
+            ],
+            "properties": {
+              "MoveEventField": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "value"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "value": true
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "SenderAddress"
+            ],
+            "properties": {
+              "SenderAddress": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "EventType"
+            ],
+            "properties": {
+              "EventType": {
+                "$ref": "#/components/schemas/EventType"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ObjectId"
+            ],
+            "properties": {
+              "ObjectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "All"
+            ],
+            "properties": {
+              "All": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Any"
+            ],
+            "properties": {
+              "Any": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "And"
+            ],
+            "properties": {
+              "And": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Or"
+            ],
+            "properties": {
+              "Or": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EventFilter"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "EventType": {
+        "description": "Auto-generated discriminant enum variants",
+        "type": "string",
+        "enum": [
+          "MoveEvent",
+          "Publish",
+          "TransferObject",
+          "DeleteObject",
+          "NewObject",
+          "EpochChange",
+          "Checkpoint"
         ]
       },
       "ExecutionStatus": {
@@ -1559,11 +2017,15 @@
         "type": "object",
         "required": [
           "fields",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "fields": {
             "$ref": "#/components/schemas/MoveStruct"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"
@@ -1884,9 +2346,6 @@
           }
         ]
       },
-      "PublicKeyBytes": {
-        "$ref": "#/components/schemas/Base64"
-      },
       "PublishResponse": {
         "type": "object",
         "required": [
@@ -1934,11 +2393,11 @@
           {
             "type": "object",
             "required": [
-              "transferCoinRequestParams"
+              "transferObjectRequestParams"
             ],
             "properties": {
-              "transferCoinRequestParams": {
-                "$ref": "#/components/schemas/TransferCoinParams"
+              "transferObjectRequestParams": {
+                "$ref": "#/components/schemas/TransferObjectParams"
               }
             },
             "additionalProperties": false
@@ -1961,11 +2420,15 @@
         "type": "object",
         "required": [
           "bcs_bytes",
+          "has_public_transfer",
           "type"
         ],
         "properties": {
           "bcs_bytes": {
             "$ref": "#/components/schemas/Base64"
+          },
+          "has_public_transfer": {
+            "type": "boolean"
           },
           "type": {
             "type": "string"
@@ -2209,14 +2672,14 @@
       "TransactionKind": {
         "oneOf": [
           {
-            "description": "Initiate a coin transfer between addresses",
+            "description": "Initiate an object transfer between addresses",
             "type": "object",
             "required": [
-              "TransferCoin"
+              "TransferObject"
             ],
             "properties": {
-              "TransferCoin": {
-                "$ref": "#/components/schemas/TransferCoin"
+              "TransferObject": {
+                "$ref": "#/components/schemas/TransferObject"
               }
             },
             "additionalProperties": false
@@ -2327,7 +2790,7 @@
           }
         ]
       },
-      "TransferCoin": {
+      "TransferObject": {
         "type": "object",
         "required": [
           "objectRef",
@@ -2342,7 +2805,7 @@
           }
         }
       },
-      "TransferCoinParams": {
+      "TransferObjectParams": {
         "type": "object",
         "required": [
           "objectId",

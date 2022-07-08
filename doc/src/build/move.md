@@ -1,5 +1,5 @@
 ---
-title: Quickstart Smart Contracts with Move
+title: Write Smart Contracts with Sui Move
 ---
 
 Welcome to the Sui tutorial for building smart contracts with
@@ -7,6 +7,11 @@ the [Move](https://github.com/MystenLabs/awesome-move) language.
 This tutorial provides a brief explanation of the Move language and
 includes concrete examples to demonstrate how Move can be used in Sui.
 
+## Quick links
+
+* [Why Move?](../../learn/why-move.md) - Quick links to external Move resources and a comparison with Solidity
+* [How Sui Move differs from Core Move](../../learn/sui-move-diffs.md) - Highlights the differences between the core Move language and the Move we use in Sui
+* [Programming Objects Tutorial Series](../../build/programming-with-objects/index.md) - Tutorial series that walks through all the powerful ways to interact with objects in Sui Move.
 
 ## Move
 
@@ -64,7 +69,7 @@ more module files are located:
 my_move_package
 ├── Move.toml
 ├── sources
-    ├── M1.move
+    ├── m1.move
 ```
 
 See
@@ -101,6 +106,12 @@ module sui::coin {
 read more about
 [modules](https://github.com/move-language/move/blob/main/language/documentation/book/src/modules-and-scripts.md#modules)
 in the Move book later.)
+
+> **Important:** In Sui Move, package names are always in CamelCase, while
+> the address alias is lowercase, for examples `sui = 0x2` and `std = 0x1`.
+> So: `Sui` = name of the imported package (Sui = sui framework), `sui` = address
+> alias of 0x2, `sui::sui` = module sui under the address 0x2, and
+> `sui::sui::SUI` = type in the module above.
 
 As we can see, when defining a module we specify the module name
 (`Coin`), preceded by the name of the package where this module resides
@@ -228,7 +239,7 @@ to define the new ones in the section describing how to
 In addition to functions callable from other functions, however, the
 Sui flavor of the Move language also defines so called _entry
 functions_ that can be called directly from Sui (e.g., from a Sui
-wallet application that can be written in a different language) and
+application that can be written in a different language) and
 must satisfy a certain set of properties.
 
 #### Entry functions
@@ -270,8 +281,8 @@ value, and has three parameters:
   in the function's body as indicated by its name starting with `_`)
   - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
-You can see how the `transfer` function is called from a sample Sui
-wallet in [Calling Move code](wallet.md#calling-move-code).
+You can see how the `transfer` function is called from a Sui
+CLI client in [Calling Move code](cli-client.md#calling-move-code).
 
 
 ## Writing a package
@@ -282,7 +293,7 @@ this package, first [install Sui binaries](install.md#binaries) and
 you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move) file.
+[m1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move) file.
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
@@ -301,13 +312,16 @@ this tutorial, is part of your system path:
 $ which sui-move
 ```
 
+### Creating the directory structure
+
 Now proceed to creating a package directory structure in the current
 directory, parallel to the `sui` repository. It will contain an
 empty manifest file and an empty module source file following the
 [Move code organization](#move-code-organization)
 described earlier.
 
-So from the same directory containing the `sui` repository, run:
+So from the same directory containing the `sui` repository create a
+parallel directory to it by running:
 
 ``` shell
 $ mkdir -p my_move_package/sources
@@ -326,6 +340,7 @@ current_directory
         ├── m1.move
 ```
 
+### Defining the package
 
 Let us assume that our module is part of an implementation of a
 fantasy game set in medieval times, where heroes roam the land slaying
@@ -342,8 +357,9 @@ Let us put the following module and struct
 definitions in the `m1.move` file:
 
 ``` rust
-module MyFirstPackage::M1 {
+module my_first_package::m1 {
     use sui::id::VersionedID;
+    use sui::tx_context::TxContext;
 
     struct Sword has key, store {
         id: VersionedID,
@@ -384,7 +400,7 @@ In order to build a package containing this simple module, we need to
 put some required metadata into the `Move.toml` file, including package
 name, package version, local dependency path to locate Sui framework
 code, and package numeric ID, which must be `0x0` for user-defined modules
-to facilitate [package publishing](wallet.md#publish-packages).
+to facilitate [package publishing](cli-client.md#publish-packages).
 
 ```
 [package]
@@ -392,14 +408,16 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../crates/sui-framework" }
+Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
-MyFirstPackage = "0x0"
+my_first_package = "0x0"
 ```
 
 See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/Move.toml)
 file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
+
+## Building the package
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
@@ -770,10 +788,10 @@ At this point, however, the
 `sui-move` command does not support package publishing. In fact, it is
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
-testing framework. Instead, one can use a sample Sui wallet to
-[publish](wallet.md#publish-packages) Move code and to
-[call](wallet.md#calling-move-code) it. See the
-[wallet documentation](wallet.md) for a description of how
+testing framework. Instead, one can use a Sui CLI client to
+[publish](cli-client.md#publish-packages) Move code and to
+[call](cli-client.md#calling-move-code) it. See the
+[Sui CLI client documentation](cli-client.md) for a description of how
 to publish the package we have [written](#writing-a-package) as as
 part of this tutorial.
 

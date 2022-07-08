@@ -79,6 +79,8 @@ const commonConfig: () => Promise<Configuration> = async () => {
         entry: {
             background: './background',
             ui: './ui',
+            'content-script': './content-script',
+            'dapp-interface': './dapp-interface',
         },
         output: {
             path: OUTPUT_ROOT,
@@ -107,6 +109,7 @@ const commonConfig: () => Promise<Configuration> = async () => {
                     options: {
                         configFile: TS_CONFIG_FILE,
                     },
+                    exclude: /node_modules/,
                 },
                 {
                     test: /\.(s)?css$/i,

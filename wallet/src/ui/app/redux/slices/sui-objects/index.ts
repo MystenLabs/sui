@@ -10,7 +10,7 @@ import {
 
 import { ExampleNFT } from './NFT';
 
-import type { SuiObject } from '@mysten/sui.js';
+import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -28,11 +28,10 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     const address = getState().account.address;
     const allSuiObjects: SuiObject[] = [];
     if (address) {
-        const allObjectRefs = await api.instance.getObjectsOwnedByAddress(
-            `${address}`
-        );
+        const allObjectRefs =
+            await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
         const objectIDs = allObjectRefs.map((anObj) => anObj.objectId);
-        const allObjRes = await api.instance.getObjectBatch(objectIDs);
+        const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
         for (const objRes of allObjRes) {
             const suiObj = getObjectExistsResponse(objRes);
             if (suiObj) {
@@ -53,6 +52,22 @@ export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
+export const transferSuiNFT = createAsyncThunk<
+    void,
+    { nftId: ObjectId; recipientAddress: SuiAddress; transferCost: number },
+    AppThunkConfig
+>(
+    'transferSuiNFT',
+    async (data, { extra: { api, keypairVault }, dispatch }) => {
+        await ExampleNFT.TransferNFT(
+            api.getSignerInstance(keypairVault.getKeyPair()),
+            data.nftId,
+            data.recipientAddress,
+            data.transferCost
+        );
+        await dispatch(fetchAllOwnedObjects());
+    }
+);
 interface SuiObjectsManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };

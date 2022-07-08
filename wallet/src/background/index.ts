@@ -3,6 +3,7 @@
 
 import Browser from 'webextension-polyfill';
 
+import { Connections } from './connections';
 import { openInNewTab } from '_shared/utils';
 
 Browser.runtime.onInstalled.addListener((details) => {
@@ -10,3 +11,5 @@ Browser.runtime.onInstalled.addListener((details) => {
         openInNewTab();
     }
 });
+
+new Connections();

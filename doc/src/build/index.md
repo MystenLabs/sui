@@ -14,9 +14,9 @@ Here is our recommended workflow to interact with Sui:
    1. [Test](../build/move.md#testing-a-package) a package.
    1. [Debug](../build/move.md#debugging-a-package) a package.
    1. [Publish](../build/move.md#publishing-a-package) a package.
-1. [Create](../build/wallet.md#genesis) and [Start](../build/wallet.md#starting-the-network) a *local Sui network*.
+1. [Create](../build/cli-client.md#genesis) and [Start](../build/cli-client.md#starting-the-network) a *local Sui network*.
 1. [Start](../build/json-rpc.md#start-local-rpc-server) a *local JSON-RPC Gateway server*.
-1. [Connect](../build/wallet.md#rpc-gateway) to the Sui network Gateway service with the *Sui Wallet*.
+1. [Connect](../build/cli-client.md#rpc-gateway) to the Sui network Gateway service with the *Sui CLI client*.
 1. Build dApps:
    1. [Use](../build/json-rpc.md) *Sui RPC Server and JSON-RPC API* to interact with a local Sui network.
    1. [Employ](../build/sui-json.md) *SuiJSON format* to align JSON inputs more closely with Move call arguments.

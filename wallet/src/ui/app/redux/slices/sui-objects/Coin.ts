@@ -23,6 +23,7 @@ export const DEFAULT_GAS_BUDGET_FOR_MERGE = 500;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
+export const DEFAULT_NFT_TRANSFER_GAS_FEE = 450;
 
 // TODO use sdk
 export class Coin {
@@ -71,7 +72,7 @@ export class Coin {
         recipient: SuiAddress
     ): Promise<TransactionResponse> {
         const coin = await Coin.selectCoin(signer, coins, amount);
-        return await signer.transferCoin({
+        return await signer.transferObject({
             objectId: coin,
             gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER,
             recipient: recipient,

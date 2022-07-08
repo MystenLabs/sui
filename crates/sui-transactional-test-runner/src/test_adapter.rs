@@ -347,19 +347,24 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             stop_line: _,
             data: _,
         } = task;
-        match command {
-            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
-                let id = match self.fake_to_real_object_id(fake_id) {
+        macro_rules! get_obj {
+            ($fake_id:ident) => {{
+                let id = match self.fake_to_real_object_id($fake_id) {
                     None => panic!(
                         "task {}, lines {}-{}. Unbound fake id {}",
-                        number, start_line, command_lines_stop, fake_id
+                        number, start_line, command_lines_stop, $fake_id
                     ),
                     Some(res) => res,
                 };
-                let obj = match self.storage.get_object(&id) {
-                    None => return Ok(Some(format!("No object at id {}", fake_id))),
+                match self.storage.get_object(&id) {
+                    None => return Ok(Some(format!("No object at id {}", $fake_id))),
                     Some(obj) => obj,
-                };
+                }
+            }};
+        }
+        match command {
+            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
+                let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj
@@ -389,6 +394,26 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     }
                 }))
             }
+            SuiSubcommand::TransferObject(TransferObjectCommand {
+                id: fake_id,
+                recipient,
+                sender,
+                gas_budget,
+            }) => {
+                let obj = get_obj!(fake_id);
+                let obj_ref = obj.compute_object_reference();
+                let recipient = match self.accounts.get(&recipient) {
+                    Some((recipient, _)) => *recipient,
+                    None => panic!("Unbound account {}", recipient),
+                };
+                let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
+                let transaction = self.sign_txn(sender, |sender, gas| {
+                    TransactionData::new_transfer(recipient, obj_ref, sender, gas, gas_budget)
+                });
+                let summary = self.execute_txn(transaction, gas_budget)?;
+                let output = self.object_summary_output(&summary, false);
+                Ok(output)
+            }
         }
     }
 }
@@ -400,6 +425,7 @@ impl<'a> SuiTestAdapter<'a> {
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
         let gas_object_id = ObjectID::new(self.rng.gen());
+        assert!(!self.object_enumeration.contains_left(&gas_object_id));
         self.enumerate_fake(gas_object_id);
         let new_key_pair;
         let (sender, sender_key) = match sender {

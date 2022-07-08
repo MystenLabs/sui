@@ -203,7 +203,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, 10);
-        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
@@ -461,6 +461,37 @@ async fn test_immutable_gas() {
     ));
 }
 
+// This test attempts to use an immutable gas object to pay for gas.
+// We expect it to fail early during transaction handle phase.
+#[tokio::test]
+async fn test_objected_owned_gas() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let parent_object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, parent_object_id)]).await;
+    let child_object_id = ObjectID::random();
+    let child_object = Object::with_object_owner_for_testing(child_object_id, parent_object_id);
+    authority_state
+        .insert_genesis_object(child_object.clone())
+        .await;
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        child_object.compute_object_reference(),
+        10000,
+    );
+    let signature = Signature::new(&data, &sender_key);
+    let transfer_transaction = Transaction::new(data, signature);
+    let result = authority_state
+        .handle_transaction(transfer_transaction.clone())
+        .await;
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
+}
+
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     transaction: Transaction,
@@ -478,9 +509,7 @@ pub async fn send_and_confirm_transaction(
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority
-        .handle_confirmation_transaction(ConfirmationTransaction::new(certificate))
-        .await
+    authority.handle_certificate(certificate).await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -728,9 +757,7 @@ async fn test_handle_confirmation_transaction_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction
-        ))
+        .handle_certificate(certified_transfer_transaction)
         .await
         .is_err());
 }
@@ -797,9 +824,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     let response = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction,
-        ))
+        .handle_certificate(certified_transfer_transaction)
         .await
         .unwrap();
     assert!(response.signed_effects.is_none());
@@ -843,9 +868,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         &authority_state,
     );
     let response = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction,
-        ))
+        .handle_certificate(certified_transfer_transaction)
         .await
         .unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
@@ -899,9 +922,7 @@ async fn test_handle_confirmation_transaction_ok() {
     next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
+        .handle_certificate(certified_transfer_transaction.clone())
         .await
         .unwrap();
     info.signed_effects.unwrap().effects.status.unwrap();
@@ -980,17 +1001,13 @@ async fn test_handle_confirmation_transaction_idempotent() {
     );
 
     let info = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
+        .handle_certificate(certified_transfer_transaction.clone())
         .await
         .unwrap();
     assert!(info.signed_effects.as_ref().unwrap().effects.status.is_ok());
 
     let info2 = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
+        .handle_certificate(certified_transfer_transaction.clone())
         .await
         .unwrap();
     assert!(info2
@@ -1320,9 +1337,7 @@ async fn test_idempotent_reversed_confirmation() {
         &authority_state,
     );
     let result1 = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
+        .handle_certificate(certified_transfer_transaction.clone())
         .await;
     assert!(result1.is_ok());
     let result2 = authority_state
@@ -1345,6 +1360,7 @@ async fn test_genesis_sui_sysmtem_state_object() {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(sui_system_object.version(), SequenceNumber::from(1));
     let move_object = sui_system_object.data.try_as_move().unwrap();
     let _sui_system_state = bcs::from_bytes::<SuiSystemState>(move_object.contents()).unwrap();
     assert_eq!(move_object.type_, SuiSystemState::type_());
@@ -1379,7 +1395,7 @@ async fn test_change_epoch_transaction() {
         .unwrap()
         .unwrap();
     let result = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(certificate))
+        .handle_certificate(certificate)
         .await
         .unwrap();
     assert!(result.signed_effects.unwrap().effects.status.is_ok());
@@ -1414,7 +1430,7 @@ async fn test_transfer_sui_no_amount() {
 
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .handle_certificate(certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().effects;
@@ -1459,7 +1475,7 @@ async fn test_transfer_sui_with_amount() {
 
     let certificate = init_certified_transaction(transaction, &authority_state);
     let response = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .handle_certificate(certificate)
         .await
         .unwrap();
     let effects = response.signed_effects.unwrap().effects;
@@ -1514,7 +1530,7 @@ async fn test_store_revert_state_update() {
     let certificate = init_certified_transaction(transaction, &authority_state);
     let tx_digest = *certificate.digest();
     authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+        .handle_certificate(certificate)
         .await
         .unwrap();
 
@@ -1570,7 +1586,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     // Create a random directory to store the DB
 
@@ -1592,8 +1608,9 @@ pub async fn init_state() -> AuthorityState {
         store,
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
+        &prometheus::Registry::new(),
     )
     .await
 }
@@ -1790,7 +1807,7 @@ async fn shared_object() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
-        let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
 
@@ -1831,19 +1848,16 @@ async fn shared_object() {
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap();
-    let confirmation_transaction = ConfirmationTransaction::new(certificate.clone());
 
     // Sending the certificate now fails since it was not sequenced.
-    let result = authority
-        .handle_confirmation_transaction(confirmation_transaction.clone())
-        .await;
+    let result = authority.handle_certificate(certificate.clone()).await;
     assert!(matches!(result, Err(SuiError::LockErrors { .. })));
 
     // Sequence the certificate to assign a sequence number to the shared object.
     authority
         .handle_consensus_transaction(
             /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(Box::new(certificate)),
+            ConsensusTransaction::UserTransaction(Box::new(certificate.clone())),
         )
         .await
         .unwrap();
@@ -1858,7 +1872,7 @@ async fn shared_object() {
     // Finally process the certificate and execute the contract. Ensure that the
     // shared object lock is cleaned up and that its sequence number increased.
     authority
-        .handle_confirmation_transaction(confirmation_transaction)
+        .handle_certificate(certificate.clone())
         .await
         .unwrap();
 

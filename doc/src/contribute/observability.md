@@ -193,8 +193,8 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
    ```shell
    $ SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start
    ```
-1. Run some transfers with wallet, or run the benchmarking tool.
-4. Browse to `http://localhost:16686/` and select Sui as the service.
+1. Run some transfers with Sui CLI client, or run the benchmarking tool.
+1. Browse to `http://localhost:16686/` and select Sui as the service.
 
 > **Note:** Separate spans (which are not nested) are not connected as a single trace for now.
 
@@ -203,7 +203,33 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 [Tokio-console](https://github.com/tokio-rs/console) is an awesome CLI tool designed to analyze and help debug Rust apps using Tokio, in real time! It relies on a special subscriber.
 
 1. Build Sui using a special flag: `RUSTFLAGS="--cfg tokio_unstable" cargo build`.
-2. Start Sui with `SUI_TOKIO_CONSOLE` set to 1.
-3. Clone the console repo and `cargo run` to launch the console.
+1. Start Sui with `SUI_TOKIO_CONSOLE` set to 1.
+1. Clone the console repo and `cargo run` to launch the console.
 
 > **Note:** Adding Tokio-console support may significantly slow down Sui validators/gateways.
+
+### Memory profiling
+
+jemalloc has a memory profiling mode that can be enabled at runtime with environment variables. See:
+
+* https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling
+* https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174
+
+For example, set `JE_MALLOC_CONF` or `JEMALLOC_SYS_WITH_MALLOC_CONF` to:
+`prof:true,lg_prof_interval:24,lg_prof_sample:19`
+
+The above setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
+and dump out the profile every 2^24 or 16MB of memory allocated.
+
+To view the profile files:
+1. `brew install jemalloc libunwind gprof2dot`
+1. Start `./sui node --config-path ...`
+1. In the same `target/release` directory, run `jeprof --text sui-node jeprof.66*.heap` where 66 is the starting PID of the current sui-node process.
+
+TODO: Define where the `target/release` directory is since we refer to it as the same but haven't yet referenced it.
+
+If the profiling does not create `.heap` files, check your env vars.  There is a log line dumped at the
+start of sui-node, that should look like this:
+```shell
+   INFO sui_node: Default Jemalloc conf: prof:true,lg_prof_interval:24,lg_prof_sample:19
+```

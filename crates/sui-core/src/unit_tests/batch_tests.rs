@@ -24,8 +24,8 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
-    Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::object::Object;
 
@@ -39,7 +39,7 @@ where
         /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
 
     (committee, authority_address, authority_key)
 }
@@ -56,8 +56,9 @@ pub(crate) async fn init_state(
         store,
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
+        &prometheus::Registry::new(),
     )
     .await
 }
@@ -504,20 +505,9 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         })
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        _transaction: ConfirmationTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        })
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
+        _certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         Ok(TransactionInfoResponse {
             signed_transaction: None,
@@ -630,20 +620,9 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         })
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        _transaction: ConfirmationTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        })
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
+        _certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         Ok(TransactionInfoResponse {
             signed_transaction: None,
@@ -760,7 +739,7 @@ async fn test_safe_batch_stream() {
     println!("init public key {:?}", public_key_bytes);
 
     authorities.insert(public_key_bytes, 1);
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new(0, authorities).unwrap();
     // Create an authority
     let store = Arc::new(AuthorityStore::open(&path, None));
     let state = AuthorityState::new(
@@ -770,8 +749,9 @@ async fn test_safe_batch_stream() {
         store.clone(),
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
+        &prometheus::Registry::new(),
     )
     .await;
 
@@ -816,8 +796,9 @@ async fn test_safe_batch_stream() {
         store,
         None,
         None,
+        None,
         &sui_config::genesis::Genesis::get_default_genesis(),
-        false,
+        &prometheus::Registry::new(),
     )
     .await;
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);

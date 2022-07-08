@@ -363,14 +363,11 @@ async fn test_object_owning_another_object() {
     assert_eq!(event1.event_type(), EventType::TransferObject);
     assert_eq!(event1.object_id(), Some(child.0));
     if let Event::TransferObject {
-        object_id: _,
-        version: _,
-        destination_addr,
-        type_,
+        recipient, type_, ..
     } = event1
     {
         assert_eq!(type_, TransferType::ToObject);
-        assert_eq!(destination_addr, new_parent.0.into());
+        assert_eq!(recipient, Owner::ObjectOwner(new_parent.0.into()));
     } else {
         panic!("Unexpected event type: {:?}", event1);
     }
@@ -511,7 +508,7 @@ pub async fn build_and_try_publish_test_package(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
     path.push(test_dir);
-    let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
 
     let all_module_bytes = modules
         .iter()
@@ -526,7 +523,7 @@ pub async fn build_and_try_publish_test_package(
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
-    let signature = Signature::new(&data, &*sender_key);
+    let signature = Signature::new(&data, sender_key);
     let transaction = Transaction::new(data, signature);
     send_and_confirm_transaction(authority, transaction)
         .await

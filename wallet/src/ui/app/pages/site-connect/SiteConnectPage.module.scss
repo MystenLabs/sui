@@ -1,0 +1,13 @@
+.permission {
+    font-weight: 500;
+    font-style: italic;
+    padding: 3px 6px;
+    background-color: #c7c7c7;
+    border-radius: 4px;
+    display: inline-block;
+    margin-right: 12px;
+
+    &:last-child {
+        margin-right: 0;
+    }
+}

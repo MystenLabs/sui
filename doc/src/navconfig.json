@@ -112,8 +112,8 @@
         "fileName": "build/move"
       },
       {
-        "label": "Create Sui Wallet",
-        "fileName": "build/wallet"
+        "label": "Use Sui CLI",
+        "fileName": "build/cli-client"
       },
       {
         "label": "Program with Objects",
@@ -153,6 +153,10 @@
       {
         "label": "Run a Fullnode",
         "fileName": "build/fullnode"
+      },
+      {
+        "label": "Subscribe to Events",
+        "fileName": "build/pubsub"
       }
     ],
     "explore": [
@@ -189,6 +193,10 @@
       {
         "label": "Logging",
         "fileName": "contribute/observability"
+      },
+      {
+        "label": "Profiling on macOS",
+        "fileName": "contribute/xcode-instruments"
       },
       {
         "label": "Research Papers",

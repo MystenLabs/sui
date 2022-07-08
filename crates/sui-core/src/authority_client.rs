@@ -21,8 +21,10 @@ use sui_types::{
     object::Object,
 };
 
+use crate::epoch::reconfiguration::Reconfigurable;
 #[cfg(test)]
 use sui_config::genesis::Genesis;
+use sui_network::tonic::transport::Channel;
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -32,16 +34,10 @@ pub trait AuthorityAPI {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError>;
 
-    /// Confirm a transaction to a Sui or Primary account.
-    async fn handle_confirmation_transaction(
+    /// Execute a certificate.
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError>;
-
-    /// Processes consensus request.
-    async fn handle_consensus_transaction(
-        &self,
-        transaction: ConsensusTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError>;
 
     /// Handle Account information requests for this account.
@@ -103,6 +99,17 @@ impl NetworkAuthorityClient {
 }
 
 #[async_trait]
+impl Reconfigurable for NetworkAuthorityClient {
+    fn needs_network_recreation() -> bool {
+        true
+    }
+
+    fn recreate(channel: tonic::transport::Channel) -> Self {
+        NetworkAuthorityClient::new(channel)
+    }
+}
+
+#[async_trait]
 impl AuthorityAPI for NetworkAuthorityClient {
     /// Initiate a new transfer to a Sui or Primary account.
     async fn handle_transaction(
@@ -116,24 +123,13 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::into)
     }
 
-    /// Confirm a transfer to a Sui or Primary account.
-    async fn handle_confirmation_transaction(
+    /// Execute a certificate.
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         self.client()
-            .confirmation_transaction(transaction.certificate)
-            .await
-            .map(tonic::Response::into_inner)
-            .map_err(Into::into)
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
-            .consensus_transaction(transaction)
+            .handle_certificate(certificate)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
@@ -221,6 +217,16 @@ pub struct LocalAuthorityClient {
     pub fault_config: LocalAuthorityClientFaultConfig,
 }
 
+impl Reconfigurable for LocalAuthorityClient {
+    fn needs_network_recreation() -> bool {
+        false
+    }
+
+    fn recreate(_channel: Channel) -> Self {
+        unreachable!(); // this function should not get called because the above function returns false
+    }
+}
+
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_transaction(
@@ -240,9 +246,9 @@ impl AuthorityAPI for LocalAuthorityClient {
         result
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         if self.fault_config.fail_before_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
@@ -250,7 +256,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             });
         }
         let state = self.state.clone();
-        let result = state.handle_confirmation_transaction(transaction).await;
+        let result = state.handle_certificate(certificate).await;
         if self.fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
@@ -259,20 +265,12 @@ impl AuthorityAPI for LocalAuthorityClient {
         result
     }
 
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        unimplemented!("LocalAuthorityClient does not support consensus transaction");
-    }
-
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
         let state = self.state.clone();
-        let result = state.handle_account_info_request(request).await;
-        result
+        state.handle_account_info_request(request).await
     }
 
     async fn handle_object_info_request(
@@ -280,8 +278,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.state.clone();
-        let x = state.handle_object_info_request(request).await;
-        x
+        state.handle_object_info_request(request).await
     }
 
     /// Handle Object information requests for this account.
@@ -290,9 +287,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-
-        let result = state.handle_transaction_info_request(request).await;
-        result
+        state.handle_transaction_info_request(request).await
     }
 
     /// Handle Batch information requests for this authority.
@@ -341,8 +336,14 @@ impl LocalAuthorityClient {
         let store = Arc::new(AuthorityStore::open(&store_path, None));
         let mut checkpoints_path = path.clone();
         checkpoints_path.push("checkpoints");
-        let checkpoints = CheckpointStore::open(&checkpoints_path, None, address, secret.clone())
-            .expect("Should not fail to open local checkpoint DB");
+        let checkpoints = CheckpointStore::open(
+            &checkpoints_path,
+            None,
+            committee.epoch,
+            address,
+            secret.clone(),
+        )
+        .expect("Should not fail to open local checkpoint DB");
 
         let state = AuthorityState::new(
             committee.clone(),
@@ -350,9 +351,10 @@ impl LocalAuthorityClient {
             secret.clone(),
             store,
             None,
+            None,
             Some(Arc::new(Mutex::new(checkpoints))),
             genesis,
-            false,
+            &prometheus::Registry::new(),
         )
         .await;
         Self {

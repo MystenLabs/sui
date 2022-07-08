@@ -72,7 +72,7 @@ module games::sea_hero_helper {
         } = wrapper;
         id::delete(id);
         let owner_reward = sea_hero::slay(hero, monster);
-        let helper_reward = coin::withdraw(&mut owner_reward, helper_reward, ctx);
+        let helper_reward = coin::take(&mut owner_reward, helper_reward, ctx);
         transfer::transfer(coin::from_balance(owner_reward, ctx), monster_owner);
         helper_reward
     }

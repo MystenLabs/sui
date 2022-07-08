@@ -53,7 +53,7 @@ pub trait WriteAheadLog<'a, C> {
     /// The possible return values mean:
     ///
     ///   Ok(None) => There was a concurrent instance of the same tx in progress, but it ended
-    ///   witout being committed. The caller may not proceed processing that tx. A TxGuard for
+    ///   without being committed. The caller may not proceed processing that tx. A TxGuard for
     ///   that tx can be (eventually) obtained by calling read_one_recoverable_tx().
     ///
     ///   Ok(Some(TxGuard)) => No other concurrent instance of the same tx is in progress, nor can
@@ -63,8 +63,11 @@ pub trait WriteAheadLog<'a, C> {
     ///
     ///   Err(e) => An error occurred.
     #[must_use]
-    async fn begin_tx(&'a self, tx: &TransactionDigest, cert: &C)
-        -> SuiResult<Option<Self::Guard>>;
+    async fn begin_tx<'b>(
+        &'a self,
+        tx: &'b TransactionDigest,
+        cert: &'b C,
+    ) -> SuiResult<Option<Self::Guard>>;
 
     /// Recoverable TXes are TXes that we find in the log at start up (which indicates we crashed
     /// while processing them) or implicitly dropped TXes (which can happen because we errored
@@ -258,10 +261,10 @@ where
 
     #[must_use]
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
-    async fn begin_tx(
+    async fn begin_tx<'b>(
         &'a self,
-        tx: &TransactionDigest,
-        cert: &C,
+        tx: &'b TransactionDigest,
+        cert: &'b C,
     ) -> SuiResult<Option<DBTxGuard<'a, C>>> {
         let mutex_guard = self.mutex_table.acquire_lock(tx).await;
         trace!(digest = ?tx, "acquired tx lock");

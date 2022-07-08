@@ -69,7 +69,7 @@ impl GasCoin {
     }
 
     pub fn to_object(&self) -> MoveObject {
-        MoveObject::new(Self::type_(), self.to_bcs_bytes())
+        MoveObject::new_gas_coin(self.to_bcs_bytes())
     }
 
     pub fn layout() -> MoveStructLayout {

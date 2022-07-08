@@ -59,7 +59,7 @@ impl<'b, K: Hash + 'b> MutexTable<K> {
         guards
     }
 
-    pub async fn acquire_lock<'a>(&'a self, k: &K) -> LockGuard<'a> {
+    pub async fn acquire_lock<'a, 'key>(&'a self, k: &'key K) -> LockGuard<'a> {
         let lock_idx = self.get_lock_idx(k);
         LockGuard(self.lock_table[lock_idx].lock().await)
     }

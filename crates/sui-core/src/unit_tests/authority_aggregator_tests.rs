@@ -8,8 +8,8 @@ use signature::Signer;
 
 use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
-use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
+use sui_types::crypto::{get_key_pair, PublicKeyBytes};
 
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
@@ -56,7 +56,7 @@ pub async fn init_local_authorities_with_genesis(
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, voting_rights).unwrap();
 
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
@@ -76,9 +76,15 @@ pub async fn init_local_authorities_with_genesis(
         authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
+        serial_authority_request_timeout: Duration::from_secs(1),
     };
     (
-        AuthorityAggregator::new_with_timeouts(committee, clients, timeouts),
+        AuthorityAggregator::new_with_timeouts(
+            committee,
+            clients,
+            GatewayMetrics::new_for_tests(),
+            timeouts,
+        ),
         states,
     )
 }
@@ -168,7 +174,7 @@ pub fn crate_object_move_transaction(
             arguments,
             GAS_VALUE_FOR_TESTING / 2,
         ),
-        &*secret,
+        secret,
     )
 }
 
@@ -274,7 +280,9 @@ where
         committee.epoch(),
         transaction.unwrap().to_transaction(),
         votes,
+        committee,
     )
+    .unwrap()
 }
 
 pub async fn do_cert<A>(
@@ -285,7 +293,7 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     authority
-        .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
+        .handle_certificate(cert.clone())
         .await
         .unwrap()
         .signed_effects
@@ -297,9 +305,7 @@ pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    let result = authority
-        .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
-        .await;
+    let result = authority.handle_certificate(cert.clone()).await;
     if result.is_err() {
         println!("Error in do cert {:?}", result.err());
     }

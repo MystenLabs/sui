@@ -197,7 +197,7 @@ fn get_inventory_for(
                     let obj_signer = obj.signer.unwrap();
                     obj.owner
                         == Owner::ObjectOwner(SuiAddress::try_from(parent.as_slice()).unwrap())
-                        && (!obj_signer.is_owned() || obj_signer == signer)
+                        && (!obj_signer.is_owned_or_quasi_shared() || obj_signer == signer)
                 } else {
                     obj.owner == signer
                 }

@@ -1,0 +1,18 @@
+processed 5 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 8-10:
+created: object(105)
+written: object(104)
+
+task 2 'view-object'. lines 13-13:
+105::m
+
+task 3 'transfer-object'. lines 15-15:
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TransferUnowned, source: None } }
+
+task 4 'view-object'. lines 17-17:
+105::m

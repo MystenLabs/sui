@@ -1,30 +1,32 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::debug;
 use typed_store::Map;
 
-use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
+use crate::authority::AuthorityStore;
+use crate::authority_client::AuthorityAPI;
 
-use super::{gossip::LocalConfirmationTransactionHandler, ActiveAuthority};
+use super::{gossip::LocalCertificateHandler, ActiveAuthority};
 
 #[cfg(test)]
 pub(crate) mod tests;
 
 pub trait PendCertificateForExecution {
-    fn pending_execution(
+    fn add_pending_certificates(
         &self,
-        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()>;
 }
 
-impl PendCertificateForExecution for AuthorityState {
-    fn pending_execution(
+impl PendCertificateForExecution for Arc<AuthorityStore> {
+    fn add_pending_certificates(
         &self,
-        certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+        certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()> {
-        self.database.add_pending_certificates(certs)
+        self.as_ref().add_pending_certificates(certs)
     }
 }
 
@@ -32,9 +34,9 @@ impl PendCertificateForExecution for AuthorityState {
 /// we do not care about certificates actually being executed.
 pub struct PendCertificateForExecutionNoop;
 impl PendCertificateForExecution for PendCertificateForExecutionNoop {
-    fn pending_execution(
+    fn add_pending_certificates(
         &self,
-        _certs: Vec<(TransactionDigest, CertifiedTransaction)>,
+        _certs: Vec<(TransactionDigest, Option<CertifiedTransaction>)>,
     ) -> SuiResult<()> {
         Ok(())
     }
@@ -92,7 +94,7 @@ where
         .map(|((i, d), c)| (i, d, c.as_ref().expect("certificate must exist")))
         .collect();
 
-    let local_handler = LocalConfirmationTransactionHandler {
+    let local_handler = LocalCertificateHandler {
         state: active_authority.state.clone(),
     };
 
@@ -109,7 +111,7 @@ where
 
         // Sync and Execute with local authority state
         net.sync_certificate_to_authority_with_timeout_inner(
-            sui_types::messages::ConfirmationTransaction::new(c.clone()),
+            c.clone(),
             active_authority.state.name,
             &local_handler,
             tokio::time::Duration::from_secs(10),

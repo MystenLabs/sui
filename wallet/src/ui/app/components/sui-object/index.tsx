@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiMoveObject, isSuiMovePackage } from '@mysten/sui.js';
-import { memo } from 'react';
+import cl from 'classnames';
+import { memo, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 
 import Field from './field';
 import CopyToClipboard from '_components/copy-to-clipboard';
@@ -16,9 +18,10 @@ import st from './SuiObject.module.scss';
 
 export type SuiObjectProps = {
     obj: SuiObjectType;
+    sendNFT?: boolean;
 };
 
-function SuiObject({ obj }: SuiObjectProps) {
+function SuiObject({ obj, sendNFT }: SuiObjectProps) {
     const { objectId } = obj.reference;
     const shortId = useMiddleEllipsis(objectId);
     const objType =
@@ -28,6 +31,11 @@ function SuiObject({ obj }: SuiObjectProps) {
     const suiMoveObjectFields = isSuiMoveObject(obj.data)
         ? obj.data.fields
         : null;
+
+    const sendUrl = useMemo(
+        () => `/send-nft?${new URLSearchParams({ objectId }).toString()}`,
+        [objectId]
+    );
     return (
         <div className={st.container}>
             <span className={st.id} title={objectId}>
@@ -44,13 +52,26 @@ function SuiObject({ obj }: SuiObjectProps) {
                     </>
                 ) : null}
                 <div className={st.fields}>
-                    {suiMoveObjectFields
-                        ? keys.map((aField) => (
-                              <Field key={aField} name={aField}>
-                                  {String(suiMoveObjectFields[aField])}
-                              </Field>
-                          ))
-                        : null}
+                    {suiMoveObjectFields ? (
+                        <>
+                            {keys.map((aField) => (
+                                <Field key={aField} name={aField}>
+                                    {String(suiMoveObjectFields[aField])}
+                                </Field>
+                            ))}
+                            {sendNFT ? (
+                                <div>
+                                    <Link
+                                        className={cl('btn', st.send)}
+                                        to={sendUrl}
+                                    >
+                                        Send NFT
+                                    </Link>
+                                </div>
+                            ) : null}
+                        </>
+                    ) : null}
+
                     {isSuiMovePackage(obj.data) ? (
                         <Field name="disassembled">
                             {JSON.stringify(obj.data.disassembled).substring(

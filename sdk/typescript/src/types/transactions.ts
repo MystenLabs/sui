@@ -4,15 +4,15 @@
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
-export type TransferCoin = {
+export type TransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
 };
 export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
-export type TransactionKindName = 'TransferCoin' | 'Publish' | 'Call';
+export type TransactionKindName = 'TransferObject' | 'Publish' | 'Call';
 export type SuiTransactionKind =
-  | { TransferCoin: TransferCoin }
+  | { TransferObject: TransferObject }
   | { Publish: SuiMovePackage }
   | { Call: MoveCall };
 export type TransactionData = {
@@ -92,6 +92,7 @@ export type TransactionEffects = {
 export type TransactionEffectsResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
+  timestamp_ms: number;
 };
 
 export type GatewayTxSeqNumber = number;
@@ -188,10 +189,10 @@ export function getTransactionGasBudget(tx: CertifiedTransaction): number {
   return tx.data.gasBudget;
 }
 
-export function getTransferCoinTransaction(
+export function getTransferObjectTransaction(
   data: SuiTransactionKind
-): TransferCoin | undefined {
-  return 'TransferCoin' in data ? data.TransferCoin : undefined;
+): TransferObject | undefined {
+  return 'TransferObject' in data ? data.TransferObject : undefined;
 }
 
 export function getPublishTransaction(

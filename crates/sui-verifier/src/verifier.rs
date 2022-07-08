@@ -8,7 +8,7 @@ use sui_types::error::ExecutionError;
 
 use crate::{
     entry_points_verifier, global_storage_access_verifier, id_immutable_verifier, id_leak_verifier,
-    private_transfer, struct_with_key_verifier,
+    private_generics, struct_with_key_verifier,
 };
 
 /// Helper for a "canonical" verification of a module.
@@ -17,6 +17,6 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     global_storage_access_verifier::verify_module(module)?;
     id_immutable_verifier::verify_module(module)?;
     id_leak_verifier::verify_module(module)?;
-    private_transfer::verify_module(module)?;
+    private_generics::verify_module(module)?;
     entry_points_verifier::verify_module(module)
 }

@@ -21,8 +21,8 @@ use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
-    Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -75,8 +75,9 @@ impl ConfigurableBatchActionClient {
             store,
             None,
             None,
+            None,
             &sui_config::genesis::Genesis::get_default_genesis(),
-            false,
+            &prometheus::Registry::new(),
         )
         .await;
 
@@ -102,24 +103,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         state.handle_transaction(transaction).await
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        let result = state.handle_confirmation_transaction(transaction).await;
-        result
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        })
+        state.handle_certificate(certificate).await
     }
 
     async fn handle_account_info_request(
@@ -137,8 +126,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.state.clone();
-        let x = state.handle_object_info_request(request).await;
-        x
+        state.handle_object_info_request(request).await
     }
 
     /// Handle Object information requests for this account.
@@ -146,8 +134,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let result = self.state.handle_transaction_info_request(request).await;
-        result
+        self.state.handle_transaction_info_request(request).await
     }
 
     /// Handle Batch information requests for this authority.
@@ -230,7 +217,7 @@ pub async fn init_configurable_authorities(
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, voting_rights).unwrap();
 
     // Create Authority Clients and States.
     let mut clients = Vec::new();

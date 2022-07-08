@@ -15,18 +15,18 @@ use sui_types::{
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
     gas::SuiGasStatus,
-    messages::{ConfirmationTransaction, SignatureAggregator, Transaction, TransactionData},
+    messages::{SignatureAggregator, Transaction, TransactionData},
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
-use crate::transaction_input_checker::InputObjects;
 use crate::{
     authority::AuthorityTemporaryStore, authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::CheckpointLocals, epoch::reconfiguration::CHECKPOINT_COUNT_PER_EPOCH,
     execution_engine,
 };
+use crate::{gateway_state::GatewayMetrics, transaction_input_checker::InputObjects};
 
 #[tokio::test]
 async fn test_start_epoch_change() {
@@ -62,6 +62,7 @@ async fn test_start_epoch_change() {
     let active = ActiveAuthority::new_with_ephemeral_follower_store(
         state.clone(),
         net.clone_inner_clients(),
+        GatewayMetrics::new_for_tests(),
     )
     .unwrap();
     // Make the high watermark differ from low watermark.
@@ -118,9 +119,7 @@ async fn test_start_epoch_change() {
     let certificate = cert.unwrap();
     assert_eq!(
         state
-            .handle_confirmation_transaction(ConfirmationTransaction {
-                certificate: certificate.clone()
-            })
+            .handle_certificate(certificate.clone())
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd
@@ -180,6 +179,7 @@ async fn test_finish_epoch_change() {
             ActiveAuthority::new_with_ephemeral_follower_store(
                 state.clone(),
                 net.clone_inner_clients(),
+                GatewayMetrics::new_for_tests(),
             )
             .unwrap()
         })

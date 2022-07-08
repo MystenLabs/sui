@@ -38,7 +38,7 @@ impl FragmentReconstruction {
         seq: u64,
         committee: Committee,
         fragments: &[CheckpointFragment],
-    ) -> Result<Option<FragmentReconstruction>, SuiError> {
+    ) -> Result<FragmentReconstruction, SuiError> {
         let mut span = SpanGraph::new(&committee);
         let mut fragments_used = Vec::new();
         let mut proposals: HashMap<AuthorityName, CheckpointSummary> = HashMap::new();
@@ -46,24 +46,24 @@ impl FragmentReconstruction {
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
-            debug_assert!(*frag.proposer.0.checkpoint.sequence_number() == seq);
+            debug_assert!(*frag.proposer.summary.sequence_number() == seq);
 
             // Check the checkpoint summary of the proposal is the same as the previous one.
             // Otherwise ignore the link.
-            let n1 = &frag.proposer.0.authority;
+            let n1 = frag.proposer.authority();
             if *proposals
                 .entry(*n1)
-                .or_insert_with(|| frag.proposer.0.checkpoint.clone())
-                != frag.proposer.0.checkpoint
+                .or_insert_with(|| frag.proposer.summary.clone())
+                != frag.proposer.summary
             {
                 continue;
             }
 
-            let n2 = &frag.other.0.authority;
+            let n2 = frag.other.authority();
             if *proposals
                 .entry(*n2)
-                .or_insert_with(|| frag.other.0.checkpoint.clone())
-                != frag.other.0.checkpoint
+                .or_insert_with(|| frag.other.summary.clone())
+                != frag.other.summary
             {
                 continue;
             }
@@ -79,7 +79,7 @@ impl FragmentReconstruction {
                 // Get all links that are part of this component
                 let mut active_links: VecDeque<_> = fragments_used
                     .into_iter()
-                    .filter(|frag| span.top_node(&frag.proposer.0.authority).0 == top)
+                    .filter(|frag| span.top_node(frag.proposer.authority()).0 == top)
                     .collect();
 
                 let mut global = GlobalCheckpoint::new();
@@ -96,23 +96,25 @@ impl FragmentReconstruction {
                             // This is bad news, we did not intend to fail here.
                             // We should have checked all conditions to avoid being
                             // in this situation. TODO: audit this.
-                            println!("Unexpected result: {:?}", other);
-                            unreachable!();
+                            panic!("Unexpected result: {:?}", other);
+                            // Or: unreachable!();
                         }
                     }
                 }
 
-                return Ok(Some(FragmentReconstruction {
+                return Ok(FragmentReconstruction {
                     global,
                     committee,
                     extra_transactions,
-                }));
+                });
             }
         }
 
         // If we run out of candidates with no checkpoint, there is no
         // checkpoint yet.
-        Ok(None)
+        Err(SuiError::from(
+            "Failed to construct checkpoint after using all fragments",
+        ))
     }
 }
 
@@ -125,11 +127,8 @@ struct SpanGraph {
 impl SpanGraph {
     /// Initialize the graph with each authority just pointing to itself.
     pub fn new(committee: &Committee) -> SpanGraph {
-        let nodes: HashMap<AuthorityName, (AuthorityName, StakeUnit)> = committee
-            .voting_rights
-            .iter()
-            .map(|(n, w)| (*n, (*n, *w)))
-            .collect();
+        let nodes: HashMap<AuthorityName, (AuthorityName, StakeUnit)> =
+            committee.members().map(|(n, w)| (*n, (*n, *w))).collect();
 
         SpanGraph { nodes }
     }
