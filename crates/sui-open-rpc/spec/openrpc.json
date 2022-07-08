@@ -16,23 +16,6 @@
   },
   "methods": [
     {
-      "name": "sui_Unknown method name",
-      "tags": [
-        {
-          "name": "Event Subscription"
-        }
-      ],
-      "params": [
-        {
-          "name": "filter",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/EventFilter"
-          }
-        }
-      ]
-    },
-    {
       "name": "sui_batchTransaction",
       "tags": [
         {
@@ -1112,6 +1095,36 @@
       }
     },
     {
+      "name": "sui_subscribeEvent",
+      "tags": [
+        {
+          "name": "Event Subscription"
+        },
+        {
+          "name": "Websocket"
+        },
+        {
+          "name": "PubSub"
+        }
+      ],
+      "params": [
+        {
+          "name": "filter",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiEventEnvelope",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/EventEnvelope"
+        }
+      }
+    },
+    {
       "name": "sui_syncAccountState",
       "tags": [
         {
@@ -1254,7 +1267,8 @@
         "type": "object",
         "required": [
           "epoch",
-          "signatures"
+          "signatures",
+          "signers_map"
         ],
         "properties": {
           "epoch": {
@@ -1265,18 +1279,11 @@
           "signatures": {
             "type": "array",
             "items": {
-              "type": "array",
-              "items": [
-                {
-                  "$ref": "#/components/schemas/PublicKeyBytes"
-                },
-                {
-                  "$ref": "#/components/schemas/AuthoritySignature"
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
+              "$ref": "#/components/schemas/AuthoritySignature"
             }
+          },
+          "signers_map": {
+            "$ref": "#/components/schemas/Base64"
           }
         }
       },
@@ -2338,9 +2345,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "PublicKeyBytes": {
-        "$ref": "#/components/schemas/Base64"
       },
       "PublishResponse": {
         "type": "object",

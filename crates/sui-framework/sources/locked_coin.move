@@ -10,6 +10,7 @@ module sui::locked_coin {
     use sui::epoch_time_lock::{Self, EpochTimeLock};
 
     friend sui::delegation;
+    friend sui::sui_system;
 
     /// A coin of type `T` locked until `locked_until_epoch`.
     struct LockedCoin<phantom T> has key, store {

@@ -19,6 +19,9 @@ const configDev: Configuration = {
     watchOptions: {
         aggregateTimeout: 600,
     },
+    stats: {
+        loggingDebug: ['sass-loader'],
+    },
 };
 
 async function getConfig() {

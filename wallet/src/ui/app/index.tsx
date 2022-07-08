@@ -4,24 +4,25 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import { DappTxApprovalPage } from './pages/dapp-tx-approval';
-import HomePage from './pages/home';
-import NftsPage from './pages/home/nfts';
-import SettingsPage from './pages/home/settings';
-import TokensPage from './pages/home/tokens';
-import TransactionsPage from './pages/home/transactions';
-import InitializePage from './pages/initialize';
-import BackupPage from './pages/initialize/backup';
-import CreatePage from './pages/initialize/create';
-import ImportPage from './pages/initialize/import';
-import SelectPage from './pages/initialize/select';
-import SiteConnectPage from './pages/site-connect';
-import TransactionDetailsPage from './pages/transaction-details';
-import TransferCoinPage from './pages/transfer-coin';
-import TransferNFTPage from './pages/transfer-nft';
-import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
+import HomePage, {
+    NftsPage,
+    SettingsPage,
+    TokensPage,
+    TransactionDetailsPage,
+    TransactionsPage,
+    TransferCoinPage,
+    TransferNFTPage,
+} from '_pages/home';
+import InitializePage from '_pages/initialize';
+import BackupPage from '_pages/initialize/backup';
+import CreatePage from '_pages/initialize/create';
+import ImportPage from '_pages/initialize/import';
+import SelectPage from '_pages/initialize/select';
+import SiteConnectPage from '_pages/site-connect';
+import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
 import { loadNetworkFromStorage } from '_redux/slices/app';
 

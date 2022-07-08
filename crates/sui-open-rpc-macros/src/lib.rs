@@ -57,11 +57,12 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             quote! {None;}
         };
+        let is_pubsub = method.is_pubsub;
         methods.push(quote! {
             let mut inputs: Vec<sui_open_rpc::ContentDescriptor> = Vec::new();
             #(#inputs)*
             let result = #returns_ty
-            builder.add_method(#namespace, #name, inputs, result, #doc, #tag);
+            builder.add_method(#namespace, #name, inputs, result, #doc, #tag, #is_pubsub);
         })
     }
     let open_rpc_name = quote::format_ident!("{}OpenRpc", &rpc_definition.name);
@@ -118,18 +119,32 @@ struct Method {
     params: Vec<(String, Type)>,
     returns: Option<Type>,
     doc: String,
+    is_pubsub: bool,
 }
 
 fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, syn::Error> {
     let mut methods = Vec::new();
     for trait_item in &mut trait_data.items {
         if let TraitItem::Method(method) = trait_item {
-            let method_name = if let Some(attr) = find_attr(&method.attrs, "method").cloned() {
-                let token: TokenStream = attr.tokens.clone().into();
-                parse::<NamedAttribute>(token)?.value.value()
-            } else {
-                "Unknown method name".to_string()
-            };
+            let (method_name, returns, is_pubsub) =
+                if let Some(attr) = find_attr(&method.attrs, "method") {
+                    let token: TokenStream = attr.tokens.clone().into();
+                    let returns = match &method.sig.output {
+                        syn::ReturnType::Default => None,
+                        syn::ReturnType::Type(_, output) => extract_type_from(output, "RpcResult"),
+                    };
+                    (
+                        parse::<NamedAttribute>(token)?.value.value(),
+                        returns,
+                        false,
+                    )
+                } else if let Some(attr) = find_attr(&method.attrs, "subscription") {
+                    let token: TokenStream = attr.tokens.clone().into();
+                    let attribute = parse::<SubscriptionNamedAttribute>(token)?;
+                    (attribute.value.value(), Some(attribute.item), true)
+                } else {
+                    panic!("Unknown method name")
+                };
 
             let doc = extract_doc_comments(&method.attrs).to_string();
 
@@ -155,15 +170,12 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
                 })
                 .collect::<Result<_, _>>()?;
 
-            let returns = match &method.sig.output {
-                syn::ReturnType::Default => None,
-                syn::ReturnType::Type(_, output) => extract_type_from(output, "RpcResult"),
-            };
             methods.push(Method {
                 name: method_name,
                 params,
                 returns,
                 doc,
+                is_pubsub,
             });
         }
     }
@@ -287,4 +299,24 @@ struct NamedAttribute {
     _eq_token: Token![=],
     #[inside(_paren_token)]
     value: syn::LitStr,
+}
+
+#[derive(Parse, Debug)]
+struct SubscriptionNamedAttribute {
+    #[paren]
+    _paren_token: Paren,
+    #[inside(_paren_token)]
+    _ident: Ident,
+    #[inside(_paren_token)]
+    _eq_token: Token![=],
+    #[inside(_paren_token)]
+    value: syn::LitStr,
+    #[inside(_paren_token)]
+    _comma: Token![,],
+    #[inside(_paren_token)]
+    _item_ident: Ident,
+    #[inside(_paren_token)]
+    _item_eq_token: Token![=],
+    #[inside(_paren_token)]
+    item: Type,
 }

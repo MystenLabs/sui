@@ -195,6 +195,10 @@
         "fileName": "contribute/observability"
       },
       {
+        "label": "Profiling on macOS",
+        "fileName": "contribute/xcode-instruments"
+      },
+      {
         "label": "Research Papers",
         "fileName": "contribute/research-papers"
       },

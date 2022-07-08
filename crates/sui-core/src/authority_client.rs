@@ -34,16 +34,10 @@ pub trait AuthorityAPI {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError>;
 
-    /// Confirm a transaction to a Sui or Primary account.
-    async fn handle_confirmation_transaction(
+    /// Execute a certificate.
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError>;
-
-    /// Processes consensus request.
-    async fn handle_consensus_transaction(
-        &self,
-        transaction: ConsensusTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError>;
 
     /// Handle Account information requests for this account.
@@ -129,24 +123,13 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::into)
     }
 
-    /// Confirm a transfer to a Sui or Primary account.
-    async fn handle_confirmation_transaction(
+    /// Execute a certificate.
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         self.client()
-            .confirmation_transaction(transaction.certificate)
-            .await
-            .map(tonic::Response::into_inner)
-            .map_err(Into::into)
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
-            .consensus_transaction(transaction)
+            .handle_certificate(certificate)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
@@ -263,9 +246,9 @@ impl AuthorityAPI for LocalAuthorityClient {
         result
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         if self.fault_config.fail_before_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
@@ -273,20 +256,13 @@ impl AuthorityAPI for LocalAuthorityClient {
             });
         }
         let state = self.state.clone();
-        let result = state.handle_confirmation_transaction(transaction).await;
+        let result = state.handle_certificate(certificate).await;
         if self.fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
         result
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        unimplemented!("LocalAuthorityClient does not support consensus transaction");
     }
 
     async fn handle_account_info_request(

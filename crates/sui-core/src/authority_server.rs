@@ -84,7 +84,6 @@ impl AuthorityServer {
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
-            state.clone(),
             consensus_address,
             state.clone_committee(),
             tx_consensus_listener,
@@ -206,7 +205,6 @@ impl ValidatorService {
 
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
-            state.clone(),
             consensus_config.address().to_owned(),
             state.clone_committee(),
             tx_sui_to_consensus.clone(),
@@ -276,70 +274,62 @@ impl Validator for ValidatorService {
         Ok(tonic::Response::new(info))
     }
 
-    async fn confirmation_transaction(
+    async fn handle_certificate(
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut transaction = request.into_inner();
-
-        transaction
+        let mut certificate = request.into_inner();
+        // 1) Verify certificate
+        certificate
             .verify(&self.state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         //TODO This is really really bad, we should have different types for signature verified transactions
-        transaction.is_verified = true;
+        certificate.is_verified = true;
 
-        let tx_digest = transaction.digest();
+        // 2) Check idempotency
+        let digest = certificate.digest();
+        if let Some(response) = self
+            .state
+            .check_tx_already_executed(digest)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
+        {
+            return Ok(tonic::Response::new(response));
+        }
+
+        // 3) If it's a shared object transaction and requires consensus, we need to do so.
+        // This will wait until either timeout or we have heard back from consensus.
+        if certificate.contains_shared_object()
+            && !self
+                .state
+                .transaction_shared_locks_exist(&certificate)
+                .await
+                .map_err(|e| tonic::Status::internal(e.to_string()))?
+        {
+            self.consensus_adapter
+                .submit(&ConsensusTransaction::UserTransaction(Box::new(
+                    certificate.clone(),
+                )))
+                .await
+                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        }
+
+        // 4) Execute the certificate.
+        let tx_digest = certificate.digest();
         let span = tracing::debug_span!(
-            "process_cert",
+            "execute_transaction",
             ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
+            tx_kind = certificate.data.kind_as_str()
         );
 
-        let confirmation_transaction = ConfirmationTransaction {
-            certificate: transaction,
-        };
-
-        let info = self
+        let response = self
             .state
-            .handle_confirmation_transaction(confirmation_transaction)
+            .handle_certificate(certificate)
             .instrument(span)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(info))
-    }
-
-    async fn consensus_transaction(
-        &self,
-        request: tonic::Request<ConsensusTransaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let transaction = request.into_inner();
-        let certificate = match transaction.clone() {
-            ConsensusTransaction::UserTransaction(certificate) => certificate,
-            _ => {
-                let error = SuiError::UnexpectedMessage;
-                return Err(tonic::Status::internal(error.to_string()));
-            }
-        };
-
-        // In some cases we can skip consensus for shared-object transactions: (i) we already executed
-        // the transaction, (ii) we already assigned locks to the transaction but failed to execute it.
-        // The later scenario happens when the authority missed some of the transaction's dependencies;
-        // we can thus try to re-execute it now.
-        let info = match self
-            .state
-            .try_skip_consensus(*certificate)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?
-        {
-            Some(info) => info,
-            None => self
-                .consensus_adapter
-                .submit(&transaction)
-                .await
-                .map_err(|e| tonic::Status::internal(e.to_string()))?,
-        };
-        Ok(tonic::Response::new(info))
+        Ok(tonic::Response::new(response))
     }
 
     async fn account_info(

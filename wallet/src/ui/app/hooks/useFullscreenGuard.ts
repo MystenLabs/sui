@@ -7,12 +7,12 @@ import useAppSelector from './useAppSelector';
 import { AppType } from '_redux/slices/app/AppType';
 import { openInNewTab } from '_shared/utils';
 
-export default function useFullscreenGuard() {
+export default function useFullscreenGuard(enabled: boolean) {
     const appType = useAppSelector((state) => state.app.appType);
     useEffect(() => {
-        if (appType === AppType.popup) {
+        if (enabled && appType === AppType.popup) {
             openInNewTab().finally(() => window.close());
         }
-    }, [appType]);
-    return appType === AppType.unknown;
+    }, [appType, enabled]);
+    return !enabled && appType === AppType.unknown;
 }

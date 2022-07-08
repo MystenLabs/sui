@@ -13,9 +13,7 @@ use sui_node::SuiNode;
 use sui_types::{
     committee::Committee,
     error::SuiResult,
-    messages::{
-        ConfirmationTransaction, ConsensusTransaction, Transaction, TransactionInfoResponse,
-    },
+    messages::{Transaction, TransactionInfoResponse},
     object::Object,
 };
 
@@ -67,11 +65,7 @@ pub fn test_authority_aggregator(
     config: &NetworkConfig,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
-    let voting_rights: BTreeMap<_, _> = validators_info
-        .iter()
-        .map(|config| (config.public_key(), config.stake()))
-        .collect();
-    let committee = Committee::new(0, voting_rights).unwrap();
+    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -96,13 +90,12 @@ pub async fn submit_single_owner_transaction(
     configs: &[ValidatorInfo],
 ) -> Vec<TransactionInfoResponse> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let txn = ConfirmationTransaction { certificate };
 
     let mut responses = Vec::new();
     for config in configs {
         let client = get_client(config);
         let reply = client
-            .handle_confirmation_transaction(txn.clone())
+            .handle_certificate(certificate.clone())
             .await
             .unwrap();
         responses.push(reply);
@@ -118,15 +111,14 @@ pub async fn submit_shared_object_transaction(
     configs: &[ValidatorInfo],
 ) -> Vec<SuiResult<TransactionInfoResponse>> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(Box::new(certificate));
 
     loop {
         let futures: Vec<_> = configs
             .iter()
             .map(|config| {
                 let client = get_client(config);
-                let txn = message.clone();
-                async move { client.handle_consensus_transaction(txn).await }
+                let cert = certificate.clone();
+                async move { client.handle_certificate(cert).await }
             })
             .collect();
 

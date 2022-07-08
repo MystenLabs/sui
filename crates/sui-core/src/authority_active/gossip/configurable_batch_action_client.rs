@@ -21,8 +21,8 @@ use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
-    Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -103,23 +103,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         state.handle_transaction(transaction).await
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        state.handle_confirmation_transaction(transaction).await
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        })
+        state.handle_certificate(certificate).await
     }
 
     async fn handle_account_info_request(

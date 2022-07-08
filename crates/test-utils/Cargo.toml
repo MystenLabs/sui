@@ -12,8 +12,8 @@ futures = "0.3.21"
 rand = "0.7.3"
 tempfile = "3.3.0"
 bcs = "0.1.3"
-jsonrpsee-http-server = "0.13.1"
-jsonrpsee-http-client = "0.13.1"
+jsonrpsee-http-server = "0.14.0"
+jsonrpsee-http-client = "0.14.0"
 prometheus = "0.13.1"
 
 sui = { path = "../sui" }
@@ -28,7 +28,6 @@ sui-node = { path = "../sui-node" }
 sui-swarm = { path = "../sui-swarm" }
 sui-types = { path = "../sui-types" }
 
-move-package = { git = "https://github.com/move-language/move", rev = "95999a9818091e382fb1c6016e68829f1dfc3127" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "95999a9818091e382fb1c6016e68829f1dfc3127", features = ["address20"] }
-
+move-package = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "7abcc9b03b25bb6ceb9ac68c2f7bdd5710e13003", features = ["address20"] }
 workspace-hack = { path = "../workspace-hack"}

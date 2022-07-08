@@ -45,12 +45,10 @@ impl Genesis {
     }
 
     pub fn committee(&self) -> SuiResult<Committee> {
-        let voting_rights = self
-            .validator_set()
-            .iter()
-            .map(|validator| (validator.public_key(), validator.stake()))
-            .collect();
-        Committee::new(self.epoch(), voting_rights)
+        Committee::new(
+            self.epoch(),
+            ValidatorInfo::voting_rights(self.validator_set()),
+        )
     }
 
     pub fn get_default_genesis() -> Self {

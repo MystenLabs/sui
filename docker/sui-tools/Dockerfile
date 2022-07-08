@@ -39,7 +39,8 @@ COPY crates crates
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
-    --bin rpc-server
+    --bin rpc-server \
+    --bin sui-faucet
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -47,6 +48,7 @@ WORKDIR sui
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/rpc-server /usr/local/bin
+COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 
 ARG BUILD_DATE
 LABEL build-date=$BUILD_DATE

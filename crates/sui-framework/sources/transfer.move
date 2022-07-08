@@ -150,4 +150,40 @@ module sui::transfer {
 
     // delete `child_id`, emit a system `DeleteChildObject(child)` event
     native fun delete_child_object_internal(child: address, child_id: VersionedID);
+
+    // Cost calibration functions
+    #[test_only]
+    public fun calibrate_freeze_object<T: key>(obj: T) {
+        freeze_object(obj)
+    }
+    #[test_only]
+    public fun calibrate_freeze_object_nop<T: key + drop>(_obj: T) {
+    }
+
+    #[test_only]
+    public fun calibrate_share_object<T: key>(obj: T) {
+        share_object(obj)
+    }
+    #[test_only]
+    public fun calibrate_share_object_nop<T: key + drop>(_obj: T) {
+    }
+
+    #[test_only]
+    public fun calibrate_transfer_internal<T: key>(obj: T, recipient: address, to_object: bool) {
+        transfer_internal(obj, recipient, to_object)
+    }
+    #[test_only]
+    public fun calibrate_transfer_internal_nop<T: key + drop>(_obj: T, _recipient: address, _to_object: bool) {
+    }
+
+    #[test_only]
+    public fun calibrate_delete_child_object_internal(child: address, child_id: VersionedID) {
+        delete_child_object_internal(child, child_id)
+    }
+
+    // TBD
+    // #[test_only]
+    // public fun calibrate_delete_child_object_internal_nop(_child: address, _child_id: VersionedID) {
+    // }
+
 }
