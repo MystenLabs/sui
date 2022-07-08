@@ -55,25 +55,15 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../sui-open-rpc/spec/openrpc.json",
-);
+const FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/spec/openrpc.json",);
 
-const OBJECT_SAMPLE_FILE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../sui-open-rpc/samples/objects.json",
-);
+const OBJECT_SAMPLE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/objects.json",);
 
-const TRANSACTION_SAMPLE_FILE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../sui-open-rpc/samples/transactions.json",
-);
+const TRANSACTION_SAMPLE_FILE_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/samples/transactions.json",);
 
-const OWNED_OBJECT_SAMPLE_FILE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../sui-open-rpc/samples/owned_objects.json",
-);
+const OWNED_OBJECT_SAMPLE_FILE_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/samples/owned_objects.json",);
 
 #[tokio::main]
 async fn main() {
