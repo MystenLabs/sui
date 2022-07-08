@@ -8,7 +8,7 @@ This document is written for engineers, developers, and technical readers knowle
 
 ## tl;dr
 
-The Sui blockchain operates at a speed and scale previously thought unimaginable. Sui assumes the typical blockchain transaction is a simple transfer and optimizes for that use. Sui does this by making each request idempotent, holding network connections open longer, and ensuring transactions complete immediately. Sui optimizes for single-writer objects, allowing a design that forgoes consensus for simple/common transactions.
+The Sui blockchain operates at a speed and scale previously thought unimaginable. Sui assumes the typical blockchain transaction is a simple transfer and optimizes for that use. Sui does this by making each request idempotent, holding network connections open longer, and ensuring transactions complete immediately. Sui optimizes for single-writer objects, allowing a design that forgoes consensus for simple transactions.
 
 Instead of the traditional blockchain’s fire-and-forget broadcast, Sui ensures a two-way handshake between the requestor and approving validators, with simple transactions having near instant finality. With this low latency, transactions can easily be incorporated into games and other settings that need completion in real time. Furthermore, Sui supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
 
@@ -44,15 +44,15 @@ Sui validators agree on and execute transactions in parallel with high throughpu
 
 This section is written for a technical audience wishing to gain more insight about how Sui achieves its main performance and security objectives.
 
-Sui assumes the typical blockchain transaction is a user-to-user transfer or asset manipulation and optimizes for that scenario. As a result, Sui distinguishes between two types of assets (i) owned objects that can only be modified by its specific owner, and (ii) shared objects that have no specific owners and can be modified by more than one user. This distinction allows a design that forgoes consensus for common transactions involving only owned objects to achieve very low latency.
+Sui assumes the typical blockchain transaction is a user-to-user transfer or asset manipulation and optimizes for that scenario. As a result, Sui distinguishes between two types of assets (i) owned objects that can only be modified by its specific owner, and (ii) shared objects that have no specific owners and can be modified by more than one user. This distinction allows a design that forgoes consensus for simple transactions involving only owned objects to achieve very low latency.
 
 Sui mitigates a major hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes maintain an accumulator that represents the state of the entire blockchain, such as the latest certified transactions. Nodes participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate). That consensus protocol leads to an agreement on the state of the blockchain before the increment, the validity and suitability of the state update itself, and the state of the blockchain after the increment. On a periodic basis, these increments are collected in the accumulator.
 
-In Sui, this consensus protocol is required only when the transaction involves shared objects. When shared objects are involved, the Sui validators play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
+In Sui, this consensus protocol is required only when the transaction involves shared objects. For this, Sui offers the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus. When shared objects are involved, the Sui validators play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
 
 Because Sui focuses on managing specific objects rather than a single aggregation of state, it also reports on them in a unique way: (i) every object in Sui has a unique version number, and (ii) every new version is created from a transaction that may involve several dependencies, themselves versioned objects.
 
-As a consequence, a Sui validator – or any other entity with a copy of the state – can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in most cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
+As a consequence, a Sui validator – or any other entity with a copy of the state – can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in many cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
 
 Sui guarantees transaction processing obeys *[eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency)* in the [classical sense](https://hal.inria.fr/inria-00609399/document). This breaks down in two parts:
 
@@ -61,7 +61,7 @@ Sui guarantees transaction processing obeys *[eventual consistency](https://en.w
 
 But contrary to a blockchain, Sui does not stop the flow of transactions in order to witness the convergence.
 
-## Common transactions
+## Simple transactions
 
 [Many transactions](https://eprint.iacr.org/2019/611.pdf) do not have complex interdependencies with other, arbitrary parts of the blockchain state. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. This observation allows Sui to forgo [consensus](https://pmg.csail.mit.edu/papers/osdi99.pdf) and instead use simpler algorithms based on [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3). These protocols are based on the [FastPay](https://arxiv.org/abs/2003.11506) design that comes with peer-reviewed security guarantees. In a nutshell, Sui takes the approach of taking a lock (or "stopping the world") only for the relevant piece of data rather than the whole chain. In this case, the only information needed is the sender account, which can then send only one transaction at a time.
 
@@ -79,7 +79,7 @@ The process of submitting a Sui transaction is thus a bit more involved than in 
 While those steps demand more of the sender, performing them efficiently can still yield a cryptographic proof of finality with minimum latency. Aside from crafting the original transaction itself, the session management for a transaction does not require access to any private keys and can be delegated to a third party. Sui takes advantage of this observation to provide [Sui Gateway services](#sui-gateway-services).
 
 
-## Support for complex contracts
+## Complex contracts
 
 Complex smart contracts may benefit from shared objects where more than one user can mutate those objects (following smart contract specific rules). In this case, Sui totally orders all transactions involving shared objects using a consensus protocol. Sui uses a novel peer-reviewed consensus protocol based on [Narwhal](https://arxiv.org/abs/2105.11827). This is state-of-the-art in terms of both performance and robustness.
 
