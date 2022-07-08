@@ -69,6 +69,7 @@ div.txadd {
 .success {
     @apply text-green-400;
 }
+
 .txlatestresults .tab {
     @apply text-lg !important;
 }
