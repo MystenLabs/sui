@@ -10,6 +10,7 @@ use crate::{
 use arc_swap::ArcSwap;
 use debug_ignore::DebugIgnore;
 use narwhal_config::{Authority, Epoch, PrimaryAddresses, Stake, WorkerAddresses};
+use narwhal_crypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use std::{
     collections::BTreeMap,
@@ -17,10 +18,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use sui_types::{
-    base_types::encode_bytes_hex,
-    crypto::{get_key_pair_from_rng, SuiKeypair},
-};
+use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
 
 pub struct ConfigBuilder<R = OsRng> {
     rng: R,
@@ -134,11 +132,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let narwhal_committee = validators
             .iter()
             .map(|validator| {
-                let name = validator
-                    .key_pair
-                    .public_key_bytes()
-                    .make_narwhal_public_key()
-                    .expect("Can't get narwhal public key");
+                let name = validator.key_pair.public().clone();
                 let primary = PrimaryAddresses {
                     primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     worker_to_primary: validator.narwhal_worker_to_primary.clone(),

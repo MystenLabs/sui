@@ -5,9 +5,15 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
+<<<<<<< HEAD
     sha3_hash, AccountSignature, AggregateAccountSignature, AggregateAuthoritySignature,
     AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable,
     EmptySignInfo, PublicKey, Signable, Signature, SuiAuthoritySignature, VerificationObligation,
+=======
+    sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
+    AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable, EmptySignInfo, Signable,
+    Signature, SuiAuthoritySignature, VerificationObligation,
+>>>>>>> b1029574 (f)
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::CheckpointFragment;
@@ -527,13 +533,13 @@ impl<S> TransactionEnvelope<S> {
     fn add_sender_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation<AggregateAccountSignature>,
-    ) -> SuiResult<()> {
+    ) -> SuiResult<usize> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
         // "check" function.
         if self.is_verified || self.data.kind.is_system_tx() {
-            return Ok(());
+            return Ok(obligation.signatures.len() - 1);
         }
 
         let (message, signature, public_key) = self
@@ -541,10 +547,21 @@ impl<S> TransactionEnvelope<S> {
             .get_verification_inputs(&self.data, self.data.sender)?;
         let idx = obligation.add_message(message);
         let key = obligation.lookup_public_key(&public_key)?;
-        obligation.public_keys.push(key);
-        obligation.signatures.push(signature);
-        obligation.message_index.push(idx);
-        Ok(())
+
+        obligation
+            .public_keys
+            .get_mut(idx)
+            .ok_or(SuiError::InvalidAuthenticator)?
+            .push(key);
+        obligation
+            .signatures
+            .get_mut(idx)
+            .ok_or(SuiError::InvalidAuthenticator)?
+            .add_signature(signature)
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Failed to add signature to obligation".to_string(),
+            })?;
+        Ok(idx)
     }
 
     pub fn sender_address(&self) -> SuiAddress {
@@ -735,12 +752,14 @@ impl SignedTransaction {
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn verify(&self, committee: &Committee) -> Result<u64, SuiError> {
         let mut obligation = VerificationObligation::default();
-        self.add_sender_sig_to_verification_obligation(&mut obligation)?;
+        let idx = self.add_sender_sig_to_verification_obligation(&mut obligation)?;
         let weight = committee.weight(&self.auth_sign_info.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        let mut message = Vec::new();
-        self.data.write(&mut message);
-        let idx = obligation.add_message(message);
+
+        // let mut message = Vec::new();
+        // self.data.write(&mut message);
+        // let idx = obligation.add_message(message);
+
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -1230,6 +1249,10 @@ impl<'a> SignatureAggregator<'a> {
             weight: 0,
             used_authorities: HashSet::new(),
             partial: CertifiedTransaction::new(committee.epoch, transaction),
+<<<<<<< HEAD
+=======
+            signature_stash: Vec::new(),
+>>>>>>> b1029574 (f)
         }
     }
 
@@ -1252,12 +1275,25 @@ impl<'a> SignatureAggregator<'a> {
         let voting_rights = self.committee.weight(&authority);
         fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
         self.weight += voting_rights;
+<<<<<<< HEAD
         // Update certificate.
         self.partial
             .auth_sign_info
             .add_signature(signature, authority, self.committee)?;
 
         if self.weight >= self.committee.quorum_threshold() {
+=======
+
+        self.signature_stash.push((authority, signature));
+
+        if self.weight >= self.committee.quorum_threshold() {
+            // Update certificate.
+            self.partial.auth_sign_info = AuthorityStrongQuorumSignInfo::new_with_signatures(
+                self.partial.auth_sign_info.epoch,
+                self.signature_stash.clone(),
+                self.committee,
+            )?;
+>>>>>>> b1029574 (f)
             Ok(Some(self.partial.clone()))
         } else {
             Ok(None)
@@ -1318,12 +1354,13 @@ impl CertifiedTransaction {
         obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
     ) -> SuiResult<()> {
         // Add the obligation of the sender signature verification.
-        self.add_sender_sig_to_verification_obligation(obligation)?;
 
-        // Add the obligation of the authority signature verifications.
+        // // Add the obligation of the authority signature verifications.
         let mut message = Vec::new();
         self.data.write(&mut message);
         let idx = obligation.add_message(message);
+
+        // let idx = self.add_sender_sig_to_verification_obligation(obligation)?;
 
         self.auth_sign_info
             .add_to_verification_obligation(committee, obligation, idx)

@@ -300,19 +300,6 @@ fn test_signature_serde_not_human_readable() {
 }
 
 #[test]
-fn test_signature_serde_human_readable() {
-    let (_, key) = get_key_pair();
-    let sig = AuthoritySignature::new(&Foo("some data".to_string()), &key);
-    let serialized = serde_json::to_string(&sig).unwrap();
-    assert_eq!(
-        format!("\"{}\"", Base64::encode_string(sig.as_ref())),
-        serialized
-    );
-    let deserialized: AuthoritySignature = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(deserialized, sig);
-}
-
-#[test]
 fn test_object_id_from_empty_string() {
     assert!(ObjectID::try_from("".to_string()).is_err());
     assert!(ObjectID::from_str("").is_err());

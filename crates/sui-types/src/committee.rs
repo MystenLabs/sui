@@ -124,7 +124,12 @@ impl Committee {
     pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<PublicKey> {
         match self.expanded_keys.get(authority) {
             Some(v) => Ok((*v).clone()),
-            None => (*authority).try_into(),
+            None => (*authority).try_into().map_err(|_| {
+                SuiError::InvalidCommittee(format!(
+                    "committee member {} is not a valid authority",
+                    authority
+                ))
+            }),
         }
     }
 

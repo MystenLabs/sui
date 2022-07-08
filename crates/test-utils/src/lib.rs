@@ -10,7 +10,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
-    crypto::{get_key_pair_from_rng, KeyPair, SuiKeypair},
+    crypto::{get_key_pair_from_rng, KeyPair, NarwhalKeypair},
 };
 
 /// The size of the committee used for tests.

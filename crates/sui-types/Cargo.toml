@@ -49,7 +49,7 @@ move-ir-types = { git = "https://github.com/move-language/move", rev = "f07e9947
 move-vm-types = { git = "https://github.com/move-language/move", rev = "f07e99473e6edfff22f30596dd493ac770f0bb4a" }
 
 narwhal-executor = { git = "https://github.com/punwai/narwhal-1", package = "executor" }
-narwhal-crypto = { git = "https://github.com/punwai/narwhal-1", package = "crypto" }
+narwhal-crypto = { git = "https://github.com/punwai/narwhal-1", package = "crypto", features = ["copy_key"]}
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
