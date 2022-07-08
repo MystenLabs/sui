@@ -350,11 +350,16 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                     .observe(now.elapsed().as_secs_f64());
             }
 
-            // measure the pending elements
+            // measure the pending & parent elements
             self.metrics
                 .pending_elements_header_waiter
                 .with_label_values(&[&self.committee.epoch.to_string()])
                 .set(self.pending.len() as i64);
+
+            self.metrics
+                .parent_requests_header_waiter
+                .with_label_values(&[&self.committee.epoch.to_string()])
+                .set(self.parent_requests.len() as i64);
         }
     }
 }

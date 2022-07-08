@@ -180,11 +180,28 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     #[instrument(level = "debug", skip_all)]
     async fn process_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", header);
+        let header_source = if self.name.eq(&header.author) {
+            "own"
+        } else {
+            "other"
+        };
+
         // Indicate that we are processing this header.
-        self.processing
+        let inserted = self
+            .processing
             .entry(header.round)
             .or_insert_with(HashSet::new)
             .insert(header.id);
+
+        if inserted {
+            // Only increase the metric when the header has been seen for the first
+            // time. Edge case is headers received past gc_round so we might have already
+            // processed them, but not big issue for now.
+            self.metrics
+                .unique_headers_received
+                .with_label_values(&[&header.epoch.to_string(), header_source])
+                .inc();
+        }
 
         // If the following condition is valid, it means we already garbage collected the parents. There is thus
         // no points in trying to synchronize them or vote for the header. We just need to gather the payload.
@@ -240,11 +257,6 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         // Store the header.
         self.header_store.write(header.id, header.clone()).await;
 
-        let header_source = if self.name.eq(&header.author) {
-            "own"
-        } else {
-            "other"
-        };
         self.metrics
             .headers_processed
             .with_label_values(&[&header.epoch.to_string(), header_source])
@@ -579,6 +591,11 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
                     .with_label_values(&[&self.committee.epoch.to_string()])
                     .observe(now.elapsed().as_secs_f64());
             }
+
+            self.metrics
+                .core_cancel_handlers_total
+                .with_label_values(&[&self.committee.epoch.to_string()])
+                .set(self.cancel_handlers.len() as i64);
         }
     }
 }

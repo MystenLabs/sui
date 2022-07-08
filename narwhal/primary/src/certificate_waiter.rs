@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::traits::VerifyingKey;
 use futures::{
@@ -49,6 +50,8 @@ pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     /// resume when we get all their dependencies. The map holds a cancellation `Sender`
     /// which we can use to give up on a certificate.
     pending: HashMap<HeaderDigest, (Round, Sender<()>)>,
+    /// The metrics handler
+    metrics: Arc<PrimaryMetrics>,
 }
 
 impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
@@ -60,6 +63,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
         rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
         rx_synchronizer: Receiver<Certificate<PublicKey>>,
         tx_core: Sender<Certificate<PublicKey>>,
+        metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -71,6 +75,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                 rx_synchronizer,
                 tx_core,
                 pending: HashMap::new(),
+                metrics,
             }
             .run()
             .await;
@@ -162,6 +167,15 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                 }
                 self.pending.retain(|_, (r, _)| *r > gc_round + 1);
             }
+
+            self.update_metrics();
         }
+    }
+
+    fn update_metrics(&self) {
+        self.metrics
+            .pending_elements_certificate_waiter
+            .with_label_values(&[&self.committee.epoch.to_string()])
+            .set(self.pending.len() as i64);
     }
 }

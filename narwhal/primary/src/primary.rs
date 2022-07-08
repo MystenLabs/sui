@@ -10,7 +10,7 @@ use crate::{
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     helper::Helper,
-    metrics::{initialise_metrics, PrimaryMetrics},
+    metrics::{initialise_metrics, PrimaryEndpointMetrics, PrimaryMetrics},
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
     state_handler::StateHandler,
@@ -136,6 +136,7 @@ impl Primary {
         // Initialise the metrics
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
+        let primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
 
         // Atomic variable use to synchronize all tasks with the latest consensus round. This is only
@@ -161,6 +162,7 @@ impl Primary {
             address.clone(),
             parameters.max_concurrent_requests,
             tx_reconfigure.subscribe(),
+            primary_endpoint_metrics,
         );
         info!(
             "Primary {} listening to primary messages on {}",
@@ -311,6 +313,7 @@ impl Primary {
             tx_reconfigure.subscribe(),
             /* rx_synchronizer */ rx_sync_certificates,
             /* tx_core */ tx_certificates_loopback,
+            node_metrics.clone(),
         );
 
         // When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
@@ -418,13 +421,14 @@ impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
         address: Multiaddr,
         max_concurrent_requests: usize,
         rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        primary_endpoint_metrics: PrimaryEndpointMetrics,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut config = mysten_network::config::Config::new();
             config.concurrency_limit_per_connection = Some(max_concurrent_requests);
             tokio::select! {
                 _result = config
-                    .server_builder()
+                    .server_builder_with_metrics(primary_endpoint_metrics)
                     .add_service(PrimaryToPrimaryServer::new(self))
                     .bind(&address)
                     .await
