@@ -53,11 +53,8 @@ function generateStartEndRange(
 ): { startGatewayTxSeqNumber: number; endGatewayTxSeqNumber: number } {
     // Pagination pageNum from query params - default to 0; No negative values
     const txPaged = pageNum && pageNum > 0 ? pageNum - 1 : 0;
-    const endGatewayTxSeqNumber: number = txCount - txNum * txPaged;
-    const tempStartGatewayTxSeqNumber: number = endGatewayTxSeqNumber - txNum;
-    // If startGatewayTxSeqNumber is less than 0, then set it 1 the first transaction sequence number
-    const startGatewayTxSeqNumber: number =
-        tempStartGatewayTxSeqNumber > 0 ? tempStartGatewayTxSeqNumber : 1;
+    const endGatewayTxSeqNumber = txCount - txNum * txPaged;
+    const startGatewayTxSeqNumber = Math.max(endGatewayTxSeqNumber - txNum, 0);
     return {
         startGatewayTxSeqNumber,
         endGatewayTxSeqNumber,
