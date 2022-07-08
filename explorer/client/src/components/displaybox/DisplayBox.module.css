@@ -50,15 +50,19 @@ img.imageblurstill {
     w-[88vw] h-[88vw] lg:w-[35vw] lg:h-[35vw] mb-[10vh];
 }
 
-div.automod {
+.automod {
     @apply border-0 border-b-2 border-solid border-gray-300;
 
-    background-color: #f0ecc1;
+    background-color: #e5f3f6;
     position: relative;
     text-align: center;
-    z-index: 100;
     align-content: center;
-    opacity: 0.45;
-    width: fit-content;
+    vertical-align: middle;
+    z-index: 100;
+    opacity: 0.90;
+    width: 50%;
     margin: auto;
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem !important;
+    margin-top: 5rem;
 }

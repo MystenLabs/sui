@@ -68,7 +68,6 @@ function DisplayBox({ display }: { display: string }) {
     if (loadedWithoutAllowedState && hasImgBeenChecked) {
         display = FALLBACK_IMAGE;
         imgClass = styles.imagebox;
-        //setHasFailedToLoad(false);
         showAutoModNotice = true;
     }
 
@@ -84,11 +83,6 @@ function DisplayBox({ display }: { display: string }) {
                     No Image was Found
                 </div>
             )}
-            {showAutoModNotice && (
-                <div className={styles.automod} id="modnotice">
-                    image hidden by automod
-                </div>
-            )}
             {!hasFailedToLoad && (
                 <img
                     id="loadedImage"
@@ -99,6 +93,11 @@ function DisplayBox({ display }: { display: string }) {
                     onLoad={handleImageLoad}
                     onError={handleImageFail}
                 />
+            )}
+            {showAutoModNotice && (
+                <div className={styles.automod} id="modnotice">
+                    image hidden by automod
+                </div>
             )}
         </div>
     );
