@@ -5,12 +5,19 @@
 use std::collections::BTreeMap;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 use crate::crypto::{get_key_pair, SuiKeypair};
 =======
 use roaring::RoaringBitmap;
 
 use crate::crypto::get_key_pair;
 >>>>>>> e9d494e4 (Replace Vec<PK> in authority quorum with equivalent bitmap (#2929))
+=======
+use narwhal_crypto::traits::KeyPair;
+use roaring::RoaringBitmap;
+
+use crate::crypto::get_key_pair;
+>>>>>>> b1029574 (f)
 
 use super::*;
 
@@ -139,6 +146,7 @@ fn test_certificates() {
         .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
         .unwrap()
         .unwrap();
+
     assert!(c.verify(&committee).is_ok());
     c.auth_sign_info.signatures.pop();
     assert!(c.verify(&committee).is_err());
@@ -193,6 +201,7 @@ fn test_new_with_signatures() {
     );
 }
 
+<<<<<<< HEAD
 #[test]
 fn test_add_signatures() {
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
@@ -229,6 +238,11 @@ fn test_add_signatures() {
 }
 
 fn get_obligation_input<T>(value: &T) -> (VerificationObligation, usize)
+=======
+fn get_obligation_input<T>(
+    value: &T,
+) -> (VerificationObligation<AggregateAuthoritySignature>, usize)
+>>>>>>> b1029574 (f)
 where
     T: BcsSignable,
 {
@@ -250,8 +264,13 @@ fn test_handle_reject_malicious_signature() {
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+<<<<<<< HEAD
         authorities.insert(*sec.public_key_bytes(), 1);
         signatures.push((*sec.public_key_bytes(), sig));
+=======
+        authorities.insert(sec.public_key_bytes(), 1u64);
+        signatures.push((sec.public_key_bytes(), sig));
+>>>>>>> b1029574 (f)
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
@@ -319,9 +338,18 @@ fn test_reject_extra_public_key() {
     quorum.signers_map.insert(3);
 
     let (mut obligation, idx) = get_obligation_input(&message);
+<<<<<<< HEAD
     assert!(quorum
         .add_to_verification_obligation(&committee, &mut obligation, idx)
         .is_ok());
+=======
+    let verify = || -> SuiResult<()> {
+        quorum.add_to_verification_obligation(&committee, &mut obligation, idx)?;
+        obligation.verify_all()?;
+        Ok(())
+    };
+    assert!(verify().is_err());
+>>>>>>> b1029574 (f)
 }
 
 #[test]

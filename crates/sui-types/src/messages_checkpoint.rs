@@ -441,11 +441,11 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
+    use narwhal_crypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
 
     use super::*;
-    use crate::crypto::SuiKeypair;
     use crate::utils::make_committee_key;
 
     // TODO use the file name as a seed

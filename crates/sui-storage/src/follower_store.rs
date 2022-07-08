@@ -52,7 +52,7 @@ impl FollowerStore {
 #[cfg(test)]
 mod test {
     use crate::follower_store::FollowerStore;
-    use sui_types::crypto::{get_key_pair, SuiKeypair};
+    use sui_types::crypto::{get_key_pair, NarwhalKeypair};
 
     #[test]
     fn test_follower_store() {

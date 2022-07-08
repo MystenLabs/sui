@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_network::tonic;
 use sui_types::committee::Committee;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::{PublicKeyBytes, ToFromBytes};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{ConfirmationTransaction, SignedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -98,7 +98,7 @@ where
             .iter()
             .map(|metadata| {
                 (
-                    PublicKeyBytes::try_from(metadata.pubkey_bytes.as_ref())
+                    PublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
                         .expect("Validity of public key bytes should be verified on-chain"),
                     metadata.next_epoch_stake + metadata.next_epoch_delegation,
                 )
@@ -205,7 +205,8 @@ where
                 .unwrap();
             let client: A = A::recreate(channel);
             let name: &[u8] = &validator.name;
-            let public_key_bytes = PublicKeyBytes::try_from(name)?;
+            let public_key_bytes =
+                PublicKeyBytes::from_bytes(name).map_err(|_| SuiError::InvalidAuthenticator)?;
             new_clients.insert(public_key_bytes, client);
         }
 

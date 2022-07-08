@@ -3,8 +3,9 @@
 
 use crate::{
     committee::Committee,
-    crypto::{get_key_pair_from_rng, KeyPair, SuiKeypair},
+    crypto::{get_key_pair_from_rng, KeyPair},
 };
+use narwhal_crypto::traits::KeyPair as NarwhalKeypair;
 use std::collections::BTreeMap;
 
 pub fn make_committee_key<R>(rand: &mut R) -> (Vec<KeyPair>, Committee)

@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::NarwhalKeypair;
 use sui_types::crypto::PublicKey;
-use sui_types::crypto::SuiKeypair;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

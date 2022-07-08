@@ -8,7 +8,7 @@ use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
     crypto::{
-        get_key_pair, AuthoritySignature, KeyPair, Signature, SuiAuthoritySignature, SuiKeypair,
+        get_key_pair, AuthoritySignature, KeyPair, NarwhalKeypair, Signature, SuiAuthoritySignature,
     },
     messages::*,
     object::Object,
@@ -59,8 +59,7 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
 fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTransaction {
     // Make certificate
     let committee = network_config.committee();
-    let mut certificate = CertifiedTransaction::new(committee.epoch(), tx.clone());
-    certificate.auth_sign_info.epoch = committee.epoch();
+    let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     // TODO: Why iterating from 0 to quorum_threshold??
     for i in 0..committee.quorum_threshold() {
         let secx = network_config
@@ -69,12 +68,17 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             .unwrap()
             .key_pair();
         let pubx = secx.public_key_bytes();
-        let sig = AuthoritySignature::new(&certificate.data, secx);
-        certificate
-            .auth_sign_info
-            .add_signature(sig, *pubx, &committee)
-            .unwrap();
+        let sig = AuthoritySignature::new(&tx.data, secx);
+        signatures.push((pubx, sig));
     }
+    let mut certificate = CertifiedTransaction::new_with_signatures(
+        committee.epoch(),
+        tx.clone(),
+        signatures,
+        &committee,
+    )
+    .unwrap();
+    certificate.auth_sign_info.epoch = committee.epoch();
     certificate
 }
 

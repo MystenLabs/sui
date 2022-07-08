@@ -17,6 +17,8 @@ use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use narwhal_crypto::bls12381::BLS12381PublicKeyBytes;
+use narwhal_crypto::ed25519::Ed25519PublicKeyBytes;
 use opentelemetry::{global, Context};
 use rand::Rng;
 use schemars::JsonSchema;
@@ -183,14 +185,33 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<&PublicKeyBytes> for SuiAddress {
-    fn from(key: &PublicKeyBytes) -> SuiAddress {
+impl From<&BLS12381PublicKeyBytes> for SuiAddress {
+    fn from(key: &BLS12381PublicKeyBytes) -> SuiAddress {
         Self::from(*key)
     }
 }
 
-impl From<PublicKeyBytes> for SuiAddress {
-    fn from(key: PublicKeyBytes) -> SuiAddress {
+impl From<&Ed25519PublicKeyBytes> for SuiAddress {
+    fn from(key: &Ed25519PublicKeyBytes) -> SuiAddress {
+        Self::from(*key)
+    }
+}
+
+impl From<BLS12381PublicKeyBytes> for SuiAddress {
+    fn from(key: BLS12381PublicKeyBytes) -> SuiAddress {
+        let mut hasher = Sha3_256::default();
+        hasher.update(key.as_ref());
+        let g_arr = hasher.finalize();
+
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
+        Self(res)
+    }
+}
+
+// Find a way to write this only once
+impl From<Ed25519PublicKeyBytes> for SuiAddress {
+    fn from(key: Ed25519PublicKeyBytes) -> SuiAddress {
         let mut hasher = Sha3_256::default();
         hasher.update(key.as_ref());
         let g_arr = hasher.finalize();
