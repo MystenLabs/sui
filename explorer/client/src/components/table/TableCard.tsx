@@ -43,7 +43,9 @@ type TxStatus = {
     txTypeName: TransactionKindName | undefined;
     status: ExecutionStatusType;
 };
+
 // support multiple types with special handling for 'addresses'/links and status
+// TODO: Not sure to allow HTML elements in the table
 type TxType = {
     [key: string]:
         | string
@@ -94,28 +96,21 @@ function columnsContent(columns: TableColumn[]) {
         // cell renderer for each column from react-table
         cell: (info: any) => {
             const content = info.getValue();
-            // handle most common types
-            if (
-                typeof content === 'string' ||
-                typeof content === 'number' ||
-                typeof content === 'boolean'
-            ) {
-                return content;
-            }
 
             // handle multiple links in one cell
             if (Array.isArray(content)) {
                 return <TxAddresses content={content} />;
             }
-            // Special handling for status
-            if (typeof content === 'object' && content !== null) {
-                // TODO: Not sure to allow HTML elements in the table
-                // Handle HTML elements
-                if (!content.txTypeName) return <>{content}</>;
-
+            // Special case for txTypes and status
+            if (
+                typeof content === 'object' &&
+                content !== null &&
+                content.txTypeName
+            ) {
                 return <TxStatusType content={content} />;
             }
-            return '';
+            // handle most common types including React.ReactElement
+            return content;
         },
     }));
 }
