@@ -16,6 +16,13 @@ import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
 import styles from './TableCard.module.css';
 
+type Category =
+    | 'objects'
+    | 'transactions'
+    | 'addresses'
+    | 'ethAddress'
+    | 'unknown';
+
 type Link = {
     url: string;
     name?: string;
@@ -32,7 +39,11 @@ type TableColumn = {
 // type Links = [Link, Link?];
 type Links = Link[];
 
-// support multiple types with sepcial handling for 'addresses'/links and status
+type TxStatus = {
+    txTypeName: TransactionKindName | undefined;
+    status: ExecutionStatusType;
+};
+// support multiple types with special handling for 'addresses'/links and status
 type TxType = {
     [key: string]:
         | string
@@ -40,11 +51,74 @@ type TxType = {
         | boolean
         | Links
         | React.ReactElement
-        | {
-              txTypeName: TransactionKindName | undefined;
-              status: ExecutionStatusType;
-          };
+        | TxStatus;
 };
+
+function TxAddresses({ content }: { content: Link[] }) {
+    return (
+        <section className={styles.addresses}>
+            {content.map((itm, idx) => (
+                <div key={idx + itm.url}>
+                    <Longtext
+                        text={itm.url}
+                        alttext={itm.name}
+                        category={(itm.category as Category) || 'unknown'}
+                        isLink={itm?.isLink}
+                        isCopyButton={itm?.copy}
+                    />
+                    {idx !== content.length - 1 && <ContentForwardArrow />}
+                </div>
+            ))}
+        </section>
+    );
+}
+
+function TxStatusType({ content }: { content: TxStatus }) {
+    return (
+        <>
+            {content.status === 'success' ? (
+                <ContentSuccessStatus />
+            ) : (
+                <ContentFailedStatus />
+            )}{' '}
+            {content.txTypeName}
+        </>
+    );
+}
+
+function columnsContent(columns: TableColumn[]) {
+    return columns.map((column) => ({
+        accessorKey: column.accessorKey,
+        id: column.accessorKey,
+        header: column.headerLabel,
+        // cell renderer for each column from react-table
+        cell: (info: any) => {
+            const content = info.getValue();
+            // handle most common types
+            if (
+                typeof content === 'string' ||
+                typeof content === 'number' ||
+                typeof content === 'boolean'
+            ) {
+                return content;
+            }
+
+            // handle multiple links in one cell
+            if (Array.isArray(content)) {
+                return <TxAddresses content={content} />;
+            }
+            // Special handling for status
+            if (typeof content === 'object' && content !== null) {
+                // TODO: Not sure to allow HTML elements in the table
+                // Handle HTML elements
+                if (!content.txTypeName) return <>{content}</>;
+
+                return <TxStatusType content={content} />;
+            }
+            return '';
+        },
+    }));
+}
 
 function TableCard({
     tabledata,
@@ -57,63 +131,7 @@ function TableCard({
     const data = useMemo(() => tabledata.data, [tabledata.data]);
     // Use Columns to create a table
     const columns = useMemo(
-        () =>
-            tabledata.columns.map((column) => ({
-                accessorKey: column.accessorKey,
-                id: column.accessorKey,
-                cell: (info: any) => {
-                    const content = info.getValue();
-                    // default types
-                    if (
-                        typeof content === 'string' ||
-                        typeof content === 'number' ||
-                        typeof content === 'boolean'
-                    ) {
-                        return info.getValue();
-                    }
-
-                    // handle multple links in one cell
-                    if (Array.isArray(content)) {
-                        return (
-                            <section className={styles.addresses}>
-                                {content.map((itm, idx) => (
-                                    <div key={idx + itm.url}>
-                                        <Longtext
-                                            text={itm.url}
-                                            alttext={itm.name}
-                                            category={itm.category || 'unknown'}
-                                            isLink={itm?.isLink}
-                                            isCopyButton={itm?.copy}
-                                        />
-                                        {idx !== content.length - 1 && (
-                                            <ContentForwardArrow />
-                                        )}
-                                    </div>
-                                ))}
-                            </section>
-                        );
-                    }
-                    // Special handling for status
-                    if (typeof content === 'object' && content !== null) {
-                        // TODO: Not sure to allow HTML elements in the table
-                        // Handle HTML elements
-                        if (!content.txTypeName) return <>{content}</>;
-
-                        return (
-                            <>
-                                {content.status === 'success' ? (
-                                    <ContentSuccessStatus />
-                                ) : (
-                                    <ContentFailedStatus />
-                                )}{' '}
-                                {content.txTypeName}
-                            </>
-                        );
-                    }
-                    return '';
-                },
-                header: column.headerLabel,
-            })),
+        () => columnsContent(tabledata.columns),
         [tabledata.columns]
     );
     const table = useReactTable({
