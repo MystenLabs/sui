@@ -14,7 +14,7 @@ fn test_json_rpc_spec() {
     assert!(
         status.success(),
         "\n\
-If this test breaks and you intended a format change, you need to run to get the fresh format:\n\
+If this test breaks and you intended a json rpc schema change, you need to run to get the fresh schema:\n\
 cargo -q run --example generate-json-rpc-spec -- record\n\
         "
     );
