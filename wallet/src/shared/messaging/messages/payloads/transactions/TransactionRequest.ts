@@ -6,10 +6,18 @@ import type { MoveCallTransaction, TransactionResponse } from '@mysten/sui.js';
 export type TransactionRequest = {
     id: string;
     approved: boolean | null;
-    tx: MoveCallTransaction;
     origin: string;
     originFavIcon?: string;
     txResult?: TransactionResponse;
     txResultError?: string;
     createdDate: string;
-};
+} & (
+    {
+        type: 'move-call';
+        tx: MoveCallTransaction;
+    } |
+    {
+        type: 'serialized-move-call';
+        txBytes: Uint8Array;
+    }
+);
