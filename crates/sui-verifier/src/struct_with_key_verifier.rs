@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This pass verifies necessary properties for Move Objects, i.e. structs with the `key` ability.
-//! The proprieties checked are
+//! The properties checked are
 //! - The first field is named "id"
 //! - The first field has type `sui::id::VersionedID`
 
