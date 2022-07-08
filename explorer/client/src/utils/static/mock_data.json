@@ -908,18 +908,9 @@
                 "authSignInfo": {
                     "epoch": 0,
                     "signatures": [
-                        [
-                            "BVcH+yyYmZd252lFHq3dKSubDr8cjX0zVpeu/71lVQ8=",
-                            "LsI1DK+7kkcMx5DWb6bxuVPtkwCP4TJAjvVw2NosuJNgtfC0w6aP7JqD4MCMm/c/FBQ/wFP3nb6yck2gy4XkAw=="
-                        ],
-                        [
-                            "DqlebnD6pu8dKKMg1C2rRrYep7ocg5grQGFMbC6UAio=",
-                            "2d4WcVIS3cKSnk4csYDMyZSNtE3JiYoBh+ylYfjVNrjQAIgligEkM1Msk4vRwVDoRBjHkFILGmO/SQE8UP+bCg=="
-                        ],
-                        [
-                            "Lzta9fyWPDlfmw5GnVgPXvUtGkweeYEezmwvOA47v/0=",
-                            "ZLWlGHYGf7wCThex8Hhl+ooea20vfXKjMbq8Xg1WGWxdqwVr18JoJWa8xR6DlVS7gwDPgrVYYVr2/fqurJ3nCw=="
-                        ]
+                        "LsI1DK+7kkcMx5DWb6bxuVPtkwCP4TJAjvVw2NosuJNgtfC0w6aP7JqD4MCMm/c/FBQ/wFP3nb6yck2gy4XkAw==",
+                        "2d4WcVIS3cKSnk4csYDMyZSNtE3JiYoBh+ylYfjVNrjQAIgligEkM1Msk4vRwVDoRBjHkFILGmO/SQE8UP+bCg==",
+                        "ZLWlGHYGf7wCThex8Hhl+ooea20vfXKjMbq8Xg1WGWxdqwVr18JoJWa8xR6DlVS7gwDPgrVYYVr2/fqurJ3nCw=="
                     ]
                 }
             },
@@ -1016,18 +1007,9 @@
                 "authSignInfo": {
                     "epoch": 0,
                     "signatures": [
-                        [
-                            "DqlebnD6pu8dKKMg1C2rRrYep7ocg5grQGFMbC6UAio=",
-                            "6R+WxlZ80e53aRxr0R44Kzz9xVm3+0WgvuRYp43Z3BNrUYVfPX8kEVIjwGQ/5JCs5IbzKQh2TR+Geazj6LLwAg=="
-                        ],
-                        [
-                            "BVcH+yyYmZd252lFHq3dKSubDr8cjX0zVpeu/71lVQ8=",
-                            "DvKi7uns1j97P2/U/ZjsGoBa9n413AXKRa/zyzKZlzpc3vvF90kN4U96DSQIH+OS5MMWGD1eI0Z0EaYRiVzsAg=="
-                        ],
-                        [
-                            "Lzta9fyWPDlfmw5GnVgPXvUtGkweeYEezmwvOA47v/0=",
-                            "rWUlaHfK+fKKyGjzEgfQoKhxRf175JnPevX0IVa5kUxgpdGiMhSRCJ2ZIWpnfDwlRJQdQrWBkovW2JzNycVsCA=="
-                        ]
+                        "6R+WxlZ80e53aRxr0R44Kzz9xVm3+0WgvuRYp43Z3BNrUYVfPX8kEVIjwGQ/5JCs5IbzKQh2TR+Geazj6LLwAg==",
+                        "DvKi7uns1j97P2/U/ZjsGoBa9n413AXKRa/zyzKZlzpc3vvF90kN4U96DSQIH+OS5MMWGD1eI0Z0EaYRiVzsAg==",
+                        "rWUlaHfK+fKKyGjzEgfQoKhxRf175JnPevX0IVa5kUxgpdGiMhSRCJ2ZIWpnfDwlRJQdQrWBkovW2JzNycVsCA=="
                     ]
                 }
             },
@@ -1094,18 +1076,9 @@
                 "authSignInfo": {
                     "epoch": 0,
                     "signatures": [
-                        [
-                            "BVcH+yyYmZd252lFHq3dKSubDr8cjX0zVpeu/71lVQ8=",
-                            "PlOlGgEpHkq40F8Z8kdcze0diuNKuLCOCR41SIbv3ePBYZF/EHmJDnDzFbqdnCEqRGTbKeWdi8+GOlgqJ2O4Bg=="
-                        ],
-                        [
-                            "Lzta9fyWPDlfmw5GnVgPXvUtGkweeYEezmwvOA47v/0=",
-                            "VVIuzJzLJQ91Dsr/IVclhDHlV3kyBGUqUcBLMiFawhimhZNjq476y5ERb42E9fmftTFOeoRl3J9/KEWmq3J8Dg=="
-                        ],
-                        [
-                            "DqlebnD6pu8dKKMg1C2rRrYep7ocg5grQGFMbC6UAio=",
-                            "HcfTrhvCqBqRXNL2FqI91JXbzFn1BsGUIO3jc7sQSKQP62fe4+orJFHjvYVHcLAJHURrn4R7bpXr6XsTbdc/DQ=="
-                        ]
+                        "PlOlGgEpHkq40F8Z8kdcze0diuNKuLCOCR41SIbv3ePBYZF/EHmJDnDzFbqdnCEqRGTbKeWdi8+GOlgqJ2O4Bg==",
+                        "VVIuzJzLJQ91Dsr/IVclhDHlV3kyBGUqUcBLMiFawhimhZNjq476y5ERb42E9fmftTFOeoRl3J9/KEWmq3J8Dg==",
+                        "HcfTrhvCqBqRXNL2FqI91JXbzFn1BsGUIO3jc7sQSKQP62fe4+orJFHjvYVHcLAJHURrn4R7bpXr6XsTbdc/DQ=="
                     ]
                 },
                 "data": {

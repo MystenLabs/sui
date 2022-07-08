@@ -40,7 +40,7 @@ type TxnState = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
-    timestamp_ms: number;
+    timestamp_ms: number | null;
 };
 // TODO: update state to include Call types
 // TODO: clean up duplicate fields
