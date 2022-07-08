@@ -6,12 +6,11 @@ import { useCallback, useState } from 'react';
 import styles from './Tabs.module.css';
 
 type Props = {
-    title?: string;
     children: JSX.Element[];
     selected?: number;
 };
 
-function Tabs({ title, children, selected }: Props) {
+function Tabs({ children, selected }: Props) {
     const [activeTab, setActivetab] = useState(selected || 0);
     const selectActiveTab = useCallback((e: React.MouseEvent<HTMLElement>) => {
         if (e.currentTarget.dataset.activetab)
