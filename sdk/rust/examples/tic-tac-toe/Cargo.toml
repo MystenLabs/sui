@@ -1,0 +1,25 @@
+[package]
+name = "sui-example-tictactoe"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.58"
+clap = { version = "3.1.17", features = ["derive"] }
+dirs = "4.0.0"
+tokio = "1.19.2"
+bcs = "0.1.3"
+serde = "1.0.138"
+
+sui-client = { path = "../../../../crates/sui-client" }
+sui-json-rpc-types= { path = "../../../../crates/sui-json-rpc-types" }
+sui-types = { path = "../../../../crates/sui-types" }
+sui-json = { path = "../../../../crates/sui-json" }
+
+[[example]]
+name = "tic-tac-toe"
+path = "src/tic_tac_toe.rs"
+test = false

@@ -3,17 +3,16 @@
 
 use move_package::BuildConfig;
 use std::{path::Path, str::FromStr};
+use sui_client::keystore::{Keystore, SuiKeystore};
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::keystore::{Keystore, SuiKeystore};
-use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, TransactionEffectsResponse, TransactionResponse,
+use sui_json_rpc::api::{
+    RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, WalletSyncApiClient,
 };
-use sui_json_rpc_api::{
-    RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, TransactionBytes,
-    WalletSyncApiClient,
+use sui_json_rpc_types::{
+    GetObjectDataResponse, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -44,7 +43,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let objects = http_client.get_objects_owned_by_address(*address).await?;
 
     let tx_data: TransactionBytes = http_client
-        .public_transfer_object(
+        .transfer_object(
             *address,
             objects.first().unwrap().object_id,
             Some(objects.last().unwrap().object_id),
@@ -192,7 +191,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     let mut tx_responses = Vec::new();
     for oref in &objects[..objects.len() - 1] {
         let tx_data: TransactionBytes = http_client
-            .public_transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
+            .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
 
         let keystore =

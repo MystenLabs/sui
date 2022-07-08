@@ -1,33 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rpc_types::SuiEventEnvelope;
-use crate::rpc_types::SuiEventFilter;
-use crate::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams,
-    SuiInputObjectKind, SuiObjectInfo, SuiObjectRef, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse,
-};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use sui_json::SuiJsonValue;
-use sui_open_rpc::Module;
-use sui_open_rpc_macros::open_rpc;
-use sui_types::sui_serde::Base64;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress, TransactionDigest},
-    crypto::SignableBytes,
-    messages::TransactionData,
+use sui_json_rpc_types::{
+    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
+    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
+    TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
+use sui_open_rpc_macros::open_rpc;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::sui_serde::Base64;
 
-pub mod client;
-pub mod keystore;
-pub mod rpc_types;
-
-type GatewayTxSeqNumber = u64;
+// TODO: Refactor this and sui-client::api
+// sui-client::api is a copy of this file, ideally we only need 1 copy of api to share between client and server
+// However the jsonrpsee rpc proc marco removes the Api traits when generate the RpcServer and RpcClient implementation,
+// we might want to replace the proc marco with handcrafted PRC server methods to make it easier to maintain.
+// Note: Please make sure to update sui-client::api if you are adding methods to the Api
 
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
 #[rpc(server, client, namespace = "sui")]
@@ -135,7 +125,7 @@ pub trait RpcTransactionBuilder {
     /// Create a transaction to transfer an object from one address to another. The object's type
     /// must allow public transfers
     #[method(name = "transferObject")]
-    async fn public_transfer_object(
+    async fn transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -215,33 +205,6 @@ pub trait RpcBcsApi {
     /// Return the raw BCS serialised move object bytes for a specified object
     #[method(name = "getRawObject")]
     async fn get_raw_object(&self, object_id: ObjectID) -> RpcResult<GetRawObjectDataResponse>;
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionBytes {
-    pub tx_bytes: Base64,
-    pub gas: SuiObjectRef,
-    pub input_objects: Vec<SuiInputObjectKind>,
-}
-
-impl TransactionBytes {
-    pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
-        Ok(Self {
-            tx_bytes: Base64::from_bytes(&data.to_bytes()),
-            gas: data.gas().into(),
-            input_objects: data
-                .input_objects()?
-                .into_iter()
-                .map(SuiInputObjectKind::from)
-                .collect(),
-        })
-    }
-
-    pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
-        TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
-    }
 }
 
 #[open_rpc(namespace = "sui", tag = "Event Subscription")]

@@ -1,0 +1,20 @@
+[package]
+name = "sui-client"
+version = "0.0.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.58"
+async-trait = "0.1.56"
+jsonrpsee = { version = "0.14.0", features = ["full"] }
+ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
+serde = { version = "1.0.138", features = ["derive"] }
+serde_json = "1.0.80"
+
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-types= { path = "../sui-json-rpc-types" }
+sui-types = { path = "../sui-types" }
+sui-json = { path = "../sui-json" }

@@ -18,8 +18,9 @@ telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", re
 
 sui-faucet = { path = "../sui-faucet" }
 sui = { path = "../sui" }
-sui-json-rpc-api = { path = "../sui-json-rpc-api" }
+sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
+sui-client = { path = "../sui-client" }
 sui-json = { path = "../sui-json" }
 sui-config = { path = "../sui-config" }
 workspace-hack = { path = "../workspace-hack"}

@@ -5,7 +5,7 @@ use anyhow::anyhow;
 use clap::*;
 use std::fs;
 use std::path::Path;
-use sui_json_rpc_api::keystore::{Keystore, SuiKeystore};
+use sui_client::keystore::{Keystore, SuiKeystore};
 use sui_types::base_types::decode_bytes_hex;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{

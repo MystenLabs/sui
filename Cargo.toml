@@ -8,13 +8,14 @@ members = [
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",
+    "crates/sui-client",
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
     "crates/sui-gateway",
     "crates/sui-json",
     "crates/sui-json-rpc",
-    "crates/sui-json-rpc-api",
+    "crates/sui-json-rpc-types",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
@@ -29,6 +30,7 @@ members = [
     "crates/test-utils",
     "crates/workspace-hack",
     "crates/x",
+    "sdk/rust/examples/tic-tac-toe"
 ]
 
 # Debug symbols are really important for profiling

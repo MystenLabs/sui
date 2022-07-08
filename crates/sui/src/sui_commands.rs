@@ -14,14 +14,14 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use sui_client::keystore::{KeystoreType, SuiKeystore};
+use sui_client::SuiRpcClient;
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_DEV_NET_URL, SUI_KEYSTORE_FILENAME};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
 use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
-use sui_json_rpc_api::client::SuiRpcClient;
-use sui_json_rpc_api::keystore::{KeystoreType, SuiKeystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
@@ -386,7 +386,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
             };
 
             // Check url is valid
-            SuiRpcClient::new(url)?;
+            SuiRpcClient::new_http_client(url)?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
