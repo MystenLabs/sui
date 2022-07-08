@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CancelHandler, RetryConfig};
+use crate::{BoundedExecutor, CancelHandler, RetryConfig, MAX_TASK_CONCURRENCY};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
+use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 use tonic::transport::Channel;
 use types::{
@@ -20,6 +21,7 @@ pub struct PrimaryNetwork {
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
+    executor: BoundedExecutor,
 }
 
 impl Default for PrimaryNetwork {
@@ -35,6 +37,7 @@ impl Default for PrimaryNetwork {
             config: Default::default(),
             retry_config,
             rng: SmallRng::from_entropy(),
+            executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
         }
     }
 }
@@ -72,17 +75,20 @@ impl PrimaryNetwork {
         message: BincodeEncodedPayload,
     ) -> CancelHandler<()> {
         let client = self.client(address);
-        let handle = tokio::spawn(
-            self.retry_config
-                .retry(move || {
-                    let mut client = client.clone();
-                    let message = message.clone();
-                    async move { client.send_message(message).await.map_err(Into::into) }
-                })
-                .map(|response| {
-                    response.expect("we retry forever so this shouldn't fail");
-                }),
-        );
+        let handle = self
+            .executor
+            .spawn(
+                self.retry_config
+                    .retry(move || {
+                        let mut client = client.clone();
+                        let message = message.clone();
+                        async move { client.send_message(message).await.map_err(Into::into) }
+                    })
+                    .map(|response| {
+                        response.expect("we retry forever so this shouldn't fail");
+                    }),
+            )
+            .await;
 
         CancelHandler(handle)
     }
@@ -110,9 +116,11 @@ impl PrimaryNetwork {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
         let mut client = self.client(address);
-        tokio::spawn(async move {
-            let _ = client.send_message(message).await;
-        })
+        self.executor
+            .spawn(async move {
+                let _ = client.send_message(message).await;
+            })
+            .await
     }
 
     /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
@@ -129,9 +137,11 @@ impl PrimaryNetwork {
             let handle = {
                 let mut client = self.client(address);
                 let message = message.clone();
-                tokio::spawn(async move {
-                    let _ = client.send_message(message).await;
-                })
+                self.executor
+                    .spawn(async move {
+                        let _ = client.send_message(message).await;
+                    })
+                    .await
             };
             handlers.push(handle);
         }
@@ -155,9 +165,11 @@ impl PrimaryNetwork {
             let handle = {
                 let mut client = self.client(address);
                 let message = message.clone();
-                tokio::spawn(async move {
-                    let _ = client.send_message(message).await;
-                })
+                self.executor
+                    .spawn(async move {
+                        let _ = client.send_message(message).await;
+                    })
+                    .await
             };
             handlers.push(handle);
         }
@@ -165,10 +177,20 @@ impl PrimaryNetwork {
     }
 }
 
-#[derive(Default)]
 pub struct PrimaryToWorkerNetwork {
     clients: HashMap<Multiaddr, PrimaryToWorkerClient<Channel>>,
     config: mysten_network::config::Config,
+    executor: BoundedExecutor,
+}
+
+impl Default for PrimaryToWorkerNetwork {
+    fn default() -> Self {
+        Self {
+            clients: Default::default(),
+            config: Default::default(),
+            executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
+        }
+    }
 }
 
 impl PrimaryToWorkerNetwork {
@@ -196,9 +218,11 @@ impl PrimaryToWorkerNetwork {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
         let mut client = self.client(address);
-        tokio::spawn(async move {
-            let _ = client.send_message(message).await;
-        })
+        self.executor
+            .spawn(async move {
+                let _ = client.send_message(message).await;
+            })
+            .await
     }
 
     pub async fn broadcast<T: VerifyingKey>(
@@ -213,9 +237,11 @@ impl PrimaryToWorkerNetwork {
             let handle = {
                 let mut client = self.client(address);
                 let message = message.clone();
-                tokio::spawn(async move {
-                    let _ = client.send_message(message).await;
-                })
+                self.executor
+                    .spawn(async move {
+                        let _ = client.send_message(message).await;
+                    })
+                    .await
             };
             handlers.push(handle);
         }

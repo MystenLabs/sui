@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CancelHandler, RetryConfig};
+use crate::{BoundedExecutor, CancelHandler, RetryConfig, MAX_TASK_CONCURRENCY};
 use crypto::traits::VerifyingKey;
 use futures::FutureExt;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
+use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 use tonic::transport::Channel;
 use types::{BincodeEncodedPayload, WorkerMessage, WorkerToWorkerClient};
@@ -17,6 +18,7 @@ pub struct WorkerNetwork {
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
+    executor: BoundedExecutor,
 }
 
 impl Default for WorkerNetwork {
@@ -32,6 +34,7 @@ impl Default for WorkerNetwork {
             config: Default::default(),
             retry_config,
             rng: SmallRng::from_entropy(),
+            executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
         }
     }
 }
@@ -69,17 +72,20 @@ impl WorkerNetwork {
         message: BincodeEncodedPayload,
     ) -> CancelHandler<()> {
         let client = self.client(address);
-        let handle = tokio::spawn(
-            self.retry_config
-                .retry(move || {
-                    let mut client = client.clone();
-                    let message = message.clone();
-                    async move { client.send_message(message).await.map_err(Into::into) }
-                })
-                .map(|response| {
-                    response.expect("we retry forever so this shouldn't fail");
-                }),
-        );
+        let handle = self
+            .executor
+            .spawn(
+                self.retry_config
+                    .retry(move || {
+                        let mut client = client.clone();
+                        let message = message.clone();
+                        async move { client.send_message(message).await.map_err(Into::into) }
+                    })
+                    .map(|response| {
+                        response.expect("we retry forever so this shouldn't fail");
+                    }),
+            )
+            .await;
 
         CancelHandler(handle)
     }
@@ -116,9 +122,11 @@ impl WorkerNetwork {
     ) -> JoinHandle<()> {
         let message = message.into();
         let mut client = self.client(address);
-        tokio::spawn(async move {
-            let _ = client.send_message(message).await;
-        })
+        self.executor
+            .spawn(async move {
+                let _ = client.send_message(message).await;
+            })
+            .await
     }
 
     /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the

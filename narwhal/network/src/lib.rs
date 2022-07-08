@@ -8,11 +8,13 @@
     rust_2021_compatibility
 )]
 
+mod bounded_executor;
 mod primary;
 mod retry;
 mod worker;
 
 pub use crate::{
+    bounded_executor::BoundedExecutor,
     primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
     retry::RetryConfig,
     worker::WorkerNetwork,
@@ -40,3 +42,11 @@ impl<T> std::future::Future for CancelHandler<T> {
         self.0.poll_unpin(cx).map(Result::unwrap)
     }
 }
+
+// This is the maximum number of network tasks that we will create for sending messages. It is a
+// limit per network struct - PrimaryNetwork, PrimaryToWorkerNetwork, and WorkerNetwork each have
+// their own limit.
+//
+// The exact number here probably isn't important, the key things is that it should be finite so
+// that we don't create unbounded numbers of tasks.
+pub const MAX_TASK_CONCURRENCY: usize = 200;
