@@ -59,7 +59,7 @@ impl Genesis {
     }
 
     pub fn get_default_genesis() -> Self {
-        Builder::new(sui_adapter::genesis::get_genesis_context()).build()
+        Builder::new_with_context(sui_adapter::genesis::get_genesis_context()).build()
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -149,8 +149,19 @@ pub struct Builder {
     validators: Vec<ValidatorInfo>,
 }
 
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Builder {
-    pub fn new(genesis_ctx: TxContext) -> Self {
+    pub fn new() -> Self {
+        let genesis_ctx = sui_adapter::genesis::get_genesis_context();
+        Self::new_with_context(genesis_ctx)
+    }
+
+    pub fn new_with_context(genesis_ctx: TxContext) -> Self {
         Self {
             sui_framework: None,
             move_framework: None,
@@ -377,7 +388,8 @@ mod test {
 
     #[test]
     fn roundtrip() {
-        let genesis = Builder::new(sui_adapter::genesis::get_genesis_context()).build();
+        let genesis =
+            Builder::new_with_context(sui_adapter::genesis::get_genesis_context()).build();
 
         let s = serde_yaml::to_string(&genesis).unwrap();
         let from_s = serde_yaml::from_str(&s).unwrap();
