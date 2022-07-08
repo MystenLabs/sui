@@ -3,13 +3,13 @@
 }
 
 .tablist {
-    @apply m-0 p-0 block mb-3 w-full transition-all duration-200 ease-in-out;
+    @apply m-0 p-0 md:block mb-3 w-full transition-all duration-200 ease-in-out flex flex-row md:flex-row overflow-x-auto items-center;
 
     border-bottom: 1px solid #f0f1f2;
 }
 
 .tab {
-    @apply list-none capitalize font-normal text-sm text-gray-500 font-sans mr-5 inline-block w-auto cursor-pointer pt-1 pb-1;
+    @apply list-none capitalize font-normal text-sm text-gray-500 font-sans mr-5 inline-block w-auto cursor-pointer pt-1 pb-1 whitespace-nowrap;
 }
 
 .tab-content {

@@ -195,7 +195,7 @@ function LatestTxView({
         },
     };
     return (
-        <div className={styles.txlatestesults}>
+        <div className={styles.txlatestresults}>
             <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
                     <TableCard tabledata={recentTx} />
