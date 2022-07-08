@@ -29,7 +29,6 @@ pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 /// - The function must have the name specified by `INIT_FN_NAME`
 /// - The function must have `Visibility::Private`
 /// - The function can have a single parameter: &mut TxContext (see `is_tx_context`)
-/// - Alternatively, the function can have zero parameters
 ///
 /// For transaction entry points
 /// - The function must have `is_entry` true
