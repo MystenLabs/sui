@@ -1,0 +1,25 @@
+processed 7 tasks
+
+task 1 'publish'. lines 8-28:
+created: object(103)
+written: object(102)
+
+task 2 'publish'. lines 30-38:
+created: object(105)
+written: object(104)
+
+task 3 'run'. lines 41-41:
+created: object(107)
+written: object(106)
+
+task 4 'view-object'. lines 43-43:
+Owner: Shared
+Contents: t2::o2::O2 {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(107)}}, version: 1u64}}
+
+task 5 'run'. lines 45-45:
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidSharedUse, source: Some("When a shared object is passed as an owned Move value in an entry function, either the the shared object's type must be defined in the same module as the called function. The shared object fake(107) (defined in module 't2::o2') is not defined in this module 't1::o1'") } }
+
+task 6 'run'. lines 47-47:
+written: object(109)
+deleted: object(107)
