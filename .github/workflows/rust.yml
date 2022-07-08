@@ -69,12 +69,6 @@ jobs:
           - [self-hosted, windows]
       fail-fast: false
     steps:
-      # Set the path for windows builds: the runner needs to be able to find
-      # llvm binaries as well as the "bash" binary included with msys64.
-      - name: Adjust path for windows builds
-        if: "startsWith(runner.os, 'windows')"
-        run: |
-          echo "C:\Program Files\llvm\bin;C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       # The install script for nextest doesn't work on windows (very linux/bash
