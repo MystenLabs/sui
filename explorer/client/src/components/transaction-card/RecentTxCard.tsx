@@ -5,8 +5,8 @@
 import { useEffect, useState, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
+import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
@@ -53,6 +53,13 @@ type TxnData = {
     From: string;
     timestamp_ms?: number;
 };
+
+type Category =
+    | 'objects'
+    | 'transactions'
+    | 'addresses'
+    | 'ethAddress'
+    | 'unknown';
 
 function generateStartEndRange(
     txCount: number,
@@ -110,8 +117,9 @@ function LatestTxView({
 }: {
     results: { loadState: string; latestTx: TxnData[]; totalTxcount?: number };
 }) {
-    // const [network] = useContext(NetworkContext);
-    const testTableData = {
+    //TODO update initial state and match the latestTx table data
+    const defaultActiveTab = 0;
+    const recentTx = {
         data: results.latestTx.map((txn) => ({
             date: `${timeAgo(txn.timestamp_ms, undefined, true)} `,
             transactionId: [
@@ -173,27 +181,28 @@ function LatestTxView({
             },
         ],
     };
+    const tabsFooter = {
+        link: {
+            text: '',
+            categoryName: 'transactions' as Category,
+            isLink: true,
+            isCopyButton: false,
+            alttext: 'More Transaction',
+        },
+        stats: {
+            count: results.totalTxcount || 0,
+            stats_text: 'total transactions',
+        },
+    };
     return (
         <div className={styles.txlatestesults}>
-            <Tabs selected={0}>
+            <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
-                    <TableCard tabledata={testTableData} />
-                    <section className={styles.recenttxfooter}>
-                        <Longtext
-                            text=""
-                            category="transactions"
-                            isLink={true}
-                            isCopyButton={false}
-                            showIconButton={true}
-                            alttext="More Transaction"
-                        />
-                        <p>
-                            {typeof results.totalTxcount === 'number'
-                                ? numberSuffix(results.totalTxcount)
-                                : results.totalTxcount}{' '}
-                            total transactions
-                        </p>
-                    </section>
+                    <TableCard tabledata={recentTx} />
+                    <TabFooter
+                        link={tabsFooter.link}
+                        stats={tabsFooter.stats}
+                    />
                 </div>
                 <div title="Epochs">Epochs Component</div>
                 <div title="Checkpoints">Checkpoints Component</div>

@@ -3,16 +3,22 @@
 
 // import cl from 'classnames';
 
-import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
+import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './TopValidatorsCard.module.css';
 
+type Category =
+    | 'objects'
+    | 'transactions'
+    | 'addresses'
+    | 'ethAddress'
+    | 'unknown';
 // TODO: Specify the type of the context
 // Specify the type of the context
-function TopValidatorsCard({}) {
+function TopValidatorsCard() {
     // mock validators data
     const validatorsData = [
         {
@@ -87,60 +93,70 @@ function TopValidatorsCard({}) {
         },
     ];
     // map the above data to match the table combine stake and stake percent
-      const mockValidatorsData = {
-          data: validatorsData.map((validator) => ({
-            validatorName : validator.validatorName,
-            stake : <div> {numberSuffix(validator.suiStake)}  <span className={styles.stakepercent}> {validator.suiStakePercent}</span></div>,
-            eporchReward : validator.eporchReward,
-            position : validator.position,
-          })),
-          columns: [
-              {
-                  headerLabel: '#',
-                  accessorKey: 'position',
-              },
-              {
-                  headerLabel: 'Validator',
-                  accessorKey: 'validatorName',
-              },
-              {
-                  headerLabel: 'STAKE',
-                  accessorKey: 'stake',
-              },
-              {
-                  headerLabel: 'LAST EPOCH REWARD',
-                  accessorKey: 'eporchReward',
-              },
-          ],
-      };
+    const mockValidatorsData = {
+        data: validatorsData.map((validator) => ({
+            validatorName: validator.validatorName,
+            stake: (
+                <div>
+                    {' '}
+                    {numberSuffix(validator.suiStake)}{' '}
+                    <span className={styles.stakepercent}>
+                        {' '}
+                        {validator.suiStakePercent}
+                    </span>
+                </div>
+            ),
+            eporchReward: validator.eporchReward,
+            position: validator.position,
+        })),
+        columns: [
+            {
+                headerLabel: '#',
+                accessorKey: 'position',
+            },
+            {
+                headerLabel: 'Validator',
+                accessorKey: 'validatorName',
+            },
+            {
+                headerLabel: 'STAKE',
+                accessorKey: 'stake',
+            },
+            {
+                headerLabel: 'LAST EPOCH REWARD',
+                accessorKey: 'eporchReward',
+            },
+        ],
+    };
 
-    // Mork data
-    const totalTransaction = 15482;
+    const tabsFooter = {
+        link: {
+            text: '',
+            categoryName: 'transactions' as Category,
+            isLink: true,
+            isCopyButton: false,
+            alttext: 'More Validators',
+        },
+        stats: {
+            count: 15482,
+            stats_text: 'total transactions',
+        },
+    };
+
     return (
         <div className={styles.validators}>
             <Tabs selected={0}>
                 <div title="Top Validators">
                     <TableCard tabledata={mockValidatorsData} />
-                    <section className={styles.recenttxfooter}>
-                        <Longtext
-                            text=""
-                            category="transactions"
-                            isLink={true}
-                            isCopyButton={false}
-                            showIconButton={true}
-                            alttext="More Validators"
-                        />
-                        <p>
-                            {numberSuffix(totalTransaction)} total transactions
-                        </p>
-                    </section>
+                    <TabFooter
+                        link={tabsFooter.link}
+                        stats={tabsFooter.stats}
+                    />
                 </div>
-                <div title="">
-                </div>
+                <div title=""></div>
             </Tabs>
         </div>
     );
-
 }
 
 export default TopValidatorsCard;

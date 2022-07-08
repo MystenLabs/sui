@@ -20,21 +20,23 @@ function Tabs({ title, children, selected }: Props) {
     return (
         <div className={styles.tabs}>
             <ul className={styles.tablist}>
-                {[...(Array.isArray(children) ? children :  [children])].map((elem, index) => {
-                    return (
-                        <li
-                            className={cl([
-                                index === activeTab && styles.selected,
-                                styles.tab,
-                            ])}
-                            key={index}
-                            data-activetab={index}
-                            onClick={selectActiveTab}
-                        >
-                            {elem.props.title}
-                        </li>
-                    );
-                })}
+                {[...(Array.isArray(children) ? children : [children])].map(
+                    (elem, index) => {
+                        return (
+                            <li
+                                className={cl([
+                                    index === activeTab && styles.selected,
+                                    styles.tab,
+                                ])}
+                                key={index}
+                                data-activetab={index}
+                                onClick={selectActiveTab}
+                            >
+                                {elem.props.title}
+                            </li>
+                        );
+                    }
+                )}
             </ul>
             <div className={styles.tabContent}>{children[activeTab]}</div>
         </div>

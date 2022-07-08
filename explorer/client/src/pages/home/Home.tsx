@@ -5,6 +5,7 @@ import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import SuiNetworkStats from '../../components/network-stats/SuiNetworkStats';
+import TopGroupsCard from '../../components/top-groups/TopGroups';
 import TopValidatorsCard from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
@@ -86,6 +87,7 @@ function HomeAPI() {
             </section>
             <section className="right-item">
                 <TopValidatorsCard />
+                <TopGroupsCard />
             </section>
         </div>
     );
