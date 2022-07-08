@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // import cl from 'classnames';
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
@@ -21,7 +22,6 @@ import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
-import Pagination from '../pagination/Pagination';
 
 import type {
     GetTxnDigestsResponse,
@@ -54,13 +54,6 @@ type TxnData = {
     From: string;
     timestamp_ms?: number;
 };
-
-type Category =
-    | 'objects'
-    | 'transactions'
-    | 'addresses'
-    | 'ethAddress'
-    | 'unknown';
 
 function generateStartEndRange(
     txCount: number,
@@ -118,6 +111,20 @@ function LatestTxView({
 }: {
     results: { loadState: string; latestTx: TxnData[]; totalTxcount?: number };
 }) {
+    // This is temporary, pagination component already does this
+    const totalCount = results.totalTxcount || 1;
+    const [searchParams, setSearchParams] = useSearchParams();
+    const pageParam = parseInt(searchParams.get('p') || '1', 10);
+    const [showNextPage, setShowNextPage] = useState(true);
+
+    const changePage = useCallback(() => {
+        const nextpage = pageParam + (showNextPage ? 1 : 0);
+        setSearchParams({ p: nextpage.toString() });
+        setShowNextPage(
+            Math.ceil(NUMBER_OF_TX_PER_PAGE * nextpage) < totalCount
+        );
+    }, [pageParam, totalCount, showNextPage, setSearchParams]);
+
     //TODO update initial state and match the latestTx table data
     const defaultActiveTab = 0;
     const recentTx = {
@@ -183,15 +190,8 @@ function LatestTxView({
         ],
     };
     const tabsFooter = {
-        link: {
-            text: '',
-            categoryName: 'transactions' as Category,
-            isLink: true,
-            isCopyButton: false,
-            alttext: 'More Transaction',
-        },
         stats: {
-            count: results.totalTxcount || 0,
+            count: totalCount || 0,
             stats_text: 'total transactions',
         },
     };
@@ -200,24 +200,31 @@ function LatestTxView({
             <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
                     <TableCard tabledata={recentTx} />
-                    <TabFooter
-                        link={tabsFooter.link}
-                        stats={tabsFooter.stats}
-                    />
+                    <TabFooter stats={tabsFooter.stats}>
+                        {showNextPage ? (
+                            <button
+                                type="button"
+                                className={styles.moretxbtn}
+                                onClick={changePage}
+                            >
+                                More Transactions <ContentForwardArrowDark />
+                            </button>
+                        ) : (
+                            <></>
+                        )}
+                    </TabFooter>
                 </div>
             </Tabs>
         </div>
     );
 }
 
-function LatestTxCardStatic({ count }: { count: number }) {
+function LatestTxCardStatic() {
     const latestTx = getAllMockTransaction().map((tx) => ({
         ...tx,
         status: tx.status as ExecutionStatusType,
         kind: tx.kind as TransactionKindName,
     }));
-    const [searchParams] = useSearchParams();
-    const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
 
     const results = {
         loadState: 'loaded',
@@ -226,7 +233,6 @@ function LatestTxCardStatic({ count }: { count: number }) {
     return (
         <>
             <LatestTxView results={results} />
-            <Pagination totalTxCount={count} txNum={pagedNum} />
         </>
     );
 }
@@ -293,16 +299,11 @@ function LatestTxCardAPI({ count }: { count: number }) {
     return (
         <>
             <LatestTxView results={results} />
-            <Pagination totalTxCount={count} txNum={NUMBER_OF_TX_PER_PAGE} />
         </>
     );
 }
 
 const LatestTxCard = ({ count }: { count: number }) =>
-    IS_STATIC_ENV ? (
-        <LatestTxCardStatic count={count} />
-    ) : (
-        <LatestTxCardAPI count={count} />
-    );
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI count={count} />;
 
 export default LatestTxCard;

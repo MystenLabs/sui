@@ -1,25 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import Longtext from '../../components/longtext/Longtext';
+
 import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './Tabs.module.css';
 
+//TODO: update this component to use account for multipe formats
+// Update this footer now accept React.ReactElement as a child
 function TabFooter({
-    link,
     stats,
+    children,
 }: {
-    link: {
-        text: string;
-        categoryName:
-            | 'objects'
-            | 'transactions'
-            | 'addresses'
-            | 'ethAddress'
-            | 'unknown';
-        isCopyButton?: boolean;
-        alttext?: string;
-    };
+    children?: React.ReactElement;
     stats?: {
         count: number | string;
         stats_text: string;
@@ -27,14 +19,11 @@ function TabFooter({
 }) {
     return (
         <section className={styles.tabsfooter}>
-            <Longtext
-                text={link.text}
-                category={link.categoryName}
-                isLink={true}
-                isCopyButton={link.isCopyButton}
-                showIconButton={true}
-                alttext={link.alttext}
-            />
+            {children ? (
+                [...(Array.isArray(children) ? children : [children])]
+            ) : (
+                <></>
+            )}
             {stats && (
                 <p>
                     {typeof stats.count === 'number'

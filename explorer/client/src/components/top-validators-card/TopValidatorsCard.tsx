@@ -1,8 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import cl from 'classnames';
-
+import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
@@ -10,12 +9,6 @@ import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './TopValidatorsCard.module.css';
 
-type Category =
-    | 'objects'
-    | 'transactions'
-    | 'addresses'
-    | 'ethAddress'
-    | 'unknown';
 // TODO: Specify the type of the context
 // Specify the type of the context
 function TopValidatorsCard() {
@@ -130,13 +123,6 @@ function TopValidatorsCard() {
     };
 
     const tabsFooter = {
-        link: {
-            text: '',
-            categoryName: 'transactions' as Category,
-            isLink: true,
-            isCopyButton: false,
-            alttext: 'More Validators',
-        },
         stats: {
             count: 15482,
             stats_text: 'total transactions',
@@ -148,10 +134,16 @@ function TopValidatorsCard() {
             <Tabs selected={0}>
                 <div title="Top Validators">
                     <TableCard tabledata={mockValidatorsData} />
-                    <TabFooter
-                        link={tabsFooter.link}
-                        stats={tabsFooter.stats}
-                    />
+                    <TabFooter stats={tabsFooter.stats}>
+                        <Longtext
+                            text=""
+                            category="transactions"
+                            isLink={true}
+                            isCopyButton={false}
+                            showIconButton={true}
+                            alttext="More Validators"
+                        />
+                    </TabFooter>
                 </div>
                 <div title=""></div>
             </Tabs>

@@ -73,3 +73,7 @@ div.txadd {
 .txlatestresults .tab {
     @apply text-lg !important;
 }
+
+.moretxbtn {
+    @apply text-left bg-transparent cursor-pointer border-0 pl-0 pr-0 text-[#636870]  hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm;
+}

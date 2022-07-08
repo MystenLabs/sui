@@ -1,8 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import cl from 'classnames';
-
+import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
@@ -10,12 +9,6 @@ import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './TopGroups.module.css';
 
-type Category =
-    | 'objects'
-    | 'transactions'
-    | 'addresses'
-    | 'ethAddress'
-    | 'unknown';
 // TODO: Specify the type of the context
 // Specify the type of the context
 function TopGroupsCard() {
@@ -115,13 +108,6 @@ function TopGroupsCard() {
     };
     const defaultActiveTab = 1;
     const tabsFooter = {
-        link: {
-            text: '',
-            categoryName: 'transactions' as Category,
-            isLink: true,
-            isCopyButton: false,
-            alttext: 'More NFT Collections',
-        },
         stats: {
             count: 326,
             stats_text: 'Collections',
@@ -134,10 +120,16 @@ function TopGroupsCard() {
                 <div title="Top Modules"></div>
                 <div title="Top NFT Collections">
                     <TableCard tabledata={mockValidatorsData} />
-                    <TabFooter
-                        link={tabsFooter.link}
-                        stats={tabsFooter.stats}
-                    />
+                    <TabFooter stats={tabsFooter.stats}>
+                        <Longtext
+                            text=""
+                            category="transactions"
+                            isLink={true}
+                            isCopyButton={false}
+                            showIconButton={true}
+                            alttext="More NFT Collections"
+                        />
+                    </TabFooter>
                 </div>
                 <div title="Top Addresses">Top Address Component</div>
             </Tabs>
