@@ -253,10 +253,12 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                         .as_millis();
 
                     let mut retry = Vec::new();
-                    for (digest, (_, _, timestamp)) in &self.pending {
-                        if timestamp + self.sync_retry_delay.as_millis() < now {
+                    for (digest, (_, _, timestamp)) in self.pending.iter_mut() {
+                        if *timestamp + self.sync_retry_delay.as_millis() < now {
                             debug!("Requesting sync for batch {digest} (retry)");
                             retry.push(*digest);
+                            // reset the time at which this request was last issued
+                            *timestamp = now;
                         }
                     }
                     if !retry.is_empty() {

@@ -295,10 +295,12 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                         .as_millis();
 
                     let mut retry = Vec::new();
-                    for (digest, (_, timestamp)) in &self.parent_requests {
-                        if timestamp + self.sync_retry_delay.as_millis() < now {
+                    for (digest, (_, timestamp)) in self.parent_requests.iter_mut() {
+                        if *timestamp + self.sync_retry_delay.as_millis() < now {
                             debug!("Requesting sync for certificate {digest} (retry)");
                             retry.push(*digest);
+                            // reset the time at which this request was last issued
+                            *timestamp = now;
                         }
                     }
 
