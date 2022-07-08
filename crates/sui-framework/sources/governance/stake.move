@@ -32,7 +32,7 @@ module sui::stake {
     /// TODO: this is a placehodler number and may be changed.
     const BONDING_PERIOD: u64 = 1;
 
-    /// Error number for when a Stake with nonzero balance is burnt. 
+    /// Error number for when a Stake with nonzero balance is burnt.
     const ENONZERO_BALANCE: u64 = 0;
 
     /// Create a stake object from a SUI balance. If the balance comes from a
@@ -48,7 +48,7 @@ module sui::stake {
             balance,
             locked_until_epoch,
         };
-        transfer::transfer(stake, recipient)
+        transfer::transfer(stake, recipient);
     }
 
     /// Withdraw `amount` from the balance of `stake`.

@@ -16,7 +16,7 @@ module test::m {
 
     public entry fun mint_s(ctx: &mut TxContext) {
         let id = tx_context::new_id(ctx);
-        transfer::share_object(S { id })
+        transfer::share_object(S { id });
     }
 }
 

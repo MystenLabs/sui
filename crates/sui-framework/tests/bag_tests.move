@@ -41,8 +41,8 @@ module sui::bag_tests {
             let obj2 = Object2 { id: tx_context::new_id(test_scenario::ctx(scenario)) };
             let id2 = *id::id(&obj2);
 
-            bag::add(&mut bag, obj1);
-            bag::add(&mut bag, obj2);
+            bag::add(&mut bag, obj1, test_scenario::ctx(scenario));
+            bag::add(&mut bag, obj2, test_scenario::ctx(scenario));
             assert!(bag::size(&bag) == 2, EBAG_SIZE_MISMATCH);
 
             assert!(bag::contains(&bag, &id1), EOBJECT_NOT_FOUND);
@@ -78,9 +78,9 @@ module sui::bag_tests {
         let bag = bag::new_with_max_capacity(&mut ctx, 1);
 
         let obj1 = Object1 { id: tx_context::new_id(&mut ctx) };
-        bag::add(&mut bag, obj1);
+        bag::add(&mut bag, obj1, &mut ctx);
         let obj2 = Object2 { id: tx_context::new_id(&mut ctx) };
-        bag::add(&mut bag, obj2);
+        bag::add(&mut bag, obj2, &mut ctx);
         bag::transfer(bag, tx_context::sender(&ctx));
     }
 }

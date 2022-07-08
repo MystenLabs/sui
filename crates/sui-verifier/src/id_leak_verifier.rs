@@ -173,19 +173,12 @@ fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHan
     }
 
     // sui::id::delete
-    (verifier.binary_view.identifier_at(m.name).as_str() == "id"
+    verifier.binary_view.identifier_at(m.name).as_str() == "id"
         && verifier
             .binary_view
             .identifier_at(function_handle.name)
             .as_str()
-            == "delete") ||
-    // sui::transfer::delete_child_object
-    (verifier.binary_view.identifier_at(m.name).as_str() == "transfer"
-            && verifier
-                .binary_view
-                .identifier_at(function_handle.name)
-                .as_str()
-                == "delete_child_object")
+            == "delete"
 }
 
 fn call(

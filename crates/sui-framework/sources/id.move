@@ -59,6 +59,12 @@ module sui::id {
         version: u64
     }
 
+    /// An object ID representing an ID that has been transferred during this transaction.
+    /// It can be used as the parent ID target for transferring child objects.
+    struct TransferredID has copy, drop {
+        id: ID,
+    }
+
     // === constructors ===
 
     /// Create an `ID` from an address
@@ -87,6 +93,12 @@ module sui::id {
         new_versioned_id(SUI_SYSTEM_STATE_OBJECT_ID)
     }
 
+    /// Create a new `TransferredID`. Only callable by `transfer`.
+    /// This is the only way to create a `TransferredID`.
+    public(friend) fun new_transferred_id(id: ID): TransferredID {
+        TransferredID { id }
+    }
+
     // === reads ===
 
     /// Get the underlying `ID` of `obj`
@@ -109,6 +121,10 @@ module sui::id {
     /// Get the inner `ID` of `versioned_id`
     public fun inner(versioned_id: &VersionedID): &ID {
         &versioned_id.id.id
+    }
+
+    public fun transferred_inner(transferred_id: &TransferredID): &ID {
+        &transferred_id.id
     }
 
     /// Get the raw bytes of a `versioned_id`'s inner `ID`

@@ -13,11 +13,10 @@
 /// In contrast to `Bag`, `Collection` requires all objects have the same type.
 module sui::collection {
     use std::errors;
-    use std::option::{Self, Option};
-    use std::vector::Self;
-    use sui::id::{Self, ID, VersionedID};
-    use sui::transfer::{Self, ChildRef};
+    use sui::id::{Self, ID, TransferredID, VersionedID};
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::vec_set::{Self, VecSet};
 
     // Error codes
     /// When removing an object from the collection, EObjectNotFound
@@ -43,8 +42,21 @@ module sui::collection {
 
     struct Collection<phantom T: key + store> has key {
         id: VersionedID,
-        objects: vector<ChildRef<T>>,
+        objects: VecSet<ID>,
         max_capacity: u64,
+    }
+
+    struct Item<T: key + store> has key, store {
+        id: VersionedID,
+        object: T,
+    }
+
+    public fun object<T: key + store>(item: &Item<T>): &T {
+        &item.object
+    }
+
+    public fun object_mut<T: key + store>(item: &mut Item<T>): &mut T {
+        &mut item.object
     }
 
     /// Create a new Collection and return it.
@@ -63,112 +75,70 @@ module sui::collection {
         );
         Collection {
             id: tx_context::new_id(ctx),
-            objects: vector::empty(),
+            objects: vec_set::empty(),
             max_capacity,
         }
     }
 
     /// Create a new Collection and transfer it to the signer.
     public entry fun create<T: key + store>(ctx: &mut TxContext) {
-        transfer::transfer(new<T>(ctx), tx_context::sender(ctx))
+        transfer::transfer(new<T>(ctx), tx_context::sender(ctx));
     }
 
     /// Returns the size of the collection.
     public fun size<T: key + store>(c: &Collection<T>): u64 {
-        vector::length(&c.objects)
+        vec_set::size(&c.objects)
     }
 
     /// Add an object to the collection.
-    /// If the object was owned by another object, an `old_child_ref` would be around
-    /// and need to be consumed as well.
     /// Abort if the object is already in the collection.
-    fun add_impl<T: key + store>(
-        c: &mut Collection<T>,
-        object: T,
-        old_child_ref: Option<ChildRef<T>>,
-    ) {
+    public fun add<T: key + store>(c: &mut Collection<T>, object: T, ctx: &mut TxContext) {
         assert!(
             size(c) + 1 <= c.max_capacity,
             errors::limit_exceeded(EMaxCapacityExceeded)
         );
         let id = id::id(&object);
         assert!(!contains(c, id), EObjectDoubleAdd);
-        let child_ref = if (option::is_none(&old_child_ref)) {
-            transfer::transfer_to_object(object, c)
-        } else {
-            let old_child_ref = option::extract(&mut old_child_ref);
-            transfer::transfer_child_to_object(object, old_child_ref, c)
-        };
-        vector::push_back(&mut c.objects, child_ref);
-        option::destroy_none(old_child_ref);
-    }
-
-    /// Add an object to the collection.
-    /// Abort if the object is already in the collection.
-    public fun add<T: key + store>(c: &mut Collection<T>, object: T) {
-        add_impl(c, object, option::none())
-    }
-
-    /// Transfer an object that was owned by another object to the collection.
-    /// Since the object is a child object of another object, an `old_child_ref`
-    /// is around and needs to be consumed.
-    public fun add_child_object<T: key + store>(
-        c: &mut Collection<T>,
-        object: T,
-        old_child_ref: ChildRef<T>,
-    ) {
-        add_impl(c, object, option::some(old_child_ref))
+        let id = *id;
+        let item = Item { id: tx_context::new_id(ctx), object };
+        transfer::transfer_to_object(item, c);
+        vec_set::insert(&mut c.objects, id);
     }
 
     /// Check whether the collection contains a specific object,
     /// identified by the object id in bytes.
     public fun contains<T: key + store>(c: &Collection<T>, id: &ID): bool {
-        option::is_some(&find(c, id))
+        vec_set::contains(&c.objects, id)
     }
 
     /// Remove and return the object from the collection.
     /// Abort if the object is not found.
-    public fun remove<T: key + store>(c: &mut Collection<T>, object: T): (T, ChildRef<T>) {
-        let idx = find(c, id::id(&object));
-        assert!(option::is_some(&idx), EObjectNotFound);
-        let child_ref = vector::remove(&mut c.objects, *option::borrow(&idx));
-        (object, child_ref)
+    public fun remove<T: key + store>(c: &mut Collection<T>, item: Item<T>): T {
+        vec_set::remove(&mut c.objects, id::id(&item));
+        let Item { id, object } = item;
+        id::delete(id);
+        object
     }
 
     /// Remove the object from the collection, and then transfer it to the signer.
     public entry fun remove_and_take<T: key + store>(
         c: &mut Collection<T>,
-        object: T,
+        item: Item<T>,
         ctx: &mut TxContext,
     ) {
-        let (object, child_ref) = remove(c, object);
-        transfer::transfer_child_to_address(object, child_ref, tx_context::sender(ctx));
+        let object = remove(c, item);
+        transfer::transfer(object, tx_context::sender(ctx));
     }
 
     /// Transfer the entire collection to `recipient`.
     public entry fun transfer<T: key + store>(c: Collection<T>, recipient: address) {
-        transfer::transfer(c, recipient)
+        transfer::transfer(c, recipient);
     }
 
     public fun transfer_to_object_id<T: key + store>(
         obj: Collection<T>,
-        owner_id: VersionedID,
-    ): (VersionedID, ChildRef<Collection<T>>) {
-        transfer::transfer_to_object_id(obj, owner_id)
-    }
-
-    /// Look for the object identified by `id_bytes` in the collection.
-    /// Returns the index if found, none if not found.
-    fun find<T: key + store>(c: &Collection<T>, id: &ID): Option<u64> {
-        let i = 0;
-        let len = size(c);
-        while (i < len) {
-            let child_ref = vector::borrow(&c.objects, i);
-            if (transfer::is_child_unsafe(child_ref,  id)) {
-                return option::some(i)
-            };
-            i = i + 1;
-        };
-        option::none()
+        owner_id: TransferredID,
+    ) {
+        transfer::transfer_to_object_id(obj, owner_id);
     }
 }

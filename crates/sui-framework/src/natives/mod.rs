@@ -58,8 +58,8 @@ pub fn all_natives(
             transfer::delete_child_object_internal,
         ),
         ("transfer", "transfer_internal", transfer::transfer_internal),
-        ("transfer", "freeze_object", transfer::freeze_object),
-        ("transfer", "share_object", transfer::share_object),
+        ("transfer", "freeze_object_internal", transfer::freeze_object),
+        ("transfer", "share_object_internal", transfer::share_object),
         ("tx_context", "derive_id", tx_context::derive_id),
         (
             "tx_context",

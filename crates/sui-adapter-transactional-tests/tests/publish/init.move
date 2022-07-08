@@ -18,7 +18,7 @@ module Test::M1 {
     fun init(ctx: &mut TxContext) {
         let value = 42;
         let singleton = Object { id: tx_context::new_id(ctx), value };
-        transfer::transfer(singleton, tx_context::sender(ctx))
+        transfer::transfer(singleton, tx_context::sender(ctx));
     }
 }
 

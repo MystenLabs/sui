@@ -39,7 +39,7 @@ module sui::epoch_reward_record {
             total_stake,
             delegator_count,
             validator,
-        })
+        });
     }
 
     /// Given the delegation amount, calculate the reward, and decrement the `delegator_count`.

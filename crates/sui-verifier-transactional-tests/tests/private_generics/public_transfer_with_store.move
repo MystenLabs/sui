@@ -14,7 +14,7 @@ module a::m {
 //# publish
 module t1::m {
     fun t(s: a::m::S) {
-        sui::transfer::transfer(s, @100)
+        sui::transfer::transfer(s, @100);
     }
 }
 
@@ -22,68 +22,38 @@ module t1::m {
 module t2::m {
     fun t(
         s: a::m::S,
-        owner_id: sui::id::VersionedID,
-    ): (sui::id::VersionedID, sui::transfer::ChildRef<a::m::S>)  {
-        sui::transfer::transfer_to_object_id(s, owner_id)
+        owner_id: sui::id::TransferredID,
+    ) {
+        sui::transfer::transfer_to_object_id(s, owner_id);
     }
 }
 
 //# publish
 module t3::m {
     fun t(s: a::m::S) {
-        sui::transfer::freeze_object(s)
+        sui::transfer::freeze_object(s);
     }
 }
 
 //# publish
 module t4::m {
     fun t(s: a::m::S) {
-        sui::transfer::share_object(s)
+        sui::transfer::share_object(s);
     }
 }
 
 //# publish
 module t5::m {
     struct R has key { id: sui::id::VersionedID }
-    fun t(child: a::m::S, owner: &mut R): sui::transfer::ChildRef<a::m::S> {
-        sui::transfer::transfer_to_object(child, owner)
+    fun t(child: a::m::S, owner: &mut R) {
+        sui::transfer::transfer_to_object(child, owner);
     }
 }
 
 //# publish
 module t6::m {
     struct R has key { id: sui::id::VersionedID }
-    fun t(child: R, owner: &mut a::m::S): sui::transfer::ChildRef<R> {
-        sui::transfer::transfer_to_object(child, owner)
-    }
-}
-
-//# publish
-module t7::m {
-    use sui::transfer::ChildRef;
-    use a::m::S;
-    struct R has key { id: sui::id::VersionedID }
-    fun transfer_child_to_object(child: S, c: ChildRef<S>, owner: &mut R): ChildRef<S> {
-        sui::transfer::transfer_child_to_object(child, c, owner)
-    }
-}
-
-//# publish
-module t8::m {
-    use sui::transfer::ChildRef;
-    use a::m::S;
-    struct R has key { id: sui::id::VersionedID }
-    fun transfer_child_to_object(child: R, c: ChildRef<R>, owner: &mut S): ChildRef<R> {
-        sui::transfer::transfer_child_to_object(child, c, owner)
-    }
-}
-
-//# publish
-module t9::m {
-    use sui::transfer::ChildRef;
-    use a::m::S;
-    struct R has key { id: sui::id::VersionedID }
-    fun transfer_child_to_object(s: S, c: ChildRef<S>) {
-        sui::transfer::transfer_child_to_address(s, c, @0x100)
+    fun t(child: R, owner: &mut a::m::S) {
+        sui::transfer::transfer_to_object(child, owner);
     }
 }

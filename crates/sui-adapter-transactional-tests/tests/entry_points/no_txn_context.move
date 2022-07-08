@@ -15,7 +15,7 @@ module Test::M {
         sui::transfer::transfer(
             Obj { id: tx_context::new_id(ctx), value: 0 },
             tx_context::sender(ctx),
-        )
+        );
     }
 
     public entry fun incr(obj: &mut Obj) {

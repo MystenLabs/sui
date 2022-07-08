@@ -23,7 +23,7 @@ module Test::M1 {
         transfer::transfer(
             Object { id: tx_context::new_id(ctx), value },
             recipient
-        )
+        );
     }
 }
 

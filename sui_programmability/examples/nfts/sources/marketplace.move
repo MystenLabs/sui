@@ -5,8 +5,9 @@ module nfts::marketplace {
     use sui::bag::{Self, Bag};
     use sui::tx_context::{Self, TxContext};
     use sui::id::{Self, ID, VersionedID};
-    use sui::transfer::{Self, ChildRef};
+    use sui::transfer;
     use sui::coin::{Self, Coin};
+    use sui::vec_set::{Self, VecSet};
 
     // For when amount paid does not match the expected.
     const EAmountIncorrect: u64 = 0;
@@ -16,7 +17,8 @@ module nfts::marketplace {
 
     struct Marketplace has key {
         id: VersionedID,
-        objects: ChildRef<Bag>,
+        // set of Bags
+        objects: VecSet<ID>,
     }
 
     /// A single listing which contains the listed item and its price in [`Coin<C>`].

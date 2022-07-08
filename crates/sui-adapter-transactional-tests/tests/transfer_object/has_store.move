@@ -17,12 +17,12 @@ module test::m {
 
     public entry fun mint_s(ctx: &mut TxContext) {
         let id = tx_context::new_id(ctx);
-        transfer::transfer(S { id }, tx_context::sender(ctx))
+        transfer::transfer(S { id }, tx_context::sender(ctx));
     }
 
     public entry fun mint_cup<T: store>(ctx: &mut TxContext) {
         let id = tx_context::new_id(ctx);
-        transfer::transfer(Cup<T> { id }, tx_context::sender(ctx))
+        transfer::transfer(Cup<T> { id }, tx_context::sender(ctx));
     }
 }
 

@@ -92,17 +92,10 @@ fn verify_private_transfer(
         | "transfer_to_object_id"
         | "freeze_object"
         | "share_object"
-        | "transfer_to_object"
-        | "transfer_to_object_unsafe"
-        | "transfer_child_to_object"
-        | "transfer_child_to_address" => (),
-        // these functions operate over ChildRef
-        "is_child" | "is_child_unsafe" | "delete_child_object" => {
-            return Ok(());
-        }
+        | "transfer_to_object" => (),
         // should be unreachable
         // these are private and the module itself is skipped
-        "transfer_internal" | "delete_child_object_internal" => {
+        "freeze_object_internal" | "share_object_internal" | "transfer_internal" => {
             debug_assert!(false, "internal error. Unexpected private function");
             return Ok(());
         }

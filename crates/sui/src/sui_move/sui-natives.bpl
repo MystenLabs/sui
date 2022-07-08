@@ -16,9 +16,9 @@
 
 procedure {:inline 1} $2_transfer_transfer_internal{{S}}(obj: {{T}}, recipient: int, to_object: bool);
 
-procedure {:inline 1} $2_transfer_share_object{{S}}(obj: {{T}});
+procedure {:inline 1} $2_transfer_share_object_internal{{S}}(obj: {{T}});
 
-procedure {:inline 1} $2_transfer_freeze_object{{S}}(obj: {{T}});
+procedure {:inline 1} $2_transfer_freeze_object_internal{{S}}(obj: {{T}});
 
 {%- endfor %}
 

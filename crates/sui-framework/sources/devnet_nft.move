@@ -60,7 +60,7 @@ module sui::devnet_nft {
     public entry fun transfer(
         nft: DevNetNFT, recipient: address, _: &mut TxContext
     ) {
-        transfer::transfer(nft, recipient)
+        transfer::transfer(nft, recipient);
     }
 
     /// Update the `description` of `nft` to `new_description`

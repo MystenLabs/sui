@@ -99,7 +99,7 @@ module sui::coin {
 
     /// Send `c` to `recipient`
     public entry fun transfer<T>(c: Coin<T>, recipient: address) {
-        transfer::transfer(c, recipient)
+        transfer::transfer(c, recipient);
     }
 
     /// Transfer `c` to the sender of the current transaction
@@ -189,7 +189,7 @@ module sui::coin {
 
     /// Give away the treasury cap to `recipient`
     public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: address) {
-        transfer::transfer(c, recipient)
+        transfer::transfer(c, recipient);
     }
 
     // === Entrypoints ===
@@ -198,7 +198,7 @@ module sui::coin {
     public entry fun mint_and_transfer<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(mint(c, amount, ctx), recipient)
+        transfer::transfer(mint(c, amount, ctx), recipient);
     }
 
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
@@ -211,7 +211,7 @@ module sui::coin {
     public entry fun split_and_transfer<T>(
         c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(take(&mut c.balance, amount, ctx), recipient)
+        transfer::transfer(take(&mut c.balance, amount, ctx), recipient);
     }
 
     /// Split coin `self` to two coins, one with balance `split_amount`,
@@ -220,7 +220,7 @@ module sui::coin {
         transfer::transfer(
             take(&mut self.balance, split_amount, ctx),
             tx_context::sender(ctx)
-        )
+        );
     }
 
     /// Split coin `self` into multiple coins, each with balance specified
