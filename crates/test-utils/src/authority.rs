@@ -22,9 +22,13 @@ pub const NETWORK_BUFFER_SIZE: usize = 65_000;
 
 /// Make an authority config for each of the `TEST_COMMITTEE_SIZE` authorities in the test committee.
 pub fn test_authority_configs() -> NetworkConfig {
+    test_and_configure_authority_configs(TEST_COMMITTEE_SIZE)
+}
+
+pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
-    let mut configs = NetworkConfig::generate_with_rng(&config_dir, TEST_COMMITTEE_SIZE, rng);
+    let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
     for config in configs.validator_configs.iter_mut() {
         // Disable gossip by default to reduce non-determinism.
         // TODO: Once this library is more broadly used, we can make this a config argument.

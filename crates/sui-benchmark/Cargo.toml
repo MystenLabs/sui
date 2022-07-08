@@ -24,6 +24,7 @@ tracing-subscriber = { version = "0.3.11", features = ["time", "registry", "env-
 clap = { version = "3.1.17", features = ["derive"] }
 prometheus = "0.13.1"
 multiaddr = "0.14.0"
+crossterm = "0.23.2"
 
 bcs = "0.1.3"
 sui-core = { path = "../sui-core" }
@@ -32,7 +33,10 @@ sui-types = { path = "../sui-types" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f", features = ["address20"] }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5be9046d6b8f7563740f4d03bba10550d3628672", package = "node" }
+sui-quorum-driver = { path = "../sui-quorum-driver" }
+sui-node = { path = "../sui-node" }
 workspace-hack = { path = "../workspace-hack"}
+test-utils = { path = "../test-utils" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { version = "^0.5", features = ["profiling"] }
