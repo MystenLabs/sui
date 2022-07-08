@@ -36,18 +36,20 @@ impl Prove {
         let mut options = move_prover::cli::Options::create_from_args(&args)?;
 
         // provide Sui-specific Boogie template for the native functions to the prover.
-        options.backend.custom_natives =
-            Some(move_prover_boogie_backend::options::CustomNativeOptions {
-                template_bytes: SUI_NATIVE_TEMPLATE.to_vec(),
-                module_instance_names: vec![
-                    (
-                        "0x2::transfer".to_string(),
-                        "transfer_instances".to_string(),
-                    ),
-                    ("0x2::id".to_string(), "id_instances".to_string()),
-                    ("0x2::event".to_string(), "sui_event_instances".to_string()),
-                ],
-            });
+        if options.backend.custom_natives.is_none() {
+            options.backend.custom_natives =
+                Some(move_prover_boogie_backend::options::CustomNativeOptions {
+                    template_bytes: SUI_NATIVE_TEMPLATE.to_vec(),
+                    module_instance_names: vec![
+                        (
+                            "0x2::transfer".to_string(),
+                            "transfer_instances".to_string(),
+                        ),
+                        ("0x2::id".to_string(), "id_instances".to_string()),
+                        ("0x2::event".to_string(), "sui_event_instances".to_string()),
+                    ],
+                });
+        }
 
         let prover_result = std::thread::spawn(move || {
             prove::run_move_prover(
@@ -58,7 +60,8 @@ impl Prove {
                 options,
             )
         });
-
-        prover_result.join().expect("move prover thread panicked")
+        prover_result
+            .join()
+            .unwrap_or_else(|err| Err(anyhow::anyhow!("{:?}", err)))
     }
 }
