@@ -32,6 +32,7 @@ import type {
 import styles from './RecentTxCard.module.css';
 
 const TRUNCATE_LENGTH = 10;
+const NUMBER_OF_TX_PER_PAGE = 15;
 
 const initState: {
     loadState: string;
@@ -204,8 +205,6 @@ function LatestTxView({
                         stats={tabsFooter.stats}
                     />
                 </div>
-                <div title="Epochs">Epochs Component</div>
-                <div title="Checkpoints">Checkpoints Component</div>
             </Tabs>
         </div>
     );
@@ -237,7 +236,8 @@ function LatestTxCardAPI({ count }: { count: number }) {
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
     const [searchParams] = useSearchParams();
-    const [txNumPerPage] = useState(15);
+    const [txNumPerPage] = useState(NUMBER_OF_TX_PER_PAGE);
+
     useEffect(() => {
         let isMounted = true;
         const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
@@ -290,7 +290,12 @@ function LatestTxCardAPI({ count }: { count: number }) {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
-    return <LatestTxView results={results} />;
+    return (
+        <>
+            <LatestTxView results={results} />
+            <Pagination totalTxCount={count} txNum={NUMBER_OF_TX_PER_PAGE} />
+        </>
+    );
 }
 
 const LatestTxCard = ({ count }: { count: number }) =>

@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import styles from './Tabs.module.css';
 
 type Props = {
-    children: JSX.Element[];
+    children: JSX.Element[] | JSX.Element;
     selected?: number;
 };
 
@@ -37,7 +37,13 @@ function Tabs({ children, selected }: Props) {
                     }
                 )}
             </ul>
-            <div className={styles.tabContent}>{children[activeTab]}</div>
+            <div className={styles.tabContent}>
+                {
+                    [...(Array.isArray(children) ? children : [children])][
+                        activeTab
+                    ]
+                }
+            </div>
         </div>
     );
 }

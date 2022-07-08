@@ -109,7 +109,7 @@ function columnsContent(columns: TableColumn[]) {
             ) {
                 return <TxStatusType content={content} />;
             }
-            // handle most common types including React.ReactElement
+            // handle most common types including
             return content;
         },
     }));

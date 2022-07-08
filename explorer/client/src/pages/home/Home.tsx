@@ -5,8 +5,8 @@ import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import SuiNetworkStats from '../../components/network-stats/SuiNetworkStats';
-import TopGroupsCard from '../../components/top-groups/TopGroups';
-import TopValidatorsCard from '../../components/top-validators-card/TopValidatorsCard';
+// import TopGroupsCard from '../../components/top-groups/TopGroups';
+// import TopValidatorsCard from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
 import {
@@ -83,12 +83,8 @@ function HomeAPI() {
         >
             <section className="left-item">
                 <LastestTxCard count={results.count} />
-                <SuiNetworkStats count={results.count} />
             </section>
-            <section className="right-item">
-                <TopValidatorsCard />
-                <TopGroupsCard />
-            </section>
+            <section className="right-item"></section>
         </div>
     );
 }
