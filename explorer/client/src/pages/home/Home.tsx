@@ -4,7 +4,7 @@ import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import SuiNetworkStats from '../../components/network-stats/SuiNetworkStats';
+// import SuiNetworkStats from '../../components/network-stats/SuiNetworkStats';
 // import TopGroupsCard from '../../components/top-groups/TopGroups';
 // import TopValidatorsCard from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
@@ -29,7 +29,6 @@ function HomeStatic() {
     return (
         <div data-testid="home-page" id="home" className={styles.home}>
             <LastestTxCard count={count} />
-            <SuiNetworkStats count={count} />
         </div>
     );
 }
