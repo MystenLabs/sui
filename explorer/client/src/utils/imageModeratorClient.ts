@@ -21,7 +21,8 @@ export class ImageModClient implements IImageModClient {
 
     async checkImage(url: string): Promise<ImageCheckResponse> {
         // static and local environments always allow images without checking
-        if (ENV_STUBS_IMG_CHECK) return { ok: true };
+        if (ENV_STUBS_IMG_CHECK || url === FALLBACK_IMAGE)
+            return { ok: true };
 
         return (
             await fetch(this.imgEndpoint, {
@@ -32,3 +33,6 @@ export class ImageModClient implements IImageModClient {
         ).json();
     }
 }
+
+
+export const FALLBACK_IMAGE = 'assets/fallback.png';
