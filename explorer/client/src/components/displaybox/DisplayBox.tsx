@@ -3,7 +3,10 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-import { ImageModClient } from '../../utils/imageModeratorClient';
+import {
+    FALLBACK_IMAGE,
+    ImageModClient,
+} from '../../utils/imageModeratorClient';
 import { transformURL } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
@@ -29,11 +32,10 @@ function DisplayBox({ display }: { display: string }) {
         new ImageModClient()
             .checkImage(transformURL(display))
             .then(({ ok }) => {
-                //setHasImgBeenChecked(true);
                 setImgAllowState(ok);
             })
             .catch((error) => {
-                //setHasImgBeenChecked(true);
+                console.warn(error);
                 // default to allow, so a broken img check service doesn't break NFT display
                 setImgAllowState(true);
             })
@@ -53,11 +55,22 @@ function DisplayBox({ display }: { display: string }) {
 
     const loadedWithoutAllowedState = hasDisplayLoaded && !imgAllowState;
     const shouldBlur = loadedWithoutAllowedState && !hasImgBeenChecked;
-    const shouldStillBlur = loadedWithoutAllowedState && hasImgBeenChecked;
+    const shouldBlock = loadedWithoutAllowedState && hasImgBeenChecked;
     // if we've loaded the display image but the check hasn't returned, display a blurry version
     let imgClass = shouldBlur ? styles.imageboxblur : styles.imagebox;
-    // if we've loaded the display image and the check did not pass, blur harder & stop animation
-    imgClass = shouldStillBlur ? styles.imageblurstill : imgClass;
+    // if we've loaded the display image and the check did not pass,
+    // stop blur animation and use a fallback image
+    imgClass = shouldBlock ? styles.imagebox : imgClass;
+
+    let showAutoModNotice =
+        !hasFailedToLoad && hasImgBeenChecked && !imgAllowState;
+
+    if (loadedWithoutAllowedState && hasImgBeenChecked) {
+        display = FALLBACK_IMAGE;
+        imgClass = styles.imagebox;
+        //setHasFailedToLoad(false);
+        showAutoModNotice = true;
+    }
 
     return (
         <div className={styles['display-container']}>
@@ -66,12 +79,12 @@ function DisplayBox({ display }: { display: string }) {
                     image loading...
                 </div>
             )}
-            {hasFailedToLoad && (
+            {hasFailedToLoad && !showAutoModNotice && (
                 <div className={styles.imagebox} id="noImage">
                     No Image was Found
                 </div>
             )}
-            {!hasFailedToLoad && hasImgBeenChecked && !imgAllowState && (
+            {showAutoModNotice && (
                 <div className={styles.automod} id="modnotice">
                     image hidden by automod
                 </div>
