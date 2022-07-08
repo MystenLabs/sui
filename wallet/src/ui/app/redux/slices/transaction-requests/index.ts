@@ -6,6 +6,7 @@ import {
     createEntityAdapter,
     createSlice,
 } from '@reduxjs/toolkit';
+import { Base64DataBuffer } from '@mysten/sui.js';
 
 import type { TransactionResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -45,7 +46,14 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
-                txResult = await signer.executeMoveCall(txRequest.tx);
+                if (txRequest.type === 'move-call') {
+                    txResult = await signer.executeMoveCall(txRequest.tx);
+                } else if (txRequest.type === 'serialized-move-call') {
+                    const txBytes = new Base64DataBuffer(txRequest.txBytes);
+                    txResult = await signer.signAndExecuteTransaction(txBytes);
+                } else {
+                    throw new Error(`Either tx or txBytes needs to be defined.`);
+                }
             } catch (e) {
                 tsResultError = (e as Error).message;
             }

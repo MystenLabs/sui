@@ -7,11 +7,10 @@ import Browser from 'webextension-polyfill';
 
 import { Window } from './Window';
 
+import type { MoveCallTransaction } from '@mysten/sui.js';
 import type { TransactionRequest } from '_payloads/transactions';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
-
-type Transaction = TransactionRequest['tx'];
 
 const TX_STORE_KEY = 'transactions';
 
@@ -26,11 +25,13 @@ class Transactions {
     private _txResponseMessages = new Subject<TransactionRequestResponse>();
 
     public async executeTransaction(
-        tx: Transaction,
+        tx: MoveCallTransaction | undefined,
+        txBytes: Uint8Array | undefined,
         connection: ContentScriptConnection
     ) {
         const txRequest = this.createTransactionRequest(
             tx,
+            txBytes,
             connection.origin,
             connection.originFavIcon
         );
@@ -92,18 +93,34 @@ class Transactions {
     }
 
     private createTransactionRequest(
-        tx: Transaction,
+        tx: MoveCallTransaction | undefined,
+        txBytes: Uint8Array | undefined,
         origin: string,
         originFavIcon?: string
     ): TransactionRequest {
-        return {
-            id: uuidV4(),
-            tx,
-            approved: null,
-            origin,
-            originFavIcon,
-            createdDate: new Date().toISOString(),
-        };
+        if (tx !== undefined) {
+            return {
+                id: uuidV4(),
+                approved: null,
+                origin,
+                originFavIcon,
+                createdDate: new Date().toISOString(),
+                type: 'move-call',
+                tx,
+            };
+        } else if (txBytes !== undefined) {
+            return {
+                id: uuidV4(),
+                approved: null,
+                origin,
+                originFavIcon,
+                createdDate: new Date().toISOString(),
+                type: 'serialized-move-call',
+                txBytes,
+            };
+        } else {
+            throw new Error("Either tx or txBytes needs to be defined.");
+        }
     }
 
     private async saveTransactionRequests(
