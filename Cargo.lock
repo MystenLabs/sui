@@ -2174,28 +2174,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generate-json-rpc-spec"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "clap 3.1.18",
- "hyper",
- "move-package",
- "pretty_assertions",
- "serde 1.0.138",
- "serde_json",
- "sui",
- "sui-config",
- "sui-json",
- "sui-json-rpc",
- "sui-json-rpc-api",
- "sui-types",
- "test-utils",
- "tokio",
- "workspace-hack 0.1.0",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6790,8 +6768,22 @@ dependencies = [
 name = "sui-open-rpc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "clap 3.1.18",
+ "hyper",
+ "move-package",
+ "pretty_assertions",
  "schemars",
  "serde 1.0.138",
+ "serde_json",
+ "sui",
+ "sui-config",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-api",
+ "sui-types",
+ "test-utils",
+ "tokio",
  "workspace-hack 0.1.0",
 ]
 
