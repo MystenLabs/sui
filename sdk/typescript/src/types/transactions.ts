@@ -8,7 +8,6 @@ export type TransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
 };
-export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
 export type TransactionKindName = 'TransferObject' | 'Publish' | 'Call';
 export type SuiTransactionKind =
@@ -27,7 +26,7 @@ export type EpochId = number;
 
 export type AuthorityQuorumSignInfo = {
   epoch: EpochId;
-  signatures: RawAuthoritySignInfo[];
+  signatures: AuthoritySignature[];
 };
 
 export type CertifiedTransaction = {
@@ -92,7 +91,7 @@ export type TransactionEffects = {
 export type TransactionEffectsResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
-  timestamp_ms: number;
+  timestamp_ms: number | null;
 };
 
 export type GatewayTxSeqNumber = number;

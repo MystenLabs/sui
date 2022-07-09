@@ -99,7 +99,7 @@ changes the transaction resulted in are final.
 
 ### Auditing and privacy
 
-Sui validators provide facilities for users to read all asserts they store, as well as the historical record of
+Sui validators provide facilities for users to read all assets they store, as well as the historical record of
 transactions they have processed that led to these assets. Validators also provide cryptographic evidence of the full
 chain of transactions that contributed to an asset state. User clients can request and validate this chain of 
 evidence to ensure all operations were correct and the result of the collective agreement between validators.

@@ -70,7 +70,7 @@ export function DappTxApprovalPage() {
     // TODO: add more tx types/make it generic
     const valuesContent = useMemo(
         () =>
-            txRequest?.tx
+            txRequest?.type === 'move-call'
                 ? [
                       { label: 'Transaction type', content: 'MoveCall' },
                       {
@@ -89,7 +89,10 @@ export function DappTxApprovalPage() {
                       },
                       { label: 'Gas budget', content: txRequest.tx.gasBudget },
                   ]
-                : [],
+                : [
+                    { label: 'Transaction type', content: 'SerializedMoveCall' },
+                    { label: 'Contents', content: txRequest?.txBytes },
+                ],
         [txRequest]
     );
     return (

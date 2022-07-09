@@ -15,14 +15,8 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
-use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::{
-    account_address::AccountAddress,
-    ident_str,
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
@@ -32,7 +26,7 @@ use prometheus::{
 };
 use std::ops::Deref;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -53,10 +47,9 @@ use sui_types::{
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure,
-    gas::SuiGasStatus,
+    fp_ensure,
     messages::*,
-    object::{Data, Object, ObjectFormatOptions, ObjectRead},
+    object::{Object, ObjectFormatOptions, ObjectRead},
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -80,8 +73,7 @@ pub mod move_integration_tests;
 #[path = "unit_tests/gas_tests.rs"]
 mod gas_tests;
 
-mod temporary_store;
-pub use temporary_store::AuthorityTemporaryStore;
+pub use sui_adapter::temporary_store::TemporaryStore;
 
 mod authority_store;
 pub use authority_store::{
@@ -92,10 +84,6 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
-
-use self::authority_store::{
-    generate_genesis_system_object, store_package_and_init_modules_for_genesis,
-};
 
 pub mod authority_notifier;
 
@@ -584,7 +572,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(
-        AuthorityTemporaryStore<AuthorityStore>,
+        TemporaryStore<Arc<AuthorityStore>>,
         SignedTransactionEffects,
     )> {
         let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
@@ -623,7 +611,7 @@ impl AuthorityState {
 
         let transaction_dependencies = input_objects.transaction_dependencies();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
+            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
         let (effects, _execution_error) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
@@ -823,7 +811,7 @@ impl AuthorityState {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
                 match self.get_object(&request.object_id).await {
                     Ok(Some(object)) => {
-                        let lock = if !object.is_owned() {
+                        let lock = if !object.is_owned_or_quasi_shared() {
                             // Unowned obejcts have no locks.
                             None
                         } else {
@@ -980,24 +968,10 @@ impl AuthorityState {
             .database_is_empty()
             .expect("Database read should not fail.")
         {
-            let mut genesis_ctx = genesis.genesis_ctx().to_owned();
-            for genesis_modules in genesis.modules() {
-                store_package_and_init_modules_for_genesis(
-                    &store,
-                    &native_functions,
-                    &mut genesis_ctx,
-                    genesis_modules.to_owned(),
-                )
-                .await
-                .expect("We expect publishing the Genesis packages to not fail");
-            }
             store
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
-            generate_genesis_system_object(&store, &move_vm, &committee, &mut genesis_ctx)
-                .await
-                .expect("Cannot generate genesis system object");
 
             store
                 .insert_new_epoch_info(EpochInfoLocals {
@@ -1371,7 +1345,7 @@ impl AuthorityState {
     #[instrument(name = "commit_certificate", level = "debug", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
-        temporary_store: AuthorityTemporaryStore<AuthorityStore>,
+        temporary_store: TemporaryStore<Arc<AuthorityStore>>,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {

@@ -1,15 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::transaction_input_checker::InputObjects;
+
 use move_core_types::account_address::AccountAddress;
-use sui_types::error::ExecutionError;
+use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use std::collections::{BTreeMap, HashSet};
+use sui_types::base_types::{
+    ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+};
+use sui_types::error::{ExecutionError, SuiError};
+use sui_types::fp_bail;
+use sui_types::messages::{ExecutionStatus, InputObjects, TransactionEffects};
+use sui_types::object::{Data, Object};
+use sui_types::storage::{BackingPackageStore, DeleteKind, Storage};
 use sui_types::{
     event::Event,
     gas::{GasCostSummary, SuiGasStatus},
     object::Owner,
 };
-
-use super::*;
 
 pub type InnerTemporaryStore = (
     BTreeMap<ObjectID, Object>,
@@ -19,11 +27,11 @@ pub type InnerTemporaryStore = (
     Vec<Event>,
 );
 
-pub struct AuthorityTemporaryStore<S> {
+pub struct TemporaryStore<S> {
     // The backing store for retrieving Move packages onchain.
     // When executing a Move call, the dependent packages are not going to be
     // in the input objects. They will be feteched from the backing store.
-    package_store: Arc<S>,
+    package_store: S,
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
     mutable_inputs: Vec<ObjectRef>, // Inputs that are mutable
@@ -37,11 +45,11 @@ pub struct AuthorityTemporaryStore<S> {
     created_object_ids: HashSet<ObjectID>,
 }
 
-impl<S> AuthorityTemporaryStore<S> {
+impl<S> TemporaryStore<S> {
     /// Creates a new store associated with an authority store, and populates it with
     /// initial objects.
     pub fn new(
-        package_store: Arc<S>,
+        package_store: S,
         input_objects: InputObjects,
         tx_digest: TransactionDigest,
     ) -> Self {
@@ -275,7 +283,7 @@ impl<S> AuthorityTemporaryStore<S> {
     }
 }
 
-impl<S> Storage for AuthorityTemporaryStore<S> {
+impl<S> Storage for TemporaryStore<S> {
     /// Resets any mutations and deletions recorded in the store.
     fn reset(&mut self) {
         self.written.clear();
@@ -297,11 +305,9 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         self.created_object_ids = ids;
     }
 
-    /*
-        Invariant: A key assumption of the write-delete logic
-        is that an entry is not both added and deleted by the
-        caller.
-    */
+    // Invariant: A key assumption of the write-delete logic
+    // is that an entry is not both added and deleted by the
+    // caller.
 
     fn write_object(&mut self, mut object: Object) {
         // there should be no write after delete
@@ -346,7 +352,7 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
     }
 }
 
-impl<S: BackingPackageStore> ModuleResolver for AuthorityTemporaryStore<S> {
+impl<S: BackingPackageStore> ModuleResolver for TemporaryStore<S> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         let package_id = &ObjectID::from(*module_id.address());
@@ -375,7 +381,7 @@ impl<S: BackingPackageStore> ModuleResolver for AuthorityTemporaryStore<S> {
     }
 }
 
-impl<S> ResourceResolver for AuthorityTemporaryStore<S> {
+impl<S> ResourceResolver for TemporaryStore<S> {
     type Error = SuiError;
 
     fn get_resource(

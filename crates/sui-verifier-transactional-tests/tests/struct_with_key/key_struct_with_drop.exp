@@ -1,5 +1,5 @@
 processed 1 task
 
-task 0 'publish'. lines 4-10:
+task 0 'publish'. lines 4-11:
 Error: Transaction Effects Status: MiscellaneousError
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ModuleVerificationFailure, source: Some("Struct S cannot have both key and drop abilities") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: Some(VMError { major_status: FIELD_MISSING_TYPE_ABILITY, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: _, name: Identifier("m") }), indices: [(StructDefinition, 0)], offsets: [] }) } }

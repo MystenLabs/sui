@@ -10,3 +10,26 @@ edition = "2021"
 schemars = "0.8.10"
 serde = "1.0.138"
 workspace-hack = { path = "../workspace-hack"}
+
+[dev-dependencies]
+anyhow = { version = "1.0.58", features = ["backtrace"] }
+clap = { version = "3.1.17", features = ["derive"] }
+pretty_assertions = "1.2.0"
+serde_json = "1.0.80"
+tokio = { version = "1.18.2", features = ["full"] }
+hyper = { version = "0.14.18", features = ["full"] }
+
+sui = { path = "../sui" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-api = { path = "../sui-json-rpc-api" }
+sui-json = { path = "../sui-json" }
+sui-types = { path = "../sui-types" }
+sui-config = { path = "../sui-config" }
+test-utils = { path = "../test-utils" }
+
+move-package = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+
+[[example]]
+name = "generate-json-rpc-spec"
+path = "src/generate_json_rpc_spec.rs"
+test = false

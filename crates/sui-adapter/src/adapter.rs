@@ -881,7 +881,7 @@ pub fn resolve_and_type_check(
                 t @ SignatureToken::Struct(_)
                 | t @ SignatureToken::StructInstantiation(_, _)
                 | t @ SignatureToken::TypeParameter(_) => {
-                    if !object.is_owned() {
+                    if !object.is_owned_or_quasi_shared() {
                         // Forbid passing shared (both mutable and immutable) object by value.
                         // This ensures that shared object cannot be transferred, deleted or wrapped.
                         return Err(ExecutionError::new_with_source(

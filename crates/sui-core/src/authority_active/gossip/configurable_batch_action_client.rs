@@ -206,7 +206,12 @@ pub async fn init_configurable_authorities(
     for _i in 0..authority_action.len() {
         gas_objects.push(Object::with_owner_for_testing(addr1));
     }
-    let genesis_objects = authority_genesis_objects(authority_count, gas_objects.clone());
+    let genesis_objects = vec![
+        gas_objects.clone(),
+        gas_objects.clone(),
+        gas_objects.clone(),
+        gas_objects.clone(),
+    ];
 
     // Create committee.
     let mut key_pairs = Vec::new();

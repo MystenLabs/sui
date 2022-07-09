@@ -3,7 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
-use crate::{args::*, in_memory_storage::InMemoryStorage};
+use crate::args::*;
 use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
@@ -36,9 +36,10 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_adapter::in_memory_storage::InMemoryStorage;
+use sui_adapter::temporary_store::TemporaryStore;
 use sui_adapter::{adapter::new_move_vm, genesis};
-use sui_core::transaction_input_checker::InputObjects;
-use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
+use sui_core::execution_engine;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
     base_types::{
@@ -48,7 +49,7 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
     event::Event,
     gas,
-    messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
+    messages::{ExecutionStatus, InputObjects, Transaction, TransactionData, TransactionEffects},
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -471,7 +472,7 @@ impl<'a> SuiTestAdapter<'a> {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
+            TemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
         let (
             TransactionEffects {
                 status,

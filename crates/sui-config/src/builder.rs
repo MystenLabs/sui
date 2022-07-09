@@ -117,7 +117,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .unwrap();
 
         let genesis = {
-            let mut builder = genesis::Builder::new(genesis_ctx)
+            let mut builder = genesis::Builder::new_with_context(genesis_ctx)
                 .add_move_modules(custom_modules)
                 .add_objects(objects);
 

@@ -47,8 +47,6 @@ use sui_json_rpc_api::rpc_types::{
     TransactionResponse, TransferObjectParams,
 };
 
-use crate::transaction_input_checker::InputObjects;
-
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
 mod gateway_state_tests;
