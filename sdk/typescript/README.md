@@ -166,7 +166,7 @@ const signer = new RawSigner(
 const bytecode = await fs.readFile('path/to/project/build/project_name/bytecode_modules/module_name.mv', 'base64');  
 const publishTxn = await signer.publish(
   {
-    packages: [bytecode.toString()],
+    compiledModules: [bytecode.toString()],
     gasBudget: 1000
   }
 );
