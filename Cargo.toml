@@ -32,8 +32,8 @@ members = [
 ]
 
 # Debug symbols are really important for profiling
-[profile.release]
-debug = true
+# [profile.release]
+# debug = true
 # strip = "debuginfo"
 
 [profile.bench]
