@@ -119,7 +119,7 @@ class Transactions {
                 txBytes,
             };
         } else {
-            throw new Error("Either tx or txBytes needs to be defined.");
+            throw new Error('Either tx or txBytes needs to be defined.');
         }
     }
 
