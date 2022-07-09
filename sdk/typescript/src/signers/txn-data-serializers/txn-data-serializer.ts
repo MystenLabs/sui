@@ -38,7 +38,7 @@ export interface MoveCallTransaction {
 }
 
 export interface PublishTransaction {
-  packages: string[],
+  compiledModules: string[],
   gasPayment?: ObjectId;
   gasBudget: number;
 }
