@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module 0x0::container {
-    use sui::id::VersionedID;
+    use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
 
     /// An object with `store` can be transferred in any
@@ -10,6 +10,11 @@ module 0x0::container {
     struct Container<T: store> has key, store {
         id: VersionedID,
         data: T
+    }
+
+    /// View function to read contents of a `Container`.
+    public fun contents<T: store>(c: &Container<T>): &T {
+        &c.data
     }
 
     /// Anyone can create a new object
@@ -20,6 +25,13 @@ module 0x0::container {
             data,
             id: tx_context::new_id(ctx),
         }
+    }
+
+    /// Destroy `Container` and get T.
+    public fun destroy<T: store> (c: Container<T>): T {
+        let Container { id, data } = c;
+        id::delete(id);
+        data
     }
 }
 
@@ -39,9 +51,19 @@ module 0x0::profile {
         url: Url
     }
 
+    /// Read `name` field from `ProfileInfo`.
+    public fun name(info: &ProfileInfo): &String {
+        &info.name
+    }
+
+    /// Read `url` field from `ProfileInfo`.
+    public fun url(info: &ProfileInfo): &Url {
+        &info.url
+    }
+
     /// Creates new `ProfileInfo` and wraps into `Container`.
     /// Then transfers to sender.
-    public fun register_profile(
+    public fun create_profile(
         name: vector<u8>, url: vector<u8>, ctx: &mut TxContext
     ) {
         // create a new container and wrap ProfileInfo into it
