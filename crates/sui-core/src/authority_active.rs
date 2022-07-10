@@ -110,7 +110,6 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
-    pub gateway_metrics: GatewayMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -134,9 +133,8 @@ impl<A> ActiveAuthority<A> {
             net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
                 committee,
                 authority_clients,
-                gateway_metrics.clone(),
+                gateway_metrics,
             ))),
-            gateway_metrics,
         })
     }
 
@@ -208,7 +206,6 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
-            gateway_metrics: self.gateway_metrics.clone(),
         }
     }
 }
