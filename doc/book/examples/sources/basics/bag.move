@@ -47,13 +47,23 @@ module 0x0::hero {
     ) {
         bag::add(backpack, item)
     }
+
+    /// To take something from backpack it has to be passed into a
+    /// `bag::remove` function.
+    public fun take_from_backpack<T: key + store>(
+        _: &mut Hero,
+        backpack: &mut Bag,
+        item: T
+    ): T {
+        bag::remove(backpack, item)
+    }
 }
 
 /// Another application that makes use of Hero.
 /// It could be extended to support payments and/or some logic.
 module 0x0::arena {
     use sui::bag::Bag;
-    use sui::id::VersionedID;
+    use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
 
     // Importing the Hero module to reuse its types.
@@ -65,8 +75,13 @@ module 0x0::arena {
         power: u64
     }
 
-    /// Create a new Sword and add it to the backpack.
-    public entry fun create_sword_for_hero(
+    /// A freely-mintable potion.
+    struct HealthPotion has key, store {
+        id: VersionedID,
+    }
+
+    /// Create a new `Sword` and add it to the backpack.
+    public entry fun add_sword(
         hero: &mut Hero,
         backpack: &mut Bag,
         ctx: &mut TxContext
@@ -75,5 +90,30 @@ module 0x0::arena {
             id: tx_context::new_id(ctx),
             power: 1000
         });
+    }
+
+    /// Create a new `HealthPotion` and add it to the backpack.
+    public entry fun add_health_potion(
+        hero: &mut Hero,
+        backpack: &mut Bag,
+        ctx: &mut TxContext
+    ) {
+        hero::add_to_backpack(hero, backpack, HealthPotion {
+            id: tx_context::new_id(ctx)
+        });
+    }
+
+    /// Take a potion from a backpack and destroy it. As if Hero consumed it.
+    /// Since `HealthPotion` is a child to a `Bag` it can be accessed directly.
+    public entry fun use_potion(
+        hero: &mut Hero,
+        backpack: &mut Bag,
+        potion: HealthPotion
+    ) {
+        let potion = hero::take_from_backpack(hero, backpack, potion);
+
+        // destructure potion
+        let HealthPotion { id } = potion;
+        id::delete(id);
     }
 }
