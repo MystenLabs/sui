@@ -5,7 +5,7 @@ module 0x0::container {
     use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
 
-    /// An object with `store` can be transfered in any
+    /// An object with `store` can be transferred in any
     /// module without a custom transfer implementation.
     struct Container<T: store> has key, store {
         id: VersionedID,
