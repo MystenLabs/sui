@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Module that defines a generic type `Guardian<T>` which can only be
 /// instantiated with a witness.
 module 0x0::guardian {

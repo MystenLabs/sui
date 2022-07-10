@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module 0x0::devnet_nft {
     use sui::url::{Self, Url};
     use sui::utf8;

@@ -5,5 +5,5 @@ transfers, publisher has to create a custom transfer function. This function can
 for example a fee, that users have to pay to transfer.
 
 ```move
-{{#include ../../examples/sources/basics/custom-transfer.move}}
+{{#include ../../examples/sources/basics/custom-transfer.move:4:}}
 ```

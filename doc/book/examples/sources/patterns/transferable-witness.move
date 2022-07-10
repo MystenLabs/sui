@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// This pattern is based on combination of two others: Capability and a Witness.
 /// Since Witness is something to be careful with, spawning it should be only
 /// allowed to authorized users (ideally only once). But some scenarios require

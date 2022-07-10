@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module 0x0::restricted_transfer {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};

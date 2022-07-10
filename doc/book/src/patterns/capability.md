@@ -4,5 +4,5 @@ Capability is a pattern which allows *authorizing* actions with an object. One o
 
 
 ```move
-{{#include ../../examples/sources/patterns/capability.move}}
+{{#include ../../examples/sources/patterns/capability.move:4:}}
 ```

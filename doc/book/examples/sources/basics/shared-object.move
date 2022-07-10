@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Unlike `Owned` objects, `Shared` ones can be accessed by anyone on the
 /// network. Extended functionality and accessibility of this kind of objects
 /// requires additional effort by securing access if needed.

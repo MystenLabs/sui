@@ -9,5 +9,5 @@ fun init(ctx: &mut TxContext) { /* ... */ }
 Example:
 
 ```move
-{{#include ../../examples/sources/basics/init-function.move}}
+{{#include ../../examples/sources/basics/init-function.move:4:}}
 ```

@@ -5,5 +5,5 @@ visibility modifiers such as `public` (allows calling from other modules), `publ
 and `native`.
 
 ```move
-{{#include ../../examples/sources/basics/entry-functions.move}}
+{{#include ../../examples/sources/basics/entry-functions.move:4:}}
 ```

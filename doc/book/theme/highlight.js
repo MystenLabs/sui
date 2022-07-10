@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /*
   Highlight.js 10.0.0 (9e4f2dc2)
   License: BSD-3-Clause
