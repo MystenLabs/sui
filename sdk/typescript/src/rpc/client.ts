@@ -53,7 +53,7 @@ export class JsonRpcClient {
               }
               if (key === 'balance') return value.toString();
               try {
-                if (value.isLosslessNumber) return value.valueOf();
+                if (value && value.isLosslessNumber) return value.valueOf(); // timestamp_ms: null
               } catch {
                 return value.toString();
               }
