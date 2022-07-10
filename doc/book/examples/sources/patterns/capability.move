@@ -7,7 +7,7 @@ module 0x0::item {
     use sui::utf8::{Self, String};
     use sui::tx_context::{Self, TxContext};
 
-    /// Type that marks Capabality to create new `Item`s.
+    /// Type that marks Capability to create new `Item`s.
     struct AdminCap has key { id: VersionedID }
 
     /// Custom NFT-like type.
