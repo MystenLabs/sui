@@ -10,7 +10,7 @@
     - [Shared Object](./basics/shared-object.md)
     - [Transfer](./basics/transfer.md)
     - [Custom transfer](./basics/custom-transfer.md)
-    - [Bag and Collection](./basics/bag-and-collection.md)
+    - [Bag](./basics/bag.md)
     - [Map - Indexed Collection](./basics/vec-map.md)
 - [Patterns](./patterns/README.md)
     <!-- - [Facade](./patterns/facade.md) -->
