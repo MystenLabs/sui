@@ -6,8 +6,9 @@
     @apply sm:w-[40vw];
 }
 
-.objectbox > div {
-    @apply py-1 px-1;
+.previewimage > div,
+.previewimage > div > img {
+    @apply h-[60px] w-[60px] mr-[20px];
 }
 
 .layout > div:first-child {
@@ -15,7 +16,7 @@
 }
 
 .ownedobjects {
-    @apply w-[100%] lg:flex lg:flex-wrap lg:justify-between;
+    @apply w-[100%] min-h-[420px] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
 }
 
 .fillerbox {
@@ -23,23 +24,11 @@
 }
 
 .objectbox {
-    @apply border-solid border-stone-300 rounded-lg my-2 lg:self-center hover:shadow-md cursor-pointer break-all lg:w-[21.8vw];
+    @apply my-[10px] break-all lg:w-[300px] flex items-center;
 }
 
-.objectbox > div:first-child > div {
-    @apply border-none;
-}
-
-.objectbox > div > div > span:first-child {
-    @apply mr-[0.25vw] uppercase font-sans font-bold block xl:inline;
-}
-
-.previewimage > div > img {
-    @apply h-[15vh];
-}
-
-.previewimage {
-    @apply h-[15vh];
+.objectbox > div.textitem {
+    @apply w-[210px];
 }
 
 .gray {
