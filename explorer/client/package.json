@@ -30,15 +30,16 @@
     },
     "dependencies": {
         "@mysten/sui.js": "file:../../sdk/typescript",
+        "@tanstack/react-table": "^8.1.4",
+        "bn.js": "^5.2.0",
         "classnames": "^2.3.1",
         "react": "^17.0.2",
         "react-dom": "^17.0.2",
         "react-ga4": "^1.4.1",
+        "react-json-view": "^1.21.3",
         "react-router-dom": "^6.2.1",
         "vanilla-cookieconsent": "^2.8.0",
-        "web-vitals": "^2.1.4",
-        "react-json-view": "^1.21.3",
-        "bn.js": "^5.2.0"
+        "web-vitals": "^2.1.4"
     },
     "scripts": {
         "start": "react-scripts start",
