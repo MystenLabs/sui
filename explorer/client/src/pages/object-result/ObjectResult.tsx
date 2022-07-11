@@ -5,6 +5,7 @@ import {
     type TransactionEffectsResponse,
     getTransactionSender,
 } from '@mysten/sui.js';
+import * as Sentry from '@sentry/react';
 import React, { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -116,6 +117,7 @@ const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
             return <ObjectLoaded data={translate(data)} />;
         } catch (err) {
             console.error("Couldn't parse data", err);
+            Sentry.captureException(err);
             return <Fail objID={objID} />;
         }
     }

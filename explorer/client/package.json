@@ -31,6 +31,8 @@
     "dependencies": {
         "@mysten/sui.js": "file:../../sdk/typescript",
         "@tanstack/react-table": "^8.1.4",
+        "@sentry/react": "^7.6.0",
+        "@sentry/tracing": "^7.6.0",
         "bn.js": "^5.2.0",
         "classnames": "^2.3.1",
         "prism-react-renderer": "^1.3.5",
@@ -50,6 +52,8 @@
         "start:local": "REACT_APP_DATA=local PORT=8080 react-scripts start",
         "test": "npx start-server-and-test 'yarn start:static' 8080 'react-scripts test --detectOpenHandles --watchAll=false'",
         "build": "react-scripts build",
+        "build:staging": "REACT_APP_DATA=staging react-scripts build",
+        "build:prod": "REACT_APP_DATA=prod react-scripts build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
         "eslint:fix": "yarn eslint:check --fix",
         "prettier:check": "prettier -c --ignore-unknown .",
