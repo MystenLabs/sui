@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module games::scoreboard {
+module games::scoreboard_lib {
     use sui::utf8;
     use std::vector;
     // use std::debug;
@@ -10,7 +10,7 @@ module games::scoreboard {
     use sui::tx_context::{Self,TxContext};
     use std::option::{Self, Option};
 
-    /// Stores information about an auction bid.
+    /// Stores information about a score.
     // FIXME drop?
     struct Score has store, drop {
         /// Coin representing the current (highest) bid.
@@ -60,7 +60,7 @@ module games::scoreboard {
     }
 
     /// Creates a scoreboard.
-    public entry fun create(
+    public fun create(
         name: vector<u8>, description: vector<u8>, capacity: u8, ctx: &mut TxContext
     ) {
         assert!(capacity > 0, 1);
@@ -144,8 +144,8 @@ module games::scoreboard {
 }
 
 #[test_only]
-module games::scoreboardTests {
-    use games::scoreboard::{Self, Scoreboard};
+module games::scoreboard_libTests {
+    use games::scoreboard_lib::{Self, Scoreboard};
     use sui::test_scenario::{Self, next_tx, ctx};
     use std::vector;
     use sui::id;
@@ -161,20 +161,20 @@ module games::scoreboardTests {
     fun test_basic() {
         let scenario = &mut test_scenario::begin(&CREATOR);
         {
-            scoreboard::create(b"test", b"test description", 3, ctx(scenario));
+            scoreboard_lib::create(b"test", b"test description", 3, ctx(scenario));
         }; next_tx(scenario, &CREATOR);
 
         {
             let scoreboard = test_scenario::take_shared<Scoreboard>(scenario);
             let scoreboard_ref = test_scenario::borrow_mut(&mut scoreboard);
             let scoreboard_id = *id::id(scoreboard_ref);
-            assert!(scoreboard::capacity(scoreboard_ref) == 3, 1);
-            let top_scores = scoreboard::top_scores(scoreboard_ref);
+            assert!(scoreboard_lib::capacity(scoreboard_ref) == 3, 1);
+            let top_scores = scoreboard_lib::top_scores(scoreboard_ref);
             assert!(vector::is_empty(top_scores), 2);
 
-            let pos = scoreboard::record_score(
+            let pos = scoreboard_lib::record_score(
                 scoreboard_ref, 
-                scoreboard::new_score(666, scoreboard_id, USER1),
+                scoreboard_lib::new_score(666, scoreboard_id, USER1),
                 ctx(scenario)
             );
             debug::print(&pos);
@@ -186,13 +186,13 @@ module games::scoreboardTests {
             let scoreboard = test_scenario::take_shared<Scoreboard>(scenario);
             let scoreboard_ref = test_scenario::borrow_mut(&mut scoreboard);
             let scoreboard_id = *id::id(scoreboard_ref);
-            let top_scores = scoreboard::top_scores(scoreboard_ref);
-            let expected_top_scores = vector[scoreboard::new_score(666, scoreboard_id, USER1)];
+            let top_scores = scoreboard_lib::top_scores(scoreboard_ref);
+            let expected_top_scores = vector[scoreboard_lib::new_score(666, scoreboard_id, USER1)];
             assert!(top_scores == &expected_top_scores, 4);
 
-            let pos = scoreboard::record_score(
+            let pos = scoreboard_lib::record_score(
                 scoreboard_ref, 
-                scoreboard::new_score(10086, scoreboard_id, USER2),
+                scoreboard_lib::new_score(10086, scoreboard_id, USER2),
                 ctx(scenario)
             );
             assert!(pos == option::some(0), 3);
@@ -203,16 +203,16 @@ module games::scoreboardTests {
             let scoreboard = test_scenario::take_shared<Scoreboard>(scenario);
             let scoreboard_ref = test_scenario::borrow_mut(&mut scoreboard);
             let scoreboard_id = *id::id(scoreboard_ref);
-            let top_scores = scoreboard::top_scores(scoreboard_ref);
+            let top_scores = scoreboard_lib::top_scores(scoreboard_ref);
             let expected_top_scores = vector[
-                scoreboard::new_score(10086, scoreboard_id, USER2),
-                scoreboard::new_score(666, scoreboard_id, USER1)
+                scoreboard_lib::new_score(10086, scoreboard_id, USER2),
+                scoreboard_lib::new_score(666, scoreboard_id, USER1)
             ];
             assert!(top_scores == &expected_top_scores, 4);
 
-            let pos = scoreboard::record_score(
+            let pos = scoreboard_lib::record_score(
                 scoreboard_ref, 
-                scoreboard::new_score(10000, scoreboard_id, USER1),
+                scoreboard_lib::new_score(10000, scoreboard_id, USER1),
                 ctx(scenario)
             );
             assert!(pos == option::some(1), 3);
@@ -223,17 +223,17 @@ module games::scoreboardTests {
             let scoreboard = test_scenario::take_shared<Scoreboard>(scenario);
             let scoreboard_ref = test_scenario::borrow_mut(&mut scoreboard);
             let scoreboard_id = *id::id(scoreboard_ref);
-            let top_scores = scoreboard::top_scores(scoreboard_ref);
+            let top_scores = scoreboard_lib::top_scores(scoreboard_ref);
             let expected_top_scores = vector[
-                scoreboard::new_score(10086, scoreboard_id, USER2),
-                scoreboard::new_score(10000, scoreboard_id, USER1),
-                scoreboard::new_score(666, scoreboard_id, USER1)
+                scoreboard_lib::new_score(10086, scoreboard_id, USER2),
+                scoreboard_lib::new_score(10000, scoreboard_id, USER1),
+                scoreboard_lib::new_score(666, scoreboard_id, USER1)
             ];
             assert!(top_scores == &expected_top_scores, 4);
 
-            let pos = scoreboard::record_score(
+            let pos = scoreboard_lib::record_score(
                 scoreboard_ref, 
-                scoreboard::new_score(665, scoreboard_id, USER2),
+                scoreboard_lib::new_score(665, scoreboard_id, USER2),
                 ctx(scenario)
             );
             assert!(pos == option::none(), 3);
@@ -244,16 +244,16 @@ module games::scoreboardTests {
             let scoreboard = test_scenario::take_shared<Scoreboard>(scenario);
             let scoreboard_ref = test_scenario::borrow_mut(&mut scoreboard);
             let scoreboard_id = *id::id(scoreboard_ref);
-            let top_scores = scoreboard::top_scores(scoreboard_ref);
+            let top_scores = scoreboard_lib::top_scores(scoreboard_ref);
             let expected_top_scores = vector[
-                scoreboard::new_score(10086, scoreboard_id, USER2),
-                scoreboard::new_score(10000, scoreboard_id, USER1),
-                scoreboard::new_score(666, scoreboard_id, USER1)
+                scoreboard_lib::new_score(10086, scoreboard_id, USER2),
+                scoreboard_lib::new_score(10000, scoreboard_id, USER1),
+                scoreboard_lib::new_score(666, scoreboard_id, USER1)
             ];
             assert!(top_scores == &expected_top_scores, 4);
-            let pos = scoreboard::record_score(
+            let pos = scoreboard_lib::record_score(
                 scoreboard_ref, 
-                scoreboard::new_score(666, scoreboard_id, USER2),
+                scoreboard_lib::new_score(666, scoreboard_id, USER2),
                 ctx(scenario)
             );    
             assert!(pos == option::none(), 3);
@@ -264,11 +264,11 @@ module games::scoreboardTests {
             let scoreboard = test_scenario::take_shared<Scoreboard>(scenario);
             let scoreboard_ref = test_scenario::borrow_mut(&mut scoreboard);
             let scoreboard_id = *id::id(scoreboard_ref);
-            let top_scores = scoreboard::top_scores(scoreboard_ref);
+            let top_scores = scoreboard_lib::top_scores(scoreboard_ref);
             let expected_top_scores = vector[
-                scoreboard::new_score(10086, scoreboard_id, USER2),
-                scoreboard::new_score(10000, scoreboard_id, USER1),
-                scoreboard::new_score(666, scoreboard_id, USER1)
+                scoreboard_lib::new_score(10086, scoreboard_id, USER2),
+                scoreboard_lib::new_score(10000, scoreboard_id, USER1),
+                scoreboard_lib::new_score(666, scoreboard_id, USER1)
             ];
             assert!(top_scores == &expected_top_scores, 4);
             test_scenario::return_shared(scenario, scoreboard);
@@ -280,7 +280,7 @@ module games::scoreboardTests {
     fun test_invalid_capacity() {
         let scenario = &mut test_scenario::begin(&CREATOR);
         {
-            scoreboard::create(b"test", b"test description", 0, ctx(scenario));
+            scoreboard_lib::create(b"test", b"test description", 0, ctx(scenario));
         }; next_tx(scenario, &CREATOR);
     }
 }
