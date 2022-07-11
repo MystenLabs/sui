@@ -11,7 +11,7 @@ base64ct = { version = "1.5.1", features = ["alloc"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 eyre = "0.6.8"
 rand = { version = "0.7.3", features = ["std"] }
-serde = { version = "1.0.138", features = ["derive"] }
+serde = { version = "1.0.139", features = ["derive"] }
 zeroize = "1.5.6"
 signature = "1.5.0"
 tokio = { version = "1.19.2", features = ["sync", "rt", "macros"] }

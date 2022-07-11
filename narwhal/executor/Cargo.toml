@@ -12,7 +12,7 @@ blake2 = "0.9"
 bytes = "1.1.0"
 futures = "0.3.21"
 rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib"], default-features = false }
-serde = { version = "1.0.138", features = ["derive"] }
+serde = { version = "1.0.139", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = { version = "1.19.2", features = ["sync"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
