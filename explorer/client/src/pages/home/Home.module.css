@@ -1,3 +1,7 @@
 div.home {
-    @apply min-h-screen;
+    @apply bg-white min-h-screen;
+}
+
+div.container {
+    @apply min-h-screen mx-auto grid md:grid-cols-2 grid-cols-1 max-w-[1440px] pl-5 pr-5 pt-10 gap-10;
 }

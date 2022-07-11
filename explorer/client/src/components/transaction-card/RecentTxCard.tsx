@@ -1,11 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { useEffect, useState, useContext } from 'react';
+// import cl from 'classnames';
+import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import Longtext from '../../components/longtext/Longtext';
+import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
+import TableCard from '../../components/table/TableCard';
+import TabFooter from '../../components/tabs/TabFooter';
+import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import {
@@ -14,11 +17,11 @@ import {
     getDataOnTxDigests,
 } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
+import { numberSuffix } from '../../utils/numberUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
-import Pagination from '../pagination/Pagination';
 
 import type {
     GetTxnDigestsResponse,
@@ -28,11 +31,17 @@ import type {
 
 import styles from './RecentTxCard.module.css';
 
-const TRUNCATE_LENGTH = 25;
+const TRUNCATE_LENGTH = 10;
+const NUMBER_OF_TX_PER_PAGE = 15;
 
-const initState: { loadState: string; latestTx: TxnData[] } = {
+const initState: {
+    loadState: string;
+    latestTx: TxnData[];
+    totalTxcount?: number;
+} = {
     loadState: 'pending',
     latestTx: [],
+    totalTxcount: 0,
 };
 
 type TxnData = {
@@ -97,106 +106,122 @@ async function getRecentTransactions(
 function LatestTxView({
     results,
 }: {
-    results: { loadState: string; latestTx: TxnData[] };
+    results: { loadState: string; latestTx: TxnData[]; totalTxcount?: number };
 }) {
-    const [network] = useContext(NetworkContext);
+    // This is temporary, pagination component already does this
+    const totalCount = results.totalTxcount || 1;
+    const [searchParams, setSearchParams] = useSearchParams();
+    const pageParam = parseInt(searchParams.get('p') || '1', 10);
+    const [showNextPage, setShowNextPage] = useState(true);
+
+    const changePage = useCallback(() => {
+        const nextpage = pageParam + (showNextPage ? 1 : 0);
+        setSearchParams({ p: nextpage.toString() });
+        setShowNextPage(
+            Math.ceil(NUMBER_OF_TX_PER_PAGE * nextpage) < totalCount
+        );
+    }, [pageParam, totalCount, showNextPage, setSearchParams]);
+
+    //TODO update initial state and match the latestTx table data
+    const defaultActiveTab = 0;
+    const recentTx = {
+        data: results.latestTx.map((txn) => ({
+            date: `${timeAgo(txn.timestamp_ms, undefined, true)} `,
+            transactionId: [
+                {
+                    url: txn.txId,
+                    name: truncate(txn.txId, TRUNCATE_LENGTH),
+                    category: 'transactions',
+                    isLink: true,
+                    copy: false,
+                },
+            ],
+            addresses: [
+                {
+                    url: txn.From,
+                    name: truncate(txn.From, TRUNCATE_LENGTH),
+                    category: 'addresses',
+                    isLink: true,
+                    copy: false,
+                },
+                ...(txn.To
+                    ? [
+                          {
+                              url: txn.To,
+                              name: truncate(txn.To, TRUNCATE_LENGTH),
+                              category: 'addresses',
+                              isLink: true,
+                              copy: false,
+                          },
+                      ]
+                    : []),
+            ],
+            txTypes: {
+                txTypeName: txn.kind,
+                status: txn.status,
+            },
+
+            gas: numberSuffix(txn.txGas),
+        })),
+        columns: [
+            {
+                headerLabel: 'Date',
+                accessorKey: 'date',
+            },
+            {
+                headerLabel: 'Type',
+                accessorKey: 'txTypes',
+            },
+            {
+                headerLabel: 'Transactions ID',
+                accessorKey: 'transactionId',
+            },
+            {
+                headerLabel: 'Addresses',
+                accessorKey: 'addresses',
+            },
+            {
+                headerLabel: 'Gas',
+                accessorKey: 'gas',
+            },
+        ],
+    };
+    const tabsFooter = {
+        stats: {
+            count: totalCount || 0,
+            stats_text: 'total transactions',
+        },
+    };
     return (
-        <div className={styles.txlatestesults}>
-            <div className={styles.txcardgrid}>
-                <h3>Latest Transactions on {network}</h3>
-            </div>
-            <div className={styles.transactioncard}>
-                <div>
-                    <div
-                        className={cl(
-                            styles.txcardgrid,
-                            styles.txcard,
-                            styles.txheader
-                        )}
-                    >
-                        <div className={styles.txcardgridlarge}>TxId</div>
-                        {results.latestTx[0].timestamp_ms && (
-                            <div className={styles.txage}>Time</div>
-                        )}
-                        <div className={styles.txtype}>TxType</div>
-                        <div className={styles.txstatus}>Status</div>
-                        <div className={styles.txgas}>Gas</div>
-                        <div className={styles.txadd}>Addresses</div>
-                    </div>
-                    {results.latestTx.map((tx, index) => (
-                        <div
-                            key={index}
-                            className={cl(styles.txcardgrid, styles.txcard)}
-                        >
-                            <div className={styles.txcardgridlarge}>
-                                <Longtext
-                                    text={tx.txId}
-                                    category="transactions"
-                                    isLink={true}
-                                    alttext={truncate(tx.txId, TRUNCATE_LENGTH)}
-                                />
-                            </div>
-                            {tx.timestamp_ms && (
-                                <div className={styles.txage}>{`${timeAgo(
-                                    tx.timestamp_ms
-                                )} ago`}</div>
-                            )}
-                            <div className={styles.txtype}> {tx.kind}</div>
-                            <div
-                                className={cl(
-                                    styles[tx.status.toLowerCase()],
-                                    styles.txstatus
-                                )}
+        <div className={styles.txlatestresults}>
+            <Tabs selected={defaultActiveTab}>
+                <div title="Transactions">
+                    <TableCard tabledata={recentTx} />
+                    <TabFooter stats={tabsFooter.stats}>
+                        {showNextPage ? (
+                            <button
+                                type="button"
+                                className={styles.moretxbtn}
+                                onClick={changePage}
                             >
-                                {tx.status === 'success' ? '\u2714' : '\u2716'}
-                            </div>
-                            <div className={styles.txgas}>{tx.txGas}</div>
-                            <div className={styles.txadd}>
-                                <div>
-                                    From:
-                                    <Longtext
-                                        text={tx.From}
-                                        category="addresses"
-                                        isLink={true}
-                                        isCopyButton={false}
-                                        alttext={truncate(
-                                            tx.From,
-                                            TRUNCATE_LENGTH
-                                        )}
-                                    />
-                                </div>
-                                {tx.To && (
-                                    <div>
-                                        To :
-                                        <Longtext
-                                            text={tx.To}
-                                            category="addresses"
-                                            isLink={true}
-                                            isCopyButton={false}
-                                            alttext={truncate(
-                                                tx.To,
-                                                TRUNCATE_LENGTH
-                                            )}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+                                More Transactions <ContentForwardArrowDark />
+                            </button>
+                        ) : (
+                            <></>
+                        )}
+                    </TabFooter>
                 </div>
-            </div>
+            </Tabs>
         </div>
     );
 }
 
-function LatestTxCardStatic({ count }: { count: number }) {
+function LatestTxCardStatic() {
     const latestTx = getAllMockTransaction().map((tx) => ({
         ...tx,
         status: tx.status as ExecutionStatusType,
         kind: tx.kind as TransactionKindName,
     }));
-    const [searchParams] = useSearchParams();
-    const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
 
     const results = {
         loadState: 'loaded',
@@ -205,7 +230,6 @@ function LatestTxCardStatic({ count }: { count: number }) {
     return (
         <>
             <LatestTxView results={results} />
-            <Pagination totalTxCount={count} txNum={pagedNum} />
         </>
     );
 }
@@ -215,7 +239,8 @@ function LatestTxCardAPI({ count }: { count: number }) {
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
     const [searchParams] = useSearchParams();
-    const [txNumPerPage] = useState(15);
+    const [txNumPerPage] = useState(NUMBER_OF_TX_PER_PAGE);
+
     useEffect(() => {
         let isMounted = true;
         const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
@@ -227,6 +252,7 @@ function LatestTxCardAPI({ count }: { count: number }) {
                 setResults({
                     loadState: 'loaded',
                     latestTx: resp,
+                    totalTxcount: count,
                 });
             })
             .catch((err) => {
@@ -270,16 +296,11 @@ function LatestTxCardAPI({ count }: { count: number }) {
     return (
         <>
             <LatestTxView results={results} />
-            <Pagination totalTxCount={count} txNum={txNumPerPage} />
         </>
     );
 }
 
 const LatestTxCard = ({ count }: { count: number }) =>
-    IS_STATIC_ENV ? (
-        <LatestTxCardStatic count={count} />
-    ) : (
-        <LatestTxCardAPI count={count} />
-    );
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI count={count} />;
 
 export default LatestTxCard;
