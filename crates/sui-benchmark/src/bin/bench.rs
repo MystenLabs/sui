@@ -43,9 +43,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() {
     #[cfg(not(target_env = "msvc"))]
-    use jemalloc_ctl::config;
-    let malloc_conf = config::malloc_conf::mib().unwrap();
-    println!("Default Jemalloc conf: {}", malloc_conf.read().unwrap());
+    malloc_conf();
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let subscriber_builder =
@@ -73,6 +71,13 @@ fn main() {
 
     let r = run_benchmark(benchmark);
     println!("{}", r);
+}
+
+#[cfg(not(target_env = "msvc"))]
+fn malloc_conf() {
+    use jemalloc_ctl::config;
+    let malloc_conf = config::malloc_conf::mib().unwrap();
+    println!("Default Jemalloc conf: {}", malloc_conf.read().unwrap());
 }
 
 fn running_mode_pre_check(benchmark: &bench_types::Benchmark) {
