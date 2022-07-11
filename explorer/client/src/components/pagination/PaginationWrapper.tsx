@@ -45,6 +45,7 @@ export default function PaginationWrapper({
 
     return (
         <>
+            {viewComponentFn(objectSample)}
             {FINAL_PAGE_NO > 1 && (
                 <>
                     <span className={pageIndex === 0 ? styles.gone : ''}>
@@ -113,8 +114,6 @@ export default function PaginationWrapper({
                     </span>
                 </>
             )}
-
-            {viewComponentFn(objectSample)}
         </>
     );
 }
