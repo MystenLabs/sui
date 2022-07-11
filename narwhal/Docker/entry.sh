@@ -3,6 +3,14 @@
 # Capture stack trace
 export RUST_BACKTRACE=1
 
+if [ -z "$VALIDATOR_ID" -a "$KUBERNETES_PORT" ]; then
+    export VALIDATOR_ID=${HOSTNAME##*-}
+    # assuming that WORKER_ID isn't also set.
+    # currently they match the validator it is assigned to.
+    export WORKER_ID=${WORKER_ID:=$VALIDATOR_ID}
+fi
+
+
 # Environment variables to use on the script
 NODE_BIN="./bin/node"
 KEYS_PATH="/validators/validator-$VALIDATOR_ID/key.json"
