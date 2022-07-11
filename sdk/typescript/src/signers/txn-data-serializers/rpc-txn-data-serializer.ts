@@ -127,7 +127,7 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
         'sui_publish',
         [
           signerAddress,
-          t.packages,
+          t.compiledModules,
           t.gasPayment,
           t.gasBudget,
         ],
