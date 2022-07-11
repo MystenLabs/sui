@@ -13,7 +13,7 @@ export default function PaginationWrapper({
 }) {
     const [pageIndex, setPageIndex] = useState(0);
 
-    const ITEMS_PER_PAGE = 12;
+    const ITEMS_PER_PAGE = 6;
 
     const FINAL_PAGE_NO =
         Math.floor(results.length / ITEMS_PER_PAGE) +

@@ -25,8 +25,10 @@ import {
     handleCoinType,
     transformURL,
     trimStdLibPrefix,
+    truncate,
 } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
+import Longtext from '../longtext/Longtext';
 import PaginationWrapper from '../pagination/PaginationWrapper';
 
 import styles from './OwnedObjects.module.css';
@@ -275,60 +277,63 @@ function GroupView({ results }: { results: resultType }) {
 }
 
 function OwnedObjectView({ results }: { results: resultType }) {
-    const navigateWithUnknown = useContext(NavigateFunctionContext);
     return (
         <div id="ownedObjects" className={styles.ownedobjects}>
             {results.map((entryObj, index1) => (
-                <div
-                    className={styles.objectbox}
-                    key={`object-${index1}`}
-                    onClick={navigateWithUnknown(entryObj.id)}
-                >
+                <div className={styles.objectbox} key={`object-${index1}`}>
                     {entryObj.display !== undefined && (
                         <div className={styles.previewimage}>
                             <DisplayBox display={entryObj.display} />
                         </div>
                     )}
-                    {Object.entries(entryObj).map(([key, value], index2) => (
-                        <div key={`object-${index1}-${index2}`}>
-                            {(() => {
-                                switch (key) {
-                                    case 'display':
-                                        break;
-                                    case 'Type':
-                                        if (entryObj._isCoin) {
-                                            break;
-                                        } else {
-                                            return (
-                                                <div>
-                                                    <span>{key}</span>
-                                                    <span>
-                                                        {trimStdLibPrefix(
-                                                            value as string
+                    <div className={styles.textitem}>
+                        {Object.entries(entryObj).map(
+                            ([key, value], index2) => (
+                                <div key={`object-${index1}-${index2}`}>
+                                    {(() => {
+                                        switch (key) {
+                                            case 'Type':
+                                                if (entryObj._isCoin) {
+                                                    break;
+                                                } else {
+                                                    return (
+                                                        <span>
+                                                            {trimStdLibPrefix(
+                                                                value as string
+                                                            )}
+                                                        </span>
+                                                    );
+                                                }
+                                            case 'balance':
+                                                if (!entryObj._isCoin) {
+                                                    break;
+                                                } else {
+                                                    return (
+                                                        <span>
+                                                            {String(value)}
+                                                        </span>
+                                                    );
+                                                }
+                                            case 'id':
+                                                return (
+                                                    <Longtext
+                                                        text={String(value)}
+                                                        category="objects"
+                                                        canCopy={false}
+                                                        alttext={truncate(
+                                                            String(value),
+                                                            19
                                                         )}
-                                                    </span>
-                                                </div>
-                                            );
+                                                    />
+                                                );
+                                            default:
+                                                break;
                                         }
-                                    default:
-                                        if (
-                                            key === 'balance' &&
-                                            !entryObj._isCoin
-                                        )
-                                            break;
-                                        if (key.startsWith('_')) {
-                                            break;
-                                        }
-                                        return (
-                                            <div>
-                                                <span>{key}</span>
-                                                <span>{String(value)}</span>
-                                            </div>
-                                        );
-                                }
-                            })()}
-                        </div>
-                    ))}
+                                    })()}
+                                </div>
+                            )
+                        )}
+                    </div>
                 </div>
             ))}
             {lastRowHas2Elements(results) && (
