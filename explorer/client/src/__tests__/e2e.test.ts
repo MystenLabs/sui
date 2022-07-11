@@ -19,7 +19,7 @@ const coinGroup = (num: number) => {
     };
 };
 
-const mainBodyCSS = 'main > div';
+const mainBodyCSS = 'main > section > div';
 
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
 
