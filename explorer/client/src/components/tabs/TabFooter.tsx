@@ -25,7 +25,7 @@ function TabFooter({
                 <></>
             )}
             {stats && (
-                <p>
+                <p className={styles.stats}>
                     {typeof stats.count === 'number'
                         ? numberSuffix(stats.count)
                         : stats.count}{' '}

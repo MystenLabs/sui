@@ -112,7 +112,9 @@ function LatestTxView({
     const totalCount = results.totalTxcount || 1;
     const [searchParams, setSearchParams] = useSearchParams();
     const pageParam = parseInt(searchParams.get('p') || '1', 10);
-    const [showNextPage, setShowNextPage] = useState(true);
+    const [showNextPage, setShowNextPage] = useState(
+        NUMBER_OF_TX_PER_PAGE < totalCount
+    );
 
     const changePage = useCallback(() => {
         const nextpage = pageParam + (showNextPage ? 1 : 0);
