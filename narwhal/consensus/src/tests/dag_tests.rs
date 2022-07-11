@@ -397,4 +397,10 @@ async fn dag_insert_and_remove_reads() {
     for authority in keys {
         assert_eq!(13, dag.node_read_causal(authority, 4).await.unwrap().len());
     }
+
+    // Ensure that the dag will reply true when we check whether we have seen
+    // all the removed certificates.
+    for digest in genesis {
+        assert!(dag.has_ever_contained(digest).await);
+    }
 }

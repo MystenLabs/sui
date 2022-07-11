@@ -75,6 +75,7 @@ enum DagCommand<PublicKey: VerifyingKey> {
         oneshot::Sender<Result<(), ValidatorDagError<PublicKey>>>,
     ),
     Contains(CertificateDigest, oneshot::Sender<bool>),
+    HasEverContained(CertificateDigest, oneshot::Sender<bool>),
     Rounds(
         PublicKey,
         oneshot::Sender<Result<std::ops::RangeInclusive<Round>, ValidatorDagError<PublicKey>>>,
@@ -144,6 +145,9 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
                         DagCommand::Contains(dig, sender)=> {
                             let _ = sender.send(self.contains(dig));
                         },
+                        DagCommand::HasEverContained(dig, sender) => {
+                            let _ = sender.send(self.has_ever_contained(dig));
+                        }
                         DagCommand::Rounds(pk, sender) => {
                             let _ = sender.send(self.rounds(pk));
                         },
@@ -201,6 +205,14 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     /// For the purposes of this memory-conscious graph, this is just "contains" semantics.
     fn contains(&self, digest: CertificateDigest) -> bool {
         self.dag.contains_live(digest)
+    }
+
+    /// Returns whether the dag has ever contained a node with the provided digest. The method will return
+    /// true either when the node is live (uncompressed) or has been already compressed as still exists
+    /// as weak reference.
+    #[instrument(level = "debug", skip_all, fields(digest = ?digest))]
+    fn has_ever_contained(&self, digest: CertificateDigest) -> bool {
+        self.dag.contains(digest)
     }
 
     /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG
@@ -390,6 +402,23 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
         receiver
             .await
             .expect("Failed to receive reply to Contains command from store")
+    }
+
+    /// Returns whether the dag has ever contained a node with the provided digest. The method will return
+    /// true either when the node is live (uncompressed) or has been already compressed as still exists
+    /// as weak reference.
+    pub async fn has_ever_contained(&self, digest: CertificateDigest) -> bool {
+        let (sender, receiver) = oneshot::channel();
+        if let Err(e) = self
+            .tx_commands
+            .send(DagCommand::HasEverContained(digest, sender))
+            .await
+        {
+            panic!("Failed to send HasEverContained command to store: {e}");
+        }
+        receiver
+            .await
+            .expect("Failed to receive reply to HasEverContained command from store")
     }
 
     /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG

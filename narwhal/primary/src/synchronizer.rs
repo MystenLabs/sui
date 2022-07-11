@@ -3,11 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{header_waiter::WaiterMessage, primary::PayloadToken};
 use config::{Committee, WorkerId};
+use consensus::dag::Dag;
 use crypto::{traits::VerifyingKey, Hash as _};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use store::Store;
 use tokio::sync::mpsc::Sender;
 use types::{error::DagResult, BatchDigest, Certificate, CertificateDigest, Header};
+
+#[cfg(test)]
+#[path = "tests/synchronizer_tests.rs"]
+pub mod synchronizer_tests;
 
 /// The `Synchronizer` checks if we have all batches and parents referenced by a header. If we don't, it sends
 /// a command to the `Waiter` to request the missing data.
@@ -23,6 +28,8 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     tx_certificate_waiter: Sender<Certificate<PublicKey>>,
     /// The genesis and its digests.
     genesis: Vec<(CertificateDigest, Certificate<PublicKey>)>,
+    /// The dag used for the external consensus
+    dag: Option<Arc<Dag<PublicKey>>>,
 }
 
 impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
@@ -33,6 +40,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
         tx_certificate_waiter: Sender<Certificate<PublicKey>>,
+        dag: Option<Arc<Dag<PublicKey>>>,
     ) -> Self {
         let mut synchronizer = Self {
             name,
@@ -41,6 +49,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
             tx_header_waiter,
             tx_certificate_waiter,
             genesis: Vec::default(),
+            dag,
         };
         synchronizer.update_genesis(committee);
         synchronizer
@@ -134,8 +143,9 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         Ok(Vec::new())
     }
 
-    /// Check whether we have all the ancestors of the certificate. If we don't, send the certificate to
-    /// the `CertificateWaiter` which will trigger re-processing once we have all the missing data.
+    /// Check whether we have seen all the ancestors of the certificate. If we don't, send the
+    /// certificate to the `CertificateWaiter` which will trigger re-processing once we have
+    /// all the missing data.
     pub async fn deliver_certificate(
         &mut self,
         certificate: &Certificate<PublicKey>,
@@ -145,14 +155,27 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                 continue;
             }
 
-            if self.certificate_store.read(*digest).await?.is_none() {
+            if !self.has_processed_certificate(*digest).await? {
                 self.tx_certificate_waiter
                     .send(certificate.clone())
                     .await
                     .expect("Failed to send sync certificate request");
                 return Ok(false);
-            };
+            }
         }
+
         Ok(true)
+    }
+
+    /// This method answers to the question of whether the certificate with the
+    /// provided digest has ever been successfully processed (seen) by this
+    /// node. Depending on the mode of running the node (internal Vs external
+    /// consensus) either the dag will be used to confirm that or the
+    /// certificate_store.
+    async fn has_processed_certificate(&self, digest: CertificateDigest) -> DagResult<bool> {
+        if let Some(dag) = &self.dag {
+            return Ok(dag.has_ever_contained(digest).await);
+        }
+        Ok(self.certificate_store.read(digest).await?.is_some())
     }
 }
