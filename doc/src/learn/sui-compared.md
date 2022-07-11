@@ -47,11 +47,11 @@ Because Sui focuses on managing specific objects rather than a single aggregate 
 * Every object in Sui has a unique version number.
 * Every new version is created from a transaction that may involve several dependencies, themselves versioned objects. 
 
-As a consequence, a Sui validator -- or any other validator with a copy of the state -- can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in most cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
+As a consequence, a Sui validator -- or any other validator with a copy of the state -- can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in many cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
 
 ## Causal order vs. total order
 
-Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, most transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, a validator must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui validators in any order.
+Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, many transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, a validator must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui validators in any order.
 
 ## Where Sui excels
 
@@ -61,14 +61,14 @@ This section summarizes the main advantages of Sui with respect to traditional b
 
 Sui’s main selling point is its unprecedented performance. The following bullet points summarize the main performance benefits of Sui with respect to traditional blockchains:
 
-* Sui forgoes consensus for most transactions while other blockchains always totally order them. Causally ordering transactions allows Sui to massively parallelize the execution of most transactions; this reduces latency and allows validators to take advantage of all their CPU cores.
+* Sui forgoes consensus for many transactions while other blockchains always totally order them. Causally ordering transactions allows Sui to massively parallelize the execution of many transactions; this reduces latency and allows validators to take advantage of all their CPU cores.
 * Sui pushes the complexity at the edges: the client is involved in a number of protocol steps. This minimizes the interactions between validators and keeps their code simpler and more efficient. Sui always gives the possibility to offload most of the client’s workload to a Sui Gateway service for better user experience. In contrast, traditional blockchains follow a fire-and-forget model where clients monitor the blockchain state to assess the success of their transaction submission.
 * Sui operates at network speed without waiting for system timeouts between protocol steps. This significantly reduces latency when the network is good and not under attack. In contrast, the security of a number of traditional blockchains (including most proof-of-work based blockchains) need to wait for predefined timeouts before committing transactions.
 * Sui can take advantage of more machines per validator to increase its performance. Traditional blockchains are often designed to run on a single machine per validator (or even on a single CPU).
 
 ### Performance under faults
 
-Sui runs a leaderless protocol to process common transactions (i.e. containing only owned objects). As a result, faulty validators do not impact performance in any significant way. For transactions involving shared objects, Sui employs a state-of-the-art consensus protocol requiring no [view-change sub-protocol](https://pmg.csail.mit.edu/papers/osdi99.pdf) and thus experiences only slight performance degradations. In contrast, most leader-based blockchains experiencing even a single validator’s crash see their throughput fall and their latency increase (often by more than one order of magnitude).
+Sui runs a leaderless protocol to process simple transactions (i.e. containing only owned objects). As a result, faulty validators do not impact performance in any significant way. For transactions involving shared objects, Sui employs a state-of-the-art consensus protocol requiring no [view-change sub-protocol](https://pmg.csail.mit.edu/papers/osdi99.pdf) and thus experiences only slight performance degradations. In contrast, most leader-based blockchains experiencing even a single validator’s crash see their throughput fall and their latency increase (often by more than one order of magnitude).
 
 ### Security assumptions
 
@@ -94,17 +94,17 @@ This section presents the main disadvantages of Sui with respect to traditional 
 
 ### Design complexity
 
-While traditional blockchains require implementing only a single consensus protocol, Sui requires two protocols: (i) a protocol based on Byzantine Consistent Broadcast to handle common transactions, and (ii) a consensus protocol to handle transactions with shared objects. This means the Sui team needs to maintain a much larger codebase.
+While traditional blockchains require implementing only a single consensus protocol, Sui requires two protocols: (i) a protocol based on Byzantine Consistent Broadcast to handle simple transactions, and (ii) a consensus protocol to handle transactions with shared objects. This means the Sui team needs to maintain a much larger codebase.
 
 Transactions involving shared objects require a little overhead (adding two extra round trips - 200ms for well-connected clients using a Sui Gateway service) before submitting it to the consensus protocol. This overhead is required to securely compose the two protocols described above. Other blockchains can instead directly submit the transaction to the consensus protocol. Note the finality for shared object transactions is still in the 2-3 second range even with this overhead.
 
 Building an efficient synchronizer is harder in Sui than in traditional blockchains. The synchronizer sub-protocol allows validators to update each other by sharing data, and it allows slow validators to catch up. Building an efficient synchronizer for traditional blockchains is no easy task, but still simpler than in Sui.
 
-### Sequential writes in the common case
+### Sequential writes in the simple case
 
 Traditional blockchains totally order all client transactions with respect to each other. This design requires reaching consensus across validators, which is effective but slow. 
 
-As mentioned in previous sections, Sui forgoes consensus for most transactions to reduce their latency. In this manner, Sui enables multi-lane processing and eliminates head-of-line blocking. All other transactions no longer need to wait for the completion of the first transaction’s increment in a single lane. Sui provides a lane of the appropriate breadth for each transaction. Simple transactions require viewing only the sender account, which greatly improves the system’s capacity.
+As mentioned in previous sections, Sui forgoes consensus for many transactions to reduce their latency. In this manner, Sui enables multi-lane processing and eliminates head-of-line blocking. All other transactions no longer need to wait for the completion of the first transaction’s increment in a single lane. Sui provides a lane of the appropriate breadth for each transaction. Simple transactions require viewing only the sender account, which greatly improves the system’s capacity.
 
 The downside of allowing head-of-line blocking on the sender for these simple transactions is that the sender can send only one transaction at a time. As a result, it is imperative the transactions finalize quickly. 
 
@@ -118,4 +118,4 @@ Sui uses the state commitment that arrives upon epoch change. Sui requires a sin
 
 ## Conclusion
 
-In summary, Sui offers many performance and usability gains at the cost of some complexity in less common use cases. Direct sender transactions excel in Sui.
+In summary, Sui offers many performance and usability gains at the cost of some complexity in less simple use cases. Direct sender transactions excel in Sui. And the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus supports more complex use cases seamlessly.
