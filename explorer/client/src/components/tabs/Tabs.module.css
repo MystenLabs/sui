@@ -28,3 +28,7 @@
 .tabsfooter a {
     @apply text-gray-700 font-semibold;
 }
+
+.stats {
+    @apply ml-auto;
+}
