@@ -11,9 +11,9 @@ import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Alert from '_components/alert';
-import BsIcon from '_components/bs-icon';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import Icon from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { txSelectors } from '_redux/slices/transactions';
 
@@ -51,10 +51,7 @@ function TransactionDetailsPage() {
         <div className={cl('container')}>
             {txDetails ? (
                 <>
-                    <BsIcon
-                        className={cl('status', status)}
-                        icon={statusIcon}
-                    />
+                    <Icon className={cl('status', status)} icon={statusIcon} />
                     {transferKind ? (
                         <span className={cl('txt')}>
                             <strong>{txKindToTxt[transferKind]}</strong>{' '}

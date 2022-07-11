@@ -5,10 +5,10 @@ import cl from 'classnames';
 import { useCallback, useEffect, useState } from 'react';
 
 import Alert from '_components/alert';
-import BsIcon from '_components/bs-icon';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import ExternalLink from '_components/external-link';
+import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import Network from '_components/network-switch';
 import { useAppDispatch } from '_hooks';
@@ -84,7 +84,7 @@ function SettingsPage() {
                 >
                     {mintInProgress ? <LoadingIndicator /> : 'Mint Demo NFT'}
                     {mintStatusIcon ? (
-                        <BsIcon
+                        <Icon
                             icon={mintStatusIcon}
                             className={cl(st['mint-icon'], {
                                 [st.success]: mintStatus,

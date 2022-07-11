@@ -5,8 +5,8 @@ import { memo, useMemo } from 'react';
 
 import { Explorer } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
-import BsIcon from '_components/bs-icon';
 import ExternalLink from '_components/external-link';
+import Icon from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { activeAccountSelector } from '_redux/slices/account';
 
@@ -70,7 +70,7 @@ function ExplorerLink(props: ExplorerLinkProps) {
             showIcon={false}
         >
             <>
-                {children} <BsIcon icon="box-arrow-up-right" />
+                {children} <Icon icon="box-arrow-up-right" />
             </>
         </ExternalLink>
     );
