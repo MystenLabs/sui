@@ -33,7 +33,7 @@ primary = { path = "../primary" }
 types = { path = "../types" }
 worker = { path = "../worker" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-axum = "0.5.11"
+axum = "0.5.12"
 prometheus = "0.13.1"
 
 [dev-dependencies]
