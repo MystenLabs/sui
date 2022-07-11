@@ -42,6 +42,7 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() {
+    #[cfg(not(target_env = "msvc"))]
     use jemalloc_ctl::config;
     let malloc_conf = config::malloc_conf::mib().unwrap();
     println!("Default Jemalloc conf: {}", malloc_conf.read().unwrap());
