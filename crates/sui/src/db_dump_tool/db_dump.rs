@@ -41,7 +41,7 @@ const SCHEDULE_TABLE_NAME: &str = "schedule";
 const EXEC_SEQ_TABLE_NAME: &str = "executed_sequence";
 const BATCHES_TABLE_NAME: &str = "batches";
 const LAST_CONSENSUS_TABLE_NAME: &str = "last_consensus_index";
-const EPOCH_TABLE_NAME: &str = "epoch";
+const EPOCH_TABLE_NAME: &str = "epochs";
 
 /// S is a template on Authority signature state. This allows SuiDataStore to be used on either
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
@@ -55,7 +55,6 @@ pub struct SuiDataStoreReadonly<S> {
 
     certificates: DBMap<TransactionDigest, CertifiedTransaction>,
 
-    // New
     pending_execution: DBMap<InternalSequenceNumber, TransactionDigest>,
 
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
@@ -65,9 +64,9 @@ pub struct SuiDataStoreReadonly<S> {
     sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
     schedule: DBMap<ObjectID, SequenceNumber>,
 
-    pub executed_sequence: DBMap<TxSequenceNumber, ExecutionDigests>,
+    executed_sequence: DBMap<TxSequenceNumber, ExecutionDigests>,
 
-    pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+    batches: DBMap<TxSequenceNumber, SignedBatch>,
 
     last_consensus_index: DBMap<u64, ExecutionIndices>,
 
@@ -161,82 +160,124 @@ where
     Q: Eq + Serialize + for<'de> Deserialize<'de> + Debug,
 {
     match table_name {
-        OBJECTS_TABLE_NAME => store
-            .objects
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        OBJECTS_TABLE_NAME => {
+            store.objects.try_catch_up_with_primary().unwrap();
+            store
+                .objects
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
+        OWNER_INDEX_TABLE_NAME => {
+            store.owner_index.try_catch_up_with_primary().unwrap();
 
-        OWNER_INDEX_TABLE_NAME => store
-            .owner_index
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+            store
+                .owner_index
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
+        TX_TABLE_NAME => {
+            store.transactions.try_catch_up_with_primary().unwrap();
+            store
+                .transactions
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        TX_TABLE_NAME => store
-            .transactions
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        CERTS_TABLE_NAME => {
+            store.certificates.try_catch_up_with_primary().unwrap();
+            store
+                .certificates
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        CERTS_TABLE_NAME => store
-            .certificates
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        PENDING_EXECUTION => {
+            store.pending_execution.try_catch_up_with_primary().unwrap();
+            store
+                .pending_execution
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        PENDING_EXECUTION => store
-            .pending_execution
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        PARENT_SYNC_TABLE_NAME => {
+            store.parent_sync.try_catch_up_with_primary().unwrap();
+            store
+                .parent_sync
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        PARENT_SYNC_TABLE_NAME => store
-            .parent_sync
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        EFFECTS_TABLE_NAME => {
+            store.effects.try_catch_up_with_primary().unwrap();
+            store
+                .effects
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        EFFECTS_TABLE_NAME => store
-            .effects
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        SEQUENCED_TABLE_NAME => {
+            store.sequenced.try_catch_up_with_primary().unwrap();
+            store
+                .sequenced
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        SEQUENCED_TABLE_NAME => store
-            .sequenced
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        SCHEDULE_TABLE_NAME => {
+            store.schedule.try_catch_up_with_primary().unwrap();
+            store
+                .schedule
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        SCHEDULE_TABLE_NAME => store
-            .schedule
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        EXEC_SEQ_TABLE_NAME => {
+            store.executed_sequence.try_catch_up_with_primary().unwrap();
+            store
+                .executed_sequence
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        EXEC_SEQ_TABLE_NAME => store
-            .executed_sequence
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
-        BATCHES_TABLE_NAME => store
-            .batches
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        BATCHES_TABLE_NAME => {
+            store.batches.try_catch_up_with_primary().unwrap();
+            store
+                .batches
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        LAST_CONSENSUS_TABLE_NAME => store
-            .last_consensus_index
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        LAST_CONSENSUS_TABLE_NAME => {
+            store
+                .last_consensus_index
+                .try_catch_up_with_primary()
+                .unwrap();
+            store
+                .last_consensus_index
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
 
-        EPOCH_TABLE_NAME => store
-            .epochs
-            .iter()
-            .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-            .collect::<BTreeMap<_, _>>(),
+        EPOCH_TABLE_NAME => {
+            store.epochs.try_catch_up_with_primary().unwrap();
+            store
+                .epochs
+                .iter()
+                .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                .collect::<BTreeMap<_, _>>()
+        }
         _ => panic!("No such table name"),
     }
 }

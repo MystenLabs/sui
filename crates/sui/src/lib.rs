@@ -5,8 +5,8 @@
 pub mod client_commands;
 pub mod config;
 pub mod console;
+pub mod db_dump_tool;
 pub mod keytool;
 pub mod shell;
 pub mod sui_commands;
 pub mod sui_move;
-pub mod db_dump_tool;
