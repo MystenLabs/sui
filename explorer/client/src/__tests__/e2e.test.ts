@@ -19,7 +19,7 @@ const coinGroup = (num: number) => {
     };
 };
 
-const mainBodyCSS = 'main > div:nth-child(2)';
+const mainBodyCSS = 'main > div';
 
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
 
@@ -289,7 +289,7 @@ describe('End-to-end Tests', () => {
                     () => {}
                 )
             ).rejects.toThrow(
-                'Error: failed to find element matching selector "main > div:nth-child(2) > div:first-child > div > div"'
+                `Error: failed to find element matching selector "${mainBodyCSS} > div:first-child > div > div"`
             );
         });
     });
