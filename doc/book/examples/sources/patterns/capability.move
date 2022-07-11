@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x0::item {
+module examples::item {
     use sui::transfer;
     use sui::id::VersionedID;
     use sui::utf8::{Self, String};

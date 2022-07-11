@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x0::my_coin {
+module examples::my_coin {
     use sui::coin;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};

@@ -13,7 +13,6 @@
     - [Bag](./basics/bag.md)
     - [Map - Indexed Collection](./basics/vec-map.md)
 - [Patterns](./patterns/README.md)
-    <!-- - [Facade](./patterns/facade.md) -->
     - [Capability](./patterns/capability.md)
     - [Witness](./patterns/witness.md)
     - [Transferable Witness](./patterns/transferable-witness.md)
@@ -21,3 +20,4 @@
 - [Samples](./samples/README.md)
     - [Make an NFT](./samples/nft.md)
     - [Create a Coin (ERC20)](./samples/coin.md)
+    - [Make a Character](./samples/character.md)

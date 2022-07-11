@@ -1,48 +1,49 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x0::container {
+/// A freely transfererrable Wrapper for custom data.
+module examples::wrapper {
     use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};
 
     /// An object with `store` can be transferred in any
     /// module without a custom transfer implementation.
-    struct Container<T: store> has key, store {
+    struct Wrapper<T: store> has key, store {
         id: VersionedID,
-        data: T
+        contents: T
     }
 
     /// View function to read contents of a `Container`.
-    public fun contents<T: store>(c: &Container<T>): &T {
-        &c.data
+    public fun contents<T: store>(c: &Wrapper<T>): &T {
+        &c.contents
     }
 
     /// Anyone can create a new object
     public fun create<T: store>(
-        data: T, ctx: &mut TxContext
-    ): Container<T> {
-        Container {
-            data,
+        contents: T, ctx: &mut TxContext
+    ): Wrapper<T> {
+        Wrapper {
+            contents,
             id: tx_context::new_id(ctx),
         }
     }
 
-    /// Destroy `Container` and get T.
-    public fun destroy<T: store> (c: Container<T>): T {
-        let Container { id, data } = c;
+    /// Destroy `Wrapper` and get T.
+    public fun destroy<T: store> (c: Wrapper<T>): T {
+        let Wrapper { id, contents } = c;
         id::delete(id);
-        data
+        contents
     }
 }
 
-module 0x0::profile {
+module examples::profile {
     use sui::transfer;
     use sui::url::{Self, Url};
     use sui::utf8::{Self, String};
     use sui::tx_context::{Self, TxContext};
 
-    // using Container functionality
-    use 0x0::container;
+    // using Wrapper functionality
+    use 0x0::wrapper;
 
     /// A profile information, not an object, can be wrapped
     /// into a transferable container
@@ -67,7 +68,7 @@ module 0x0::profile {
         name: vector<u8>, url: vector<u8>, ctx: &mut TxContext
     ) {
         // create a new container and wrap ProfileInfo into it
-        let container = container::create(ProfileInfo {
+        let container = wrapper::create(ProfileInfo {
             name: utf8::string_unsafe(name),
             url: url::new_unsafe_from_bytes(url)
         }, ctx);

@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x0::restricted_transfer {
+module examples::restricted_transfer {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
@@ -12,7 +12,11 @@ module 0x0::restricted_transfer {
     /// For when paid amount is not equal to the transfer price.
     const EWrongAmount: u64 = 0;
 
-    /// An object that marks a property ownership
+    /// A Capability that allows bearer to create new `TitleDeed`s.
+    struct GovernmentCapability has key { id: VersionedID }
+
+    /// An object that marks a property ownership. Can only be issued
+    /// by an authority.
     struct TitleDeed has key {
         id: VersionedID,
         // ... some additional fields
@@ -28,6 +32,10 @@ module 0x0::restricted_transfer {
 
     /// Create a `LandRegistry` on module init.
     fun init(ctx: &mut TxContext) {
+        transfer::transfer(GovernmentCapability {
+            id: tx_context::new_id(ctx)
+        }, tx_context::sender(ctx));
+
         transfer::share_object(LandRegistry {
             id: tx_context::new_id(ctx),
             balance: balance::zero<SUI>(),
@@ -35,7 +43,17 @@ module 0x0::restricted_transfer {
         })
     }
 
-    // .... some functionality to acquire TitleDeeds ...
+    /// Create `TitleDeed` and transfer it to the property owner.
+    /// Only owner of the `GovernmentCapability` can perform this action.
+    public entry fun issue_title_deed(
+        _: &GovernmentCapability,
+        for: address,
+        ctx: &mut TxContext
+    ) {
+        transfer::transfer(TitleDeed {
+            id: tx_context::new_id(ctx)
+        }, for)
+    }
 
     /// A custom transfer function. Required due to `TitleDeed` not having
     /// a `store` ability. All transfers of `TitleDeed`s have to go through

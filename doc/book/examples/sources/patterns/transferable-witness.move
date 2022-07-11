@@ -8,7 +8,7 @@
 /// there's a case where authorization should be performed after some time.
 ///
 /// For these, rather rare, scerarios a storable witness is a perfect solution.
-module 0x0::transferable_witness {
+module examples::transferable_witness {
     use sui::transfer;
     use sui::id::{Self, VersionedID};
     use sui::tx_context::{Self, TxContext};

@@ -4,22 +4,25 @@
 /// Unlike `Owned` objects, `Shared` ones can be accessed by anyone on the
 /// network. Extended functionality and accessibility of this kind of objects
 /// requires additional effort by securing access if needed.
-module 0x0::shared {
+module examples::donuts {
     use sui::transfer;
     use sui::sui::SUI;
-    use sui::id::{VersionedID};
     use sui::coin::{Self, Coin};
+    use sui::id::{Self, VersionedID};
     use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
 
     /// For when Coin balance is too low.
     const ENotEnough: u64 = 0;
 
-    /// A purchased item. For simplicity's sake we ignore implementation.
-    struct Item has key { id: VersionedID }
+    /// Capability that grants an owner the right to collect profits.
+    struct ShopOwnerCap has key { id: VersionedID }
+
+    /// A purchasable Donut. For simplicity's sake we ignore implementation.
+    struct Donut has key { id: VersionedID }
 
     /// A shared object. `key` ability is required.
-    struct Shop has key {
+    struct DonutShop has key {
         id: VersionedID,
         price: u64,
         balance: Balance<SUI>
@@ -30,7 +33,12 @@ module 0x0::shared {
     ///
     /// To share an object `transfer::share_object` is used.
     fun init(ctx: &mut TxContext) {
-        transfer::share_object(Shop {
+        transfer::transfer(ShopOwnerCap {
+            id: tx_context::new_id(ctx)
+        }, tx_context::sender(ctx));
+
+        // Share the object to make it accessible to everyone!
+        transfer::share_object(DonutShop {
             id: tx_context::new_id(ctx),
             price: 1000,
             balance: balance::zero()
@@ -38,8 +46,8 @@ module 0x0::shared {
     }
 
     /// Entry function available to everyone who owns a Coin.
-    public entry fun buy_item(
-        shop: &mut Shop, payment: &mut Coin<SUI>, ctx: &mut TxContext
+    public entry fun buy_donut(
+        shop: &mut DonutShop, payment: &mut Coin<SUI>, ctx: &mut TxContext
     ) {
         assert!(coin::value(payment) >= shop.price, ENotEnough);
 
@@ -50,8 +58,25 @@ module 0x0::shared {
         // Put the coin to the Shop's balance
         balance::join(&mut shop.balance, paid);
 
-        transfer::transfer(Item {
+        transfer::transfer(Donut {
             id: tx_context::new_id(ctx)
         }, tx_context::sender(ctx))
+    }
+
+    /// Consume donut and get nothing...
+    public entry fun eat_donut(d: Donut) {
+        let Donut { id } = d;
+        id::delete(id);
+    }
+
+    /// Take coin from `DonutShop` and transfer it to tx sender.
+    /// Requires authorization with `ShopOwnerCap`.
+    public entry fun collect_profits(
+        _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut TxContext
+    ) {
+        let amount = balance::value(&shop.balance);
+        let profits = coin::take(&mut shop.balance, amount, ctx);
+
+        transfer::transfer(profits, tx_context::sender(ctx))
     }
 }

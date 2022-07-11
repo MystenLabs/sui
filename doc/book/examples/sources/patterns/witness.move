@@ -3,7 +3,7 @@
 
 /// Module that defines a generic type `Guardian<T>` which can only be
 /// instantiated with a witness.
-module 0x0::guardian {
+module examples::guardian {
     use sui::id::VersionedID;
     use sui::tx_context::{Self, TxContext};
 
@@ -23,7 +23,7 @@ module 0x0::guardian {
 }
 
 /// Custom module that makes use of the `guardian`.
-module 0x0::peace {
+module examples::peace {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
