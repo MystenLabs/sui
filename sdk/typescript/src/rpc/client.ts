@@ -50,9 +50,9 @@ export class JsonRpcClient {
             LosslessJSON.parse(text, (key: string, value: any) => {
               if (key === 'balance') return value.toString();
               try {
-                if (value && value.isLosslessNumber) return value.valueOf();
+                if (value !== null && value.isLosslessNumber) return value.valueOf();
               } catch {
-                return value.toString();
+                return value ? value.toString() : key;
               }
               return value;
             })
