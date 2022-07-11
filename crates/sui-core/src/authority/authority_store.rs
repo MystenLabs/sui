@@ -110,7 +110,7 @@ pub struct SuiDataStore<S> {
     /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
     /// TODO: These two maps should be merged into a single one (no reason to have two).
     sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
-    schedule: DBMap<ObjectID, SequenceNumber>,
+    next_object_versions: DBMap<ObjectID, SequenceNumber>,
 
     // Tables used for authority batch structure
     /// A sequence on all executed certificates and effects.
@@ -146,7 +146,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 ("parent_sync", &options),
                 ("effects", &point_lookup),
                 ("sequenced", &options),
-                ("schedule", &options),
+                ("next_object_versions", &options),
                 ("executed_sequence", &options),
                 ("batches", &options),
                 ("last_consensus_index", &options),
@@ -168,7 +168,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             parent_sync,
             effects,
             sequenced,
-            schedule,
+            next_object_versions,
             batches,
             last_consensus_index,
             epochs,
@@ -182,7 +182,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             "parent_sync";<ObjectRef, TransactionDigest>,
             "effects";<TransactionDigest, TransactionEffectsEnvelope<S>>,
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
-            "schedule";<ObjectID, SequenceNumber>,
+            "next_object_versions";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
             "last_consensus_index";<u64, ExecutionIndices>,
             "epochs";<EpochId, EpochInfoLocals>
@@ -220,7 +220,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             parent_sync,
             effects,
             sequenced,
-            schedule,
+            next_object_versions,
             executed_sequence,
             batches,
             last_consensus_index,
@@ -1083,7 +1083,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
         let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
-        write_batch = write_batch.delete_batch(&self.schedule, schedule_to_delete)?;
+        write_batch = write_batch.delete_batch(&self.next_object_versions, schedule_to_delete)?;
         write_batch.write()?;
         Ok(())
     }
@@ -1124,7 +1124,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let ids = certificate.shared_input_objects();
-        let versions = self.schedule.multi_get(ids)?;
+        let versions = self.next_object_versions.multi_get(ids)?;
 
         let ids = certificate.shared_input_objects();
         let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
@@ -1159,7 +1159,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let mut write_batch = self.sequenced.batch();
         // Note: we have already written the certificates as part of the add_pending_certificates above.
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
-        write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
+        write_batch = write_batch.insert_batch(&self.next_object_versions, schedule_to_write)?;
         write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
         write_batch.write().map_err(SuiError::from)
     }
@@ -1336,12 +1336,6 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
             .expect("Sui System State object deserialization cannot fail");
         Ok(result)
-    }
-
-    #[cfg(test)]
-    /// Provide read access to the `schedule` table (useful for testing).
-    pub fn get_schedule(&self, object_id: &ObjectID) -> SuiResult<Option<SequenceNumber>> {
-        self.schedule.get(object_id).map_err(SuiError::from)
     }
 }
 
