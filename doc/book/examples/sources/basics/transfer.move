@@ -62,7 +62,7 @@ module examples::profile {
         &info.url
     }
 
-    /// Creates new `ProfileInfo` and wraps into `Container`.
+    /// Creates new `ProfileInfo` and wraps into `Wrapper`.
     /// Then transfers to sender.
     public fun create_profile(
         name: vector<u8>, url: vector<u8>, ctx: &mut TxContext
@@ -73,7 +73,7 @@ module examples::profile {
             url: url::new_unsafe_from_bytes(url)
         }, ctx);
 
-        // `Container` type is freely transferable
+        // `Wrapper` type is freely transferable
         transfer::transfer(container, tx_context::sender(ctx))
     }
 }
