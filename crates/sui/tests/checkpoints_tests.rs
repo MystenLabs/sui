@@ -3,7 +3,6 @@
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
 use std::sync::Arc;
-use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
@@ -145,15 +144,10 @@ async fn end_to_end() {
     // Start active part of each authority.
     for authority in &handles {
         let state = authority.state().clone();
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_authority_handle = tokio::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
-                    state,
-                    clients,
-                    AuthAggMetrics::new_for_tests(),
-                )
-                .unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap(),
             );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),
@@ -235,15 +229,10 @@ async fn checkpoint_with_shared_objects() {
     // Start active part of each authority.
     for authority in &handles {
         let state = authority.state().clone();
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_authority_handle = tokio::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
-                    state,
-                    clients,
-                    AuthAggMetrics::new_for_tests(),
-                )
-                .unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap(),
             );
             let checkpoint_process_control = CheckpointProcessControl {
                 long_pause_between_checkpoints: Duration::from_millis(10),

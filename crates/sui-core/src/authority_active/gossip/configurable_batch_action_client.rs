@@ -5,6 +5,7 @@
 use crate::authority::AuthorityState;
 use crate::authority::AuthorityStore;
 use crate::authority_aggregator::authority_aggregator_tests::*;
+use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
@@ -196,7 +197,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
 pub async fn init_configurable_authorities(
     authority_action: Vec<BatchAction>,
 ) -> (
-    BTreeMap<AuthorityName, ConfigurableBatchActionClient>,
+    AuthorityAggregator<ConfigurableBatchActionClient>,
     Vec<Arc<AuthorityState>>,
     Vec<ExecutionDigests>,
 ) {
@@ -312,5 +313,10 @@ pub async fn init_configurable_authorities(
         .into_iter()
         .map(|(name, client)| (name, client.authority_client().clone()))
         .collect();
-    (authority_clients, states, executed_digests)
+    let net = AuthorityAggregator::new(
+        committee,
+        authority_clients,
+        AuthAggMetrics::new_for_tests(),
+    );
+    (net, states, executed_digests)
 }
