@@ -83,7 +83,7 @@ function DisplayBox({ display }: { display: string }) {
                     No Image was Found
                 </div>
             )}
-            {!hasFailedToLoad && (
+            {!hasFailedToLoad && !showAutoModNotice && (
                 <img
                     id="loadedImage"
                     className={imgClass}
