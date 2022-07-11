@@ -1,14 +1,14 @@
 ---
-title: Experiment with Sui DevNet
+title: Experiment with Sui Devnet
 ---
 
-Welcome to the beginnings of the Sui DevNet. It exists now to gain operational experience with the Sui software in a public setting. The Sui DevNet currently consists of:
+Welcome to the beginnings of the Sui Devnet. It exists now to gain operational experience with the Sui software in a public setting. The Sui Devnet currently consists of:
 
 * A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: https://gateway.devnet.sui.io:443/ using [JSON-RPC](../build/json-rpc.md)
-* A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing the TestNet transaction history: https://explorer.devnet.sui.io
+* A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing transaction history: https://explorer.devnet.sui.io
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
-Many improvements to the Sui DevNet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui DevNet blog post](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b) announcement for full details on upcoming features. All DevNet usage is subject to our [terms of service](https://sui.io/terms/).
+Many improvements to the Sui Devnet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui Devnet blog post](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b) announcement for full details on upcoming features. All Devnet usage is subject to our [terms of service](https://sui.io/terms/).
 
 ## Tools
 
@@ -24,7 +24,7 @@ We provide the following tools for users to interact with the Sui Devnet:
 
 ### Set up environment
 
-You may simply [install Sui](../build/install.md) and then request test tokens as described in the install docs. To use the Sui DevNet, you will need:
+You may simply [install Sui](../build/install.md) and then request test tokens as described in the install docs. To use the Sui Devnet, you will need:
 
 1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 1. the [`git` command line interface](https://git-scm.com/download/).
@@ -37,13 +37,13 @@ $ which sui
 ```
 You should see the path to the command. Otherwise, reinstall.
 
-> **Tip:** To reliably test DevNet with the latest Sui binaries, re-install them at least weekly.
+> **Tip:** To reliably test Devnet with the latest Sui binaries, re-install them at least weekly.
 
 In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
 
 ### Set up Sui CLI client, connect to gateway
 
-Now [set up your Sui CLI client and connect to DevNet](../build/cli-client.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/cli-client.md#manually-change-the-rpc-server-url) if you have already configured a Sui CLI client.
+Now [set up your Sui CLI client and connect to Devnet](../build/cli-client.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/cli-client.md#manually-change-the-rpc-server-url) if you have already configured a Sui CLI client.
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
 
@@ -203,4 +203,4 @@ https://explorer.devnet.sui.io/objects/OBJECT-ID
 
 ![Magic sword](../../static/magic-sword.png "Magic sword")
 
-This concludes the Sui DevNet setup and testing instructions. Revisit this page and re-install the binaries regularly to witness and help Sui grow!
+This concludes the Sui Devnet setup and testing instructions. Revisit this page and re-install the binaries regularly to witness and help Sui grow!
