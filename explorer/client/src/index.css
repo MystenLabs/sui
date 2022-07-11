@@ -12,7 +12,26 @@
 }
 
 body {
-    @apply bg-[#f8f8f8] m-0 text-offblack;
+    @apply m-0 text-offblack;
+}
+
+/* Improves scrollbar look on Chromium browsers */
+
+body::-webkit-scrollbar {
+    width: 10px;
+}
+
+body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body::-webkit-scrollbar-thumb {
+    background: #898d93;
+    border-radius: 5px;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+    background: #4e555d;
 }
 
 input:focus,

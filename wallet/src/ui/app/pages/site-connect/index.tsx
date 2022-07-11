@@ -6,8 +6,6 @@ import { useParams } from 'react-router-dom';
 
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-// TODO: fix imports ordering for this
-import stUserApprove from '_components/user-approve-container/UserApproveContainer.module.scss';
 import { useAppDispatch, useAppSelector, useInitializedGuard } from '_hooks';
 import {
     permissionsSelectors,
@@ -18,6 +16,7 @@ import type { PermissionType } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './SiteConnectPage.module.scss';
+import stUserApprove from '_components/user-approve-container/UserApproveContainer.module.scss';
 
 const permissionTypeToTxt: Record<PermissionType, string> = {
     viewAccount: 'View Account',

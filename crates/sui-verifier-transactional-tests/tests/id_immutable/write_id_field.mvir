@@ -1,0 +1,20 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# publish
+module 0x0.m {
+    import 0x2.id;
+
+    struct Foo has key {
+        id: id.VersionedID,
+    }
+
+    foo(f: Self.Foo, id: id.VersionedID) {
+        let x: &mut id.VersionedID;
+        label l0:
+        x = &mut (&mut f).Foo::id;
+        *move(x) = move(id);
+        abort 0;
+    }
+
+}

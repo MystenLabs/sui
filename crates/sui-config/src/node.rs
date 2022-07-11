@@ -10,6 +10,7 @@ use narwhal_config::Parameters as ConsensusParameters;
 use narwhal_config::SharedCommittee as ConsensusCommittee;
 use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -139,6 +140,7 @@ impl ConsensusConfig {
 pub struct ValidatorInfo {
     pub public_key: PublicKeyBytes,
     pub stake: StakeUnit,
+    pub delegation: StakeUnit,
     pub network_address: Multiaddr,
 }
 
@@ -155,8 +157,24 @@ impl ValidatorInfo {
         self.stake
     }
 
+    pub fn delegation(&self) -> StakeUnit {
+        self.delegation
+    }
+
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
+    }
+
+    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<PublicKeyBytes, u64> {
+        validator_set
+            .iter()
+            .map(|validator| {
+                (
+                    validator.public_key(),
+                    validator.stake() + validator.delegation(),
+                )
+            })
+            .collect()
     }
 }
 

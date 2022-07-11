@@ -1,19 +1,16 @@
 .app {
-    @apply font-sans w-screen;
-}
+    @apply font-sans w-full;
 
-div.header {
-    @apply lg:flex lg:justify-between py-[1vh] ml-[5vw] mr-[5vw];
-}
-
-a.suititle {
-    @apply text-lg text-offwhite font-bold no-underline hover:underline;
-}
-
-.search {
-    @apply bg-offblack text-offwhite pb-4 w-[100vw];
+    background: linear-gradient(
+        to bottom,
+        #2a4362 50%,
+        #2a4362 0%,
+        #767a81 0%,
+        #767a81 50%
+    );
 }
 
 main {
-    @apply relative;
+    @apply relative z-10 py-2 min-h-[77vh]  
+    bg-offwhite rounded-[20px] shadow-2xl;
 }

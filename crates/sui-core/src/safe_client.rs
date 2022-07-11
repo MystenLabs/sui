@@ -309,15 +309,15 @@ where
         Ok(transaction_info)
     }
 
-    /// Confirm a transfer to a Sui or Primary account.
-    pub async fn handle_confirmation_transaction(
+    /// Execute a certificate.
+    pub async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let digest = *transaction.certificate.digest();
+        let digest = *certificate.digest();
         let transaction_info = self
             .authority_client
-            .handle_confirmation_transaction(transaction)
+            .handle_certificate(certificate)
             .await?;
 
         if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
@@ -325,16 +325,6 @@ where
             return Err(err);
         }
         Ok(transaction_info)
-    }
-
-    pub async fn handle_consensus_transaction(
-        &self,
-        transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        // TODO: Add safety checks on the response.
-        self.authority_client
-            .handle_consensus_transaction(transaction)
-            .await
     }
 
     pub async fn handle_account_info_request(

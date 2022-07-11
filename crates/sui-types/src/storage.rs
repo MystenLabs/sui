@@ -42,3 +42,15 @@ pub trait Storage {
 pub trait BackingPackageStore {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>>;
 }
+
+impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        BackingPackageStore::get_package(self.as_ref(), package_id)
+    }
+}
+
+impl<S: BackingPackageStore> BackingPackageStore for &S {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        BackingPackageStore::get_package(*self, package_id)
+    }
+}

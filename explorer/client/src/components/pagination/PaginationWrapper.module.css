@@ -24,7 +24,7 @@ button.btncontainer {
 }
 
 .paginationheading > button {
-    @apply block lg:inline mb-2 bg-sui hover:bg-suidark hover:text-white rounded-r-md border-none cursor-pointer p-2;
+    @apply block lg:inline mb-2 bg-sui hover:bg-sui-dark hover:text-white rounded-r-md border-none cursor-pointer p-2;
 }
 
 .paginationheading > h2 {

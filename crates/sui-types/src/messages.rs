@@ -30,9 +30,10 @@ use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+use tracing::debug;
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -772,11 +773,6 @@ impl PartialEq for SignedTransaction {
 
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ConfirmationTransaction {
-    pub certificate: CertifiedTransaction,
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
     pub account: SuiAddress,
@@ -1155,11 +1151,14 @@ impl CertifiedTransactionEffects {
         epoch: EpochId,
         effects: TransactionEffects,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-    ) -> Self {
-        Self {
+        committee: &Committee,
+    ) -> SuiResult<Self> {
+        Ok(Self {
             effects,
-            auth_signature: AuthorityStrongQuorumSignInfo { epoch, signatures },
-        }
+            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                epoch, signatures, committee,
+            )?,
+        })
     }
 
     pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
@@ -1205,6 +1204,89 @@ impl InputObjectKind {
         }
     }
 }
+
+pub struct InputObjects {
+    objects: Vec<(InputObjectKind, Object)>,
+}
+
+impl InputObjects {
+    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
+        Self { objects }
+    }
+
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.objects.is_empty()
+    }
+
+    pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
+        let owned_objects: Vec<_> = self
+            .objects
+            .iter()
+            .filter_map(|(object_kind, object)| match object_kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some(*object_ref)
+                    }
+                }
+                InputObjectKind::SharedMoveObject(_) => None,
+            })
+            .collect();
+
+        debug!(
+            num_mutable_objects = owned_objects.len(),
+            "Checked locks and found mutable objects"
+        );
+
+        owned_objects
+    }
+
+    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
+        self.objects
+            .iter()
+            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .map(|(_, obj)| obj.compute_object_reference())
+            .collect()
+    }
+
+    pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
+        self.objects
+            .iter()
+            .map(|(_, obj)| obj.previous_transaction)
+            .collect()
+    }
+
+    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
+        self.objects
+            .iter()
+            .filter_map(|(kind, object)| match kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some(*object_ref)
+                    }
+                }
+                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+            })
+            .collect()
+    }
+
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
+        self.objects
+            .into_iter()
+            .map(|(_, object)| (object.id(), object))
+            .collect()
+    }
+}
+
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
     weight: StakeUnit,
@@ -1251,8 +1333,7 @@ impl<'a> SignatureAggregator<'a> {
         // Update certificate.
         self.partial
             .auth_sign_info
-            .signatures
-            .push((authority, signature));
+            .add_signature(signature, authority, self.committee)?;
 
         if self.weight >= self.committee.quorum_threshold() {
             Ok(Some(self.partial.clone()))
@@ -1264,21 +1345,30 @@ impl<'a> SignatureAggregator<'a> {
 
 impl CertifiedTransaction {
     pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
-        Self::new_with_signatures(epoch, transaction, vec![])
+        CertifiedTransaction {
+            transaction_digest: transaction.transaction_digest,
+            is_verified: false,
+            data: transaction.data,
+            tx_signature: transaction.tx_signature,
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
+        }
     }
 
     pub fn new_with_signatures(
         epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-    ) -> CertifiedTransaction {
-        CertifiedTransaction {
+        committee: &Committee,
+    ) -> SuiResult<CertifiedTransaction> {
+        Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityStrongQuorumSignInfo { epoch, signatures },
-        }
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                epoch, signatures, committee,
+            )?,
+        })
     }
 
     pub fn to_transaction(self) -> Transaction {
@@ -1324,21 +1414,11 @@ impl Display for CertifiedTransaction {
         writeln!(writer, "Transaction Hash: {:?}", self.digest())?;
         writeln!(
             writer,
-            "Signed Authorities : {:?}",
-            self.auth_sign_info
-                .signatures
-                .iter()
-                .map(|(name, _)| name)
-                .collect::<Vec<_>>()
+            "Signed Authorities Bitmap : {:?}",
+            self.auth_sign_info.signers_map
         )?;
         write!(writer, "{}", &self.data.kind)?;
         write!(f, "{}", writer)
-    }
-}
-
-impl ConfirmationTransaction {
-    pub fn new(certificate: CertifiedTransaction) -> Self {
-        Self { certificate }
     }
 }
 
