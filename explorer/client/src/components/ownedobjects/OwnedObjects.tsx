@@ -183,13 +183,17 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
         <div className={styles.layout}>
             {coin_results.length > 0 && (
                 <div>
-                    <h2>Coins</h2>
+                    <div className={styles.ownedobjectheader}>
+                        <h2>Coins</h2>
+                    </div>
                     <GroupView results={coin_results} />
                 </div>
             )}
             {other_results.length > 0 && (
                 <div id="NFTSection">
-                    <h2>NFTs</h2>
+                    <div className={styles.ownedobjectheader}>
+                        <h2>NFTs</h2>
+                    </div>
                     <PaginationWrapper
                         results={other_results}
                         viewComponentFn={viewFn}
@@ -297,7 +301,11 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                                     break;
                                                 } else {
                                                     return (
-                                                        <span>
+                                                        <span
+                                                            className={
+                                                                styles.typevalue
+                                                            }
+                                                        >
                                                             {trimStdLibPrefix(
                                                                 value as string
                                                             )}

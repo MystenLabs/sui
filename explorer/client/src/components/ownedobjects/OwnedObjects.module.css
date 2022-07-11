@@ -23,12 +23,24 @@
     @apply invisible;
 }
 
+.ownedobjectheader {
+    @apply pb-1 border-0 border-b border-solid border-sui-grey-45;
+}
+
+.ownedobjectheader > h2 {
+    @apply text-lg text-sui-grey-100;
+}
+
 .objectbox {
     @apply my-[10px] break-all lg:w-[300px] flex items-center;
 }
 
 .objectbox > div.textitem {
     @apply w-[210px];
+}
+
+.typevalue {
+    @apply text-sui-grey-80;
 }
 
 .gray {
