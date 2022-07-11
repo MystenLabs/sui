@@ -44,7 +44,7 @@ use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI, gateway_state::GatewayMetrics,
+    authority_client::AuthorityAPI,
 };
 use tokio::time::Instant;
 
@@ -52,6 +52,7 @@ pub mod gossip;
 use gossip::{gossip_process, node_sync_process};
 
 pub mod checkpoint_driver;
+use crate::authority_aggregator::AuthAggMetrics;
 use checkpoint_driver::checkpoint_process;
 
 pub mod execution_driver;
@@ -117,7 +118,7 @@ impl<A> ActiveAuthority<A> {
         authority: Arc<AuthorityState>,
         follower_store: Arc<FollowerStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
-        gateway_metrics: GatewayMetrics,
+        auth_agg_metrics: AuthAggMetrics,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -133,7 +134,7 @@ impl<A> ActiveAuthority<A> {
             net: ArcSwap::from(Arc::new(AuthorityAggregator::new(
                 committee,
                 authority_clients,
-                gateway_metrics,
+                auth_agg_metrics,
             ))),
         })
     }
@@ -141,7 +142,7 @@ impl<A> ActiveAuthority<A> {
     pub fn new_with_ephemeral_follower_store(
         authority: Arc<AuthorityState>,
         authority_clients: BTreeMap<AuthorityName, A>,
-        gateway_metrics: GatewayMetrics,
+        auth_agg_metrics: AuthAggMetrics,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
         let follower_store = Arc::new(FollowerStore::open(&working_dir).expect("cannot open db"));
@@ -149,7 +150,7 @@ impl<A> ActiveAuthority<A> {
             authority,
             follower_store,
             authority_clients,
-            gateway_metrics,
+            auth_agg_metrics,
         )
     }
 

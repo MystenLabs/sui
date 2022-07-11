@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gateway_state::GatewayMetrics;
+use crate::authority_aggregator::AuthAggMetrics;
 use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
 use std::sync::Arc;
@@ -34,7 +34,7 @@ async fn pending_exec_storage_notify() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );
@@ -118,7 +118,7 @@ async fn pending_exec_full() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );

@@ -3,9 +3,9 @@
 
 use crate::{
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    authority_aggregator::AuthAggMetrics,
     authority_client::LocalAuthorityClient,
     checkpoints::checkpoint_tests::TestSetup,
-    gateway_state::GatewayMetrics,
     safe_client::SafeClient,
 };
 
@@ -36,7 +36,7 @@ async fn checkpoint_active_flow_happy_path() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );
@@ -114,7 +114,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );
@@ -208,7 +208,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );
@@ -302,7 +302,7 @@ async fn test_empty_checkpoint() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );

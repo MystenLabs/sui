@@ -3,10 +3,10 @@
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
 use std::sync::Arc;
+use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
-    gateway_state::GatewayMetrics,
 };
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
@@ -151,7 +151,7 @@ async fn end_to_end() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     state,
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );
@@ -241,7 +241,7 @@ async fn checkpoint_with_shared_objects() {
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     state,
                     clients,
-                    GatewayMetrics::new_for_tests(),
+                    AuthAggMetrics::new_for_tests(),
                 )
                 .unwrap(),
             );

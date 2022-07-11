@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::gateway_state::GatewayMetrics;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 
@@ -128,7 +127,7 @@ pub struct AuthorityAggregator<A> {
     /// How to talk to this committee.
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     // Metrics
-    pub metrics: GatewayMetrics,
+    pub metrics: AuthAggMetrics,
     pub timeouts: TimeoutConfig,
 }
 
@@ -136,7 +135,7 @@ impl<A> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: GatewayMetrics,
+        metrics: AuthAggMetrics,
     ) -> Self {
         Self::new_with_timeouts(committee, authority_clients, metrics, Default::default())
     }
@@ -144,7 +143,7 @@ impl<A> AuthorityAggregator<A> {
     pub fn new_with_timeouts(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: GatewayMetrics,
+        metrics: AuthAggMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
@@ -1449,7 +1448,7 @@ where
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
-        self.metrics.total_tx_certificates.inc();
+        self.metrics.total_tx_certificates_created.inc();
         let response = self
             .process_certificate(new_certificate.clone())
             .instrument(tracing::debug_span!("process_cert"))

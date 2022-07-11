@@ -13,6 +13,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tracing::info;
 
 use sui_config::NodeConfig;
+use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -157,13 +158,11 @@ impl SuiNode {
                 }
             }
 
-            let gateway_metrics =
-                sui_core::gateway_state::GatewayMetrics::new(&prometheus_registry);
             let active_authority = Arc::new(ActiveAuthority::new(
                 state.clone(),
                 follower_store,
                 authority_clients,
-                gateway_metrics,
+                AuthAggMetrics::new(&prometheus_registry),
             )?);
 
             Some(if is_validator {
