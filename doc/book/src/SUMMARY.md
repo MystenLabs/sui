@@ -6,10 +6,11 @@
     - [Init Function](./basics/init-function.md)
     - [Entry Functions](./basics/entry-functions.md)
     - [Strings](./basics/strings.md)
-    <!-- - [Owned Objects](./basics/owned-objects.md) -->
     - [Shared Object](./basics/shared-object.md)
     - [Transfer](./basics/transfer.md)
     - [Custom transfer](./basics/custom-transfer.md)
+    - [Events](./basics/events.md)
+    <!-- - [Owned Objects](./basics/owned-objects.md) -->
     <!-- - [Bag](./basics/bag.md) -->
     <!-- - [Map - Indexed Collection](./basics/vec-map.md) -->
 - [Patterns](./patterns/README.md)
