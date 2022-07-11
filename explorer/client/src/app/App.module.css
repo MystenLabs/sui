@@ -15,6 +15,6 @@ main {
     bg-offwhite rounded-[20px] shadow-2xl;
 }
 
-.suicontainer{
+.suicontainer {
     @apply max-w-[1440px] mx-auto p-5;
 }

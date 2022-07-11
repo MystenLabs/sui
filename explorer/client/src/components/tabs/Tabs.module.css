@@ -29,6 +29,6 @@
     @apply text-gray-700 font-semibold;
 }
 
-.stats{
-   @apply ml-auto;
+.stats {
+    @apply ml-auto;
 }
