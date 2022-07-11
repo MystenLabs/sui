@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import * as Sentry from '@sentry/react';
 import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -239,6 +240,7 @@ function LatestTxCardAPI({ count }: { count: number }) {
                     'Encountered error when fetching recent transactions',
                     err
                 );
+                Sentry.captureException(err);
             });
 
         return () => {
