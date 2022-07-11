@@ -4,6 +4,7 @@
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
+use crate::db_dump_tool::db_dump::dump_table;
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::{self, execute_move_command};
 use anyhow::{anyhow, bail};
@@ -11,7 +12,7 @@ use clap::*;
 use move_package::BuildConfig;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
+use std::path::{self, Path, PathBuf};
 use std::{fs, io};
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_DEV_NET_URL, SUI_KEYSTORE_FILENAME};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
@@ -103,6 +104,20 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
+    },
+
+    /// Tool to dump validator & gateway db.
+    #[clap(name = "dump")]
+    Dump {
+        /// Path of the DB to dump
+        #[clap(name = "db_path")]
+        db_path: String,
+        /// If this is a gateway DB or authority DB
+        #[clap(name = "gateway", long)]
+        gateway: bool,
+        /// The name of the table to dump
+        #[clap(name = "table_name")]
+        table_name: String,
     },
 }
 
@@ -350,6 +365,17 @@ impl SuiCommand {
                 build_config,
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
+            SuiCommand::Dump {
+                db_path,
+                table_name,
+                gateway,
+            } => {
+                let mp = dump_table(gateway, PathBuf::from(db_path), &table_name);
+                for (k, v) in mp {
+                    println!("{:<100?}: {:?}", k, v);
+                }
+                Ok(())
+            }
         }
     }
 }

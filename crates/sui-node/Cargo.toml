@@ -25,8 +25,8 @@ sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-types = { path = "../sui-types" }
 
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "da6700abb50e11c88208cfc9101de168ce5b5d64" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "da6700abb50e11c88208cfc9101de168ce5b5d64" }
 workspace-hack = { path = "../workspace-hack"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
