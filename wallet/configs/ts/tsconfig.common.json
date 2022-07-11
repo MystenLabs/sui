@@ -37,7 +37,8 @@
             "_variables": ["./src/ui/styles/variables"],
             "_variables/*": ["./src/ui/styles/variables/*"],
             "_values": ["./src/ui/styles/values"],
-            "_values/*": ["./src/ui/styles/values/*"]
+            "_values/*": ["./src/ui/styles/values/*"],
+            "_font-icons/*": ["./font-icons/*"]
         }
     },
     "include": ["../../src"],

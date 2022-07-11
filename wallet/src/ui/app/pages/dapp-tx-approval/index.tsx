@@ -90,9 +90,12 @@ export function DappTxApprovalPage() {
                       { label: 'Gas budget', content: txRequest.tx.gasBudget },
                   ]
                 : [
-                    { label: 'Transaction type', content: 'SerializedMoveCall' },
-                    { label: 'Contents', content: txRequest?.txBytes },
-                ],
+                      {
+                          label: 'Transaction type',
+                          content: 'SerializedMoveCall',
+                      },
+                      { label: 'Contents', content: txRequest?.txBytes },
+                  ],
         [txRequest]
     );
     return (

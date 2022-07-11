@@ -13,6 +13,7 @@ import store from '_store';
 import { thunkExtras } from '_store/thunk-extras';
 
 import './styles/global.scss';
+import '_font-icons/output/sui-icons.scss';
 
 async function init() {
     if (process.env.NODE_ENV === 'development') {

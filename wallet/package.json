@@ -16,7 +16,8 @@
         "lint": "npm run eslint:check && npm run prettier:check && npm run stylelint:check",
         "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix",
         "start": "concurrently --restart-tries 10 --raw \"npm:build:dev -- --watch\" \"npm:prettier:fix:watch\"",
-        "test": "jest"
+        "test": "jest",
+        "make-font-icons": "svgtofont -s ./font-icons/svgs/ -o ./font-icons/output/"
     },
     "repository": {
         "type": "git",
@@ -62,6 +63,7 @@
         "stylelint-config-prettier-scss": "^0.0.1",
         "stylelint-config-standard-scss": "^3.0.0",
         "stylelint-webpack-plugin": "^3.2.0",
+        "svgtofont": "^3.17.8",
         "ts-jest": "^28.0.2",
         "ts-loader": "^9.3.0",
         "ts-node": "^10.7.0",

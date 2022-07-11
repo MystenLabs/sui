@@ -1,12 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Base64DataBuffer } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
     createSlice,
 } from '@reduxjs/toolkit';
-import { Base64DataBuffer } from '@mysten/sui.js';
 
 import type { TransactionResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -52,7 +52,9 @@ export const respondToTransactionRequest = createAsyncThunk<
                     const txBytes = new Base64DataBuffer(txRequest.txBytes);
                     txResult = await signer.signAndExecuteTransaction(txBytes);
                 } else {
-                    throw new Error(`Either tx or txBytes needs to be defined.`);
+                    throw new Error(
+                        `Either tx or txBytes needs to be defined.`
+                    );
                 }
             } catch (e) {
                 tsResultError = (e as Error).message;

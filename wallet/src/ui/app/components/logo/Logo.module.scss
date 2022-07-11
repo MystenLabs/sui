@@ -2,52 +2,25 @@
     display: inline-flex;
     flex-flow: row nowrap;
     align-items: center;
-    color: #6fbcf0;
 }
 
-.image {
-    background-image: url('~_images/sui-icon.png');
-    background-repeat: no-repeat;
-    background-size: contain;
-
-    &.normal {
-        width: 30px;
-        height: 30px;
-    }
-
-    &.big {
-        width: 60px;
-        height: 60px;
-    }
-
-    &.bigger {
-        width: 90px;
-        height: 90px;
-    }
-
-    &.huge {
-        width: 120px;
-        height: 120px;
-    }
-}
-
+.icon,
 .txt {
-    margin-left: 5px;
-    font-weight: 700;
+    font-weight: 500;
 
-    &.normal {
-        font-size: 15px;
-    }
-
-    &.big {
-        font-size: 20px;
-    }
-
-    &.bigger {
+    .normal & {
         font-size: 25px;
     }
 
-    &.huge {
-        font-size: 30px;
+    .big & {
+        font-size: 35px;
+    }
+
+    .bigger & {
+        font-size: 45px;
+    }
+
+    .huge & {
+        font-size: 55px;
     }
 }

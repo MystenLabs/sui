@@ -12,12 +12,12 @@ export type TransactionRequest = {
     txResultError?: string;
     createdDate: string;
 } & (
-    {
-        type: 'move-call';
-        tx: MoveCallTransaction;
-    } |
-    {
-        type: 'serialized-move-call';
-        txBytes: Uint8Array;
-    }
+    | {
+          type: 'move-call';
+          tx: MoveCallTransaction;
+      }
+    | {
+          type: 'serialized-move-call';
+          txBytes: Uint8Array;
+      }
 );

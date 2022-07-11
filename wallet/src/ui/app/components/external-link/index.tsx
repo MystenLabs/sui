@@ -3,7 +3,7 @@
 
 import { memo } from 'react';
 
-import BsIcon from '_components/bs-icon';
+import Icon from '_components/icon';
 
 import type { ReactNode } from 'react';
 
@@ -30,7 +30,7 @@ function ExternalLink({
             rel="noreferrer"
             title={title}
         >
-            {children} {showIcon ? <BsIcon icon="link-45deg" /> : null}
+            {children} {showIcon ? <Icon icon="link-45deg" /> : null}
         </a>
     );
 }
