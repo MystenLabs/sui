@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::anyhow;
 use clap::Parser;
 use clap::Subcommand;
@@ -6,13 +9,13 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
-use sui_client::apis::{RpcBcsApi, RpcGatewayApi, RpcReadApi, RpcTransactionBuilder};
+use sui_client::apis::{
+    RpcBcsApi, RpcGatewayApi, RpcReadApi, RpcTransactionBuilder, WalletSyncApi,
+};
 use sui_client::keystore::{Keystore, SuiKeystore};
 use sui_client::SuiRpcClient;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, TransactionBytes, TransactionResponse,
-};
+use sui_json_rpc_types::GetObjectDataResponse;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::id::VersionedID;
@@ -22,15 +25,17 @@ use sui_types::sui_serde::Base64;
 async fn main() -> Result<(), anyhow::Error> {
     let opts: TicTacToeOpts = TicTacToeOpts::parse();
     let keystore_path = opts.keystore_path.unwrap_or_else(default_keystore_path);
+    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
         client: SuiRpcClient::new_http_client(&opts.rpc_server_url)?,
-        keystore: SuiKeystore::load_or_create(&keystore_path)?,
+        keystore,
     };
 
     match opts.subcommand {
-        TicTacToeCommand::NewGame { player1, player2 } => {
-            game.create_game(player1, player2).await?;
+        TicTacToeCommand::NewGame { player_x, player_o } => {
+            game.create_game(player_x, player_o).await?;
         }
         TicTacToeCommand::JoinGame {
             my_identity,
@@ -52,41 +57,59 @@ struct TicTacToe {
 impl TicTacToe {
     async fn create_game(
         &self,
-        player1: SuiAddress,
-        player2: SuiAddress,
+        player_x: Option<SuiAddress>,
+        player_o: Option<SuiAddress>,
     ) -> Result<(), anyhow::Error> {
-        let create_game_call: TransactionBytes = self
+        let player_x = player_x.unwrap_or_else(|| self.keystore.addresses()[0]);
+        let player_o = player_o.unwrap_or_else(|| self.keystore.addresses()[1]);
+
+        self.client.sync_account_state(player_x).await?;
+
+        // Create a move call transaction using the TransactionBuilder API.
+        let create_game_call = self
             .client
             .move_call(
-                player1,
+                player_x,
                 self.game_package_id,
                 "shared_tic_tac_toe".to_string(),
                 "create_game".to_string(),
                 vec![],
                 vec![
-                    SuiJsonValue::from_str(&player1.to_string())?,
-                    SuiJsonValue::from_str(&player2.to_string())?,
+                    SuiJsonValue::from_str(&player_x.to_string())?,
+                    SuiJsonValue::from_str(&player_o.to_string())?,
                 ],
                 None,
                 1000,
             )
             .await?;
 
-        println!("{:?}", create_game_call.tx_bytes);
-
+        // Sign the transaction.
         let transaction_bytes = create_game_call.tx_bytes.to_vec()?;
-        let signature = self.keystore.sign(&player1, &transaction_bytes)?;
-
+        let signature = self.keystore.sign(&player_x, &transaction_bytes)?;
         let signature_base64 = Base64::from_bytes(signature.signature_bytes());
         let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
-        let response: TransactionResponse = self
+        // Execute the transaction.
+        let response = self
             .client
             .execute_transaction(create_game_call.tx_bytes, signature_base64, pub_key)
             .await?;
 
-        println!("{:?}", response.to_effect_response()?.effects.created);
+        // We know `create_game` move function will create 1 object.
+        let game_id = response
+            .to_effect_response()?
+            .effects
+            .created
+            .first()
+            .unwrap()
+            .reference
+            .object_id;
 
+        println!("Create new game [{}]", game_id);
+        println!("Player X : {}", player_x);
+        println!("Player O : {}", player_o);
+
+        self.join_game(game_id, player_x).await?;
         Ok(())
     }
 
@@ -95,19 +118,33 @@ impl TicTacToe {
         game_id: ObjectID,
         my_identity: SuiAddress,
     ) -> Result<(), anyhow::Error> {
-        let current_game: GetRawObjectDataResponse = self.client.get_raw_object(game_id).await?;
+        let current_game = self.client.get_raw_object(game_id).await?;
+        let current_game_bytes = current_game
+            .object()?
+            .data
+            .try_as_move()
+            .map(|m| &m.bcs_bytes)
+            .unwrap();
 
-        let game: TicTacToeState = bcs::from_bytes(
-            &current_game
-                .into_object()?
-                .data
-                .try_as_move()
-                .unwrap()
-                .bcs_bytes,
-        )?;
+        let game_state: TicTacToeState = bcs::from_bytes(current_game_bytes)?;
+        if game_state.o_address == my_identity {
+            println!("You are player O")
+        } else if game_state.x_address == my_identity {
+            println!("You are player X")
+        } else {
+            return Err(anyhow!("You are not invited to the game."));
+        }
 
-        if game.o_address != my_identity && game.x_address != my_identity {
-            return Err(anyhow!("You are not in the game."));
+        let current_player = if game_state.cur_turn % 2 == 0 {
+            game_state.x_address
+        } else {
+            game_state.o_address
+        };
+
+        if current_player == my_identity {
+            println!("It's your turn!");
+        } else {
+            println!("Waiting for opponent...");
         }
 
         loop {
@@ -146,8 +183,8 @@ fn default_keystore_path() -> PathBuf {
 #[clap(rename_all = "kebab-case")]
 enum TicTacToeCommand {
     NewGame {
-        player1: SuiAddress,
-        player2: SuiAddress,
+        player_x: Option<SuiAddress>,
+        player_o: Option<SuiAddress>,
     },
     JoinGame {
         my_identity: SuiAddress,
