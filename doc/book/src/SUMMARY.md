@@ -6,18 +6,18 @@
     - [Init Function](./basics/init-function.md)
     - [Entry Functions](./basics/entry-functions.md)
     - [Strings](./basics/strings.md)
-    - [Owned Objects](./basics/owned-objects.md)
+    <!-- - [Owned Objects](./basics/owned-objects.md) -->
     - [Shared Object](./basics/shared-object.md)
     - [Transfer](./basics/transfer.md)
     - [Custom transfer](./basics/custom-transfer.md)
-    - [Bag](./basics/bag.md)
-    - [Map - Indexed Collection](./basics/vec-map.md)
+    <!-- - [Bag](./basics/bag.md) -->
+    <!-- - [Map - Indexed Collection](./basics/vec-map.md) -->
 - [Patterns](./patterns/README.md)
     - [Capability](./patterns/capability.md)
     - [Witness](./patterns/witness.md)
     - [Transferable Witness](./patterns/transferable-witness.md)
-    - [Hot Potato](./patterns/hot-potato.md)
+    <!-- - [Hot Potato](./patterns/hot-potato.md) -->
 - [Samples](./samples/README.md)
     - [Make an NFT](./samples/nft.md)
     - [Create a Coin (ERC20)](./samples/coin.md)
-    - [Make a Character](./samples/character.md)
+    <!-- - [Make a Character](./samples/character.md) -->
