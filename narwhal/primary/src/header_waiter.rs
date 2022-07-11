@@ -24,8 +24,8 @@ use std::{
 use store::Store;
 use tokio::{
     sync::{
-        mpsc::{channel, Receiver, Sender},
-        watch,
+        mpsc::{Receiver, Sender},
+        oneshot, watch,
     },
     task::JoinHandle,
     time::{sleep, Duration, Instant},
@@ -88,7 +88,7 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     batch_requests: HashMap<BatchDigest, Round>,
     /// List of digests (headers or tx batch) that are waiting to be processed.
     /// Their processing will resume when we get all their dependencies.
-    pending: HashMap<HeaderDigest, (Round, Sender<()>)>,
+    pending: HashMap<HeaderDigest, (Round, oneshot::Sender<()>)>,
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -148,7 +148,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
         missing: Vec<T>,
         store: Store<T, V>,
         deliver: Header<PublicKey>,
-        mut handler: Receiver<()>,
+        handler: oneshot::Receiver<()>,
     ) -> DagResult<Option<Header<PublicKey>>>
     where
         T: Serialize + DeserializeOwned + Send + Clone,
@@ -159,7 +159,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
             result = try_join_all(waiting) => {
                 result.map(|_| Some(deliver)).map_err(DagError::from)
             }
-            _ = handler.recv() => Ok(None),
+            _ = handler => Ok(None),
         }
     }
 
@@ -190,7 +190,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                             let wait_for = missing
                                 .iter().map(|(x, y)| (*x, *y))
                                 .collect();
-                            let (tx_cancel, rx_cancel) = channel(1);
+                            let (tx_cancel, rx_cancel) = oneshot::channel();
                             self.pending.insert(header_id, (round, tx_cancel));
                             let fut = Self::waiter(wait_for, self.payload_store.clone(), header, rx_cancel);
                             // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
@@ -231,7 +231,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                             // Add the header to the waiter pool. The waiter will return it to us
                             // when all its parents are in the store.
                             let wait_for = missing.clone();
-                            let (tx_cancel, rx_cancel) = channel(1);
+                            let (tx_cancel, rx_cancel) = oneshot::channel();
                             self.pending.insert(header_id, (round, tx_cancel));
                             let fut = Self::waiter(wait_for, self.certificate_store.clone(), header, rx_cancel);
                             // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
@@ -337,12 +337,22 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
 
                 let mut gc_round = round - self.gc_depth;
 
-                for (r, handler) in self.pending.values() {
-                    if r <= &gc_round {
-                        let _ = handler.send(()).await;
-                    }
-                }
-                self.pending.retain(|_, (r, _)| r > &mut gc_round);
+                // Cancel expired `notify_read`s, keep the rest in the map
+                // TODO: replace with `drain_filter` once that API stabilizes
+                self.pending = self
+                    .pending
+                    .drain()
+                    .flat_map(|(digest, (r, handler))| {
+                        if r <= gc_round {
+                            handler
+                                .send(())
+                                .expect("fatal error sending pending cancellation signal");
+                            None
+                        } else {
+                            Some((digest, (r, handler)))
+                        }
+                    })
+                    .collect();
                 self.batch_requests.retain(|_, r| r > &mut gc_round);
                 self.parent_requests.retain(|_, (r, _)| r > &mut gc_round);
 

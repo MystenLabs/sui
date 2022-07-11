@@ -18,8 +18,8 @@ use std::{
 use store::Store;
 use tokio::{
     sync::{
-        mpsc::{channel, Receiver, Sender},
-        watch,
+        mpsc::{Receiver, Sender},
+        oneshot, watch,
     },
     task::JoinHandle,
 };
@@ -49,7 +49,7 @@ pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     /// List of digests (certificates) that are waiting to be processed. Their processing will
     /// resume when we get all their dependencies. The map holds a cancellation `Sender`
     /// which we can use to give up on a certificate.
-    pending: HashMap<HeaderDigest, (Round, Sender<()>)>,
+    pending: HashMap<HeaderDigest, (Round, oneshot::Sender<()>)>,
     /// The metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -88,7 +88,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
         missing: Vec<CertificateDigest>,
         store: &Store<CertificateDigest, Certificate<PublicKey>>,
         deliver: Certificate<PublicKey>,
-        mut cancel_handle: Receiver<()>,
+        cancel_handle: oneshot::Receiver<()>,
     ) -> DagResult<Certificate<PublicKey>> {
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
 
@@ -97,7 +97,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                 result.map(|_| deliver).map_err(DagError::from)
             }
             // the request for this certificate is obsolete, for instance because its round is obsolete (GC'd).
-            _ = cancel_handle.recv() => Ok(deliver),
+            _ = cancel_handle => Ok(deliver),
         }
     }
 
@@ -124,7 +124,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                         .parents
                         .iter().cloned()
                         .collect();
-                    let (tx_cancel, rx_cancel) = channel(1);
+                    let (tx_cancel, rx_cancel) = oneshot::channel();
                     self.pending.insert(header_id, (certificate.round(), tx_cancel));
                     let fut = Self::waiter(wait_for, &self.store, certificate, rx_cancel);
                     waiting.push(fut);
@@ -160,12 +160,20 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
             let round = self.consensus_round.load(Ordering::Relaxed);
             if round > self.gc_depth {
                 let gc_round = round - self.gc_depth;
-                for (r, cancel_handle) in self.pending.values() {
-                    if *r <= gc_round + 1 {
-                        let _ = cancel_handle.send(()).await;
-                    }
-                }
-                self.pending.retain(|_, (r, _)| *r > gc_round + 1);
+                self.pending = self
+                    .pending
+                    .drain()
+                    .flat_map(|(digest, (r, handler))| {
+                        if r <= gc_round {
+                            handler
+                                .send(())
+                                .expect("fatal error sending pending cancellation signal");
+                            None
+                        } else {
+                            Some((digest, (r, handler)))
+                        }
+                    })
+                    .collect();
             }
 
             self.update_metrics();
