@@ -173,7 +173,7 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
 
 const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
     return (
-        <div className={cl(styles.txdetailsbg)}>
+        <div className={cl(theme.textresults, styles.txdetailsbg)}>
             <div className={theme.txdetailstitle}>
                 <h3>Transaction Details</h3>
             </div>

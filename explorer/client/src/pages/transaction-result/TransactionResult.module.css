@@ -1,3 +1,7 @@
+.txdetailsbg {
+    @apply bg-[#f8f8f8];
+}
+
 div.txcard {
     @apply bg-white px-6 pt-0 pb-0 bg-center rounded-lg shadow-md border-2 border-coolGray-400
     font-sans break-all tracking-tight font-semibold block pl-0 pr-0 m-auto mt-0 mb-10;
