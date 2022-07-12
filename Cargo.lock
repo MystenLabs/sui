@@ -1499,9 +1499,6 @@ name = "debug-ignore"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e51694c5f8b91baf933e6429a3df4ff3e9f1160386d150790b97bef73337d1b"
-dependencies = [
- "serde 1.0.139",
-]
 
 [[package]]
 name = "derivative"
@@ -6464,7 +6461,6 @@ dependencies = [
  "bcs",
  "config 0.1.0",
  "crypto",
- "debug-ignore",
  "dirs",
  "move-binary-format",
  "move-core-types",

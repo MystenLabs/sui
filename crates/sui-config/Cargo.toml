@@ -16,7 +16,6 @@ rand = "0.7.3"
 dirs = "4.0.0"
 multiaddr = "0.14.0"
 once_cell = "1.11.0"
-debug-ignore = { version = "1.0.2", features = ["serde"] }
 tracing = "0.1.35"
 
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", package = "config" }
