@@ -138,13 +138,25 @@ impl ConsensusConfig {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
+    pub name: String,
     pub public_key: PublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub network_address: Multiaddr,
+    pub narwhal_primary_to_primary: Multiaddr,
+
+    //TODO remove all of these as they shouldn't be needed to be encoded in genesis
+    pub narwhal_worker_to_primary: Multiaddr,
+    pub narwhal_primary_to_worker: Multiaddr,
+    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_consensus_address: Multiaddr,
 }
 
 impl ValidatorInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn sui_address(&self) -> SuiAddress {
         SuiAddress::from(self.public_key())
     }
