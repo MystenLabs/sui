@@ -11,18 +11,21 @@ import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { API_ENV } from '_app/ApiProvider';
+import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 type AppState = {
     appType: AppType;
     apiEnv: API_ENV;
     showHideNetwork: boolean;
+    navVisible: boolean;
 };
 
 const initialState: AppState = {
     appType: AppType.unknown,
     apiEnv: DEFAULT_API_ENV,
     showHideNetwork: false,
+    navVisible: true,
 };
 
 // On network change, set setNewJsonRpcProvider, fetch all owned objects, and fetch all transactions
@@ -64,11 +67,19 @@ const slice = createSlice({
         setNetworkSelector: (state, { payload }: PayloadAction<boolean>) => {
             state.showHideNetwork = !payload;
         },
+        setNavVisibility: (
+            state,
+            { payload: isVisible }: PayloadAction<boolean>
+        ) => {
+            state.navVisible = isVisible;
+        },
     },
 
     initialState,
 });
 
-export const { initAppType, setApiEnv, setNetworkSelector } = slice.actions;
+export const { initAppType, setApiEnv, setNetworkSelector, setNavVisibility } =
+    slice.actions;
+export const getNavIsVisible = ({ app }: RootState) => app.navVisible;
 
 export default slice.reducer;
