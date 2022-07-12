@@ -167,8 +167,15 @@ impl SuiNode {
                     AuthAggMetrics::new(&prometheus_registry),
                 );
 
-                let active_authority =
-                    Arc::new(ActiveAuthority::new(state.clone(), follower_store, net)?);
+                let pending_store =
+                    Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
+
+                let active_authority = Arc::new(ActiveAuthority::new(
+                    state.clone(),
+                    pending_store,
+                    follower_store,
+                    net,
+                )?);
 
                 if is_validator {
                     // TODO: get degree from config file.
@@ -185,15 +192,8 @@ impl SuiNode {
                         ),
                     )
                 } else {
-                    let pending_store =
-                        Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
-
                     (
-                        Some(
-                            active_authority
-                                .spawn_node_sync_process(pending_store)
-                                .await,
-                        ),
+                        Some(active_authority.spawn_node_sync_process().await),
                         None,
                         None,
                     )

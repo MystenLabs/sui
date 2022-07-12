@@ -15,7 +15,7 @@ use prometheus::{
 };
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
-    error::SuiError,
+    error::{SuiError, SuiResult},
     messages::{CertifiedTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
@@ -26,12 +26,14 @@ use sui_types::{
 use tokio::time::Instant;
 
 use crate::{
+    authority::AuthorityState,
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
     authority_client::AuthorityAPI,
     checkpoints::{proposal::CheckpointProposal, CheckpointStore},
+    node_sync::NodeSyncState,
 };
+use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::{Committee, StakeUnit};
-use sui_types::error::SuiResult;
 use tracing::{debug, info, warn};
 
 #[cfg(test)]
@@ -581,8 +583,8 @@ pub async fn sync_to_checkpoint<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let _name = active_authority.state.name;
     let net = active_authority.net.load();
+    let state = active_authority.state.clone();
     // Get out last checkpoint
     let latest_checkpoint = checkpoint_db.lock().latest_stored_checkpoint()?;
     // We use the latest available authorities not the authorities that signed the checkpoint
@@ -598,7 +600,7 @@ where
     // so download a full certificate for it.
     if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
         let seq = *signed.summary.sequence_number();
-        debug!("Partial Sync ({_name:?}): {seq:?}",);
+        debug!(name = ?state.name, ?seq, "Partial Sync",);
         let (past, _) = get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
 
         checkpoint_db
@@ -611,9 +613,17 @@ where
         .unwrap_or(0);
 
     for seq in full_sync_start..latest_known_checkpoint.summary.sequence_number {
-        debug!("Full Sync ({_name:?}): {seq:?}");
+        debug!(name = ?state.name, ?seq, "Full Sync",);
         let (past, contents) =
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
+
+        sync_checkpoint_certs(
+            state.clone(),
+            active_authority.node_sync_store.clone(),
+            net.clone(),
+            &contents,
+        )
+        .await?;
 
         checkpoint_db.lock().process_new_checkpoint_certificate(
             &past,
@@ -624,6 +634,20 @@ where
     }
 
     Ok(())
+}
+
+/// Fetch and execute all certificates in the checkpoint.
+async fn sync_checkpoint_certs<A>(
+    state: Arc<AuthorityState>,
+    node_sync_store: Arc<NodeSyncStore>,
+    net: Arc<AuthorityAggregator<A>>,
+    contents: &CheckpointContents,
+) -> SuiResult
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    let sync = NodeSyncState::new(state, net, node_sync_store);
+    sync.sync_checkpoint(contents).await
 }
 
 pub async fn get_one_checkpoint_with_contents<A>(
