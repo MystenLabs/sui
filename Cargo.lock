@@ -6330,6 +6330,7 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bcs",
  "clap 3.1.18",
  "colored",
  "futures",
@@ -6342,6 +6343,7 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-unit-test",
+ "multiaddr",
  "rand 0.7.3",
  "rustyline",
  "rustyline-derive",
