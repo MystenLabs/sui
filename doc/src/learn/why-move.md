@@ -10,7 +10,7 @@ First, note Move is based upon the well-supported [Rust](https://www.rust-lang.o
 
 * [Sui Move announcement](https://sui.io/resources-move/why-we-created-sui-move/)
 * [Sui source code](https://github.com/MystenLabs/sui)
-* [`rustdoc` output](../build/install.md#rustdoc) docs
+* [`rustdoc` output](../build/install.md#rustdoc)
 * [Sui Move by example](https://examples.sui.io/)
 
 ## Move resources
