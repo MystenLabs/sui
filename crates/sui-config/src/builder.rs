@@ -7,12 +7,8 @@ use crate::{
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
-use arc_swap::ArcSwap;
-use debug_ignore::DebugIgnore;
-use narwhal_config::{Authority, Epoch, PrimaryAddresses, Stake, WorkerAddresses};
 use rand::rngs::OsRng;
 use std::{
-    collections::BTreeMap,
     num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
@@ -136,43 +132,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             builder.build()
         };
 
-        let narwhal_committee = validators
-            .iter()
-            .map(|validator| {
-                let name = validator
-                    .key_pair
-                    .public_key_bytes()
-                    .make_narwhal_public_key()
-                    .expect("Can't get narwhal public key");
-                let primary = PrimaryAddresses {
-                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
-                    worker_to_primary: validator.narwhal_worker_to_primary.clone(),
-                };
-                let workers = [(
-                    0, // worker_id
-                    WorkerAddresses {
-                        primary_to_worker: validator.narwhal_primary_to_worker.clone(),
-                        transactions: validator.narwhal_consensus_address.clone(),
-                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
-                    },
-                )]
-                .into_iter()
-                .collect();
-                let authority = Authority {
-                    stake: validator.stake as Stake, //TODO this should at least be the same size integer
-                    primary,
-                    workers,
-                };
-
-                (name, authority)
-            })
-            .collect::<BTreeMap<_, _>>();
-        let narwhal_committee =
-            DebugIgnore(Arc::new(ArcSwap::from_pointee(narwhal_config::Committee {
-                authorities: narwhal_committee,
-                epoch: genesis.epoch() as Epoch,
-            })));
-
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
@@ -191,7 +150,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     consensus_address,
                     consensus_db_path,
                     narwhal_config: Default::default(),
-                    narwhal_committee: narwhal_committee.clone(),
                 };
 
                 NodeConfig {

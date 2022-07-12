@@ -4,11 +4,8 @@
 use crate::genesis;
 use crate::Config;
 use anyhow::Result;
-use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
-use narwhal_config::SharedCommittee as ConsensusCommittee;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -111,8 +108,6 @@ pub struct ConsensusConfig {
     pub consensus_db_path: PathBuf,
 
     pub narwhal_config: ConsensusParameters,
-
-    pub narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
 }
 
 impl ConsensusConfig {
@@ -126,10 +121,6 @@ impl ConsensusConfig {
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
         &self.narwhal_config
-    }
-
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
-        &self.narwhal_committee
     }
 }
 

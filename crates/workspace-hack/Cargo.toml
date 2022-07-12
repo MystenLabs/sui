@@ -118,7 +118,7 @@ dag = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002e
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 datatest-stable = { version = "0.1", default-features = false }
-debug-ignore = { version = "1", default-features = false, features = ["serde"] }
+debug-ignore = { version = "1", default-features = false }
 derive_builder = { version = "0.11", features = ["std"] }
 determinator = { version = "0.9", default-features = false }
 deunicode = { version = "0.4", default-features = false }
@@ -676,7 +676,7 @@ darling_macro-582f2526e08bb6a0 = { package = "darling_macro", version = "0.14", 
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 datatest-stable = { version = "0.1", default-features = false }
-debug-ignore = { version = "1", default-features = false, features = ["serde"] }
+debug-ignore = { version = "1", default-features = false }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
 derive-syn-parse = { version = "0.1", default-features = false }
 derive_builder = { version = "0.11", features = ["std"] }
