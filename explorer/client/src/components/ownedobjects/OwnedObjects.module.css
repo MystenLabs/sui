@@ -3,7 +3,7 @@
 }
 
 .layout > div {
-    @apply sm:w-[40%];
+    @apply sm:w-[600px];
 }
 
 .previewimage > div,

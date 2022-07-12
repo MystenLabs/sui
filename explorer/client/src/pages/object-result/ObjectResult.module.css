@@ -1,5 +1,5 @@
 .resultbox {
-    @apply flex flex-wrap w-full;
+    @apply flex flex-wrap w-[100%];
 }
 
 h1.title {
@@ -9,8 +9,8 @@ h1.title {
 /* Display Box CSS */
 
 .display {
-    @apply ml-[5vw] mx-auto mt-[1vh]
-    w-[88vw] lg:w-[35vw] min-h-[35vw] lg:min-h-[35vw];
+    @apply mt-[1vh]
+    w-[100%] lg:w-[40%] min-h-[88vw] lg:min-h-[35vw];
 }
 
 .display > div > img {
@@ -24,15 +24,15 @@ h1.title {
 /* Text Box CSS */
 
 div.textbox {
-    @apply ml-[5vw] mb-[10vh] w-[90vw];
+    @apply mb-[10vh] w-[100%];
 }
 
 div.textbox.accommodate {
-    @apply lg:w-[45vw];
+    @apply lg:w-[50%] lg:ml-[10%];
 }
 
 div.textbox.noaccommodate {
-    @apply w-[90vw];
+    @apply w-[100%];
 }
 
 div.mutable {
@@ -50,7 +50,7 @@ div.textbox > div > div > div.unconstrained {
 /* Property Box CSS */
 
 div.propertybox {
-    @apply flex flex-wrap font-mono lg:w-[50vw];
+    @apply flex flex-wrap font-mono;
 }
 
 div.propertybox > div {
