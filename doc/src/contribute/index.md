@@ -9,7 +9,7 @@ Find answers to common questions in our [FAQ](../contribute/faq.md). Read other 
 ## See our roadmap
 
 Sui is evolving quickly. See our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) for the
-overall status of Sui, including timelines for launching devnet, testnet, and mainnet.
+overall status of Sui, including timelines for launching Devnet, Testnet, and Mainnet.
 
 ## Join the community
 
