@@ -223,7 +223,7 @@ impl ValidatorService {
                 /* consensus_address */ consensus_config.address().to_owned(),
                 /* tx_consensus_listener */ tx_sui_to_consensus,
                 rx_checkpoint_consensus_adapter,
-                /* checkpoint_locals */ checkpoint_store.lock().get_locals(),
+                /* checkpoint_locals */ checkpoint_store,
                 /* retry_delay */ Duration::from_millis(5_000),
                 /* max_pending_transactions */ 10_000,
             )
