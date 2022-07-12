@@ -6,12 +6,12 @@ This page links to key [Move](https://golden.com/wiki/Move_(programming_language
 
 ## Sui Move
 
-First, note Move is based upon the well-supported [Rust](https://www.rust-lang.org/) programming language. And [Sui Move differs from core Move](sui-move-diffs.md) in subtle yet distinct ways.
+First, note Move is based upon the well-supported [Rust](https://www.rust-lang.org/) programming language. And [Sui Move differs from core Move](sui-move-diffs.md) in subtle yet distinct ways. Here are resources to ramp up on Sui Move:
 
-Find the the Sui source code at:
-https://github.com/MystenLabs/sui
-
-And see the `rustdoc` output for it in the [Install](../build/install.md#rustdoc) docs.
+* [Sui Move announcement](https://sui.io/resources-move/why-we-created-sui-move/)
+* [Sui source code](https://github.com/MystenLabs/sui)
+* [`rustdoc` output](../build/install.md#rustdoc)
+* [Sui Move by example](https://examples.sui.io/)
 
 ## Move resources
 
