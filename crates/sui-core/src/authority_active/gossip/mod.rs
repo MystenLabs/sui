@@ -84,7 +84,6 @@ pub async fn node_sync_process<A>(
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    // TODO: special case follower for node sync.
     let state = active_authority.state.clone();
     let aggregator = active_authority.net.load().clone();
     follower_process(
@@ -344,10 +343,6 @@ where
         active_authority: &ActiveAuthority<A>,
         gossip_type: GossipType,
     ) -> Self {
-        // TODO: for validator gossip, we should always use None as the start_seq, but we should
-        // consult the start_seq we retrieved from the db to make sure that the peer is giving
-        // us new txes.
-
         let start_seq = match active_authority
             .follower_store
             .get_next_sequence(&peer_name)
