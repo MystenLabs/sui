@@ -21,7 +21,7 @@ def local(ctx, debug=True):
         'workers': 1,
         'rate': 50_000,
         'tx_size': 512,
-        'duration': 10,
+        'duration': 20,
         'mem_profiling': False
     }
     node_params = {
