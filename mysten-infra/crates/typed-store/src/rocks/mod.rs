@@ -395,6 +395,12 @@ where
     {
         self.batch().delete_batch(self, keys)?.write()
     }
+
+    /// Try to catch up with primary when running as secondary
+    #[instrument(level = "trace", skip_all, err)]
+    fn try_catch_up_with_primary(&self) -> Result<(), Self::Error> {
+        Ok(self.rocksdb.try_catch_up_with_primary()?)
+    }
 }
 
 impl<J, K, U, V> TryExtend<(J, U)> for DBMap<K, V>
@@ -465,6 +471,60 @@ pub fn open_cf_opts<P: AsRef<Path>>(
             rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
                 &options,
                 &primary,
+                opt_cfs
+                    .iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            )?,
+        )
+    };
+    Ok(rocksdb)
+}
+
+/// Opens a database with options, and a number of column families with individual options that are created if they do not exist.
+pub fn open_cf_opts_secondary<P: AsRef<Path>>(
+    primary_path: P,
+    secondary_path: Option<P>,
+    db_options: Option<rocksdb::Options>,
+    opt_cfs: &[(&str, &rocksdb::Options)],
+) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
+    // Customize database options
+    let mut options = db_options.unwrap_or_default();
+
+    fdlimit::raise_fd_limit();
+    // This is a requirement by RocksDB when opening as secondary
+    options.set_max_open_files(-1);
+
+    let mut opt_cfs: std::collections::HashMap<_, _> = opt_cfs.iter().cloned().collect();
+    let cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &primary_path)
+        .ok()
+        .unwrap_or_default();
+
+    let default_rocksdb_options = rocksdb::Options::default();
+    // Add CFs not explicitly listed
+    for cf_key in cfs.iter() {
+        if !opt_cfs.contains_key(&cf_key[..]) {
+            opt_cfs.insert(cf_key, &default_rocksdb_options);
+        }
+    }
+
+    let primary_path = primary_path.as_ref().to_path_buf();
+    let secondary_path = secondary_path
+        .map(|q| q.as_ref().to_path_buf())
+        .unwrap_or_else(|| {
+            let mut s = primary_path.clone();
+            s.pop();
+            s.push("SECONDARY");
+            s.as_path().to_path_buf()
+        });
+
+    let rocksdb = {
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        Arc::new(
+            rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors_as_secondary(
+                &options,
+                &primary_path,
+                &secondary_path,
                 opt_cfs
                     .iter()
                     .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),

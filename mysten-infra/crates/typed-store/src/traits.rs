@@ -73,4 +73,7 @@ where
     fn multi_remove<J>(&self, keys: impl IntoIterator<Item = J>) -> Result<(), Self::Error>
     where
         J: Borrow<K>;
+
+    /// Try to catch up with primary when running as secondary
+    fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
 }
