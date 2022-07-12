@@ -91,7 +91,6 @@ export const StakeTokens = createAsyncThunk<
         // TODO: fetch the first active validator for now,
         // repalce it with the user picked one
         const activeValidators = await Coin.getActiveValidators(
-            // api.getSignerInstance(keypairVault.getKeyPair())
             api.instance.fullNode
         );
         const first_validator = activeValidators[0];
