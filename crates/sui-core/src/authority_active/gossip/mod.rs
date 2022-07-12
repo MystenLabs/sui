@@ -38,8 +38,6 @@ mod configurable_batch_action_client;
 #[cfg(test)]
 pub(crate) mod tests;
 
-mod node_sync;
-use node_sync::NodeSyncDigestHandler;
 use sui_types::messages::CertifiedTransaction;
 
 #[derive(Copy, Clone)]
