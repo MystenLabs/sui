@@ -73,7 +73,7 @@ function DisplayBox({ display }: { display: string }) {
 
     return (
         <div className={styles['display-container']}>
-            {!hasDisplayLoaded && (
+            {!hasDisplayLoaded && !showAutoModNotice && (
                 <div className={styles.imagebox} id="pleaseWaitImage">
                     image loading...
                 </div>
@@ -83,7 +83,7 @@ function DisplayBox({ display }: { display: string }) {
                     No Image was Found
                 </div>
             )}
-            {!hasFailedToLoad && !showAutoModNotice && (
+            {hasDisplayLoaded && !hasFailedToLoad && !showAutoModNotice && (
                 <img
                     id="loadedImage"
                     className={imgClass}
