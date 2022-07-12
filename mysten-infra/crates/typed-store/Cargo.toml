@@ -18,6 +18,7 @@ tracing = "0.1.35"
 tokio = { version = "1.19.2", features = ["sync", "macros", "rt"] }
 thiserror = "1.0.31"
 collectable = "0.0.2"
+fdlimit = "0.2.1"
 
 [dev-dependencies]
 tempfile = "3.3.0"
