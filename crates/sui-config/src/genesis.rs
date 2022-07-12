@@ -58,6 +58,46 @@ impl Genesis {
         )
     }
 
+    pub fn narwhal_committee(
+        &self,
+    ) -> narwhal_config::SharedCommittee<narwhal_crypto::ed25519::Ed25519PublicKey> {
+        let narwhal_committee = self
+            .validator_set
+            .iter()
+            .map(|validator| {
+                let name = validator
+                    .public_key()
+                    .make_narwhal_public_key()
+                    .expect("Can't get narwhal public key");
+                let primary = narwhal_config::PrimaryAddresses {
+                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                    worker_to_primary: validator.narwhal_worker_to_primary.clone(),
+                };
+                let workers = [(
+                    0, // worker_id
+                    narwhal_config::WorkerAddresses {
+                        primary_to_worker: validator.narwhal_primary_to_worker.clone(),
+                        transactions: validator.narwhal_consensus_address.clone(),
+                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                    },
+                )]
+                .into_iter()
+                .collect();
+                let authority = narwhal_config::Authority {
+                    stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
+                    primary,
+                    workers,
+                };
+
+                (name, authority)
+            })
+            .collect();
+        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
+            authorities: narwhal_committee,
+            epoch: self.epoch() as narwhal_config::Epoch,
+        }))
+    }
+
     pub fn get_default_genesis() -> Self {
         Builder::new_with_context(sui_adapter::genesis::get_genesis_context()).build()
     }
