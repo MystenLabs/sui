@@ -3,6 +3,7 @@
 
 import { useParams } from 'react-router-dom';
 
+import { ReactComponent as AddressIcon } from '../../assets/AddressIcon.svg';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
@@ -31,7 +32,9 @@ function AddressResult() {
         return (
             <div className={styles.results} id="textResults">
                 <div className={styles.addressid}>
-                    <span>Address</span>
+                    <span>
+                        <AddressIcon /> Address
+                    </span>
                     <div id="addressID">
                         <Longtext
                             text={addressID}
