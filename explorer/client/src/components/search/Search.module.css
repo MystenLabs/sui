@@ -28,11 +28,3 @@
 .searchtextmobile {
     @apply sm:hidden block;
 }
-
-.searchtextdesktop {
-    @apply hidden sm:block;
-}
-
-.searchtextmobile {
-    @apply sm:hidden block;
-}
