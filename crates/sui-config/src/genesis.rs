@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ValidatorInfo;
-use anyhow::Context;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
@@ -22,10 +21,11 @@ use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
 use sui_types::messages::Transaction;
 use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
-    base_types::TxContext,
+    base_types::{encode_bytes_hex, TxContext},
     committee::{Committee, EpochId},
     error::SuiResult,
     object::Object,
@@ -96,6 +96,21 @@ impl Genesis {
             authorities: narwhal_committee,
             epoch: self.epoch() as narwhal_config::Epoch,
         }))
+    }
+
+    pub fn sui_system_object(&self) -> SuiSystemState {
+        let sui_system_object = self
+            .objects()
+            .iter()
+            .find(|o| o.id() == sui_types::SUI_SYSTEM_STATE_OBJECT_ID)
+            .expect("Sui System State object must always exist");
+        let move_object = sui_system_object
+            .data
+            .try_as_move()
+            .expect("Sui System State object must be a Move object");
+        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+            .expect("Sui System State object deserialization cannot fail");
+        result
     }
 
     pub fn get_default_genesis() -> Self {
@@ -272,6 +287,82 @@ impl Builder {
             validator_set: self.validators,
         }
     }
+
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Reading Genesis Builder from {}", path.display());
+
+        if !path.is_dir() {
+            bail!("path must be a directory");
+        }
+
+        // Load context
+        let ctx_bytes =
+            fs::read(path.join(GENESIS_CTX_FILE_NAME)).context("unable to load genesis_ctx")?;
+        let genesis_ctx: TxContext = serde_yaml::from_slice(&ctx_bytes)?;
+
+        // Load Objects
+        let mut objects = Vec::new();
+        for entry in std::fs::read_dir(path.join(GENESIS_BUILDER_OBJECT_DIR))? {
+            let entry = entry?;
+            let path = entry.path();
+            let object_bytes = fs::read(path)?;
+            let object: Object = serde_yaml::from_slice(&object_bytes)?;
+            objects.push(object);
+        }
+
+        // Load validator infos
+        let mut committee = Vec::new();
+        for entry in std::fs::read_dir(path.join(GENESIS_BUILDER_COMMITTEE_DIR))? {
+            let entry = entry?;
+            let path = entry.path();
+            let validator_info_bytes = fs::read(path)?;
+            let validator_info: ValidatorInfo = serde_yaml::from_slice(&validator_info_bytes)?;
+            committee.push(validator_info);
+        }
+
+        Ok(Self {
+            sui_framework: None,
+            move_framework: None,
+            move_modules: vec![],
+            objects,
+            genesis_ctx,
+            validators: committee,
+        })
+    }
+
+    pub fn save<P: AsRef<Path>>(self, path: P) -> Result<(), anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Writing Genesis Builder to {}", path.display());
+
+        std::fs::create_dir_all(path)?;
+
+        // Write context
+        let ctx_bytes = serde_yaml::to_vec(&self.genesis_ctx)?;
+        fs::write(path.join(GENESIS_CTX_FILE_NAME), ctx_bytes)?;
+
+        // Write Objects
+        let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
+        std::fs::create_dir_all(&object_dir)?;
+
+        for object in self.objects {
+            let object_bytes = serde_yaml::to_vec(&object)?;
+            let hex_digest = encode_bytes_hex(&object.digest());
+            fs::write(object_dir.join(hex_digest), object_bytes)?;
+        }
+
+        // Write validator infos
+        let committee_dir = path.join(GENESIS_BUILDER_COMMITTEE_DIR);
+        std::fs::create_dir_all(&committee_dir)?;
+
+        for validator in self.validators {
+            let validator_info_bytes = serde_yaml::to_vec(&validator)?;
+            let hex_name = encode_bytes_hex(&validator.public_key());
+            fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
+        }
+
+        Ok(())
+    }
 }
 
 fn create_genesis_objects(
@@ -421,9 +512,15 @@ pub fn generate_genesis_system_object(
     Ok(())
 }
 
+const GENESIS_CTX_FILE_NAME: &str = "genesis-ctx";
+const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
+const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
+
 #[cfg(test)]
 mod test {
     use super::Builder;
+    use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
+    use sui_types::crypto::get_key_pair_from_rng;
 
     #[test]
     fn roundtrip() {
@@ -433,5 +530,38 @@ mod test {
         let s = serde_yaml::to_string(&genesis).unwrap();
         let from_s = serde_yaml::from_str(&s).unwrap();
         assert_eq!(genesis, from_s);
+    }
+
+    #[test]
+    fn ceremony() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        let genesis_config = GenesisConfig::for_local_testing();
+        let (_account_keys, objects) = genesis_config
+            .generate_accounts(&mut rand::rngs::OsRng)
+            .unwrap();
+
+        let genesis_ctx = sui_adapter::genesis::get_genesis_context();
+
+        let mut builder = Builder::new_with_context(genesis_ctx).add_objects(objects);
+
+        let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let validator = ValidatorInfo {
+            name: "0".into(),
+            public_key: *key.public_key_bytes(),
+            stake: 1,
+            delegation: 0,
+            network_address: utils::new_network_address(),
+            narwhal_primary_to_primary: utils::new_network_address(),
+            narwhal_worker_to_primary: utils::new_network_address(),
+            narwhal_primary_to_worker: utils::new_network_address(),
+            narwhal_worker_to_worker: utils::new_network_address(),
+            narwhal_consensus_address: utils::new_network_address(),
+        };
+
+        builder = builder.add_validator(validator);
+
+        builder.save(dir.path()).unwrap();
+        Builder::load(dir.path()).unwrap();
     }
 }
