@@ -151,3 +151,24 @@ const moveCallTxn = await signer.executeMoveCall({
 });
 console.log('moveCallTxn', moveCallTxn);
 ```
+
+To publish a package:
+
+```typescript
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import * as fs from 'fs/promises';
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const signer = new RawSigner(
+  keypair,
+  new JsonRpcProvider('https://gateway.devnet.sui.io:443')
+);
+const bytecode = await fs.readFile('path/to/project/build/project_name/bytecode_modules/module_name.mv', 'base64');  
+const publishTxn = await signer.publish(
+  {
+    compiledModules: [bytecode.toString()],
+    gasBudget: 1000
+  }
+);
+console.log('publishTxn', publishTxn);
+```
