@@ -12,6 +12,7 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import TabFooter from '../../components/tabs/TabFooter';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -179,6 +180,13 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
             return 0;
         });
 
+    const nftFooter = {
+        stats: {
+            count: other_results.length,
+            stats_text: 'Total NFTs',
+        },
+    };
+
     return (
         <div className={styles.layout}>
             {coin_results.length > 0 && (
@@ -198,6 +206,7 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
                         results={other_results}
                         viewComponentFn={viewFn}
                     />
+                    <TabFooter stats={nftFooter.stats} />
                 </div>
             )}
         </div>
