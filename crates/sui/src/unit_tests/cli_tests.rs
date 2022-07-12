@@ -112,10 +112,16 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         gateway: GatewayType::Embedded(GatewayConfig {
             db_folder_path: working_dir.join("client_db"),
             validator_set: vec![ValidatorInfo {
+                name: "0".into(),
                 public_key: *get_key_pair().1.public_key_bytes(),
                 stake: 1,
                 delegation: 1,
-                network_address: "/dns/localhost/tcp/8080/http".parse().unwrap(),
+                network_address: sui_config::utils::new_network_address(),
+                narwhal_primary_to_primary: sui_config::utils::new_network_address(),
+                narwhal_worker_to_primary: sui_config::utils::new_network_address(),
+                narwhal_primary_to_worker: sui_config::utils::new_network_address(),
+                narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+                narwhal_consensus_address: sui_config::utils::new_network_address(),
             }],
             ..Default::default()
         }),

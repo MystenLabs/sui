@@ -29,14 +29,20 @@ pub async fn init_local_authorities(
 ) {
     let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
     let mut key_pairs = Vec::new();
-    for _ in 0..committee_size {
+    for i in 0..committee_size {
         let (_, key_pair) = get_key_pair();
         let authority_name = *key_pair.public_key_bytes();
         let validator_info = ValidatorInfo {
+            name: format!("validator-{i}"),
             public_key: authority_name,
             stake: 1,
             delegation: 0,
             network_address: sui_config::utils::new_network_address(),
+            narwhal_primary_to_primary: sui_config::utils::new_network_address(),
+            narwhal_worker_to_primary: sui_config::utils::new_network_address(),
+            narwhal_primary_to_worker: sui_config::utils::new_network_address(),
+            narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+            narwhal_consensus_address: sui_config::utils::new_network_address(),
         };
         builder = builder.add_validator(validator_info);
         key_pairs.push((authority_name, key_pair));

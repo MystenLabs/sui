@@ -89,16 +89,24 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
         let validator_set = validators
             .iter()
-            .map(|validator| {
+            .enumerate()
+            .map(|(i, validator)| {
+                let name = format!("validator-{i}");
                 let public_key = *validator.key_pair.public_key_bytes();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
 
                 ValidatorInfo {
+                    name,
                     public_key,
                     stake,
                     delegation: 0, // no delegation yet at genesis
                     network_address,
+                    narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                    narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
+                    narwhal_primary_to_worker: validator.narwhal_primary_to_worker.clone(),
+                    narwhal_worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                    narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                 }
             })
             .collect::<Vec<_>>();
