@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::CheckpointLocals;
+use crate::checkpoints::CheckpointStore;
 use crate::checkpoints::ConsensusSender;
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
@@ -10,6 +10,7 @@ use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
+use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::{
@@ -272,7 +273,7 @@ pub struct CheckpointConsensusAdapter {
     /// Receive new checkpoint fragments to sequence.
     rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
     /// A pointer to the checkpoints local store.
-    checkpoint_locals: Arc<CheckpointLocals>,
+    checkpoint_db: Arc<Mutex<CheckpointStore>>,
     /// The initial delay to wait before re-attempting a connection with consensus (in ms).
     retry_delay: Duration,
     /// The maximum number of checkpoint fragment pending sequencing.
@@ -287,7 +288,7 @@ impl CheckpointConsensusAdapter {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
-        checkpoint_locals: Arc<CheckpointLocals>,
+        checkpoint_db: Arc<Mutex<CheckpointStore>>,
         retry_delay: Duration,
         max_pending_transactions: usize,
     ) -> Self {
@@ -301,7 +302,7 @@ impl CheckpointConsensusAdapter {
             consensus_client,
             tx_consensus_listener,
             rx_checkpoint_consensus_adapter,
-            checkpoint_locals,
+            checkpoint_db,
             retry_delay,
             max_pending_transactions,
             buffer: VecDeque::with_capacity(max_pending_transactions),
@@ -380,7 +381,7 @@ impl CheckpointConsensusAdapter {
                     // Cleanup the buffer.
                     if self.buffer.len() >= self.max_pending_transactions {
                         // Drop the earliest fragments. They are not needed for liveness.
-                        if let Some(proposal) = &self.checkpoint_locals.current_proposal {
+                        if let Some(proposal) = &self.checkpoint_db.lock().get_locals().current_proposal {
                             let current_sequence_number = proposal.sequence_number();
                             self.buffer.retain(|(_, s)| s >= current_sequence_number);
                         }
