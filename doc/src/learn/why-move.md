@@ -2,7 +2,16 @@
 title: Why Move?
 ---
 
-This page links to key Move resources and compares the Move and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
+This page links to key [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) resources and compares the [Move](https://github.com/move-language/move/tree/main/language/documentation) and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
+
+## Sui Move
+
+First, note Move is based upon the well-supported [Rust](https://www.rust-lang.org/) programming language. And [Sui Move differs from core Move](sui-move-diffs.md) in subtle yet distinct ways.
+
+Find the the Sui source code at:
+https://github.com/MystenLabs/sui
+
+And see the `rustdoc` output for it in the [Install](../build/install.md#rustdoc) docs.
 
 ## Move resources
 
