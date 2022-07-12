@@ -16,8 +16,8 @@ Owner: Immutable
 Contents: test::m::S {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(107)}}, version: 1u64}}
 
 task 4 'transfer-object'. lines 28-28:
-Error: Transaction Effects Status: MiscellaneousError
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TransferUnowned, source: None } }
+Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None } }
 
 task 5 'view-object'. lines 30-30:
 Owner: Immutable

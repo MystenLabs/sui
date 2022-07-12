@@ -12,7 +12,6 @@ use anyhow::Result;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
-    errors::PartialVMResult,
     file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
 use move_core_types::{
@@ -32,7 +31,7 @@ use sui_types::{
     event::{Event, TransferType},
     gas::SuiGasStatus,
     id::VersionedID,
-    messages::{CallArg, InputObjectKind, ObjectArg},
+    messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -232,11 +231,14 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     gas_status.charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
     let mut modules = module_bytes
         .iter()
-        .map(|b| CompiledModule::deserialize(b))
-        .collect::<PartialVMResult<Vec<CompiledModule>>>()?;
+        .map(|b| {
+            CompiledModule::deserialize(b)
+                .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
+        })
+        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()?;
 
     if modules.is_empty() {
-        return Err(ExecutionErrorKind::ModulePublishFailure.into());
+        return Err(ExecutionErrorKind::PublishErrorEmptyPackage.into());
     }
 
     let package_id = generate_package_id(&mut modules, ctx)?;
@@ -374,7 +376,7 @@ pub fn generate_package_id(
             let handle = module.module_handle_at(module.self_module_handle_idx);
             let name = module.identifier_at(handle.name);
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::ModulePublishFailure,
+                ExecutionErrorKind::PublishErrorNonZeroAddress,
                 format!("Publishing module {name} with non-zero address is not allowed"),
             ));
         }
@@ -384,7 +386,7 @@ pub fn generate_package_id(
         );
         if sub_map.insert(old_module_id, new_module_id).is_some() {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::ModulePublishFailure,
+                ExecutionErrorKind::PublishErrorDuplicateModule,
                 "Publishing two modules with the same ID",
             ));
         }
@@ -658,7 +660,7 @@ fn handle_transfer<
                     parent = *object_owner_map.get(&parent).unwrap();
                 }
                 if parent == obj_address {
-                    return Err(ExecutionErrorKind::CircularObjectOwnership.into());
+                    return Err(ExecutionErrorKind::circular_object_ownership(parent.into()).into());
                 }
                 object_owner_map.insert(obj_address, new_owner);
             }
@@ -731,7 +733,7 @@ pub fn resolve_and_type_check(
     // functions, and as such need to bypass this check.
     if !fdef.is_entry && !is_genesis {
         return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::InvalidNonEntryFunction,
+            ExecutionErrorKind::NonEntryFunctionInvoked,
             "Can only call `entry` functions",
         ));
     }
@@ -740,7 +742,7 @@ pub fn resolve_and_type_check(
     // check arity of type and value arguments
     if fhandle.type_parameters.len() != type_args.len() {
         return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::InvalidFunctionSignature,
+            ExecutionErrorKind::EntryTypeArityMismatch,
             format!(
                 "Expected {:?} type arguments, but found {:?}",
                 fhandle.type_parameters.len(),
@@ -761,8 +763,9 @@ pub fn resolve_and_type_check(
         args.len()
     };
     if parameters.len() != num_args {
+        let idx = std::cmp::min(parameters.len(), num_args) as LocalIndex;
         return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::InvalidFunctionSignature,
+            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::ArityMismatch),
             format!(
                 "Expected {:?} arguments calling function '{}', but found {:?}",
                 parameters.len(),
@@ -785,18 +788,22 @@ pub fn resolve_and_type_check(
         .enumerate()
         .map(|(idx, arg)| {
             let param_type = &parameters[idx];
+            let idx = idx as LocalIndex;
             let object_kind = match arg {
                 CallArg::Pure(arg) => {
                     if !is_primitive(view, type_args, param_type) {
-                        return Err(
-                            ExecutionError::new_with_source(
-                                ExecutionErrorKind::TypeError,
-                                format!(
-                                    "Non-primitive argument at index {}. If it is an object, it must be populated by an object ID",
-                                    idx,
-                                ),
-                            )
+                        let msg = format!(
+                            "Non-primitive argument at index {}. If it is an object, it must be \
+                            populated by an object ID",
+                            idx,
                         );
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::entry_argument_error(
+                                idx,
+                                EntryArgumentErrorKind::UnsupportedPureArg,
+                            ),
+                            msg,
+                        ));
                     }
                     return Ok(arg);
                 }
@@ -817,7 +824,7 @@ pub fn resolve_and_type_check(
                         "Object map not populated for arg {} with id {}",
                         idx, id
                     );
-                    return Err(ExecutionErrorKind::ExecutionInvariantViolation.into());
+                    return Err(ExecutionErrorKind::InvariantViolation.into());
                 }
             };
             match object_kind {
@@ -828,7 +835,10 @@ pub fn resolve_and_type_check(
                         idx, id
                     );
                     return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::TypeError,
+                        ExecutionErrorKind::entry_argument_error(
+                            idx,
+                            EntryArgumentErrorKind::ObjectKindMismatch,
+                        ),
                         error,
                     ));
                 }
@@ -839,7 +849,10 @@ pub fn resolve_and_type_check(
                         idx, id
                     );
                     return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::TypeError,
+                        ExecutionErrorKind::entry_argument_error(
+                            idx,
+                            EntryArgumentErrorKind::ObjectKindMismatch,
+                        ),
                         error,
                     ));
                 }
@@ -855,7 +868,10 @@ pub fn resolve_and_type_check(
                         param_type
                     );
                     return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::TypeError,
+                        ExecutionErrorKind::entry_argument_error(
+                            idx,
+                            EntryArgumentErrorKind::TypeMismatch,
+                        ),
                         error,
                     ));
                 }
@@ -871,7 +887,10 @@ pub fn resolve_and_type_check(
                             idx
                         );
                         return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::TypeError,
+                            ExecutionErrorKind::entry_argument_error(
+                                idx,
+                                EntryArgumentErrorKind::InvalidObjectByMuteRef,
+                            ),
                             error,
                         ));
                     }
@@ -885,9 +904,13 @@ pub fn resolve_and_type_check(
                         // Forbid passing shared (both mutable and immutable) object by value.
                         // This ensures that shared object cannot be transferred, deleted or wrapped.
                         return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::TypeError,
+                            ExecutionErrorKind::entry_argument_error(
+                                idx,
+                                EntryArgumentErrorKind::InvalidObjectByValue,
+                            ),
                             format!(
-                                "Only owned object can be passed by-value, violation found in argument {}",
+                                "Only owned object can be passed by-value, violation found in \
+                                argument {}",
                                 idx
                             ),
                         ));
@@ -897,7 +920,10 @@ pub fn resolve_and_type_check(
                 }
                 t => {
                     return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::TypeError,
+                        ExecutionErrorKind::entry_argument_error(
+                            idx,
+                            EntryArgumentErrorKind::TypeMismatch,
+                        ),
                         format!(
                             "Found object argument {}, but function expects {:?}",
                             move_object.type_, t
@@ -905,7 +931,7 @@ pub fn resolve_and_type_check(
                     ));
                 }
             };
-            type_check_struct(view, type_args, &move_object.type_, inner_param_type)?;
+            type_check_struct(view, type_args, idx, &move_object.type_, inner_param_type)?;
             object_type_map.insert(id, move_object.type_.module_id());
             Ok(object_arg)
         })
@@ -938,26 +964,32 @@ fn check_child_object_of_shared_object(
     let ancestor_map = ObjectRootAncestorMap::new(&object_owner_map)?;
     for (object_id, owner) in object_owner_map {
         // We are only interested in objects owned by objects.
-        if !matches!(owner, Owner::ObjectOwner(..)) {
-            continue;
-        }
-        let (ancestor_id, ancestor_owner) = ancestor_map.get_root_ancestor(&object_id)?;
+        let owner = match owner {
+            Owner::ObjectOwner(o) => o,
+            _ => continue,
+        };
+        let (ancestor_id, ancestor_owner) = match ancestor_map.get_root_ancestor(&object_id) {
+            Some(ancestor) => ancestor,
+            None => return Err(ExecutionErrorKind::missing_object_owner(object_id, owner).into()),
+        };
         if ancestor_owner.is_shared() {
             // unwrap safe because the object ID exists in object_owner_map.
             let child_module = object_type_map.get(&object_id).unwrap();
             let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
             if !(child_module == &current_module || ancestor_module == &current_module) {
-                return Err(ExecutionError::new_with_source(ExecutionErrorKind::InvalidSharedChildUse,
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::invalid_shared_child_use(object_id, ancestor_id),
                     format!(
-        "When an (either direct or indirect) child object of a shared object is passed as a Move argument,\
-        either the child object's type or the shared object's type must be defined in the same module \
-        as the called function. This is violated by object {child} (defined in module '{child_module}'), \
-        whose ancestor {ancestor} is a shared object (defined in module '{ancestor_module}'), \
-        and neither are defined in this module '{current_module}'",
+"When an (either direct or indirect) child object of a shared object is passed as a Move argument, \
+either the child object's type or the shared object's type must be defined in the same module \
+as the called function. This is violated by object {child} (defined in module '{child_module}'), \
+whose ancestor {ancestor} is a shared object (defined in module '{ancestor_module}'), \
+and neither are defined in this module '{current_module}'",
                     child = object_id,
                     child_module = current_module,
                     ancestor = ancestor_id,
-                    )));
+                    ),
+                ));
             }
         }
     }
@@ -1029,12 +1061,13 @@ fn is_primitive_type_tag(t: &TypeTag) -> bool {
 fn type_check_struct(
     view: &BinaryIndexedView,
     function_type_arguments: &[TypeTag],
+    idx: LocalIndex,
     arg_type: &StructTag,
     param_type: &SignatureToken,
 ) -> Result<(), ExecutionError> {
     if !struct_tag_equals_sig_token(view, function_type_arguments, arg_type, param_type) {
         Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::TypeError,
+            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
             format!(
                 "Expected argument of type {}, but found type {}",
                 sui_verifier::format_signature_token(view, param_type),
