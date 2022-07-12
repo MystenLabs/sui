@@ -1,6 +1,7 @@
 @use 'sass:map';
 @use './light';
 @use './dark';
+@use '_variables' as v;
 
 @mixin apply-theme($name, $values, $default-values) {
     @each $variable, $default-value in $default-values {
@@ -9,7 +10,7 @@
             $final-value: map.get($values, $variable);
         }
 
-        #{$variable}: $final-value;
+        @include v.set($variable, $final-value);
     }
 }
 

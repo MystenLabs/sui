@@ -9,4 +9,10 @@ $values: (
     c-var.$main-content-background: #0d1f36,
     c-var.$text-on-main-content-background: c-val.$white,
     shadows.$main-content: 0 0 49px rgb(103 103 103 / 13%),
+    c-var.$nav-background-color: #4e545b33,
+    c-var.$nav-background-filter: blur(25px),
+    c-var.$nav-item-color: c-val.$sui-steel-blue,
+    c-var.$nav-item-highlighted-color: c-val.$white,
+    c-var.$nav-item-icon-highlighted-color: c-val.$sui-blue,
+    c-var.$nav-item-icon-highlighted-gradient-color: none,
 );
