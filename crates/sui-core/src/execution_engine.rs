@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
 
-use crate::authority::AuthorityTemporaryStore;
+use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
@@ -33,7 +33,7 @@ use tracing::{debug, instrument, trace};
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     shared_object_refs: Vec<ObjectRef>,
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
@@ -85,7 +85,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
 }
 
 fn charge_gas_for_object_read<S>(
-    temporary_store: &AuthorityTemporaryStore<S>,
+    temporary_store: &TemporaryStore<S>,
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
     // Charge gas for reading all objects from the DB.
@@ -101,7 +101,7 @@ fn charge_gas_for_object_read<S>(
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
@@ -242,12 +242,13 @@ fn execute_transaction<S: BackingPackageStore>(
 }
 
 fn transfer_object<S>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     mut object: Object,
     sender: SuiAddress,
     recipient: SuiAddress,
 ) -> Result<(), ExecutionError> {
-    object.transfer_and_increment_version(recipient)?;
+    object.ensure_public_transfer_eligible()?;
+    object.transfer_and_increment_version(recipient);
     temporary_store.log_event(Event::TransferObject {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("native")),
@@ -269,7 +270,7 @@ fn transfer_object<S>(
 /// We make sure that the gas object's version is not incremented after this function call, because
 /// when we charge gas later, its version will be officially incremented.
 fn transfer_sui<S>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     mut object: Object,
     recipient: SuiAddress,
     amount: Option<u64>,
@@ -280,7 +281,8 @@ fn transfer_sui<S>(
 
     if let Some(amount) = amount {
         // Deduct the amount from the gas coin and update it.
-        let mut gas_coin = GasCoin::try_from(&object)?;
+        let mut gas_coin = GasCoin::try_from(&object)
+            .expect("gas object is transferred, so already checked to be a SUI coin");
         gas_coin.0.balance.withdraw(amount)?;
         let move_object = object
             .data
@@ -312,7 +314,7 @@ fn transfer_sui<S>(
     } else {
         // If amount is not specified, we simply transfer the entire coin object.
         // We don't want to increment the version number yet because latter gas charge will do it.
-        object.transfer_without_version_change(recipient)?;
+        object.transfer_without_version_change(recipient);
     }
 
     // TODO: Emit a new event type for this.

@@ -1,0 +1,33 @@
+.content {
+    @apply container overflow-x-auto text-left text-[#4E555D];
+}
+
+.table {
+    @apply w-full text-sm text-left text-[#4E555D]  overflow-x-auto min-w-max;
+
+    border-bottom: 1px solid #f0f1f2;
+}
+
+.table th {
+    @apply text-left font-normal uppercase text-[#767A81] text-xs;
+}
+
+.table td {
+    @apply pr-5 text-[#4E555D];
+}
+
+.table tbody tr {
+    @apply space-y-10 mt-10;
+}
+
+.addresses {
+    @apply flex flex-wrap;
+}
+
+.addresses svg {
+    @apply mr-1;
+}
+
+.tablespacing {
+    @apply pb-1 pt-1;
+}

@@ -1,9 +1,13 @@
+.hamburger {
+    @apply stroke-white stroke-[2.5px] cursor-pointer sm:hidden block;
+}
+
 .networkbox {
-    @apply text-lg cursor-pointer text-offblack bg-green-500 hover:bg-green-900 hover:text-offwhite text-center rounded-lg px-2 my-2 lg:my-0 lg:w-[20vw];
+    @apply text-sm cursor-pointer text-offwhite bg-transparent hover:bg-search-fill leading-8  w-[10rem] mx-[2vw] text-center hidden sm:block;
 }
 
 .opennetworkbox {
-    @apply fixed top-0 right-0 w-screen h-screen text-center z-30;
+    @apply fixed top-0 right-0 w-screen h-screen text-center z-50 text-offwhite;
 }
 
 .closeicon {
@@ -15,7 +19,7 @@ div.opennetworkdetails {
 }
 
 div.detailsbg {
-    @apply absolute top-0 left-0 w-full h-full bg-gray-500 z-20 opacity-50;
+    @apply fixed top-0 left-0 w-full h-full bg-gray-500 z-20 opacity-50;
 }
 
 div.inactive {

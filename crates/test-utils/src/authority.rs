@@ -13,9 +13,7 @@ use sui_node::SuiNode;
 use sui_types::{
     committee::Committee,
     error::SuiResult,
-    messages::{
-        ConfirmationTransaction, ConsensusTransaction, Transaction, TransactionInfoResponse,
-    },
+    messages::{Transaction, TransactionInfoResponse},
     object::Object,
 };
 
@@ -24,9 +22,13 @@ pub const NETWORK_BUFFER_SIZE: usize = 65_000;
 
 /// Make an authority config for each of the `TEST_COMMITTEE_SIZE` authorities in the test committee.
 pub fn test_authority_configs() -> NetworkConfig {
+    test_and_configure_authority_configs(TEST_COMMITTEE_SIZE)
+}
+
+pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
-    let mut configs = NetworkConfig::generate_with_rng(&config_dir, TEST_COMMITTEE_SIZE, rng);
+    let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
     for config in configs.validator_configs.iter_mut() {
         // Disable gossip by default to reduce non-determinism.
         // TODO: Once this library is more broadly used, we can make this a config argument.
@@ -67,11 +69,7 @@ pub fn test_authority_aggregator(
     config: &NetworkConfig,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
-    let voting_rights: BTreeMap<_, _> = validators_info
-        .iter()
-        .map(|config| (config.public_key(), config.stake()))
-        .collect();
-    let committee = Committee::new(0, voting_rights).unwrap();
+    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -96,13 +94,12 @@ pub async fn submit_single_owner_transaction(
     configs: &[ValidatorInfo],
 ) -> Vec<TransactionInfoResponse> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let txn = ConfirmationTransaction { certificate };
 
     let mut responses = Vec::new();
     for config in configs {
         let client = get_client(config);
         let reply = client
-            .handle_confirmation_transaction(txn.clone())
+            .handle_certificate(certificate.clone())
             .await
             .unwrap();
         responses.push(reply);
@@ -118,15 +115,14 @@ pub async fn submit_shared_object_transaction(
     configs: &[ValidatorInfo],
 ) -> Vec<SuiResult<TransactionInfoResponse>> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(Box::new(certificate));
 
     loop {
         let futures: Vec<_> = configs
             .iter()
             .map(|config| {
                 let client = get_client(config);
-                let txn = message.clone();
-                async move { client.handle_consensus_transaction(txn).await }
+                let cert = certificate.clone();
+                async move { client.handle_certificate(cert).await }
             })
             .collect();
 

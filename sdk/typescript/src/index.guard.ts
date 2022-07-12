@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferObjectTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferObject, RawAuthoritySignInfo, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, TransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferObjectTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferObject, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, PublishResponse, SuiPackage, TransactionResponse } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
 import { PublicKey } from "./cryptography/publickey";
@@ -117,6 +117,21 @@ export function isMoveCallTransaction(obj: any, _argumentName?: string): obj is 
     )
 }
 
+export function isPublishTransaction(obj: any, _argumentName?: string): obj is PublishTransaction {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        Array.isArray(obj.compiledModules) &&
+        obj.compiledModules.every((e: any) =>
+            isTransactionDigest(e) as boolean
+        ) &&
+        (typeof obj.gasPayment === "undefined" ||
+            isTransactionDigest(obj.gasPayment) as boolean) &&
+        isSequenceNumber(obj.gasBudget) as boolean
+    )
+}
+
 export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is TxnDataSerializer {
     return (
         (obj !== null &&
@@ -125,7 +140,8 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
         typeof obj.newTransferObject === "function" &&
         typeof obj.newMoveCall === "function" &&
         typeof obj.newMergeCoin === "function" &&
-        typeof obj.newSplitCoin === "function"
+        typeof obj.newSplitCoin === "function" &&
+        typeof obj.newPublish === "function"
     )
 }
 
@@ -336,14 +352,6 @@ export function isTransferObject(obj: any, _argumentName?: string): obj is Trans
     )
 }
 
-export function isRawAuthoritySignInfo(obj: any, _argumentName?: string): obj is RawAuthoritySignInfo {
-    return (
-        Array.isArray(obj) &&
-        isTransactionDigest(obj[0]) as boolean &&
-        isTransactionDigest(obj[1]) as boolean
-    )
-}
-
 export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
     return (
         (obj === "TransferObject" ||
@@ -398,7 +406,7 @@ export function isAuthorityQuorumSignInfo(obj: any, _argumentName?: string): obj
         isSequenceNumber(obj.epoch) as boolean &&
         Array.isArray(obj.signatures) &&
         obj.signatures.every((e: any) =>
-            isRawAuthoritySignInfo(e) as boolean
+            isTransactionDigest(e) as boolean
         )
     )
 }
@@ -509,7 +517,9 @@ export function isTransactionEffectsResponse(obj: any, _argumentName?: string): 
             typeof obj === "object" ||
             typeof obj === "function") &&
         isCertifiedTransaction(obj.certificate) as boolean &&
-        isTransactionEffects(obj.effects) as boolean
+        isTransactionEffects(obj.effects) as boolean &&
+        (obj.timestamp_ms === null ||
+            isSequenceNumber(obj.timestamp_ms) as boolean)
     )
 }
 
@@ -621,6 +631,32 @@ export function isSplitCoinResponse(obj: any, _argumentName?: string): obj is Sp
     )
 }
 
+export function isPublishResponse(obj: any, _argumentName?: string): obj is PublishResponse {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isCertifiedTransaction(obj.certificate) as boolean &&
+        Array.isArray(obj.createdObjects) &&
+        obj.createdObjects.every((e: any) =>
+            isSuiObject(e) as boolean
+        ) &&
+        isSuiPackage(obj.package) as boolean &&
+        isSuiObject(obj.updatedGas) as boolean
+    )
+}
+
+export function isSuiPackage(obj: any, _argumentName?: string): obj is SuiPackage {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.digest) as boolean &&
+        isTransactionDigest(obj.objectId) as boolean &&
+        isSequenceNumber(obj.version) as boolean
+    )
+}
+
 export function isTransactionResponse(obj: any, _argumentName?: string): obj is TransactionResponse {
     return (
         ((obj !== null &&
@@ -634,6 +670,10 @@ export function isTransactionResponse(obj: any, _argumentName?: string): obj is 
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isMergeCoinResponse(obj.MergeCoinResponse) as boolean)
+            isMergeCoinResponse(obj.MergeCoinResponse) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isPublishResponse(obj.PublishResponse) as boolean)
     )
 }

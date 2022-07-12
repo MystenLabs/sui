@@ -4,6 +4,7 @@
 use anyhow::Result;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
+use std::thread::Builder;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -13,13 +14,16 @@ use std::{
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let sui_framwork_path = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let move_stdlib_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("deps/move-stdlib");
+    let sui_framework_path = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let move_stdlib_path = sui_framework_path.join("deps").join("move-stdlib");
 
-    let sui_build_config = BuildConfig::default();
-    let sui_framework =
-        sui_framework_build::build_move_package(sui_framwork_path, sui_build_config).unwrap();
-    let move_stdlib = sui_framework_build::build_move_stdlib_modules(&move_stdlib_path).unwrap();
+    let stdlib_path = move_stdlib_path.clone();
+    let (sui_framework, move_stdlib) = Builder::new()
+        .stack_size(16 * 1024 * 1024) // build_move_package require bigger stack size on windows.
+        .spawn(move || build_framework_and_stdlib(sui_framework_path, &stdlib_path))
+        .unwrap()
+        .join()
+        .unwrap();
 
     serialize_modules_to_file(sui_framework, &out_dir.join("sui-framework")).unwrap();
     serialize_modules_to_file(move_stdlib, &out_dir.join("move-stdlib")).unwrap();
@@ -27,11 +31,11 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!(
         "cargo:rerun-if-changed={}",
-        sui_framwork_path.join("Move.toml").display()
+        sui_framework_path.join("Move.toml").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
-        sui_framwork_path.join("sources").display()
+        sui_framework_path.join("sources").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
@@ -41,6 +45,17 @@ fn main() {
         "cargo:rerun-if-changed={}",
         move_stdlib_path.join("sources").display()
     );
+}
+
+fn build_framework_and_stdlib(
+    sui_framework_path: &Path,
+    move_stdlib_path: &Path,
+) -> (Vec<CompiledModule>, Vec<CompiledModule>) {
+    let sui_framework =
+        sui_framework_build::build_move_package(sui_framework_path, BuildConfig::default())
+            .unwrap();
+    let move_stdlib = sui_framework_build::build_move_stdlib_modules(move_stdlib_path).unwrap();
+    (sui_framework, move_stdlib)
 }
 
 fn serialize_modules_to_file(modules: Vec<CompiledModule>, file: &Path) -> Result<()> {

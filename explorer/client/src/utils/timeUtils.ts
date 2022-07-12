@@ -34,38 +34,70 @@ export const convertNumberToDate = (epochMilliSecs: number | null): string => {
     )}:${stdToN(date.getUTCSeconds(), 2)} UTC`;
 };
 
+// TODO - this need a bit of modification to account for multiple display formate types
 export const timeAgo = (
     epochMilliSecs: number | null | undefined,
-    timeNow?: number
+    timeNow?: number,
+    shortenTimeLabel?: boolean
 ): string => {
     if (!epochMilliSecs) return '';
 
     //In static mode the time is fixed at 1 Jan 2025 01:13:10 UTC for testing purposes
     timeNow = timeNow ? timeNow : IS_STATIC_ENV ? 1735693990000 : Date.now();
 
+    const timeLabel = {
+        year: {
+            full: 'year',
+            short: 'y',
+        },
+        month: {
+            full: 'month',
+            short: 'm',
+        },
+        day: {
+            full: 'day',
+            short: 'd',
+        },
+        hour: {
+            full: 'hour',
+            short: 'h',
+        },
+        min: {
+            full: 'min',
+            short: 'm',
+        },
+        sec: {
+            full: 'sec',
+            short: 's',
+        },
+    };
+    const dateKeyType = shortenTimeLabel ? 'short' : 'full';
+
     let timeUnit: [string, number][];
     let timeCol = timeNow - epochMilliSecs;
 
     if (timeCol >= 1000 * 60 * 60 * 24) {
         timeUnit = [
-            ['day', 1000 * 60 * 60 * 24],
-            ['hour', 1000 * 60 * 60],
+            [timeLabel.day[dateKeyType], 1000 * 60 * 60 * 24],
+            [timeLabel.hour[dateKeyType], 1000 * 60 * 60],
         ];
     } else if (timeCol >= 1000 * 60 * 60) {
         timeUnit = [
-            ['hour', 1000 * 60 * 60],
-            ['min', 1000 * 60],
+            [timeLabel.hour[dateKeyType], 1000 * 60 * 60],
+            [timeLabel.min[dateKeyType], 1000 * 60],
         ];
     } else {
         timeUnit = [
-            ['min', 1000 * 60],
-            ['sec', 1000],
+            [timeLabel.min[dateKeyType], 1000 * 60],
+            [timeLabel.sec[dateKeyType], 1000],
         ];
     }
 
     const convertAmount = (amount: number, label: string) => {
-        if (amount > 1) return `${amount} ${label}s`;
-        if (amount === 1) return `${amount} ${label}`;
+        const spacing = shortenTimeLabel ? '' : ' ';
+        if (amount > 1)
+            return `${amount}${spacing}${label}${!shortenTimeLabel ? 's' : ''}`;
+        if (amount === 1) return `${amount}${spacing}${label}`;
         return '';
     };
 

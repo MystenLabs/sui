@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::authority::AuthorityState;
-use crate::checkpoints::CheckpointLocals;
+
+use crate::checkpoints::CheckpointStore;
 use crate::checkpoints::ConsensusSender;
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
@@ -10,19 +10,19 @@ use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
+use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
-use sui_types::messages::ConfirmationTransaction;
 use sui_types::messages_checkpoint::CheckpointFragment;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
-    messages::{ConsensusTransaction, TransactionInfoResponse},
+    messages::ConsensusTransaction,
 };
 use tokio::{
     sync::{
@@ -67,8 +67,6 @@ type ConsensusOutput = (
 
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
-    /// The authority's state.
-    state: Arc<AuthorityState>,
     /// The network client connecting to the consensus node of this authority.
     consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
     /// The Sui committee information.
@@ -84,7 +82,6 @@ pub struct ConsensusAdapter {
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
@@ -95,7 +92,6 @@ impl ConsensusAdapter {
                 .expect("Failed to connect to consensus"),
         );
         Self {
-            state,
             consensus_client,
             committee,
             tx_consensus_listener,
@@ -110,10 +106,7 @@ impl ConsensusAdapter {
     }
 
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
-    pub async fn submit(
-        &self,
-        certificate: &ConsensusTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
+    pub async fn submit(&self, certificate: &ConsensusTransaction) -> SuiResult {
         // Check the Sui certificate (submitted by the user).
         certificate.verify(&self.committee)?;
 
@@ -144,8 +137,8 @@ impl ConsensusAdapter {
         // certificate will be sequenced. So the best we can do is to set a timer and notify the
         // client to retry if we timeout without hearing back from consensus (this module does not
         // handle retries). The best timeout value depends on the consensus protocol.
-        let info = match timeout(self.max_delay, receiver).await {
-            Ok(reply) => reply.expect("Failed to read back from consensus listener"),
+        match timeout(self.max_delay, receiver).await {
+            Ok(_) => Ok(()),
             Err(e) => {
                 let message = ConsensusListenerMessage::Cleanup(serialized);
                 self.tx_consensus_listener
@@ -154,28 +147,6 @@ impl ConsensusAdapter {
                     .expect("Cleanup channel with consensus listener dropped");
                 Err(SuiError::FailedToHearBackFromConsensus(e.to_string()))
             }
-        }?;
-
-        if info.is_empty() {
-            // Consensus successfully assigned shared-locks to this certificate.
-            match certificate {
-                ConsensusTransaction::UserTransaction(certificate) => {
-                    let confirmation = ConfirmationTransaction {
-                        certificate: *certificate.clone(),
-                    };
-                    self.state
-                        .handle_confirmation_transaction(confirmation)
-                        .await
-                }
-                message => {
-                    tracing::error!("Unexpected message {message:?}");
-                    Err(SuiError::UnexpectedMessage)
-                }
-            }
-        } else {
-            // This certificate has already been executed.
-            bincode::deserialize(&info)
-                .map_err(|e| SuiError::ConsensusSuiSerializationError(e.to_string()))
         }
     }
 }
@@ -302,7 +273,7 @@ pub struct CheckpointConsensusAdapter {
     /// Receive new checkpoint fragments to sequence.
     rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
     /// A pointer to the checkpoints local store.
-    checkpoint_locals: Arc<CheckpointLocals>,
+    checkpoint_db: Arc<Mutex<CheckpointStore>>,
     /// The initial delay to wait before re-attempting a connection with consensus (in ms).
     retry_delay: Duration,
     /// The maximum number of checkpoint fragment pending sequencing.
@@ -317,7 +288,7 @@ impl CheckpointConsensusAdapter {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
-        checkpoint_locals: Arc<CheckpointLocals>,
+        checkpoint_db: Arc<Mutex<CheckpointStore>>,
         retry_delay: Duration,
         max_pending_transactions: usize,
     ) -> Self {
@@ -331,7 +302,7 @@ impl CheckpointConsensusAdapter {
             consensus_client,
             tx_consensus_listener,
             rx_checkpoint_consensus_adapter,
-            checkpoint_locals,
+            checkpoint_db,
             retry_delay,
             max_pending_transactions,
             buffer: VecDeque::with_capacity(max_pending_transactions),
@@ -410,7 +381,7 @@ impl CheckpointConsensusAdapter {
                     // Cleanup the buffer.
                     if self.buffer.len() >= self.max_pending_transactions {
                         // Drop the earliest fragments. They are not needed for liveness.
-                        if let Some(proposal) = &self.checkpoint_locals.current_proposal {
+                        if let Some(proposal) = &self.checkpoint_db.lock().get_locals().current_proposal {
                             let current_sequence_number = proposal.sequence_number();
                             self.buffer.retain(|(_, s)| s >= current_sequence_number);
                         }

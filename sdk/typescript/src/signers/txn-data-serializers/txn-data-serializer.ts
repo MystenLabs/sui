@@ -37,6 +37,13 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
+export interface PublishTransaction {
+  compiledModules: string[],
+  gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
+
 ///////////////////////////////
 // Exported Abstracts
 /**
@@ -61,5 +68,10 @@ export interface TxnDataSerializer {
   newSplitCoin(
     signerAddress: SuiAddress,
     txn: SplitCoinTransaction
+  ): Promise<Base64DataBuffer>;
+
+  newPublish(
+    signerAddress: SuiAddress,
+    txn: PublishTransaction
   ): Promise<Base64DataBuffer>;
 }

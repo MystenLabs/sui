@@ -3,7 +3,7 @@
     "title": "QUICK LINKS",
     "items": [
       {
-        "label": "DevNet",
+        "label": "Devnet",
         "link": "explore/devnet"
       },
       {
@@ -193,6 +193,10 @@
       {
         "label": "Logging",
         "fileName": "contribute/observability"
+      },
+      {
+        "label": "Profiling on macOS",
+        "fileName": "contribute/xcode-instruments"
       },
       {
         "label": "Research Papers",

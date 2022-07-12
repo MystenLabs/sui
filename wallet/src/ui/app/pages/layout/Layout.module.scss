@@ -1,0 +1,13 @@
+@use '_values/dimensions';
+
+.container {
+    display: flex;
+    align-items: center;
+    flex-flow: column nowrap;
+
+    &.forced-popup-dimensions,
+    :global(.is-popup) & {
+        width: dimensions.$popup-width;
+        height: dimensions.$popup-height;
+    }
+}

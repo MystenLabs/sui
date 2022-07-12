@@ -12,10 +12,10 @@ interface, *Sui CLI*.
 
 Follow the instructions to [install Sui binaries](install.md#binaries).
 
-## Connect to DevNet
-We are hosting a public [DevNet](../explore/devnet.md) for the community to
+## Connect to Devnet
+We are hosting a public [Devnet](../explore/devnet.md) for the community to
 experiment with our  tech and help to shape the future of the Sui network. To
-connect the Sui  client to the DevNet, run the following command:
+connect the Sui  client to the Devnet, run the following command:
 ```shell
 $ sui client
 ```
@@ -26,17 +26,17 @@ Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you wan
 ```
 Type 'y' and then press 'Enter'. You should see the following output:
 ```shell
-Sui RPC server Url (Default to Sui DevNet if not specified) :
+Sui RPC server Url (Default to Sui Devnet if not specified) :
 ```
-The Sui client will prompt for the RPC server URL; press 'Enter' and it will default to DevNet.
+The Sui client will prompt for the RPC server URL; press 'Enter' and it will default to Devnet.
 Or enter a custom URL if you want to connect to a server hosted elsewhere.
 
 If you have used the Sui client before with a local network, follow the next section to
-[manually change the RPC server URL](#manually-change-the-rpc-server-url) to DevNet.
+[manually change the RPC server URL](#manually-change-the-rpc-server-url) to Devnet.
 
 ### Manually change the RPC server URL
 If you have used the Sui client before, you will have an existing `client.yaml` configuration
-file. Change the configured RPC server URL to DevNet by using:
+file. Change the configured RPC server URL to Devnet by using:
 ```shell
 $ sui client switch --gateway https://gateway.devnet.sui.io:443
 ```
@@ -239,7 +239,7 @@ The following commands are supported by the Sui client:
     objects               Obtain all objects owned by the address
     publish               Publish Move modules
     split-coin            Split a coin object into multiple coins
-    switch                Switch active address and network(e.g., devnet, local rpc server)
+    switch                Switch active address and network (e.g., Devnet, local RPC server)
     sync                  Synchronize client state with authorities
     transfer-coin         Transfer coin object
     transfer-sui          Transfer SUI, and pay gas with the same SUI coin object. If amount is

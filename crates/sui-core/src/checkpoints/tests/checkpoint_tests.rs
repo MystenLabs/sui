@@ -31,14 +31,15 @@ use sui_types::crypto::KeyPair;
 pub struct TestCausalOrderPendCertNoop;
 
 impl CausalOrder for TestCausalOrderPendCertNoop {
-    fn get_complete_causal_order(
+    fn get_complete_causal_order<'a>(
         &self,
-        transactions: &[ExecutionDigests],
+        transactions: impl Iterator<Item = &'a ExecutionDigests>,
         _ckpt_store: &mut CheckpointStore,
     ) -> SuiResult<Vec<ExecutionDigests>> {
-        Ok(transactions.to_vec())
+        Ok(transactions.cloned().collect())
     }
 }
+
 impl PendCertificateForExecution for TestCausalOrderPendCertNoop {
     fn add_pending_certificates(
         &self,
@@ -185,13 +186,16 @@ fn make_checkpoint_db() {
     assert_eq!(cps.next_checkpoint(), 0);
 
     // You cannot make a checkpoint without processing all transactions
-    assert!(cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).is_err());
+    assert!(cps
+        .update_new_checkpoint(0, &[t1, t2, t4, t5], PendCertificateForExecutionNoop)
+        .is_err());
 
     // Now process the extra transactions in the checkpoint
     cps.update_processed_transactions(&[(4, t4), (5, t5)])
         .unwrap();
 
-    cps.update_new_checkpoint(0, &[t1, t2, t4, t5]).unwrap();
+    cps.update_new_checkpoint(0, &[t1, t2, t4, t5], PendCertificateForExecutionNoop)
+        .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 4);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
     assert_eq!(cps.next_checkpoint(), 1);
@@ -243,7 +247,9 @@ fn make_proposals() {
         .collect();
 
     // if not all transactions are processed we fail
-    assert!(cps1.update_new_checkpoint(0, &ckp_items[..]).is_err());
+    assert!(cps1
+        .update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
+        .is_err());
 
     cps1.update_processed_transactions(&[(3, t1), (4, t4)])
         .unwrap();
@@ -257,10 +263,14 @@ fn make_proposals() {
     cps4.update_processed_transactions(&[(3, t1), (4, t2), (5, t3)])
         .unwrap();
 
-    cps1.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-    cps2.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-    cps3.update_new_checkpoint(0, &ckp_items[..]).unwrap();
-    cps4.update_new_checkpoint(0, &ckp_items[..]).unwrap();
+    cps1.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
+        .unwrap();
+    cps2.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
+        .unwrap();
+    cps3.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
+        .unwrap();
+    cps4.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
+        .unwrap();
 
     assert_eq!(
         cps4.extra_transactions.keys().collect::<HashSet<_>>(),

@@ -1,11 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Link } from 'react-router-dom';
-
 import Footer from '../components/footer/Footer';
-import NetworkSelect from '../components/network/Network';
-import Search from '../components/search/Search';
+import Header from '../components/header/Header';
 import { NetworkContext, useNetwork } from '../context';
 import AppRoutes from '../pages/config/AppRoutes';
 
@@ -16,17 +13,11 @@ function App() {
     return (
         <NetworkContext.Provider value={[network, setNetwork]}>
             <div className={styles.app}>
+                <Header />
                 <main>
-                    <div className={styles.search}>
-                        <div className={styles.header}>
-                            <Link className={styles.suititle} to="/">
-                                Sui Explorer
-                            </Link>
-                            <NetworkSelect />
-                        </div>
-                        <Search />
-                    </div>
-                    <AppRoutes />
+                    <section className={styles.suicontainer}>
+                        <AppRoutes />
+                    </section>
                 </main>
                 <Footer />
             </div>

@@ -96,6 +96,8 @@ pub enum SuiError {
         expected_sequence: SequenceNumber,
         given_sequence: SequenceNumber,
     },
+    #[error("Invalid Authority Bitmap: {}", error)]
+    InvalidAuthorityBitmap { error: String },
     #[error("Conflicting transaction already received: {pending_transaction:?}")]
     ConflictingTransaction {
         pending_transaction: TransactionDigest,

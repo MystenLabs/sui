@@ -6,7 +6,7 @@ import { useMemo, useCallback, useRef } from 'react';
 
 import NetworkSelector from './NetworkSelector';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
-import BsIcon from '_components/bs-icon';
+import Icon from '_components/icon';
 import { useAppSelector, useAppDispatch, useOnClickOutside } from '_hooks';
 import { setNetworkSelector } from '_redux/slices/app';
 
@@ -43,11 +43,11 @@ const Network = () => {
         >
             {selectedApiEnv ? (
                 <div className={st.network} style={netColor}>
-                    <BsIcon icon="circle-fill" className={st.networkIcon} />
+                    <Icon icon="circle-fill" className={st.networkIcon} />
                     <span className={st.networkName}>
                         {API_ENV_TO_INFO[selectedApiEnv].name}
                     </span>
-                    <BsIcon
+                    <Icon
                         icon={showNetworkSelect ? 'chevron-up' : 'chevron-down'}
                         className={cl(st.networkIcon, st.networkDropdown)}
                     />

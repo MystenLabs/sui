@@ -2,17 +2,38 @@
 
 A chrome (v88+) extension wallet for [Sui](https://sui.io).
 
-# Set up
+# Set Up
 
 **Requirements**: Node 14.0.0 or later.
 
-Run `npm i` first to install the required `node modules`
+Currently the Wallet depends on an unreleased version of `sui.js`, the TypeScript SDK for Sui. Therefore, you need to build the SDK first:
+
+```bash
+$ cd <Your Sui Repository>/sdk/typescript
+$ yarn && yarn build
+```
+
+Then, in the project directory, run:
+
+```bash
+$ npm i
+```
+
+> **Note:** If you are updating the SDK and Wallet at the same time, you need to run the following commands to make sure the Explorer depends on the updated SDK.
+
+```bash
+$ cd <Your Sui Repository>/sdk/typescript
+$ yarn build
+
+$ cd ../../wallet
+$ rm -rf node_modules/ && npm i
+```
 
 Then one of the following build steps is required:
 
 ## Build in watch mode (dev)
 
-To build the extension and watch for changes run
+To build the extension and watch for changes run:
 
 ```
 npm start

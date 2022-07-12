@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/generate-json-rpc-spec",
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
@@ -32,9 +31,10 @@ members = [
     "crates/x",
 ]
 
-[profile.release]
-debug = false
-strip = "debuginfo"
+# Debug symbols are really important for profiling
+# [profile.release]
+# debug = true
+# strip = "debuginfo"
 
 [profile.bench]
 debug = true
