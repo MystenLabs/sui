@@ -20,7 +20,10 @@ function DisplayBox({ display }: { display: string }) {
 
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(
-        () => setHasDisplayLoaded(true),
+        () => {
+            setHasDisplayLoaded(true);
+            setHasFailedToLoad(false);
+        },
         [setHasDisplayLoaded]
     );
 
@@ -54,20 +57,12 @@ function DisplayBox({ display }: { display: string }) {
     );
 
     const loadedWithoutAllowedState = hasDisplayLoaded && !imgAllowState;
-    const shouldBlur = loadedWithoutAllowedState && !hasImgBeenChecked;
-    const shouldBlock = loadedWithoutAllowedState && hasImgBeenChecked;
-    // if we've loaded the display image but the check hasn't returned, display a blurry version
-    let imgClass = shouldBlur ? styles.imageboxblur : styles.imagebox;
-    // if we've loaded the display image and the check did not pass,
-    // stop blur animation and use a fallback image
-    imgClass = shouldBlock ? styles.imagebox : imgClass;
 
     let showAutoModNotice =
         !hasFailedToLoad && hasImgBeenChecked && !imgAllowState;
 
     if (loadedWithoutAllowedState && hasImgBeenChecked) {
         display = FALLBACK_IMAGE;
-        imgClass = styles.imagebox;
         showAutoModNotice = true;
     }
 
@@ -83,10 +78,10 @@ function DisplayBox({ display }: { display: string }) {
                     No Image was Found
                 </div>
             )}
-            {hasDisplayLoaded && !hasFailedToLoad && !showAutoModNotice && (
+            {!hasFailedToLoad && !showAutoModNotice && (
                 <img
                     id="loadedImage"
-                    className={imgClass}
+                    className={styles.imagebox}
                     style={imageStyle}
                     alt="NFT"
                     src={transformURL(display)}
