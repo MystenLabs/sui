@@ -29,6 +29,10 @@ use types::{
     Certificate, CertificateDigest, HeaderDigest, Reconfigure, Round,
 };
 
+#[cfg(test)]
+#[path = "tests/certificate_waiter_tests.rs"]
+pub mod certificate_waiter_tests;
+
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
 /// for further processing.
 pub struct CertificateWaiter<PublicKey: VerifyingKey> {

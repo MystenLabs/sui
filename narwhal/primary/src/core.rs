@@ -263,6 +263,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             .inc();
 
         // Check if we can vote for this header.
+        // TODO: compute from a persisted last_voted (issue #488)
         if self
             .last_voted
             .entry(header.round)
@@ -271,11 +272,18 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         {
             // Make a vote and send it to the header's creator.
             let vote = Vote::new(header, &self.name, &mut self.signature_service).await;
-            debug!("Created {:?}", vote);
+            debug!(
+                "Created vote {vote:?} for {header} at round {}",
+                header.round
+            );
             if vote.origin == self.name {
-                self.process_vote(vote)
-                    .await
-                    .expect("Failed to process our own vote");
+                // This used to be a panic, but this may fail if we're processing a late-received
+                // header where we were already are part of the signers (as a restart could have blown our `last_voted`)
+                // TODO: change this back to a panic-on-error once we have persisted last_voted (issue #488)
+                let res = self.process_vote(vote).await;
+                if let Err(e) = res {
+                    error!("Failed to process our own vote: {}", e.to_string());
+                }
             } else {
                 let address = self
                     .committee
