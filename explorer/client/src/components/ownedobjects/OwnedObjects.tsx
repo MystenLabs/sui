@@ -327,7 +327,7 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                                     <Longtext
                                                         text={String(value)}
                                                         category="objects"
-                                                        canCopy={false}
+                                                        isCopyButton={false}
                                                         alttext={truncate(
                                                             String(value),
                                                             19

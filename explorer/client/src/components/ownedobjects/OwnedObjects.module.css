@@ -3,7 +3,7 @@
 }
 
 .layout > div {
-    @apply sm:w-[40vw];
+    @apply sm:w-[40%];
 }
 
 .previewimage > div,
@@ -32,11 +32,7 @@
 }
 
 .objectbox {
-    @apply my-[10px] break-all lg:w-[300px] flex items-center;
-}
-
-.objectbox > div.textitem {
-    @apply w-[210px];
+    @apply my-[10px] break-all lg:w-[50%] flex items-center;
 }
 
 .typevalue {
