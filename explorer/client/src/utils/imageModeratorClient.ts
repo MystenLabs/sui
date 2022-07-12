@@ -31,7 +31,7 @@ export class ImageModClient implements IImageModClient {
             })
         ).json();
 
-        return{ ok: await resp };
+        return { ok: await resp };
     }
 }
 

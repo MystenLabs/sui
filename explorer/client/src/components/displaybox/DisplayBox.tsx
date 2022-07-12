@@ -19,13 +19,10 @@ function DisplayBox({ display }: { display: string }) {
     const [imgAllowState, setImgAllowState] = useState(false);
 
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
-    const handleImageLoad = useCallback(
-        () => {
-            setHasDisplayLoaded(true);
-            setHasFailedToLoad(false);
-        },
-        [setHasDisplayLoaded]
-    );
+    const handleImageLoad = useCallback(() => {
+        setHasDisplayLoaded(true);
+        setHasFailedToLoad(false);
+    }, [setHasDisplayLoaded]);
 
     useEffect(() => {
         setHasFailedToLoad(false);
