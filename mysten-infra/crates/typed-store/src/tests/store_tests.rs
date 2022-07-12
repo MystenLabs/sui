@@ -138,3 +138,29 @@ async fn write_and_read_all_successfully() {
         assert_eq!(value.unwrap(), key_values[i].1);
     }
 }
+
+#[tokio::test]
+async fn iter_successfully() {
+    // GIVEN Create new store.
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let store = Store::new(db);
+
+    // AND key-values to store.
+    let key_values = vec![
+        (vec![0u8, 1u8], vec![4u8, 7u8]),
+        (vec![0u8, 2u8], vec![4u8, 7u8]),
+        (vec![0u8, 3u8], vec![4u8, 7u8]),
+    ];
+
+    let result = store.write_all(key_values.clone()).await;
+    assert!(result.is_ok());
+
+    // Iter through the keys
+    let output = store.iter().await;
+    for (k, v) in &key_values {
+        let v1 = output.get(&*k).unwrap();
+        assert_eq!(v1.first(), v.first());
+        assert_eq!(v1.last(), v.last());
+    }
+    assert_eq!(output.len(), key_values.len());
+}
