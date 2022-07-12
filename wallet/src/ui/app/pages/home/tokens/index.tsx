@@ -22,6 +22,7 @@ function TokensPage() {
                     <CoinBalance
                         type={aCoinType}
                         balance={aCoinBalance}
+                        stake={true}
                         key={aCoinType}
                     />
                 );

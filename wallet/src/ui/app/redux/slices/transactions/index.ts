@@ -62,6 +62,52 @@ export const sendTokens = createAsyncThunk<
     }
 );
 
+type StakeTokensTXArgs = {
+    tokenTypeArg: string;
+    amount: bigint;
+};
+
+export const StakeTokens = createAsyncThunk<
+    TransactionResult,
+    StakeTokensTXArgs,
+    AppThunkConfig
+>(
+    'sui-objects/stake',
+    async (
+        { tokenTypeArg, amount },
+        { getState, extra: { api, keypairVault }, dispatch }
+    ) => {
+        const state = getState();
+        const coinType = Coin.getCoinTypeFromArg(tokenTypeArg);
+
+        const coins: SuiMoveObject[] = suiObjectsAdapterSelectors
+            .selectAll(state)
+            .filter(
+                (anObj) =>
+                    isSuiMoveObject(anObj.data) && anObj.data.type === coinType
+            )
+            .map(({ data }) => data as SuiMoveObject);
+
+        // TODO: fetch the first active validator for now,
+        // repalce it with the user picked one
+        const activeValidators = await Coin.getActiveValidators(
+            // api.getSignerInstance(keypairVault.getKeyPair())
+            api.instance.fullNode
+        );
+        const first_validator = activeValidators[0];
+        const metadata = (first_validator as SuiMoveObject).fields.metadata;
+        const validatorAddress = (metadata as SuiMoveObject).fields.sui_address;
+        const response = await Coin.stakeCoin(
+            api.getSignerInstance(keypairVault.getKeyPair()),
+            coins,
+            amount,
+            validatorAddress
+        );
+        dispatch(fetchAllOwnedObjects());
+        return response as TransactionResult;
+    }
+);
+
 const txAdapter = createEntityAdapter<TransactionResult>({
     selectId: (tx) => tx.EffectResponse.certificate.transactionDigest,
 });
@@ -76,6 +122,9 @@ const slice = createSlice({
     reducers: {},
     extraReducers: (builder) => {
         builder.addCase(sendTokens.fulfilled, (state, { payload }) => {
+            return txAdapter.setOne(state, payload);
+        });
+        builder.addCase(StakeTokens.fulfilled, (state, { payload }) => {
             return txAdapter.setOne(state, payload);
         });
     },

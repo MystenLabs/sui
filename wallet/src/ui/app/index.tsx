@@ -10,6 +10,7 @@ import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
 import HomePage, {
     NftsPage,
     SettingsPage,
+    StakePage,
     TokensPage,
     TransactionDetailsPage,
     TransactionsPage,
@@ -51,6 +52,7 @@ const App = () => {
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send-nft" element={<TransferNFTPage />} />
+                <Route path="stake" element={<StakePage />} />
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
