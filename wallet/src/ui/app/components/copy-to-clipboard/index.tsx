@@ -4,7 +4,7 @@
 import cl from 'classnames';
 import { memo, useCallback, useEffect, useState } from 'react';
 
-import BsIcon from '_components/bs-icon';
+import Icon from '_components/icon';
 
 import type { ReactNode, MouseEventHandler } from 'react';
 
@@ -58,7 +58,7 @@ function CopyToClipboard({
             onClick={!copyOnlyOnIconClick ? copyToClipboard : undefined}
         >
             {children}
-            <BsIcon
+            <Icon
                 className={st['copy-icon']}
                 icon={`clipboard${copied ? '-check' : ''}`}
                 onClick={copyToClipboard}

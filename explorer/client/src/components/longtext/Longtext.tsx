@@ -4,6 +4,7 @@
 import { useCallback, useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import { ReactComponent as ContentCopyIcon } from '../../assets/content_copy_black_18dp.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
@@ -17,6 +18,7 @@ function Longtext({
     isLink = true,
     alttext = '',
     isCopyButton = true,
+    showIconButton = false,
 }: {
     text: string;
     category:
@@ -28,6 +30,7 @@ function Longtext({
     isLink?: boolean;
     alttext?: string;
     isCopyButton?: boolean;
+    showIconButton?: boolean;
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
 
@@ -42,6 +45,7 @@ function Longtext({
     }, [setCopyIcon, text]);
 
     let icon;
+    let iconButton = <></>;
 
     if (isCopyButton) {
         if (pleaseWait) {
@@ -57,6 +61,10 @@ function Longtext({
         }
     } else {
         icon = <></>;
+    }
+
+    if (showIconButton) {
+        iconButton = <ContentForwardArrowDark />;
     }
 
     const navigateUnknown = useCallback(() => {
@@ -97,7 +105,7 @@ function Longtext({
                     className={styles.longtext}
                     to={`/${category}/${encodeURIComponent(text)}`}
                 >
-                    {alttext ? alttext : text}
+                    {alttext ? alttext : text} {iconButton}
                 </Link>
             );
         }

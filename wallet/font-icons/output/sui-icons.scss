@@ -1,0 +1,22 @@
+@font-face {font-family: sui-icons;
+    src: url('./sui-icons.eot');
+    src: url('./sui-icons.eot#iefix') format('embedded-opentype'),
+    url("./sui-icons.woff2") format("woff2"),
+    url("./sui-icons.woff") format("woff"),
+    url('./sui-icons.ttf') format('truetype'),
+url('./sui-icons.svg#sui-icons') format('svg');
+}
+
+[class^="sui-icons-"], [class*=" sui-icons-"] {
+    font-family: sui-icons !important;
+    font-size: 16px;
+    font-style:normal;
+    -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+}
+
+.sui-icons-sui-logo-icon:before { content: "\ea01"; }
+.sui-icons-sui-logo-txt:before { content: "\ea02"; }
+
+$sui-icons-sui-logo-icon: "\ea01";
+$sui-icons-sui-logo-txt: "\ea02";

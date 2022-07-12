@@ -14,6 +14,7 @@ import {
   SplitCoinTransaction,
   TransferObjectTransaction,
   TxnDataSerializer,
+  PublishTransaction,
 } from './txn-data-serializers/txn-data-serializer';
 
 ///////////////////////////////
@@ -115,6 +116,17 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<TransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newMoveCall(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  async publish(
+    transaction: PublishTransaction
+  ): Promise<TransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newPublish(
       signerAddress,
       transaction
     );

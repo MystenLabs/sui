@@ -96,6 +96,16 @@ export class DAppInterface {
         );
     }
 
+    public executeSerializedMoveCall(transactionBytes: Uint8Array) {
+        return mapToPromise(
+            this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
+                type: 'execute-transaction-request',
+                transactionBytes,
+            }),
+            (response) => response.result
+        );
+    }
+
     private send<
         RequestPayload extends Payload,
         ResponsePayload extends Payload | void = void

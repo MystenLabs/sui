@@ -5,6 +5,7 @@
 module 0x0.m {
     import 0x2.id;
     struct S has key, drop {
+        id: id.VersionedID,
         flag: bool
     }
 }

@@ -8,7 +8,6 @@ export type TransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
 };
-export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
 export type TransactionKindName = 'TransferObject' | 'Publish' | 'Call';
 export type SuiTransactionKind =
@@ -27,7 +26,7 @@ export type EpochId = number;
 
 export type AuthorityQuorumSignInfo = {
   epoch: EpochId;
-  signatures: RawAuthoritySignInfo[];
+  signatures: AuthoritySignature[];
 };
 
 export type CertifiedTransaction = {
@@ -92,7 +91,7 @@ export type TransactionEffects = {
 export type TransactionEffectsResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
-  timestamp_ms: number;
+  timestamp_ms: number | null;
 };
 
 export type GatewayTxSeqNumber = number;
@@ -136,16 +135,31 @@ export type SplitCoinResponse = {
   updatedGas: SuiObject;
 };
 
+export type PublishResponse = {
+  certificate: CertifiedTransaction;
+  createdObjects: SuiObject[];
+  package: SuiPackage;
+  updatedGas: SuiObject;
+}
+
+export type SuiPackage = {
+  digest: string;
+  objectId: string;
+  version: number;
+}
+
 export type TransactionResponse =
   | {
       EffectResponse: TransactionEffectsResponse;
-      // TODO: Add Publish Response
     }
   | {
       SplitCoinResponse: SplitCoinResponse;
     }
   | {
       MergeCoinResponse: MergeCoinResponse;
+    }
+  | {
+      PublishResponse: PublishResponse;
     };
 
 /* -------------------------------------------------------------------------- */
@@ -272,6 +286,12 @@ export function getMergeCoinResponse(
   data: TransactionResponse
 ): MergeCoinResponse | undefined {
   return 'MergeCoinResponse' in data ? data.MergeCoinResponse : undefined;
+}
+
+export function getPublishResponse(
+  data: TransactionResponse
+): PublishResponse | undefined {
+  return 'PublishResponse' in data ? data.PublishResponse : undefined;
 }
 
 /**

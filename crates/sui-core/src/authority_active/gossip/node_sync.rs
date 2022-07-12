@@ -305,7 +305,7 @@ where
         }
 
         self.state
-            .handle_node_sync_transaction(cert, effects)
+            .handle_node_sync_certificate(cert, effects)
             .await?;
 
         // Garbage collect data for this tx.

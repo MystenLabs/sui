@@ -9,7 +9,7 @@ Find answers to common questions in our [FAQ](../contribute/faq.md). Read other 
 ## See our roadmap
 
 Sui is evolving quickly. See our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) for the
-overall status of Sui, including timelines for launching devnet, testnet, and mainnet.
+overall status of Sui, including timelines for launching Devnet, Testnet, and Mainnet.
 
 ## Join the community
 
@@ -74,5 +74,6 @@ To submit your pull request:
 * Learn [about Mysten Labs](https://mystenlabs.com/) the company on our public site.
 * Read the [Sui Smart Contract Platform](../../paper/sui.pdf) white paper.
 * Implementing [logging](../contribute/observability.md) in Sui to observe the behavior of your development.
+* Employ [performance profiling on macOS](../contribute/xcode-instruments.md).
 * Find related [research papers](../contribute/research-papers.md).
 * See and adhere to our [code of conduct](../contribute/code-of-conduct.md).

@@ -14,7 +14,7 @@ To immediately get started using Sui:
 1. Meet the [prerequisites](#prerequisites).
 1. Install the [binaries](#binaries).
 1. Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
-1. Request [SUI tokens](#sui-tokens) to evaluate DevNet and Sui Wallet
+1. Request [SUI tokens](#sui-tokens) to evaluate Devnet and Sui Wallet
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
 
@@ -91,7 +91,7 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-To [experiment with DevNet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
+To [experiment with Devnet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
 
 To request SUI test tokens:
 
@@ -108,7 +108,10 @@ To request SUI test tokens:
 
 ## Source code
 
-If you need to download and understand the Sui source code, clone the Sui repository:
+If you need to download and understand the Sui source code:
+https://github.com/MystenLabs/sui
+
+Clone the Sui repository:
 
 ```shell
 $ git clone https://github.com/MystenLabs/sui.git --branch devnet
@@ -122,14 +125,19 @@ You can start exploring Sui's source code by looking into the following primary 
 * [explorer](https://github.com/MystenLabs/sui/tree/main/explorer) - object explorer for the Sui network
 * [sui-network](https://github.com/MystenLabs/sui/tree/main/crates/sui-network) - networking interfaces
 
-And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
+## Rustdoc
+
+See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
 * https://mystenlabs.github.io/sui/ - the Sui blockchain
 * https://mystenlabs.github.io/narwhal/ - the Narwhal and Tusk consensus engine
 * https://mystenlabs.github.io/mysten-infra/ - Mysten Labs infrastructure
 
+## Help
+
 To contribute updates to Sui code, [send pull requests](../contribute/index.md#send-pull-requests) our way.
 
-> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our devnet. If you want to run network locally using the latest version and don't need to interact with our devnet, you could switch to `main` branch.
+> NOTE: the above `git clone` command syncs with the `devnet` branch, which makes sure the source code is compatible with our Devnet. If you want to run network locally using the latest version and don't need to interact with our Devnet, you should switch to `main` branch.
+ 
 ## Next steps
 
 Continue your journey through:

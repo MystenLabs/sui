@@ -5,7 +5,7 @@ import cl from 'classnames';
 import { useMemo, useCallback } from 'react';
 
 import { API_ENV_TO_INFO, API_ENV } from '_app/ApiProvider';
-import BsIcon from '_components/bs-icon';
+import Icon from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeRPCNetwork } from '_redux/slices/app';
 
@@ -53,7 +53,7 @@ const NetworkSelector = () => {
                         data-network={apiEnv.networkName}
                         onClick={changeNetwork}
                     >
-                        <BsIcon
+                        <Icon
                             icon="check2"
                             className={cl(
                                 st.selectedNetwork,
@@ -62,7 +62,7 @@ const NetworkSelector = () => {
                             )}
                         />
                         <div style={apiEnv.style}>
-                            <BsIcon
+                            <Icon
                                 icon="circle-fill"
                                 className={st.networkIcon}
                             />

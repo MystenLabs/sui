@@ -30,7 +30,7 @@ import styles from './TransactionResult.module.css';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
-    timestamp_ms: number;
+    timestamp_ms: number | null;
     gasFee: number;
     txError: string;
     mutated: SuiObjectRef[];
@@ -120,9 +120,6 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             label: 'Validator Signatures',
             value: tx.authSignInfo.signatures,
             list: true,
-            sublist: true,
-            // Todo - assumes only two itmes in list ['A', 'B']
-            subLabel: ['Name', 'Signature'],
         },
     ];
 }

@@ -1,0 +1,5 @@
+processed 1 task
+
+task 0 'publish'. lines 4-20:
+Error: Transaction Effects Status: MiscellaneousError
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: Some(VMError { major_status: WRITEREF_WITHOUT_DROP_ABILITY, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: _, name: Identifier("m") }), indices: [(FunctionDefinition, 0)], offsets: [(FunctionDefinitionIndex(0), 5)] }) } }

@@ -38,7 +38,7 @@ type TxnData = {
     kind: TransactionKindName | undefined;
     From: string;
     To?: string;
-    timestamp_ms?: number;
+    timestamp_ms?: number | null;
 };
 
 type categoryType = 'address' | 'object';
