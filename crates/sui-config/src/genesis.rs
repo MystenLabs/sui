@@ -349,12 +349,11 @@ pub fn generate_genesis_system_object(
     let mut names = Vec::new();
     let mut stakes = Vec::new();
 
-    for (i, validator) in committee.iter().enumerate() {
+    for validator in committee {
         pubkeys.push(validator.public_key());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
-        // TODO: Allow config to specify human readable validator names.
-        names.push(format!("validator-{i}").into_bytes());
+        names.push(validator.name().to_owned().into_bytes());
         stakes.push(validator.stake());
     }
 
