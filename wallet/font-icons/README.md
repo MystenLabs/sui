@@ -8,8 +8,12 @@ Under [output](./output/) directory, a demo page [index.html](./output/index.htm
 
 It will be useful to also document here the source of each icon.
 
--   sui-logo-icon.svg - created from the original logo given by design
--   sui-logo-txt.svg - created from the original logo given by design
+-   [sui-logo-icon.svg](./svgs/sui-logo-icon.svg) - created from the original logo given by design
+-   [sui-logo-txt.svg](./svgs/sui-logo-txt.svg) - created from the original logo given by design
+-   [tokens.svg](./svgs/tokens.svg) - exported from [figma](https://www.figma.com/file/rkFrheddol8YO7HQaHgIfF/Sui-Systematize?node-id=3547%3A3433)
+-   [nfts.svg](./svgs/nfts.svg) - exported from [figma](https://www.figma.com/file/rkFrheddol8YO7HQaHgIfF/Sui-Systematize?node-id=3547%3A3433)
+-   [history.svg](./svgs/history.svg) - exported from [figma](https://www.figma.com/file/rkFrheddol8YO7HQaHgIfF/Sui-Systematize?node-id=3547%3A3433)
+-   [apps.svg](./svgs/apps.svg) - exported from [figma](https://www.figma.com/file/rkFrheddol8YO7HQaHgIfF/Sui-Systematize?node-id=3547%3A3433)
 
 # Troubleshooting
 
