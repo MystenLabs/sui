@@ -4,6 +4,7 @@
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
+use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::{self, execute_move_command};
 use anyhow::{anyhow, bail};
@@ -62,6 +63,7 @@ pub enum SuiCommand {
         #[clap(short, long, help = "Forces overwriting existing configuration")]
         force: bool,
     },
+    GenesisCeremony(Ceremony),
     /// Sui keystore tool.
     #[clap(name = "keytool")]
     KeyTool {
@@ -307,6 +309,7 @@ impl SuiCommand {
 
                 Ok(())
             }
+            SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool { keystore_path, cmd } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
