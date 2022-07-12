@@ -125,6 +125,11 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Learn Sui Move",
+            "url": "https://sui.io/resources-move/why-we-created-sui-move/",
+            "external": true
+          },
+          {
             "name": "Use Move VSCode Plugin",
             "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
             "external": true
