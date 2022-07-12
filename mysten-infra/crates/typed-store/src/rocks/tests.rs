@@ -502,3 +502,41 @@ fn test_multi_remove() {
         assert_eq!(Some(v), val);
     }
 }
+
+#[tokio::test]
+async fn open_as_secondary_test() {
+    let primary_path = temp_dir();
+
+    // Init a DB
+    let primary_db = DBMap::<i32, String>::open(primary_path.clone(), None, Some("table"))
+        .expect("Failed to open storage");
+    // Create kv pairs
+    let keys_vals = (0..101).map(|i| (i, i.to_string()));
+
+    primary_db
+        .multi_insert(keys_vals.clone())
+        .expect("Failed to multi-insert");
+
+    let opt = rocksdb::Options::default();
+    let secondary_store =
+        open_cf_opts_secondary(primary_path, None, None, &[("table", &opt)]).unwrap();
+    let secondary_db = DBMap::<i32, String>::reopen(&secondary_store, Some("table")).unwrap();
+
+    secondary_db.try_catch_up_with_primary().unwrap();
+    // Check secondary
+    for (k, v) in keys_vals {
+        assert_eq!(secondary_db.get(&k).unwrap(), Some(v));
+    }
+
+    // Update the value from 0 to 10
+    primary_db.insert(&0, &"10".to_string()).unwrap();
+
+    // This should still be stale since secondary is behind
+    assert_eq!(secondary_db.get(&0).unwrap(), Some("0".to_string()));
+
+    // Try force catchup
+    secondary_db.try_catch_up_with_primary().unwrap();
+
+    // New value should be present
+    assert_eq!(secondary_db.get(&0).unwrap(), Some("10".to_string()));
+}
