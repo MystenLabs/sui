@@ -96,7 +96,7 @@ function DisplayBox({ display }: { display: string }) {
             )}
             {showAutoModNotice && (
                 <div className={styles.automod} id="modnotice">
-                    NFT image hidden for likely sensitive material
+                    NFT image hidden
                 </div>
             )}
         </div>

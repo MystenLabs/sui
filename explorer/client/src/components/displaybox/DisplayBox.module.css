@@ -21,6 +21,7 @@ img.imagebox {
     align-content: center;
     vertical-align: middle;
     margin: auto;
-    padding: 2rem !important;
-    margin-top: 5rem;
+    padding: 1rem !important;
+    margin-top: 2rem;
+    word-wrap: normal;
 }
