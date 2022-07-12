@@ -7,8 +7,6 @@ module sui::transfer {
 
     // To allow access to transfer_to_object_unsafe.
     friend sui::bag;
-    // To allow access to is_child_unsafe.
-    friend sui::collection;
 
     // When transferring a child object, this error is thrown if the child object
     // doesn't match the ChildRef that represents the ownership.
@@ -38,7 +36,7 @@ module sui::transfer {
     /// We should always call `is_child` whenever we can.
     /// This is currently only exposed to friend classes. If there turns out to be
     /// general needs, we can open it up.
-    public(friend) fun is_child_unsafe<T: key>(child_ref: &ChildRef<T>, id: &ID): bool {
+    public fun is_child_unsafe<T: key>(child_ref: &ChildRef<T>, id: &ID): bool {
         &child_ref.child_id == id
     }
 
