@@ -5,7 +5,8 @@ import cl from 'classnames';
 import { memo } from 'react';
 
 import Loading from '_components/loading';
-import { useFullscreenGuard } from '_hooks';
+import { useAppSelector, useFullscreenGuard } from '_hooks';
+import { getNavIsVisible } from '_redux/slices/app';
 
 import type { ReactNode } from 'react';
 
@@ -23,11 +24,13 @@ function PageLayout({
     children,
 }: PageLayoutProps) {
     const guardLoading = useFullscreenGuard(forceFullscreen);
+    const isNavVisible = useAppSelector(getNavIsVisible);
     return (
         <Loading loading={guardLoading}>
             <div
                 className={cl(st.container, {
-                    [st.forcedPopupDimensions]: limitToPopUpSize,
+                    [st.forcedPopupSize]: limitToPopUpSize,
+                    [st.navHidden]: !isNavVisible,
                 })}
             >
                 {children}

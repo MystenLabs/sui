@@ -22,12 +22,18 @@
     flex-flow: column nowrap;
     align-items: center;
     background: v.use(v.$colors-main-content-background);
-    padding: 25px;
     border-radius: 20px 20px 0 0;
     flex-grow: 1;
     box-shadow: v.use(v.$shadows-main-content);
+    overflow: hidden;
+    position: relative;
+}
+
+.main {
     overflow: auto;
-    max-height: 100%;
+    padding: 25px;
+    padding-bottom: calc(v.use(v.$sizing-nav-height-placeholder) + 12px);
+    flex-grow: 1;
 }
 
 .logo {

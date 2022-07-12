@@ -5,9 +5,9 @@ import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
-import Header from '_components/header';
 import Loading from '_components/loading';
 import Logo from '_components/logo';
+import Navigation from '_components/navigation';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
 import PageLayout from '_pages/layout';
 import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
@@ -41,8 +41,10 @@ const HomePage = () => {
                         <Logo className={st.logo} txt={true} />
                     </div>
                     <div className={st.content}>
-                        <Header />
-                        <Outlet />
+                        <main className={st.main}>
+                            <Outlet />
+                        </main>
+                        <Navigation />
                     </div>
                 </div>
             </Loading>

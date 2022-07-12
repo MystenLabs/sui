@@ -13,4 +13,11 @@ $values: (
         0 0 44px rgb(0 0 0 / 5%),
         0 0 6px rgb(0 0 0 / 2%),
     ),
+    c-var.$nav-background-color: #dde3eb33,
+    c-var.$nav-background-filter: blur(25px),
+    c-var.$nav-item-color: c-val.$gray-60,
+    c-var.$nav-item-highlighted-color: c-val.$gray-95,
+    c-var.$nav-item-icon-highlighted-color: transparent,
+    c-var.$nav-item-icon-highlighted-gradient-color:
+        linear-gradient(135deg, #589aea 0%, #4c75a6 100%),
 );
