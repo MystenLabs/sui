@@ -1865,7 +1865,7 @@ async fn shared_object() {
 
     let shared_object_version = authority
         .db()
-        .sequenced(&transaction_digest, [shared_object_id].iter())
+        .get_assigned_object_versions(&transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
@@ -1879,7 +1879,7 @@ async fn shared_object() {
 
     let shared_object_lock = authority
         .db()
-        .sequenced(&transaction_digest, [shared_object_id].iter())
+        .get_assigned_object_versions(&transaction_digest, [shared_object_id].iter())
         .unwrap()[0];
     assert!(shared_object_lock.is_none());
 

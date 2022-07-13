@@ -109,7 +109,7 @@ pub struct SuiDataStore<S> {
     /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
     /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
     /// TODO: These two maps should be merged into a single one (no reason to have two).
-    sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
+    assigned_object_versions: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
     next_object_versions: DBMap<ObjectID, SequenceNumber>,
 
     // Tables used for authority batch structure
@@ -145,7 +145,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 ("pending_execution", &options),
                 ("parent_sync", &options),
                 ("effects", &point_lookup),
-                ("sequenced", &options),
+                ("assigned_object_versions", &options),
                 ("next_object_versions", &options),
                 ("executed_sequence", &options),
                 ("batches", &options),
@@ -167,7 +167,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             pending_execution,
             parent_sync,
             effects,
-            sequenced,
+            assigned_object_versions,
             next_object_versions,
             batches,
             last_consensus_index,
@@ -181,7 +181,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             "pending_execution";<InternalSequenceNumber, TransactionDigest>,
             "parent_sync";<ObjectRef, TransactionDigest>,
             "effects";<TransactionDigest, TransactionEffectsEnvelope<S>>,
-            "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
+            "assigned_object_versions";<(TransactionDigest, ObjectID), SequenceNumber>,
             "next_object_versions";<ObjectID, SequenceNumber>,
             "batches";<TxSequenceNumber, SignedBatch>,
             "last_consensus_index";<u64, ExecutionIndices>,
@@ -219,7 +219,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             pending_notifier: Arc::new(Notify::new()),
             parent_sync,
             effects,
-            sequenced,
+            assigned_object_versions,
             next_object_versions,
             executed_sequence,
             batches,
@@ -518,14 +518,16 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
-    pub fn sequenced<'a>(
+    pub fn get_assigned_object_versions<'a>(
         &self,
         transaction_digest: &TransactionDigest,
         object_ids: impl Iterator<Item = &'a ObjectID>,
     ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
         let keys = object_ids.map(|objid| (*transaction_digest, *objid));
 
-        self.sequenced.multi_get(keys).map_err(SuiError::from)
+        self.assigned_object_versions
+            .multi_get(keys)
+            .map_err(SuiError::from)
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
@@ -534,7 +536,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         transaction_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
         Ok(self
-            .sequenced
+            .assigned_object_versions
             .iter()
             .skip_to(&(*transaction_digest, ObjectID::ZERO))?
             .take_while(|((tx, _objid), _ver)| tx == transaction_digest)
@@ -1081,8 +1083,9 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 schedule_to_delete.push(*object_id);
             }
         }
-        let mut write_batch = self.sequenced.batch();
-        write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
+        let mut write_batch = self.assigned_object_versions.batch();
+        write_batch =
+            write_batch.delete_batch(&self.assigned_object_versions, sequenced_to_delete)?;
         write_batch = write_batch.delete_batch(&self.next_object_versions, schedule_to_delete)?;
         write_batch.write()?;
         Ok(())
@@ -1104,8 +1107,8 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .collect();
         info!(?sequenced, "locking");
 
-        let mut write_batch = self.sequenced.batch();
-        write_batch = write_batch.insert_batch(&self.sequenced, sequenced)?;
+        let mut write_batch = self.assigned_object_versions.batch();
+        write_batch = write_batch.insert_batch(&self.assigned_object_versions, sequenced)?;
         write_batch.write()?;
 
         Ok(())
@@ -1156,9 +1159,10 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         //       it is ok to just update the pending list without updating the sequence.
 
         // Atomically store all elements.
-        let mut write_batch = self.sequenced.batch();
+        let mut write_batch = self.assigned_object_versions.batch();
         // Note: we have already written the certificates as part of the add_pending_certificates above.
-        write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
+        write_batch =
+            write_batch.insert_batch(&self.assigned_object_versions, sequenced_to_write)?;
         write_batch = write_batch.insert_batch(&self.next_object_versions, schedule_to_write)?;
         write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
         write_batch.write().map_err(SuiError::from)
