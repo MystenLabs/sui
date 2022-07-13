@@ -11,12 +11,14 @@ import {
     getObjectDataWithPackageAddress,
 } from '../object-result/ObjectResult';
 
-import type { Validator, ValidatorMetadata, ValidatorState } from '../../components/top-validators-card/TopValidatorsCard';
+import type {
+    Validator,
+    ValidatorMetadata,
+    ValidatorState,
+} from '../../components/top-validators-card/TopValidatorsCard';
 
 import objStyles from '../object-result/ObjectResult.module.css';
 import txStyles from '../transaction-result/TransactionResult.module.css';
-
-
 
 const VALIDATORS_OBJECT_ID = '0x05';
 
@@ -220,7 +222,5 @@ const ValidatorResult = (): JSX.Element => {
     return <ValidatorsResultAPI />;
     //);
 };
-
-
 
 export { ValidatorResult };
