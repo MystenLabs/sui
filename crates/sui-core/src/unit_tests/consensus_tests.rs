@@ -119,8 +119,9 @@ async fn listen_to_sequenced_transaction() {
     );
 
     // Submit a sample consensus transaction.
-    let (sender, receiver) = oneshot::channel();
-    let message = ConsensusListenerMessage::New(serialized.clone(), sender);
+    let (waiter, signals) = ConsensusWaiter::new();
+
+    let message = ConsensusListenerMessage::New(serialized.clone(), signals);
     tx_sui_to_consensus.send(message).await.unwrap();
 
     // Notify the consensus listener that the transaction has been sequenced.
@@ -129,7 +130,7 @@ async fn listen_to_sequenced_transaction() {
     tx_consensus_to_sui.send(output).await.unwrap();
 
     // Ensure the caller get notified from the consensus listener.
-    assert!(receiver.await.unwrap().is_ok());
+    assert!(waiter.wait_for_result().await.is_ok());
 }
 
 #[tokio::test]
@@ -165,7 +166,6 @@ async fn submit_transaction_to_consensus() {
         while let Some(message) = rx_consensus_listener.recv().await {
             let (serialized, replier) = match message {
                 ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
-                message => panic!("Unexpected message {message:?}"),
             };
 
             let message =
@@ -186,7 +186,7 @@ async fn submit_transaction_to_consensus() {
 
             // Reply to the submitter.
             let result = Ok(Vec::default());
-            replier.send(result).unwrap();
+            replier.0.send(result).unwrap();
         }
     });
 

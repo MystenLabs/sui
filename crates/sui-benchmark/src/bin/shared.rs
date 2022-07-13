@@ -92,8 +92,7 @@ async fn main() {
     let configs = test_and_configure_authority_configs(opts.committee_size);
     let _ = spawn_test_authorities(gas.clone(), &configs).await;
     let clients = test_authority_aggregator(&configs);
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
-    let quorum_driver = quorum_driver_handler.clone_quorum_driver();
+    let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
 
     // publish package
     write("Publishing basics package".to_string());
@@ -140,13 +139,21 @@ async fn main() {
         .collect();
     let mut tasks = Vec::new();
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+    let request_delay_micros = 1_000_000 / (opts.num_workers * opts.target_qps);
+    let stat_delay_micros = 1_000_000 * opts.stat_collection_interval;
+
     (0..opts.num_workers).for_each(|i| {
         let mut free_pool = gas[i as usize].clone();
-        let qd = quorum_driver.clone();
+
+        // Make a per worker quorum driver, otherwise they all share the same task.
+        let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
+        let qd = quorum_driver_handler.clone_quorum_driver();
+
         let tx_cloned = tx.clone();
-        let request_delay_micros = 1_000_000 / (opts.num_workers * opts.target_qps);
-        let stat_delay_micros = 1_000_000 * opts.stat_collection_interval;
+
         let mut request_interval = time::interval(Duration::from_micros(request_delay_micros));
+        request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+
         let mut stat_interval = time::interval(Duration::from_micros(stat_delay_micros));
         let runner = tokio::spawn(async move {
             let mut num_success = 0;
@@ -183,6 +190,7 @@ async fn main() {
                         num_submitted = 0;
                         min_latency = Duration::MAX;
                         max_latency = Duration::ZERO;
+                        println!("Queue size: {}", futures.len());
                     }
                     _ = request_interval.tick() => {
                         if free_pool.is_empty() {
@@ -214,7 +222,7 @@ async fn main() {
                                         NextOp::Retry(Box::new((tx, counter_id, owner)))
                                     }
                                     Err(sui_err) => {
-                                        error!("{}", sui_err);
+                                        error!("Retry due to error: {}", sui_err);
                                         NextOp::Retry(Box::new((tx, counter_id, owner)))
                                     }
                                 }
@@ -266,7 +274,8 @@ async fn main() {
                                 }
                             }
                             NextOp::Response(None) => {
-                                num_in_flight -= 1;
+                                // num_in_flight -= 1;
+                                unreachable!();
                             }
                         }
                     }
