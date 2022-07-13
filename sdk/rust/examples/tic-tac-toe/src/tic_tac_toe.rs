@@ -267,9 +267,11 @@ fn get_row_col_input(is_row: bool) -> u8 {
     rename_all = "kebab-case"
 )]
 struct TicTacToeOpts {
+    #[clap(long)]
     game_package_id: ObjectID,
+    #[clap(long)]
     keystore_path: Option<PathBuf>,
-    #[clap(default_value = "http://127.0.0.1:5001")]
+    #[clap(long, default_value = "https://gateway.devnet.sui.io:443")]
     rpc_server_url: String,
     #[clap(subcommand)]
     subcommand: TicTacToeCommand,
@@ -286,11 +288,15 @@ fn default_keystore_path() -> PathBuf {
 #[clap(rename_all = "kebab-case")]
 enum TicTacToeCommand {
     NewGame {
+        #[clap(long)]
         player_x: Option<SuiAddress>,
+        #[clap(long)]
         player_o: Option<SuiAddress>,
     },
     JoinGame {
+        #[clap(long)]
         my_identity: SuiAddress,
+        #[clap(long)]
         game_id: ObjectID,
     },
 }
