@@ -431,18 +431,19 @@ where
         // Verify signatures
         resp.verify(&self.committee)?;
 
-        // Verify detail was returned if requested.
-        match (detail, &resp.detail) {
-            (false, Some(_)) | (true, None) => {
-                return Err(SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                });
-            }
-            _ => (),
-        };
+        if let (CheckpointRequestType::PastCheckpoint(_), true, None) =
+            (&req_type, detail, &resp.detail)
+        {
+            // detail was requested but not returned. Note for
+            // CheckpointRequestType::LatestCheckpointProposal, detail may not be available and so
+            // it may be present or absent.
+            return Err(SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+            });
+        }
 
         // Verify response data was correct for request
-        match req_type {
+        match &req_type {
             CheckpointRequestType::LatestCheckpointProposal => {
                 if let AuthorityCheckpointInfo::Proposal { previous, .. } = &resp.info {
                     self.verify_checkpoint_sequence(None, previous)?;
@@ -455,7 +456,7 @@ where
             }
             CheckpointRequestType::PastCheckpoint(seq) => {
                 if let AuthorityCheckpointInfo::Past(past) = &resp.info {
-                    self.verify_checkpoint_sequence(Some(seq), past)?;
+                    self.verify_checkpoint_sequence(Some(*seq), past)?;
                     Ok(resp)
                 } else {
                     Err(SuiError::ByzantineAuthoritySuspicion {
