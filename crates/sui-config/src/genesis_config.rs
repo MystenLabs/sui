@@ -5,7 +5,6 @@ use anyhow::Result;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
@@ -19,8 +18,6 @@ pub struct GenesisConfig {
     pub validator_genesis_info: Option<Vec<ValidatorGenesisInfo>>,
     pub committee_size: usize,
     pub accounts: Vec<AccountConfig>,
-    pub sui_framework_lib_path: Option<PathBuf>,
-    pub move_framework_lib_path: Option<PathBuf>,
 }
 
 impl Config for GenesisConfig {}
@@ -181,8 +178,6 @@ impl Default for GenesisConfig {
             validator_genesis_info: None,
             committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
             accounts: vec![],
-            sui_framework_lib_path: None,
-            move_framework_lib_path: None,
         }
     }
 }
