@@ -301,6 +301,11 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         self.executed_sequence.insert(&seq, digest).unwrap();
     }
 
+    #[cfg(test)]
+    pub fn get_next_object_version(&self, obj: &ObjectID) -> Option<SequenceNumber> {
+        self.next_object_versions.get(obj).unwrap()
+    }
+
     /// Add a number of certificates to the pending transactions as well as the
     /// certificates structure if they are not already executed.
     /// Certificates are optional, and if not provided, they will be eventually
