@@ -63,7 +63,7 @@ function DisplayBox({ display }: { display: string }) {
         showAutoModNotice = true;
     }
 
-    if(showAutoModNotice) {
+    if (showAutoModNotice) {
         return (
             <div className={styles['display-container']}>
                 {showAutoModNotice && (
@@ -72,7 +72,7 @@ function DisplayBox({ display }: { display: string }) {
                     </div>
                 )}
             </div>
-        )
+        );
     } else {
         return (
             <div className={styles['display-container']}>
@@ -98,7 +98,7 @@ function DisplayBox({ display }: { display: string }) {
                     />
                 )}
             </div>
-        )
+        );
     }
 }
 
