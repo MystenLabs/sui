@@ -5,9 +5,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::{
-    authority::AuthorityState,
-    authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
-    authority_aggregator::AuthorityAggregator,
+    authority::AuthorityState, authority_aggregator::AuthorityAggregator,
     authority_client::NetworkAuthorityClient,
 };
 use sui_node::SuiNode;
@@ -19,8 +17,8 @@ use sui_types::{
 use test_utils::transaction::publish_counter_package;
 use test_utils::{
     authority::{
-        spawn_test_authorities, submit_shared_object_transaction, test_authority_aggregator,
-        test_authority_configs,
+        spawn_checkpoint_processes, spawn_test_authorities, submit_shared_object_transaction,
+        test_authority_aggregator, test_authority_configs,
     },
     messages::{move_transaction, test_transactions},
     objects::test_gas_objects,

@@ -7196,6 +7196,7 @@ dependencies = [
  "sui-swarm",
  "sui-types",
  "tempfile",
+ "tokio",
  "workspace-hack 0.1.0",
 ]
 

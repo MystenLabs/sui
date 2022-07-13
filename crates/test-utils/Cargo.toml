@@ -15,6 +15,7 @@ bcs = "0.1.3"
 jsonrpsee-http-server = "0.14.0"
 jsonrpsee-http-client = "0.14.0"
 prometheus = "0.13.1"
+tokio = { version = "1.18.2", features = ["full"] }
 
 sui = { path = "../sui" }
 sui-adapter = { path = "../sui-adapter" }

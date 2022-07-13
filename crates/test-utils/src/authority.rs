@@ -3,12 +3,16 @@
 use crate::{messages::make_certificates, TEST_COMMITTEE_SIZE};
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::{
-    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
+    authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
+    authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
     authority_client::NetworkAuthorityClient,
+    gateway_state::GatewayMetrics,
 };
 use sui_node::SuiNode;
 use sui_types::{
@@ -65,6 +69,33 @@ where
         handles.push(node);
     }
     handles
+}
+
+/// Spawn checkpoint processes with very short checkpointing intervals.
+pub async fn spawn_checkpoint_processes(
+    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    handles: &[SuiNode],
+) {
+    // Start active part of each authority.
+    for authority in handles {
+        let state = authority.state().clone();
+        let clients = aggregator.clone_inner_clients();
+        let _active_authority_handle = tokio::spawn(async move {
+            let active_state = Arc::new(
+                ActiveAuthority::new_with_ephemeral_storage(
+                    state,
+                    clients,
+                    GatewayMetrics::new_for_tests(),
+                    CheckpointProcessControl {
+                        long_pause_between_checkpoints: Duration::from_millis(10),
+                        ..CheckpointProcessControl::default()
+                    },
+                )
+                .unwrap(),
+            );
+            active_state.spawn_checkpoint_process().await
+        });
+    }
 }
 
 /// Create a test authority aggregator.
