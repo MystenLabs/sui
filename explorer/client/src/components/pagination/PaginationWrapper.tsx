@@ -73,13 +73,13 @@ export default function PaginationWrapper({
                             onClick={handleFirstClick}
                             disabled={pageIndex === 0}
                         >
-                            First
+                            1
                         </button>
                     </span>
 
-                    <span className={styles.pagenumber}>
-                        Page {pageIndex + 1} of {FINAL_PAGE_NO}
-                    </span>
+                    <button className={styles.pagenumber}>
+                        {pageIndex + 1}
+                    </button>
 
                     <span
                         className={
@@ -92,7 +92,7 @@ export default function PaginationWrapper({
                             onClick={handleLastClick}
                             className={styles.btncontainer}
                         >
-                            Last
+                            {FINAL_PAGE_NO}
                         </button>
                         <button
                             id="nextBtn"
