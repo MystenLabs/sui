@@ -5,7 +5,7 @@ use std::{fmt::Write, fs::read_dir, path::PathBuf, str, time::Duration};
 
 use anyhow::anyhow;
 use move_package::BuildConfig;
-use serde_json::{json, Value};
+use serde_json::json;
 
 use sui::client_commands::SwitchResponse;
 use sui::{
@@ -21,11 +21,7 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::keystore::KeystoreType;
 use sui_json_rpc_api::rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    crypto::get_key_pair,
-    gas_coin::GasCoin,
-};
+use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 
 use test_utils::network::{setup_network_and_wallet, start_test_network};
 
@@ -243,37 +239,6 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
-    // Create and save genesis config file
-    // Create 4 authorities and 1 account
-    let num_authorities = 4;
-    let mut config = GenesisConfig::custom_genesis(num_authorities, 1, 1);
-    config
-        .move_packages
-        .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
-    config
-        .move_packages
-        .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
-
-    // Start network
-    let network = start_test_network(Some(config)).await?;
-
-    // Checks network config contains package ids
-    let _network_conf =
-        PersistedConfig::<NetworkConfig>::read(&network.dir().join(SUI_NETWORK_CONFIG))?;
-
-    // Create Wallet context.
-    let wallet_conf_path = network.dir().join(SUI_CLIENT_CONFIG);
-    let mut context = WalletContext::new(&wallet_conf_path)?;
-
-    // Make sure init() is executed correctly for custom_genesis_package_2::M1
-    let move_objects =
-        get_move_objects_by_type(&mut context, SuiAddress::default(), "M1::Object").await?;
-    assert_eq!(move_objects.len(), 1);
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
@@ -334,70 +299,6 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     .print(true);
 
     Ok(())
-}
-
-async fn get_move_objects_by_type(
-    context: &mut WalletContext,
-    address: SuiAddress,
-    type_substr: &str,
-) -> Result<Vec<(ObjectID, Value)>, anyhow::Error> {
-    let objects = get_move_objects(context, address).await?;
-    Ok(objects
-        .into_iter()
-        .filter(|(_, obj)| obj["data"]["type"].to_string().contains(type_substr))
-        .collect())
-}
-
-async fn get_move_objects(
-    context: &mut WalletContext,
-    address: SuiAddress,
-) -> Result<Vec<(ObjectID, Value)>, anyhow::Error> {
-    // Sync client to retrieve objects from the network.
-    SuiClientCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(context)
-    .await?
-    .print(true);
-
-    // Fetch objects owned by `address`
-    let objects_result = SuiClientCommands::Objects {
-        address: Some(address),
-    }
-    .execute(context)
-    .await?;
-
-    match objects_result {
-        SuiClientCommandResult::Objects(object_refs) => {
-            let mut objs = vec![];
-            for oref in object_refs {
-                objs.push((
-                    oref.object_id,
-                    get_move_object(context, oref.object_id).await?,
-                ));
-            }
-            Ok(objs)
-        }
-        _ => panic!(
-            "WalletCommands::Objects returns wrong type {}",
-            objects_result
-        ),
-    }
-}
-
-async fn get_move_object(
-    context: &mut WalletContext,
-    id: ObjectID,
-) -> Result<Value, anyhow::Error> {
-    let obj = SuiClientCommands::Object { id }.execute(context).await?;
-
-    match obj {
-        SuiClientCommandResult::Object(obj) => match obj {
-            GetObjectDataResponse::Exists(obj) => Ok(serde_json::to_value(obj)?),
-            _ => panic!("WalletCommands::Object returns wrong type"),
-        },
-        _ => panic!("WalletCommands::Object returns wrong type {obj}"),
-    }
 }
 
 #[allow(clippy::assertions_on_constants)]
