@@ -13,9 +13,10 @@ dirs = "4.0.0"
 tokio = "1.19.2"
 bcs = "0.1.3"
 serde = "1.0.138"
+async-recursion = "1.0.0"
 
+## Sui dependencies
 sui-client = { path = "../../../../crates/sui-client" }
-sui-json-rpc-types= { path = "../../../../crates/sui-json-rpc-types" }
 sui-types = { path = "../../../../crates/sui-types" }
 sui-json = { path = "../../../../crates/sui-json" }
 

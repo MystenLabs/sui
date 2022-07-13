@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use async_recursion::async_recursion;
 use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
+use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
-use sui_client::apis::{
-    RpcBcsApi, RpcGatewayApi, RpcReadApi, RpcTransactionBuilder, WalletSyncApi,
-};
+use sui_client::apis::{RpcBcsApi, RpcGatewayApi, RpcTransactionBuilder, WalletSyncApi};
 use sui_client::keystore::{Keystore, SuiKeystore};
 use sui_client::SuiRpcClient;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::GetObjectDataResponse;
-
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::crypto::SignableBytes;
 use sui_types::id::VersionedID;
+use sui_types::messages::TransactionData;
 use sui_types::sui_serde::Base64;
 
 #[tokio::main]
@@ -60,9 +60,11 @@ impl TicTacToe {
         player_x: Option<SuiAddress>,
         player_o: Option<SuiAddress>,
     ) -> Result<(), anyhow::Error> {
+        // Default player identity to first and second keys in the keystore if not provided.
         let player_x = player_x.unwrap_or_else(|| self.keystore.addresses()[0]);
         let player_o = player_o.unwrap_or_else(|| self.keystore.addresses()[1]);
 
+        // Force a sync of signer's state in gateway.
         self.client.sync_account_state(player_x).await?;
 
         // Create a move call transaction using the TransactionBuilder API.
@@ -78,13 +80,18 @@ impl TicTacToe {
                     SuiJsonValue::from_str(&player_x.to_string())?,
                     SuiJsonValue::from_str(&player_o.to_string())?,
                 ],
-                None,
+                None, // The gateway server will pick a gas object belong to the signer if not provided.
                 1000,
             )
             .await?;
 
         // Sign the transaction.
         let transaction_bytes = create_game_call.tx_bytes.to_vec()?;
+
+        // You can do some extra verification here to make sure the transaction created is correct before signing.
+        let _transaction = TransactionData::from_signable_bytes(&transaction_bytes)?;
+
+        // Create a signature using the keystore.
         let signature = self.keystore.sign(&player_x, &transaction_bytes)?;
         let signature_base64 = Base64::from_bytes(signature.signature_bytes());
         let pub_key = Base64::from_bytes(signature.public_key_bytes());
@@ -105,7 +112,7 @@ impl TicTacToe {
             .reference
             .object_id;
 
-        println!("Create new game [{}]", game_id);
+        println!("Created new game, game id : [{}]", game_id);
         println!("Player X : {}", player_x);
         println!("Player O : {}", player_o);
 
@@ -118,15 +125,7 @@ impl TicTacToe {
         game_id: ObjectID,
         my_identity: SuiAddress,
     ) -> Result<(), anyhow::Error> {
-        let current_game = self.client.get_raw_object(game_id).await?;
-        let current_game_bytes = current_game
-            .object()?
-            .data
-            .try_as_move()
-            .map(|m| &m.bcs_bytes)
-            .unwrap();
-
-        let game_state: TicTacToeState = bcs::from_bytes(current_game_bytes)?;
+        let game_state = self.fetch_game_state(game_id).await?;
         if game_state.o_address == my_identity {
             println!("You are player O")
         } else if game_state.x_address == my_identity {
@@ -134,26 +133,126 @@ impl TicTacToe {
         } else {
             return Err(anyhow!("You are not invited to the game."));
         }
+        self.next_turn(my_identity, game_state).await
+    }
 
-        let current_player = if game_state.cur_turn % 2 == 0 {
-            game_state.x_address
-        } else {
-            game_state.o_address
-        };
+    #[async_recursion]
+    async fn next_turn(
+        &self,
+        my_identity: SuiAddress,
+        game_state: TicTacToeState,
+    ) -> Result<(), anyhow::Error> {
+        game_state.print_game_board();
 
-        if current_player == my_identity {
+        // return if game ended.
+        if game_state.game_status != 0 {
+            println!("Game ended.");
+            match game_state.game_status {
+                1 => println!("Player X win"),
+                2 => println!("Player O win"),
+                3 => println!("Draw"),
+                _ => {}
+            }
+            return Ok(());
+        }
+
+        if game_state.is_my_turn(my_identity) {
             println!("It's your turn!");
+            let row = get_row_col_input(true) - 1;
+            let col = get_row_col_input(false) - 1;
+
+            // Create a move call transaction using the TransactionBuilder API.
+            let place_mark_call = self
+                .client
+                .move_call(
+                    my_identity,
+                    self.game_package_id,
+                    "shared_tic_tac_toe".to_string(),
+                    "place_mark".to_string(),
+                    vec![],
+                    vec![
+                        SuiJsonValue::from_str(&game_state.id.object_id().to_hex_literal())?,
+                        SuiJsonValue::from_str(&row.to_string())?,
+                        SuiJsonValue::from_str(&col.to_string())?,
+                    ],
+                    None,
+                    1000,
+                )
+                .await?;
+
+            // Sign the transaction.
+            let transaction_bytes = place_mark_call.tx_bytes.to_vec()?;
+            let signature = self.keystore.sign(&my_identity, &transaction_bytes)?;
+            let signature_base64 = Base64::from_bytes(signature.signature_bytes());
+            let pub_key = Base64::from_bytes(signature.public_key_bytes());
+
+            // Execute the transaction.
+            let response = self
+                .client
+                .execute_transaction(place_mark_call.tx_bytes, signature_base64, pub_key)
+                .await?;
+
+            // Print any execution error.
+            let status = response.to_effect_response()?.effects.status;
+            if status.is_err() {
+                eprintln!("{:?}", status);
+            }
+            // Proceed to next turn.
+            self.next_turn(
+                my_identity,
+                self.fetch_game_state(*game_state.id.object_id()).await?,
+            )
+            .await?;
         } else {
             println!("Waiting for opponent...");
-        }
+            // Sleep until my turn.
+            while !self
+                .fetch_game_state(*game_state.id.object_id())
+                .await?
+                .is_my_turn(my_identity)
+            {
+                thread::sleep(Duration::from_secs(1));
+            }
+            self.next_turn(
+                my_identity,
+                self.fetch_game_state(*game_state.id.object_id()).await?,
+            )
+            .await?;
+        };
+        Ok(())
+    }
 
-        loop {
-            let response: GetObjectDataResponse = self.client.get_object(game_id).await?;
-            let o = response.object()?;
-            println!("{}", o);
-            thread::sleep(Duration::from_secs(5));
+    // Retrieve the latest game state from the server.
+    async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
+        // Get the raw BCS serialised move object data
+        let current_game = self.client.get_raw_object(game_id).await?;
+        let current_game_bytes = current_game
+            .object()?
+            .data
+            .try_as_move()
+            .map(|m| &m.bcs_bytes)
+            .unwrap();
+        // Deserialize the data bytes into TicTacToeState struct
+        Ok(bcs::from_bytes(current_game_bytes)?)
+    }
+}
+
+// Helper function for getting console input
+fn get_row_col_input(is_row: bool) -> u8 {
+    let r_c = if is_row { "row" } else { "column" };
+    print!("Enter {} number (1-3) : ", r_c);
+    let _ = stdout().flush();
+    let mut s = String::new();
+    stdin()
+        .read_line(&mut s)
+        .expect("Did not enter a correct string");
+
+    if let Ok(number) = s.trim().parse() {
+        if number > 0 && number < 4 {
+            return number;
         }
     }
+    get_row_col_input(is_row)
 }
 
 // Clap command line args parser
@@ -192,8 +291,8 @@ enum TicTacToeCommand {
     },
 }
 
+// Data structure mirroring move object `games::shared_tic_tac_toe::TicTacToe` for deserialization.
 #[derive(Deserialize, Debug)]
-#[allow(dead_code)]
 struct TicTacToeState {
     id: VersionedID,
     gameboard: Vec<Vec<u8>>,
@@ -201,4 +300,38 @@ struct TicTacToeState {
     game_status: u8,
     x_address: SuiAddress,
     o_address: SuiAddress,
+}
+
+impl TicTacToeState {
+    fn print_game_board(&self) {
+        println!("     1     2     3");
+        print!("  ┌-----┬-----┬-----┐");
+        let mut row_num = 1;
+        for row in &self.gameboard {
+            println!();
+            print!("{} ", row_num);
+            for cell in row {
+                let mark = match cell {
+                    0 => "X",
+                    1 => "O",
+                    _ => " ",
+                };
+                print!("|  {}  ", mark)
+            }
+            println!("|");
+            print!("  ├-----┼-----┼-----┤");
+            row_num += 1;
+        }
+        print!("\r");
+        println!("  └-----┴-----┴-----┘");
+    }
+
+    fn is_my_turn(&self, my_identity: SuiAddress) -> bool {
+        let current_player = if self.cur_turn % 2 == 0 {
+            self.x_address
+        } else {
+            self.o_address
+        };
+        current_player == my_identity
+    }
 }

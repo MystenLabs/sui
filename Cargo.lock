@@ -6352,13 +6352,14 @@ dependencies = [
  "serde_json",
  "serde_with",
  "shell-words",
+ "sui-client",
  "signature",
  "sui-config",
  "sui-core",
  "sui-framework",
  "sui-gateway",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-node",
  "sui-quorum-driver",
  "sui-swarm",
@@ -6436,6 +6437,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ed25519-dalek",
+ "jsonrpsee",
+ "serde 1.0.139",
+ "serde_json",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-types",
+]
+
+[[package]]
 name = "sui-cluster-test"
 version = "0.1.0"
 dependencies = [
@@ -6444,10 +6461,11 @@ dependencies = [
  "reqwest",
  "serde_json",
  "sui",
+ "sui-client",
  "sui-config",
  "sui-faucet",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -6521,7 +6539,7 @@ dependencies = [
  "sui-config",
  "sui-framework",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-network",
  "sui-storage",
  "sui-types",
@@ -6539,6 +6557,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-example-tictactoe"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "bcs",
+ "clap 3.1.18",
+ "dirs",
+ "serde 1.0.139",
+ "sui-client",
+ "sui-json",
+ "sui-types",
+ "tokio",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "0.1.0"
 dependencies = [
@@ -6550,7 +6584,7 @@ dependencies = [
  "serde 1.0.139",
  "sui",
  "sui-config",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-types",
  "telemetry-subscribers",
  "test-utils",
@@ -6610,12 +6644,13 @@ dependencies = [
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=40dae350a699f59f2e296152e02c78765db34e68)",
  "prometheus",
  "serde 1.0.139",
+ "sui-client",
  "sui-config",
  "sui-core",
  "sui-framework",
  "sui-json",
  "sui-json-rpc",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-node",
  "sui-types",
  "telemetry-subscribers",
@@ -6656,12 +6691,14 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "jsonrpsee-core",
+ "jsonrpsee-proc-macros",
  "prometheus",
  "serde 1.0.139",
  "sui-core",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-open-rpc",
+ "sui-open-rpc-macros",
  "sui-types",
  "tokio",
  "tracing",
@@ -6669,7 +6706,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-json-rpc-api"
+name = "sui-json-rpc-types"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -6748,7 +6785,7 @@ dependencies = [
  "sui-config",
  "sui-json",
  "sui-json-rpc",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-types",
  "test-utils",
  "tokio",
@@ -7135,12 +7172,13 @@ dependencies = [
  "rand 0.7.3",
  "sui",
  "sui-adapter",
+ "sui-client",
  "sui-config",
  "sui-core",
  "sui-framework",
  "sui-gateway",
  "sui-json-rpc",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-node",
  "sui-swarm",
  "sui-types",
