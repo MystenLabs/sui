@@ -115,8 +115,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .unwrap();
 
         let genesis = {
-            let genesis_ctx = sui_adapter::genesis::get_genesis_context();
-            let mut builder = genesis::Builder::new_with_context(genesis_ctx).add_objects(objects);
+            let mut builder = genesis::Builder::new().add_objects(objects);
 
             for validator in validator_set {
                 builder = builder.add_validator(validator);
