@@ -92,26 +92,3 @@ pub fn share_object(
         Ok(NativeResult::err(cost, 0))
     }
 }
-
-/// Implementation of Move native function
-/// `delete_child_object_internal<T: key>(child: T)`
-pub fn delete_child_object_internal(
-    context: &mut NativeContext,
-    ty_args: Vec<Type>,
-    mut args: VecDeque<Value>,
-) -> PartialVMResult<NativeResult> {
-    debug_assert!(ty_args.is_empty());
-    // first args is an object ID that we will emit in a DeleteChildObject event
-    // second arg is VersionedID that we want to ignore
-    debug_assert!(args.len() == 2);
-
-    let obj_id = args.pop_front().unwrap();
-    let event_type = EventType::DeleteChildObject;
-    // TODO: Decide the cost.
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
-    if context.save_event(vec![], event_type as u64, Type::Address, obj_id)? {
-        Ok(NativeResult::ok(cost, smallvec![]))
-    } else {
-        Ok(NativeResult::err(cost, 0))
-    }
-}

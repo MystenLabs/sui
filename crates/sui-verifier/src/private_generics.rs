@@ -89,20 +89,17 @@ fn verify_private_transfer(
     match fident.as_str() {
         // transfer functions
         "transfer"
+        | "transfer_to_object"
         | "transfer_to_object_id"
         | "freeze_object"
-        | "share_object"
-        | "transfer_to_object"
-        | "transfer_to_object_unsafe"
-        | "transfer_child_to_object"
-        | "transfer_child_to_address" => (),
+        | "share_object" => (),
         // these functions operate over ChildRef
-        "is_child" | "is_child_unsafe" | "delete_child_object" => {
+        "is_child" | "inner" => {
             return Ok(());
         }
         // should be unreachable
         // these are private and the module itself is skipped
-        "transfer_internal" | "delete_child_object_internal" => {
+        "transfer_internal" => {
             debug_assert!(false, "internal error. Unexpected private function");
             return Ok(());
         }

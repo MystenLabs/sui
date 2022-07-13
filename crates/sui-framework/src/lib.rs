@@ -67,8 +67,6 @@ pub enum EventType {
     /// deleted, the object ID must be deleted and this event will be
     /// emitted.
     DeleteObjectID,
-    /// System event: a child object is deleted along with a child ref.
-    DeleteChildObject,
     /// User-defined event
     User,
 }
