@@ -654,14 +654,7 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                 }
 
                 fragments_num += 1;
-                if fragments_num <= 2 {
-                    // There is no point to make a checkpoint if we don't have enough fragments.
-                    continue;
-                }
-                // TODO: here we should really wait until the fragment is sequenced, otherwise
-                //       we would be going ahead and sequencing more fragments that may not be
-                //       needed. For the moment we just linearly back-off.
-                tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
+
                 let result = checkpoint_db.lock().attempt_to_construct_checkpoint(
                     active_authority.state.database.clone(),
                     committee,
@@ -676,6 +669,10 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                             "Failed to construct checkpoint: {:?}",
                             err
                         );
+                        // TODO: here we should really wait until the fragment is sequenced, otherwise
+                        //       we would be going ahead and sequencing more fragments that may not be
+                        //       needed. For the moment we just linearly back-off.
+                        tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
                         continue;
                     }
                     Ok(()) => {
