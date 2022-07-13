@@ -21,7 +21,7 @@
 }
 
 .objectbox {
-    @apply my-[5vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
+    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
 }
 
 .coinheading + .ownedobjects > .objectbox,
@@ -43,6 +43,8 @@
 
 .coinfield > div:first-child {
     @apply w-[80px] text-sui-grey-80 font-medium;
+
+    word-break: keep-all;
 }
 
 .coinheading > button {
