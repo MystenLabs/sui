@@ -150,7 +150,7 @@ async fn main() {
         let qd = quorum_driver_handler.clone_quorum_driver();
 
         let tx_cloned = tx.clone();
-        
+
         let mut request_interval = time::interval(Duration::from_micros(request_delay_micros));
         request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
 

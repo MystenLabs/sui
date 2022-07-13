@@ -59,7 +59,6 @@ pub enum ConsensusListenerMessage {
         SerializedConsensusTransaction,
         (TxSequencedNotifier, TxSequencedNotifierClose),
     ),
-    // Cleanup(SerializedConsensusTransaction),
 }
 
 pub struct ConsensusWaiter {
@@ -157,8 +156,6 @@ impl ConsensusAdapter {
         let bytes = Bytes::from(serialized.clone());
 
         // Notify the consensus listener that we are expecting to process this certificate.
-        // let (sender, receiver) = oneshot::channel();
-
         let (waiter, signals) = ConsensusWaiter::new();
 
         let consensus_input = ConsensusListenerMessage::New(serialized.clone(), signals);
@@ -256,11 +253,8 @@ impl ConsensusListener {
                                 let id = id_counter;
                                 id_counter += 1;
 
-                                // let len = self.pending.len();
                                 let list = self.pending.entry(digest).or_insert_with(Vec::new);
-                                // println!("Insert {} - {}", len, list.len());
                                 list.push((id, replier));
-
 
                                 // Register with the close notification.
                                 closed_notifications.push(async move {
@@ -400,7 +394,7 @@ impl CheckpointConsensusAdapter {
         deliver: T,
     ) -> (SuiResult<SerializedTransactionInfoResponse>, T) {
         let outcome = match timeout(retry_delay, receiver.wait_for_result()).await {
-            Ok(reply) => reply, // .expect("Failed to read back from consensus listener"),
+            Ok(reply) => reply,
             Err(e) => Err(SuiError::FailedToHearBackFromConsensus(e.to_string())),
         };
         (outcome, deliver)
@@ -418,7 +412,6 @@ impl CheckpointConsensusAdapter {
                     Ok(_) => {
                         // Notify the consensus listener that we wish to be notified once our
                         // consensus transaction is sequenced.
-                        // let (sender, receiver) = oneshot::channel();
                         let (waiter, signals) = ConsensusWaiter::new();
 
                         let consensus_input =
