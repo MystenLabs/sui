@@ -198,7 +198,6 @@ impl<'de> Deserialize<'de> for Genesis {
 pub struct Builder {
     sui_framework: Option<Vec<CompiledModule>>,
     move_framework: Option<Vec<CompiledModule>>,
-    move_modules: Vec<Vec<CompiledModule>>,
     objects: Vec<Object>,
     genesis_ctx: TxContext,
     validators: Vec<ValidatorInfo>,
@@ -220,7 +219,6 @@ impl Builder {
         Self {
             sui_framework: None,
             move_framework: None,
-            move_modules: vec![],
             objects: vec![],
             genesis_ctx,
             validators: vec![],
@@ -234,11 +232,6 @@ impl Builder {
 
     pub fn move_framework(mut self, move_framework: Vec<CompiledModule>) -> Self {
         self.move_framework = Some(move_framework);
-        self
-    }
-
-    pub fn add_move_modules(mut self, modules: Vec<Vec<CompiledModule>>) -> Self {
-        self.move_modules = modules;
         self
     }
 
@@ -275,9 +268,6 @@ impl Builder {
             .sui_framework
             .unwrap_or_else(sui_framework::get_sui_framework);
         modules.push(sui_modules);
-
-        // add custom modules
-        modules.extend(self.move_modules);
 
         let objects =
             create_genesis_objects(&mut genesis_ctx, &modules, &objects, &self.validators);
@@ -324,7 +314,6 @@ impl Builder {
         Ok(Self {
             sui_framework: None,
             move_framework: None,
-            move_modules: vec![],
             objects,
             genesis_ctx,
             validators: committee,
