@@ -11,7 +11,7 @@ bcs = "0.1.3"
 arc-swap = "1.5.0"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 serde = { version = "1.0.139", features = ["derive"] }
-serde_yaml = "0.8.23"
+serde_yaml = "0.8.25"
 rand = "0.7.3"
 dirs = "4.0.0"
 multiaddr = "0.14.0"
