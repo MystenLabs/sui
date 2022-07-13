@@ -84,13 +84,20 @@ type ValidatorState = {
     };
 };
 
-const STATE_DEFAULT = {
+const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
     epoch: 0,
     id: { id: '', version: 0 },
-    parameters: {},
+    parameters: {
+        type: '0x2::sui_system::SystemParameters',
+        fields: {
+            max_validator_candidate_count: 0,
+            min_validator_stake: BigInt(0)
+        }
+    },
     storage_fund: 0,
     treasury_cap: {
+        type: '',
         fields: {},
     },
     validators: {
@@ -135,7 +142,7 @@ const Fail = (): JSX.Element => {
 };
 
 export const TopValidatorsCardAPI = (): JSX.Element => {
-    const [showObjectState, setObjectState] = useState({});
+    const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
     const [loadState, setLoadState] = useState('pending');
     const [network] = useContext(NetworkContext);
     useEffect(() => {
@@ -147,7 +154,6 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
             })
             .catch((error: any) => {
                 console.log(error);
-                setObjectState(STATE_DEFAULT);
                 setLoadState('fail');
             });
     }, [network]);
@@ -245,7 +251,7 @@ const textDecoder = new TextDecoder('utf-8');
 
 // TODO: Specify the type of the context
 // Specify the type of the context
-function TopValidatorsCard({ state }: { state: ValidatorState }) {
+function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     // mock validators data
 
     const totalStake = state.validators.fields.validator_stake;
@@ -316,7 +322,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
                             category="transactions"
                             isLink={true}
                             isCopyButton={false}
-                            showIconButton={true}
+                            /*showIconButton={true}*/
                             alttext="More Validators"
                         />
                     </TabFooter>
