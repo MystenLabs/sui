@@ -2,21 +2,24 @@
     @apply invisible;
 }
 
-.btncontainer,
-.pagenumber {
-    @apply inline-block w-[20%] font-mono;
+button.btncontainer,
+button.pagenumber {
+    @apply w-[32px] h-[32px] rounded font-sans inline-block px-0 cursor-pointer border-none bg-inherit hover:bg-sui
+  py-2
+  text-sui-grey-75 stroke-sui-grey-75
+  hover:text-white hover:stroke-white
+  items-center border-[1px] border-solid
+  mx-[4px];
+}
+
+button.pagenumber {
+    @apply select-none border-solid border-sui-dark text-sui-dark hover:text-sui-dark cursor-default;
+
+    background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
 }
 
 button.btncontainer {
-    @apply inline-block px-0 cursor-pointer border-none bg-inherit hover:bg-sui
-  py-2
-  text-offblack stroke-offblack
-  hover:text-white hover:stroke-white
-  items-center;
-}
-
-.pagenumber {
-    @apply select-none text-center break-normal text-sm;
+    @apply border-solid hover:border-sui;
 }
 
 .paginationheading {
