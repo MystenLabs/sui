@@ -12,6 +12,7 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ReactComponent as BackArrow } from '../../assets/SVGIcons/back-arrow-dark.svg';
 import TabFooter from '../../components/tabs/TabFooter';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -232,7 +233,7 @@ function GroupView({ results }: { results: resultType }) {
 
     if (isGroup) {
         return (
-            <div id="groupCollection" className={styles.ownedobjects}>
+            <div id="groupCollection" className={styles.ownedcoins}>
                 {uniqueTypes.map((typeV) => {
                     const subObjList = results.filter(
                         ({ Type }) => Type === typeV
@@ -244,12 +245,12 @@ function GroupView({ results }: { results: resultType }) {
                             className={styles.objectbox}
                         >
                             <div>
-                                <div>
-                                    <span>Type</span>
+                                <div className={styles.coinfield}>
+                                    <div>Type</div>
                                     <span>{handleCoinType(typeV)}</span>
                                 </div>
-                                <div>
-                                    <span>Balance</span>
+                                <div className={styles.coinfield}>
+                                    <div>Balance</div>
                                     <span>
                                         {subObjList[0]._isCoin &&
                                         subObjList.every(
@@ -279,8 +280,10 @@ function GroupView({ results }: { results: resultType }) {
     } else {
         return (
             <div>
-                <div className={styles.paginationheading}>
-                    <button onClick={goBack}>&#60; Back</button>
+                <div className={styles.coinheading}>
+                    <button onClick={goBack}>
+                        <BackArrow /> Go Back
+                    </button>
                     <h2>{handleCoinType(subObjs[0].Type)}</h2>
                 </div>
                 <PaginationWrapper results={subObjs} viewComponentFn={viewFn} />
@@ -326,23 +329,57 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                                     break;
                                                 } else {
                                                     return (
-                                                        <span>
-                                                            {String(value)}
-                                                        </span>
+                                                        <div
+                                                            className={
+                                                                styles.coinfield
+                                                            }
+                                                        >
+                                                            <div>Balance</div>
+                                                            <div>
+                                                                {String(value)}
+                                                            </div>
+                                                        </div>
                                                     );
                                                 }
                                             case 'id':
-                                                return (
-                                                    <Longtext
-                                                        text={String(value)}
-                                                        category="objects"
-                                                        isCopyButton={false}
-                                                        alttext={truncate(
-                                                            String(value),
-                                                            19
-                                                        )}
-                                                    />
-                                                );
+                                                if (entryObj._isCoin) {
+                                                    return (
+                                                        <div
+                                                            className={
+                                                                styles.coinfield
+                                                            }
+                                                        >
+                                                            <div>Object ID</div>
+                                                            <Longtext
+                                                                text={String(
+                                                                    value
+                                                                )}
+                                                                category="objects"
+                                                                isCopyButton={
+                                                                    false
+                                                                }
+                                                                alttext={truncate(
+                                                                    String(
+                                                                        value
+                                                                    ),
+                                                                    19
+                                                                )}
+                                                            />
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <Longtext
+                                                            text={String(value)}
+                                                            category="objects"
+                                                            isCopyButton={false}
+                                                            alttext={truncate(
+                                                                String(value),
+                                                                19
+                                                            )}
+                                                        />
+                                                    );
+                                                }
                                             default:
                                                 break;
                                         }

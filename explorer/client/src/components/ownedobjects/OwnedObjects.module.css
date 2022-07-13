@@ -15,8 +15,34 @@
     @apply pr-[4vw] mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
 }
 
+.ownedcoins,
 .ownedobjects {
     @apply w-[100%] min-h-[420px] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
+}
+
+.objectbox {
+    @apply my-[5vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
+}
+
+.coinheading + .ownedobjects > .objectbox,
+.ownedcoins > div.objectbox {
+    @apply bg-sui-grey-40 p-1 lg:w-[48%] rounded-md;
+}
+
+.ownedcoins > div.objectbox {
+    @apply cursor-pointer hover:shadow-md;
+}
+
+.coinfield {
+    @apply flex;
+}
+
+.coinfield > div:first-child {
+    @apply w-[80px] text-sui-grey-80 font-medium;
+}
+
+.coinheading > button {
+    @apply font-sans text-sui-dark hover:text-offblack bg-offwhite border-0 cursor-pointer text-sm;
 }
 
 .fillerbox {
@@ -29,10 +55,6 @@
 
 .ownedobjectheader > h2 {
     @apply text-lg text-sui-grey-100;
-}
-
-.objectbox {
-    @apply my-[10px] break-all lg:w-[50%] flex items-center;
 }
 
 .typevalue {
