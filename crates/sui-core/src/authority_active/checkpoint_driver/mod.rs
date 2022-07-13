@@ -137,6 +137,12 @@ pub async fn checkpoint_process<A>(
             // First sync until before the latest checkpoint. We will special
             // handle the latest checkpoint latter.
             if next_checkpoint < checkpoint.summary.sequence_number {
+                info!(
+                    "{:?}'s checkpoint is at {:?}, behind latest {:?}. Start syncing",
+                    active_authority.state.name,
+                    next_checkpoint,
+                    checkpoint.summary.sequence_number
+                );
                 // TODO: The sync process only works within an epoch.
                 if let Err(err) = sync_to_checkpoint(
                     active_authority,
@@ -149,6 +155,10 @@ pub async fn checkpoint_process<A>(
                     // if there was an error we pause to wait for network to come up
                     tokio::time::sleep(timing.delay_on_quorum_failure).await;
                 }
+                info!(
+                    "{:?}'s checkpoint sync finished",
+                    active_authority.state.name
+                );
                 // The above process can take some time, and the latest checkpoint may have
                 // already changed. Restart process to be sure.
                 continue;
@@ -168,7 +178,7 @@ pub async fn checkpoint_process<A>(
                 Ok(true) => {
                     let _name = state_checkpoints.lock().name;
                     let _next_checkpoint = state_checkpoints.lock().next_checkpoint();
-                    debug!("{_name:?} at checkpoint {_next_checkpoint:?}");
+                    info!("{_name:?} at checkpoint {_next_checkpoint:?}");
                     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
                     continue;
                 }
@@ -446,6 +456,11 @@ where
             state_checkpoints
                 .lock()
                 .promote_signed_checkpoint_to_cert(checkpoint, committee)?;
+            info!(
+                "Validator {:?} updated signed checkpoint to cert at seq {:?}",
+                active_authority.state.name,
+                checkpoint.summary.sequence_number(),
+            );
             Ok(true)
         }
         Action::NewCert => {
@@ -476,6 +491,11 @@ where
                     committee,
                     active_authority.state.database.clone(),
                 )?;
+            info!(
+                "Validator {:?} stored new checkpoint cert at seq {:?}",
+                active_authority.state.name,
+                checkpoint.summary.sequence_number(),
+            );
             Ok(true)
         }
         Action::Nothing => Ok(false),

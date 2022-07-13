@@ -329,6 +329,7 @@ async fn checkpoint_with_shared_objects() {
     transaction_digests.insert(*increment_counter_transaction.digest());
 
     // Wait for the transactions to be executed and end up in a checkpoint.
+    let mut cnt = 0;
     loop {
         // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
@@ -338,8 +339,10 @@ async fn checkpoint_with_shared_objects() {
 
         match ok {
             true => break,
-            false => tokio::time::sleep(Duration::from_millis(10)).await,
+            false => tokio::time::sleep(Duration::from_secs(1)).await,
         }
+        cnt += 1;
+        assert!(cnt <= 20);
     }
 
     // Ensure all authorities moved to the next checkpoint sequence number.
