@@ -6461,6 +6461,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "bcs",
+ "camino",
  "config 0.1.0",
  "crypto",
  "dirs",

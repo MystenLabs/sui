@@ -5,7 +5,10 @@ use anyhow::Result;
 use clap::Parser;
 use multiaddr::Multiaddr;
 use std::path::PathBuf;
-use sui_config::{genesis::Builder, SUI_GENESIS_FILENAME};
+use sui_config::{
+    genesis::{Builder, Genesis},
+    SUI_GENESIS_FILENAME,
+};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::PublicKeyBytes,
@@ -15,7 +18,7 @@ use sui_types::{
 #[derive(Parser)]
 pub struct Ceremony {
     #[clap(long)]
-    path: PathBuf,
+    path: Option<PathBuf>,
 
     #[clap(subcommand)]
     command: CeremonyCommand,
@@ -43,16 +46,23 @@ pub enum CeremonyCommand {
     },
 
     Finalize,
+
+    Verify,
 }
 
 pub fn run(cmd: Ceremony) -> Result<()> {
+    let dir = if let Some(path) = cmd.path {
+        path
+    } else {
+        std::env::current_dir()?
+    };
+
     match cmd.command {
         CeremonyCommand::Init => {
             let builder = Builder::new();
-            builder.save(cmd.path)?;
+            builder.save(dir)?;
         }
 
-        //TODO this will need to include Narwhal network information
         CeremonyCommand::AddValidator {
             name,
             public_key,
@@ -63,7 +73,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             narwhal_worker_to_worker,
             narwhal_consensus_address,
         } => {
-            let mut builder = Builder::load(&cmd.path)?;
+            let mut builder = Builder::load(&dir)?;
             builder = builder.add_validator(sui_config::ValidatorInfo {
                 name,
                 public_key,
@@ -76,7 +86,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 narwhal_worker_to_worker,
                 narwhal_consensus_address,
             });
-            builder.save(cmd.path)?;
+            builder.save(dir)?;
         }
 
         CeremonyCommand::AddGasObject {
@@ -84,21 +94,35 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             object_id,
             value,
         } => {
-            let mut builder = Builder::load(&cmd.path)?;
+            let mut builder = Builder::load(&dir)?;
 
             let object_id = object_id.unwrap_or_else(ObjectID::random);
             let object = Object::with_id_owner_gas_for_testing(object_id, address, value);
             builder = builder.add_object(object);
 
-            builder.save(cmd.path)?;
+            builder.save(dir)?;
         }
 
         CeremonyCommand::Finalize => {
-            let builder = Builder::load(&cmd.path)?;
+            let builder = Builder::load(&dir)?;
 
             let genesis = builder.build();
 
-            genesis.save(cmd.path.join(SUI_GENESIS_FILENAME))?;
+            genesis.save(dir.join(SUI_GENESIS_FILENAME))?;
+        }
+
+        CeremonyCommand::Verify => {
+            let loaded_genesis = Genesis::load(dir.join(SUI_GENESIS_FILENAME))?;
+
+            let builder = Builder::load(&dir)?;
+
+            let built_genesis = builder.build();
+
+            if built_genesis != loaded_genesis {
+                return Err(anyhow::anyhow!(
+                    "loaded genesis does not match built genesis"
+                ));
+            }
         }
     }
 
