@@ -8,7 +8,7 @@ use sui::client_commands::{
     call_move, WalletContext, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL,
 };
 use sui::config::{Config, GatewayType, SuiClientConfig};
-use sui_client::keystore::KeystoreType;
+use sui_client::crypto::KeystoreType;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_faucet::FaucetResponse;
 use sui_json::SuiJsonValue;

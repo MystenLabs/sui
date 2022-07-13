@@ -17,8 +17,6 @@ async-recursion = "1.0.0"
 
 ## Sui dependencies
 sui-client = { path = "../../../../crates/sui-client" }
-sui-types = { path = "../../../../crates/sui-types" }
-sui-json = { path = "../../../../crates/sui-json" }
 
 [[example]]
 name = "tic-tac-toe"

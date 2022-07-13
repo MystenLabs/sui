@@ -13,7 +13,7 @@ use sui::{
     config::{GatewayConfig, GatewayType, SuiClientConfig},
     sui_commands::SuiCommand,
 };
-use sui_client::keystore::KeystoreType;
+use sui_client::crypto::KeystoreType;
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
 use sui_config::{
     Config, NetworkConfig, PersistedConfig, ValidatorInfo, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,

@@ -6567,8 +6567,6 @@ dependencies = [
  "dirs",
  "serde 1.0.139",
  "sui-client",
- "sui-json",
- "sui-types",
  "tokio",
 ]
 

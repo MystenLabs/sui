@@ -10,7 +10,7 @@ use sui::{
     client_commands::{SuiClientCommands, WalletContext},
     config::{GatewayConfig, GatewayType, SuiClientConfig},
 };
-use sui_client::keystore::{KeystoreType, SuiKeystore};
+use sui_client::crypto::{KeystoreType, SuiKeystore};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};

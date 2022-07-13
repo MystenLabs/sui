@@ -22,7 +22,7 @@ use sui_json_rpc_types::{
 };
 use tracing::info;
 
-use sui_client::keystore::Keystore;
+use sui_client::crypto::Keystore;
 use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;

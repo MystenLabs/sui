@@ -24,7 +24,11 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::sui_serde::Base64;
 
 pub mod apis;
-pub mod keystore;
+pub mod crypto;
+
+// re-export essential sui crates
+pub use sui_json as json;
+pub use sui_types as types;
 
 pub struct SuiRpcClient {
     client: Client,

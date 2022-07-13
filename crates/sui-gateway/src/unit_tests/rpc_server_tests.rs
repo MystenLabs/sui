@@ -3,7 +3,7 @@
 
 use move_package::BuildConfig;
 use std::{path::Path, str::FromStr};
-use sui_client::keystore::{Keystore, SuiKeystore};
+use sui_client::crypto::{Keystore, SuiKeystore};
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_framework::build_move_package_to_bytes;

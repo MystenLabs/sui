@@ -11,15 +11,19 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
-use sui_client::apis::{RpcBcsApi, RpcGatewayApi, RpcTransactionBuilder, WalletSyncApi};
-use sui_client::keystore::{Keystore, SuiKeystore};
-use sui_client::SuiRpcClient;
-use sui_json::SuiJsonValue;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::SignableBytes;
-use sui_types::id::VersionedID;
-use sui_types::messages::TransactionData;
-use sui_types::sui_serde::Base64;
+use sui_client::{
+    apis::{RpcBcsApi, RpcGatewayApi, RpcTransactionBuilder, WalletSyncApi},
+    crypto::{Keystore, SuiKeystore},
+    json::SuiJsonValue,
+    types::{
+        base_types::{ObjectID, SuiAddress},
+        crypto::SignableBytes,
+        id::VersionedID,
+        messages::TransactionData,
+        sui_serde::Base64,
+    },
+    SuiRpcClient,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -148,9 +152,9 @@ impl TicTacToe {
         if game_state.game_status != 0 {
             println!("Game ended.");
             match game_state.game_status {
-                1 => println!("Player X win"),
-                2 => println!("Player O win"),
-                3 => println!("Draw"),
+                1 => println!("Player X won!"),
+                2 => println!("Player O won!"),
+                3 => println!("It's a draw!"),
                 _ => {}
             }
             return Ok(());
