@@ -14,6 +14,7 @@ import {
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
+import Tabs from '../../components/tabs/Tabs';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxModuleView from './TxModuleView';
@@ -191,7 +192,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const sender = getTransactionSender(txdata);
     const recipient = getTransferObjectTransaction(txdetails);
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
-
+    const TabName = `${txKindName} Details` ;
+    
     const txHeaderData = {
         txId: txdata.txId,
         status: txdata.status,
@@ -257,54 +259,72 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                   })),
               }
             : false;
+    const defaultActiveTab = 0;
     return (
         <div className={cl(styles.txdetailsbg)}>
             <TxResultHeader data={txHeaderData} />
-            <div className={styles.txgridcomponent} id={txdata.txId}>
-                {sender && (
-                    <section
-                        className={cl([styles.txcomponent, styles.txsender])}
-                    >
-                        <div className={styles.txaddress}>
-                            <SendReceiveView data={sendreceive} />
-                        </div>
-                    </section>
-                )}
-                <section
-                    className={cl([styles.txcomponent, styles.txgridcolspan2])}
-                >
-                    <div className={styles.txlinks}>
-                        {createdMutateData.map((item, idx) => (
-                            <TxLinks data={item} key={idx} />
-                        ))}
-                    </div>
-                </section>
-
-                {txKindData?.module?.value &&
-                    Array.isArray(txKindData?.module?.value) && (
+            <Tabs selected={defaultActiveTab}>
+                <section title={TabName} className={styles.txtabs}>
+                    <div className={styles.txgridcomponent} id={txdata.txId}>
+                        {sender && (
+                            <section
+                                className={cl([
+                                    styles.txcomponent,
+                                    styles.txsender,
+                                ])}
+                            >
+                                <div className={styles.txaddress}>
+                                    <SendReceiveView data={sendreceive} />
+                                </div>
+                            </section>
+                        )}
                         <section
                             className={cl([
                                 styles.txcomponent,
-                                styles.txgridcolspan3,
+                                styles.txgridcolspan2,
                             ])}
                         >
-                            <h3 className={styles.txtitle}>Modules </h3>
-                            <div className={styles.txmodule}>
-                                {txKindData.module.value
-                                    .slice(0, 3)
-                                    .map((item, idx) => (
-                                        <TxModuleView itm={item} key={idx} />
-                                    ))}
+                            <div className={styles.txlinks}>
+                                {createdMutateData.map((item, idx) => (
+                                    <TxLinks data={item} key={idx} />
+                                ))}
                             </div>
                         </section>
-                    )}
-            </div>
-            <div className={styles.txgridcomponent}>
-                {typearguments && <ItemView data={typearguments} />}
-                <ItemView data={GasStorageFees} />
-                <ItemView data={transactionSignatureData} />
-                <ItemView data={validatorSignatureData} />
-            </div>
+
+                        {txKindData?.module?.value &&
+                            Array.isArray(txKindData?.module?.value) && (
+                                <section
+                                    className={cl([
+                                        styles.txcomponent,
+                                        styles.txgridcolspan3,
+                                    ])}
+                                >
+                                    <h3 className={styles.txtitle}>Modules </h3>
+                                    <div className={styles.txmodule}>
+                                        {txKindData.module.value
+                                            .slice(0, 3)
+                                            .map((item, idx) => (
+                                                <TxModuleView
+                                                    itm={item}
+                                                    key={idx}
+                                                />
+                                            ))}
+                                    </div>
+                                </section>
+                            )}
+                    </div>
+                    <div className={styles.txgridcomponent}>
+                        {typearguments && <ItemView data={typearguments} />}
+                        <ItemView data={GasStorageFees} />
+                    </div>
+                </section>
+                <section title="Signatures">
+                    <div className={styles.txgridcomponent}>
+                        <ItemView data={transactionSignatureData} />
+                        <ItemView data={validatorSignatureData} />
+                    </div>
+                </section>
+            </Tabs>
         </div>
     );
 }

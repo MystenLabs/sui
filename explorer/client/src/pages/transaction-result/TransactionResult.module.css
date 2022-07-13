@@ -40,7 +40,7 @@
 
 .itemviewtitle,
 .txtitle {
-    @apply text-sui-grey-100 font-[500] text-lg  mt-2 mb-0;
+    @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
 }
 
 .itemviewtitle {
@@ -88,4 +88,9 @@
 
 .mono {
     @apply font-mono text-sm break-all;
+}
+
+.txdetailsbg ul{
+    @apply mt-5 mb-2;
+    border-top: none !important;
 }

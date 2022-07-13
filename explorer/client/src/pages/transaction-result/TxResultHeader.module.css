@@ -1,7 +1,5 @@
 .txheader {
     @apply pb-2 mb-0;
-
-    border-bottom: 1px solid #f0f1f2;
 }
 
 .txback {
