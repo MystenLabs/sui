@@ -92,8 +92,7 @@ async fn main() {
     let configs = test_and_configure_authority_configs(opts.committee_size);
     let _ = spawn_test_authorities(gas.clone(), &configs).await;
     let clients = test_authority_aggregator(&configs);
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
-    let quorum_driver = quorum_driver_handler.clone_quorum_driver();
+    let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
 
     // publish package
     write("Publishing basics package".to_string());
@@ -142,7 +141,11 @@ async fn main() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     (0..opts.num_workers).for_each(|i| {
         let mut free_pool = gas[i as usize].clone();
-        let qd = quorum_driver.clone();
+
+        // Make a per worker quorum driver, otherwise they all share the same task.
+        let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
+        let qd = quorum_driver_handler.clone_quorum_driver();
+
         let tx_cloned = tx.clone();
         let request_delay_micros = 1_000_000 / (opts.num_workers * opts.target_qps);
         let stat_delay_micros = 1_000_000 * opts.stat_collection_interval;
@@ -214,7 +217,7 @@ async fn main() {
                                         NextOp::Retry(Box::new((tx, counter_id, owner)))
                                     }
                                     Err(sui_err) => {
-                                        error!("{}", sui_err);
+                                        error!("Retry due to error: {}", sui_err);
                                         NextOp::Retry(Box::new((tx, counter_id, owner)))
                                     }
                                 }
