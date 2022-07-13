@@ -25,6 +25,8 @@ export default function PaginationWrapper({
     );
 
     const handleFirstClick = useCallback(() => setPageIndex(0), []);
+    const handleSecondClick = useCallback(() => setPageIndex(1), []);
+    const handleThirdClick = useCallback(() => setPageIndex(2), []);
 
     const handleBackClick = useCallback(
         () => pageIndex - 1 >= 0 && setPageIndex(pageIndex - 1),
@@ -42,6 +44,10 @@ export default function PaginationWrapper({
         () => setPageIndex(FINAL_PAGE_NO - 1),
         [FINAL_PAGE_NO]
     );
+    const handlePenultimateClick = useCallback(
+        () => setPageIndex(FINAL_PAGE_NO - 2),
+        [FINAL_PAGE_NO]
+    );
 
     return (
         <>
@@ -55,16 +61,7 @@ export default function PaginationWrapper({
                             onClick={handleBackClick}
                             disabled={pageIndex === 0}
                         >
-                            <svg
-                                width="12"
-                                height="12"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M 12 12 L 0 6 L 12 0"
-                                    fill="transparent"
-                                />
-                            </svg>
+                            &larr;
                         </button>
 
                         <button
@@ -77,9 +74,74 @@ export default function PaginationWrapper({
                         </button>
                     </span>
 
+                    {FINAL_PAGE_NO > 2 && pageIndex > 1 && (
+                        <button
+                            className={styles.btncontainer}
+                            id="secondBtn"
+                            onClick={handleSecondClick}
+                            disabled={pageIndex === 1}
+                        >
+                            2
+                        </button>
+                    )}
+                    {pageIndex > 2 && FINAL_PAGE_NO > 5 && (
+                        <button className={styles.btncontainer}>...</button>
+                    )}
+                    {FINAL_PAGE_NO === 5 && pageIndex > 2 && (
+                        <button
+                            className={styles.btncontainer}
+                            id="middleBtn"
+                            onClick={handleThirdClick}
+                        >
+                            3
+                        </button>
+                    )}
+                    {FINAL_PAGE_NO === 5 && pageIndex > 3 && (
+                        <button
+                            className={styles.btncontainer}
+                            id="middleBtn"
+                            onClick={handlePenultimateClick}
+                        >
+                            4
+                        </button>
+                    )}
+
                     <button className={styles.pagenumber}>
                         {pageIndex + 1}
                     </button>
+
+                    {FINAL_PAGE_NO > 2 && pageIndex === 0 && (
+                        <button
+                            className={styles.btncontainer}
+                            id="secondBtn"
+                            onClick={handleSecondClick}
+                        >
+                            2
+                        </button>
+                    )}
+
+                    {pageIndex < FINAL_PAGE_NO - 3 && FINAL_PAGE_NO > 5 && (
+                        <button className={styles.btncontainer}>...</button>
+                    )}
+                    {FINAL_PAGE_NO === 5 && pageIndex < 2 && (
+                        <button
+                            className={styles.btncontainer}
+                            id="middleBtn"
+                            onClick={handleThirdClick}
+                        >
+                            3
+                        </button>
+                    )}
+
+                    {FINAL_PAGE_NO > 3 && pageIndex < FINAL_PAGE_NO - 2 && (
+                        <button
+                            className={styles.btncontainer}
+                            id="secondLastBtn"
+                            onClick={handlePenultimateClick}
+                        >
+                            {FINAL_PAGE_NO - 1}
+                        </button>
+                    )}
 
                     <span
                         className={
@@ -100,16 +162,7 @@ export default function PaginationWrapper({
                             disabled={pageIndex === FINAL_PAGE_NO - 1}
                             onClick={handleNextClick}
                         >
-                            <svg
-                                width="12"
-                                height="12"
-                                xmlns="http://www.w3.org/2000/svg"
-                            >
-                                <path
-                                    d="M 0 12 L 12 6 L 0 0"
-                                    fill="transparent"
-                                />
-                            </svg>
+                            &rarr;
                         </button>
                     </span>
                 </>
