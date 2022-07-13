@@ -92,8 +92,8 @@ const STATE_DEFAULT: ValidatorState = {
         type: '0x2::sui_system::SystemParameters',
         fields: {
             max_validator_candidate_count: 0,
-            min_validator_stake: BigInt(0)
-        }
+            min_validator_stake: BigInt(0),
+        },
     },
     storage_fund: 0,
     treasury_cap: {
