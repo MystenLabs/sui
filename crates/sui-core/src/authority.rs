@@ -1461,36 +1461,12 @@ impl ExecutionState for AuthorityState {
                     SuiError::NotASharedObjectTransaction
                 );
 
-                // Check if we already assigned locks to the shared objects.
-                let shared_locks = self.transaction_shared_locks_exist(&certificate).await?;
+                // Check the certificate. Remember that Byzantine authorities may input anything into
+                // consensus.
+                certificate.verify(&self.committee.load())?;
 
-                // If we already executed this transaction, return the signed effects.
-                // This is not an optimization, and is critical for safety. It is to ensure that
-                // we don't end up re-assigning shared object locks after they are unlocked when
-                // the transaction was committed.
-                let digest = certificate.digest();
-                if let Some(response) = self.check_tx_already_executed(digest).await? {
-                    return Ok(bincode::serialize(&response).expect("Failed to serialize tx info"));
-                }
-
-                // If we didn't already assigned shared-locks to this transaction, we do it now.
-                if !shared_locks {
-                    // Check the certificate. Remember that Byzantine authorities may input anything into
-                    // consensus.
-                    certificate.verify(&self.committee.load())?;
-
-                    // Persist the certificate since we are about to lock one or more shared object.
-                    // We thus need to make sure someone (if not the client) can continue the protocol.
-                    // Also atomically lock the shared objects for this particular transaction and
-                    // increment the last consensus index. Note that a single process can ever call
-                    // this function and that the last consensus index is also kept in memory. It is
-                    // thus ok to only persist now (despite this function may have returned earlier).
-                    // In the worst case, the synchronizer of the consensus client will catch up.
-                    self.database.persist_certificate_and_lock_shared_objects(
-                        *certificate,
-                        consensus_index,
-                    )?;
-                }
+                self.database
+                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)?;
 
                 // TODO: This return time is not ideal.
                 Ok(Vec::default())
