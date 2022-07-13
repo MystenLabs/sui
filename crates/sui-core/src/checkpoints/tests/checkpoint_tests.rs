@@ -718,7 +718,7 @@ fn set_get_checkpoint() {
         CertifiedCheckpointSummary::aggregate(signed_checkpoint, &committee).unwrap();
 
     // Send the certificate to a party that has the data
-    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee, response.detail.as_ref())
+    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee)
         .unwrap();
 
     // Now we have a certified checkpoint
@@ -1845,11 +1845,7 @@ async fn checkpoint_messaging_flow() {
         } else {
             auth.checkpoint
                 .lock()
-                .promote_signed_checkpoint_to_cert(
-                    &checkpoint_cert,
-                    &setup.committee,
-                    Some(&contents),
-                )
+                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee)
                 .unwrap();
         }
     }

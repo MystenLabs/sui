@@ -740,9 +740,8 @@ impl CheckpointStore {
         &mut self,
         checkpoint: &CertifiedCheckpointSummary,
         committee: &Committee,
-        contents: Option<&CheckpointContents>,
     ) -> SuiResult {
-        checkpoint.verify(committee, contents)?;
+        checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
             self.latest_stored_checkpoint()?,
             Some(AuthenticatedCheckpoint::Signed(_))
