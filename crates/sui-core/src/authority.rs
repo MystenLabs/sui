@@ -1383,7 +1383,9 @@ impl AuthorityState {
     ) -> SuiResult<bool> {
         let digest = certificate.digest();
         let shared_inputs = certificate.shared_input_objects();
-        let shared_locks = self.database.sequenced(digest, shared_inputs)?;
+        let shared_locks = self
+            .database
+            .get_assigned_object_versions(digest, shared_inputs)?;
         Ok(shared_locks[0].is_some())
     }
 
