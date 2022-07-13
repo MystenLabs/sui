@@ -90,7 +90,8 @@
     @apply font-mono text-sm break-all;
 }
 
-.txdetailsbg ul{
+.txdetailsbg ul {
     @apply mt-5 mb-2;
+
     border-top: none !important;
 }
