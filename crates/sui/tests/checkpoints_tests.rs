@@ -139,11 +139,13 @@ async fn end_to_end() {
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(input_objects, &configs).await;
 
+    let (_first, rest) = handles[..].split_at(1);
+
     // Make an authority's aggregator.
     let aggregator = test_authority_aggregator(&configs);
 
     // Start active part of each authority.
-    for authority in &handles {
+    for authority in rest {
         let state = authority.state().clone();
         let clients = aggregator.clone_inner_clients();
         let _active_authority_handle = tokio::spawn(async move {
@@ -186,7 +188,7 @@ async fn end_to_end() {
     // Wait for the transactions to be executed and end up in a checkpoint.
     loop {
         // Ensure all submitted transactions are in the checkpoint.
-        let ok = handles
+        let ok = rest
             .iter()
             .map(|authority| transactions_in_checkpoint(&authority.state()))
             .all(|digests| digests.is_superset(&transaction_digests));
@@ -198,7 +200,7 @@ async fn end_to_end() {
     }
 
     // Ensure all authorities moved to the next checkpoint sequence number.
-    let ok = handles
+    let ok = rest
         .iter()
         .map(|authority| {
             authority
