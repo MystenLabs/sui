@@ -29,9 +29,9 @@ To immediately get started using Sui:
 > ```
 
 ## Supported OS
+* linux - tested on Ubuntu version 18.04 (Bionic Beaver)
 * macOS - tested on macOS Monterey
 * Windows - tested on Windows 11
-* linux - not tested
 
 ## Prerequisites
 
