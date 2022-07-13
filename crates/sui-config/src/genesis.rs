@@ -30,7 +30,7 @@ use sui_types::{
     error::SuiResult,
     object::Object,
 };
-use tracing::{info, trace};
+use tracing::trace;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Genesis {
@@ -196,8 +196,6 @@ impl<'de> Deserialize<'de> for Genesis {
 }
 
 pub struct Builder {
-    sui_framework: Option<Vec<CompiledModule>>,
-    move_framework: Option<Vec<CompiledModule>>,
     objects: Vec<Object>,
     validators: Vec<ValidatorInfo>,
 }
@@ -211,21 +209,9 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Self {
         Self {
-            sui_framework: None,
-            move_framework: None,
             objects: vec![],
             validators: vec![],
         }
-    }
-
-    pub fn sui_framework(mut self, sui_framework: Vec<CompiledModule>) -> Self {
-        self.sui_framework = Some(sui_framework);
-        self
-    }
-
-    pub fn move_framework(mut self, move_framework: Vec<CompiledModule>) -> Self {
-        self.move_framework = Some(move_framework);
-        self
     }
 
     pub fn add_object(mut self, object: Object) -> Self {
@@ -244,23 +230,14 @@ impl Builder {
     }
 
     pub fn build(self) -> Genesis {
-        let mut modules = Vec::new();
         let objects = self.objects;
         let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
 
-        // Load Move Framework
-        info!("Loading Move framework lib from {:?}", self.move_framework);
-        let move_modules = self
-            .move_framework
-            .unwrap_or_else(sui_framework::get_move_stdlib);
-        modules.push(move_modules);
-
-        // Load Sui Framework
-        info!("Loading Sui framework lib from {:?}", self.sui_framework);
-        let sui_modules = self
-            .sui_framework
-            .unwrap_or_else(sui_framework::get_sui_framework);
-        modules.push(sui_modules);
+        // Get Move and Sui Framework
+        let modules = [
+            sui_framework::get_move_stdlib(),
+            sui_framework::get_sui_framework(),
+        ];
 
         let objects =
             create_genesis_objects(&mut genesis_ctx, &modules, &objects, &self.validators);
@@ -300,8 +277,6 @@ impl Builder {
         }
 
         Ok(Self {
-            sui_framework: None,
-            move_framework: None,
             objects,
             validators: committee,
         })

@@ -61,8 +61,6 @@ fn main() {
         validator_genesis_info: None,
         committee_size: bch.host_port_stake_triplets.len(),
         accounts: accounts.clone(),
-        sui_framework_lib_path: None,
-        move_framework_lib_path: None,
     };
 
     let path_str = "distributed_bench_genesis.conf";
