@@ -13,6 +13,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as BackArrow } from '../../assets/SVGIcons/back-arrow-dark.svg';
+import tablestyle from '../../components/table/TableCard.module.css';
 import TabFooter from '../../components/tabs/TabFooter';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -233,7 +234,10 @@ function GroupView({ results }: { results: resultType }) {
 
     if (isGroup) {
         return (
-            <table id="groupCollection">
+            <table
+                id="groupCollection"
+                className={`${styles.groupview} ${tablestyle.table}`}
+            >
                 <tr>
                     <th>Type</th>
                     <th>Balance</th>
@@ -244,8 +248,10 @@ function GroupView({ results }: { results: resultType }) {
                     );
                     return (
                         <tr key={typeV} onClick={shrinkObjList(subObjList)}>
-                            <td>{handleCoinType(typeV)}</td>
-                            <td>
+                            <td className={styles.tablespacing}>
+                                {handleCoinType(typeV)}
+                            </td>
+                            <td className={styles.tablespacing}>
                                 {subObjList[0]._isCoin &&
                                 subObjList.every(
                                     (el) => el.balance !== undefined
