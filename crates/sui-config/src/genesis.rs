@@ -114,7 +114,7 @@ impl Genesis {
     }
 
     pub fn get_default_genesis() -> Self {
-        Builder::new_with_context(sui_adapter::genesis::get_genesis_context()).build()
+        Builder::new().build()
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -199,7 +199,6 @@ pub struct Builder {
     sui_framework: Option<Vec<CompiledModule>>,
     move_framework: Option<Vec<CompiledModule>>,
     objects: Vec<Object>,
-    genesis_ctx: TxContext,
     validators: Vec<ValidatorInfo>,
 }
 
@@ -211,16 +210,10 @@ impl Default for Builder {
 
 impl Builder {
     pub fn new() -> Self {
-        let genesis_ctx = sui_adapter::genesis::get_genesis_context();
-        Self::new_with_context(genesis_ctx)
-    }
-
-    pub fn new_with_context(genesis_ctx: TxContext) -> Self {
         Self {
             sui_framework: None,
             move_framework: None,
             objects: vec![],
-            genesis_ctx,
             validators: vec![],
         }
     }
@@ -253,7 +246,7 @@ impl Builder {
     pub fn build(self) -> Genesis {
         let mut modules = Vec::new();
         let objects = self.objects;
-        let mut genesis_ctx = self.genesis_ctx;
+        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
 
         // Load Move Framework
         info!("Loading Move framework lib from {:?}", self.move_framework);
@@ -286,11 +279,6 @@ impl Builder {
             bail!("path must be a directory");
         }
 
-        // Load context
-        let ctx_bytes =
-            fs::read(path.join(GENESIS_CTX_FILE_NAME)).context("unable to load genesis_ctx")?;
-        let genesis_ctx: TxContext = serde_yaml::from_slice(&ctx_bytes)?;
-
         // Load Objects
         let mut objects = Vec::new();
         for entry in std::fs::read_dir(path.join(GENESIS_BUILDER_OBJECT_DIR))? {
@@ -315,7 +303,6 @@ impl Builder {
             sui_framework: None,
             move_framework: None,
             objects,
-            genesis_ctx,
             validators: committee,
         })
     }
@@ -325,10 +312,6 @@ impl Builder {
         trace!("Writing Genesis Builder to {}", path.display());
 
         std::fs::create_dir_all(path)?;
-
-        // Write context
-        let ctx_bytes = serde_yaml::to_vec(&self.genesis_ctx)?;
-        fs::write(path.join(GENESIS_CTX_FILE_NAME), ctx_bytes)?;
 
         // Write Objects
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
@@ -501,7 +484,6 @@ pub fn generate_genesis_system_object(
     Ok(())
 }
 
-const GENESIS_CTX_FILE_NAME: &str = "genesis-ctx";
 const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 
@@ -513,8 +495,7 @@ mod test {
 
     #[test]
     fn roundtrip() {
-        let genesis =
-            Builder::new_with_context(sui_adapter::genesis::get_genesis_context()).build();
+        let genesis = Builder::new().build();
 
         let s = serde_yaml::to_string(&genesis).unwrap();
         let from_s = serde_yaml::from_str(&s).unwrap();
@@ -530,9 +511,7 @@ mod test {
             .generate_accounts(&mut rand::rngs::OsRng)
             .unwrap();
 
-        let genesis_ctx = sui_adapter::genesis::get_genesis_context();
-
-        let mut builder = Builder::new_with_context(genesis_ctx).add_objects(objects);
+        let mut builder = Builder::new().add_objects(objects);
 
         let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
