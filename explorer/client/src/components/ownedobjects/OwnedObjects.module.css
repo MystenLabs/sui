@@ -1,3 +1,11 @@
+.groupview {
+    @apply border-collapse;
+}
+
+.groupview tr:not(:first-of-type) {
+    @apply cursor-pointer hover:bg-[#6FBCF01A] h-[33px];
+}
+
 .layout {
     @apply flex flex-wrap mt-0;
 }
