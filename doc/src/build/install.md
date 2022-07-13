@@ -46,6 +46,28 @@ Sui is written in Rust, and we are using Cargo to build and manage the
 dependencies. You will need Cargo to build and install Sui on your machine.
 
 To run Sui, you will need to install:
+#### Linux
+1. curl
+   ```shell
+   sudo apt install curl
+   ```
+2. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain version 1.60.0 or higher; update it with:
+   ```shell
+   $ rustup update stable
+   ```
+3. The [`git` command line interface](https://git-scm.com/download/).
+4. libssl-dev
+   ```shell
+   sudo apt install libssl-dev
+   ```
+5. cmake
+   ```shell
+   sudo apt install cmake
+   ```
+6. libclang-dev
+   ```shell
+   sudo apt install libclang-dev
+   ```
 #### macOS
 1. A command line interface, as virtually everything done here is done by CLI.
 2. The `curl` command to download other tools, which you can confirm with:
@@ -94,7 +116,7 @@ This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) t
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
 Confirm the installation with:
-#### macOS
+#### macOS and Linux
 ```
 $ echo $PATH
 ```
