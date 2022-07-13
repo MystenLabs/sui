@@ -14,9 +14,11 @@ import {
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
-import codestyle from '../../styles/bytecode.module.css';
-import { convertNumberToDate, timeAgo } from '../../utils/timeUtils';
+import SendReceiveView from './SendReceiveView';
 import { type DataType } from './TransactionResultType';
+import TxLinks from './TxLinks';
+import TxModuleView from './TxModuleView';
+import TxResultHeader from './TxResultHeader';
 
 import type {
     CertifiedTransaction,
@@ -37,58 +39,16 @@ type TxDataProps = CertifiedTransaction & {
     created: SuiObjectRef[];
 };
 
-// Generate an Arr of Obj with Label and Value
-// TODO rewrite to use sui.js, verify tx types and dynamically generate list
-function formatTxResponse(tx: TxDataProps, txId: string) {
-    // TODO: handle multiple transactions
-    const txData = getTransactions(tx)[0];
-    const txKindName = getTransactionKindName(txData);
-
+function generateMutatedCreated(
+    tx: TxDataProps,
+    txKindName?: TransactionKindName | undefined
+) {
     return [
-        {
-            label: 'Transaction ID',
-            value: txId,
-            className: 'columnheader',
-        },
-        ...(tx.timestamp_ms
-            ? [
-                  {
-                      label: 'Time',
-                      value: tx.timestamp_ms,
-                  },
-              ]
-            : []),
-
-        {
-            // May change later
-            label: 'Status',
-            value:
-                tx.status === 'success' ? 'Success' : `Failed - ${tx.txError}`,
-            classAttr:
-                tx.status === 'success' ? 'status-success' : 'status-fail',
-        },
-        {
-            label: 'Transaction Type',
-            value: txKindName,
-        },
-        // txKind Transfer or Call
-        ...(formatByTransactionKind(
-            txKindName,
-            txData,
-            getTransactionSender(tx)
-        ) ?? []),
-        {
-            label: 'Transaction Signature',
-            value: tx.txSignature,
-        },
         ...(tx.mutated?.length
             ? [
                   {
                       label: 'Mutated',
-                      category: 'objects',
-                      value: tx.mutated.map((obj) => getObjectId(obj)),
-                      list: true,
-                      link: true,
+                      links: tx.mutated.map((obj) => obj.objectId),
                   },
               ]
             : []),
@@ -96,31 +56,10 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             ? [
                   {
                       label: 'Created',
-                      value: tx.created.map((obj) => getObjectId(obj)),
-                      category: 'objects',
-                      list: true,
-                      link: true,
+                      links: tx.created.map((obj) => obj.objectId),
                   },
               ]
             : []),
-        {
-            label: 'Gas Payment',
-            value: tx.data.gasPayment.objectId,
-            link: true,
-        },
-        {
-            label: 'Gas Fee',
-            value: tx.gasFee,
-        },
-        {
-            label: 'Gas Budget',
-            value: tx.data.gasBudget,
-        },
-        {
-            label: 'Validator Signatures',
-            value: tx.authSignInfo.signatures,
-            list: true,
-        },
     ];
 }
 
@@ -132,203 +71,243 @@ function formatByTransactionKind(
     switch (kind) {
         case 'TransferObject':
             const transfer = getTransferObjectTransaction(data)!;
-            return [
-                {
-                    label: 'Object',
+            return {
+                title: 'Transfer',
+                sender: {
+                    value: sender,
+                    link: true,
+                    category: 'addresses',
+                },
+                objectId: {
                     value: transfer.objectRef.objectId,
                     link: true,
                     category: 'objects',
                 },
-                {
-                    label: 'Sender',
-                    value: sender,
-                    link: true,
-                    category: 'addresses',
-                    className: 'Receiver',
-                },
-                {
-                    label: 'To',
+                recipient: {
                     value: transfer.recipient,
                     category: 'addresses',
                     link: true,
                 },
-            ];
+            };
         case 'Call':
             const moveCall = getMoveCallTransaction(data)!;
-            return [
-                {
-                    label: 'From',
+            return {
+                title: 'Call',
+                sender: {
                     value: sender,
                     link: true,
                     category: 'addresses',
                 },
-                {
-                    label: 'Package',
-                    category: 'objects',
+                package: {
                     value: getObjectId(moveCall.package),
                     link: true,
+                    category: 'objects',
                 },
-                {
-                    label: 'Module',
+                module: {
                     value: moveCall.module,
                 },
-                {
-                    label: 'Function',
-                    value: moveCall.function,
-                },
-                {
-                    label: 'Arguments',
-                    value: JSON.stringify(moveCall.arguments),
-                },
-            ];
-        case 'Publish':
-            const publish = getPublishTransaction(data)!;
-            return [
-                {
-                    label: 'Modules',
-                    // TODO: render modules correctly
-                    value: Object.entries(getMovePackageContent(publish)!),
+                arguments: {
+                    value: moveCall.arguments,
                     list: true,
                 },
+            };
+        case 'Publish':
+            const publish = getPublishTransaction(data)!;
+            return {
+                title: 'publish',
+                module: {
+                    value: Object.entries(getMovePackageContent(publish)!),
+                },
                 ...(sender
-                    ? [
-                          {
-                              label: 'Sender ',
+                    ? {
+                          sender: {
                               value: sender,
                               link: true,
                               category: 'addresses',
                           },
-                      ]
-                    : []),
-            ];
+                      }
+                    : {}),
+            };
+
         default:
-            return [];
+            return {};
     }
 }
 
-function ItemView({ itm, text }: { itm: any; text: string | number }) {
-    switch (true) {
-        case itm.label === 'Modules':
-            return <div className={codestyle.code}>{itm.value}</div>;
-        case itm.label === 'Time':
-            return (
-                <>{`${timeAgo(text as number)} ago (${convertNumberToDate(
-                    text as number
-                )})`}</>
-            );
-        case itm.link:
-            return (
-                <Longtext
-                    text={text as string}
-                    category={itm.category ? itm.category : 'unknown'}
-                    isLink={true}
-                />
-            );
-        default:
-            return <>{text}</>;
-    }
-}
+type TxItemView = {
+    title: string;
+    content: {
+        label?: string | number | any;
+        value: string | number;
+        link?: boolean;
+        monotypeClass?: boolean;
+    }[];
+};
 
-function SubListView({ itm, list }: { itm: any; list: any }) {
+function ItemView({ data }: { data: TxItemView }) {
     return (
-        <div>
-            {list.map((sublist: string, l: number) => (
-                <div className={styles.sublist} key={l}>
-                    <div className={styles.sublist}>
-                        {itm.subLabel ? (
-                            <div className={styles.sublistlabel}>
-                                {itm.subLabel[l]}:
+        <div className={styles.itemView}>
+            <div className={styles.itemviewtitle}>{data.title}</div>
+            <div className={styles.itemviewcontent}>
+                {data.content.map((item, index) => {
+                    return (
+                        <div
+                            key={index}
+                            className={cl(
+                                styles.itemviewcontentitem,
+                                !item.label && styles.singleitem
+                            )}
+                        >
+                            {item.label && (
+                                <div className={styles.itemviewcontentlabel}>
+                                    {item.label}
+                                </div>
+                            )}
+                            <div
+                                className={cl(
+                                    styles.itemviewcontentvalue,
+                                    item.monotypeClass && styles.mono
+                                )}
+                            >
+                                {item.link ? (
+                                    <Longtext
+                                        text={item.value as string}
+                                        category="objects"
+                                        isLink={true}
+                                    />
+                                ) : (
+                                    item.value
+                                )}
                             </div>
-                        ) : (
-                            ''
-                        )}
-                        <div className={styles.sublistvalue}>
-                            <ItemView itm={itm} text={sublist} />
                         </div>
-                    </div>
-                </div>
-            ))}
+                    );
+                })}
+            </div>
         </div>
     );
 }
 
-const TestIDMatcher = (label: string) => {
-    switch (label) {
-        case 'Transaction ID':
-            return 'transactionID';
-        case 'Time':
-            return 'timestamp';
-        default:
-            return '';
-    }
-};
-
 function TransactionView({ txdata }: { txdata: DataType }) {
+    const txdetails = getTransactions(txdata)[0];
+    const txKindName = getTransactionKindName(txdetails);
+    const sender = getTransactionSender(txdata);
+    const recipient = getTransferObjectTransaction(txdetails);
+    const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
+
+    const txHeaderData = {
+        txId: txdata.txId,
+        status: txdata.status,
+        txKindName: txKindName,
+    };
+
+    const transactionSignatureData = {
+        title: 'Transaction Signatures',
+        content: [
+            {
+                label: 'Signature',
+                value: txdata.txSignature,
+                monotypeClass: true,
+            },
+        ],
+    };
+
+    const validatorSignatureData = {
+        title: 'Validator Signatures',
+        content: txdata.authSignInfo.signatures.map((validatorSign) => ({
+            value: validatorSign,
+            monotypeClass: true,
+        })),
+    };
+
+    const createdMutateData = generateMutatedCreated(txdata, txKindName);
+
+    const sendreceive = {
+        sender: sender,
+        ...(txdata.timestamp_ms
+            ? {
+                  timestamp_ms: txdata.timestamp_ms,
+              }
+            : {}),
+        recipient: [...(recipient?.recipient ? [recipient.recipient] : [])],
+    };
+    const GasStorageFees = {
+        title: 'Gas & Storage Fees',
+        content: [
+            {
+                label: 'Gas Payment',
+                value: txdata.data.gasPayment.objectId,
+                link: true,
+            },
+            {
+                label: 'Gas Fees',
+                value: txdata.gasFee,
+            },
+            {
+                label: 'Gas Budget',
+                value: txdata.data.gasBudget,
+            },
+            //TODO: Add Storage Fees
+        ],
+    };
+    const typearguments =
+        txKindData?.arguments && txKindData?.arguments?.value
+            ? {
+                  title: 'Arguments' as string,
+                  content: txKindData.arguments.value.map((arg) => ({
+                      value: arg as string,
+                      monotypeClass: true,
+                  })),
+              }
+            : false;
     return (
-        <>
-            {txdata && (
-                <div>
-                    <div id="txview" className={styles.txcard}>
-                        {formatTxResponse(txdata, txdata.txId).map(
-                            (itm: any, index: number) => (
-                                <div
-                                    key={index}
-                                    className={cl(
-                                        styles.txcardgrid,
-                                        itm.className
-                                            ? styles[itm.className]
-                                            : ''
-                                    )}
-                                >
-                                    <div>{itm.label}</div>
-                                    <div
-                                        className={cl(
-                                            styles.txcardgridlarge,
-                                            itm.classAttr
-                                                ? styles[itm.classAttr]
-                                                : ''
-                                        )}
-                                        id={TestIDMatcher(itm.label)}
-                                    >
-                                        {itm.list ? (
-                                            <ul className={styles.listitems}>
-                                                {itm.value.map(
-                                                    (list: any, n: number) => (
-                                                        <li
-                                                            className={
-                                                                styles.list
-                                                            }
-                                                            key={n}
-                                                        >
-                                                            {itm.sublist ? (
-                                                                <SubListView
-                                                                    itm={itm}
-                                                                    list={list}
-                                                                />
-                                                            ) : (
-                                                                <ItemView
-                                                                    itm={itm}
-                                                                    text={list}
-                                                                />
-                                                            )}
-                                                        </li>
-                                                    )
-                                                )}
-                                            </ul>
-                                        ) : (
-                                            <ItemView
-                                                itm={itm}
-                                                text={itm.value}
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-                            )
-                        )}
+        <div className={cl(styles.txdetailsbg)}>
+            <TxResultHeader data={txHeaderData} />
+            <div className={styles.txgridcomponent}>
+                {sender && (
+                    <section
+                        className={cl([styles.txcomponent, styles.txsender])}
+                    >
+                        <div className={styles.txaddress}>
+                            <SendReceiveView data={sendreceive} />
+                        </div>
+                    </section>
+                )}
+                <section
+                    className={cl([styles.txcomponent, styles.txgridcolspan2])}
+                >
+                    <div className={styles.txlinks}>
+                        {createdMutateData.map((item, idx) => (
+                            <TxLinks data={item} key={idx} />
+                        ))}
                     </div>
-                </div>
-            )}
-        </>
+                </section>
+
+                {txKindData?.module?.value &&
+                    Array.isArray(txKindData?.module?.value) && (
+                        <section
+                            className={cl([
+                                styles.txcomponent,
+                                styles.txgridcolspan3,
+                            ])}
+                        >
+                            <h3 className={styles.txtitle}>Modules </h3>
+                            <div className={styles.txmodule}>
+                                {txKindData.module.value
+                                    .slice(0, 3)
+                                    .map((item, idx) => (
+                                        <TxModuleView itm={item} key={idx} />
+                                    ))}
+                            </div>
+                        </section>
+                    )}
+            </div>
+            <div className={styles.txgridcomponent}>
+                {typearguments && <ItemView data={typearguments} />}
+                <ItemView data={GasStorageFees} />
+                <ItemView data={transactionSignatureData} />
+                <ItemView data={validatorSignatureData} />
+            </div>
+        </div>
     );
 }
 

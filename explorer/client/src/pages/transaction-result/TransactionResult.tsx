@@ -6,7 +6,6 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -30,7 +29,7 @@ import type {
     SuiObjectRef,
 } from '@mysten/sui.js';
 
-import styles from './TransactionResult.module.css';
+// import styles from './TransactionResult.module.css';
 
 type TxnState = CertifiedTransaction & {
     loadState: string;
@@ -172,14 +171,7 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
 };
 
 const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
-    return (
-        <div className={cl(theme.textresults, styles.txdetailsbg)}>
-            <div className={theme.txdetailstitle}>
-                <h3>Transaction Details</h3>
-            </div>
-            <TransactionView txdata={txData} />
-        </div>
-    );
+    return <TransactionView txdata={txData} />;
 };
 
 function TransactionResult() {

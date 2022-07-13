@@ -9,7 +9,7 @@
 }
 
 .tab {
-    @apply list-none capitalize font-normal text-sm text-gray-500 font-sans mr-5 inline-block w-auto cursor-pointer pt-1 pb-1 whitespace-nowrap;
+    @apply list-none capitalize font-[600] text-lg text-gray-500 font-sans mr-5 inline-block w-auto cursor-pointer pt-1 pb-1 whitespace-nowrap;
 }
 
 .tab-content {
