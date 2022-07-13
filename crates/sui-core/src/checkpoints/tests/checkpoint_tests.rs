@@ -426,7 +426,9 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::None));
 
         let current_proposal = current.unwrap();
-        current_proposal.verify().expect("no signature error");
+        current_proposal
+            .verify(&committee, None)
+            .expect("no signature error");
         assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
 
@@ -446,7 +448,7 @@ fn latest_proposal() {
 
         let current_proposal = current.unwrap();
         current_proposal
-            .verify_with_transactions(response.detail.as_ref().unwrap())
+            .verify(&committee, response.detail.as_ref())
             .expect("no signature error");
         assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
@@ -571,7 +573,9 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
 
         let current_proposal = current.unwrap();
-        current_proposal.verify().expect("no signature error");
+        current_proposal
+            .verify(&committee, None)
+            .expect("no signature error");
         assert_eq!(current_proposal.summary.sequence_number, 1);
     }
 }
@@ -692,9 +696,7 @@ fn set_get_checkpoint() {
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(..))
     ));
     if let AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) = response.info {
-        signed
-            .verify_with_transactions(&response.detail.unwrap())
-            .unwrap();
+        signed.verify(&committee, response.detail.as_ref()).unwrap();
     }
 
     // Make a certificate
@@ -716,7 +718,7 @@ fn set_get_checkpoint() {
         CertifiedCheckpointSummary::aggregate(signed_checkpoint, &committee).unwrap();
 
     // Send the certificate to a party that has the data
-    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee)
+    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee, response.detail.as_ref())
         .unwrap();
 
     // Now we have a certified checkpoint
@@ -1843,7 +1845,11 @@ async fn checkpoint_messaging_flow() {
         } else {
             auth.checkpoint
                 .lock()
-                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee)
+                .promote_signed_checkpoint_to_cert(
+                    &checkpoint_cert,
+                    &setup.committee,
+                    Some(&contents),
+                )
                 .unwrap();
         }
     }

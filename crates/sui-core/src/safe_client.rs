@@ -432,20 +432,19 @@ where
         resp.verify(&self.committee)?;
 
         // Verify detail was returned if requested.
-        let contents = match (detail, resp.detail) {
+        match (detail, &resp.detail) {
             (false, Some(_)) | (true, None) => {
                 return Err(SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                 });
             }
-            (false, None) => None,
-            (true, Some(contents)) => Some(contents),
+            _ => (),
         };
 
         // Verify response data was correct for request
         match req_type {
             CheckpointRequestType::LatestCheckpointProposal => {
-                if let AuthorityCheckpointInfo::Proposal { current, previous } = &resp.info {
+                if let AuthorityCheckpointInfo::Proposal { previous, .. } = &resp.info {
                     self.verify_checkpoint_sequence(None, previous)?;
                     Ok(resp)
                 } else {
