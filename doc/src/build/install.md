@@ -28,6 +28,11 @@ To immediately get started using Sui:
 > ./sui-setup.sh
 > ```
 
+## Supported OS
+* linux - tested on Ubuntu version 18.04 (Bionic Beaver)
+* macOS - tested on macOS Monterey
+* Windows - tested on Windows 11
+
 ## Prerequisites
 
 At a minimum, you should have a machine capable of installing command line tools.
@@ -41,21 +46,61 @@ Sui is written in Rust, and we are using Cargo to build and manage the
 dependencies. You will need Cargo to build and install Sui on your machine.
 
 To run Sui, you will need to install:
-1. A command line interface, as virtually everything done here is done by CLI.
-1. The `curl` command to download other tools, which you can confirm with:
+#### Linux
+1. curl
    ```shell
-   $ which curl
-1. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain version 1.60.0 or higher; update it with:
+   sudo apt install curl
+   ```
+2. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain version 1.60.0 or higher; update it with:
    ```shell
    $ rustup update stable
    ```
-1. The `cmake` command.
-1. The Sui [binaries](#binaries).
+3. The [`git` command line interface](https://git-scm.com/download/).
+4. libssl-dev
+   ```shell
+   sudo apt install libssl-dev
+   ```
+5. cmake
+   ```shell
+   sudo apt install cmake
+   ```
+6. libclang-dev
+   ```shell
+   sudo apt install libclang-dev
+   ```
+#### macOS
+1. A command line interface, as virtually everything done here is done by CLI.
+2. The `curl` command to download other tools, which you can confirm with:
+   ```shell
+   $ which curl
+3. The [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain version 1.60.0 or higher; update it with:
+   ```shell
+   $ rustup update stable
+   ```
+4. The `cmake` command.
+5. The [`git` command line interface](https://git-scm.com/download/).
+6. The Sui [binaries](#binaries).
 
+#### Windows
+1. Command Prompt
+2. [C++ build tools](https://visualstudio.microsoft.com/downloads/)
+3. [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain version 1.60.0 or higher; update it with:
+   ```shell
+   $ rustup update stable
+   ```
+4. The [`git` command line interface](https://git-scm.com/download/win)
+5. [CMake](https://cmake.org/install/)
+6. The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
+
+>**NOTE:** You will need to restart Command Prompt after installing the above prerequisites for it to take effect.
+
+>**Tip:** The installation progress might appear hanging if the `cmd.exe` window loses focus, hitting `enter` key will fix the issue.
+
+>**Known Issue:** The `sui console` command does not work in PowerShell.
+> 
 ### Advanced
 
 In addition, to conduct advanced work such as altering Sui itself, also obtain:
-1. The [`git` command line interface](https://git-scm.com/download/).
 1. The [Sui source code](#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable
 
 ## Binaries
@@ -71,11 +116,14 @@ This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) t
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
 Confirm the installation with:
-
+#### macOS and Linux
 ```
 $ echo $PATH
 ```
-
+#### Windows
+```
+$ echo %PATH%
+```
 And ensure the `.cargo/bin` directory appears. Access the help for any of these binaries by passing the `--help` argument to it.
 
 ## Integrated Development Environment
