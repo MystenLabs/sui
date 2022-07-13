@@ -241,9 +241,8 @@ impl ConsensusListener {
     /// Main loop receiving messages input to consensus and notifying the caller once the inputs
     /// are sequenced (or if an error happened).
     async fn run(&mut self) {
-
         let mut closed_notifications = FuturesUnordered::new();
-        let mut id_counter : u64 = 0;
+        let mut id_counter: u64 = 0;
 
         loop {
             tokio::select! {
@@ -291,7 +290,7 @@ impl ConsensusListener {
                     }
                 }
 
-                Some((digest, id)) = closed_notifications.next() => {                    
+                Some((digest, id)) = closed_notifications.next() => {
                     let should_delete = if let Some(list) = self.pending.get_mut(&digest) {
                         // First clean up the list
                         list.retain(|(item_id, _)| *item_id != id);
@@ -303,7 +302,7 @@ impl ConsensusListener {
                     if should_delete {
                         self.pending.remove(&digest);
                     }
-                    
+
                 }
 
             }
