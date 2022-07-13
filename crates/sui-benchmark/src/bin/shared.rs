@@ -5,11 +5,11 @@ use futures::future::try_join_all;
 use futures::future::{join_all, BoxFuture};
 use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
-use sui_types::crypto::EmptySignInfo;
 use std::collections::{BTreeMap, VecDeque};
 use std::time::Duration;
 use sui_quorum_driver::QuorumDriverHandler;
 use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::crypto::EmptySignInfo;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     Transaction, TransactionEnvelope,
@@ -151,7 +151,6 @@ async fn main() {
         let qd = quorum_driver_handler.clone_quorum_driver();
 
         let tx_cloned = tx.clone();
-
         let mut request_interval = time::interval(Duration::from_micros(request_delay_micros));
         request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
 
@@ -272,9 +271,7 @@ async fn main() {
                     Some(op) = futures.next() => {
                         match op {
                             NextOp::Retry(b) => {
-
                                 retry_queue.push_back(b);
-                                
                             }
                             NextOp::Response(Some((start, payload))) => {
                                 free_pool.push(payload);
