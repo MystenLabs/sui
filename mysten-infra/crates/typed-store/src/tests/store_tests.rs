@@ -147,20 +147,58 @@ async fn iter_successfully() {
 
     // AND key-values to store.
     let key_values = vec![
-        (vec![0u8, 1u8], vec![4u8, 7u8]),
-        (vec![0u8, 2u8], vec![4u8, 7u8]),
-        (vec![0u8, 3u8], vec![4u8, 7u8]),
+        (vec![0u8, 1u8], vec![4u8, 4u8]),
+        (vec![0u8, 2u8], vec![4u8, 5u8]),
+        (vec![0u8, 3u8], vec![4u8, 6u8]),
     ];
 
     let result = store.write_all(key_values.clone()).await;
     assert!(result.is_ok());
 
     // Iter through the keys
-    let output = store.iter().await;
+    let output = store.iter(None).await;
     for (k, v) in &key_values {
         let v1 = output.get(&*k).unwrap();
         assert_eq!(v1.first(), v.first());
         assert_eq!(v1.last(), v.last());
+    }
+    assert_eq!(output.len(), key_values.len());
+}
+
+#[tokio::test]
+async fn iter_and_filter_successfully() {
+    // GIVEN Create new store.
+    let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();
+    let store = Store::new(db);
+
+    // AND key-values to store.
+    let key_values = vec![
+        (vec![0u8, 1u8], vec![4u8, 4u8]),
+        (vec![0u8, 2u8], vec![4u8, 5u8]),
+        (vec![0u8, 3u8], vec![4u8, 6u8]),
+        (vec![0u8, 4u8], vec![4u8, 7u8]),
+        (vec![0u8, 5u8], vec![4u8, 0u8]),
+        (vec![0u8, 6u8], vec![4u8, 1u8]),
+    ];
+
+    let result = store.write_all(key_values.clone()).await;
+    assert!(result.is_ok());
+
+    // Iter through the keys
+    let output = store
+        .iter(Some(Box::new(|(k, _v)| {
+            u16::from_le_bytes(k[..2].try_into().unwrap()) % 2 == 0
+        })))
+        .await;
+    for (k, v) in &key_values {
+        let int = u16::from_le_bytes(k[..2].try_into().unwrap());
+        if int % 2 == 0 {
+            let v1 = output.get(&*k).unwrap();
+            assert_eq!(v1.first(), v.first());
+            assert_eq!(v1.last(), v.last());
+        } else {
+            assert!(output.get(&*k).is_none());
+        }
     }
     assert_eq!(output.len(), key_values.len());
 }

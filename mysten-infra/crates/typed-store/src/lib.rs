@@ -28,6 +28,7 @@ pub mod rocks;
 pub mod store_tests;
 
 pub type StoreError = rocks::TypedStoreError;
+
 type StoreResult<T> = Result<T, StoreError>;
 
 pub enum StoreCommand<Key, Value> {
@@ -38,7 +39,10 @@ pub enum StoreCommand<Key, Value> {
     Read(Key, oneshot::Sender<StoreResult<Option<Value>>>),
     ReadAll(Vec<Key>, oneshot::Sender<StoreResult<Vec<Option<Value>>>>),
     NotifyRead(Key, oneshot::Sender<StoreResult<Option<Value>>>),
-    Iter(oneshot::Sender<HashMap<Key, Value>>),
+    Iter(
+        Option<Box<dyn Fn(&(Key, Value)) -> bool + Send>>,
+        oneshot::Sender<HashMap<Key, Value>>,
+    ),
 }
 
 #[derive(Clone)]
@@ -121,8 +125,14 @@ where
                                 .push_back(sender)
                         }
                     }
-                    StoreCommand::Iter(sender) => {
-                        let response = keyed_db.iter().collect();
+                    StoreCommand::Iter(predicate, sender) => {
+                        let response = if let Some(func) = predicate {
+                            keyed_db.iter().filter(func).collect()
+                        } else {
+                            // Beware, we may overload the memory with a large table!
+                            keyed_db.iter().collect()
+                        };
+
                         let _ = sender.send(response);
                     }
                 }
@@ -231,9 +241,16 @@ where
             .expect("Failed to receive reply to NotifyRead command from store")
     }
 
-    pub async fn iter(&self) -> HashMap<Key, Value> {
+    pub async fn iter(
+        &self,
+        predicate: Option<Box<dyn Fn(&(Key, Value)) -> bool + Send>>,
+    ) -> HashMap<Key, Value> {
         let (sender, receiver) = oneshot::channel();
-        if let Err(e) = self.channel.send(StoreCommand::Iter(sender)).await {
+        if let Err(e) = self
+            .channel
+            .send(StoreCommand::Iter(predicate, sender))
+            .await
+        {
             panic!("Failed to send Iter command to store: {e}");
         }
         receiver
