@@ -1,6 +1,9 @@
-use std::path::PathBuf;
-use clap::Parser;
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use self::db_dump::{dump_table, list_tables};
+use clap::Parser;
+use std::path::PathBuf;
 
 pub mod db_dump;
 
