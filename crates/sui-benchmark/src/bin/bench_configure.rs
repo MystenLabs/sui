@@ -61,7 +61,6 @@ fn main() {
         validator_genesis_info: None,
         committee_size: bch.host_port_stake_triplets.len(),
         accounts: accounts.clone(),
-        move_packages: vec![],
         sui_framework_lib_path: None,
         move_framework_lib_path: None,
     };

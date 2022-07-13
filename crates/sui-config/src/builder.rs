@@ -113,17 +113,10 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let (account_keys, objects) = initial_accounts_config
             .generate_accounts(&mut self.rng)
             .unwrap();
-        // It is important that we create a single genesis ctx, and use it to generate
-        // modules and objects from now on. This ensures all object IDs created are unique.
-        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
-        let custom_modules = initial_accounts_config
-            .generate_custom_move_modules(&mut genesis_ctx)
-            .unwrap();
 
         let genesis = {
-            let mut builder = genesis::Builder::new_with_context(genesis_ctx)
-                .add_move_modules(custom_modules)
-                .add_objects(objects);
+            let genesis_ctx = sui_adapter::genesis::get_genesis_context();
+            let mut builder = genesis::Builder::new_with_context(genesis_ctx).add_objects(objects);
 
             for validator in validator_set {
                 builder = builder.add_validator(validator);
