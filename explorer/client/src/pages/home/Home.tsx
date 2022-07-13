@@ -4,6 +4,7 @@ import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
+import { TopValidatorsCardAPI } from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
 import {
@@ -80,7 +81,9 @@ function HomeAPI() {
             <section className="left-item">
                 <LastestTxCard count={results.count} />
             </section>
-            <section className="right-item"></section>
+            <section className="right-item">
+                <TopValidatorsCardAPI/>
+            </section>
         </div>
     );
 }
