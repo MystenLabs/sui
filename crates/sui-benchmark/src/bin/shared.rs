@@ -5,13 +5,14 @@ use futures::future::try_join_all;
 use futures::future::{join_all, BoxFuture};
 use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::collections::BTreeMap;
+use sui_types::crypto::EmptySignInfo;
+use std::collections::{BTreeMap, VecDeque};
 use std::time::Duration;
 use sui_quorum_driver::QuorumDriverHandler;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    Transaction,
+    Transaction, TransactionEnvelope,
 };
 use sui_types::object::Owner;
 use test_utils::authority::{
@@ -164,6 +165,9 @@ async fn main() {
             let mut num_in_flight: u64 = 0;
             let mut num_submitted = 0;
             let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
+
+            let mut retry_queue : VecDeque<Box<(TransactionEnvelope<EmptySignInfo>, ObjectID, Owner)>> = VecDeque::new();
+
             loop {
                 tokio::select! {
                     _ = stat_interval.tick() => {
@@ -190,9 +194,44 @@ async fn main() {
                         num_submitted = 0;
                         min_latency = Duration::MAX;
                         max_latency = Duration::ZERO;
-                        println!("Queue size: {}", futures.len());
                     }
                     _ = request_interval.tick() => {
+
+                        // If a retry is available send that
+                        // (sending retries here subjects them to our rate limit)
+                        if let Some(b) = retry_queue.pop_front() {
+
+                            num_submitted += 1;
+                            num_error += 1;
+                            let res = qd
+                                .execute_transaction(ExecuteTransactionRequest {
+                                    transaction: b.0.clone(),
+                                    request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                                })
+                                .map(move |res| {
+                                    match res {
+                                        Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+                                            let (_, effects) = *result;
+                                            NextOp::Response(Some((
+                                                Instant::now(),
+                                                (b.1, (effects.effects.gas_object.0, b.2)),
+                                            )))
+                                        }
+                                        Ok(resp) => {
+                                            error!("unexpected_response: {:?}", resp);
+                                            NextOp::Retry(b)
+                                        }
+                                        Err(sui_err) => {
+                                            error!("{}", sui_err);
+                                            NextOp::Retry(b)
+                                        }
+                                    }
+                                });
+                            futures.push(Box::pin(res));
+                            continue
+                        }
+
+                        // Otherwise send a fresh request
                         if free_pool.is_empty() {
                             num_no_gas += 1;
                         } else {
@@ -233,33 +272,9 @@ async fn main() {
                     Some(op) = futures.next() => {
                         match op {
                             NextOp::Retry(b) => {
-                                num_submitted += 1;
-                                num_error += 1;
-                                let res = qd
-                                    .execute_transaction(ExecuteTransactionRequest {
-                                        transaction: b.0.clone(),
-                                        request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-                                    })
-                                    .map(move |res| {
-                                        match res {
-                                            Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
-                                                let (_, effects) = *result;
-                                                NextOp::Response(Some((
-                                                    Instant::now(),
-                                                    (b.1, (effects.effects.gas_object.0, b.2)),
-                                                )))
-                                            }
-                                            Ok(resp) => {
-                                                error!("unexpected_response: {:?}", resp);
-                                                NextOp::Retry(b)
-                                            }
-                                            Err(sui_err) => {
-                                                error!("{}", sui_err);
-                                                NextOp::Retry(b)
-                                            }
-                                        }
-                                    });
-                                futures.push(Box::pin(res));
+
+                                retry_queue.push_back(b);
+                                
                             }
                             NextOp::Response(Some((start, payload))) => {
                                 free_pool.push(payload);
