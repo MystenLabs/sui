@@ -6,6 +6,8 @@ import { useState, useCallback } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 
+import type { Category } from './TransactionResultType';
+
 import styles from './TxLinks.module.css';
 
 type Addresslist = {
@@ -35,7 +37,7 @@ function TxLinks({ data }: { data: Addresslist }) {
                             <li key={idx}>
                                 <Longtext
                                     text={objId}
-                                    category="objects"
+                                    category={data?.category as Category}
                                     isLink={true}
                                 />
                             </li>

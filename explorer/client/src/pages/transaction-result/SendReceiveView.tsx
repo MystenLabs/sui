@@ -25,7 +25,7 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                 <Longtext
                     text={data.sender}
                     category="addresses"
-                    isLink={false}
+                    isLink={true}
                 />
                 {data.recipient && (
                     <ul className={styles.txrecipents}>

@@ -58,17 +58,17 @@
     grid-template-columns: 1fr 2fr;
 }
 
-.itemviewcontent .itemviewcontentitem a {
+.itemviewcontentvalue {
+    @apply text-sm pt-2 pb-2 text-gray-800;
+}
+
+.itemviewcontent .itemviewcontentitem a,
+.itemviewcontent .itemviewcontentitem span {
     @apply break-all font-mono text-sm text-sui-dark;
 }
 
-.itemviewcontentlabel,
-.itemviewcontentvalue {
+.itemviewcontentlabel {
     @apply pt-2 pb-2;
-}
-
-.itemviewcontentvalue {
-    @apply text-gray-800;
 }
 
 @media (min-width: 40em) {

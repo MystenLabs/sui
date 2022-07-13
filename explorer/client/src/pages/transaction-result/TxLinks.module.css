@@ -6,7 +6,8 @@
     @apply pt-1.5 pb-1.5 font-mono;
 }
 
-.mutatedcreatedlist ul li a {
+.mutatedcreatedlist ul li a,
+.objectidlists span {
     @apply text-sui-dark;
 }
 

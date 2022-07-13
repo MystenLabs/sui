@@ -15,11 +15,11 @@ import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
 import SendReceiveView from './SendReceiveView';
-import { type DataType } from './TransactionResultType';
 import TxLinks from './TxLinks';
 import TxModuleView from './TxModuleView';
 import TxResultHeader from './TxResultHeader';
 
+import type { DataType, Category } from './TransactionResultType';
 import type {
     CertifiedTransaction,
     TransactionKindName,
@@ -39,10 +39,7 @@ type TxDataProps = CertifiedTransaction & {
     created: SuiObjectRef[];
 };
 
-function generateMutatedCreated(
-    tx: TxDataProps,
-    txKindName?: TransactionKindName | undefined
-) {
+function generateMutatedCreated(tx: TxDataProps) {
     return [
         ...(tx.mutated?.length
             ? [
@@ -140,6 +137,7 @@ type TxItemView = {
         label?: string | number | any;
         value: string | number;
         link?: boolean;
+        category?: string;
         monotypeClass?: boolean;
     }[];
 };
@@ -172,7 +170,7 @@ function ItemView({ data }: { data: TxItemView }) {
                                 {item.link ? (
                                     <Longtext
                                         text={item.value as string}
-                                        category="objects"
+                                        category={item.category as Category}
                                         isLink={true}
                                     />
                                 ) : (
@@ -219,7 +217,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         })),
     };
 
-    const createdMutateData = generateMutatedCreated(txdata, txKindName);
+    const createdMutateData = generateMutatedCreated(txdata);
 
     const sendreceive = {
         sender: sender,

@@ -2,6 +2,17 @@
     @apply list-none p-0;
 }
 
+.txaddresssender a,
+.txaddresssender span {
+    @apply pl-2 pr-0;
+}
+
+.txaddresssender a,
+.txaddresssender,
+.txaddress ul li a {
+    @apply break-all font-mono text-sm text-sui-dark;
+}
+
 .txaddress ul li {
     @apply p-1.5 pl-5 md:pl-4 pr-0  ml-2;
 
@@ -9,17 +20,8 @@
     align-items: center;
 }
 
-.txaddress ul li a,
-.txaddresssender {
-    @apply break-all font-mono text-sm text-sui-dark;
-}
-
 .txaddresssender {
     @apply relative pl-1.5;
-}
-
-.txaddresssender span {
-    @apply pl-2 pr-0;
 }
 
 .txaddresssender::before {
