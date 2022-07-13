@@ -3,6 +3,7 @@
 
 use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
+use camino::Utf8Path;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
@@ -242,15 +243,43 @@ impl Builder {
         let objects =
             create_genesis_objects(&mut genesis_ctx, &modules, &objects, &self.validators);
 
-        Genesis {
+        let genesis = Genesis {
             objects,
             validator_set: self.validators,
+        };
+
+        // Verify that all the validators were properly created onchain
+        let system_object = genesis.sui_system_object();
+        assert_eq!(system_object.epoch, 0);
+
+        for (validator, onchain_validator) in genesis
+            .validator_set()
+            .iter()
+            .zip(system_object.validators.active_validators.iter())
+        {
+            assert_eq!(validator.stake(), onchain_validator.stake_amount);
+            assert_eq!(
+                validator.sui_address().to_vec(),
+                onchain_validator.metadata.sui_address.to_vec(),
+            );
+            assert_eq!(
+                validator.public_key().to_vec(),
+                onchain_validator.metadata.pubkey_bytes,
+            );
+            assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
+            assert_eq!(
+                validator.network_address().to_vec(),
+                onchain_validator.metadata.net_address
+            );
         }
+
+        genesis
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
         let path = path.as_ref();
-        trace!("Reading Genesis Builder from {}", path.display());
+        let path: &Utf8Path = path.try_into()?;
+        trace!("Reading Genesis Builder from {}", path);
 
         if !path.is_dir() {
             bail!("path must be a directory");
@@ -258,8 +287,12 @@ impl Builder {
 
         // Load Objects
         let mut objects = Vec::new();
-        for entry in std::fs::read_dir(path.join(GENESIS_BUILDER_OBJECT_DIR))? {
+        for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
             let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
             let path = entry.path();
             let object_bytes = fs::read(path)?;
             let object: Object = serde_yaml::from_slice(&object_bytes)?;
@@ -268,8 +301,12 @@ impl Builder {
 
         // Load validator infos
         let mut committee = Vec::new();
-        for entry in std::fs::read_dir(path.join(GENESIS_BUILDER_COMMITTEE_DIR))? {
+        for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
             let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
             let path = entry.path();
             let validator_info_bytes = fs::read(path)?;
             let validator_info: ValidatorInfo = serde_yaml::from_slice(&validator_info_bytes)?;
