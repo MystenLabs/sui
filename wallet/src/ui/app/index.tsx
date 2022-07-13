@@ -9,7 +9,6 @@ import { useAppDispatch, useAppSelector } from '_hooks';
 import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
 import HomePage, {
     NftsPage,
-    SettingsPage,
     StakePage,
     TokensPage,
     TransactionDetailsPage,
@@ -49,7 +48,6 @@ const App = () => {
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
-                <Route path="settings" element={<SettingsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send-nft" element={<TransferNFTPage />} />
                 <Route path="stake" element={<StakePage />} />
