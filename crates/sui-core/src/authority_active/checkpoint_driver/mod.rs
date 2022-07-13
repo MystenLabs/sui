@@ -158,7 +158,10 @@ pub async fn checkpoint_process<A>(
                 update_latest_checkpoint(active_authority, &state_checkpoints, &checkpoint).await;
             match result {
                 Err(err) => {
-                    warn!("Failed to update latest checkpoint: {:?}", err);
+                    warn!(
+                        "{:?} failed to update latest checkpoint: {:?}",
+                        active_authority.state.name, err
+                    );
                     tokio::time::sleep(timing.delay_on_local_failure).await;
                     continue;
                 }
@@ -211,7 +214,10 @@ pub async fn checkpoint_process<A>(
                 .await;
             }
             Err(err) => {
-                warn!("Failure to make a new proposal: {:?}", err);
+                warn!(
+                    "{:?} failed to make a new proposal: {:?}",
+                    active_authority.state.name, err
+                );
                 tokio::time::sleep(timing.delay_on_local_failure).await;
                 continue;
             }

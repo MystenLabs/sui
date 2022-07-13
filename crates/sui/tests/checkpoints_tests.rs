@@ -210,6 +210,8 @@ async fn end_to_end() {
 
 #[tokio::test]
 async fn checkpoint_with_shared_objects() {
+    telemetry_subscribers::init_for_testing();
+
     // Get some gas objects to submit shared-objects transactions.
     let mut gas_objects = test_gas_objects();
 
