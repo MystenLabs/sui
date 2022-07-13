@@ -18,6 +18,9 @@ module sui::sui_system {
 
     friend sui::genesis;
 
+    #[test_only]
+    friend sui::governance_test_utils;
+
     /// A list of system config parameters.
     // TDOO: We will likely add more, a few potential ones:
     // - the change in stake across epochs can be at most +/- x%
@@ -223,6 +226,20 @@ module sui::sui_system {
         delegation::undelegate(delegation, self.epoch, ctx)
     }
 
+    // Switch delegation from the current validator to a new one. 
+    public entry fun request_switch_delegation(
+        self: &mut SuiSystemState,
+        delegation: &mut Delegation,
+        new_validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let old_validator_address = delegation::validator(delegation);
+        let amount = delegation::delegate_amount(delegation);
+        validator_set::request_remove_delegation(&mut self.validators, old_validator_address, amount);
+        validator_set::request_add_delegation(&mut self.validators, new_validator_address, amount);
+        delegation::switch_delegation(delegation, new_validator_address, ctx);
+    }
+
     // TODO: Once we support passing vector of object references as arguments,
     // we should support passing a vector of &mut EpochRewardRecord,
     // which will allow delegators to claim all their reward in one transaction.
@@ -262,8 +279,8 @@ module sui::sui_system {
         let storage_reward = balance::increase_supply(&mut self.sui_supply, storage_charge);
         let computation_reward = balance::increase_supply(&mut self.sui_supply, computation_charge);
 
-        let delegation_stake = validator_set::delegation_stake(&self.validators);
-        let validator_stake = validator_set::validator_stake(&self.validators);
+        let delegation_stake = validator_set::total_delegation_stake(&self.validators);
+        let validator_stake = validator_set::total_validator_stake(&self.validators);
         let storage_fund = balance::value(&self.storage_fund);
         let total_stake = delegation_stake + validator_stake + storage_fund;
 
@@ -298,6 +315,18 @@ module sui::sui_system {
     public fun epoch(self: &SuiSystemState): u64 {
         self.epoch
     }
+
+    /// Returns the amount of stake delegated to `validator_addr`. 
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_delegate_amount(self: &SuiSystemState, validator_addr: address): u64 {
+        validator_set::validator_delegate_amount(&self.validators, validator_addr)
+    } 
+
+    /// Returns the amount of delegators who have delegated to `validator_addr`. 
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_delegator_count(self: &SuiSystemState, validator_addr: address): u64 {
+        validator_set::validator_delegator_count(&self.validators, validator_addr)
+    } 
 
     #[test_only]
     public fun set_epoch_for_testing(self: &mut SuiSystemState, epoch_num: u64) {
