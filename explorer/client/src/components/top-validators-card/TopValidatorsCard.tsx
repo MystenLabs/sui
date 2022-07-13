@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type GetObjectDataResponse, isSuiMoveObject, isSuiObject } from '@mysten/sui.js';
+import {
+    type GetObjectDataResponse,
+    isSuiMoveObject,
+    isSuiObject,
+} from '@mysten/sui.js';
 import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
@@ -86,7 +90,7 @@ const STATE_DEFAULT = {
     parameters: {},
     storage_fund: 0,
     treasury_cap: {
-        fields: {}
+        fields: {},
     },
     validators: {
         type: '0x2::validator_set::ValidatorSet',
@@ -98,25 +102,28 @@ const STATE_DEFAULT = {
             pending_validators: '',
             quorum_stake_threshold: BigInt(0),
             validator_stake: BigInt(0),
-        }
-    }
-}
+        },
+    },
+};
 
 const VALIDATORS_OBJECT_ID = '0x05';
 
-function getValidatorState(
-    network: string
-): Promise<ValidatorState> {
+function getValidatorState(network: string): Promise<ValidatorState> {
     return rpc(network)
         .getObject(VALIDATORS_OBJECT_ID)
         .then((objState: GetObjectDataResponse) => {
             //console.log(objState);
-            if (isSuiObject(objState.details) && isSuiMoveObject(objState.details.data)) {
+            if (
+                isSuiObject(objState.details) &&
+                isSuiMoveObject(objState.details.data)
+            ) {
                 console.log(objState.details.data.fields);
                 return objState.details.data.fields as ValidatorState;
             }
 
-            throw new Error("sui system state information not shaped as expected");
+            throw new Error(
+                'sui system state information not shaped as expected'
+            );
         });
 }
 
@@ -133,8 +140,6 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
     useEffect(() => {
         getValidatorState(network)
             .then((objState: ValidatorState) => {
-
-
                 console.log('validator state', objState);
                 setObjectState(objState);
                 setLoadState('loaded');
@@ -147,13 +152,11 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
     }, [network]);
 
     if (loadState === 'loaded') {
-        console.log("VALIDATORS LOADED");
+        console.log('VALIDATORS LOADED');
         return <TopValidatorsCard state={showObjectState as ValidatorState} />;
     }
     if (loadState === 'pending') {
-        return (
-            <div className={theme.pending}>loading validator info...</div>
-        );
+        return <div className={theme.pending}>loading validator info...</div>;
     }
     if (loadState === 'fail') {
         return <Fail />;
@@ -161,7 +164,6 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
 
     return <div>"Something went wrong"</div>;
 };
-
 
 /*
 const validatorsDataOld = [
@@ -243,15 +245,16 @@ const validatorsDataOld = [
 function TopValidatorsCard({ state }: { state: ValidatorState }) {
     // mock validators data
     const totalStake = state.validators.fields.validator_stake;
-    const validatorsData = state.validators.fields.active_validators
-        .map((av, i) => {
+    const validatorsData = state.validators.fields.active_validators.map(
+        (av, i) => {
             return {
                 name: av.fields.metadata.fields.name,
                 stake: av.fields.stake,
                 stakePercent: av.fields.stake / totalStake,
-                position: i + 1
-            }
-        });
+                position: i + 1,
+            };
+        }
+    );
 
     // map the above data to match the table combine stake and stake percent
     const mockValidatorsData = {
@@ -281,7 +284,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }) {
             {
                 headerLabel: 'STAKE',
                 accessorKey: 'stake',
-            }
+            },
         ],
     };
 

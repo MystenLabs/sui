@@ -82,7 +82,7 @@ function HomeAPI() {
                 <LastestTxCard count={results.count} />
             </section>
             <section className="right-item">
-                <TopValidatorsCardAPI/>
+                <TopValidatorsCardAPI />
             </section>
         </div>
     );
