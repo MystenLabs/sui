@@ -11,76 +11,16 @@ import {
     getObjectDataWithPackageAddress,
 } from '../object-result/ObjectResult';
 
+import type { Validator, ValidatorMetadata, ValidatorState } from '../../components/top-validators-card/TopValidatorsCard';
+
 import objStyles from '../object-result/ObjectResult.module.css';
 import txStyles from '../transaction-result/TransactionResult.module.css';
+
+
 
 const VALIDATORS_OBJECT_ID = '0x05';
 
 const DATATYPE_DEFAULT = { loadState: 'pending' };
-
-type ObjFields = {
-    type: string;
-    fields: any[keyof string];
-};
-
-type SystemParams = {
-    type: '0x2::sui_system::SystemParameters';
-    fields: {
-        max_validator_candidate_count: number;
-        min_validator_stake: bigint;
-    };
-};
-
-type Validator = {
-    type: '0x2::validator::Validator';
-    fields: {
-        delegation: bigint;
-        delegation_count: number;
-        metadata: ValidatorMetadata;
-        pending_delegation: bigint;
-        pending_delegation_withdraw: bigint;
-        pending_delegator_count: number;
-        pending_delegator_withdraw_count: number;
-        pending_stake: {
-            type: '0x1::option::Option<0x2::balance::Balance<0x2::sui::SUI>>';
-            fields: any[keyof string];
-        };
-        pending_withdraw: bigint;
-        stake: bigint;
-    };
-};
-
-type ValidatorMetadata = {
-    type: '0x2::validator::ValidatorMetadata';
-    fields: {
-        name: string;
-        net_address: string;
-        next_epoch_stake: number;
-        pubkey_bytes: string;
-        sui_address: string;
-    };
-};
-
-type ValidatorState = {
-    delegation_reward: number;
-    epoch: number;
-    id: { id: string; version: number };
-    parameters: SystemParams;
-    storage_fund: number;
-    treasury_cap: ObjFields;
-    validators: {
-        type: '0x2::validator_set::ValidatorSet';
-        fields: {
-            delegation_stake: number;
-            active_validators: Validator[];
-            next_epoch_validators: Validator[];
-            pending_removals: string;
-            pending_validators: string;
-            quorum_stake_threshold: number;
-            validator_stake: number;
-        };
-    };
-};
 
 const textDecoder = new TextDecoder();
 
@@ -126,7 +66,7 @@ function ValidatorElement({ itm }: { itm: Validator }): JSX.Element {
         <div>
             <h3>{textDecoder.decode(new Base64DataBuffer(name).getData())}</h3>
             <h4>Stake</h4>
-            {itm.fields.stake} SUI
+            {itm.fields.stake_amount} SUI
             <h4>Address</h4>
             {addr}
             <h4>Pubkey</h4>
@@ -280,5 +220,7 @@ const ValidatorResult = (): JSX.Element => {
     return <ValidatorsResultAPI />;
     //);
 };
+
+
 
 export { ValidatorResult };

@@ -20,12 +20,12 @@ import ErrorResult from '../error-result/ErrorResult';
 
 import styles from './TopValidatorsCard.module.css';
 
-type ObjFields = {
+export type ObjFields = {
     type: string;
     fields: any[keyof string];
 };
 
-type SystemParams = {
+export type SystemParams = {
     type: '0x2::sui_system::SystemParameters';
     fields: {
         max_validator_candidate_count: number;
@@ -33,7 +33,7 @@ type SystemParams = {
     };
 };
 
-type Validator = {
+export type Validator = {
     type: '0x2::validator::Validator';
     fields: {
         delegation: bigint;
@@ -52,7 +52,7 @@ type Validator = {
     };
 };
 
-type ValidatorMetadata = {
+export type ValidatorMetadata = {
     type: '0x2::validator::ValidatorMetadata';
     fields: {
         name: string;
@@ -63,7 +63,7 @@ type ValidatorMetadata = {
     };
 };
 
-type ValidatorState = {
+export type ValidatorState = {
     delegation_reward: number;
     epoch: number;
     id: { id: string; version: number };
@@ -125,7 +125,7 @@ function getValidatorState(network: string): Promise<ValidatorState> {
                 isSuiObject(objState.details) &&
                 isSuiMoveObject(objState.details.data)
             ) {
-                console.log(objState.details.data.fields);
+                console.log(objState);
                 return objState.details.data.fields as ValidatorState;
             }
 
@@ -252,13 +252,13 @@ const textDecoder = new TextDecoder('utf-8');
 function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     const totalStake = state.validators.fields.validator_stake;
     // sort by order of descending stake
-    state.validators.fields.active_validators.sort((a:Validator, b:Validator): number => {
-        if (a.fields.stake_amount < b.fields.stake_amount)
-            return -1;
-        if (a.fields.stake_amount > b.fields.stake_amount)
-            return 1;
-        return 0;
-    })
+    state.validators.fields.active_validators.sort(
+        (a: Validator, b: Validator): number => {
+            if (a.fields.stake_amount < b.fields.stake_amount) return -1;
+            if (a.fields.stake_amount > b.fields.stake_amount) return 1;
+            return 0;
+        }
+    );
 
     const validatorsData = state.validators.fields.active_validators.map(
         (av, i) => {
@@ -269,7 +269,8 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
             return {
                 name: name,
                 stake: av.fields.stake_amount,
-                stakePercent: Number((av.fields.stake_amount / totalStake)) * 100,
+                stakePercent: Number(av.fields.stake_amount / totalStake) * 100,
+                delegation_count: av.fields.delegation_count || 0,
                 position: i + 1,
             };
         }
@@ -289,6 +290,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                     </span>
                 </div>
             ),
+            delegation: validator.delegation_count,
             position: validator.position,
         })),
         columns: [
@@ -297,12 +299,16 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                 accessorKey: 'position',
             },
             {
-                headerLabel: 'Validator',
+                headerLabel: 'Name',
                 accessorKey: 'name',
             },
             {
                 headerLabel: 'STAKE',
                 accessorKey: 'stake',
+            },
+            {
+                headerLabel: 'Delegators',
+                accessorKey: 'delegation',
             },
         ],
     };
