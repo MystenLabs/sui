@@ -248,12 +248,13 @@ const textDecoder = new TextDecoder('utf-8');
 function TopValidatorsCard({ state }: { state: ValidatorState }) {
     // mock validators data
 
-
     const totalStake = state.validators.fields.validator_stake;
     const validatorsData = state.validators.fields.active_validators.map(
         (av, i) => {
             const rawName = av.fields.metadata.fields.name;
-            const name = textDecoder.decode(new Base64DataBuffer(rawName).getData());
+            const name = textDecoder.decode(
+                new Base64DataBuffer(rawName).getData()
+            );
             return {
                 name: name,
                 stake: av.fields.stake,
