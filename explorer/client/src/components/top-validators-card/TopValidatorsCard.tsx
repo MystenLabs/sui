@@ -48,7 +48,7 @@ type Validator = {
             fields: any[keyof string];
         };
         pending_withdraw: bigint;
-        stake: bigint;
+        stake_amount: bigint;
     };
 };
 
@@ -249,12 +249,17 @@ const validatorsDataOld = [
 
 const textDecoder = new TextDecoder('utf-8');
 
-// TODO: Specify the type of the context
-// Specify the type of the context
 function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
-    // mock validators data
-
     const totalStake = state.validators.fields.validator_stake;
+    // sort by order of descending stake
+    state.validators.fields.active_validators.sort((a:Validator, b:Validator): number => {
+        if (a.fields.stake_amount < b.fields.stake_amount)
+            return -1;
+        if (a.fields.stake_amount > b.fields.stake_amount)
+            return 1;
+        return 0;
+    })
+
     const validatorsData = state.validators.fields.active_validators.map(
         (av, i) => {
             const rawName = av.fields.metadata.fields.name;
@@ -263,8 +268,8 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
             );
             return {
                 name: name,
-                stake: av.fields.stake,
-                stakePercent: av.fields.stake / totalStake,
+                stake: av.fields.stake_amount,
+                stakePercent: Number((av.fields.stake_amount / totalStake)) * 100,
                 position: i + 1,
             };
         }
@@ -273,14 +278,14 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     // map the above data to match the table combine stake and stake percent
     const mockValidatorsData = {
         data: validatorsData.map((validator) => ({
-            validatorName: validator.name,
+            name: validator.name,
             stake: (
                 <div>
                     {' '}
                     {validator.stake}{' '}
                     <span className={styles.stakepercent}>
                         {' '}
-                        {validator.stakePercent}
+                        {validator.stakePercent} %
                     </span>
                 </div>
             ),
@@ -304,8 +309,8 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
 
     const tabsFooter = {
         stats: {
-            count: 15482,
-            stats_text: 'total transactions',
+            count: validatorsData.length,
+            stats_text: 'total validators',
         },
     };
 
@@ -319,7 +324,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                     <TabFooter stats={tabsFooter.stats}>
                         <Longtext
                             text=""
-                            category="transactions"
+                            category="validators"
                             isLink={true}
                             isCopyButton={false}
                             /*showIconButton={true}*/
