@@ -13,8 +13,12 @@
     flex-flow: row nowrap;
     align-items: center;
     padding: 0 15px;
-    justify-content: center;
+    justify-content: space-between;
     min-height: 52px;
+}
+
+.menu-button {
+    justify-self: flex-end;
 }
 
 .content {
