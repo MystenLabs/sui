@@ -15,7 +15,7 @@ tokio = { version = "1.18.2", features = ["full"] }
 futures = "0.3.21"
 prometheus = "0.13.1"
 clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68" }
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
@@ -25,7 +25,7 @@ sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 sui-node = { path = "../sui-node" }
 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68" }
 move-package = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
 workspace-hack = { path = "../workspace-hack"}
 

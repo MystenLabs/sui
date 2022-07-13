@@ -91,13 +91,10 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 config-379a95f8704ad10 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", features = ["benchmark", "rand"] }
-console-api = { version = "0.3", default-features = false, features = ["transport"] }
-console-subscriber = { version = "0.1", features = ["env-filter"] }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "2", default-features = false }
 crc-catalog = { version = "1", default-features = false }
-crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -109,6 +106,7 @@ crossbeam-utils = { version = "0.8", features = ["lazy_static", "std"] }
 crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2b5c6dc72f624058 = { package = "crossterm", version = "0.23" }
+crossterm-adf3d7031871b0af = { package = "crossterm", version = "0.24" }
 crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3" }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
@@ -156,7 +154,6 @@ fdlimit = { version = "0.2", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
-flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
 flexstr = { version = "0.9", features = ["std"] }
 float-cmp = { version = "0.9", features = ["num-traits", "ratio"] }
 flume = { version = "0.10", default-features = false, features = ["async", "futures-core", "futures-sink", "pin-project"] }
@@ -193,7 +190,7 @@ half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more", "raw"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.7", default-features = false }
-hdrhistogram = { version = "7", default-features = false, features = ["base64", "flate2", "nom", "serialization"] }
+hdrhistogram = { version = "7", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
 hex = { version = "0.4", features = ["alloc", "std"] }
@@ -297,7 +294,7 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "77336580
 multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multimap = { version = "0.8", default-features = false }
-mysten-network-9c745ecfd9cc7dc3 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", default-features = false }
+mysten-network-5b6fe57aba1ebf5f = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68", default-features = false }
 mysten-network-a2655ef8805d82bb = { package = "mysten-network", git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
@@ -363,7 +360,7 @@ prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
 prost = { version = "0.10", features = ["prost-derive", "std"] }
 prost-build = { version = "0.10" }
-prost-types = { version = "0.10", features = ["std"] }
+prost-types = { version = "0.10", default-features = false }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -391,7 +388,7 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 roaring = { version = "0.9", default-features = false }
-rocksdb = { version = "0.18", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+rocksdb = { version = "0.18", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
@@ -459,7 +456,7 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -510,7 +507,7 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store-9c745ecfd9cc7dc3 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", default-features = false }
+typed-store-5b6fe57aba1ebf5f = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68", default-features = false }
 typed-store-a2655ef8805d82bb = { package = "typed-store", git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67", default-features = false }
 typenum = { version = "1", default-features = false }
 types = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3" }
@@ -646,13 +643,10 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 config-379a95f8704ad10 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", features = ["benchmark", "rand"] }
-console-api = { version = "0.3", default-features = false, features = ["transport"] }
-console-subscriber = { version = "0.1", features = ["env-filter"] }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "2", default-features = false }
 crc-catalog = { version = "1", default-features = false }
-crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -664,6 +658,7 @@ crossbeam-utils = { version = "0.8", features = ["lazy_static", "std"] }
 crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2b5c6dc72f624058 = { package = "crossterm", version = "0.23" }
+crossterm-adf3d7031871b0af = { package = "crossterm", version = "0.24" }
 crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3" }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
@@ -723,7 +718,6 @@ fdlimit = { version = "0.2", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
-flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
 flexstr = { version = "0.9", features = ["std"] }
 float-cmp = { version = "0.9", features = ["num-traits", "ratio"] }
 flume = { version = "0.10", default-features = false, features = ["async", "futures-core", "futures-sink", "pin-project"] }
@@ -761,7 +755,7 @@ half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more", "raw"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.7", default-features = false }
-hdrhistogram = { version = "7", default-features = false, features = ["base64", "flate2", "nom", "serialization"] }
+hdrhistogram = { version = "7", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
 hex = { version = "0.4", features = ["alloc", "std"] }
@@ -876,9 +870,9 @@ multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
-mysten-network-9c745ecfd9cc7dc3 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", default-features = false }
+mysten-network-5b6fe57aba1ebf5f = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68", default-features = false }
 mysten-network-a2655ef8805d82bb = { package = "mysten-network", git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67", default-features = false }
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", default-features = false }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
 network = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", default-features = false }
@@ -961,7 +955,7 @@ proptest-derive = { version = "0.3", default-features = false }
 prost = { version = "0.10", features = ["prost-derive", "std"] }
 prost-build = { version = "0.10" }
 prost-derive = { version = "0.10", default-features = false }
-prost-types = { version = "0.10", features = ["std"] }
+prost-types = { version = "0.10", default-features = false }
 protobuf = { version = "2", default-features = false }
 ptree = { version = "0.4", features = ["ansi", "ansi_term", "atty", "conf", "config", "directories", "petgraph", "serde-value", "tint", "value"] }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -992,7 +986,7 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 roaring = { version = "0.9", default-features = false }
-rocksdb = { version = "0.18", features = ["bzip2", "lz4", "snappy", "zlib", "zstd"] }
+rocksdb = { version = "0.18", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
@@ -1077,7 +1071,7 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", features = ["chrome", "console-subscriber", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tokio-console", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -1135,7 +1129,7 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store-9c745ecfd9cc7dc3 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "94d7da89f6a52d7f60a9802b0a03147a9c89c3e4", default-features = false }
+typed-store-5b6fe57aba1ebf5f = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68", default-features = false }
 typed-store-a2655ef8805d82bb = { package = "typed-store", git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67", default-features = false }
 typenum = { version = "1", default-features = false }
 types = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3" }
