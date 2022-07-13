@@ -262,7 +262,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     return (
         <div className={cl(styles.txdetailsbg)}>
             <TxResultHeader data={txHeaderData} />
-            <div className={styles.txgridcomponent}>
+            <div className={styles.txgridcomponent} id={txdata.txId}>
                 {sender && (
                     <section
                         className={cl([styles.txcomponent, styles.txsender])}
