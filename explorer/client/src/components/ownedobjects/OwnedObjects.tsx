@@ -233,41 +233,31 @@ function GroupView({ results }: { results: resultType }) {
 
     if (isGroup) {
         return (
-            <div id="groupCollection" className={styles.ownedcoins}>
+            <table id="groupCollection">
+                <tr>
+                    <th>Type</th>
+                    <th>Balance</th>
+                </tr>
                 {uniqueTypes.map((typeV) => {
                     const subObjList = results.filter(
                         ({ Type }) => Type === typeV
                     );
                     return (
-                        <div
-                            key={typeV}
-                            onClick={shrinkObjList(subObjList)}
-                            className={styles.objectbox}
-                        >
-                            <div>
-                                <div className={styles.coinfield}>
-                                    <div>Type</div>
-                                    <span>{handleCoinType(typeV)}</span>
-                                </div>
-                                <div className={styles.coinfield}>
-                                    <div>Balance</div>
-                                    <span>
-                                        {subObjList[0]._isCoin &&
-                                        subObjList.every(
-                                            (el) => el.balance !== undefined
-                                        )
-                                            ? `${subObjList.reduce(
-                                                  (prev, current) =>
-                                                      prev.add(
-                                                          current.balance!
-                                                      ),
-                                                  Coin.getZero()
-                                              )}`
-                                            : ''}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                        <tr key={typeV} onClick={shrinkObjList(subObjList)}>
+                            <td>{handleCoinType(typeV)}</td>
+                            <td>
+                                {subObjList[0]._isCoin &&
+                                subObjList.every(
+                                    (el) => el.balance !== undefined
+                                )
+                                    ? `${subObjList.reduce(
+                                          (prev, current) =>
+                                              prev.add(current.balance!),
+                                          Coin.getZero()
+                                      )}`
+                                    : ''}
+                            </td>
+                        </tr>
                     );
                 })}
                 {lastRowHas2Elements(uniqueTypes) && (
@@ -275,7 +265,7 @@ function GroupView({ results }: { results: resultType }) {
                         className={`${styles.objectbox} ${styles.fillerbox}`}
                     />
                 )}
-            </div>
+            </table>
         );
     } else {
         return (
@@ -350,21 +340,23 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                                             }
                                                         >
                                                             <div>Object ID</div>
-                                                            <Longtext
-                                                                text={String(
-                                                                    value
-                                                                )}
-                                                                category="objects"
-                                                                isCopyButton={
-                                                                    false
-                                                                }
-                                                                alttext={truncate(
-                                                                    String(
+                                                            <div>
+                                                                <Longtext
+                                                                    text={String(
                                                                         value
-                                                                    ),
-                                                                    19
-                                                                )}
-                                                            />
+                                                                    )}
+                                                                    category="objects"
+                                                                    isCopyButton={
+                                                                        false
+                                                                    }
+                                                                    alttext={truncate(
+                                                                        String(
+                                                                            value
+                                                                        ),
+                                                                        19
+                                                                    )}
+                                                                />
+                                                            </div>
                                                         </div>
                                                     );
                                                 } else {

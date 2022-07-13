@@ -38,13 +38,17 @@
 }
 
 .coinfield {
-    @apply flex;
+    @apply grid grid-cols-12;
 }
 
 .coinfield > div:first-child {
-    @apply w-[80px] text-sui-grey-80 font-medium;
+    @apply col-span-4 text-sui-grey-80 font-medium;
 
     word-break: keep-all;
+}
+
+.coinfield > div:nth-child(2) {
+    @apply col-span-8;
 }
 
 .coinheading > button {
