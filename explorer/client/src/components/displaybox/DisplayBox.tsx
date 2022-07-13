@@ -63,36 +63,43 @@ function DisplayBox({ display }: { display: string }) {
         showAutoModNotice = true;
     }
 
-    return (
-        <div className={styles['display-container']}>
-            {!hasDisplayLoaded && !showAutoModNotice && (
-                <div className={styles.imagebox} id="pleaseWaitImage">
-                    image loading...
-                </div>
-            )}
-            {hasFailedToLoad && !showAutoModNotice && (
-                <div className={styles.imagebox} id="noImage">
-                    No Image was Found
-                </div>
-            )}
-            {!hasFailedToLoad && !showAutoModNotice && (
-                <img
-                    id="loadedImage"
-                    className={styles.imagebox}
-                    style={imageStyle}
-                    alt="NFT"
-                    src={transformURL(display)}
-                    onLoad={handleImageLoad}
-                    onError={handleImageFail}
-                />
-            )}
-            {showAutoModNotice && (
-                <div className={styles.automod} id="modnotice">
-                    NFT image hidden
-                </div>
-            )}
-        </div>
-    );
+    if(showAutoModNotice) {
+        return (
+            <div className={styles['display-container']}>
+                {showAutoModNotice && (
+                    <div className={styles.automod} id="modnotice">
+                        NFT image hidden
+                    </div>
+                )}
+            </div>
+        )
+    } else {
+        return (
+            <div className={styles['display-container']}>
+                {!hasDisplayLoaded && (
+                    <div className={styles.imagebox} id="pleaseWaitImage">
+                        image loading...
+                    </div>
+                )}
+                {hasFailedToLoad && (
+                    <div className={styles.imagebox} id="noImage">
+                        No Image was Found
+                    </div>
+                )}
+                {!hasFailedToLoad && (
+                    <img
+                        id="loadedImage"
+                        className={styles.imagebox}
+                        style={imageStyle}
+                        alt="NFT"
+                        src={transformURL(display)}
+                        onLoad={handleImageLoad}
+                        onError={handleImageFail}
+                    />
+                )}
+            </div>
+        )
+    }
 }
 
 export default DisplayBox;
