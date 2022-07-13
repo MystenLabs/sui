@@ -26,11 +26,15 @@
 
 .coinheading + .ownedobjects > .objectbox,
 .ownedcoins > div.objectbox {
-    @apply bg-sui-grey-40 p-1 lg:w-[48%] rounded-md;
+    @apply p-1 lg:w-[47%] rounded-md;
 }
 
 .ownedcoins > div.objectbox {
-    @apply cursor-pointer hover:shadow-md;
+    @apply cursor-pointer hover:border-sui-grey-80 border-solid border-sui-grey-40;
+}
+
+.coinheading + .ownedobjects > .objectbox {
+    @apply bg-sui-grey-40;
 }
 
 .coinfield {
