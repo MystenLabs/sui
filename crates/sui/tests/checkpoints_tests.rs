@@ -242,6 +242,33 @@ async fn end_to_end() {
 }
 
 #[tokio::test]
+async fn end_to_end_with_one_byzantine() {
+    telemetry_subscribers::init_for_testing();
+    // Make a few test transactions.
+    let total_transactions = 3;
+    let mut rng = StdRng::from_seed([0; 32]);
+    let keys = (0..total_transactions).map(|_| get_key_pair_from_rng(&mut rng).1);
+    let (transactions, input_objects) = test_transactions(keys);
+    let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
+
+    // Spawn a quorum of authorities.
+    let configs = test_authority_configs();
+    let handles = spawn_test_authorities(input_objects, &configs).await;
+    let (_first, rest) = handles[..].split_at(1);
+
+    // Make an authority's aggregator.
+    let aggregator = test_authority_aggregator(&configs);
+
+    // one authority does not participate in checkpointing
+    spawn_checkpoint_processes(&aggregator, rest).await;
+
+    execute_transactions(&aggregator, &transactions).await;
+
+    // the honest majority still makes progress
+    wait_for_advance_to_next_checkpoint(rest, &transaction_digests).await;
+}
+
+#[tokio::test]
 async fn checkpoint_with_shared_objects() {
     telemetry_subscribers::init_for_testing();
 
