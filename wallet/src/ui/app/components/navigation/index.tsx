@@ -36,10 +36,6 @@ function Navigation({ className }: NavigationProps) {
                 <Icon className={st.icon} icon={SuiIcons.History} />
                 <span className={st.title}>Activity</span>
             </NavLink>
-            <NavLink to="./settings" className={makeLinkCls} title="Settings">
-                <Icon className={st.icon} icon={SuiIcons.Apps} />
-                <span className={st.title}>Settings</span>
-            </NavLink>
         </nav>
     );
 }

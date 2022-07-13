@@ -20,7 +20,7 @@ import type { SerializedError } from '@reduxjs/toolkit';
 
 import st from './SettingsPage.module.scss';
 
-function SettingsPage() {
+function Settings() {
     const [logoutInProgress, setLogoutInProgress] = useState(false);
     const [mintInProgress, setMintInProgress] = useState(false);
     const [mintStatus, setMintStatus] = useState<boolean | null>(null);
@@ -114,4 +114,4 @@ function SettingsPage() {
     );
 }
 
-export default SettingsPage;
+export default Settings;
