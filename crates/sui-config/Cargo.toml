@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 bcs = "0.1.3"
 arc-swap = "1.5.0"
+camino = "1.0.9"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 serde = { version = "1.0.139", features = ["derive"] }
 serde_yaml = "0.8.25"
