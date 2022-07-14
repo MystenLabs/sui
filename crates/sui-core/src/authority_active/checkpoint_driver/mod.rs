@@ -137,6 +137,12 @@ pub async fn checkpoint_process<A>(
             // First sync until before the latest checkpoint. We will special
             // handle the latest checkpoint latter.
             if next_checkpoint < checkpoint.summary.sequence_number {
+                info!(
+                    "{:?}'s checkpoint is at {:?}, behind latest {:?}. Start syncing",
+                    active_authority.state.name,
+                    next_checkpoint,
+                    checkpoint.summary.sequence_number
+                );
                 // TODO: The sync process only works within an epoch.
                 if let Err(err) = sync_to_checkpoint(
                     active_authority,
@@ -149,6 +155,10 @@ pub async fn checkpoint_process<A>(
                     // if there was an error we pause to wait for network to come up
                     tokio::time::sleep(timing.delay_on_quorum_failure).await;
                 }
+                info!(
+                    "{:?}'s checkpoint sync finished",
+                    active_authority.state.name
+                );
                 // The above process can take some time, and the latest checkpoint may have
                 // already changed. Restart process to be sure.
                 continue;
@@ -158,14 +168,17 @@ pub async fn checkpoint_process<A>(
                 update_latest_checkpoint(active_authority, &state_checkpoints, &checkpoint).await;
             match result {
                 Err(err) => {
-                    warn!("Failed to update latest checkpoint: {:?}", err);
+                    warn!(
+                        "{:?} failed to update latest checkpoint: {:?}",
+                        active_authority.state.name, err
+                    );
                     tokio::time::sleep(timing.delay_on_local_failure).await;
                     continue;
                 }
                 Ok(true) => {
                     let _name = state_checkpoints.lock().name;
                     let _next_checkpoint = state_checkpoints.lock().next_checkpoint();
-                    debug!("{_name:?} at checkpoint {_next_checkpoint:?}");
+                    info!("{_name:?} at checkpoint {_next_checkpoint:?}");
                     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
                     continue;
                 }
@@ -211,7 +224,10 @@ pub async fn checkpoint_process<A>(
                 .await;
             }
             Err(err) => {
-                warn!("Failure to make a new proposal: {:?}", err);
+                warn!(
+                    "{:?} failed to make a new proposal: {:?}",
+                    active_authority.state.name, err
+                );
                 tokio::time::sleep(timing.delay_on_local_failure).await;
                 continue;
             }
@@ -440,6 +456,11 @@ where
             state_checkpoints
                 .lock()
                 .promote_signed_checkpoint_to_cert(checkpoint, committee)?;
+            info!(
+                "Validator {:?} updated signed checkpoint to cert at seq {:?}",
+                active_authority.state.name,
+                checkpoint.summary.sequence_number(),
+            );
             Ok(true)
         }
         Action::NewCert => {
@@ -470,6 +491,11 @@ where
                     committee,
                     active_authority.state.database.clone(),
                 )?;
+            info!(
+                "Validator {:?} stored new checkpoint cert at seq {:?}",
+                active_authority.state.name,
+                checkpoint.summary.sequence_number(),
+            );
             Ok(true)
         }
         Action::Nothing => Ok(false),
@@ -654,14 +680,7 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                 }
 
                 fragments_num += 1;
-                if fragments_num <= 2 {
-                    // There is no point to make a checkpoint if we don't have enough fragments.
-                    continue;
-                }
-                // TODO: here we should really wait until the fragment is sequenced, otherwise
-                //       we would be going ahead and sequencing more fragments that may not be
-                //       needed. For the moment we just linearly back-off.
-                tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
+
                 let result = checkpoint_db.lock().attempt_to_construct_checkpoint(
                     active_authority.state.database.clone(),
                     committee,
@@ -676,6 +695,10 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                             "Failed to construct checkpoint: {:?}",
                             err
                         );
+                        // TODO: here we should really wait until the fragment is sequenced, otherwise
+                        //       we would be going ahead and sequencing more fragments that may not be
+                        //       needed. For the moment we just linearly back-off.
+                        tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
                         continue;
                     }
                     Ok(()) => {

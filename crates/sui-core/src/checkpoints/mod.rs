@@ -92,11 +92,10 @@ pub struct CheckpointStore {
         DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
 
     /// The mapping from checkpoint to transaction/effects contained within the checkpoint.
-    /// The second part of the key is the local sequence number if the transaction was
-    /// processed or Max(u64) / 2 + offset if not. It allows the authority to store and serve
-    /// checkpoints in a causal order that can be processed in order. (Note the set
-    /// of transactions in the checkpoint is global but not the order.)
-    pub checkpoint_contents: DBMap<(CheckpointSequenceNumber, TxSequenceNumber), ExecutionDigests>,
+    /// The checkpoint content should be causally ordered and is consistent among
+    /// all validators.
+    /// TODO: CheckpointContents may grow very big and becomes problematic to store as db value.
+    pub checkpoint_contents: DBMap<CheckpointSequenceNumber, CheckpointContents>,
 
     /// The set of transaction/effects this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
@@ -260,7 +259,7 @@ impl CheckpointStore {
         ) = reopen! (
             &db,
             "transactions_to_checkpoint";<ExecutionDigests,(CheckpointSequenceNumber, TxSequenceNumber)>,
-            "checkpoint_contents";<(CheckpointSequenceNumber,TxSequenceNumber),ExecutionDigests>,
+            "checkpoint_contents";<CheckpointSequenceNumber,CheckpointContents>,
             "extra_transactions";<ExecutionDigests,TxSequenceNumber>,
             "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
             "local_fragments";<AuthorityName, CheckpointFragment>,
@@ -348,13 +347,7 @@ impl CheckpointStore {
         let detail = if let &AuthenticatedCheckpoint::None = &checkpoint {
             None
         } else if detail {
-            Some(CheckpointContents::new(
-                self.checkpoint_contents
-                    .iter()
-                    .skip_to(&(seq, 0))?
-                    .take_while(|((k, _), _)| *k == seq)
-                    .map(|(_, digest)| digest),
-            ))
+            self.checkpoint_contents.get(&seq)?
         } else {
             None
         };
@@ -450,8 +443,7 @@ impl CheckpointStore {
             .delete_batch(&self.local_fragments, self.local_fragments.keys())?;
 
         // Update the transactions databases.
-        let transactions: Vec<_> = contents.transactions.to_vec();
-        self.update_new_checkpoint_inner(checkpoint_sequence_number, &transactions, batch)
+        self.update_new_checkpoint_inner(checkpoint_sequence_number, contents, batch)
     }
 
     /// Call this function internally to register the latest batch of
@@ -895,7 +887,7 @@ impl CheckpointStore {
     pub fn update_new_checkpoint(
         &mut self,
         seq: CheckpointSequenceNumber,
-        transactions: &[ExecutionDigests],
+        transactions: &CheckpointContents,
         effects_store: impl PendCertificateForExecution,
     ) -> Result<(), SuiError> {
         // Ensure we have processed all transactions contained in this checkpoint.
@@ -911,7 +903,7 @@ impl CheckpointStore {
     fn update_new_checkpoint_inner(
         &mut self,
         seq: CheckpointSequenceNumber,
-        transactions: &[ExecutionDigests],
+        transactions: &CheckpointContents,
         batch: DBBatch,
     ) -> Result<(), SuiError> {
         // Check that this checkpoint seq is new, and directly follows the last
@@ -941,23 +933,24 @@ impl CheckpointStore {
 
         // Now write the checkpoint data to the database
 
-        let checkpoint_data: Vec<_> = transactions
+        let transactions_to_checkpoint: Vec<_> = transactions
             .iter()
             .zip(transactions_with_seq.iter())
             .map(|(tx, opt)| {
                 // Unwrap safe since we have checked all transactions are processed
                 // to get to this point.
                 let iseq = opt.as_ref().unwrap();
-                ((seq, *iseq), *tx)
+                (*tx, (seq, *iseq))
             })
             .collect();
 
-        let batch = batch.insert_batch(
-            &self.transactions_to_checkpoint,
-            checkpoint_data.iter().map(|(a, b)| (b, a)),
-        )?;
+        let batch =
+            batch.insert_batch(&self.transactions_to_checkpoint, transactions_to_checkpoint)?;
 
-        let batch = batch.insert_batch(&self.checkpoint_contents, checkpoint_data.into_iter())?;
+        let batch = batch.insert_batch(
+            &self.checkpoint_contents,
+            std::iter::once((seq, transactions)),
+        )?;
 
         // Write to the database.
         batch.write()?;
@@ -1021,21 +1014,6 @@ impl CheckpointStore {
                 .filter_map(|((seq, tx), in_chk)| {
                     if in_chk.is_some() {
                         Some((tx, (in_chk.unwrap().0, *seq)))
-                    } else {
-                        None
-                    }
-                }),
-        )?;
-
-        // Update the checkpoint local sequence number
-        let batch = batch.insert_batch(
-            &self.checkpoint_contents,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(((in_chk.unwrap().0, *seq), tx))
                     } else {
                         None
                     }

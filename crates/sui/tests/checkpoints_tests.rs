@@ -32,19 +32,14 @@ fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<Transaction
 
     // Get all transactions in the first 10 checkpoints.
     (0..10)
-        .flat_map(|checkpoint_sequence| {
-            // Get enough sequence numbers (one or two are enough).
-            (0..10)
-                .filter_map(|i| {
-                    checkpoints_store
-                        .lock()
-                        .checkpoint_contents
-                        .get(&(checkpoint_sequence, i))
-                        .unwrap()
-                })
-                .map(|x| x.transaction)
-                .collect::<HashSet<_>>()
+        .filter_map(|checkpoint_sequence| {
+            checkpoints_store
+                .lock()
+                .checkpoint_contents
+                .get(&checkpoint_sequence)
+                .unwrap()
         })
+        .flat_map(|x| x.iter().map(|tx| tx.transaction).collect::<HashSet<_>>())
         .collect::<HashSet<_>>()
 }
 
@@ -215,6 +210,8 @@ async fn end_to_end() {
 
 #[tokio::test]
 async fn checkpoint_with_shared_objects() {
+    telemetry_subscribers::init_for_testing();
+
     // Get some gas objects to submit shared-objects transactions.
     let mut gas_objects = test_gas_objects();
 
@@ -332,6 +329,7 @@ async fn checkpoint_with_shared_objects() {
     transaction_digests.insert(*increment_counter_transaction.digest());
 
     // Wait for the transactions to be executed and end up in a checkpoint.
+    let mut cnt = 0;
     loop {
         // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
@@ -341,8 +339,10 @@ async fn checkpoint_with_shared_objects() {
 
         match ok {
             true => break,
-            false => tokio::time::sleep(Duration::from_millis(10)).await,
+            false => tokio::time::sleep(Duration::from_secs(1)).await,
         }
+        cnt += 1;
+        assert!(cnt <= 20);
     }
 
     // Ensure all authorities moved to the next checkpoint sequence number.
