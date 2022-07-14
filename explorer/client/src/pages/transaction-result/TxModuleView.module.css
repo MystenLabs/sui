@@ -1,0 +1,90 @@
+pre {
+    text-align: left;
+    margin: 1em 0;
+    padding: 0.5em;
+    overflow: scroll;
+}
+
+section .codeview {
+    border-color: transparent !important;
+    height: 450px !important;
+    @apply font-mono text-sm pl-0 pr-0;
+}
+
+.moduletitle {
+    @apply text-sm font-semibold pt-2 pb-2;
+}
+
+.txmodule {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-0 pt-2 md:pb-2;
+}
+
+.txmodule section {
+    border-top: 1px solid #f0f1f2;
+    border-bottom: 1px solid #f0f1f2;
+    @apply md:p-3 pb-0;
+}
+
+.txmodule section:first-child {
+    @apply pl-0;
+}
+
+.itemviewtitle,
+.txtitle {
+    @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
+}
+
+section .codeview pre {
+    @apply m-0 p-0;
+}
+
+.moretxbtn {
+    @apply text-right bg-transparent cursor-pointer border-0  text-[#636870] hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm p-2;
+}
+
+.moretxbtn::after {
+    margin: 5px;
+    content: '';
+    background-image: url('../../assets/SVGIcons/chevron-down.svg');
+    @apply text-sm;
+
+    width: 12px;
+    height: 12px;
+    position: absolute;
+    margin-top: 4px;
+    transform: rotate(0deg);
+}
+
+.viewless::after {
+    transform: rotate(180deg);
+}
+
+.viewmore {
+    @apply flex justify-end;
+}
+
+.modulewrapper {
+    @apply p-0 pb-2;
+}
+@media (min-width: 40em) {
+    section .modulewrapper {
+        border-right: 1px solid #f0f1f2;
+    }
+
+    section .modulewrapper:last-child,
+    section .modulewrapper:nth-child(3n) {
+        border-right: none;
+    }
+}
+
+.codeline {
+    display: table-row;
+}
+
+.codelinenumbers {
+    display: table-cell;
+    text-align: left;
+    padding-right: 1em;
+    user-select: none;
+    opacity: 0.5;
+}
