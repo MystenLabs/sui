@@ -95,3 +95,8 @@
 
     border-top: none !important;
 }
+
+.packagedetails .itemviewtitle{
+    @apply mt-0;
+    border-bottom: none;
+}

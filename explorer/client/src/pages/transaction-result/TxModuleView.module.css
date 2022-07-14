@@ -1,6 +1,6 @@
 section .codeview {
     border-color: transparent !important;
-    max-height: 300px !important;
+    height: 540px !important;
     @apply font-mono text-sm;
 }
 

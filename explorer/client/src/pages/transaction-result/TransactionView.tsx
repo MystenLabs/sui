@@ -104,6 +104,9 @@ function formatByTransactionKind(
                 module: {
                     value: moveCall.module,
                 },
+                function: {
+                    value: moveCall.function,
+                },
                 arguments: {
                     value: moveCall.arguments,
                     list: true,
@@ -250,13 +253,33 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         ],
     };
     const typearguments =
-        txKindData?.arguments && txKindData?.arguments?.value
+        txKindData.title === 'Call' && txKindData.package
             ? {
-                  title: 'Arguments' as string,
-                  content: txKindData.arguments.value.map((arg) => ({
-                      value: arg as string,
-                      monotypeClass: true,
-                  })),
+                  title: 'Package Details',
+                  content: [
+                      {
+                          label: 'Package ID',
+                          monotypeClass: true,
+                          link: true,
+                          category: 'objects',
+                          value: txKindData.package.value,
+                      },
+                      {
+                          label: 'Module',
+                          monotypeClass: true,
+                          value: txKindData.module.value,
+                      },
+                      {
+                          label: 'Funtion',
+                          monotypeClass: true,
+                          value: txKindData.function.value,
+                      },
+                      {
+                          label: 'Argument',
+                          monotypeClass: true,
+                          value: JSON.stringify(txKindData.arguments.value),
+                      },
+                  ],
               }
             : false;
     const defaultActiveTab = 0;
@@ -266,6 +289,17 @@ function TransactionView({ txdata }: { txdata: DataType }) {
             <Tabs selected={defaultActiveTab}>
                 <section title={TabName} className={styles.txtabs}>
                     <div className={styles.txgridcomponent} id={txdata.txId}>
+                        {typearguments && (
+                            <section
+                                className={cl([
+                                    styles.txcomponent,
+                                    styles.txgridcolspan2,
+                                    styles.packagedetails,
+                                ])}
+                            >
+                                <ItemView data={typearguments} />
+                            </section>
+                        )}
                         {sender && (
                             <section
                                 className={cl([
@@ -314,7 +348,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             )}
                     </div>
                     <div className={styles.txgridcomponent}>
-                        {typearguments && <ItemView data={typearguments} />}
                         <ItemView data={GasStorageFees} />
                     </div>
                 </section>
