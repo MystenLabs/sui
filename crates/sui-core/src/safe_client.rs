@@ -402,21 +402,15 @@ where
             AuthenticatedCheckpoint::Certified(c) => Some(*c.summary.sequence_number()),
         };
 
-        match (expected_seq, observed_seq) {
-            (Some(e), Some(o)) => {
-                fp_ensure!(
-                    e == o,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                    }
-                );
-                Ok(())
-            }
-            (None, _) => Ok(()),
-            _ => Err(SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address,
-            }),
+        if let (Some(e), Some(o)) = (expected_seq, observed_seq) {
+            fp_ensure!(
+                e == o,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                }
+            );
         }
+        Ok(())
     }
 
     pub async fn handle_checkpoint(
@@ -430,23 +424,6 @@ where
 
         // Verify signatures
         resp.verify(&self.committee)?;
-
-        if let (CheckpointRequestType::PastCheckpoint(_), true, None) =
-            (&req_type, detail, &resp.detail)
-        {
-            // detail was requested but not returned. Note for
-            // CheckpointRequestType::LatestCheckpointProposal, detail may not be available and so
-            // it may be present or absent.
-            match &resp.info {
-                Signed(_) | Certified(_) => {
-                    return Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                    })
-                }
-                // Checkpoint wasn't found, so detail is obviously not required.
-                None => (),
-            }
-        }
 
         // Verify response data was correct for request
         match &req_type {
@@ -462,6 +439,21 @@ where
             }
             CheckpointRequestType::PastCheckpoint(seq) => {
                 if let AuthorityCheckpointInfo::Past(past) = &resp.info {
+                    match past {
+                        AuthenticatedCheckpoint::Signed(_)
+                        | AuthenticatedCheckpoint::Certified(_) => {
+                            if detail && resp.detail.is_none() {
+                                // peer has the checkpoint, but refused to give us the contents.
+                                // (For AuthorityCheckpointInfo::Proposal, contents are not
+                                // guaranteed to exist yet).
+                                return Err(SuiError::ByzantineAuthoritySuspicion {
+                                    authority: self.address,
+                                });
+                            }
+                        }
+                        // Checkpoint wasn't found, so detail is obviously not required.
+                        AuthenticatedCheckpoint::None => (),
+                    }
                     self.verify_checkpoint_sequence(Some(*seq), past)?;
                     Ok(resp)
                 } else {
