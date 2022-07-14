@@ -20,35 +20,6 @@ import { truncate } from '../../utils/stringUtils';
 
 const textDecoder = new TextDecoder();
 
-export const TopValidatorsCardAPI = (): JSX.Element => {
-    const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
-    const [loadState, setLoadState] = useState('pending');
-    const [network] = useContext(NetworkContext);
-    useEffect(() => {
-        getValidatorState(network)
-            .then((objState: ValidatorState) => {
-                setObjectState(objState);
-                setLoadState('loaded');
-            })
-            .catch((error: any) => {
-                console.log(error);
-                setLoadState('fail');
-            });
-    }, [network]);
-
-    if (loadState === 'loaded') {
-        return <ValidatorsPage state={showObjectState as ValidatorState} />;
-    }
-    if (loadState === 'pending') {
-        return <div className={theme.pending}>loading validator info...</div>;
-    }
-    if (loadState === 'fail') {
-        return <Fail />;
-    }
-
-    return <div>"Something went wrong"</div>;
-};
-
 const Fail = (): JSX.Element => {
     return (
         <ErrorResult id={''} errorMsg="Validator data could not be loaded" />
@@ -175,8 +146,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
         },
     };
 
-    console.log(mockValidatorsData);
-
     return (
         <div className={styles.validators}>
             <Tabs selected={0}>
@@ -206,18 +175,16 @@ export const ValidatorPageAPI = (): JSX.Element => {
     useEffect(() => {
         getValidatorState(network)
             .then((objState: ValidatorState) => {
-                console.log('validator state', objState);
                 setObjectState(objState);
                 setLoadState('loaded');
             })
             .catch((error: any) => {
-                console.log(error);
+                console.error(error);
                 setLoadState('fail');
             });
     }, [network]);
 
     if (loadState === 'loaded') {
-        console.log('validators page LOADED');
         return <ValidatorsPage state={showObjectState as ValidatorState} />;
     }
     if (loadState === 'pending') {
