@@ -188,10 +188,10 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                         <Longtext
                             text=""
                             category="validators"
-                            isLink={true}
+                            isLink={false}
                             isCopyButton={false}
                             /*showIconButton={true}*/
-                            alttext="More Validators"
+                            alttext=""
                         />
                     </TabFooter>
                 </div>
