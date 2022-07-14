@@ -15,9 +15,7 @@ import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
-import {
-    STATE_DEFAULT,
-} from '../../components/top-validators-card/TopValidatorsCard';
+import { STATE_DEFAULT } from '../../components/top-validators-card/TopValidatorsCard';
 import styles from '../../components/top-validators-card/TopValidatorsCard.module.css';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
@@ -168,25 +166,20 @@ export const getStakePercent = (stake: bigint, total: bigint): number =>
     Number(BigInt(stake) * BigInt(100)) / Number(total);
 
 export function processValidators(set: Validator[], totalStake: bigint) {
-    return set.map(
-        (av, i) => {
-            const rawName = av.fields.metadata.fields.name;
-            const name = textDecoder.decode(
-                new Base64DataBuffer(rawName).getData()
-            );
-            return {
-                name: name,
-                address: av.fields.metadata.fields.sui_address,
-                stake: av.fields.stake_amount,
-                stakePercent: getStakePercent(
-                    av.fields.stake_amount,
-                    totalStake
-                ),
-                delegation_count: av.fields.delegation_count || 0,
-                position: i + 1,
-            };
-        }
-    )
+    return set.map((av, i) => {
+        const rawName = av.fields.metadata.fields.name;
+        const name = textDecoder.decode(
+            new Base64DataBuffer(rawName).getData()
+        );
+        return {
+            name: name,
+            address: av.fields.metadata.fields.sui_address,
+            stake: av.fields.stake_amount,
+            stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
+            delegation_count: av.fields.delegation_count || 0,
+            position: i + 1,
+        };
+    });
 }
 
 export function getTabFooter(count: number) {
@@ -203,7 +196,10 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     // sort by order of descending stake
     sortValidatorsByStake(state.validators.fields.active_validators);
 
-    const validatorsData = processValidators(state.validators.fields.active_validators, totalStake);
+    const validatorsData = processValidators(
+        state.validators.fields.active_validators,
+        totalStake
+    );
 
     let cumulativeStakePercent = 0;
     // map the above data to match the table combine stake and stake percent

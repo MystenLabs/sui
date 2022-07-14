@@ -90,7 +90,10 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     // sort by order of descending stake
     sortValidatorsByStake(state.validators.fields.active_validators);
 
-    const validatorsData = processValidators(state.validators.fields.active_validators, totalStake);
+    const validatorsData = processValidators(
+        state.validators.fields.active_validators,
+        totalStake
+    );
 
     // map the above data to match the table combine stake and stake percent
     const tableData = {
