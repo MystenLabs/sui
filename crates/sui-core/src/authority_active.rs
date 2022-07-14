@@ -47,6 +47,7 @@ pub mod gossip;
 use gossip::{gossip_process, node_sync_process};
 
 pub mod checkpoint_driver;
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use checkpoint_driver::checkpoint_process;
 
 pub mod execution_driver;
@@ -198,21 +199,20 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub async fn spawn_checkpoint_process(self: Arc<Self>) {
-        self.spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+    pub async fn spawn_checkpoint_process(self: Arc<Self>, metrics: CheckpointMetrics) {
+        self.spawn_checkpoint_process_with_config(CheckpointProcessControl::default(), metrics)
             .await
     }
 
     /// Spawn all active tasks.
     pub async fn spawn_checkpoint_process_with_config(
         self: Arc<Self>,
-        checkpoint_process_control: Option<CheckpointProcessControl>,
+        checkpoint_process_control: CheckpointProcessControl,
+        metrics: CheckpointMetrics,
     ) {
         // Spawn task to take care of checkpointing
         let _checkpoint_join = tokio::task::spawn(async move {
-            if let Some(checkpoint) = checkpoint_process_control {
-                checkpoint_process(&self, &checkpoint).await;
-            }
+            checkpoint_process(&self, &checkpoint_process_control, metrics).await;
         });
 
         if let Err(err) = _checkpoint_join.await {

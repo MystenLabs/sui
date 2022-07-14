@@ -3,6 +3,7 @@
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
 use std::sync::Arc;
+use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
@@ -149,7 +150,10 @@ async fn end_to_end() {
                 ..CheckpointProcessControl::default()
             };
             active_state
-                .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
+                .spawn_checkpoint_process_with_config(
+                    checkpoint_process_control,
+                    CheckpointMetrics::new_for_tests(),
+                )
                 .await
         });
     }
@@ -240,7 +244,10 @@ async fn checkpoint_with_shared_objects() {
             active_state.clone().spawn_execute_process().await;
 
             active_state
-                .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
+                .spawn_checkpoint_process_with_config(
+                    checkpoint_process_control,
+                    CheckpointMetrics::new_for_tests(),
+                )
                 .await
         });
     }

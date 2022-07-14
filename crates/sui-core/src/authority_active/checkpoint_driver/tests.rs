@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
-    authority_client::LocalAuthorityClient,
-    checkpoints::checkpoint_tests::TestSetup,
-    safe_client::SafeClient,
+    authority_active::ActiveAuthority, authority_client::LocalAuthorityClient,
+    checkpoints::checkpoint_tests::TestSetup, safe_client::SafeClient,
 };
 
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use sui_types::messages::ExecutionStatus;
 
@@ -38,7 +37,9 @@ async fn checkpoint_active_flow_happy_path() {
                 )
                 .unwrap(),
             );
-            active_state.spawn_checkpoint_process().await
+            active_state
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+                .await
         });
     }
 
@@ -121,7 +122,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
             // Spin the checkpoint service.
             active_state
-                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
                 .await;
         });
     }
@@ -214,7 +215,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
             // Spin the gossip service.
             active_state
-                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
                 .await;
         });
     }
@@ -306,7 +307,7 @@ async fn test_empty_checkpoint() {
 
             // Spin the gossip service.
             active_state
-                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
                 .await;
         });
     }
