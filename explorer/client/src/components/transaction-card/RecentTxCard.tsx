@@ -72,8 +72,8 @@ function generateStartEndRange(
 
 async function getRecentTransactions(
     network: Network | string,
-    txNum: number,
     totalTx: number,
+    txNum: number,
     pageNum?: number
 ): Promise<TxnData[]> {
     try {
@@ -260,7 +260,7 @@ function LatestTxCardAPI() {
         const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
 
         if (pagedNum > 1 && count === 0) return;
-        getRecentTransactions(network, txNumPerPage, count, pagedNum)
+        getRecentTransactions(network, count, txNumPerPage, pagedNum)
             .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
