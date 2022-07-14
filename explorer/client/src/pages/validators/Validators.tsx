@@ -114,7 +114,6 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
                 isSuiObject(objState.details) &&
                 isSuiMoveObject(objState.details.data)
             ) {
-                console.log(objState);
                 return objState.details.data.fields as ValidatorState;
             }
 
