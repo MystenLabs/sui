@@ -84,7 +84,7 @@ export type ValidatorState = {
     };
 };
 
-const STATE_DEFAULT: ValidatorState = {
+export const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
     epoch: 0,
     id: { id: '', version: 0 },
@@ -116,7 +116,7 @@ const STATE_DEFAULT: ValidatorState = {
 
 const VALIDATORS_OBJECT_ID = '0x05';
 
-function getValidatorState(network: string): Promise<ValidatorState> {
+export function getValidatorState(network: string): Promise<ValidatorState> {
     return rpc(network)
         .getObject(VALIDATORS_OBJECT_ID)
         .then((objState: GetObjectDataResponse) => {
@@ -249,16 +249,20 @@ const validatorsDataOld = [
 
 const textDecoder = new TextDecoder('utf-8');
 
-function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
-    const totalStake = state.validators.fields.validator_stake;
-    // sort by order of descending stake
-    state.validators.fields.active_validators.sort(
+export function sortValidatorsByStake(validators: Validator[]) {
+    validators.sort(
         (a: Validator, b: Validator): number => {
             if (a.fields.stake_amount < b.fields.stake_amount) return -1;
             if (a.fields.stake_amount > b.fields.stake_amount) return 1;
             return 0;
         }
     );
+}
+
+function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
+    const totalStake = state.validators.fields.validator_stake;
+    // sort by order of descending stake
+    sortValidatorsByStake(state.validators.fields.active_validators);
 
     const validatorsData = state.validators.fields.active_validators.map(
         (av, i) => {
