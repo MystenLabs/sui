@@ -224,7 +224,21 @@ pub async fn checkpoint_process<A>(
 
         // (3) Create a new proposal locally. This will also allow other validators
         // to query the proposal.
-        let proposal = state_checkpoints.lock().new_proposal(committee.epoch);
+        // Only move to propose when we have the full checkpoint certificate
+        let sequence_number = state_checkpoints.lock().next_checkpoint();
+        if sequence_number > 0 {
+            // Check that we have the full certificate for the previous checkpoint.
+            // If not, we are not ready yet to make a proposal.
+            if !matches!(
+                state_checkpoints.lock().get_checkpoint(sequence_number - 1),
+                Ok(Some(AuthenticatedCheckpoint::Certified(..)))
+            ) {
+                tokio::time::sleep(timing.delay_on_local_failure).await;
+                continue;
+            }
+        }
+
+        let proposal = state_checkpoints.lock().set_proposal(committee.epoch);
 
         // (4) Check if we need to advance to the next checkpoint, in case >2/3
         // have a proposal out. If so we start creating and injecting fragments

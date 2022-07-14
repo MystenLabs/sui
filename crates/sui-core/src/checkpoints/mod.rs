@@ -133,14 +133,20 @@ pub struct CheckpointStore {
 }
 
 impl CheckpointStore {
+    pub fn get_checkpoint(
+        &self,
+        seq: CheckpointSequenceNumber,
+    ) -> Result<Option<AuthenticatedCheckpoint>, SuiError> {
+        Ok(self.checkpoints.get(&seq)?)
+    }
+
     fn get_prev_checkpoint_digest(
         &mut self,
         checkpoint_sequence: CheckpointSequenceNumber,
     ) -> Result<Option<CheckpointDigest>, SuiError> {
         // Extract the previous checkpoint digest if there is one.
         Ok(if checkpoint_sequence > 0 {
-            self.checkpoints
-                .get(&(checkpoint_sequence - 1))?
+            self.get_checkpoint(checkpoint_sequence - 1)?
                 .map(|prev_checkpoint| match prev_checkpoint {
                     AuthenticatedCheckpoint::Certified(cert) => cert.summary.digest(),
                     AuthenticatedCheckpoint::Signed(signed) => signed.summary.digest(),
@@ -774,26 +780,6 @@ impl CheckpointStore {
     /// Returns the next transactions sequence number expected.
     pub fn next_transaction_sequence_expected(&mut self) -> TxSequenceNumber {
         self.get_locals().next_transaction_sequence
-    }
-
-    /// Creates a new proposal, but only if the previous checkpoint certificate
-    /// is known and stored. This ensures that any validator in checkpoint round
-    /// X can serve certificates for all rounds < X.
-    pub fn new_proposal(&mut self, epoch: EpochId) -> Result<CheckpointProposal, SuiError> {
-        let sequence_number = self.next_checkpoint();
-
-        // Only move to propose when we have the full checkpoint certificate
-        if sequence_number > 0 {
-            // Check that we have the full certificate for the previous checkpoint
-            if !matches!(
-                self.checkpoints.get(&(sequence_number - 1)),
-                Ok(Some(AuthenticatedCheckpoint::Certified(..)))
-            ) {
-                return Err(SuiError::from("Cannot propose before having a certificate"));
-            }
-        }
-
-        self.set_proposal(epoch)
     }
 
     /// Get the latest stored checkpoint if there is one
