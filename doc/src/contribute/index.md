@@ -74,6 +74,5 @@ To submit your pull request:
 * Learn [about Mysten Labs](https://mystenlabs.com/) the company on our public site.
 * Read the [Sui Smart Contract Platform](../../paper/sui.pdf) white paper.
 * Implementing [logging](../contribute/observability.md) in Sui to observe the behavior of your development.
-* Employ [performance profiling on macOS](../contribute/xcode-instruments.md).
 * Find related [research papers](../contribute/research-papers.md).
 * See and adhere to our [code of conduct](../contribute/code-of-conduct.md).
