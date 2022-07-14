@@ -53,7 +53,7 @@ module nfts::marketplace {
             ask,
             owner: tx_context::sender(ctx),
         };
-        bag::add(objects, listing, ctx)
+        bag::add(objects, listing, ctx);
     }
 
     /// Remove listing and get an item back. Only owner can do that.

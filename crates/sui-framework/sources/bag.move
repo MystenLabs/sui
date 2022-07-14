@@ -10,9 +10,9 @@
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
 module sui::bag {
-    use std::errors;
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer;
+    use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
     use sui::vec_set::{Self, VecSet};
 
@@ -49,10 +49,7 @@ module sui::bag {
 
     /// Create a new Bag with custom size limit and return it.
     public fun new_with_max_capacity(ctx: &mut TxContext, max_capacity: u64): Bag {
-        assert!(
-            max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            errors::limit_exceeded(EInvalidMaxCapacity)
-        );
+        assert!(max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0, EInvalidMaxCapacity);
         Bag {
             id: tx_context::new_id(ctx),
             objects: vec_set::empty(),
@@ -71,15 +68,14 @@ module sui::bag {
     }
 
     /// Add a new object to the Bag.
-    public fun add<T: store>(c: &mut Bag, value: T, ctx: &mut TxContext) {
-        assert!(
-            size(c) + 1 <= c.max_capacity,
-            errors::limit_exceeded(EMaxCapacityExceeded)
-        );
+    public fun add<T: store>(c: &mut Bag, value: T, ctx: &mut TxContext): TypedID<Item<T>> {
+        assert!(size(c) + 1 <= c.max_capacity, EMaxCapacityExceeded);
         let id = tx_context::new_id(ctx);
         vec_set::insert(&mut c.objects, *id::inner(&id));
         let item = Item { id, value };
+        let item_id = typed_id::new(&item);
         transfer::transfer_to_object(item, c);
+        item_id
     }
 
     /// identified by the object id in bytes.

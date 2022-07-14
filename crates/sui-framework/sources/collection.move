@@ -12,9 +12,9 @@
 /// access and operate on each individual object.
 /// In contrast to `Bag`, `Collection` requires all objects have the same type.
 module sui::collection {
-    use std::errors;
     use sui::id::{Self, ID, VersionedID};
     use sui::transfer;
+    use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
     use sui::vec_set::{Self, VecSet};
 
@@ -55,10 +55,7 @@ module sui::collection {
         ctx: &mut TxContext,
         max_capacity: u64,
     ): Collection<T> {
-        assert!(
-            max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            errors::limit_exceeded(EInvalidMaxCapacity)
-        );
+        assert!(max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0, EInvalidMaxCapacity);
         Collection {
             id: tx_context::new_id(ctx),
             objects: vec_set::empty(),
@@ -77,15 +74,18 @@ module sui::collection {
     }
 
     /// Add an object to the collection.
-    public fun add<T: store>(c: &mut Collection<T>, value: T, ctx: &mut TxContext) {
-        assert!(
-            size(c) + 1 <= c.max_capacity,
-            errors::limit_exceeded(EMaxCapacityExceeded)
-        );
+    public fun add<T: store>(
+        c: &mut Collection<T>,
+        value: T,
+        ctx: &mut TxContext,
+    ): TypedID<Item<T>> {
+        assert!(size(c) + 1 <= c.max_capacity, EMaxCapacityExceeded);
         let id = tx_context::new_id(ctx);
         vec_set::insert(&mut c.objects, *id::inner(&id));
         let item = Item { id, value };
+        let item_id = typed_id::new(&item);
         transfer::transfer_to_object(item, c);
+        item_id
     }
 
     /// Check whether the collection contains a specific object,

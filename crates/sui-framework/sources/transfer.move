@@ -14,7 +14,6 @@ module sui::transfer {
 
     /// Transfer ownership of `obj` to another object `owner`.
     public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R) {
-        let obj_id = *id::id(&obj);
         let owner_id = id::id_address(id::id(owner));
         transfer_internal(obj, owner_id, true);
     }
@@ -28,7 +27,6 @@ module sui::transfer {
     /// verssioned ID, `&VersionedID`. Which can then be used with this function.
     /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
     public fun transfer_to_object_id<T: key>(obj: T, owner_id: &VersionedID) {
-        let obj_id = *id::id(&obj);
         let inner_owner_id = *id::inner(owner_id);
         transfer_internal(obj, id::id_address(&inner_owner_id), true);
     }
