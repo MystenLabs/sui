@@ -520,6 +520,18 @@
             }
         },
         {
+            "id": "Item5",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+
+        {
             "id": "Item6",
             "category": "object",
             "version": "1",

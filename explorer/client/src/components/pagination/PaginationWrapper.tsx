@@ -55,30 +55,11 @@ export default function PaginationWrapper({
             >
                 &larr;
             </button>
-
-            <button
-                className={
-                    pageIndex === 0 ? styles.pagenumber : styles.btncontainer
-                }
-                id="firstBtn"
-                onClick={handleBtnClick(0)}
-                disabled={pageIndex === 0}
-            >
-                1
-            </button>
         </span>
     );
 
     const LastTwoButtons = (
         <span className={pageIndex === FINAL_PAGE_NO - 1 ? styles.gone : ''}>
-            <button
-                id="lastBtn"
-                disabled={pageIndex === FINAL_PAGE_NO - 1}
-                onClick={handleBtnClick(FINAL_PAGE_NO - 1)}
-                className={styles.btncontainer}
-            >
-                {FINAL_PAGE_NO}
-            </button>
             <button
                 id="nextBtn"
                 className={styles.btncontainer}
@@ -96,41 +77,70 @@ export default function PaginationWrapper({
             {FINAL_PAGE_NO > 1 && (
                 <>
                     {FirstTwoButtons}
+                    <button
+                        className={
+                            pageIndex === 0
+                                ? styles.pagenumber
+                                : styles.btncontainer
+                        }
+                        id="firstBtn"
+                        onClick={handleBtnClick(0)}
+                        disabled={pageIndex === 0}
+                    >
+                        1
+                    </button>
 
-                    {pageIndex > 1 && (
-                        <button
-                            className={
-                                pageIndex === 1
-                                    ? styles.pagenumber
-                                    : styles.btncontainer
-                            }
-                            id="secondBtn"
-                            onClick={handleBtnClick(1)}
-                        >
-                            2
-                        </button>
-                    )}
+                    <button
+                        className={
+                            pageIndex === 1
+                                ? styles.pagenumber
+                                : styles.btncontainer
+                        }
+                        id="secondBtn"
+                        onClick={handleBtnClick(1)}
+                        disabled={pageIndex === 1}
+                    >
+                        2
+                    </button>
                     {pageIndex > 2 && (
                         <button className={styles.btncontainer}>...</button>
                     )}
 
-                    <button className={styles.pagenumber}>
-                        {pageIndex + 1}
-                    </button>
+                    {pageIndex > 1 && pageIndex < FINAL_PAGE_NO - 2 && (
+                        <button className={styles.pagenumber}>
+                            {pageIndex + 1}
+                        </button>
+                    )}
 
                     {pageIndex < FINAL_PAGE_NO - 3 && (
                         <button className={styles.btncontainer}>...</button>
                     )}
 
-                    {pageIndex < FINAL_PAGE_NO - 2 && (
-                        <button
-                            className={styles.btncontainer}
-                            id="secondLastBtn"
-                            onClick={handleBtnClick(FINAL_PAGE_NO - 2)}
-                        >
-                            {FINAL_PAGE_NO - 1}
-                        </button>
-                    )}
+                    <button
+                        className={
+                            pageIndex === FINAL_PAGE_NO - 2
+                                ? styles.pagenumber
+                                : styles.btncontainer
+                        }
+                        id="secondLastBtn"
+                        onClick={handleBtnClick(FINAL_PAGE_NO - 2)}
+                        disabled={pageIndex === FINAL_PAGE_NO - 2}
+                    >
+                        {FINAL_PAGE_NO - 1}
+                    </button>
+                    <button
+                        id="lastBtn"
+                        disabled={pageIndex === FINAL_PAGE_NO - 1}
+                        onClick={handleBtnClick(FINAL_PAGE_NO - 1)}
+                        className={
+                            pageIndex === FINAL_PAGE_NO - 1
+                                ? styles.pagenumber
+                                : styles.btncontainer
+                        }
+                    >
+                        {FINAL_PAGE_NO}
+                    </button>
+
                     {LastTwoButtons}
                 </>
             )}
