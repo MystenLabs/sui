@@ -250,13 +250,11 @@ const validatorsDataOld = [
 const textDecoder = new TextDecoder('utf-8');
 
 export function sortValidatorsByStake(validators: Validator[]) {
-    validators.sort(
-        (a: Validator, b: Validator): number => {
-            if (a.fields.stake_amount < b.fields.stake_amount) return -1;
-            if (a.fields.stake_amount > b.fields.stake_amount) return 1;
-            return 0;
-        }
-    );
+    validators.sort((a: Validator, b: Validator): number => {
+        if (a.fields.stake_amount < b.fields.stake_amount) return -1;
+        if (a.fields.stake_amount > b.fields.stake_amount) return 1;
+        return 0;
+    });
 }
 
 function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {

@@ -7,7 +7,12 @@ import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
-import { getValidatorState, sortValidatorsByStake, STATE_DEFAULT, type ValidatorState } from '../../components/top-validators-card/TopValidatorsCard';
+import {
+    getValidatorState,
+    sortValidatorsByStake,
+    STATE_DEFAULT,
+    type ValidatorState,
+} from '../../components/top-validators-card/TopValidatorsCard';
 import styles from '../../components/top-validators-card/TopValidatorsCard.module.css';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
@@ -56,8 +61,13 @@ function instanceOfValidatorState(object: any): object is ValidatorState {
     return (
         object !== undefined &&
         object !== null &&
-        ['validators', 'epoch', 'treasury_cap', 'parameters', 'delegation_reward']
-            .every((x) => x in object)
+        [
+            'validators',
+            'epoch',
+            'treasury_cap',
+            'parameters',
+            'delegation_reward',
+        ].every((x) => x in object)
     );
 }
 
@@ -75,15 +85,20 @@ const ValidatorPageResult = (): JSX.Element => {
     //);
 };
 
-function stakeColumn(validator: { stake: BigInt, stakePercent: number }): JSX.Element {
-    return <div>
-        {' '}
-        {validator.stake}{' '}
-        <span className={styles.stakepercent}>
+function stakeColumn(validator: {
+    stake: BigInt;
+    stakePercent: number;
+}): JSX.Element {
+    return (
+        <div>
             {' '}
-            {validator.stakePercent} %
-        </span>
-    </div>
+            {validator.stake}{' '}
+            <span className={styles.stakepercent}>
+                {' '}
+                {validator.stakePercent} %
+            </span>
+        </div>
+    );
 }
 
 function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
@@ -117,13 +132,15 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 name: validator.name,
                 address: truncate(validator.address, 14),
                 stake: stakeColumn(validator),
-                cumulativeStake: <span className={styles.stakepercent}>
-                    {' '}
-                    {cumulativeStakePercent} %
-                </span>,
+                cumulativeStake: (
+                    <span className={styles.stakepercent}>
+                        {' '}
+                        {cumulativeStakePercent} %
+                    </span>
+                ),
                 delegation: validator.delegation_count,
                 position: validator.position,
-            }
+            };
         }),
         columns: [
             {
