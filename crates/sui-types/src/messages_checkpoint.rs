@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
@@ -370,6 +371,9 @@ pub struct CheckpointContents {
 
 impl BcsSignable for CheckpointContents {}
 
+// TODO: We should create a type for ordered contents,
+// instead of mixing them in the same type.
+// https://github.com/MystenLabs/sui/issues/3038
 impl CheckpointContents {
     pub fn new<T>(contents: T) -> CheckpointContents
     where
@@ -378,6 +382,10 @@ impl CheckpointContents {
         CheckpointContents {
             transactions: contents.collect::<BTreeSet<_>>().into_iter().collect(),
         }
+    }
+
+    pub fn iter(&self) -> Iter<'_, ExecutionDigests> {
+        self.transactions.iter()
     }
 
     pub fn digest(&self) -> [u8; 32] {

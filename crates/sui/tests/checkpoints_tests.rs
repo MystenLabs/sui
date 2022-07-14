@@ -32,19 +32,14 @@ fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<Transaction
 
     // Get all transactions in the first 10 checkpoints.
     (0..10)
-        .flat_map(|checkpoint_sequence| {
-            // Get enough sequence numbers (one or two are enough).
-            (0..10)
-                .filter_map(|i| {
-                    checkpoints_store
-                        .lock()
-                        .checkpoint_contents
-                        .get(&(checkpoint_sequence, i))
-                        .unwrap()
-                })
-                .map(|x| x.transaction)
-                .collect::<HashSet<_>>()
+        .filter_map(|checkpoint_sequence| {
+            checkpoints_store
+                .lock()
+                .checkpoint_contents
+                .get(&checkpoint_sequence)
+                .unwrap()
         })
+        .flat_map(|x| x.iter().map(|tx| tx.transaction).collect::<HashSet<_>>())
         .collect::<HashSet<_>>()
 }
 
