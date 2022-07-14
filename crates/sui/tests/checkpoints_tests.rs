@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
-use std::sync::Arc;
-use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
     authority_client::NetworkAuthorityClient,
@@ -23,7 +21,7 @@ use test_utils::{
     messages::{move_transaction, test_transactions},
     objects::test_gas_objects,
 };
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{sleep, Duration};
 use typed_store::Map;
 
 /// Helper function determining whether the checkpoint store of an authority contains the input
@@ -42,29 +40,6 @@ fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<Transaction
         })
         .flat_map(|x| x.iter().map(|tx| tx.transaction).collect::<HashSet<_>>())
         .collect::<HashSet<_>>()
-}
-
-async fn spawn_checkpoint_processes(
-    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
-    handles: &[SuiNode],
-) {
-    // Start active part of each authority.
-    for authority in &handles {
-        let state = authority.state().clone();
-        let inner_agg = aggregator.clone();
-        let active_state =
-            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
-        let checkpoint_process_control = CheckpointProcessControl {
-            long_pause_between_checkpoints: Duration::from_millis(10),
-            ..CheckpointProcessControl::default()
-        };
-        let _active_authority_handle = active_state
-            .spawn_checkpoint_process_with_config(
-                checkpoint_process_control,
-                CheckpointMetrics::new_for_tests(),
-            )
-            .await;
-    }
 }
 
 async fn execute_transactions(
@@ -100,7 +75,7 @@ async fn wait_for_advance_to_next_checkpoint(
         let ok = handles
             .iter()
             .map(|authority| transactions_in_checkpoint(&authority.state()))
-            .all(|digests| digests.is_superset(&transaction_digests));
+            .all(|digests| digests.is_superset(transaction_digests));
 
         match ok {
             true => break,
@@ -338,7 +313,7 @@ async fn checkpoint_with_shared_objects() {
     }
 
     // Now send a few single-writer transactions.
-    execute_transactions(&aggregator, transactions).await;
+    execute_transactions(&aggregator, &transactions).await;
 
     // Record the transactions digests we expect to see in the checkpoint. Note that there is also
     // an extra transaction to register the move module that we don't consider here.

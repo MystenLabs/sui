@@ -114,7 +114,6 @@ async fn pending_exec_full() {
                 ActiveAuthority::new_with_ephemeral_storage(
                     inner_state.authority.clone(),
                     inner_agg,
-                    Default::default(),
                 )
                 .unwrap(),
             );

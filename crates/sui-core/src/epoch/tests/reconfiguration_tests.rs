@@ -52,9 +52,7 @@ async fn test_start_epoch_change() {
         })
         .unwrap();
     // Create an active authority for the first authority state.
-    let active =
-        ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone(), Default::default())
-            .unwrap();
+    let active = ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap();
     // Make the high watermark differ from low watermark.
     let ticket = state.batch_notifier.ticket().unwrap();
 
@@ -160,12 +158,7 @@ async fn test_finish_epoch_change() {
     let actives: Vec<_> = states
         .iter()
         .map(|state| {
-            ActiveAuthority::new_with_ephemeral_storage(
-                state.clone(),
-                net.clone(),
-                Default::default(),
-            )
-            .unwrap()
+            ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap()
         })
         .collect();
     let results: Vec<_> = states
