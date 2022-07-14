@@ -41,7 +41,7 @@ pub(crate) mod tests;
 use sui_types::messages::CertifiedTransaction;
 
 #[derive(Copy, Clone)]
-enum GossipType {
+pub(crate) enum GossipType {
     /// Must get the full sequence of the peers it is connecting to. This is used for the full node sync logic
     /// where a full node follows all validators.
     Full,

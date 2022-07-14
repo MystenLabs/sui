@@ -112,7 +112,6 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
-    checkpoint_config: CheckpointProcessControl,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -121,7 +120,6 @@ impl<A> ActiveAuthority<A> {
         node_sync_store: Arc<NodeSyncStore>,
         follower_store: Arc<FollowerStore>,
         net: AuthorityAggregator<A>,
-        checkpoint_config: CheckpointProcessControl,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -136,7 +134,6 @@ impl<A> ActiveAuthority<A> {
             node_sync_store,
             follower_store,
             net: ArcSwap::from(Arc::new(net)),
-            checkpoint_config,
         })
     }
 
@@ -147,7 +144,6 @@ impl<A> ActiveAuthority<A> {
     pub fn new_with_ephemeral_storage(
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
-        checkpoint_config: CheckpointProcessControl,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
         let follower_db_path = working_dir.path().join("follower_db");
@@ -156,13 +152,7 @@ impl<A> ActiveAuthority<A> {
         let follower_store =
             Arc::new(FollowerStore::open(&follower_db_path).expect("cannot open db"));
         let node_sync_store = Arc::new(NodeSyncStore::open(&sync_db_path).expect("cannot open db"));
-        Self::new(
-            authority,
-            node_sync_store,
-            follower_store,
-            net,
-            checkpoint_config,
-        )
+        Self::new(authority, node_sync_store, follower_store, net)
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -219,7 +209,6 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
-            checkpoint_config: self.checkpoint_config.clone(),
         }
     }
 }
@@ -249,6 +238,14 @@ where
     }
 
     pub async fn sync_to_latest_checkpoint(&self) -> SuiResult {
+        self.sync_to_latest_checkpoint_with_config(Default::default())
+            .await
+    }
+
+    pub async fn sync_to_latest_checkpoint_with_config(
+        &self,
+        checkpoint_process_control: CheckpointProcessControl,
+    ) -> SuiResult {
         let checkpoint_store =
             self.state
                 .checkpoints
@@ -259,8 +256,8 @@ where
 
         let (checkpoint_summary, _) = get_latest_proposal_and_checkpoint_from_all(
             self.net(),
-            self.checkpoint_config.extra_time_after_quorum,
-            self.checkpoint_config.timeout_until_quorum,
+            checkpoint_process_control.extra_time_after_quorum,
+            checkpoint_process_control.timeout_until_quorum,
         )
         .await?;
 
