@@ -2,7 +2,7 @@
 title: Using the Sui Wallet Browser Extension
 ---
 
-Welcome to the [Sui Wallet Browser Chrome Extension](https://chrome.google.com/webstore/detail/sui-wallet/albddfdbohgeonpapellnjadnddglhgn?hl=en&authuser=0). The Sui Wallet Browser Extension acts as your portal to the Web3 world. Follow this guide to install and use the extension.
+Welcome to the [Sui Wallet Browser Chrome Extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil). The Sui Wallet Browser Extension acts as your portal to the Web3 world. Follow this guide to install and use the extension.
 
 ## Purpose
 
@@ -67,7 +67,7 @@ View your recent transactions and visit [Sui Explorer](https://explorer.devnet.s
 ## Install
 
 To install the Sui Wallet Browser Extension:
-1. Visit its [link in the Chrome Webstore](https://chrome.google.com/webstore/detail/sui-wallet/albddfdbohgeonpapellnjadnddglhgn?hl=en&authuser=0).
+1. Visit its [link in the Chrome Webstore](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil).
 1. Click **Install**.
 1. Optionally, [pin the extension](https://www.howtogeek.com/683099/how-to-pin-and-unpin-extensions-from-the-chrome-toolbar/) to add it to your toolbar for easy access.
 
