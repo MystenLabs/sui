@@ -22,10 +22,6 @@ export class VoidProvider extends Provider {
     throw this.newError('getObject');
   }
 
-  async getValidators(): Promise<GetObjectDataResponse> {
-    throw this.newError('getValidators');
-  }
-
   // Transactions
   async getTransaction(
     _digest: TransactionDigest

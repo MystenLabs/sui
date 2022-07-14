@@ -91,10 +91,6 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getValidators(): Promise<GetObjectDataResponse> {
-    return this.getObject('0x05');
-  }
-
   // Transactions
 
   async getTransactionsForObject(
