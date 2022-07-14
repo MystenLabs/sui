@@ -18,6 +18,7 @@ import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { truncate } from '../../utils/stringUtils';
+import { mockState } from './mockData';
 
 const textDecoder = new TextDecoder();
 
@@ -43,27 +44,30 @@ const ValidatorPageResult = (): JSX.Element => {
     }
 
     return IS_STATIC_ENV ? (
-        <ValidatorsPage state={STATE_DEFAULT} />
+        <ValidatorsPage state={mockState} />
     ) : (
         <ValidatorPageAPI />
     );
 };
 
-function stakeColumn(validator: {
+export function stakeColumn(validator: {
     stake: BigInt;
     stakePercent: number;
 }): JSX.Element {
     return (
         <div>
             {' '}
-            {validator.stake}{' '}
+            {validator.stake.toString()}{' '}
             <span className={styles.stakepercent}>
                 {' '}
-                {validator.stakePercent} %
+                {validator.stakePercent.toFixed(2)} %
             </span>
         </div>
     );
 }
+
+const getStakePercent = (stake: bigint, total: bigint): number =>
+    Number(stake * BigInt(100)) / Number(total)
 
 function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     const totalStake = state.validators.fields.validator_stake;
@@ -80,7 +84,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 name: name,
                 address: av.fields.metadata.fields.sui_address,
                 stake: av.fields.stake_amount,
-                stakePercent: Number(av.fields.stake_amount / totalStake) * 100,
+                stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
                 delegation_count: av.fields.delegation_count || 0,
                 position: i + 1,
             };
@@ -99,7 +103,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 cumulativeStake: (
                     <span className={styles.stakepercent}>
                         {' '}
-                        {cumulativeStakePercent} %
+                        {cumulativeStakePercent.toFixed(2)} %
                     </span>
                 ),
                 delegation: validator.delegation_count,

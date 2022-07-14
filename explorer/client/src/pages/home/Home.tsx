@@ -4,7 +4,7 @@ import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import { TopValidatorsCardAPI } from '../../components/top-validators-card/TopValidatorsCard';
+import { TopValidatorsCardAPI, TopValidatorsCardStatic } from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
 import {
@@ -25,8 +25,17 @@ async function getTransactionCount(network: Network | string): Promise<number> {
 function HomeStatic() {
     const [count] = useState(500);
     return (
-        <div data-testid="home-page" id="home" className={styles.home}>
-            <LastestTxCard count={count} />
+        <div
+            data-testid="home-page"
+            id="home"
+            className={cl([styles.home, styles.container])}
+        >
+            <section className="left-item">
+                <LastestTxCard count={count} />
+            </section>
+            <section className="right-item">
+                <TopValidatorsCardStatic />
+            </section>
         </div>
     );
 }

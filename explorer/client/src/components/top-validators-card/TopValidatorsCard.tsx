@@ -14,7 +14,8 @@ import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
-import { ValidatorLoadFail } from '../../pages/validators/Validators';
+import { stakeColumn, ValidatorLoadFail } from '../../pages/validators/Validators';
+import { mockState } from '../../pages/validators/mockData';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 
@@ -120,7 +121,6 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
     return rpc(network)
         .getObject(VALIDATORS_OBJECT_ID)
         .then((objState: GetObjectDataResponse) => {
-            //console.log(objState);
             if (
                 isSuiObject(objState.details) &&
                 isSuiMoveObject(objState.details.data)
@@ -133,6 +133,10 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
                 'sui system state information not shaped as expected'
             );
         });
+}
+
+export const TopValidatorsCardStatic = (): JSX.Element => {
+    return <TopValidatorsCard state={mockState as ValidatorState} />;
 }
 
 export const TopValidatorsCardAPI = (): JSX.Element => {
@@ -168,8 +172,8 @@ const textDecoder = new TextDecoder('utf-8');
 
 export function sortValidatorsByStake(validators: Validator[]) {
     validators.sort((a: Validator, b: Validator): number => {
-        if (a.fields.stake_amount < b.fields.stake_amount) return -1;
-        if (a.fields.stake_amount > b.fields.stake_amount) return 1;
+        if (a.fields.stake_amount < b.fields.stake_amount) return 1;
+        if (a.fields.stake_amount > b.fields.stake_amount) return -1;
         return 0;
     });
 }
@@ -188,7 +192,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
             return {
                 name: name,
                 stake: av.fields.stake_amount,
-                stakePercent: Number(av.fields.stake_amount / totalStake) * 100,
+                stakePercent: Number(av.fields.stake_amount * BigInt(100) / totalStake),
                 delegation_count: av.fields.delegation_count || 0,
                 position: i + 1,
             };
@@ -199,16 +203,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     const tableData = {
         data: validatorsData.map((validator) => ({
             name: validator.name,
-            stake: (
-                <div>
-                    {' '}
-                    {validator.stake}{' '}
-                    <span className={styles.stakepercent}>
-                        {' '}
-                        {validator.stakePercent} %
-                    </span>
-                </div>
-            ),
+            stake: stakeColumn(validator),
             delegation: validator.delegation_count,
             position: validator.position,
         })),
@@ -238,8 +233,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
             stats_text: 'total validators',
         },
     };
-
-    console.log(tableData);
 
     return (
         <div className={styles.validators}>
