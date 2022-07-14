@@ -95,7 +95,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
         totalStake
     );
 
-    // map the above data to match the table combine stake and stake percent
+    // map the above data to match the table - combine stake and stake percent
     const tableData = {
         data: validatorsData.map((validator) => ({
             name: validator.name,

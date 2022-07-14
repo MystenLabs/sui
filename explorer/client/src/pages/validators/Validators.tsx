@@ -202,7 +202,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     );
 
     let cumulativeStakePercent = 0;
-    // map the above data to match the table combine stake and stake percent
     const tableData = {
         data: validatorsData.map((validator) => {
             cumulativeStakePercent += validator.stakePercent;
