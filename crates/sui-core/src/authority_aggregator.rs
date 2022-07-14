@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::gateway_state::GatewayMetrics;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 
@@ -23,6 +22,9 @@ use sui_types::{
 };
 use tracing::{debug, info, instrument, trace, Instrument};
 
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::time::Duration;
@@ -63,6 +65,61 @@ impl Default for TimeoutConfig {
     }
 }
 
+/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+#[derive(Clone)]
+pub struct AuthAggMetrics {
+    pub total_tx_certificates_created: IntCounter,
+    pub num_signatures: Histogram,
+    pub num_good_stake: Histogram,
+    pub num_bad_stake: Histogram,
+}
+
+// Override default Prom buckets for positive numbers in 0-50k range
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+];
+
+impl AuthAggMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            total_tx_certificates_created: register_int_counter_with_registry!(
+                "total_tx_certificates_created",
+                "Total number of certificates made in the authority_aggregator",
+                registry,
+            )
+            .unwrap(),
+            // It's really important to use the right histogram buckets for accurate histogram collection.
+            // Otherwise values get clipped
+            num_signatures: register_histogram_with_registry!(
+                "num_signatures_per_tx",
+                "Number of signatures collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            num_good_stake: register_histogram_with_registry!(
+                "num_good_stake_per_tx",
+                "Amount of good stake collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            num_bad_stake: register_histogram_with_registry!(
+                "num_bad_stake_per_tx",
+                "Amount of bad stake collected per transaction",
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
+    }
+}
+
 #[derive(Clone)]
 pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
@@ -70,7 +127,7 @@ pub struct AuthorityAggregator<A> {
     /// How to talk to this committee.
     pub authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
     // Metrics
-    pub metrics: GatewayMetrics,
+    pub metrics: AuthAggMetrics,
     pub timeouts: TimeoutConfig,
 }
 
@@ -78,7 +135,7 @@ impl<A> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: GatewayMetrics,
+        metrics: AuthAggMetrics,
     ) -> Self {
         Self::new_with_timeouts(committee, authority_clients, metrics, Default::default())
     }
@@ -86,7 +143,7 @@ impl<A> AuthorityAggregator<A> {
     pub fn new_with_timeouts(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: GatewayMetrics,
+        metrics: AuthAggMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
@@ -1391,7 +1448,7 @@ where
             .process_transaction(transaction.clone())
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
-        self.metrics.total_tx_certificates.inc();
+        self.metrics.total_tx_certificates_created.inc();
         let response = self
             .process_certificate(new_certificate.clone())
             .instrument(tracing::debug_span!("process_cert"))

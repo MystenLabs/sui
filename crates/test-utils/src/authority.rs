@@ -5,6 +5,7 @@ use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::{
     authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
     authority_client::NetworkAuthorityClient,
@@ -79,7 +80,7 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    let metrics = sui_core::gateway_state::GatewayMetrics::new(&prometheus::Registry::new());
+    let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
     AuthorityAggregator::new(committee, clients, metrics)
 }
 
