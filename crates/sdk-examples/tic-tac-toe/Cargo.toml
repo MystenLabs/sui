@@ -16,7 +16,7 @@ serde = "1.0.138"
 async-recursion = "1.0.0"
 
 ## Sui dependencies
-sui-client = { path = "../../../../crates/sui-client" }
+sui-client = { path = "../../sui-client" }
 
 [[example]]
 name = "tic-tac-toe"

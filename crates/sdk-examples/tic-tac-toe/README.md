@@ -2,7 +2,7 @@
 
 An example of interacting with the move contract using the Sui Rust SDK.
 
-## Quick start
+## Demo quick start
 
 ### 1. Prepare the environment 
    * Install `sui` and `rpc-server` binaries following the [installation doc](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#binaries).
@@ -34,6 +34,6 @@ you can use the following command
       ```shell
       cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> join-game --my-identity <<address>> --game-id <<game ID>>
       ```
-
+ 
     
    
