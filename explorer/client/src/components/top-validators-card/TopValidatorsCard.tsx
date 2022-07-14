@@ -148,7 +148,6 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
     useEffect(() => {
         getValidatorState(network)
             .then((objState: ValidatorState) => {
-                console.log('validator state', objState);
                 setObjectState(objState);
                 setLoadState('loaded');
             })
@@ -159,7 +158,6 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
     }, [network]);
 
     if (loadState === 'loaded') {
-        console.log('VALIDATORS LOADED');
         return <TopValidatorsCard state={showObjectState as ValidatorState} />;
     }
     if (loadState === 'pending') {
