@@ -437,9 +437,15 @@ where
             // detail was requested but not returned. Note for
             // CheckpointRequestType::LatestCheckpointProposal, detail may not be available and so
             // it may be present or absent.
-            return Err(SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address,
-            });
+            match &resp.info {
+                Signed(_) | Certified(_) => {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    })
+                }
+                // Checkpoint wasn't found, so detail is obviously not required.
+                None => (),
+            }
         }
 
         // Verify response data was correct for request
