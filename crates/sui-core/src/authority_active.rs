@@ -35,7 +35,6 @@ use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore}
 use sui_types::{base_types::AuthorityName, error::SuiResult};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tracing::error;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
@@ -199,7 +198,10 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub async fn spawn_checkpoint_process(self: Arc<Self>, metrics: CheckpointMetrics) {
+    pub async fn spawn_checkpoint_process(
+        self: Arc<Self>,
+        metrics: CheckpointMetrics,
+    ) -> JoinHandle<()> {
         self.spawn_checkpoint_process_with_config(CheckpointProcessControl::default(), metrics)
             .await
     }
@@ -209,15 +211,11 @@ where
         self: Arc<Self>,
         checkpoint_process_control: CheckpointProcessControl,
         metrics: CheckpointMetrics,
-    ) {
+    ) -> JoinHandle<()> {
         // Spawn task to take care of checkpointing
-        let _checkpoint_join = tokio::task::spawn(async move {
+        tokio::task::spawn(async move {
             checkpoint_process(&self, &checkpoint_process_control, metrics).await;
-        });
-
-        if let Err(err) = _checkpoint_join.await {
-            error!("Join checkpoint task end error: {:?}", err);
-        }
+        })
     }
 
     /// Spawn gossip process
