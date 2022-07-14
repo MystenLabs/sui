@@ -164,8 +164,6 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
     return <div>"Something went wrong"</div>;
 };
 
-
-
 const textDecoder = new TextDecoder('utf-8');
 
 export function sortValidatorsByStake(validators: Validator[]) {
