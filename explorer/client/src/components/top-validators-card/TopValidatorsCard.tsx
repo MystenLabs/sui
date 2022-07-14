@@ -14,7 +14,10 @@ import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
-import { stakeColumn, ValidatorLoadFail } from '../../pages/validators/Validators';
+import {
+    stakeColumn,
+    ValidatorLoadFail,
+} from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -137,7 +140,7 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
 
 export const TopValidatorsCardStatic = (): JSX.Element => {
     return <TopValidatorsCard state={mockState as ValidatorState} />;
-}
+};
 
 export const TopValidatorsCardAPI = (): JSX.Element => {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
@@ -192,7 +195,9 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
             return {
                 name: name,
                 stake: av.fields.stake_amount,
-                stakePercent: Number(av.fields.stake_amount * BigInt(100) / totalStake),
+                stakePercent: Number(
+                    (av.fields.stake_amount * BigInt(100)) / totalStake
+                ),
                 delegation_count: av.fields.delegation_count || 0,
                 position: i + 1,
             };

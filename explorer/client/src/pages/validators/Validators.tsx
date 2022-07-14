@@ -67,7 +67,7 @@ export function stakeColumn(validator: {
 }
 
 const getStakePercent = (stake: bigint, total: bigint): number =>
-    Number(stake * BigInt(100)) / Number(total)
+    Number(stake * BigInt(100)) / Number(total);
 
 function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     const totalStake = state.validators.fields.validator_stake;
@@ -84,7 +84,10 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 name: name,
                 address: av.fields.metadata.fields.sui_address,
                 stake: av.fields.stake_amount,
-                stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
+                stakePercent: getStakePercent(
+                    av.fields.stake_amount,
+                    totalStake
+                ),
                 delegation_count: av.fields.delegation_count || 0,
                 position: i + 1,
             };

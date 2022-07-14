@@ -4,7 +4,10 @@ import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import { TopValidatorsCardAPI, TopValidatorsCardStatic } from '../../components/top-validators-card/TopValidatorsCard';
+import {
+    TopValidatorsCardAPI,
+    TopValidatorsCardStatic,
+} from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
 import {

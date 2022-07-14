@@ -1,14 +1,17 @@
-import { Base64DataBuffer } from "@mysten/sui.js";
+import { Base64DataBuffer } from '@mysten/sui.js';
 
-import type { Validator, ValidatorState } from "../../components/top-validators-card/TopValidatorsCard";
+import type {
+    Validator,
+    ValidatorState,
+} from '../../components/top-validators-card/TopValidatorsCard';
 
 const encoder = new TextEncoder();
 
 type TestValidatorInfo = {
-    name: string,
-    stake: BigInt,
-    suiAddress: string
-}
+    name: string;
+    stake: BigInt;
+    suiAddress: string;
+};
 
 const validators: TestValidatorInfo[] = [
     {
@@ -64,53 +67,55 @@ const validators: TestValidatorInfo[] = [
 ];
 
 const validatorsTotalStake: bigint = validators
-    .map(v => v.stake)
-    .reduce((prev, current, _i, _arr): BigInt =>
-        BigInt(prev as bigint) + BigInt(current as bigint)
+    .map((v) => v.stake)
+    .reduce(
+        (prev, current, _i, _arr): BigInt =>
+            BigInt(prev as bigint) + BigInt(current as bigint)
     ) as bigint;
 
 export const mockState: ValidatorState = {
     delegation_reward: 0,
     epoch: 0,
     id: {
-        id: "",
-        version: 0
+        id: '',
+        version: 0,
     },
     parameters: {
-        type: "0x2::sui_system::SystemParameters",
+        type: '0x2::sui_system::SystemParameters',
         fields: {
             max_validator_candidate_count: 100,
-            min_validator_stake: BigInt(10)
-        }
+            min_validator_stake: BigInt(10),
+        },
     },
     storage_fund: 0,
     treasury_cap: {
-        type: "",
-        fields: undefined
+        type: '',
+        fields: undefined,
     },
     validators: {
-        type: "0x2::validator_set::ValidatorSet",
+        type: '0x2::validator_set::ValidatorSet',
         fields: {
             delegation_stake: BigInt(100000000),
-            active_validators: validators.map(v => getFullValidatorData(v)),
+            active_validators: validators.map((v) => getFullValidatorData(v)),
             next_epoch_validators: [],
-            pending_removals: "",
-            pending_validators: "",
-            quorum_stake_threshold: validatorsTotalStake * BigInt(3) / BigInt(4),
-            validator_stake: validatorsTotalStake
-        }
-    }
+            pending_removals: '',
+            pending_validators: '',
+            quorum_stake_threshold:
+                (validatorsTotalStake * BigInt(3)) / BigInt(4),
+            validator_stake: validatorsTotalStake,
+        },
+    },
 };
 
-
-
 function getFullValidatorData(partial: TestValidatorInfo): Validator {
-    const name64 = new Base64DataBuffer(encoder.encode(partial.name)).toString()
+    const name64 = new Base64DataBuffer(
+        encoder.encode(partial.name)
+    ).toString();
     return {
         type: '0x2::validator::Validator',
         fields: {
             delegation: BigInt(0),
-            delegation_count: Number(partial.stake as bigint / BigInt(10000)),
+            delegation_count: Number((partial.stake as bigint) / BigInt(10000)),
             metadata: {
                 type: '0x2::validator::ValidatorMetadata',
                 fields: {
@@ -118,8 +123,8 @@ function getFullValidatorData(partial: TestValidatorInfo): Validator {
                     net_address: '',
                     next_epoch_stake: 0,
                     pubkey_bytes: '',
-                    sui_address: partial.suiAddress
-                }
+                    sui_address: partial.suiAddress,
+                },
             },
             pending_delegation: BigInt(0),
             pending_delegation_withdraw: BigInt(0),
@@ -127,10 +132,10 @@ function getFullValidatorData(partial: TestValidatorInfo): Validator {
             pending_delegator_withdraw_count: 0,
             pending_stake: {
                 type: '0x1::option::Option<0x2::balance::Balance<0x2::sui::SUI>>',
-                fields: {}
+                fields: {},
             },
             pending_withdraw: BigInt(0),
             stake_amount: partial.stake as bigint,
-        }
-    }
+        },
+    };
 }
