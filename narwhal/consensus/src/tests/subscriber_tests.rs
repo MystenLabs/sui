@@ -63,20 +63,23 @@ pub async fn spawn_node(
     // Spawn the consensus engine and sink the primary channel.
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, rx_output) = channel(1);
+    let gc_depth = 50;
     let tusk = Tusk {
         committee: committee.clone(),
         store: consensus_store.clone(),
-        gc_depth: 50,
+        gc_depth,
     };
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     Consensus::spawn(
         committee,
         consensus_store.clone(),
+        certificate_store.clone(),
         rx_waiter,
         tx_primary,
         tx_output,
         tusk,
         metrics,
+        gc_depth,
     );
     tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
 

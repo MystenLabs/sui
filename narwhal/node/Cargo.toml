@@ -15,7 +15,7 @@ cfg-if = "1.0.0"
 clap = "2.34"
 futures = "0.3.21"
 rand = "0.7.3"
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "7e9b7568fc7184b4938976330122f3c8064e3236" }
 thiserror = "1.0.31"
 tokio = { version = "1.19.2", features = ["full"] }
 tokio-stream = "0.1.9"

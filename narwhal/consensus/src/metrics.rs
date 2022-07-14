@@ -12,6 +12,9 @@ pub struct ConsensusMetrics {
     pub external_consensus_dag_vertices_elements: IntGaugeVec,
     /// The number of elements in the dag (external consensus)
     pub external_consensus_dag_size: IntGaugeVec,
+    /// The number of times the consensus state was restored from the consensus store
+    /// following a node restart
+    pub recovered_consensus_state: IntGaugeVec,
 }
 
 impl ConsensusMetrics {
@@ -40,7 +43,13 @@ impl ConsensusMetrics {
                 "The number of elements in the inner dag (external consensus)",
                 &[],
                 registry
-            ).unwrap()
+            ).unwrap(),
+            recovered_consensus_state: register_int_gauge_vec_with_registry!(
+                "recovered_consensus_state",
+                "The number of times the consensus state was restored from the consensus store following a node restart",
+                &[],
+                registry
+            ).unwrap(),
         }
     }
 }
