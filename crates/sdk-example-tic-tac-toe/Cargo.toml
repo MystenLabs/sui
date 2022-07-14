@@ -18,6 +18,8 @@ async-recursion = "1.0.0"
 ## Sui dependencies
 sui-client = { path = "../sui-client" }
 
+workspace-hack = { path = "../workspace-hack"}
+
 [[example]]
 name = "tic-tac-toe"
 path = "src/tic_tac_toe.rs"
