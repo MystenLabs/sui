@@ -415,6 +415,165 @@
                 }
             }
         },
+        {
+            "id": "Image9",
+            "category": "object",
+            "owner": { "SingleOwner": "CollectionObject" },
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image10",
+            "category": "object",
+            "owner": { "SingleOwner": "CollectionObject" },
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Image11",
+            "category": "object",
+            "owner": { "SingleOwner": "CollectionObject" },
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {
+                    "display": "https://sui-explorer-test-image.s3.amazonaws.com/testImage.png",
+                    "cosmetic_type": 1,
+                    "lore": "This is a species of orchid only found in Brazil",
+                    "Humidity": "High",
+                    "Temperature": "Hot",
+                    "Light": "Medium",
+                    "Flowering Period": "Spring to early Summer"
+                }
+            }
+        },
+        {
+            "id": "Item1",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item2",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item3",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item4",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item6",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item7",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item8",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item9",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
+        {
+            "id": "Item10",
+            "category": "object",
+            "version": "1",
+            "readonly": "true",
+            "objType": "0x2::Cosmetic::Plant",
+            "name": "Oncidium croesus",
+            "data": {
+                "contents": {}
+            }
+        },
 
         {
             "id": "standaloneObject",
