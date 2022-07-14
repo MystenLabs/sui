@@ -70,22 +70,34 @@ $ git commit -m "add gas object"
 $ git push
 ```
 
-4. Finalize Genesis
+4. Build Genesis
 
 Once all validators and gas objects have been added, the MC can build the genesis object:
 
 ```
-$ git genesis-ceremony finalize
+$ git genesis-ceremony build
 $ git add .
 $ git commit -m "build genesis"
 $ git push
 ```
 
-5. Distribute Genesis and Optionally Verify Genesis
+5. Verify and Sign Genesis
 
-Once genesis is built, it can be shared with all parties. Each individual can also optionally verify
-the genesis state by building it locally themselves:
+Once genesis is built each validator will need to verify and sign genesis:
 
 ```
-$ git genesis-ceremony verify
+$ git genesis-ceremony verify-and-sign \
+    --keypair <hex encoded ed25519 keypair>
+$ git add .
+$ git commit -m "sign genesis"
+$ git push
+```
+
+6. Finalize Genesis
+
+Once all validators have successfully verified and signed genesis, the MC can finalize the ceremony
+and then the genesis state can be distributed:
+
+```
+$ git genesis-ceremony finalize
 ```
