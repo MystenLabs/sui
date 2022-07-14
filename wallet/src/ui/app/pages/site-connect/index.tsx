@@ -46,7 +46,7 @@ function SiteConnectPage() {
                 dispatch(
                     respondToPermissionRequest({
                         id: requestID,
-                        accounts: allowed ? [`0x${activeAccount}`] : [],
+                        accounts: allowed ? [activeAccount] : [],
                         allowed,
                     })
                 );
