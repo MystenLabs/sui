@@ -16,6 +16,7 @@ import {
 import styles from '../../components/top-validators-card/TopValidatorsCard.module.css';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
+import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { truncate } from '../../utils/stringUtils';
 
 const textDecoder = new TextDecoder();
@@ -41,11 +42,9 @@ const ValidatorPageResult = (): JSX.Element => {
         return <ValidatorsPage state={state} />;
     }
 
-    //return IS_STATIC_ENV ? (
-    //    <ObjectResultStatic objID={VALIDATOR_OBJECT_ID} />
-    //) : (
-    return <ValidatorPageAPI />;
-    //);
+    return IS_STATIC_ENV ?
+        <ValidatorsPage state={STATE_DEFAULT} /> :
+        <ValidatorPageAPI />;
 };
 
 function stakeColumn(validator: {
