@@ -271,7 +271,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     );
 
     // map the above data to match the table combine stake and stake percent
-    const mockValidatorsData = {
+    const tableData = {
         data: validatorsData.map((validator) => ({
             name: validator.name,
             stake: (
@@ -314,13 +314,13 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
         },
     };
 
-    console.log(mockValidatorsData);
+    console.log(tableData);
 
     return (
         <div className={styles.validators}>
             <Tabs selected={0}>
                 <div title="Top Validators">
-                    <TableCard tabledata={mockValidatorsData} />
+                    <TableCard tabledata={tableData} />
                     <TabFooter stats={tabsFooter.stats}>
                         <Longtext
                             text=""
