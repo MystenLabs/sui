@@ -42,9 +42,11 @@ const ValidatorPageResult = (): JSX.Element => {
         return <ValidatorsPage state={state} />;
     }
 
-    return IS_STATIC_ENV ?
-        <ValidatorsPage state={STATE_DEFAULT} /> :
-        <ValidatorPageAPI />;
+    return IS_STATIC_ENV ? (
+        <ValidatorsPage state={STATE_DEFAULT} />
+    ) : (
+        <ValidatorPageAPI />
+    );
 };
 
 function stakeColumn(validator: {
