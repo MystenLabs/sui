@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    type GetObjectDataResponse,
-    isSuiMoveObject,
-    isSuiObject,
     Base64DataBuffer,
 } from '@mysten/sui.js';
 import { useContext, useEffect, useState } from 'react';
@@ -16,12 +13,13 @@ import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import {
     getStakePercent,
+    getValidatorState,
+    sortValidatorsByStake,
     stakeColumn,
     ValidatorLoadFail,
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
 import theme from '../../styles/theme.module.css';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 
 import styles from './TopValidatorsCard.module.css';
 
@@ -119,26 +117,6 @@ export const STATE_DEFAULT: ValidatorState = {
     },
 };
 
-const VALIDATORS_OBJECT_ID = '0x05';
-
-export function getValidatorState(network: string): Promise<ValidatorState> {
-    return rpc(network)
-        .getObject(VALIDATORS_OBJECT_ID)
-        .then((objState: GetObjectDataResponse) => {
-            if (
-                isSuiObject(objState.details) &&
-                isSuiMoveObject(objState.details.data)
-            ) {
-                console.log(objState);
-                return objState.details.data.fields as ValidatorState;
-            }
-
-            throw new Error(
-                'sui system state information not shaped as expected'
-            );
-        });
-}
-
 export const TopValidatorsCardStatic = (): JSX.Element => {
     return <TopValidatorsCard state={mockState as ValidatorState} />;
 };
@@ -173,14 +151,6 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
 };
 
 const textDecoder = new TextDecoder('utf-8');
-
-export function sortValidatorsByStake(validators: Validator[]) {
-    validators.sort((a: Validator, b: Validator): number => {
-        if (a.fields.stake_amount < b.fields.stake_amount) return 1;
-        if (a.fields.stake_amount > b.fields.stake_amount) return -1;
-        return 0;
-    });
-}
 
 function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     const totalStake = state.validators.fields.validator_stake;

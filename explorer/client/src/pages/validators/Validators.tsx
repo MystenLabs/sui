@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '@mysten/sui.js';
+import { Base64DataBuffer, type GetObjectDataResponse, isSuiMoveObject, isSuiObject } from '@mysten/sui.js';
 import { useState, useContext, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -11,9 +11,8 @@ import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import {
-    getValidatorState,
-    sortValidatorsByStake,
     STATE_DEFAULT,
+    type Validator,
     type ValidatorState,
 } from '../../components/top-validators-card/TopValidatorsCard';
 import styles from '../../components/top-validators-card/TopValidatorsCard.module.css';
@@ -22,6 +21,8 @@ import theme from '../../styles/theme.module.css';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { truncate } from '../../utils/stringUtils';
 import { mockState } from './mockData';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+
 
 const textDecoder = new TextDecoder();
 
@@ -37,6 +38,34 @@ function instanceOfValidatorState(object: any): object is ValidatorState {
             'delegation_reward',
         ].every((x) => x in object)
     );
+}
+
+const VALIDATORS_OBJECT_ID = '0x05';
+
+export function getValidatorState(network: string): Promise<ValidatorState> {
+    return rpc(network)
+        .getObject(VALIDATORS_OBJECT_ID)
+        .then((objState: GetObjectDataResponse) => {
+            if (
+                isSuiObject(objState.details) &&
+                isSuiMoveObject(objState.details.data)
+            ) {
+                console.log(objState);
+                return objState.details.data.fields as ValidatorState;
+            }
+
+            throw new Error(
+                'sui system state information not shaped as expected'
+            );
+        });
+}
+
+export function sortValidatorsByStake(validators: Validator[]) {
+    validators.sort((a: Validator, b: Validator): number => {
+        if (a.fields.stake_amount < b.fields.stake_amount) return 1;
+        if (a.fields.stake_amount > b.fields.stake_amount) return -1;
+        return 0;
+    });
 }
 
 const ValidatorPageResult = (): JSX.Element => {
