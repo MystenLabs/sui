@@ -1,0 +1,51 @@
+.network-options {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    background-color: #fff;
+    padding: 16px 0 0;
+}
+
+.network-lists {
+    list-style: none;
+    padding: 0;
+    overflow-y: auto;
+    margin-bottom: 0;
+    margin-top: 0;
+    width: 100%;
+}
+
+.network-item {
+    list-style: none;
+    padding: 16px;
+    font-size: 16px;
+    font-style: normal;
+    cursor: pointer;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    line-height: 20px;
+
+    &:hover {
+        background-color: #e6effe;
+    }
+}
+
+.network-icon {
+    margin-right: 15px;
+    font-size: 13px;
+}
+
+.selected-network {
+    margin-right: 15px;
+    font-weight: bold;
+    font-size: 20px;
+    opacity: 0;
+}
+
+.network-active {
+    opacity: 1;
+    color: #6fbcf0;
+}
