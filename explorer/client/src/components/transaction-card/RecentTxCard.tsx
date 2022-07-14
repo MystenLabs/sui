@@ -72,11 +72,18 @@ function generateStartEndRange(
 
 async function getRecentTransactions(
     network: Network | string,
-    totalTx: number,
     txNum: number,
+    totalTx: number,
     pageNum?: number
 ): Promise<TxnData[]> {
     try {
+        if (totalTx === 0) {
+            return (await rpc(network)
+                .getRecentTransactions(txNum)
+                .then((res: GetTxnDigestsResponse) =>
+                    getDataOnTxDigests(network, res)
+                )) as TxnData[];
+        }
         // Get the latest transactions
 
         // Instead of getRecentTransactions, use getTransactionCount
@@ -109,11 +116,14 @@ function LatestTxView({
     results: { loadState: string; latestTx: TxnData[]; totalTxcount?: number };
 }) {
     // This is temporary, pagination component already does this
-    const totalCount = results.totalTxcount || 1;
+    const totalCount = results.totalTxcount || 0;
     const [searchParams, setSearchParams] = useSearchParams();
     const pageParam = parseInt(searchParams.get('p') || '1', 10);
-    const [showNextPage, setShowNextPage] = useState(
-        NUMBER_OF_TX_PER_PAGE < totalCount
+    const [showNextPage, setShowNextPage] = useState(false);
+
+    useEffect(
+        () => setShowNextPage(NUMBER_OF_TX_PER_PAGE < totalCount),
+        [totalCount]
     );
 
     const changePage = useCallback(() => {
@@ -236,17 +246,21 @@ function LatestTxCardStatic() {
     );
 }
 
-function LatestTxCardAPI({ count }: { count: number }) {
+function LatestTxCardAPI() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
     const [searchParams] = useSearchParams();
     const [txNumPerPage] = useState(NUMBER_OF_TX_PER_PAGE);
 
+    const [count, setCount] = useState(0);
+
     useEffect(() => {
         let isMounted = true;
         const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
-        getRecentTransactions(network, count, txNumPerPage, pagedNum)
+
+        if (pagedNum > 1 && count === 0) return;
+        getRecentTransactions(network, txNumPerPage, count, pagedNum)
             .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
@@ -273,6 +287,11 @@ function LatestTxCardAPI({ count }: { count: number }) {
             isMounted = false;
         };
     }, [count, network, searchParams, txNumPerPage]);
+    useEffect(() => {
+        rpc(network)
+            .getTotalTransactionNumber()
+            .then((resp: number) => setCount(resp));
+    }, [network]);
 
     if (results.loadState === 'pending') {
         return (
@@ -302,7 +321,7 @@ function LatestTxCardAPI({ count }: { count: number }) {
     );
 }
 
-const LatestTxCard = ({ count }: { count: number }) =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI count={count} />;
+const LatestTxCard = () =>
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI />;
 
 export default LatestTxCard;

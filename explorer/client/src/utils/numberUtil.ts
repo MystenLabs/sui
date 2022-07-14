@@ -3,6 +3,8 @@
 
 // Number Suffix
 export const numberSuffix = (num: number): string => {
+    // Handle case where count not found:
+    if (num === 0) return '-';
     if (num >= 1000000) {
         return (num / 1000000).toFixed(1) + 'M';
     }
