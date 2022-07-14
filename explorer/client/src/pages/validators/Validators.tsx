@@ -101,13 +101,14 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
             cumulativeStakePercent += validator.stakePercent;
             return {
                 name: validator.name,
-                address:
+                address: (
                     <Longtext
                         text={validator.address}
                         alttext={truncate(validator.address, 14)}
                         category={'addresses'}
                         isLink={true}
-                    />,
+                    />
+                ),
                 stake: stakeColumn(validator),
                 cumulativeStake: (
                     <span className={styles.stakepercent}>
