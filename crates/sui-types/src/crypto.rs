@@ -157,13 +157,13 @@ impl AsRef<[u8]> for PublicKeyBytes {
     }
 }
 
-impl TryInto<dalek::PublicKey> for PublicKeyBytes {
+impl TryFrom<PublicKeyBytes> for dalek::PublicKey {
     type Error = SuiError;
 
-    fn try_into(self) -> Result<dalek::PublicKey, Self::Error> {
+    fn try_from(value: PublicKeyBytes) -> Result<Self, Self::Error> {
         // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
-        dalek::PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
+        dalek::PublicKey::from_bytes(value.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
     }
 }
 
@@ -192,6 +192,22 @@ impl FromStr for PublicKeyBytes {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         decode_bytes_hex(s).map_err(Into::into)
+    }
+}
+
+impl signature::Verifier<Signature> for PublicKeyBytes {
+    fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), signature::Error> {
+        // deserialize the signature
+        let signature = ed25519_dalek::Signature::from_bytes(signature.signature_bytes())
+            .map_err(|_| signature::Error::new())?;
+
+        let public_key =
+            dalek::PublicKey::from_bytes(self.as_ref()).map_err(|_| signature::Error::new())?;
+
+        // perform cryptographic signature check
+        public_key
+            .verify(message, &signature)
+            .map_err(|_| signature::Error::new())
     }
 }
 
