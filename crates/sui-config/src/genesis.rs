@@ -9,7 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
@@ -17,6 +17,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
+use sui_types::crypto::PublicKeyBytes;
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
@@ -134,6 +135,10 @@ impl Genesis {
             .with_context(|| format!("Unable to save Genesis to {}", path.display()))?;
         Ok(())
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        bcs::to_bytes(self).expect("failed to serialize genesis")
+    }
 }
 
 impl Serialize for Genesis {
@@ -197,8 +202,8 @@ impl<'de> Deserialize<'de> for Genesis {
 }
 
 pub struct Builder {
-    objects: Vec<Object>,
-    validators: Vec<ValidatorInfo>,
+    objects: BTreeMap<ObjectID, Object>,
+    validators: BTreeMap<PublicKeyBytes, ValidatorInfo>,
 }
 
 impl Default for Builder {
@@ -210,28 +215,29 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Self {
         Self {
-            objects: vec![],
-            validators: vec![],
+            objects: Default::default(),
+            validators: Default::default(),
         }
     }
 
     pub fn add_object(mut self, object: Object) -> Self {
-        self.objects.push(object);
+        self.objects.insert(object.id(), object);
         self
     }
 
     pub fn add_objects(mut self, objects: Vec<Object>) -> Self {
-        self.objects.extend(objects);
+        for object in objects {
+            self.objects.insert(object.id(), object);
+        }
         self
     }
 
     pub fn add_validator(mut self, validator: ValidatorInfo) -> Self {
-        self.validators.push(validator);
+        self.validators.insert(validator.public_key(), validator);
         self
     }
 
     pub fn build(self) -> Genesis {
-        let objects = self.objects;
         let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
 
         // Get Move and Sui Framework
@@ -240,12 +246,17 @@ impl Builder {
             sui_framework::get_sui_framework(),
         ];
 
-        let objects =
-            create_genesis_objects(&mut genesis_ctx, &modules, &objects, &self.validators);
+        let objects = self.objects.into_iter().map(|(_, o)| o).collect::<Vec<_>>();
+        let validators = self
+            .validators
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect::<Vec<_>>();
+        let objects = create_genesis_objects(&mut genesis_ctx, &modules, &objects, &validators);
 
         let genesis = Genesis {
             objects,
-            validator_set: self.validators,
+            validator_set: validators,
         };
 
         // Verify that all the validators were properly created onchain
@@ -286,7 +297,7 @@ impl Builder {
         }
 
         // Load Objects
-        let mut objects = Vec::new();
+        let mut objects = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
             let entry = entry?;
             if entry.file_name().starts_with('.') {
@@ -296,11 +307,11 @@ impl Builder {
             let path = entry.path();
             let object_bytes = fs::read(path)?;
             let object: Object = serde_yaml::from_slice(&object_bytes)?;
-            objects.push(object);
+            objects.insert(object.id(), object);
         }
 
         // Load validator infos
-        let mut committee = Vec::new();
+        let mut committee = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
             let entry = entry?;
             if entry.file_name().starts_with('.') {
@@ -310,7 +321,7 @@ impl Builder {
             let path = entry.path();
             let validator_info_bytes = fs::read(path)?;
             let validator_info: ValidatorInfo = serde_yaml::from_slice(&validator_info_bytes)?;
-            committee.push(validator_info);
+            committee.insert(validator_info.public_key(), validator_info);
         }
 
         Ok(Self {
@@ -329,7 +340,7 @@ impl Builder {
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
         std::fs::create_dir_all(&object_dir)?;
 
-        for object in self.objects {
+        for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
             let hex_digest = encode_bytes_hex(&object.digest());
             fs::write(object_dir.join(hex_digest), object_bytes)?;
@@ -339,7 +350,7 @@ impl Builder {
         let committee_dir = path.join(GENESIS_BUILDER_COMMITTEE_DIR);
         std::fs::create_dir_all(&committee_dir)?;
 
-        for validator in self.validators {
+        for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
             let hex_name = encode_bytes_hex(&validator.public_key());
             fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
