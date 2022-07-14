@@ -1154,7 +1154,7 @@ impl Display for EntryArgumentErrorKind {
         match self {
             EntryArgumentErrorKind::TypeMismatch => write!(f, "Type mismatch."),
             EntryArgumentErrorKind::InvalidObjectByValue => {
-                write!(f, "Immutable objects cannot be passed by-value.")
+                write!(f, "Immutable and shared objects cannot be passed by-value.")
             }
             EntryArgumentErrorKind::InvalidObjectByMuteRef => {
                 write!(

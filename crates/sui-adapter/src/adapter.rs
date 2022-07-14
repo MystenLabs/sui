@@ -901,15 +901,15 @@ pub fn resolve_and_type_check(
                 | t @ SignatureToken::StructInstantiation(_, _)
                 | t @ SignatureToken::TypeParameter(_) => {
                     match &object.owner {
-                        Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Shared => (),
-                        Owner::Immutable => {
+                        Owner::AddressOwner(_) | Owner::ObjectOwner(_) => (),
+                        Owner::Shared | Owner::Immutable => {
                             return Err(ExecutionError::new_with_source(
                                 ExecutionErrorKind::entry_argument_error(
                                     idx,
                                     EntryArgumentErrorKind::InvalidObjectByValue,
                                 ),
                                 format!(
-                                    "Immutable objects cannot be passed by-value, \
+                                    "Immutable and shared objects cannot be passed by-value, \
                                     violation found in argument {}",
                                     idx
                                 ),
@@ -1005,25 +1005,26 @@ fn check_shared_object_rules(
         }
     }
 
-    // check shared object by value rule
-    let by_value_shared_object = object_owner_map
-        .iter()
-        .filter(|(id, owner)| matches!(owner, Owner::Shared) && by_value_objects.contains(id))
-        .map(|(id, _)| *id);
-    for shared_object_id in by_value_shared_object {
-        let shared_object_module = object_type_map.get(&shared_object_id).unwrap();
-        if shared_object_module != &current_module {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::invalid_shared_by_value(shared_object_id),
-                format!(
-        "When a shared object is passed as an owned Move value in an entry function, either the \
-        the shared object's type must be defined in the same module as the called function. The \
-        shared object {shared_object_id} (defined in module '{shared_object_module}') is not \
-        defined in this module '{current_module}'",
-                ),
-            ));
-        }
-    }
+    // TODO not yet supported
+    // // check shared object by value rule
+    // let by_value_shared_object = object_owner_map
+    //     .iter()
+    //     .filter(|(id, owner)| matches!(owner, Owner::Shared) && by_value_objects.contains(id))
+    //     .map(|(id, _)| *id);
+    // for shared_object_id in by_value_shared_object {
+    //     let shared_object_module = object_type_map.get(&shared_object_id).unwrap();
+    //     if shared_object_module != &current_module {
+    //         return Err(ExecutionError::new_with_source(
+    //             ExecutionErrorKind::invalid_shared_by_value(shared_object_id),
+    //             format!(
+    //     "When a shared object is passed as an owned Move value in an entry function, either the \
+    //     the shared object's type must be defined in the same module as the called function. The \
+    //     shared object {shared_object_id} (defined in module '{shared_object_module}') is not \
+    //     defined in this module '{current_module}'",
+    //             ),
+    //         ));
+    //     }
+    // }
     Ok(())
 }
 
