@@ -1,0 +1,33 @@
+.txheader {
+    @apply pb-2 mb-0;
+}
+
+.txback {
+    @apply w-full pb-2;
+
+    border-bottom: 1px solid #f0f1f2;
+}
+
+.txback a {
+    @apply text-sui-dark text-[14px] font-[500] md:text-[15px] no-underline hover:text-sui;
+}
+
+.txtypes {
+    @apply text-sui-dark font-[500] mt-10 text-lg mb-2;
+}
+
+.txid {
+    @apply text-offblack font-[600] text-lg md:text-2xl font-mono break-all block md:flex items-center;
+}
+
+.txresulttype {
+    @apply text-sm ml-2 mr-2;
+}
+
+.success {
+    @apply bg-[#ECFBF7] capitalize text-sm font-sans text-[#008C65] font-normal p-0 pr-3 pl-3 rounded-[10px] inline-block m-0 md:ml-2 md:mr-2;
+}
+
+.failed {
+    @apply bg-[#FBE9E7] capitalize text-sm font-sans text-[#D0021B] font-normal p-0 pr-3 pl-3 rounded-[10px] inline-block m-0 md:ml-2 md:mr-2;
+}

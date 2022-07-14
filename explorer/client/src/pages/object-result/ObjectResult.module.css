@@ -1,5 +1,5 @@
 .resultbox {
-    @apply flex flex-wrap w-[95vw];
+    @apply flex flex-wrap w-full;
 }
 
 h1.title {
