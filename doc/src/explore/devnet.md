@@ -196,8 +196,8 @@ Mutated Objects:
 
 Go to the Sui Explorer to observe a newly created object (ID `2E34983D59E9FC5310CFBAA953D2188E6A84FD21`, in this example). You should see a sword object created with `Magic` property of `42` and `Strength` property of `7` and transferred to the new owner.
 
-As above, replace object ID in the Explorer link with the object ID of the created object you observed in your own command output:
-https://explorer.devnet.sui.io/objects/OBJECT-ID
+As above, replace the object ID in the Explorer link with the object ID of the created object you observed in your own command output, appended to:
+https://explorer.devnet.sui.io/objects/
 
 ![Magic sword](../../static/magic-sword.png "Magic sword")
 
