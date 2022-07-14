@@ -11,7 +11,7 @@ use crypto::{
 };
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use prometheus::{default_registry, Registry};
+use prometheus::Registry;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -102,7 +102,7 @@ async fn test_rounds_errors() {
         )),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     // AND Wait for tasks to start
@@ -170,7 +170,7 @@ async fn test_rounds_return_successful_response() {
         /* external_consensus */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     // AND Wait for tasks to start
@@ -308,7 +308,7 @@ async fn test_node_read_causal_signed_certificates() {
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
@@ -339,7 +339,7 @@ async fn test_node_read_causal_signed_certificates() {
         )),
         NetworkModel::Asynchronous,
         tx_feedback_2,
-        default_registry(),
+        &Registry::new(),
     );
 
     // Wait for tasks to start

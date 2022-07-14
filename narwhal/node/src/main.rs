@@ -10,20 +10,17 @@
 
 use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
-use async_trait::async_trait;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
 use crypto::{ed25519::Ed25519KeyPair, generate_production_keypair, traits::KeyPair};
-use executor::{
-    ExecutionIndices, ExecutionState, ExecutionStateError, SerializedTransaction, SubscriberResult,
-};
+use executor::{SerializedTransaction, SubscriberResult};
 use futures::future::join_all;
 use node::{
+    execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
     Node, NodeStorage,
 };
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver};
 use tracing::{info, subscriber::set_global_default};
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
@@ -212,56 +209,5 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 async fn analyze(mut rx_output: Receiver<(SubscriberResult<Vec<u8>>, SerializedTransaction)>) {
     while let Some(_message) = rx_output.recv().await {
         // NOTE: Notify the user that its transaction has been processed.
-    }
-}
-
-/// A simple/dumb execution engine.
-struct SimpleExecutionState;
-
-#[async_trait]
-impl ExecutionState for SimpleExecutionState {
-    type Transaction = String;
-    type Error = SimpleExecutionError;
-
-    async fn handle_consensus_transaction(
-        &self,
-        _execution_indices: ExecutionIndices,
-        _transaction: Self::Transaction,
-    ) -> Result<Vec<u8>, Self::Error> {
-        Ok(Vec::default())
-    }
-
-    fn ask_consensus_write_lock(&self) -> bool {
-        true
-    }
-
-    fn release_consensus_write_lock(&self) {}
-
-    async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        Ok(ExecutionIndices::default())
-    }
-}
-
-/// A simple/dumb execution error.
-#[derive(Debug, Error)]
-pub enum SimpleExecutionError {
-    #[error("Something went wrong in the authority")]
-    ServerError,
-
-    #[error("The client made something bad")]
-    ClientError,
-}
-
-#[async_trait]
-impl ExecutionStateError for SimpleExecutionError {
-    fn node_error(&self) -> bool {
-        match self {
-            Self::ServerError => true,
-            Self::ClientError => false,
-        }
-    }
-
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
     }
 }

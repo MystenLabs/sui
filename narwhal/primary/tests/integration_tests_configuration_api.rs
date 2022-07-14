@@ -6,7 +6,7 @@ use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::traits::KeyPair;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use prometheus::{default_registry, Registry};
+use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{committee, keys, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -50,7 +50,7 @@ async fn test_new_epoch() {
         )),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     // Wait for tasks to start
@@ -122,7 +122,7 @@ async fn test_new_network_info() {
         )),
         NetworkModel::Asynchronous,
         /* tx_committed_certificates */ tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     // Wait for tasks to start

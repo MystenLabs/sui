@@ -25,6 +25,7 @@ use types::{
 };
 use worker::{metrics::initialise_metrics, Worker};
 
+pub mod execution_state;
 pub mod metrics;
 
 /// All the data stores of the node.

@@ -10,7 +10,7 @@ use crypto::{
 };
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
-use prometheus::{default_registry, Registry};
+use prometheus::Registry;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
@@ -122,7 +122,7 @@ async fn test_get_collections() {
         )),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     let metrics = Metrics {
@@ -295,7 +295,7 @@ async fn test_remove_collections() {
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     // Wait for tasks to start
@@ -499,7 +499,7 @@ async fn test_read_causal_signed_certificates() {
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
@@ -530,7 +530,7 @@ async fn test_read_causal_signed_certificates() {
         )),
         NetworkModel::Asynchronous,
         tx_feedback_2,
-        default_registry(),
+        &Registry::new(),
     );
 
     // Wait for tasks to start
@@ -690,7 +690,7 @@ async fn test_read_causal_unsigned_certificates() {
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
         tx_feedback,
-        default_registry(),
+        &Registry::new(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
@@ -714,7 +714,7 @@ async fn test_read_causal_unsigned_certificates() {
         )),
         NetworkModel::Asynchronous,
         tx_feedback_2,
-        default_registry(),
+        &Registry::new(),
     );
 
     // Wait for tasks to start
@@ -851,7 +851,7 @@ async fn test_get_collections_with_missing_certificates() {
         )),
         NetworkModel::Asynchronous,
         tx_feedback_1,
-        default_registry(),
+        &Registry::new(),
     );
 
     let metrics_1 = Metrics {
@@ -886,7 +886,7 @@ async fn test_get_collections_with_missing_certificates() {
         None,
         NetworkModel::Asynchronous,
         tx_feedback_2,
-        default_registry(),
+        &Registry::new(),
     );
 
     let metrics_2 = Metrics {

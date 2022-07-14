@@ -179,7 +179,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     #[async_recursion]
     #[instrument(level = "debug", skip_all)]
     async fn process_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
-        debug!("Processing {:?}", header);
+        debug!("Processing {:?} round:{:?}", header, header.round);
         let header_source = if self.name.eq(&header.author) {
             "own"
         } else {
@@ -345,7 +345,11 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     #[async_recursion]
     #[instrument(level = "debug", skip_all)]
     async fn process_certificate(&mut self, certificate: Certificate<PublicKey>) -> DagResult<()> {
-        debug!("Processing {:?}", certificate);
+        debug!(
+            "Processing {:?} round:{:?}",
+            certificate,
+            certificate.round()
+        );
 
         // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
         // parents or payload (which we may not have yet).

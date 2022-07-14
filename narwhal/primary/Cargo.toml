@@ -49,6 +49,11 @@ tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
 tracing-test = "0.2.2"
 worker = { path = "../worker" }
+async-trait = "0.1.56"
+executor = { path = "../executor" }
+thiserror = "1.0.31"
+tracing = "0.1.35"
+tracing-subscriber = { version = "0.3.14", features = ["time", "env-filter"] }
 
 [features]
 benchmark = []

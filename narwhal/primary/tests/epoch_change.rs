@@ -6,7 +6,7 @@ use crypto::traits::KeyPair;
 use futures::future::join_all;
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use prometheus::default_registry;
+use prometheus::Registry;
 use std::{collections::BTreeMap, sync::Arc};
 use test_utils::{keys, make_authority, pure_committee_from_keys, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -51,7 +51,7 @@ async fn test_simple_epoch_change() {
             /* dag */ None,
             NetworkModel::Asynchronous,
             /* tx_committed_certificates */ tx_feedback,
-            default_registry(),
+            &Registry::new(),
         );
     }
 
@@ -138,7 +138,7 @@ async fn test_partial_committee_change() {
             /* dag */ None,
             NetworkModel::Asynchronous,
             /* tx_committed_certificates */ tx_feedback,
-            default_registry(),
+            &Registry::new(),
         );
     }
 
@@ -211,7 +211,7 @@ async fn test_partial_committee_change() {
             /* dag */ None,
             NetworkModel::Asynchronous,
             /* tx_committed_certificates */ tx_feedback,
-            default_registry(),
+            &Registry::new(),
         );
     }
 
@@ -273,7 +273,7 @@ async fn test_restart_with_new_committee_change() {
             /* dag */ None,
             NetworkModel::Asynchronous,
             /* tx_committed_certificates */ tx_feedback,
-            default_registry(),
+            &Registry::new(),
         );
         handles.extend(primary_handles);
     }
@@ -331,7 +331,7 @@ async fn test_restart_with_new_committee_change() {
                 /* dag */ None,
                 NetworkModel::Asynchronous,
                 /* tx_committed_certificates */ tx_feedback,
-                default_registry(),
+                &Registry::new(),
             );
             handles.extend(primary_handles);
         }

@@ -6,7 +6,7 @@ use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
 };
-use std::{sync::Once, time::Duration};
+use std::time::Duration;
 use tonic::Code;
 
 #[derive(Clone)]
@@ -16,35 +16,23 @@ pub(crate) struct Metrics {
     pub(crate) node_metrics: Option<PrimaryMetrics>,
 }
 
-static mut METRICS: Metrics = Metrics {
-    endpoint_metrics: None,
-    primary_endpoint_metrics: None,
-    node_metrics: None,
-};
-static INIT: Once = Once::new();
-
 /// Initialises the metrics. Should be called only once when the primary
 /// node is initialised, otherwise it will lead to erroneously creating
 /// multiple registries.
 pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
-    unsafe {
-        INIT.call_once(|| {
-            // The metrics used for the gRPC primary node endpoints we expose to the external consensus
-            let endpoint_metrics = EndpointMetrics::new(metrics_registry);
+    // The metrics used for the gRPC primary node endpoints we expose to the external consensus
+    let endpoint_metrics = EndpointMetrics::new(metrics_registry);
 
-            // The metrics used for the primary-to-primary communication node endpoints
-            let primary_endpoint_metrics = PrimaryEndpointMetrics::new(metrics_registry);
+    // The metrics used for the primary-to-primary communication node endpoints
+    let primary_endpoint_metrics = PrimaryEndpointMetrics::new(metrics_registry);
 
-            // Essential/core metrics across the primary node
-            let node_metrics = PrimaryMetrics::new(metrics_registry);
+    // Essential/core metrics across the primary node
+    let node_metrics = PrimaryMetrics::new(metrics_registry);
 
-            METRICS = Metrics {
-                node_metrics: Some(node_metrics),
-                endpoint_metrics: Some(endpoint_metrics),
-                primary_endpoint_metrics: Some(primary_endpoint_metrics),
-            }
-        });
-        METRICS.clone()
+    Metrics {
+        node_metrics: Some(node_metrics),
+        endpoint_metrics: Some(endpoint_metrics),
+        primary_endpoint_metrics: Some(primary_endpoint_metrics),
     }
 }
 

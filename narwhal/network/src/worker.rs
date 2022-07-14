@@ -7,8 +7,7 @@ use futures::FutureExt;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
-use tokio::runtime::Handle;
-use tokio::task::JoinHandle;
+use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
 use types::{BincodeEncodedPayload, WorkerMessage, WorkerToWorkerClient};
 
