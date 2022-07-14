@@ -964,6 +964,7 @@ pub enum ExecutionFailureStatus {
     CircularObjectOwnership(CircularObjectOwnership),
     MissingObjectOwner(MissingObjectOwner),
     InvalidSharedChildUse(InvalidSharedChildUse),
+    InvalidSharedByValue(InvalidSharedByValue),
     // Likely going to be removed
     DeleteObjectOwnedObject,
 
@@ -1020,6 +1021,11 @@ pub struct InvalidSharedChildUse {
     pub ancestor: ObjectID,
 }
 
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct InvalidSharedByValue {
+    pub object: ObjectID,
+}
+
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
@@ -1035,6 +1041,10 @@ impl ExecutionFailureStatus {
 
     pub fn invalid_shared_child_use(child: ObjectID, ancestor: ObjectID) -> Self {
         InvalidSharedChildUse { child, ancestor }.into()
+    }
+
+    pub fn invalid_shared_by_value(object: ObjectID) -> Self {
+        InvalidSharedByValue { object }.into()
     }
 }
 
@@ -1076,16 +1086,19 @@ impl std::fmt::Display for ExecutionFailureStatus {
                 "Number of type arguments does not match the expected value",
             ),
             ExecutionFailureStatus::EntryArgumentError(data) => {
-                write!(f, "Entry Argument Type Error. {}", data)
+                write!(f, "Entry Argument Type Error. {data}")
             }
             ExecutionFailureStatus::CircularObjectOwnership(data) => {
-                write!(f, "Circular  Object Ownership. {}", data)
+                write!(f, "Circular  Object Ownership. {data}")
             }
             ExecutionFailureStatus::MissingObjectOwner(data) => {
-                write!(f, "Missing Object Owner. {}", data)
+                write!(f, "Missing Object Owner. {data}")
             }
             ExecutionFailureStatus::InvalidSharedChildUse(data) => {
-                write!(f, "Invalid Shared Child Object Usage. {}.", data)
+                write!(f, "Invalid Shared Child Object Usage. {data}.")
+            }
+            ExecutionFailureStatus::InvalidSharedByValue(data) => {
+                write!(f, "Invalid Shared Object By-Value Usage. {data}.")
             }
             ExecutionFailureStatus::DeleteObjectOwnedObject => write!(
                 f,
@@ -1141,7 +1154,7 @@ impl Display for EntryArgumentErrorKind {
         match self {
             EntryArgumentErrorKind::TypeMismatch => write!(f, "Type mismatch."),
             EntryArgumentErrorKind::InvalidObjectByValue => {
-                write!(f, "Only an owned object can be passed by-value.")
+                write!(f, "Immutable and shared objects cannot be passed by-value.")
             }
             EntryArgumentErrorKind::InvalidObjectByMuteRef => {
                 write!(
@@ -1189,11 +1202,23 @@ impl Display for InvalidSharedChildUse {
         let InvalidSharedChildUse { child, ancestor } = self;
         write!(
             f,
-            "When an (either direct or indirect) child object of a shared object is passed as a \
-            Move argument, either the child object's type or the shared object's type must be \
-            defined in the same module as the called function. This is violated by the child \
-            object {child}, whose ancestor {ancestor} is a shared object, and neither are defined \
-            in the current module."
+            "When a child object (either direct or indirect) of a shared object is passed by-value \
+            to an entry function, either the child object's type or the shared object's type must \
+            be defined in the same module as the called function. This is violated by object \
+            {child}, whose ancestor {ancestor} is a shared object, and neither are defined in \
+            this module.",
+        )
+    }
+}
+
+impl Display for InvalidSharedByValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let InvalidSharedByValue { object } = self;
+        write!(
+            f,
+        "When a shared object is passed as an owned Move value in an entry function, either the \
+        the shared object's type must be defined in the same module as the called function. The \
+        shared object {object} is not defined in this module",
         )
     }
 }
@@ -1253,6 +1278,12 @@ impl From<MissingObjectOwner> for ExecutionFailureStatus {
 impl From<InvalidSharedChildUse> for ExecutionFailureStatus {
     fn from(error: InvalidSharedChildUse) -> Self {
         Self::InvalidSharedChildUse(error)
+    }
+}
+
+impl From<InvalidSharedByValue> for ExecutionFailureStatus {
+    fn from(error: InvalidSharedByValue) -> Self {
+        Self::InvalidSharedByValue(error)
     }
 }
 

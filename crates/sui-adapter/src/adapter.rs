@@ -900,20 +900,21 @@ pub fn resolve_and_type_check(
                 t @ SignatureToken::Struct(_)
                 | t @ SignatureToken::StructInstantiation(_, _)
                 | t @ SignatureToken::TypeParameter(_) => {
-                    if !object.is_owned_or_quasi_shared() {
-                        // Forbid passing shared (both mutable and immutable) object by value.
-                        // This ensures that shared object cannot be transferred, deleted or wrapped.
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::entry_argument_error(
-                                idx,
-                                EntryArgumentErrorKind::InvalidObjectByValue,
-                            ),
-                            format!(
-                                "Only owned object can be passed by-value, violation found in \
-                                argument {}",
-                                idx
-                            ),
-                        ));
+                    match &object.owner {
+                        Owner::AddressOwner(_) | Owner::ObjectOwner(_) => (),
+                        Owner::Shared | Owner::Immutable => {
+                            return Err(ExecutionError::new_with_source(
+                                ExecutionErrorKind::entry_argument_error(
+                                    idx,
+                                    EntryArgumentErrorKind::InvalidObjectByValue,
+                                ),
+                                format!(
+                                    "Immutable and shared objects cannot be passed by-value, \
+                                    violation found in argument {}",
+                                    idx
+                                ),
+                            ));
+                        }
                     }
                     by_value_objects.insert(id);
                     t
@@ -937,7 +938,12 @@ pub fn resolve_and_type_check(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    check_child_object_of_shared_object(objects, &object_type_map, module.self_id())?;
+    check_shared_object_rules(
+        objects,
+        &by_value_objects,
+        &object_type_map,
+        module.self_id(),
+    )?;
 
     Ok(TypeCheckSuccess {
         module_id,
@@ -949,11 +955,17 @@ pub fn resolve_and_type_check(
     })
 }
 
-/// Check that for each pair of a shared object and a descendant of it (through object ownership),
-/// at least one of the types of the shared object and the descendant must be defined in the
-/// same module as the function being called (somewhat similar to Rust's orphan rule).
-fn check_child_object_of_shared_object(
+/// Check rules for shared object + by-value child rules and rules for by-value shared object rules:
+/// - For each pair of a shared object and a descendant of it (through object ownership), if the
+///   descendant is used by-value, at least one of the types of the shared object and the descendant
+///   must be defined in the same module as the entry function being called
+///   (somewhat similar to Rust's orphan rule where a trait impl must be defined in the same crate
+///   as the type implementing the trait or the trait itself).
+/// - For each shared object used by-value, the type of the shared object must be defined in the
+///   same module as the entry function being called.
+fn check_shared_object_rules(
     objects: &BTreeMap<ObjectID, impl Borrow<Object>>,
+    by_value_objects: &BTreeSet<ObjectID>,
     object_type_map: &BTreeMap<ObjectID, ModuleId>,
     current_module: ModuleId,
 ) -> Result<(), ExecutionError> {
@@ -962,37 +974,57 @@ fn check_child_object_of_shared_object(
         .map(|(id, obj)| (*id, obj.borrow().owner))
         .collect();
     let ancestor_map = ObjectRootAncestorMap::new(&object_owner_map)?;
-    for (object_id, owner) in object_owner_map {
-        // We are only interested in objects owned by objects.
-        let owner = match owner {
-            Owner::ObjectOwner(o) => o,
-            _ => continue,
-        };
-        let (ancestor_id, ancestor_owner) = match ancestor_map.get_root_ancestor(&object_id) {
+    let by_value_object_owned = object_owner_map
+        .iter()
+        .filter_map(|(id, owner)| match owner {
+            Owner::ObjectOwner(owner) if by_value_objects.contains(id) => Some((*id, *owner)),
+            _ => None,
+        });
+    for (child_id, owner) in by_value_object_owned {
+        let (ancestor_id, ancestor_owner) = match ancestor_map.get_root_ancestor(&child_id) {
             Some(ancestor) => ancestor,
-            None => return Err(ExecutionErrorKind::missing_object_owner(object_id, owner).into()),
+            None => return Err(ExecutionErrorKind::missing_object_owner(child_id, owner).into()),
         };
         if ancestor_owner.is_shared() {
             // unwrap safe because the object ID exists in object_owner_map.
-            let child_module = object_type_map.get(&object_id).unwrap();
+            let child_module = object_type_map.get(&child_id).unwrap();
             let ancestor_module = object_type_map.get(&ancestor_id).unwrap();
             if !(child_module == &current_module || ancestor_module == &current_module) {
                 return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::invalid_shared_child_use(object_id, ancestor_id),
+                    ExecutionErrorKind::invalid_shared_child_use(child_id, ancestor_id),
                     format!(
-"When an (either direct or indirect) child object of a shared object is passed as a Move argument, \
-either the child object's type or the shared object's type must be defined in the same module \
-as the called function. This is violated by object {child} (defined in module '{child_module}'), \
-whose ancestor {ancestor} is a shared object (defined in module '{ancestor_module}'), \
-and neither are defined in this module '{current_module}'",
-                    child = object_id,
-                    child_module = current_module,
-                    ancestor = ancestor_id,
+        "When a child object (either direct or indirect) of a shared object is passed by-value to \
+        an entry function, either the child object's type or the shared object's type must be \
+        defined in the same module as the called function. This is violated by object {child_id} \
+        (defined in module '{child_module}'), whose ancestor {ancestor_id} is a shared \
+        object (defined in module '{ancestor_module}'), and neither are defined in this module \
+        '{current_module}'",
                     ),
                 ));
             }
         }
     }
+
+    // TODO not yet supported
+    // // check shared object by value rule
+    // let by_value_shared_object = object_owner_map
+    //     .iter()
+    //     .filter(|(id, owner)| matches!(owner, Owner::Shared) && by_value_objects.contains(id))
+    //     .map(|(id, _)| *id);
+    // for shared_object_id in by_value_shared_object {
+    //     let shared_object_module = object_type_map.get(&shared_object_id).unwrap();
+    //     if shared_object_module != &current_module {
+    //         return Err(ExecutionError::new_with_source(
+    //             ExecutionErrorKind::invalid_shared_by_value(shared_object_id),
+    //             format!(
+    //     "When a shared object is passed as an owned Move value in an entry function, either the \
+    //     the shared object's type must be defined in the same module as the called function. The \
+    //     shared object {shared_object_id} (defined in module '{shared_object_module}') is not \
+    //     defined in this module '{current_module}'",
+    //             ),
+    //         ));
+    //     }
+    // }
     Ok(())
 }
 
