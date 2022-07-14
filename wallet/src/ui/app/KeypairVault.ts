@@ -13,7 +13,11 @@ export default class KeypairVault {
     }
 
     public getAccount(): string | null {
-        return this._keypair?.getPublicKey().toSuiAddress() || null;
+        let address = this._keypair?.getPublicKey().toSuiAddress() || null;
+        if (address && !address.startsWith('0x')) {
+            address = `0x${address}`;
+        }
+        return address;
     }
 
     public getKeyPair() {

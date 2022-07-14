@@ -16,9 +16,7 @@ type AccountAddressProps = {
 };
 
 function AccountAddress({ className, showLink = true }: AccountAddressProps) {
-    const address = useAppSelector(
-        ({ account: { address } }) => address && `0x${address}`
-    );
+    const address = useAppSelector(({ account: { address } }) => address);
     const shortenAddress = useMiddleEllipsis(address || '', 20);
     return address ? (
         <span className={cl(st.addressContainer, className)}>
