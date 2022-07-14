@@ -1,7 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, type GetObjectDataResponse, isSuiMoveObject, isSuiObject } from '@mysten/sui.js';
+import {
+    Base64DataBuffer,
+    type GetObjectDataResponse,
+    isSuiMoveObject,
+    isSuiObject,
+} from '@mysten/sui.js';
 import { useState, useContext, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -12,19 +17,80 @@ import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import {
     STATE_DEFAULT,
-    type Validator,
-    type ValidatorState,
 } from '../../components/top-validators-card/TopValidatorsCard';
 import styles from '../../components/top-validators-card/TopValidatorsCard.module.css';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { truncate } from '../../utils/stringUtils';
 import { mockState } from './mockData';
-import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-
 
 const textDecoder = new TextDecoder();
+
+export type ObjFields = {
+    type: string;
+    fields: any[keyof string];
+};
+
+export type SystemParams = {
+    type: '0x2::sui_system::SystemParameters';
+    fields: {
+        max_validator_candidate_count: number;
+        min_validator_stake: bigint;
+    };
+};
+
+export type Validator = {
+    type: '0x2::validator::Validator';
+    fields: {
+        delegation: bigint;
+        delegation_count: number;
+        metadata: ValidatorMetadata;
+        pending_delegation: bigint;
+        pending_delegation_withdraw: bigint;
+        pending_delegator_count: number;
+        pending_delegator_withdraw_count: number;
+        pending_stake: {
+            type: '0x1::option::Option<0x2::balance::Balance<0x2::sui::SUI>>';
+            fields: any[keyof string];
+        };
+        pending_withdraw: bigint;
+        stake_amount: bigint;
+    };
+};
+
+export type ValidatorMetadata = {
+    type: '0x2::validator::ValidatorMetadata';
+    fields: {
+        name: string;
+        net_address: string;
+        next_epoch_stake: number;
+        pubkey_bytes: string;
+        sui_address: string;
+    };
+};
+
+export type ValidatorState = {
+    delegation_reward: number;
+    epoch: number;
+    id: { id: string; version: number };
+    parameters: SystemParams;
+    storage_fund: number;
+    treasury_cap: ObjFields;
+    validators: {
+        type: '0x2::validator_set::ValidatorSet';
+        fields: {
+            delegation_stake: bigint;
+            active_validators: Validator[];
+            next_epoch_validators: Validator[];
+            pending_removals: string;
+            pending_validators: string;
+            quorum_stake_threshold: bigint;
+            validator_stake: bigint;
+        };
+    };
+};
 
 function instanceOfValidatorState(object: any): object is ValidatorState {
     return (
@@ -101,12 +167,8 @@ export function stakeColumn(validator: {
 export const getStakePercent = (stake: bigint, total: bigint): number =>
     Number(BigInt(stake) * BigInt(100)) / Number(total);
 
-function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
-    const totalStake = state.validators.fields.validator_stake;
-    // sort by order of descending stake
-    sortValidatorsByStake(state.validators.fields.active_validators);
-
-    const validatorsData = state.validators.fields.active_validators.map(
+export function processValidators(set: Validator[], totalStake: bigint) {
+    return set.map(
         (av, i) => {
             const rawName = av.fields.metadata.fields.name;
             const name = textDecoder.decode(
@@ -124,7 +186,24 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                 position: i + 1,
             };
         }
-    );
+    )
+}
+
+export function getTabFooter(count: number) {
+    return {
+        stats: {
+            count: count,
+            stats_text: 'total validators',
+        },
+    };
+}
+
+function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
+    const totalStake = state.validators.fields.validator_stake;
+    // sort by order of descending stake
+    sortValidatorsByStake(state.validators.fields.active_validators);
+
+    const validatorsData = processValidators(state.validators.fields.active_validators, totalStake);
 
     let cumulativeStakePercent = 0;
     // map the above data to match the table combine stake and stake percent

@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    Base64DataBuffer,
-} from '@mysten/sui.js';
 import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
@@ -12,80 +9,18 @@ import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import {
-    getStakePercent,
+    getTabFooter,
     getValidatorState,
+    processValidators,
     sortValidatorsByStake,
     stakeColumn,
     ValidatorLoadFail,
+    type ValidatorState,
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
 import theme from '../../styles/theme.module.css';
 
 import styles from './TopValidatorsCard.module.css';
-
-export type ObjFields = {
-    type: string;
-    fields: any[keyof string];
-};
-
-export type SystemParams = {
-    type: '0x2::sui_system::SystemParameters';
-    fields: {
-        max_validator_candidate_count: number;
-        min_validator_stake: bigint;
-    };
-};
-
-export type Validator = {
-    type: '0x2::validator::Validator';
-    fields: {
-        delegation: bigint;
-        delegation_count: number;
-        metadata: ValidatorMetadata;
-        pending_delegation: bigint;
-        pending_delegation_withdraw: bigint;
-        pending_delegator_count: number;
-        pending_delegator_withdraw_count: number;
-        pending_stake: {
-            type: '0x1::option::Option<0x2::balance::Balance<0x2::sui::SUI>>';
-            fields: any[keyof string];
-        };
-        pending_withdraw: bigint;
-        stake_amount: bigint;
-    };
-};
-
-export type ValidatorMetadata = {
-    type: '0x2::validator::ValidatorMetadata';
-    fields: {
-        name: string;
-        net_address: string;
-        next_epoch_stake: number;
-        pubkey_bytes: string;
-        sui_address: string;
-    };
-};
-
-export type ValidatorState = {
-    delegation_reward: number;
-    epoch: number;
-    id: { id: string; version: number };
-    parameters: SystemParams;
-    storage_fund: number;
-    treasury_cap: ObjFields;
-    validators: {
-        type: '0x2::validator_set::ValidatorSet';
-        fields: {
-            delegation_stake: bigint;
-            active_validators: Validator[];
-            next_epoch_validators: Validator[];
-            pending_removals: string;
-            pending_validators: string;
-            quorum_stake_threshold: bigint;
-            validator_stake: bigint;
-        };
-    };
-};
 
 export const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
@@ -150,31 +85,12 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
     return <div>"Something went wrong"</div>;
 };
 
-const textDecoder = new TextDecoder('utf-8');
-
 function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     const totalStake = state.validators.fields.validator_stake;
     // sort by order of descending stake
     sortValidatorsByStake(state.validators.fields.active_validators);
 
-    const validatorsData = state.validators.fields.active_validators.map(
-        (av, i) => {
-            const rawName = av.fields.metadata.fields.name;
-            const name = textDecoder.decode(
-                new Base64DataBuffer(rawName).getData()
-            );
-            return {
-                name: name,
-                stake: av.fields.stake_amount,
-                stakePercent: getStakePercent(
-                    av.fields.stake_amount,
-                    totalStake
-                ),
-                delegation_count: av.fields.delegation_count || 0,
-                position: i + 1,
-            };
-        }
-    );
+    const validatorsData = processValidators(state.validators.fields.active_validators, totalStake);
 
     // map the above data to match the table combine stake and stake percent
     const tableData = {
@@ -204,12 +120,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
         ],
     };
 
-    const tabsFooter = {
-        stats: {
-            count: validatorsData.length,
-            stats_text: 'total validators',
-        },
-    };
+    const tabsFooter = getTabFooter(validatorsData.length);
 
     return (
         <div className={styles.validators}>

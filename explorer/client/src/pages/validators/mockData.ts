@@ -1,9 +1,5 @@
 import { Base64DataBuffer } from '@mysten/sui.js';
-
-import type {
-    Validator,
-    ValidatorState,
-} from '../../components/top-validators-card/TopValidatorsCard';
+import { type Validator, type ValidatorState } from './Validators';
 
 const encoder = new TextEncoder();
 
