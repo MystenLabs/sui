@@ -237,6 +237,17 @@ where
         })
     }
 
+    pub async fn spawn_checkpoint_sync_process(self: Arc<Self>) {
+        self.spawn_checkpoint_sync_process_with_config(Default::default())
+            .await
+    }
+
+    pub async fn spawn_checkpoint_sync_process_with_config(
+        self: Arc<Self>,
+        checkpoint_process_control: CheckpointProcessControl,
+    ) {
+    }
+
     pub async fn sync_to_latest_checkpoint(&self) -> SuiResult {
         self.sync_to_latest_checkpoint_with_config(Default::default())
             .await
