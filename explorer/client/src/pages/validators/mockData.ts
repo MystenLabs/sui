@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { Base64DataBuffer } from '@mysten/sui.js';
 
 import { type Validator, type ValidatorState } from './Validators';
