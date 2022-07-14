@@ -259,7 +259,9 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
             <Tabs selected={0}>
                 <div title="Validators">
                     <TableCard tabledata={tableData} />
-                    <TabFooter stats={getTabFooter(validatorsData.length).stats}>
+                    <TabFooter
+                        stats={getTabFooter(validatorsData.length).stats}
+                    >
                         <Longtext
                             text=""
                             category="validators"
