@@ -18,8 +18,8 @@ To immediately get started using Sui:
 1. Optionally, download the [source code](#source-code) to have local
    access to examples and modify Sui itself.
 
-> **Tip:** Assuming you have Rust Cargo, the `git` command, and a GitHub account
-> (see prerequisites(#prerequisites)), you can download the `sui-setup.sh` script
+> **Tip:** Assuming you on macOS or Linux, have `curl`, Rust Cargo, the `git` command, and a GitHub account
+> (see [Prerequisites](#prerequisites)), you can download the `sui-setup.sh` script
 > and run it to conduct all of the setup below, **including removal of any existing
 > sui assets**. To use it, run these commands in a terminal:
 > ```shell
