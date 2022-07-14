@@ -94,6 +94,7 @@ pub struct CheckpointStore {
     /// The mapping from checkpoint to transaction/effects contained within the checkpoint.
     /// The checkpoint content should be causally ordered and is consistent among
     /// all validators.
+    /// TODO: CheckpointContents may grow very big and becomes problematic to store as db value.
     pub checkpoint_contents: DBMap<CheckpointSequenceNumber, CheckpointContents>,
 
     /// The set of transaction/effects this authority has processed but have not yet been
