@@ -15,6 +15,7 @@ import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import {
+    getStakePercent,
     stakeColumn,
     ValidatorLoadFail,
 } from '../../pages/validators/Validators';
@@ -195,9 +196,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
             return {
                 name: name,
                 stake: av.fields.stake_amount,
-                stakePercent: Number(
-                    (av.fields.stake_amount * BigInt(100)) / totalStake
-                ),
+                stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
                 delegation_count: av.fields.delegation_count || 0,
                 position: i + 1,
             };

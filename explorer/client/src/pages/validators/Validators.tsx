@@ -66,8 +66,8 @@ export function stakeColumn(validator: {
     );
 }
 
-const getStakePercent = (stake: bigint, total: bigint): number =>
-    Number(stake * BigInt(100)) / Number(total);
+export const getStakePercent = (stake: bigint, total: bigint): number =>
+    Number(BigInt(stake) * BigInt(100)) / Number(total);
 
 function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
     const totalStake = state.validators.fields.validator_stake;
@@ -101,7 +101,13 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
             cumulativeStakePercent += validator.stakePercent;
             return {
                 name: validator.name,
-                address: truncate(validator.address, 14),
+                address:
+                    <Longtext
+                        text={validator.address}
+                        alttext={truncate(validator.address, 14)}
+                        category={'addresses'}
+                        isLink={true}
+                    />,
                 stake: stakeColumn(validator),
                 cumulativeStake: (
                     <span className={styles.stakepercent}>
