@@ -5671,6 +5671,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk-example-tic-tac-toe"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "bcs",
+ "clap 3.1.18",
+ "dirs",
+ "serde 1.0.139",
+ "sui-client",
+ "tokio",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6554,20 +6568,6 @@ dependencies = [
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=40dae350a699f59f2e296152e02c78765db34e68)",
  "types",
  "workspace-hack 0.1.0",
-]
-
-[[package]]
-name = "sui-example-tictactoe"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-recursion",
- "bcs",
- "clap 3.1.18",
- "dirs",
- "serde 1.0.139",
- "sui-client",
- "tokio",
 ]
 
 [[package]]

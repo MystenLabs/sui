@@ -1,5 +1,5 @@
 [package]
-name = "sui-example-tictactoe"
+name = "sdk-example-tic-tac-toe"
 version = "0.0.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -16,7 +16,7 @@ serde = "1.0.138"
 async-recursion = "1.0.0"
 
 ## Sui dependencies
-sui-client = { path = "../../sui-client" }
+sui-client = { path = "../sui-client" }
 
 [[example]]
 name = "tic-tac-toe"

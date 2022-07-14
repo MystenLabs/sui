@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/sdk-examples/tic-tac-toe"
+    "crates/sdk-example-tic-tac-toe",
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
