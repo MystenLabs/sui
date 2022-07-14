@@ -17,7 +17,7 @@ import Longtext from '../../components/longtext/Longtext';
 import Tabs from '../../components/tabs/Tabs';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
-import TxModuleView from './TxModuleView';
+import TxModulesWrapper from './TxModulesWrapper';
 import TxResultHeader from './TxResultHeader';
 
 import type { DataType, Category } from './TransactionResultType';
@@ -283,6 +283,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
               }
             : false;
     const defaultActiveTab = 0;
+
+    const modules =
+        txKindData?.module?.value && Array.isArray(txKindData?.module?.value)
+            ? {
+                  title: 'Modules',
+                  content: txKindData?.module?.value,
+              }
+            : false;
+
     return (
         <div className={cl(styles.txdetailsbg)}>
             <TxResultHeader data={txHeaderData} />
@@ -325,27 +334,16 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             </div>
                         </section>
 
-                        {txKindData?.module?.value &&
-                            Array.isArray(txKindData?.module?.value) && (
-                                <section
-                                    className={cl([
-                                        styles.txcomponent,
-                                        styles.txgridcolspan3,
-                                    ])}
-                                >
-                                    <h3 className={styles.txtitle}>Modules </h3>
-                                    <div className={styles.txmodule}>
-                                        {txKindData.module.value
-                                            .slice(0, 3)
-                                            .map((item, idx) => (
-                                                <TxModuleView
-                                                    itm={item}
-                                                    key={idx}
-                                                />
-                                            ))}
-                                    </div>
-                                </section>
-                            )}
+                        {modules && (
+                            <section
+                                className={cl([
+                                    styles.txcomponent,
+                                    styles.txgridcolspan3,
+                                ])}
+                            >
+                                <TxModulesWrapper data={modules} />
+                            </section>
+                        )}
                     </div>
                     <div className={styles.txgridcomponent}>
                         <ItemView data={GasStorageFees} />

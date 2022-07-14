@@ -6,20 +6,6 @@
     @apply block md:grid grid-cols-1 md:grid-cols-1 gap-0 md:gap-3;
 }
 
-.txmodule {
-    @apply grid grid-cols-1 md:grid-cols-3 gap-0 pt-2 pb-2;
-}
-
-.txmodule section {
-    border-top: 1px solid #f0f1f2;
-    border-bottom: 1px solid #f0f1f2;
-    @apply p-3 pb-0;
-}
-
-.txmodule section:first-child {
-    @apply pl-0;
-}
-
 .txcomponent {
     @apply pt-4 pb-4;
 }

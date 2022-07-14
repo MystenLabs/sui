@@ -29,8 +29,6 @@ import type {
     SuiObjectRef,
 } from '@mysten/sui.js';
 
-// import styles from './TransactionResult.module.css';
-
 type TxnState = CertifiedTransaction & {
     loadState: string;
     txId: string;
