@@ -82,13 +82,13 @@ impl TryFrom<&MoveObject> for GasCoin {
     fn try_from(value: &MoveObject) -> Result<GasCoin, ExecutionError> {
         if value.type_ != GasCoin::type_() {
             return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::TypeError,
+                ExecutionErrorKind::InvalidGasObject,
                 format!("Gas object type is not a gas coin: {}", value.type_),
             ));
         }
         let gas_coin: GasCoin = bcs::from_bytes(value.contents()).map_err(|err| {
             ExecutionError::new_with_source(
-                ExecutionErrorKind::TypeError,
+                ExecutionErrorKind::InvalidGasObject,
                 format!("Unable to deserialize gas object: {:?}", err),
             )
         })?;
@@ -103,7 +103,7 @@ impl TryFrom<&Object> for GasCoin {
         match &value.data {
             Data::Move(obj) => obj.try_into(),
             Data::Package(_) => Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::TypeError,
+                ExecutionErrorKind::InvalidGasObject,
                 format!("Gas object type is not a gas coin: {:?}", value),
             )),
         }

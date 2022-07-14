@@ -46,6 +46,10 @@ ChangeEpoch:
     - epoch: U64
     - storage_charge: U64
     - computation_charge: U64
+CircularObjectOwnership:
+  STRUCT:
+    - object:
+        TYPENAME: ObjectID
 Data:
   ENUM:
     0:
@@ -56,6 +60,25 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
+EntryArgumentError:
+  STRUCT:
+    - argument_idx: U8
+    - kind:
+        TYPENAME: EntryArgumentErrorKind
+EntryArgumentErrorKind:
+  ENUM:
+    0:
+      TypeMismatch: UNIT
+    1:
+      InvalidObjectByValue: UNIT
+    2:
+      InvalidObjectByMuteRef: UNIT
+    3:
+      ObjectKindMismatch: UNIT
+    4:
+      UnsupportedPureArg: UNIT
+    5:
+      ArityMismatch: UNIT
 ExecutionDigests:
   STRUCT:
     - transaction:
@@ -67,12 +90,62 @@ ExecutionFailureStatus:
     0:
       InsufficientGas: UNIT
     1:
+      InvalidGasObject: UNIT
+    2:
+      InvalidTransactionUpdate: UNIT
+    3:
+      ModuleNotFound: UNIT
+    4:
+      FunctionNotFound: UNIT
+    5:
+      InvariantViolation: UNIT
+    6:
+      InvalidTransferObject: UNIT
+    7:
+      InvalidTransferSui: UNIT
+    8:
+      InvalidTransferSuiInsufficientBalance: UNIT
+    9:
+      NonEntryFunctionInvoked: UNIT
+    10:
+      EntryTypeArityMismatch: UNIT
+    11:
+      EntryArgumentError:
+        NEWTYPE:
+          TYPENAME: EntryArgumentError
+    12:
+      CircularObjectOwnership:
+        NEWTYPE:
+          TYPENAME: CircularObjectOwnership
+    13:
+      MissingObjectOwner:
+        NEWTYPE:
+          TYPENAME: MissingObjectOwner
+    14:
+      InvalidSharedChildUse:
+        NEWTYPE:
+          TYPENAME: InvalidSharedChildUse
+    15:
+      DeleteObjectOwnedObject: UNIT
+    16:
+      PublishErrorEmptyPackage: UNIT
+    17:
+      PublishErrorNonZeroAddress: UNIT
+    18:
+      PublishErrorDuplicateModule: UNIT
+    19:
+      SuiMoveVerificationError: UNIT
+    20:
+      MovePrimitiveRuntimeError: UNIT
+    21:
       MoveAbort:
         TUPLE:
-          - TYPENAME: AbortLocation
+          - TYPENAME: ModuleId
           - U64
-    2:
-      MiscellaneousError: UNIT
+    22:
+      VMVerificationOrDeserializationError: UNIT
+    23:
+      VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -84,6 +157,18 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
 Identifier:
   NEWTYPESTRUCT: STR
+InvalidSharedChildUse:
+  STRUCT:
+    - child:
+        TYPENAME: ObjectID
+    - ancestor:
+        TYPENAME: ObjectID
+MissingObjectOwner:
+  STRUCT:
+    - child:
+        TYPENAME: ObjectID
+    - parent:
+        TYPENAME: SuiAddress
 ModuleId:
   STRUCT:
     - address:

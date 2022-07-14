@@ -401,7 +401,7 @@ async fn test_object_owning_another_object() {
     // we expect this to be and error due to Deleting an Object Owned Object
     assert!(matches!(
         effects.status.unwrap_err(),
-        ExecutionFailureStatus::MiscellaneousError,
+        ExecutionFailureStatus::DeleteObjectOwnedObject,
     ));
 
     // Remove the child from the parent.
