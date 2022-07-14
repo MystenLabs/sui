@@ -41,11 +41,7 @@ export default function PaginationWrapper({
         [pageIndex, results.length]
     );
 
-    // When Total Number of Pages at most 5, list all always:
-
-    //if ((FINAL_PAGE_NO > 1) && (FINAL_PAGE_NO <= 5))
-
-    const FirstTwoButtons = (
+    const FirstButton = (
         <span className={pageIndex === 0 ? styles.gone : ''}>
             <button
                 className={styles.btncontainer}
@@ -58,7 +54,7 @@ export default function PaginationWrapper({
         </span>
     );
 
-    const LastTwoButtons = (
+    const LastButton = (
         <span className={pageIndex === FINAL_PAGE_NO - 1 ? styles.gone : ''}>
             <button
                 id="nextBtn"
@@ -70,13 +66,41 @@ export default function PaginationWrapper({
             </button>
         </span>
     );
+    // When Total Number of Pages at most 5, list all always:
+
+    if (FINAL_PAGE_NO > 1 && FINAL_PAGE_NO <= 5) {
+        return (
+            <>
+                {viewComponentFn(objectSample)}
+                {FirstButton}
+                {Array(FINAL_PAGE_NO)
+                    .fill(0)
+                    .map((_: number, arrayIndex: number) => (
+                        <button
+                            key={`page-${arrayIndex}`}
+                            className={
+                                pageIndex === arrayIndex
+                                    ? styles.pagenumber
+                                    : styles.btncontainer
+                            }
+                            id="firstBtn"
+                            onClick={handleBtnClick(arrayIndex)}
+                            disabled={pageIndex === arrayIndex}
+                        >
+                            {arrayIndex + 1}
+                        </button>
+                    ))}
+                {LastButton}
+            </>
+        );
+    }
 
     return (
         <>
             {viewComponentFn(objectSample)}
             {FINAL_PAGE_NO > 1 && (
                 <>
-                    {FirstTwoButtons}
+                    {FirstButton}
                     <button
                         className={
                             pageIndex === 0
@@ -141,7 +165,7 @@ export default function PaginationWrapper({
                         {FINAL_PAGE_NO}
                     </button>
 
-                    {LastTwoButtons}
+                    {LastButton}
                 </>
             )}
         </>
