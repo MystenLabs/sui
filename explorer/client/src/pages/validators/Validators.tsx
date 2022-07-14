@@ -254,19 +254,12 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
         ],
     };
 
-    const tabsFooter = {
-        stats: {
-            count: validatorsData.length,
-            stats_text: 'total validators',
-        },
-    };
-
     return (
         <div className={styles.validators}>
             <Tabs selected={0}>
                 <div title="Validators">
                     <TableCard tabledata={tableData} />
-                    <TabFooter stats={tabsFooter.stats}>
+                    <TabFooter stats={getTabFooter(validatorsData.length).stats}>
                         <Longtext
                             text=""
                             category="validators"
@@ -277,7 +270,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                         />
                     </TabFooter>
                 </div>
-                <div title=""></div>
             </Tabs>
         </div>
     );

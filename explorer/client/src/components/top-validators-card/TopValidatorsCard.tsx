@@ -141,7 +141,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                         />
                     </TabFooter>
                 </div>
-                <div title=""></div>
             </Tabs>
         </div>
     );
