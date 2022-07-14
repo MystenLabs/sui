@@ -4,7 +4,7 @@
 import cl from 'classnames';
 import { memo, useCallback, useEffect, useState } from 'react';
 
-import Icon from '_components/icon';
+import Icon, { SuiIcons } from '_components/icon';
 
 import type { ReactNode, MouseEventHandler } from 'react';
 
@@ -59,8 +59,8 @@ function CopyToClipboard({
         >
             {children}
             <Icon
-                className={st['copy-icon']}
-                icon={`clipboard${copied ? '-check' : ''}`}
+                className={cl(st.copyIcon, { [st.copied]: copied })}
+                icon={SuiIcons.Clipboard}
                 onClick={copyToClipboard}
                 title="Copy to clipboard"
             />
