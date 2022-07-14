@@ -965,8 +965,6 @@ pub enum ExecutionFailureStatus {
     MissingObjectOwner(MissingObjectOwner),
     InvalidSharedChildUse(InvalidSharedChildUse),
     InvalidSharedByValue(InvalidSharedByValue),
-    // Likely going to be removed
-    DeleteObjectOwnedObject,
 
     //
     // MovePublish errors
@@ -1100,10 +1098,6 @@ impl std::fmt::Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
             }
-            ExecutionFailureStatus::DeleteObjectOwnedObject => write!(
-                f,
-                "Invalid deletion of object owned object without a child ref."
-            ),
             ExecutionFailureStatus::PublishErrorEmptyPackage => write!(
                 f,
                 "Publish Error, Empty Package. A package must have at least one module."
