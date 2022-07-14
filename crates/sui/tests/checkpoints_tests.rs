@@ -141,21 +141,18 @@ async fn end_to_end() {
     for authority in &handles {
         let state = authority.state().clone();
         let inner_agg = aggregator.clone();
-        let _active_authority_handle = tokio::spawn(async move {
-            let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap(),
-            );
-            let checkpoint_process_control = CheckpointProcessControl {
-                long_pause_between_checkpoints: Duration::from_millis(10),
-                ..CheckpointProcessControl::default()
-            };
-            active_state
-                .spawn_checkpoint_process_with_config(
-                    checkpoint_process_control,
-                    CheckpointMetrics::new_for_tests(),
-                )
-                .await
-        });
+        let active_state =
+            Arc::new(ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap());
+        let checkpoint_process_control = CheckpointProcessControl {
+            long_pause_between_checkpoints: Duration::from_millis(10),
+            ..CheckpointProcessControl::default()
+        };
+        let _active_authority_handle = active_state
+            .spawn_checkpoint_process_with_config(
+                checkpoint_process_control,
+                CheckpointMetrics::new_for_tests(),
+            )
+            .await;
     }
 
     // Send the transactions for execution.
@@ -231,25 +228,22 @@ async fn checkpoint_with_shared_objects() {
     for authority in &handles {
         let state = authority.state().clone();
         let inner_agg = aggregator.clone();
-        let _active_authority_handle = tokio::spawn(async move {
-            let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap(),
-            );
-            let checkpoint_process_control = CheckpointProcessControl {
-                long_pause_between_checkpoints: Duration::from_millis(10),
-                ..CheckpointProcessControl::default()
-            };
+        let active_state =
+            Arc::new(ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap());
+        let checkpoint_process_control = CheckpointProcessControl {
+            long_pause_between_checkpoints: Duration::from_millis(10),
+            ..CheckpointProcessControl::default()
+        };
 
-            println!("Start active execution process.");
-            active_state.clone().spawn_execute_process().await;
+        println!("Start active execution process.");
+        active_state.clone().spawn_execute_process().await;
 
-            active_state
-                .spawn_checkpoint_process_with_config(
-                    checkpoint_process_control,
-                    CheckpointMetrics::new_for_tests(),
-                )
-                .await
-        });
+        let _active_authority_handle = active_state
+            .spawn_checkpoint_process_with_config(
+                checkpoint_process_control,
+                CheckpointMetrics::new_for_tests(),
+            )
+            .await;
     }
 
     // Publish the move package to all authorities and get the new package ref.
