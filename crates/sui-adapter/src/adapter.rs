@@ -909,8 +909,8 @@ pub fn resolve_and_type_check(
                                     EntryArgumentErrorKind::InvalidObjectByValue,
                                 ),
                                 format!(
-                                    "Immutable objects cannot be pased by-value, \
-                                violation found in argument {}",
+                                    "Immutable objects cannot be passed by-value, \
+                                    violation found in argument {}",
                                     idx
                                 ),
                             ));
@@ -993,7 +993,7 @@ fn check_shared_object_rules(
                 return Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::invalid_shared_child_use(child_id, ancestor_id),
                     format!(
-        "When an (either direct or indirect) child object of a shared object is passed by-value to \
+        "When a child object (either direct or indirect) of a shared object is passed by-value to \
         an entry function, either the child object's type or the shared object's type must be \
         defined in the same module as the called function. This is violated by object {child_id} \
         (defined in module '{child_module}'), whose ancestor {ancestor_id} is a shared \

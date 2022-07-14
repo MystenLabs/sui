@@ -1154,7 +1154,7 @@ impl Display for EntryArgumentErrorKind {
         match self {
             EntryArgumentErrorKind::TypeMismatch => write!(f, "Type mismatch."),
             EntryArgumentErrorKind::InvalidObjectByValue => {
-                write!(f, "Only an owned object can be passed by-value.")
+                write!(f, "Immutable objects cannot be passed by-value.")
             }
             EntryArgumentErrorKind::InvalidObjectByMuteRef => {
                 write!(
@@ -1202,11 +1202,11 @@ impl Display for InvalidSharedChildUse {
         let InvalidSharedChildUse { child, ancestor } = self;
         write!(
             f,
-            "When an (either direct or indirect) child object of a shared object is passed as a \
-            Move argument, either the child object's type or the shared object's type must be \
-            defined in the same module as the called function. This is violated by the child \
-            object {child}, whose ancestor {ancestor} is a shared object, and neither are defined \
-            in the current module."
+            "When a child object (either direct or indirect) of a shared object is passed by-value \
+            to an entry function, either the child object's type or the shared object's type must \
+            be defined in the same module as the called function. This is violated by object \
+            {child}, whose ancestor {ancestor} is a shared object, and neither are defined in \
+            this module.",
         )
     }
 }

@@ -126,25 +126,29 @@ ExecutionFailureStatus:
         NEWTYPE:
           TYPENAME: InvalidSharedChildUse
     15:
-      DeleteObjectOwnedObject: UNIT
+      InvalidSharedByValue:
+        NEWTYPE:
+          TYPENAME: InvalidSharedByValue
     16:
-      PublishErrorEmptyPackage: UNIT
+      DeleteObjectOwnedObject: UNIT
     17:
-      PublishErrorNonZeroAddress: UNIT
+      PublishErrorEmptyPackage: UNIT
     18:
-      PublishErrorDuplicateModule: UNIT
+      PublishErrorNonZeroAddress: UNIT
     19:
-      SuiMoveVerificationError: UNIT
+      PublishErrorDuplicateModule: UNIT
     20:
-      MovePrimitiveRuntimeError: UNIT
+      SuiMoveVerificationError: UNIT
     21:
+      MovePrimitiveRuntimeError: UNIT
+    22:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    22:
-      VMVerificationOrDeserializationError: UNIT
     23:
+      VMVerificationOrDeserializationError: UNIT
+    24:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
@@ -157,6 +161,10 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
 Identifier:
   NEWTYPESTRUCT: STR
+InvalidSharedByValue:
+  STRUCT:
+    - object:
+        TYPENAME: ObjectID
 InvalidSharedChildUse:
   STRUCT:
     - child:
