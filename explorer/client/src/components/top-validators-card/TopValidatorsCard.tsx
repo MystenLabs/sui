@@ -14,9 +14,9 @@ import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
+import { ValidatorLoadFail } from '../../pages/validators/Validators';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import ErrorResult from '../error-result/ErrorResult';
 
 import styles from './TopValidatorsCard.module.css';
 
@@ -135,12 +135,6 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
         });
 }
 
-const Fail = (): JSX.Element => {
-    return (
-        <ErrorResult id={''} errorMsg="Validator data could not be loaded" />
-    );
-};
-
 export const TopValidatorsCardAPI = (): JSX.Element => {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
     const [loadState, setLoadState] = useState('pending');
@@ -164,7 +158,7 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
         return <div className={theme.pending}>loading validator info...</div>;
     }
     if (loadState === 'fail') {
-        return <Fail />;
+        return <ValidatorLoadFail />;
     }
 
     return <div>"Something went wrong"</div>;

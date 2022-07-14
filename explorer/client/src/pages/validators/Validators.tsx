@@ -20,12 +20,6 @@ import { truncate } from '../../utils/stringUtils';
 
 const textDecoder = new TextDecoder();
 
-const Fail = (): JSX.Element => {
-    return (
-        <ErrorResult id={''} errorMsg="Validator data could not be loaded" />
-    );
-};
-
 function instanceOfValidatorState(object: any): object is ValidatorState {
     return (
         object !== undefined &&
@@ -94,7 +88,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
 
     let cumulativeStakePercent = 0;
     // map the above data to match the table combine stake and stake percent
-    const mockValidatorsData = {
+    const tableData = {
         data: validatorsData.map((validator) => {
             cumulativeStakePercent += validator.stakePercent;
             return {
@@ -150,7 +144,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
         <div className={styles.validators}>
             <Tabs selected={0}>
                 <div title="Validators">
-                    <TableCard tabledata={mockValidatorsData} />
+                    <TableCard tabledata={tableData} />
                     <TabFooter stats={tabsFooter.stats}>
                         <Longtext
                             text=""
@@ -167,6 +161,12 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
         </div>
     );
 }
+
+export const ValidatorLoadFail = (): JSX.Element => {
+    return (
+        <ErrorResult id={''} errorMsg="Validator data could not be loaded" />
+    );
+};
 
 export const ValidatorPageAPI = (): JSX.Element => {
     const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
@@ -191,7 +191,7 @@ export const ValidatorPageAPI = (): JSX.Element => {
         return <div className={theme.pending}>loading validator info...</div>;
     }
     if (loadState === 'fail') {
-        return <Fail />;
+        return <ValidatorLoadFail />;
     }
 
     return <div>"Something went wrong"</div>;
