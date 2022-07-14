@@ -9,6 +9,7 @@ use std::{
 };
 
 use parking_lot::Mutex;
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     error::SuiError,
@@ -80,9 +81,40 @@ impl Default for CheckpointProcessControl {
     }
 }
 
+#[derive(Clone)]
+pub struct CheckpointMetrics {
+    checkpoint_certificates_stored: IntCounter,
+    checkpoints_signed: IntCounter,
+}
+
+impl CheckpointMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            checkpoint_certificates_stored: register_int_counter_with_registry!(
+                "checkpoint_certificates_stored",
+                "Total number of unique checkpoint certificates stored in this validator",
+                registry,
+            )
+            .unwrap(),
+            checkpoints_signed: register_int_counter_with_registry!(
+                "checkpoints_signed",
+                "Total number of checkpoints signed by this validator",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = Registry::new();
+        Self::new(&registry)
+    }
+}
+
 pub async fn checkpoint_process<A>(
     active_authority: &ActiveAuthority<A>,
     timing: &CheckpointProcessControl,
+    metrics: CheckpointMetrics,
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -179,6 +211,7 @@ pub async fn checkpoint_process<A>(
                     let _name = state_checkpoints.lock().name;
                     let _next_checkpoint = state_checkpoints.lock().next_checkpoint();
                     info!("{_name:?} at checkpoint {_next_checkpoint:?}");
+                    metrics.checkpoint_certificates_stored.inc();
                     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
                     continue;
                 }
@@ -211,7 +244,7 @@ pub async fn checkpoint_process<A>(
         // (5) Now we try to create fragments and construct checkpoint.
         match proposal {
             Ok(my_proposal) => {
-                create_fragments_and_make_checkpoint(
+                if create_fragments_and_make_checkpoint(
                     active_authority,
                     state_checkpoints.clone(),
                     &my_proposal,
@@ -221,7 +254,10 @@ pub async fn checkpoint_process<A>(
                     committee,
                     timing.consensus_delay_estimate,
                 )
-                .await;
+                .await
+                {
+                    metrics.checkpoints_signed.inc();
+                }
             }
             Err(err) => {
                 warn!(
@@ -596,7 +632,7 @@ where
 /// Picks other authorities at random and constructs checkpoint fragments
 /// that are submitted to consensus. The process terminates when a future
 /// checkpoint is created, or we run out of validators.
-/// Returns whether we have successfully created a new checkpoint.
+/// Returns whether we have successfully created and signed a new checkpoint.
 pub async fn create_fragments_and_make_checkpoint<A>(
     active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
@@ -604,7 +640,8 @@ pub async fn create_fragments_and_make_checkpoint<A>(
     mut available_authorities: BTreeSet<AuthorityName>,
     committee: &Committee,
     consensus_delay_estimate: Duration,
-) where
+) -> bool
+where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     // Pick another authority, get their proposal, and submit it to consensus
@@ -703,12 +740,13 @@ pub async fn create_fragments_and_make_checkpoint<A>(
                     }
                     Ok(()) => {
                         // A new checkpoint has been made.
-                        break;
+                        return true;
                     }
                 }
             }
         }
     }
+    false
 }
 
 /// Given a fragment with this authority as the proposer and another authority as the counterpart,

@@ -3,6 +3,7 @@
 
 use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::messages::ExecutionStatus;
@@ -36,7 +37,9 @@ async fn pending_exec_storage_notify() {
                 )
                 .unwrap(),
             );
-            active_state.spawn_checkpoint_process().await
+            active_state
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+                .await
         });
     }
 
@@ -121,7 +124,9 @@ async fn pending_exec_full() {
             );
 
             active_state.clone().spawn_execute_process().await;
-            active_state.spawn_checkpoint_process().await;
+            active_state
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+                .await;
         });
     }
 
