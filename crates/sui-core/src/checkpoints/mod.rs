@@ -26,6 +26,7 @@ use sui_types::{
         CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
+use tracing::{debug, info};
 use typed_store::{
     reopen,
     rocks::{open_cf_opts, DBBatch, DBMap},
@@ -424,6 +425,11 @@ impl CheckpointStore {
         debug_assert!(self.next_checkpoint() == checkpoint_sequence_number);
 
         self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
+        debug!(
+            "Number of transactions in checkpoint {:?}: {:?}",
+            checkpoint_sequence_number,
+            contents.transactions.len()
+        );
 
         // Make a DB batch
         let batch = self.checkpoints.batch();
@@ -838,6 +844,7 @@ impl CheckpointStore {
         new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
+        info!(cp_seq=?checkpoint_sequence, "A new checkpoint proposal is created");
         Ok(proposal_and_transactions)
     }
 
@@ -847,24 +854,28 @@ impl CheckpointStore {
         pending_execution: &impl PendCertificateForExecution,
     ) -> SuiResult {
         let extra_tx = self.extra_transactions.multi_get(transactions.clone())?;
-        let tx_to_execute = extra_tx
+        let tx_to_execute: Vec<_> = extra_tx
             .iter()
             .zip(transactions)
             .filter_map(|(opt_seq, digest)| {
                 if opt_seq.is_none() {
-                    Some(*digest)
+                    Some(digest.transaction)
                 } else {
                     None
                 }
-            });
-
-        let pending_tx: Vec<_> = tx_to_execute
-            .map(|digest| (digest.transaction, None))
+            })
             .collect();
-        if pending_tx.is_empty() {
+
+        if tx_to_execute.is_empty() {
             Ok(())
         } else {
-            pending_execution.add_pending_certificates(pending_tx)?;
+            debug!("Scheduled transactions for execution: {:?}", tx_to_execute);
+            pending_execution.add_pending_certificates(
+                tx_to_execute
+                    .into_iter()
+                    .map(|digest| (digest, None))
+                    .collect(),
+            )?;
             Err(SuiError::from("Checkpoint blocked by pending certificates"))
         }
     }

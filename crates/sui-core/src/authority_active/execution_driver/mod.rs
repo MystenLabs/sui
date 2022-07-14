@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
-use tracing::debug;
+use tracing::{debug, info};
 use typed_store::Map;
 
 use crate::authority::AuthorityStore;
@@ -48,7 +48,7 @@ pub async fn execution_process<A>(active_authority: &ActiveAuthority<A>)
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    debug!("Start pending certificates execution.");
+    info!("Start pending certificates execution process.");
 
     // Loop whenever there is a signal that a new transactions is ready to process.
     loop {
