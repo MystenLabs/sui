@@ -13,16 +13,21 @@ import st from './AccountAddress.module.scss';
 type AccountAddressProps = {
     className?: string;
     showLink?: boolean;
+    shorten?: boolean;
 };
 
-function AccountAddress({ className, showLink = true }: AccountAddressProps) {
+function AccountAddress({
+    className,
+    showLink = true,
+    shorten = true,
+}: AccountAddressProps) {
     const address = useAppSelector(({ account: { address } }) => address);
     const shortenAddress = useMiddleEllipsis(address || '', 20);
     return address ? (
         <span className={cl(st.addressContainer, className)}>
             <CopyToClipboard txt={address}>
                 <span className={st.address} title={address}>
-                    {shortenAddress}
+                    {shorten ? shortenAddress : address}
                 </span>
             </CopyToClipboard>
             {showLink ? (

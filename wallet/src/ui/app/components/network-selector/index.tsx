@@ -9,7 +9,7 @@ import Icon from '_components/icon';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { changeRPCNetwork } from '_redux/slices/app';
 
-import st from './Network.module.scss';
+import st from './NetworkSelector.module.scss';
 
 const NetworkSelector = () => {
     const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
@@ -44,7 +44,6 @@ const NetworkSelector = () => {
 
     return (
         <div className={st.networkOptions}>
-            <div className={st.networkHeader}>RPC NETWORK</div>
             <ul className={st.networkLists}>
                 {netWorks.map((apiEnv) => (
                     <li
