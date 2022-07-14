@@ -78,10 +78,8 @@ Type: 0x2::devnet_nft::DevNetNFT
 
 The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `Sui CLI client` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
 
-Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) at:
-https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
-
-Replace the object ID in the link above with the object ID of the Example NFT you observed in your own command output to see it in Sui Explorer:
+Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) by appending the object ID to:
+https://explorer.devnet.sui.io/objects/
 
 ![Example NFT](../../static/example-nft.png "Example NFT")
 
