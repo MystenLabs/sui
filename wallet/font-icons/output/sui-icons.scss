@@ -15,16 +15,28 @@ url('./sui-icons.svg#sui-icons') format('svg');
 }
 
 .sui-icons-apps:before { content: "\ea01"; }
-.sui-icons-history:before { content: "\ea02"; }
-.sui-icons-nfts:before { content: "\ea03"; }
-.sui-icons-sui-logo-icon:before { content: "\ea04"; }
-.sui-icons-sui-logo-txt:before { content: "\ea05"; }
-.sui-icons-tokens:before { content: "\ea06"; }
+.sui-icons-arrow-left:before { content: "\ea02"; }
+.sui-icons-clipboard:before { content: "\ea03"; }
+.sui-icons-globe:before { content: "\ea04"; }
+.sui-icons-history:before { content: "\ea05"; }
+.sui-icons-logout:before { content: "\ea06"; }
+.sui-icons-nfts:before { content: "\ea07"; }
+.sui-icons-person:before { content: "\ea08"; }
+.sui-icons-sui-chevron-right:before { content: "\ea09"; }
+.sui-icons-sui-logo-icon:before { content: "\ea0a"; }
+.sui-icons-sui-logo-txt:before { content: "\ea0b"; }
+.sui-icons-tokens:before { content: "\ea0c"; }
 
 $sui-icons-apps: "\ea01";
-$sui-icons-history: "\ea02";
-$sui-icons-nfts: "\ea03";
-$sui-icons-sui-logo-icon: "\ea04";
-$sui-icons-sui-logo-txt: "\ea05";
-$sui-icons-tokens: "\ea06";
+$sui-icons-arrow-left: "\ea02";
+$sui-icons-clipboard: "\ea03";
+$sui-icons-globe: "\ea04";
+$sui-icons-history: "\ea05";
+$sui-icons-logout: "\ea06";
+$sui-icons-nfts: "\ea07";
+$sui-icons-person: "\ea08";
+$sui-icons-sui-chevron-right: "\ea09";
+$sui-icons-sui-logo-icon: "\ea0a";
+$sui-icons-sui-logo-txt: "\ea0b";
+$sui-icons-tokens: "\ea0c";
 
