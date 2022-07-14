@@ -5,7 +5,6 @@ use crate::{
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
     authority_client::LocalAuthorityClient,
     checkpoints::checkpoint_tests::TestSetup,
-    gateway_state::GatewayMetrics,
     safe_client::SafeClient,
 };
 
@@ -30,13 +29,12 @@ async fn checkpoint_active_flow_happy_path() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );
@@ -108,13 +106,12 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );
@@ -202,13 +199,12 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );
@@ -296,13 +292,12 @@ async fn test_empty_checkpoint() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );

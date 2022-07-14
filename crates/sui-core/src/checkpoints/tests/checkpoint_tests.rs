@@ -10,7 +10,6 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
-    gateway_state::GatewayMetrics,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -25,6 +24,7 @@ use sui_types::{
     waypoint::GlobalCheckpoint,
 };
 
+use crate::authority_aggregator::AuthAggMetrics;
 use parking_lot::Mutex;
 use sui_types::crypto::KeyPair;
 
@@ -1682,7 +1682,7 @@ pub async fn checkpoint_tests_setup(
                 )
             })
             .collect(),
-        GatewayMetrics::new_for_tests(),
+        AuthAggMetrics::new_for_tests(),
     );
 
     TestSetup {

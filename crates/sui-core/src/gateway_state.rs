@@ -15,6 +15,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
@@ -34,6 +35,7 @@ use sui_types::{
 };
 
 use crate::authority::ResolverWrapper;
+use crate::authority_aggregator::AuthAggMetrics;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -72,19 +74,11 @@ pub struct GatewayMetrics {
     total_tx_retries: IntCounter,
     shared_obj_tx: IntCounter,
     pub total_tx_certificates: IntCounter,
-    pub num_signatures: Histogram,
-    pub num_good_stake: Histogram,
-    pub num_bad_stake: Histogram,
     pub transaction_latency: Histogram,
 }
 
-// Override default Prom buckets for positive numbers in 0-50k range
-const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
-];
-
 impl GatewayMetrics {
-    pub fn new(registry: &prometheus::Registry) -> Self {
+    pub fn new(registry: &Registry) -> Self {
         Self {
             total_tx_processed: register_int_counter_with_registry!(
                 "total_tx_processed",
@@ -141,29 +135,6 @@ impl GatewayMetrics {
                 registry,
             )
             .unwrap(),
-            // It's really important to use the right histogram buckets for accurate histogram collection.
-            // Otherwise values get clipped
-            num_signatures: register_histogram_with_registry!(
-                "num_signatures_per_tx",
-                "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_good_stake: register_histogram_with_registry!(
-                "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_bad_stake: register_histogram_with_registry!(
-                "num_bad_stake_per_tx",
-                "Amount of bad stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
             transaction_latency: register_histogram_with_registry!(
                 "transaction_latency",
                 "Latency of execute_transaction_impl",
@@ -198,12 +169,14 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: GatewayMetrics,
+        prometheus_registry: &Registry,
     ) -> SuiResult<Self> {
+        let gateway_metrics = GatewayMetrics::new(prometheus_registry);
+        let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         Self::new_with_authorities(
             path,
-            AuthorityAggregator::new(committee, authority_clients, metrics.clone()),
-            metrics,
+            AuthorityAggregator::new(committee, authority_clients, auth_agg_metrics),
+            gateway_metrics,
         )
     }
 

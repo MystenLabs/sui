@@ -79,7 +79,7 @@ pub async fn init_local_authorities_with_genesis(
         AuthorityAggregator::new_with_timeouts(
             committee,
             clients,
-            GatewayMetrics::new_for_tests(),
+            AuthAggMetrics::new_for_tests(),
             timeouts,
         ),
         states,
