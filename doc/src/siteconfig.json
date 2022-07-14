@@ -125,6 +125,9 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Try Sui Wallet Browser Extension",
+            "url": "/explore/wallet-browser",
+          },
             "name": "Learn Sui Move",
             "url": "https://sui.io/resources-move/why-we-created-sui-move/",
             "external": true
@@ -176,6 +179,14 @@
           {
             "name": "Sui Compared to other Blockchains",
             "url": "/learn/sui-compared"
+          },
+          {
+            "name": "Why Move?",
+            "url": "/learn/why-move"
+          },
+          {
+            "name": "How Sui Move and Core Move differ",
+            "url": "/learn/sui-move-diffs"
           }
         ]
       },
