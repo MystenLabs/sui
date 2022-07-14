@@ -10,7 +10,7 @@ h1.title {
 
 .display {
     @apply ml-[5vw] mx-auto mt-[1vh]
-    w-[88vw] lg:w-[35vw] min-h-[88vw] lg:min-h-[35vw];
+    w-[88vw] lg:w-[35vw] min-h-[35vw] lg:min-h-[35vw];
 }
 
 .display > div > img {
