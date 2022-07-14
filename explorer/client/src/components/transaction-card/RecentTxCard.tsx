@@ -287,6 +287,7 @@ function LatestTxCardAPI() {
             isMounted = false;
         };
     }, [count, network, searchParams, txNumPerPage]);
+
     useEffect(() => {
         rpc(network)
             .getTotalTransactionNumber()
