@@ -577,14 +577,14 @@ impl Object {
 
     pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
         if !matches!(self.owner, Owner::AddressOwner(_)) {
-            return Err(ExecutionErrorKind::TransferUnowned.into());
+            return Err(ExecutionErrorKind::InvalidTransferObject.into());
         }
         let has_public_transfer = match &self.data {
             Data::Move(m) => m.has_public_transfer(),
             Data::Package(_) => false,
         };
         if !has_public_transfer {
-            return Err(ExecutionErrorKind::TransferObjectWithoutPublicTransfer.into());
+            return Err(ExecutionErrorKind::InvalidTransferObject.into());
         }
         Ok(())
     }

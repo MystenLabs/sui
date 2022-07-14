@@ -16,8 +16,8 @@ use sui_types::{
     batch::UpdateItem,
     crypto::{get_key_pair, AuthoritySignature, Signature},
     messages::{
-        CallArg, ExecutionFailureStatus, ExecutionStatus, ObjectArg, ObjectInfoRequestKind,
-        SingleTransactionKind, TransactionKind,
+        CallArg, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
+        ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
 };
@@ -63,6 +63,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ExecutionStatus>(&samples)?;
     tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
     tracer.trace_type::<AbortLocation>(&samples)?;
+    tracer.trace_type::<EntryArgumentErrorKind>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<ObjectArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;
