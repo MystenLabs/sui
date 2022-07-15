@@ -408,7 +408,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "miniz_oxide",
- "object 0.29.0",
+ "object",
  "rustc-demangle",
 ]
 
@@ -4477,15 +4477,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "object"
-version = "0.28.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e42c982f2d955fac81dd7e1d0e1426a7d702acd9c98d19ab01083a6a0328c424"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -8692,6 +8683,7 @@ dependencies = [
  "cargo_metadata",
  "cassowary",
  "cast 0.2.7",
+ "cast 0.3.0",
  "cc",
  "cexpr",
  "cfg-expr",
@@ -8713,8 +8705,10 @@ dependencies = [
  "colored-diff",
  "combine",
  "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "config 0.11.0",
  "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "constant_time_eq",
  "core2",
  "crc",
@@ -8732,6 +8726,7 @@ dependencies = [
  "crossterm 0.23.2",
  "crossterm 0.24.0",
  "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "crypto-common",
  "crypto-mac",
  "csv",
@@ -8739,6 +8734,7 @@ dependencies = [
  "curve25519-dalek",
  "curve25519-dalek-fiat",
  "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "darling 0.13.4",
  "darling 0.14.1",
  "darling_core 0.13.4",
@@ -8782,6 +8778,7 @@ dependencies = [
  "ethnum",
  "event-listener",
  "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "eyre",
  "fail",
  "fastrand",
@@ -8948,6 +8945,7 @@ dependencies = [
  "named-lock",
  "nested",
  "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "nexlint",
  "nexlint-lints",
  "nibble_vec",
@@ -8966,7 +8964,7 @@ dependencies = [
  "num_cpus",
  "num_enum",
  "num_enum_derive",
- "object 0.28.4",
+ "object",
  "once_cell",
  "oorandom",
  "opaque-debug 0.3.0",
@@ -9016,6 +9014,7 @@ dependencies = [
  "pretty_assertions",
  "prettyplease",
  "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "proc-macro-crate",
  "proc-macro-error",
  "proc-macro-error-attr",
@@ -9202,8 +9201,10 @@ dependencies = [
  "twox-hash",
  "typed-arena",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7e9b7568fc7184b4938976330122f3c8064e3236)",
+ "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=c6dc7a23a40b3517f138d122a76d3bc15f844f67)",
  "typenum",
  "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "ucd-trie",
  "uncased",
  "unescape",
@@ -9249,7 +9250,9 @@ dependencies = [
  "webpki-roots 0.22.4",
  "which",
  "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=29e853d2d65e543fa0f1dbc634d01576c0e8e60e)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "yaml-rust",
  "zeroize",
  "zeroize_derive",
