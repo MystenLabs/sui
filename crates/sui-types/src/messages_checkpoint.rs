@@ -186,6 +186,7 @@ impl AuthenticatedCheckpoint {
 }
 
 pub type CheckpointDigest = [u8; 32];
+pub type CheckpointContentsDigest = [u8; 32];
 
 // The constituent parts of checkpoints, signed and certified
 
@@ -194,7 +195,7 @@ pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
     pub waypoint: Box<Waypoint>, // Bigger structure, can live on heap.
-    pub content_digest: CheckpointDigest,
+    pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
     // TODO: add digest of previous checkpoint summary
 }
@@ -226,7 +227,7 @@ impl CheckpointSummary {
         &self.sequence_number
     }
 
-    pub fn digest(&self) -> [u8; 32] {
+    pub fn digest(&self) -> CheckpointDigest {
         sha3_hash(self)
     }
 }
@@ -425,7 +426,7 @@ impl CheckpointContents {
         self.transactions.iter()
     }
 
-    pub fn digest(&self) -> [u8; 32] {
+    pub fn digest(&self) -> CheckpointContentsDigest {
         sha3_hash(self)
     }
 }
