@@ -41,7 +41,6 @@ const initState: {
 } = {
     loadState: 'pending',
     latestTx: [],
-    totalTxcount: 0,
 };
 
 type TxnData = {
@@ -70,21 +69,14 @@ function generateStartEndRange(
     };
 }
 
-async function getRecentTransactions(
+async function getRecentTransactionsInRange(
     network: Network | string,
     totalTx: number,
     txNum: number,
     pageNum?: number
 ): Promise<TxnData[]> {
     try {
-        if (totalTx === 0) {
-            return (await rpc(network)
-                .getRecentTransactions(txNum)
-                .then((res: GetTxnDigestsResponse) =>
-                    getDataOnTxDigests(network, res)
-                )) as TxnData[];
-        }
-        // Get the latest transactions
+        // Get the transactions within a Range
 
         // Instead of getRecentTransactions, use getTransactionCount
         // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
@@ -110,124 +102,79 @@ async function getRecentTransactions(
     }
 }
 
-function LatestTxView({
-    results,
-}: {
-    results: { loadState: string; latestTx: TxnData[]; totalTxcount?: number };
-}) {
-    // This is temporary, pagination component already does this
-    const totalCount = results.totalTxcount || 0;
-    const [searchParams, setSearchParams] = useSearchParams();
-    const pageParam = parseInt(searchParams.get('p') || '1', 10);
-    const [showNextPage, setShowNextPage] = useState(false);
-
-    useEffect(
-        () => setShowNextPage(NUMBER_OF_TX_PER_PAGE < totalCount),
-        [totalCount]
-    );
-
-    const changePage = useCallback(() => {
-        const nextpage = pageParam + (showNextPage ? 1 : 0);
-        setSearchParams({ p: nextpage.toString() });
-        setShowNextPage(
-            Math.ceil(NUMBER_OF_TX_PER_PAGE * nextpage) < totalCount
-        );
-    }, [pageParam, totalCount, showNextPage, setSearchParams]);
-
-    //TODO update initial state and match the latestTx table data
-    const defaultActiveTab = 0;
-    const recentTx = {
-        data: results.latestTx.map((txn) => ({
-            date: `${timeAgo(txn.timestamp_ms, undefined, true)} `,
-            transactionId: [
-                {
-                    url: txn.txId,
-                    name: truncate(txn.txId, TRUNCATE_LENGTH),
-                    category: 'transactions',
-                    isLink: true,
-                    copy: false,
-                },
-            ],
-            addresses: [
-                {
-                    url: txn.From,
-                    name: truncate(txn.From, TRUNCATE_LENGTH),
-                    category: 'addresses',
-                    isLink: true,
-                    copy: false,
-                },
-                ...(txn.To
-                    ? [
-                          {
-                              url: txn.To,
-                              name: truncate(txn.To, TRUNCATE_LENGTH),
-                              category: 'addresses',
-                              isLink: true,
-                              copy: false,
-                          },
-                      ]
-                    : []),
-            ],
-            txTypes: {
-                txTypeName: txn.kind,
-                status: txn.status,
-            },
-
-            gas: numberSuffix(txn.txGas),
-        })),
-        columns: [
+// This converts the results into a format suitable for the table:
+const convertResults = (inputResults: {
+    loadState: string;
+    latestTx: TxnData[];
+    totalTxcount?: number;
+}) => ({
+    data: inputResults.latestTx.map((txn) => ({
+        date: `${timeAgo(txn.timestamp_ms, undefined, true)} `,
+        transactionId: [
             {
-                headerLabel: 'Date',
-                accessorKey: 'date',
-            },
-            {
-                headerLabel: 'Type',
-                accessorKey: 'txTypes',
-            },
-            {
-                headerLabel: 'Transactions ID',
-                accessorKey: 'transactionId',
-            },
-            {
-                headerLabel: 'Addresses',
-                accessorKey: 'addresses',
-            },
-            {
-                headerLabel: 'Gas',
-                accessorKey: 'gas',
+                url: txn.txId,
+                name: truncate(txn.txId, TRUNCATE_LENGTH),
+                category: 'transactions',
+                isLink: true,
+                copy: false,
             },
         ],
-    };
-    const tabsFooter = {
-        stats: {
-            count: totalCount || 0,
-            stats_text: 'total transactions',
+        addresses: [
+            {
+                url: txn.From,
+                name: truncate(txn.From, TRUNCATE_LENGTH),
+                category: 'addresses',
+                isLink: true,
+                copy: false,
+            },
+            ...(txn.To
+                ? [
+                      {
+                          url: txn.To,
+                          name: truncate(txn.To, TRUNCATE_LENGTH),
+                          category: 'addresses',
+                          isLink: true,
+                          copy: false,
+                      },
+                  ]
+                : []),
+        ],
+        txTypes: {
+            txTypeName: txn.kind,
+            status: txn.status,
         },
-    };
-    return (
-        <div className={styles.txlatestresults}>
-            <Tabs selected={defaultActiveTab}>
-                <div title="Transactions">
-                    <TableCard tabledata={recentTx} />
-                    <TabFooter stats={tabsFooter.stats}>
-                        {showNextPage ? (
-                            <button
-                                type="button"
-                                className={styles.moretxbtn}
-                                onClick={changePage}
-                            >
-                                More Transactions <ContentForwardArrowDark />
-                            </button>
-                        ) : (
-                            <></>
-                        )}
-                    </TabFooter>
-                </div>
-            </Tabs>
-        </div>
-    );
-}
 
+        gas: numberSuffix(txn.txGas),
+    })),
+    columns: [
+        {
+            headerLabel: 'Date',
+            accessorKey: 'date',
+        },
+        {
+            headerLabel: 'Type',
+            accessorKey: 'txTypes',
+        },
+        {
+            headerLabel: 'Transactions ID',
+            accessorKey: 'transactionId',
+        },
+        {
+            headerLabel: 'Addresses',
+            accessorKey: 'addresses',
+        },
+        {
+            headerLabel: 'Gas',
+            accessorKey: 'gas',
+        },
+    ],
+});
+
+// 1) Sui Explorer decides between Static (-> 2A) or Live API (-> 2B) mode:
+const LatestTxCard = () =>
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPIInitialLoad />;
+
+// 2A) Static mode has no footer and pulls from the static dataset:
 function LatestTxCardStatic() {
     const latestTx = getAllMockTransaction().map((tx) => ({
         ...tx,
@@ -239,59 +186,46 @@ function LatestTxCardStatic() {
         loadState: 'loaded',
         latestTx: latestTx,
     };
+
     return (
-        <>
-            <LatestTxView results={results} />
-        </>
+        <div className={styles.txlatestresults}>
+            <Tabs selected={0}>
+                <div title="Transactions">
+                    <TableCard tabledata={convertResults(results)} />
+                </div>
+            </Tabs>
+        </div>
     );
 }
 
-function LatestTxCardAPI() {
-    const [isLoaded, setIsLoaded] = useState(false);
+// 2B) In Live API mode under the inital load, the Explorer first displays the most recent transactions (-> 3):
+function LatestTxCardAPIInitialLoad() {
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
-    const [searchParams] = useSearchParams();
-    const [txNumPerPage] = useState(NUMBER_OF_TX_PER_PAGE);
 
-    const [count, setCount] = useState(0);
-
+    //Whenever network changes, we get a new list of recent tx:
     useEffect(() => {
-        let isMounted = true;
-        const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
-
-        if (pagedNum > 1 && count === 0) return;
-        getRecentTransactions(network, count, txNumPerPage, pagedNum)
-            .then(async (resp: any) => {
-                if (isMounted) {
-                    setIsLoaded(true);
-                }
+        rpc(network)
+            .getRecentTransactions(NUMBER_OF_TX_PER_PAGE)
+            .then((res: GetTxnDigestsResponse) =>
+                getDataOnTxDigests(network, res)
+            )
+            .then((resp) =>
                 setResults({
                     loadState: 'loaded',
-                    latestTx: resp,
-                    totalTxcount: count,
-                });
-            })
+                    latestTx: resp as TxnData[],
+                })
+            )
             .catch((err) => {
                 setResults({
                     ...initState,
                     loadState: 'fail',
                 });
-                setIsLoaded(false);
                 console.error(
                     'Encountered error when fetching recent transactions',
                     err
                 );
             });
-
-        return () => {
-            isMounted = false;
-        };
-    }, [count, network, searchParams, txNumPerPage]);
-
-    useEffect(() => {
-        rpc(network)
-            .getTotalTransactionNumber()
-            .then((resp: number) => setCount(resp));
     }, [network]);
 
     if (results.loadState === 'pending') {
@@ -302,7 +236,7 @@ function LatestTxCardAPI() {
         );
     }
 
-    if (!isLoaded && results.loadState === 'fail') {
+    if (results.loadState === 'fail') {
         return (
             <ErrorResult
                 id=""
@@ -315,14 +249,100 @@ function LatestTxCardAPI() {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
-    return (
-        <>
-            <LatestTxView results={results} />
-        </>
-    );
+    return <LatestTxAPIView results={results} />;
 }
 
-const LatestTxCard = () =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI />;
+// 3) On the initial load, the most recent transactions are displayed.
+// When the count has been found, this is displayed also.
+// When the user clicks 'More Transactions', getTransactionsInRange is used
+// to find the next list of recent transactions
+
+function LatestTxAPIView({
+    results,
+}: {
+    results: { loadState: string; latestTx: TxnData[] };
+}) {
+    const [count, setCount] = useState<'TBC' | number>('TBC');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const pageParam = parseInt(searchParams.get('p') || '1', 10);
+    const [showNextPage, setShowNextPage] = useState(false);
+
+    const [network] = useContext(NetworkContext);
+
+    //Initialize results to be the most recent transactions:
+    const [newResults, setResults] = useState(results);
+
+    //Whenever the network changes we initially close the footer, find the count and then re-open with new count:
+    useEffect(() => {
+        setCount('TBC');
+        rpc(network)
+            .getTotalTransactionNumber()
+            .then((resp: number) => setCount(resp));
+    }, [network]);
+
+    useEffect(() => {
+        if (count === 'TBC') return;
+        setShowNextPage(NUMBER_OF_TX_PER_PAGE < count);
+    }, [count]);
+
+    const changePage = useCallback(() => {
+        const nextpage = pageParam + (showNextPage ? 1 : 0);
+        setSearchParams({ p: nextpage.toString() });
+        setShowNextPage(Math.ceil(NUMBER_OF_TX_PER_PAGE * nextpage) < count);
+
+        getRecentTransactionsInRange(
+            network,
+            count as number,
+            NUMBER_OF_TX_PER_PAGE,
+            nextpage
+        )
+            .then(async (resp: any) => {
+                setResults({
+                    loadState: 'loaded',
+                    latestTx: resp,
+                });
+            })
+            .catch((err) => {
+                console.error(
+                    'Encountered error when fetching next transactions page',
+                    err
+                );
+            });
+    }, [network, pageParam, count, showNextPage, setSearchParams]);
+
+    //TODO update initial state and match the latestTx table data
+    const defaultActiveTab = 0;
+    const tabsFooter = {
+        stats: {
+            count: count || 0,
+            stats_text: 'total transactions',
+        },
+    };
+    return (
+        <div className={styles.txlatestresults}>
+            <Tabs selected={defaultActiveTab}>
+                <div title="Transactions">
+                    <TableCard tabledata={convertResults(newResults)} />
+                    {count !== 'TBC' && (
+                        <TabFooter stats={tabsFooter.stats}>
+                            {showNextPage ? (
+                                <button
+                                    type="button"
+                                    className={styles.moretxbtn}
+                                    onClick={changePage}
+                                >
+                                    More Transactions{' '}
+                                    <ContentForwardArrowDark />
+                                </button>
+                            ) : (
+                                <></>
+                            )}
+                        </TabFooter>
+                    )}
+                </div>
+            </Tabs>
+        </div>
+    );
+}
 
 export default LatestTxCard;
