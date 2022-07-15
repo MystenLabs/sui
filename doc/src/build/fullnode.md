@@ -122,7 +122,7 @@ source.
 
 Follow the instructions in the
 [Fullnode Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme)
-to run a Sui fullnode using Docker.
+to run a Sui fullnode using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
 ### Building from source
 
@@ -219,6 +219,14 @@ Whenever a new release is deployed to `devnet`, the blockchain state is
 typically wiped clean. In order to have your fullnode continue to properly
 synchronize with the new state of Devnet, you'll need to follow a few steps
 based on how you originally set up your node. See below.
+
+## With Docker Compose
+
+Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment),
+namely by running the command:
+```shell
+$ docker-compose down --volumes
+```
 
 ### Built from source
 
