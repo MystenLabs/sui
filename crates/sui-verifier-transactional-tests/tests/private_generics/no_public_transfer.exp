@@ -1,4 +1,4 @@
-processed 11 tasks
+processed 9 tasks
 
 task 1 'publish'. lines 8-11:
 created: object(103)
@@ -28,14 +28,6 @@ task 7 'publish'. lines 53-59:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer_to_object' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
 
-task 8 'publish'. lines 61-69:
+task 8 'publish'. lines 61-67:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::transfer_child_to_object. Invalid call to 'sui::transfer::transfer_child_to_object' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
-
-task 9 'publish'. lines 71-79:
-Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::transfer_child_to_object. Invalid call to 'sui::transfer::transfer_child_to_object' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
-
-task 10 'publish'. lines 81-89:
-Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::transfer_child_to_object. Invalid call to 'sui::transfer::transfer_child_to_address' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer_to_object_id' on an object of type 'a::m::S'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }

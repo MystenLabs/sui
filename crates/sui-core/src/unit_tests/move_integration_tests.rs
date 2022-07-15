@@ -399,57 +399,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     // we expect this to be and error due to Deleting an Object Owned Object
-    assert!(matches!(
-        effects.status.unwrap_err(),
-        ExecutionFailureStatus::DeleteObjectOwnedObject,
-    ));
-
-    // Remove the child from the parent.
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "object_owner",
-        "remove_child",
-        vec![],
-        vec![
-            TestCallArg::Object(new_parent.0),
-            TestCallArg::Object(child.0),
-        ],
-    )
-    .await
-    .unwrap();
     assert!(effects.status.is_ok());
-    // Removing child from parent results in a transfer event
-    assert_eq!(effects.events.len(), 1);
-    let event1 = &effects.events[0];
-    assert_eq!(event1.event_type(), EventType::TransferObject);
-    assert_eq!(event1.object_id(), Some(child.0));
-
-    // Delete the child again. This time it will succeed because it's no longer owned by a parent.
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "object_owner",
-        "delete_child",
-        vec![],
-        vec![
-            TestCallArg::Object(child.0),
-            TestCallArg::Object(new_parent.0),
-        ],
-    )
-    .await
-    .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.events.len(), 1);
-    let event1 = &effects.events[0];
-    assert_eq!(event1.event_type(), EventType::DeleteObject);
-    assert_eq!(event1.object_id(), Some(child.0));
 
     // Create a parent and a child together. This tests the
     // transfer::transfer_to_object_id() API.
