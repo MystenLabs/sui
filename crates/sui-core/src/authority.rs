@@ -389,12 +389,18 @@ impl AuthorityState {
                 .acquire_shared_locks_from_effects(&certificate, &signed_effects.effects)?;
         }
 
-        let resp = self.process_certificate(tx_guard, certificate).await?;
+        let resp = self.process_certificate(tx_guard, &certificate).await?;
 
         let expected_effects_digest = signed_effects.effects.digest();
         let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.effects.digest());
         if observed_effects_digest != Some(expected_effects_digest) {
-            error!(?expected_effects_digest, ?observed_effects_digest, ?signed_effects, ?resp.signed_effects, "Locally executed effects do not match canonical effects!");
+            error!(
+                ?expected_effects_digest,
+                ?observed_effects_digest,
+                ?signed_effects,
+                ?resp.signed_effects,
+                input_objects = ?certificate.data.input_objects(),
+                "Locally executed effects do not match canonical effects!");
         }
         Ok(())
     }
@@ -418,7 +424,7 @@ impl AuthorityState {
         // for every tx.
         let tx_guard = self.acquire_tx_guard(&certificate).await?;
 
-        self.process_certificate(tx_guard, certificate).await
+        self.process_certificate(tx_guard, &certificate).await
     }
 
     async fn acquire_tx_guard<'a, 'b>(
@@ -506,7 +512,7 @@ impl AuthorityState {
     async fn process_certificate(
         &self,
         tx_guard: CertTxGuard<'_>,
-        certificate: CertifiedTransaction,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         self.metrics.total_certs.inc();
         let transaction_digest = *certificate.digest();
@@ -537,7 +543,7 @@ impl AuthorityState {
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
         let (temporary_store, signed_effects) = match self
-            .prepare_certificate(&certificate, transaction_digest)
+            .prepare_certificate(certificate, transaction_digest)
             .await
         {
             Err(e) => {
@@ -550,7 +556,7 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(temporary_store, &certificate, &signed_effects)
+        self.commit_certificate(temporary_store, certificate, &signed_effects)
             .await?;
 
         // commit_certificate finished, the tx is fully committed to the store.
@@ -558,7 +564,7 @@ impl AuthorityState {
 
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&transaction_digest)?,
-            certified_transaction: Some(certificate),
+            certified_transaction: Some(certificate.clone()),
             signed_effects: Some(signed_effects),
         })
     }
@@ -1088,7 +1094,7 @@ impl AuthorityState {
                     continue;
                 }
 
-                if let Err(e) = self.process_certificate(tx_guard, cert).await {
+                if let Err(e) = self.process_certificate(tx_guard, &cert).await {
                     warn!(?digest, "Failed to process in-progress certificate: {}", e);
                 }
             } else {
