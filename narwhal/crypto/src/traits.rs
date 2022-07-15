@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 use base64ct::Encoding;
 use eyre::eyre;
+
 use rand::{CryptoRng, RngCore};
 
 use serde::{de::DeserializeOwned, Serialize};
 pub use signature::{Error, Signer};
 use std::fmt::{Debug, Display};
+
+pub const DEFAULT_DOMAIN: [u8; 16] = [0u8; 16];
 
 /// Trait impl'd by concrete types that represent digital cryptographic material
 /// (keys). For signatures, we rely on `signature::Signature`, which may be more widely implemented.
@@ -36,6 +39,12 @@ pub trait ToFromBytes: AsRef<[u8]> + Debug + Sized {
     /// Borrow a byte slice representing the serialized form of this key
     fn as_bytes(&self) -> &[u8] {
         self.as_ref()
+    }
+}
+
+impl<T: signature::Signature> ToFromBytes for T {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        <Self as signature::Signature>::from_bytes(bytes)
     }
 }
 
@@ -75,6 +84,7 @@ pub trait VerifyingKey:
     + Default // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
     + ToFromBytes
     + signature::Verifier<Self::Sig>
+    + for <'a> From<&'a Self::PrivKey> // conversion PrivateKey -> PublicKey
     + Send
     + Sync
     + 'static
@@ -82,6 +92,7 @@ pub trait VerifyingKey:
 {
     type PrivKey: SigningKey<PubKey = Self>;
     type Sig: Authenticator<PubKey = Self>;
+    const LENGTH: usize;
 
     // Expected to be overridden by implementations
     fn verify_batch(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), signature::Error> {
@@ -102,6 +113,7 @@ pub trait VerifyingKey:
 pub trait SigningKey: ToFromBytes + Serialize + DeserializeOwned + Send + Sync + 'static {
     type PubKey: VerifyingKey<PrivKey = Self>;
     type Sig: Authenticator<PrivKey = Self>;
+    const LENGTH: usize;
 }
 
 /// Trait impl'd by signatures in asymmetric cryptography.
@@ -122,14 +134,54 @@ pub trait Authenticator:
 {
     type PubKey: VerifyingKey<Sig = Self>;
     type PrivKey: SigningKey<Sig = Self>;
+    type AggregateSig: AggregateAuthenticator<Sig = Self>;
+    const LENGTH: usize;
 }
 
 /// Trait impl'd by a public / private key pair in asymmetric cryptography.
 ///
-pub trait KeyPair {
+pub trait KeyPair: Sized + From<Self::PrivKey> {
     type PubKey: VerifyingKey<PrivKey = Self::PrivKey>;
     type PrivKey: SigningKey<PubKey = Self::PubKey>;
+    type Sig: Authenticator<PubKey = Self::PubKey>;
+
     fn public(&'_ self) -> &'_ Self::PubKey;
     fn private(self) -> Self::PrivKey;
+
+    #[cfg(feature = "copy_key")]
+    fn copy(&self) -> Self;
+
     fn generate<R: CryptoRng + RngCore>(rng: &mut R) -> Self;
+}
+
+/// Trait impl'd by aggregated signatures in asymmetric cryptography.
+///
+/// The trait bounds are implemented to allow the aggregation of multiple signatures,
+/// and to verify it against multiple, unaggregated public keys. For signature schemes
+/// where aggregation is not possible, a trivial implementation is provided.
+///
+pub trait AggregateAuthenticator:
+    Display + Default + Serialize + DeserializeOwned + Send + Sync + 'static + Clone
+{
+    type Sig: Authenticator<PubKey = Self::PubKey>;
+    type PubKey: VerifyingKey<Sig = Self::Sig>;
+    type PrivKey: SigningKey<Sig = Self::Sig>;
+
+    /// Parse a key from its byte representation
+    fn aggregate(signatures: Vec<Self::Sig>) -> Result<Self, Error>;
+
+    fn add_signature(&mut self, signature: Self::Sig) -> Result<(), Error>;
+    fn add_aggregate(&mut self, signature: Self) -> Result<(), Error>;
+
+    fn verify(
+        &self,
+        pks: &[<Self::Sig as Authenticator>::PubKey],
+        message: &[u8],
+    ) -> Result<(), Error>;
+
+    fn batch_verify(
+        sigs: &[Self],
+        pks: &[&[Self::PubKey]],
+        messages: &[&[u8]],
+    ) -> Result<(), Error>;
 }

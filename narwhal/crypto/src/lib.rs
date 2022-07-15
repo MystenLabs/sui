@@ -23,6 +23,10 @@ use tokio::sync::{
 use traits::{Authenticator, KeyPair};
 
 #[cfg(test)]
+#[path = "tests/pubkey_bytes_tests.rs"]
+pub mod pubkey_bytes_tests;
+
+#[cfg(test)]
 #[path = "tests/ed25519_tests.rs"]
 pub mod ed25519_tests;
 
@@ -37,8 +41,10 @@ pub mod bls12377;
 pub mod bls12381_tests;
 
 pub mod bls12381;
-
 pub mod ed25519;
+pub mod hkdf;
+pub mod pubkey_bytes;
+pub mod serde_helpers;
 pub mod traits;
 
 pub type CryptoError = ed25519_dalek::ed25519::Error;

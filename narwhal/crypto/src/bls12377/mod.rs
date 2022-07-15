@@ -3,7 +3,10 @@
 
 use std::fmt::{self, Display};
 
-use crate::traits::{EncodeDecodeBase64, ToFromBytes};
+use crate::{
+    pubkey_bytes::PublicKeyBytes,
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, ToFromBytes},
+};
 use ::ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_bls12_377::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{AffineCurve, ProjectiveCurve};
@@ -12,7 +15,7 @@ use ark_ff::{
     Zero,
 };
 use base64ct::{Base64, Encoding};
-use celo_bls::PublicKey;
+use celo_bls::{hash_to_curve::try_and_increment, PublicKey};
 use once_cell::sync::OnceCell;
 use serde::{de, Deserialize, Serialize};
 use serde_with::serde_as;
@@ -28,6 +31,10 @@ pub const CELO_BLS_PRIVATE_KEY_LENGTH: usize = 32;
 pub const CELO_BLS_PUBLIC_KEY_LENGTH: usize = 96;
 pub const CELO_BLS_SIGNATURE_LENGTH: usize = 48;
 
+///
+/// Define Structs
+///
+
 #[readonly::make]
 #[derive(Debug, Clone)]
 pub struct BLS12377PublicKey {
@@ -35,11 +42,21 @@ pub struct BLS12377PublicKey {
     pub bytes: OnceCell<[u8; CELO_BLS_PUBLIC_KEY_LENGTH]>,
 }
 
+pub type BLS12377PublicKeyBytes = PublicKeyBytes<BLS12377PublicKey, { BLS12377PublicKey::LENGTH }>;
+
 #[readonly::make]
 #[derive(Debug)]
 pub struct BLS12377PrivateKey {
     pub privkey: celo_bls::PrivateKey,
     pub bytes: OnceCell<[u8; CELO_BLS_PRIVATE_KEY_LENGTH]>,
+}
+
+// There is a strong requirement for this specific impl. in Fab benchmarks
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")] // necessary so as not to deser under a != type
+pub struct BLS12377KeyPair {
+    name: BLS12377PublicKey,
+    secret: BLS12377PrivateKey,
 }
 
 #[readonly::make]
@@ -52,6 +69,21 @@ pub struct BLS12377Signature {
     #[serde(default = "OnceCell::new")]
     pub bytes: OnceCell<[u8; CELO_BLS_SIGNATURE_LENGTH]>,
 }
+
+#[readonly::make]
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BLS12377AggregateSignature {
+    #[serde_as(as = "ark_serialize::SerdeAs")]
+    pub sig: Option<celo_bls::Signature>,
+    #[serde(skip)]
+    #[serde(default = "OnceCell::new")]
+    pub bytes: OnceCell<[u8; CELO_BLS_SIGNATURE_LENGTH]>,
+}
+
+///
+/// Implement Authenticator
+///
 
 impl signature::Signature for BLS12377Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
@@ -102,9 +134,14 @@ impl Eq for BLS12377Signature {}
 
 impl Authenticator for BLS12377Signature {
     type PubKey = BLS12377PublicKey;
-
     type PrivKey = BLS12377PrivateKey;
+    type AggregateSig = BLS12377AggregateSignature;
+    const LENGTH: usize = CELO_BLS_SIGNATURE_LENGTH;
 }
+
+///
+/// Implement VerifyingKey
+///
 
 impl Default for BLS12377PublicKey {
     // eprint.iacr.org/2021/323 should incite us to remove our usage of Default,
@@ -210,10 +247,20 @@ impl Verifier<BLS12377Signature> for BLS12377PublicKey {
     }
 }
 
+impl<'a> From<&'a BLS12377PrivateKey> for BLS12377PublicKey {
+    fn from(secret: &'a BLS12377PrivateKey) -> Self {
+        let inner = &secret.privkey;
+        BLS12377PublicKey {
+            pubkey: inner.to_public(),
+            bytes: OnceCell::new(),
+        }
+    }
+}
+
 impl VerifyingKey for BLS12377PublicKey {
     type PrivKey = BLS12377PrivateKey;
-
     type Sig = BLS12377Signature;
+    const LENGTH: usize = CELO_BLS_PUBLIC_KEY_LENGTH;
 
     fn verify_batch(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), signature::Error> {
         if pks.len() != sigs.len() {
@@ -229,6 +276,10 @@ impl VerifyingKey for BLS12377PublicKey {
             .map_err(|_| signature::Error::new())
     }
 }
+
+///
+/// Implement SigningKey
+///
 
 impl AsRef<[u8]> for BLS12377PrivateKey {
     fn as_ref(&self) -> &[u8] {
@@ -276,8 +327,8 @@ impl<'de> Deserialize<'de> for BLS12377PrivateKey {
 
 impl SigningKey for BLS12377PrivateKey {
     type PubKey = BLS12377PublicKey;
-
     type Sig = BLS12377Signature;
+    const LENGTH: usize = CELO_BLS_PRIVATE_KEY_LENGTH;
 }
 
 impl Signer<BLS12377Signature> for BLS12377PrivateKey {
@@ -296,18 +347,29 @@ impl Signer<BLS12377Signature> for BLS12377PrivateKey {
     }
 }
 
-// There is a strong requirement for this specific impl. in Fab benchmarks
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")] // necessary so as not to deser under a != type
-pub struct BLS12377KeyPair {
-    name: BLS12377PublicKey,
-    secret: BLS12377PrivateKey,
+///
+/// Implement KeyPair
+///
+
+impl From<BLS12377PrivateKey> for BLS12377KeyPair {
+    fn from(secret: BLS12377PrivateKey) -> Self {
+        let name = BLS12377PublicKey::from(&secret);
+        BLS12377KeyPair { name, secret }
+    }
 }
 
 impl KeyPair for BLS12377KeyPair {
     type PubKey = BLS12377PublicKey;
-
     type PrivKey = BLS12377PrivateKey;
+    type Sig = BLS12377Signature;
+
+    #[cfg(feature = "copy_key")]
+    fn copy(&self) -> Self {
+        BLS12377KeyPair {
+            name: self.name.clone(),
+            secret: BLS12377PrivateKey::from_bytes(self.secret.as_ref()).unwrap(),
+        }
+    }
 
     fn public(&'_ self) -> &'_ Self::PubKey {
         &self.name
@@ -347,5 +409,150 @@ impl Signer<BLS12377Signature> for BLS12377KeyPair {
             sig: celo_bls_sig,
             bytes: OnceCell::new(),
         })
+    }
+}
+
+///
+/// Implement AggregateAuthenticator
+///
+
+impl AsRef<[u8]> for BLS12377AggregateSignature {
+    fn as_ref(&self) -> &[u8] {
+        match &self.sig {
+            Some(sig) => self
+                .bytes
+                .get_or_try_init::<_, eyre::Report>(|| {
+                    let mut bytes = [0u8; CELO_BLS_SIGNATURE_LENGTH];
+                    sig.as_ref().into_affine().serialize(&mut bytes[..])?;
+                    Ok(bytes)
+                })
+                .expect("OnceCell invariant violated"),
+            None => &[],
+        }
+    }
+}
+
+impl Display for BLS12377AggregateSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", Base64::encode_string(self.as_ref()))
+    }
+}
+
+// see [#34](https://github.com/MystenLabs/narwhal/issues/34)
+impl Default for BLS12377AggregateSignature {
+    fn default() -> Self {
+        BLS12377AggregateSignature {
+            sig: None,
+            bytes: OnceCell::new(),
+        }
+    }
+}
+
+impl AggregateAuthenticator for BLS12377AggregateSignature {
+    type PrivKey = BLS12377PrivateKey;
+    type PubKey = BLS12377PublicKey;
+    type Sig = BLS12377Signature;
+
+    /// Parse a key from its byte representation
+    fn aggregate(signatures: Vec<Self::Sig>) -> Result<Self, signature::Error> {
+        let sig = celo_bls::Signature::aggregate(signatures.iter().map(|x| &x.sig));
+        Ok(BLS12377AggregateSignature {
+            sig: Some(sig),
+            bytes: OnceCell::new(),
+        })
+    }
+
+    fn add_signature(&mut self, signature: Self::Sig) -> Result<(), signature::Error> {
+        match self.sig {
+            Some(ref mut sig) => {
+                let raw_sig = celo_bls::Signature::aggregate([signature.sig, sig.clone()]);
+                self.sig = Some(raw_sig);
+                Ok(())
+            }
+            None => {
+                self.sig = Some(signature.sig);
+                Ok(())
+            }
+        }
+    }
+
+    fn add_aggregate(&mut self, signature: Self) -> Result<(), signature::Error> {
+        match self.sig {
+            Some(ref mut sig) => match signature.sig {
+                Some(sig_to_add) => {
+                    let raw_sig = celo_bls::Signature::aggregate([sig_to_add, sig.clone()]);
+                    self.sig = Some(raw_sig);
+                    Ok(())
+                }
+                None => Ok(()),
+            },
+            None => {
+                self.sig = signature.sig;
+                Ok(())
+            }
+        }
+    }
+
+    fn verify(
+        &self,
+        pks: &[<Self::Sig as Authenticator>::PubKey],
+        message: &[u8],
+    ) -> Result<(), signature::Error> {
+        let mut cache = celo_bls::PublicKeyCache::new();
+        let apk = cache.aggregate(pks.iter().map(|pk| pk.pubkey.clone()).collect());
+        apk.verify(
+            message,
+            &[],
+            &self.sig.clone().ok_or_else(signature::Error::new)?,
+            &*try_and_increment::COMPOSITE_HASH_TO_G1,
+        )
+        .map_err(|_| signature::Error::new())?;
+
+        Ok(())
+    }
+
+    fn batch_verify(
+        signatures: &[Self],
+        pks: &[&[Self::PubKey]],
+        messages: &[&[u8]],
+    ) -> Result<(), signature::Error> {
+        if pks.len() != messages.len() || messages.len() != signatures.len() {
+            return Err(signature::Error::new());
+        }
+        for i in 0..signatures.len() {
+            let sig = signatures[i].sig.clone();
+            let mut cache = celo_bls::PublicKeyCache::new();
+            let apk = cache.aggregate(pks[i].iter().map(|pk| pk.pubkey.clone()).collect());
+            apk.verify(
+                messages[i],
+                &[],
+                &sig.ok_or_else(signature::Error::new)?,
+                &*try_and_increment::COMPOSITE_HASH_TO_G1,
+            )
+            .map_err(|_| signature::Error::new())?;
+        }
+        Ok(())
+    }
+}
+
+///
+/// Implement VerifyingKeyBytes
+///
+
+impl TryInto<BLS12377PublicKey> for BLS12377PublicKeyBytes {
+    type Error = signature::Error;
+
+    fn try_into(self) -> Result<BLS12377PublicKey, Self::Error> {
+        // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
+        // to ensure the bytes represent a poin on the curve.
+        BLS12377PublicKey::from_bytes(self.as_ref()).map_err(|_| Self::Error::new())
+    }
+}
+
+impl From<BLS12377PublicKey> for BLS12377PublicKeyBytes {
+    fn from(pk: BLS12377PublicKey) -> BLS12377PublicKeyBytes {
+        let mut bytes = [0u8; CELO_BLS_PUBLIC_KEY_LENGTH];
+        pk.pubkey.serialize(&mut bytes[..]).unwrap();
+        BLS12377PublicKeyBytes::new(bytes)
     }
 }

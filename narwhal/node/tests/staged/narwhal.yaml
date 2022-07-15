@@ -44,10 +44,7 @@ Committee:
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
 Ed25519Signature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
+  NEWTYPESTRUCT: BYTES
 Header:
   STRUCT:
     - author:
