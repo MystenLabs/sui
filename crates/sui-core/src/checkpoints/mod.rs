@@ -741,7 +741,7 @@ impl CheckpointStore {
         checkpoint: &CertifiedCheckpointSummary,
         committee: &Committee,
     ) -> SuiResult {
-        checkpoint.verify(committee)?;
+        checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
             self.latest_stored_checkpoint()?,
             Some(AuthenticatedCheckpoint::Signed(_))
@@ -768,7 +768,7 @@ impl CheckpointStore {
             .get(checkpoint.summary.sequence_number())?
             .is_none());
         // Check and process contents
-        checkpoint.verify_with_transactions(committee, contents)?;
+        checkpoint.verify(committee, Some(contents))?;
         self.handle_internal_set_checkpoint(
             &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
             contents,
