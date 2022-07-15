@@ -126,7 +126,7 @@
         "sublist": [
           {
             "name": "Try Sui Wallet Browser Extension",
-            "url": "/explore/wallet-browser",
+            "url": "/explore/wallet-browser"
           },
           {
             "name": "Learn Sui Move",
