@@ -36,7 +36,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 ```
-This will print a summary of objects owned my the address "0xec11cad080d0496a53bafcea629fcbcfff2a9866".
+This will print a list of object summaries owned by the address "0xec11cad080d0496a53bafcea629fcbcfff2a9866".
 You can verify the result with the [Sui explorer](https://explorer.devnet.sui.io/) if you are using the Sui devnet.
 
 ### Example 2 - Create and execute transaction
