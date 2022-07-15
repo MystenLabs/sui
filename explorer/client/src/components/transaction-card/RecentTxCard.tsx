@@ -114,7 +114,7 @@ async function getRecentTransactions(
 }
 
 // Pass Props txPerPage, truncateLength, paginationtype to the component so that this component can be used for both the Home Page and trnasaction page
-// TODO - Passing the too much props from component to component  is not ideal way to do this - gets confusing
+// TODO - rework this - gets confusing
 function LatestTxView({
     results,
 }: {
