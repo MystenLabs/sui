@@ -130,25 +130,23 @@ ExecutionFailureStatus:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
     16:
-      DeleteObjectOwnedObject: UNIT
-    17:
       PublishErrorEmptyPackage: UNIT
-    18:
+    17:
       PublishErrorNonZeroAddress: UNIT
-    19:
+    18:
       PublishErrorDuplicateModule: UNIT
-    20:
+    19:
       SuiMoveVerificationError: UNIT
-    21:
+    20:
       MovePrimitiveRuntimeError: UNIT
-    22:
+    21:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    23:
+    22:
       VMVerificationOrDeserializationError: UNIT
-    24:
+    23:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
