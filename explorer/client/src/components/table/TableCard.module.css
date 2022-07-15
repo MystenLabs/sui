@@ -17,9 +17,14 @@
 }
 
 .table tbody tr {
-    @apply space-y-10 mt-10 hover:bg-[#6fbcf014] ;
+    @apply space-y-10 mt-10 hover:bg-[#6fbcf014];
 }
-.table tbody tr:hover td{
+
+td:nth-child(1) {
+    @apply text-xs;
+}
+
+.table tbody tr:hover td {
     @apply text-black;
 }
 
@@ -34,10 +39,7 @@
 .tablespacing {
     @apply pb-2 pt-2;
 }
+
 td a {
     @apply font-mono text-[#4E555D];
-}
-
-td:nth-child(1) {
-    @apply text-xs;
 }
