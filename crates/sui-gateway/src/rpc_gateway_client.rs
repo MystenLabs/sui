@@ -4,7 +4,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
 
-use sui_client::SuiClient;
+use sui_sdk::SuiClient;
 use tokio::runtime::Handle;
 
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};

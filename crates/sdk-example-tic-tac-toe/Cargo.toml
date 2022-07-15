@@ -16,7 +16,7 @@ serde = "1.0.138"
 async-recursion = "1.0.0"
 
 ## Sui dependencies
-sui-client = { path = "../sui-sdk" }
+sui-sdk = { path = "../sui-sdk" }
 
 workspace-hack = { path = "../workspace-hack"}
 

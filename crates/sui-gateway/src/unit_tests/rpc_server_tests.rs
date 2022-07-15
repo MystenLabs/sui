@@ -3,7 +3,6 @@
 
 use move_package::BuildConfig;
 use std::{path::Path, str::FromStr};
-use sui_client::crypto::{Keystore, SuiKeystore};
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_framework::build_move_package_to_bytes;
@@ -14,6 +13,7 @@ use sui_json_rpc::api::{
 use sui_json_rpc_types::{
     GetObjectDataResponse, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
+use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},

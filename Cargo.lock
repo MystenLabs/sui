@@ -5680,7 +5680,7 @@ dependencies = [
  "clap 3.1.18",
  "dirs",
  "serde 1.0.139",
- "sui-client",
+ "sui-sdk",
  "tokio",
  "workspace-hack 0.1.0",
 ]
@@ -6367,7 +6367,6 @@ dependencies = [
  "serde_json",
  "serde_with",
  "shell-words",
- "sui-client",
  "signature",
  "sui-config",
  "sui-core",
@@ -6377,6 +6376,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-node",
  "sui-quorum-driver",
+ "sui-sdk",
  "sui-swarm",
  "sui-types",
  "telemetry-subscribers",
@@ -6452,23 +6452,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-client"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "ed25519-dalek",
- "jsonrpsee",
- "serde 1.0.139",
- "serde_json",
- "sui-json",
- "sui-json-rpc",
- "sui-json-rpc-types",
- "sui-types",
- "workspace-hack 0.1.0",
-]
-
-[[package]]
 name = "sui-cluster-test"
 version = "0.1.0"
 dependencies = [
@@ -6477,11 +6460,11 @@ dependencies = [
  "reqwest",
  "serde_json",
  "sui",
- "sui-client",
  "sui-config",
  "sui-faucet",
  "sui-json",
  "sui-json-rpc-types",
+ "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -6644,7 +6627,6 @@ dependencies = [
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=40dae350a699f59f2e296152e02c78765db34e68)",
  "prometheus",
  "serde 1.0.139",
- "sui-client",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -6652,6 +6634,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-node",
+ "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
  "test-utils",
@@ -6813,6 +6796,23 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
+name = "sui-sdk"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ed25519-dalek",
+ "jsonrpsee",
+ "serde 1.0.139",
+ "serde_json",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-types",
  "workspace-hack 0.1.0",
 ]
 
@@ -7172,7 +7172,6 @@ dependencies = [
  "rand 0.7.3",
  "sui",
  "sui-adapter",
- "sui-client",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -7180,6 +7179,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-node",
+ "sui-sdk",
  "sui-swarm",
  "sui-types",
  "tempfile",

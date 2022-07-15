@@ -22,11 +22,11 @@ use sui_json_rpc_types::{
 };
 use tracing::info;
 
-use sui_client::crypto::Keystore;
 use sui_core::gateway_state::GatewayClient;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
+use sui_sdk::crypto::Keystore;
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{

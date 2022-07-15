@@ -14,14 +14,14 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use sui_client::crypto::{KeystoreType, SuiKeystore};
-use sui_client::SuiClient;
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_DEV_NET_URL, SUI_KEYSTORE_FILENAME};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
 use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
+use sui_sdk::crypto::{KeystoreType, SuiKeystore};
+use sui_sdk::SuiClient;
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 use tracing::info;

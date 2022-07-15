@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
-use sui_client::{
+use sui_sdk::{
     crypto::{Keystore, SuiKeystore},
     json::SuiJsonValue,
     types::{

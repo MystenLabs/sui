@@ -10,7 +10,6 @@ use sui::{
     client_commands::{SuiClientCommands, WalletContext},
     config::{GatewayConfig, GatewayType, SuiClientConfig},
 };
-use sui_client::crypto::{KeystoreType, SuiKeystore};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
@@ -22,6 +21,7 @@ use sui_json_rpc::api::WalletSyncApiServer;
 use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
+use sui_sdk::crypto::{KeystoreType, SuiKeystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 const NUM_VALIDAOTR: usize = 4;
