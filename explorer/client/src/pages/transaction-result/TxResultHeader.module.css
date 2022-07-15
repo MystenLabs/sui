@@ -17,7 +17,7 @@
 }
 
 .txid {
-    @apply text-offblack font-[600] text-lg md:text-2xl font-mono break-all block md:flex items-center;
+    @apply text-offblack font-[600] text-lg md:text-2xl font-mono break-all block  items-center;
 }
 
 .txresulttype {
@@ -29,5 +29,13 @@
 }
 
 .failed {
-    @apply bg-[#FBE9E7] capitalize text-sm font-sans text-[#D0021B] font-normal p-0 pr-3 pl-3 rounded-[10px] inline-block m-0 md:ml-2 md:mr-2;
+    @apply bg-[#EB5A291A] capitalize text-sm font-sans text-[#B94118] font-normal p-0 pr-3 pl-3 rounded-[10px] inline-block m-0 md:ml-2 md:mr-2;
+}
+
+.longtext {
+    @apply bg-transparent border-0 font-sans text-sm text-[#1F6493] font-[500] cursor-pointer hover:text-sui-grey-80;
+}
+
+.error {
+    @apply w-full rounded-none m-0 text-sm p-1 pl-2 pr-2 font-normal mt-2 w-fit md:w-full;
 }

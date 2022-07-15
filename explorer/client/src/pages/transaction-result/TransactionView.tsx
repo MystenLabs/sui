@@ -201,6 +201,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         txId: txdata.txId,
         status: txdata.status,
         txKindName: txKindName,
+        ...(txdata.txError ? { error: txdata.txError } : {}),
     };
 
     const transactionSignatureData = {

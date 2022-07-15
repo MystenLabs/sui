@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import cl from 'classnames';
-import { useEffect, useState, useContext, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import cl from 'classnames';
+import { useEffect, useState, useContext } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import TableCard from '../../components/table/TableCard';
@@ -22,6 +22,7 @@ import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
+import Pagination from '../pagination/Pagination';
 
 import type {
     GetTxnDigestsResponse,
@@ -33,15 +34,24 @@ import styles from './RecentTxCard.module.css';
 
 const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 15;
+const DEFAULT_PAGI_TYPE = 'more button';
+
+type PaginationType = 'more button' | 'pagination' | 'none';
 
 const initState: {
     loadState: string;
     latestTx: TxnData[];
     totalTxcount?: number;
+    txPerPage?: number;
+    truncateLength?: number;
+    paginationtype?: PaginationType;
 } = {
     loadState: 'pending',
     latestTx: [],
     totalTxcount: 0,
+    txPerPage: NUMBER_OF_TX_PER_PAGE,
+    truncateLength: TRUNCATE_LENGTH,
+    paginationtype: 'pagination',
 };
 
 type TxnData = {
@@ -103,26 +113,24 @@ async function getRecentTransactions(
     }
 }
 
+// Pass Props txPerPage, truncateLength, paginationtype to the component so that this component can be used for both the Home Page and trnasaction page
+// TODO - rework this - gets confusing
 function LatestTxView({
     results,
 }: {
-    results: { loadState: string; latestTx: TxnData[]; totalTxcount?: number };
+    results: {
+        loadState: string;
+        latestTx: TxnData[];
+        totalTxcount?: number;
+        txPerPage?: number;
+        truncateLength?: number;
+        paginationtype?: PaginationType;
+    };
 }) {
-    // This is temporary, pagination component already does this
     const totalCount = results.totalTxcount || 1;
-    const [searchParams, setSearchParams] = useSearchParams();
-    const pageParam = parseInt(searchParams.get('p') || '1', 10);
-    const [showNextPage, setShowNextPage] = useState(
-        NUMBER_OF_TX_PER_PAGE < totalCount
-    );
-
-    const changePage = useCallback(() => {
-        const nextpage = pageParam + (showNextPage ? 1 : 0);
-        setSearchParams({ p: nextpage.toString() });
-        setShowNextPage(
-            Math.ceil(NUMBER_OF_TX_PER_PAGE * nextpage) < totalCount
-        );
-    }, [pageParam, totalCount, showNextPage, setSearchParams]);
+    const txPerPage = results.txPerPage || NUMBER_OF_TX_PER_PAGE;
+    const truncateLength = results.truncateLength || TRUNCATE_LENGTH;
+    const paginationtype = results.paginationtype || DEFAULT_PAGI_TYPE;
 
     //TODO update initial state and match the latestTx table data
     const defaultActiveTab = 0;
@@ -132,7 +140,7 @@ function LatestTxView({
             transactionId: [
                 {
                     url: txn.txId,
-                    name: truncate(txn.txId, TRUNCATE_LENGTH),
+                    name: truncate(txn.txId, truncateLength),
                     category: 'transactions',
                     isLink: true,
                     copy: false,
@@ -141,7 +149,7 @@ function LatestTxView({
             addresses: [
                 {
                     url: txn.From,
-                    name: truncate(txn.From, TRUNCATE_LENGTH),
+                    name: truncate(txn.From, truncateLength),
                     category: 'addresses',
                     isLink: true,
                     copy: false,
@@ -150,7 +158,7 @@ function LatestTxView({
                     ? [
                           {
                               url: txn.To,
-                              name: truncate(txn.To, TRUNCATE_LENGTH),
+                              name: truncate(txn.To, truncateLength),
                               category: 'addresses',
                               isLink: true,
                               copy: false,
@@ -167,7 +175,7 @@ function LatestTxView({
         })),
         columns: [
             {
-                headerLabel: 'Date',
+                headerLabel: 'Time',
                 accessorKey: 'date',
             },
             {
@@ -175,7 +183,7 @@ function LatestTxView({
                 accessorKey: 'txTypes',
             },
             {
-                headerLabel: 'Transactions ID',
+                headerLabel: 'Transaction ID',
                 accessorKey: 'transactionId',
             },
             {
@@ -191,23 +199,28 @@ function LatestTxView({
     const tabsFooter = {
         stats: {
             count: totalCount || 0,
-            stats_text: 'total transactions',
+            stats_text: 'Total transactions',
         },
     };
+
     return (
-        <div className={styles.txlatestresults}>
+        <div className={cl(styles.txlatestresults, styles[paginationtype])}>
             <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
                     <TableCard tabledata={recentTx} />
                     <TabFooter stats={tabsFooter.stats}>
-                        {showNextPage ? (
-                            <button
-                                type="button"
-                                className={styles.moretxbtn}
-                                onClick={changePage}
-                            >
-                                More Transactions <ContentForwardArrowDark />
-                            </button>
+                        {paginationtype !== 'none' ? (
+                            paginationtype === 'pagination' ? (
+                                <Pagination
+                                    totalTxCount={totalCount}
+                                    txNum={txPerPage}
+                                />
+                            ) : (
+                                <Link className={styles.moretxbtn} to={`/`}>
+                                    More Transactions{' '}
+                                    <ContentForwardArrowDark />
+                                </Link>
+                            )
                         ) : (
                             <></>
                         )}
@@ -236,17 +249,29 @@ function LatestTxCardStatic() {
     );
 }
 
-function LatestTxCardAPI({ count }: { count: number }) {
+type RecentTx = {
+    count?: number;
+    paginationtype?: PaginationType;
+    txPerPage?: number;
+    truncateLength?: number;
+};
+
+function LatestTxCardAPI({ ...data }: RecentTx) {
+    const {
+        count = 0,
+        txPerPage = NUMBER_OF_TX_PER_PAGE,
+        truncateLength = TRUNCATE_LENGTH,
+        paginationtype = DEFAULT_PAGI_TYPE,
+    } = data;
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
     const [searchParams] = useSearchParams();
-    const [txNumPerPage] = useState(NUMBER_OF_TX_PER_PAGE);
 
     useEffect(() => {
         let isMounted = true;
         const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
-        getRecentTransactions(network, count, txNumPerPage, pagedNum)
+        getRecentTransactions(network, count, txPerPage, pagedNum)
             .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
@@ -255,6 +280,9 @@ function LatestTxCardAPI({ count }: { count: number }) {
                     loadState: 'loaded',
                     latestTx: resp,
                     totalTxcount: count,
+                    txPerPage: txPerPage,
+                    truncateLength: truncateLength,
+                    paginationtype,
                 });
             })
             .catch((err) => {
@@ -272,7 +300,14 @@ function LatestTxCardAPI({ count }: { count: number }) {
         return () => {
             isMounted = false;
         };
-    }, [count, network, searchParams, txNumPerPage]);
+    }, [
+        count,
+        network,
+        paginationtype,
+        searchParams,
+        truncateLength,
+        txPerPage,
+    ]);
 
     if (results.loadState === 'pending') {
         return (
@@ -302,7 +337,8 @@ function LatestTxCardAPI({ count }: { count: number }) {
     );
 }
 
-const LatestTxCard = ({ count }: { count: number }) =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI count={count} />;
+// Provide option to show pagination or not, so we can reuse this component for both homepage and the transactions page
+const LatestTxCard = ({ ...data }: RecentTx) =>
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI {...data} />;
 
 export default LatestTxCard;
