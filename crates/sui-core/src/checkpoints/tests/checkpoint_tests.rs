@@ -1736,7 +1736,7 @@ async fn checkpoint_messaging_flow() {
     for auth in &setup.authorities {
         auth.checkpoint
             .lock()
-            .new_proposal(setup.committee.epoch)
+            .set_proposal(setup.committee.epoch)
             .unwrap();
     }
 
@@ -1880,7 +1880,7 @@ async fn test_no_more_fragments() {
         let proposal = auth
             .checkpoint
             .lock()
-            .new_proposal(setup.committee.epoch)
+            .set_proposal(setup.committee.epoch)
             .unwrap();
         proposals.push(proposal);
     }
