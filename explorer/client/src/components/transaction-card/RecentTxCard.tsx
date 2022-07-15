@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useEffect, useState, useContext, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useState, useContext } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import TableCard from '../../components/table/TableCard';
@@ -131,16 +131,6 @@ function LatestTxView({
     const txPerPage = results.txPerPage || NUMBER_OF_TX_PER_PAGE;
     const truncateLength = results.truncateLength || TRUNCATE_LENGTH;
     const paginationtype = results.paginationtype || DEFAULT_PAGI_TYPE;
-    const [searchParams, setSearchParams] = useSearchParams();
-    const pageParam = parseInt(searchParams.get('p') || '1', 10);
-    const [showNextPage, setShowNextPage] = useState(txPerPage < totalCount);
-
-    // This is temporary, pagination component already does this
-    const changePage = useCallback(() => {
-        const nextpage = pageParam + (showNextPage ? 1 : 0);
-        setSearchParams({ p: nextpage.toString() });
-        setShowNextPage(Math.ceil(txPerPage * nextpage) < totalCount);
-    }, [pageParam, showNextPage, setSearchParams, txPerPage, totalCount]);
 
     //TODO update initial state and match the latestTx table data
     const defaultActiveTab = 0;
@@ -219,21 +209,17 @@ function LatestTxView({
                 <div title="Transactions">
                     <TableCard tabledata={recentTx} />
                     <TabFooter stats={tabsFooter.stats}>
-                        {showNextPage ? (
+                        {paginationtype !== 'none' ? (
                             paginationtype === 'pagination' ? (
                                 <Pagination
                                     totalTxCount={totalCount}
                                     txNum={txPerPage}
                                 />
                             ) : (
-                                <button
-                                    type="button"
-                                    className={styles.moretxbtn}
-                                    onClick={changePage}
-                                >
+                                <Link className={styles.moretxbtn} to={`/`}>
                                     More Transactions{' '}
                                     <ContentForwardArrowDark />
-                                </button>
+                                </Link>
                             )
                         ) : (
                             <></>
