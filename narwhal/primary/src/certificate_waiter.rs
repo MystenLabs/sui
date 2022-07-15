@@ -33,6 +33,11 @@ use types::{
 #[path = "tests/certificate_waiter_tests.rs"]
 pub mod certificate_waiter_tests;
 
+/// The resolution of the timer that checks whether we received replies to our parent requests, and triggers
+/// a round of GC if we didn't.
+#[allow(dead_code)]
+const GC_RESOLUTION: u64 = 10_000;
+
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
 /// for further processing.
 pub struct CertificateWaiter<PublicKey: VerifyingKey> {
