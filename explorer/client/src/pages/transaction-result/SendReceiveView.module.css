@@ -3,14 +3,18 @@
 }
 
 .txaddresssender a,
-.txaddresssender span {
-    @apply pl-2 pr-0;
-}
-
-.txaddresssender a,
 .txaddresssender,
 .txaddress ul li a {
     @apply break-all font-mono text-sm text-sui-dark;
+}
+
+.label span {
+    @apply text-sui-grey-80 font-[500] text-[13px] mb-2;
+}
+
+.recipient.txaddresssender a,
+.recipient.txaddresssender span {
+    @apply pl-2 pr-0;
 }
 
 .txaddress ul li {
@@ -21,10 +25,14 @@
 }
 
 .txaddresssender {
-    @apply relative pl-1.5;
+    @apply relative mt-1;
 }
 
-.txaddresssender::before {
+.recipient.txaddresssender {
+    @apply pl-1.5;
+}
+
+.recipient.txaddresssender::before {
     content: '';
     background-image: url('../../assets/SVGIcons/Start.svg');
     background-size: 16px 16px;
@@ -37,7 +45,7 @@
     align-items: center;
 }
 
-.txaddresssender::after {
+.recipient.txaddresssender::after {
     @apply ml-[-0.5rem];
 
     top: 10px;
@@ -55,7 +63,7 @@
 
 .label {
     border-bottom: 1px solid #f0f1f2;
-    @apply text-sui-grey-85 font-[500] text-lg  mt-0 mb-2 border-b-[1px] border-[#f0f1f2] md:border-0;
+    @apply text-sui-grey-100 font-[500] text-lg  mt-0 mb-2 border-b-[1px] border-[#f0f1f2] md:border-0;
 }
 
 .txaddressheader {
@@ -102,8 +110,4 @@
 
 .txrecipents li :first-child::after {
     height: 20px;
-}
-
-.label span {
-    @apply text-sui-grey-80 font-[500] text-[13px] mb-2;
 }
