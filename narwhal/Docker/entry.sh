@@ -13,19 +13,20 @@ fi
 
 # Environment variables to use on the script
 NODE_BIN="./bin/node"
-KEYS_PATH="/validators/validator-$VALIDATOR_ID/key.json"
-COMMITTEE_PATH="/validators/committee.json"
-PARAMETERS_PATH="/validators/parameters.json"
+KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/key.json"}
+COMMITTEE_PATH=${COMMITTEE_PATH:="/validators/committee.json"}
+PARAMETERS_PATH=${PARAMETERS_PATH:="/validators/parameters.json"}
+DATA_PATH=${DATA_PATH:="/validators"}
 
 if [[ "$CLEANUP_DISABLED" = "true" ]]; then
   echo "Will not clean up existing directories..."
 else
   if [[ "$NODE_TYPE" = "primary" ]]; then
     # Clean up only the primary node's data
-    rm -r "/validators/validator-$VALIDATOR_ID/db-primary"
+    rm -r "${DATA_PATH}/validator-$VALIDATOR_ID/db-primary"
   elif [[ "$NODE_TYPE" = "worker" ]]; then
     # Clean up only the specific worker's node data
-    rm -r "/validators/validator-$VALIDATOR_ID/db-worker-${WORKER_ID}"
+    rm -r "${DATA_PATH}/validator-$VALIDATOR_ID/db-worker-${WORKER_ID}"
   fi
 fi
 
@@ -36,7 +37,7 @@ if [[ "$NODE_TYPE" = "primary" ]]; then
   $NODE_BIN $LOG_LEVEL run \
   --keys $KEYS_PATH \
   --committee $COMMITTEE_PATH \
-  --store "/validators/validator-$VALIDATOR_ID/db-primary" \
+  --store "${DATA_PATH}/validator-$VALIDATOR_ID/db-primary" \
   --parameters $PARAMETERS_PATH \
   primary $CONSENSUS_DISABLED
 elif [[ "$NODE_TYPE" = "worker" ]]; then
@@ -45,7 +46,7 @@ elif [[ "$NODE_TYPE" = "worker" ]]; then
   $NODE_BIN $LOG_LEVEL run \
   --keys $KEYS_PATH \
   --committee $COMMITTEE_PATH \
-  --store "/validators/validator-$VALIDATOR_ID/db-worker-$WORKER_ID" \
+  --store "${DATA_PATH}/validator-$VALIDATOR_ID/db-worker-$WORKER_ID" \
   --parameters $PARAMETERS_PATH \
   worker --id $WORKER_ID
 else
