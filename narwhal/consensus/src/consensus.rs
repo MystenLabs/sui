@@ -91,7 +91,7 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
         gc_depth: Round,
     ) -> Dag<PublicKey> {
         let mut dag: Dag<PublicKey> = HashMap::new();
-        let min_round = last_committed_round - gc_depth;
+        let min_round = last_committed_round.saturating_sub(gc_depth);
         let cert_map = cert_store
             .iter(Some(Box::new(move |(_dig, cert)| {
                 cert.header.round > min_round
