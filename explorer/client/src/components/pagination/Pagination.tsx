@@ -1,7 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import cl from 'classnames';
 import { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+
+import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 
 import styles from './Pagination.module.css';
 function generatePaginationArr(
@@ -10,7 +14,7 @@ function generatePaginationArr(
     totalItems: number
 ) {
     // number of list items to show before truncating
-    const range: number = 4;
+    const range: number = 2;
     const max = Math.ceil((totalItems - 1) / itemsPerPage);
     const maxRange = (Math.floor(startAt / range) + 1) * range;
     // set the min range to be the max range minus the range if it is less than the max - range
@@ -56,26 +60,35 @@ function Pagination({
             <nav className={styles.pagination}>
                 <ul>
                     {pageIndex > 1 && (
-                        <li className="page-item">
+                        <li className={styles.arrow}>
                             <button
-                                className={
-                                    pageIndex === 1 ? styles.activepag : ''
-                                }
+                                className={cl([
+                                    pageIndex === 1 ? styles.activepag : '',
+                                    styles.paginationleft,
+                                ])}
                                 onClick={changePage(pageIndex - 1)}
                             >
-                                &larr;
+                                <ContentForwardArrowDark />
                             </button>
                         </li>
                     )}
                     {pageIndex > pagiData.range - 1 && (
+                        <>
+                            <li className="page-item">
+                                <button
+                                    className="page-link"
+                                    onClick={changePage(1)}
+                                >
+                                    1
+                                </button>
+                            </li>
+                        </>
+                    )}
+                    {pageIndex > pagiData.range && (
                         <li className="page-item">
-                            <button
-                                className="page-link"
-                                onClick={changePage(1)}
-                            >
-                                1
+                            <button className={styles.paginationdot}>
+                                ...
                             </button>
-                            {' ... '}
                         </li>
                     )}
                     {pagiData.listItems.map((itm: any, index: number) => (
@@ -92,27 +105,41 @@ function Pagination({
                     ))}
 
                     {pageIndex < pagiData.max - 1 && (
-                        <li className="page-item">
-                            {' ... '}
-                            <button
-                                className={
-                                    pageIndex === pagiData.max
-                                        ? styles.activepag
-                                        : ''
-                                }
-                                onClick={changePage(pagiData.max)}
-                            >
-                                {pagiData.max}
-                            </button>
-                        </li>
+                        <>
+                            <li className="page-item">
+                                <button
+                                    className={cl(
+                                        pageIndex === pagiData.max
+                                            ? styles.activepag
+                                            : '',
+                                        styles.paginationdot
+                                    )}
+                                >
+                                    ...
+                                </button>
+                            </li>
+
+                            <li className="page-item">
+                                <button
+                                    className={
+                                        pageIndex === pagiData.max
+                                            ? styles.activepag
+                                            : ''
+                                    }
+                                    onClick={changePage(pagiData.max)}
+                                >
+                                    {pagiData.max}
+                                </button>
+                            </li>
+                        </>
                     )}
                     {pageIndex < pagiData.max && (
-                        <li className="page-item">
+                        <li className={styles.arrow}>
                             <button
                                 className="page-link"
                                 onClick={changePage(pageIndex + 1)}
                             >
-                                →
+                                <ContentForwardArrowDark />
                             </button>
                         </li>
                     )}

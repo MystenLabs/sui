@@ -41,7 +41,7 @@ impl Balance {
         fp_ensure!(
             self.value >= amount,
             ExecutionError::new_with_source(
-                ExecutionErrorKind::TransferInsufficientBalance,
+                ExecutionErrorKind::InvalidTransferSuiInsufficientBalance,
                 format!("balance: {} required: {}", self.value, amount)
             )
         );

@@ -5,9 +5,10 @@ module nfts::geniteam {
     use sui::bag::{Self, Bag};
     use sui::collection::{Self, Collection};
     use sui::id::VersionedID;
+    use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
-    use sui::transfer::{Self, ChildRef};
+    use sui::transfer;
     use std::ascii::{Self, String};
     use std::vector;
 
@@ -32,12 +33,12 @@ module nfts::geniteam {
         earth_runes_count: u64,
 
         // Owned Farm
-        owned_farm: Option<ChildRef<Farm>>,
+        owned_farm: Option<TypedID<Farm>>,
 
         // Inventory of unassigned cosmetics.
         // A cosmetic can be either a FarmCosmetic or a MonsterCosmetic.
         // Since they can be of different types, we use Bag instead of Collection.
-        inventory: ChildRef<Bag>,
+        inventory: TypedID<Bag>,
     }
 
     struct Farm has key {
@@ -50,12 +51,12 @@ module nfts::geniteam {
         occupied_monster_slots: u64,
 
         // Collection of Pet monsters owned by this Farm
-        pet_monsters: ChildRef<Collection<Monster>>,
+        pet_monsters: TypedID<Collection<Monster>>,
 
         // Applied cosmetic at this slot
-        applied_farm_cosmetic_0:  Option<ChildRef<FarmCosmetic>>,
+        applied_farm_cosmetic_0:  Option<TypedID<FarmCosmetic>>,
         // Applied cosmetic at this slot
-        applied_farm_cosmetic_1:  Option<ChildRef<FarmCosmetic>>,
+        applied_farm_cosmetic_1:  Option<TypedID<FarmCosmetic>>,
     }
 
     struct Monster has key, store {
@@ -73,9 +74,9 @@ module nfts::geniteam {
         display: String,
 
         // Applied cosmetic at this slot
-        applied_monster_cosmetic_0: Option<ChildRef<MonsterCosmetic>>,
+        applied_monster_cosmetic_0: Option<TypedID<MonsterCosmetic>>,
         // Applied cosmetic at this slot
-        applied_monster_cosmetic_1: Option<ChildRef<MonsterCosmetic>>,
+        applied_monster_cosmetic_1: Option<TypedID<MonsterCosmetic>>,
 
     }
 
@@ -111,12 +112,13 @@ module nfts::geniteam {
         assert!(option::is_none(&player.owned_farm), ETooManyFarms);
 
         let farm = new_farm(farm_name, farm_img_index, total_monster_slots, ctx);
+        let farm_id = typed_id::new(&farm);
 
         // Transfer ownership of farm to player
-        let child_ref = transfer::transfer_to_object(farm, player);
+        transfer::transfer_to_object(farm, player);
 
         // Store the farm
-        option::fill(&mut player.owned_farm, child_ref)
+        option::fill(&mut player.owned_farm, farm_id)
     }
 
     /// Create a Monster and add it to the Farm's collection of Monsters, which
@@ -144,13 +146,13 @@ module nfts::geniteam {
 
         // Check if this is the right collection
         assert!(
-            transfer::is_child(&farm.pet_monsters, pet_monsters),
+            typed_id::equals_object(&farm.pet_monsters, pet_monsters),
             EMonsterCollectionNotOwnedByFarm,
         );
 
         // TODO: Decouple adding monster to farm from creating a monster.
         // Add it to the collection
-        collection::add(pet_monsters, monster);
+        collection::add(pet_monsters, monster, ctx);
     }
 
     /// Create Farm cosmetic owned by player and add to its inventory
@@ -160,7 +162,7 @@ module nfts::geniteam {
     ) {
         // Check if this is the right collection
         assert!(
-            transfer::is_child(&player.inventory, inventory),
+            typed_id::equals_object(&player.inventory, inventory),
             EInventoryNotOwnedByPlayer,
         );
 
@@ -172,7 +174,7 @@ module nfts::geniteam {
             };
 
         // Add it to the player's inventory
-        bag::add(inventory, farm_cosmetic);
+        bag::add(inventory, farm_cosmetic, ctx);
     }
 
     /// Create Monster cosmetic owned by player and add to its inventory
@@ -182,7 +184,7 @@ module nfts::geniteam {
     ) {
         // Check if this is the right collection
         assert!(
-            transfer::is_child(&player.inventory, inventory),
+            typed_id::equals_object(&player.inventory, inventory),
             EInventoryNotOwnedByPlayer,
         );
 
@@ -194,7 +196,7 @@ module nfts::geniteam {
             };
 
         // Add it to the player's inventory
-        bag::add(inventory, monster_cosmetic);
+        bag::add(inventory, monster_cosmetic, ctx);
     }
 
     /// Update the attributes of a player
@@ -252,7 +254,8 @@ module nfts::geniteam {
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
 
         // Transfer ownership of cosmetic to this farm
-        let child_ref = transfer::transfer_to_object(farm_cosmetic, farm);
+        let child_ref = typed_id::new(&farm_cosmetic);
+        transfer::transfer_to_object(farm_cosmetic, farm);
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {
@@ -274,7 +277,8 @@ module nfts::geniteam {
         assert!(cosmetic_slot_id <= 1 , EInvalidCosmeticsSlot);
 
         // Transfer ownership of cosmetic to this monster
-        let child_ref = transfer::transfer_to_object(monster_cosmetic, monster);
+        let child_ref = typed_id::new(&monster_cosmetic);
+        transfer::transfer_to_object(monster_cosmetic, monster);
 
         // Assign by slot
         if (cosmetic_slot_id == 0) {
@@ -299,7 +303,8 @@ module nfts::geniteam {
         let inventory = bag::new(ctx);
 
         // Transfer ownership of inventory to player.
-        let (id, child_ref) = bag::transfer_to_object_id(inventory, id);
+        let inventory_id = typed_id::new(&inventory);
+        bag::transfer_to_object_id(inventory, &id);
 
         let player = Player {
             id,
@@ -309,7 +314,7 @@ module nfts::geniteam {
             wind_runes_count: 0,
             earth_runes_count: 0,
             owned_farm: option::none(),
-            inventory: child_ref
+            inventory: inventory_id
         };
 
         player
@@ -327,7 +332,8 @@ module nfts::geniteam {
         let pet_monsters = collection::new<Monster>(ctx);
 
         // Transfer ownership of pet monsters to farm.
-        let (id, child_ref) = collection::transfer_to_object_id(pet_monsters, id);
+        let pet_monsters_id = typed_id::new(&pet_monsters);
+        collection::transfer_to_object_id(pet_monsters, &id);
 
 
         let farm = Farm {
@@ -338,7 +344,7 @@ module nfts::geniteam {
             level: 0,
             current_xp: 0,
             occupied_monster_slots: 0,
-            pet_monsters: child_ref,
+            pet_monsters: pet_monsters_id,
             applied_farm_cosmetic_0: option::none(),
             applied_farm_cosmetic_1: option::none(),
         };

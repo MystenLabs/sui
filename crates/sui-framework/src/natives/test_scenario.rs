@@ -65,7 +65,6 @@ fn get_object_id_from_event(event_type_byte: u64, val: &Value) -> Option<ObjectI
     } else {
         let event_type = EventType::try_from_primitive(event_type_byte as u8).unwrap();
         match event_type {
-            EventType::DeleteChildObject => val,
             EventType::DeleteObjectID => get_nested_struct_field(val, &[0, 0, 0]).unwrap(),
             EventType::User => {
                 return None;
@@ -152,7 +151,7 @@ fn get_global_inventory(events: &[Event]) -> Result<Inventory, u64> {
                     },
                 );
             }
-            EventType::DeleteObjectID | EventType::DeleteChildObject => {
+            EventType::DeleteObjectID => {
                 // note: obj_id may or may not be present in `inventory`--a useer can create an ID and delete it without associating it with a transferred object
                 inventory.remove(&obj_id);
             }

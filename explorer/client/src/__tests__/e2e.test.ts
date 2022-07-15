@@ -155,7 +155,9 @@ describe('End-to-end Tests', () => {
         });
     });
 
+    /*
     describe('Transaction Results', () => {
+        // disabled because we are not do not display the Word Transaction ID
         const successID = 'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=';
         it('can be searched', async () => {
             await page.goto(BASE_URL);
@@ -200,7 +202,7 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(value.trim()).toBe('< 1 sec ago (01 Jan 2025 01:13:09 UTC)');
         });
-    });
+    });*/
 
     describe('Owned Objects have links that enable', () => {
         const navigationTemplate = async (

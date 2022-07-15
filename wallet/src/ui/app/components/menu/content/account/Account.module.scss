@@ -1,0 +1,32 @@
+@use '_values/colors';
+
+.content {
+    flex-grow: 1;
+    max-width: 100%;
+}
+
+.logout {
+    display: flex;
+    flex-flow: row;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    background: colors.$gray-45;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    color: #ca2d2d;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+
+    &:disabled {
+        opacity: 0.7;
+    }
+}
+
+.logout-icon {
+    color: #ca2d2d99;
+    margin-right: 12px;
+    font-size: 12px;
+}

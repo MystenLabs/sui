@@ -6,8 +6,6 @@ use crate::authority_active::gossip::configurable_batch_action_client::{
     init_configurable_authorities, BatchAction, ConfigurableBatchActionClient,
 };
 use crate::authority_active::MAX_RETRY_DELAY_MS;
-use crate::gateway_state::GatewayMetrics;
-use std::collections::BTreeMap;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
@@ -19,14 +17,13 @@ pub async fn test_gossip_plain() {
         BatchAction::EmitUpdateItem(),
     ];
 
-    let (clients, states, digests) = init_configurable_authorities(action_sequence).await;
+    let (net, states, digests) = init_configurable_authorities(action_sequence).await;
 
-    let _active_authorities = start_gossip_process(states.clone(), clients.clone()).await;
+    let _active_authorities = start_gossip_process(states.clone(), net.clone()).await;
     tokio::time::sleep(Duration::from_secs(20)).await;
 
     // Expected outcome of gossip: each digest's tx signature and cert is now on every authority.
-    let clients_final: Vec<_> = clients.values().collect();
-    for client in clients_final.iter() {
+    for client in net.clone_inner_clients().values() {
         for digest in &digests {
             let result1 = client
                 .handle_transaction_info_request(TransactionInfoRequest {
@@ -46,14 +43,13 @@ pub async fn test_gossip_plain() {
 pub async fn test_gossip_error() {
     let action_sequence = vec![BatchAction::EmitError(), BatchAction::EmitUpdateItem()];
 
-    let (clients, states, digests) = init_configurable_authorities(action_sequence).await;
+    let (net, states, digests) = init_configurable_authorities(action_sequence).await;
 
-    let _active_authorities = start_gossip_process(states.clone(), clients.clone()).await;
+    let _active_authorities = start_gossip_process(states.clone(), net.clone()).await;
     // failure back-offs were set from the errors
     tokio::time::sleep(Duration::from_millis(MAX_RETRY_DELAY_MS)).await;
 
-    let clients_final: Vec<_> = clients.values().collect();
-    for client in clients_final.iter() {
+    for client in net.clone_inner_clients().values() {
         for digest in &digests {
             let result1 = client
                 .handle_transaction_info_request(TransactionInfoRequest {
@@ -72,7 +68,7 @@ pub async fn test_gossip_error() {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 pub async fn test_gossip_after_revert() {
     let action_sequence = vec![BatchAction::EmitUpdateItem(), BatchAction::EmitUpdateItem()];
-    let (clients, states, digests) = init_configurable_authorities(action_sequence).await;
+    let (net, states, digests) = init_configurable_authorities(action_sequence).await;
 
     tokio::time::sleep(Duration::from_secs(20)).await;
     // 3 (quorum) of the validators have executed 2 transactions, and 1 has none.
@@ -103,11 +99,10 @@ pub async fn test_gossip_after_revert() {
         }
     }
 
-    let _active_authorities = start_gossip_process(states.clone(), clients.clone()).await;
+    let _active_authorities = start_gossip_process(states.clone(), net.clone()).await;
     tokio::time::sleep(Duration::from_secs(20)).await;
 
-    let clients_final: Vec<_> = clients.values().collect();
-    for client in clients_final.iter() {
+    for client in net.clone_inner_clients().values() {
         let result = client
             .handle_transaction_info_request(TransactionInfoRequest {
                 transaction_digest: digests[0].transaction,
@@ -155,22 +150,17 @@ pub async fn test_gossip_after_revert() {
 
 async fn start_gossip_process(
     states: Vec<Arc<AuthorityState>>,
-    clients: BTreeMap<AuthorityName, ConfigurableBatchActionClient>,
+    net: AuthorityAggregator<ConfigurableBatchActionClient>,
 ) -> Vec<JoinHandle<()>> {
     let mut active_authorities = Vec::new();
 
     // Start active processes.
     for state in states {
-        let inner_clients = clients.clone();
+        let inner_net = net.clone();
 
         let handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
-                    state,
-                    inner_clients,
-                    GatewayMetrics::new_for_tests(),
-                )
-                .unwrap(),
+                ActiveAuthority::new_with_ephemeral_follower_store(state, inner_net).unwrap(),
             );
             active_state.spawn_gossip_process(3).await;
         });

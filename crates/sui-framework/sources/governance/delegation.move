@@ -3,7 +3,7 @@
 
 module sui::delegation {
     use std::option::{Self, Option};
-    use sui::balance::Balance;
+    use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::id::{Self, VersionedID};
     use sui::locked_coin::{Self, LockedCoin};
@@ -107,6 +107,40 @@ module sui::delegation {
         self.ending_epoch = option::some(ending_epoch);
     }
 
+    /// Switch the delegation from the current validator to `new_validator_address`.
+    /// The current `Delegation` object `self` becomes inactive and the balance inside is
+    /// extracted to the new `Delegation` object. 
+    public(friend) fun switch_delegation(
+        self: &mut Delegation,
+        new_validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        assert!(is_active(self), 0);
+        let current_epoch = tx_context::epoch(ctx);
+        let balance = option::extract(&mut self.active_delegation);
+        let delegate_amount = balance::value(&balance);
+
+        let new_epoch_lock = 
+            if (option::is_some(&self.coin_locked_until_epoch)) {
+                option::some(option::extract(&mut self.coin_locked_until_epoch))
+            } else { 
+                option::none() 
+            };
+
+        self.ending_epoch = option::some(current_epoch);
+
+        let new_delegation = Delegation {
+            id: tx_context::new_id(ctx),
+            active_delegation: option::some(balance),
+            ending_epoch: option::none(),
+            delegate_amount,
+            next_reward_unclaimed_epoch: current_epoch + 1,
+            coin_locked_until_epoch: new_epoch_lock,
+            validator_address: new_validator_address,
+        };
+        transfer::transfer(new_delegation, tx_context::sender(ctx))
+    }
+
     /// Claim delegation reward. Increment next_reward_unclaimed_epoch.
     public(friend) fun claim_reward(
         self: &mut Delegation,
@@ -169,7 +203,7 @@ module sui::delegation {
         self.delegate_amount
     }
 
-    fun is_active(self: &Delegation): bool {
+    public fun is_active(self: &Delegation): bool {
         option::is_some(&self.active_delegation) && option::is_none(&self.ending_epoch)
     }
 }

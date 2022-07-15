@@ -76,14 +76,15 @@ function TxAddresses({ content }: { content: Link[] }) {
 }
 
 function TxStatusType({ content }: { content: TxStatus }) {
+    const TxStatus = {
+        success: ContentSuccessStatus,
+        fail: ContentFailedStatus,
+    };
+    const TxResultStatus =
+        content.status === 'success' ? TxStatus.success : TxStatus.fail;
     return (
         <>
-            {content.status === 'success' ? (
-                <ContentSuccessStatus />
-            ) : (
-                <ContentFailedStatus />
-            )}{' '}
-            {content.txTypeName}
+            <TxResultStatus /> {content.txTypeName}
         </>
     );
 }
@@ -109,7 +110,7 @@ function columnsContent(columns: TableColumn[]) {
             ) {
                 return <TxStatusType content={content} />;
             }
-            // handle most common types including
+            // handle most common types
             return content;
         },
     }));

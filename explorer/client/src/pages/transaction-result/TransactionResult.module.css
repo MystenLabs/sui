@@ -1,69 +1,89 @@
-.txdetailsbg {
-    @apply bg-[#f8f8f8];
+.txlinks {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-1;
 }
 
-div.txcard {
-    @apply bg-white px-6 pt-0 pb-0 bg-center rounded-lg shadow-md border-2 border-coolGray-400
-    font-sans break-all tracking-tight font-semibold block pl-0 pr-0 m-auto mt-0 mb-10;
-    @apply pr-0 pl-0 w-full block !important;
+.txgridcomponent {
+    @apply block md:grid grid-cols-1 md:grid-cols-1 gap-0 md:gap-3;
 }
 
-div.columnheader > div {
-    @apply font-sans text-white;
+.txcomponent {
+    @apply pt-4 pb-4;
 }
 
-div.txcardgrid {
-    @apply grid md:grid-cols-3 sm:grid-cols-1 gap-2 border-0  pt-3 pb-3 md:pl-8 md:pr-8 pl-4 pr-4 items-center;
+.txgridcolspan2 {
+    grid-column: span 2;
+    border-right: 1px solid #f0f1f2;
+    @apply border-0 md:border-r-[1px] md:border-[#f0f1f2];
 }
 
-div.txcardgrid:nth-child(2n + 1) {
-    @apply bg-[#f6f6f6];
+.txgridcolspan3 {
+    grid-column: span 3;
 }
 
-.listitems .sublist > div {
-    @apply break-all break-words max-w-[84vw] overflow-auto;
+.txsender {
+    @apply col-start-2 md:col-start-3 md:row-start-1 md:row-end-2;
 }
 
-div.txcardgrid:first-child {
-    @apply bg-offblack rounded-none items-center pt-5 pb-5 font-black shadow-md border-2 border-coolGray-400;
+.itemviewtitle,
+.txtitle {
+    @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
 }
 
-div.txcardgrid > div:first-child {
-    @apply col-span-1 font-normal w-[90vw];
+.itemviewtitle {
+    border-bottom: 1px solid #f0f1f2;
+    @apply border-b-[1px] border-[#f0f1f2] pb-1 pt-1;
 }
 
-div.txcardgrid > div:last-child {
-    @apply border-none;
+.itemviewcontent {
+    @apply mb-2 mt-2;
 }
 
-div.txcardgridlarge {
-    @apply font-mono break-all tracking-tight font-normal md:block col-span-2  max-w-[84vw];
+.itemviewcontent .itemviewcontentitem {
+    @apply grid gap-1 text-[14px] md:text-[15px] text-gray-500;
+
+    grid-template-columns: 1fr 2fr;
 }
 
-div.status-success {
-    @apply text-green-600;
+.itemviewcontentvalue {
+    @apply text-sm pt-2 pb-2 text-gray-800;
 }
 
-div.status-fail {
-    @apply text-red-300;
+.itemviewcontent .itemviewcontentitem a,
+.itemviewcontent .itemviewcontentitem span {
+    @apply break-all font-mono text-sm text-sui-dark;
 }
 
-ul.listitems {
-    @apply list-none p-0 m-0;
+.itemviewcontentlabel {
+    @apply pt-2 pb-2;
 }
 
-.listitems .list {
-    @apply mt-5 list-none p-0  max-w-[84vw];
+@media (min-width: 40em) {
+    .itemviewcontent .itemviewcontentitem {
+        grid-template-columns: 1fr 5fr;
+    }
+
+    .txmodule section:nth-child(2n) {
+        border-left: 1px solid #f0f1f2;
+        border-right: 1px solid #f0f1f2;
+    }
 }
 
-.listitems .list:first-child {
+.singleitem {
+    @apply block !important;
+}
+
+.mono {
+    @apply font-mono text-sm break-all;
+}
+
+.txdetailsbg ul {
+    @apply mt-5 mb-2;
+
+    border-top: none !important;
+}
+
+.packagedetails .itemviewtitle {
     @apply mt-0;
-}
 
-.listitems .sublist {
-    @apply mt-2 list-none p-0 md:flex grid gap-2 pr-0  max-w-[84vw];
-}
-
-div.sublist .sublistlabel {
-    @apply w-28 flex-none;
+    border-bottom: none;
 }

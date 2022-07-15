@@ -52,11 +52,6 @@ pub fn all_natives(
             "update_object",
             test_scenario::update_object,
         ),
-        (
-            "transfer",
-            "delete_child_object_internal",
-            transfer::delete_child_object_internal,
-        ),
         ("transfer", "transfer_internal", transfer::transfer_internal),
         ("transfer", "freeze_object", transfer::freeze_object),
         ("transfer", "share_object", transfer::share_object),

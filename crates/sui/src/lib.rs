@@ -10,3 +10,5 @@ pub mod keytool;
 pub mod shell;
 pub mod sui_commands;
 pub mod sui_move;
+
+pub mod genesis_ceremony;

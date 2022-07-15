@@ -167,8 +167,8 @@ module nfts::auction_lib {
     /// exposes transfer::transfer_to_object_id
     public fun transfer_to_object_id<T: key + store>(
         obj: Auction<T>,
-        owner_id: VersionedID,
-    ): (VersionedID, transfer::ChildRef<Auction<T>>) {
+        owner_id: &VersionedID,
+    ) {
         transfer::transfer_to_object_id(obj, owner_id)
     }
 
