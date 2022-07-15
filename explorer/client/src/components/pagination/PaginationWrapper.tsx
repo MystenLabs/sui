@@ -127,7 +127,7 @@ export default function PaginationWrapper({
                         2
                     </button>
                     {pageIndex > 2 && (
-                        <button className={styles.btncontainer}>...</button>
+                        <button className={styles.ellipsis}>...</button>
                     )}
 
                     {pageIndex > 1 && pageIndex < FINAL_PAGE_NO - 2 && (
@@ -137,7 +137,7 @@ export default function PaginationWrapper({
                     )}
 
                     {pageIndex < FINAL_PAGE_NO - 3 && (
-                        <button className={styles.btncontainer}>...</button>
+                        <button className={styles.ellipsis}>...</button>
                     )}
 
                     <button
