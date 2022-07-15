@@ -19,20 +19,20 @@ use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NF
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_json::SuiJsonValue;
+use sui_json_rpc::api::EventReadApiOpenRpc;
+use sui_json_rpc::api::EventStreamingApiOpenRpc;
+use sui_json_rpc::api::RpcReadApiClient;
+use sui_json_rpc::api::RpcTransactionBuilderClient;
+use sui_json_rpc::api::WalletSyncApiClient;
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::gateway_api::{GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
 use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
+use sui_json_rpc_types::{
+    GetObjectDataResponse, SuiObjectInfo, TransactionBytes, TransactionEffectsResponse,
+    TransactionResponse,
 };
-use sui_json_rpc_api::EventReadApiOpenRpc;
-use sui_json_rpc_api::EventStreamingApiOpenRpc;
-use sui_json_rpc_api::RpcReadApiClient;
-use sui_json_rpc_api::RpcTransactionBuilderClient;
-use sui_json_rpc_api::TransactionBytes;
-use sui_json_rpc_api::WalletSyncApiClient;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;

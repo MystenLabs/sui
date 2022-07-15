@@ -29,7 +29,7 @@ use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::{AuthorityStrongQuorumSignInfo, Signature};
+use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
 use sui_types::error::SuiError;
 use sui_types::event::EventType;
 use sui_types::event::{Event, TransferType};
@@ -46,8 +46,10 @@ use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRea
 use sui_types::sui_serde::{Base64, Encoding};
 
 #[cfg(test)]
-#[path = "unit_tests/gateway_types_tests.rs"]
-mod gateway_types_tests;
+#[path = "unit_tests/rpc_types_tests.rs"]
+mod rpc_types_tests;
+
+pub type GatewayTxSeqNumber = u64;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct TransactionEffectsResponse {
@@ -514,7 +516,7 @@ impl Display for PublishResponse {
 pub type GetObjectDataResponse = SuiObjectRead<SuiParsedMoveObject>;
 pub type GetRawObjectDataResponse = SuiObjectRead<SuiRawMoveObject>;
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
 pub enum SuiObjectRead<T: SuiMoveObject> {
     Exists(SuiObject<T>),
@@ -671,6 +673,45 @@ pub enum SuiMoveStruct {
         fields: BTreeMap<String, SuiMoveValue>,
     },
     WithFields(BTreeMap<String, SuiMoveValue>),
+}
+
+impl SuiMoveStruct {
+    pub fn to_json_value(self) -> Result<Value, serde_json::Error> {
+        // Unwrap MoveStructs
+        let unwrapped = match self {
+            SuiMoveStruct::Runtime(values) => {
+                let values = values
+                    .into_iter()
+                    .map(|value| match value {
+                        SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
+                        SuiMoveValue::Vector(values) => {
+                            SuiMoveStruct::Runtime(values).to_json_value()
+                        }
+                        _ => serde_json::to_value(&value),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                serde_json::to_value(&values)
+            }
+            // We only care about values here, assuming struct type information is known at the client side.
+            SuiMoveStruct::WithTypes { type_: _, fields } | SuiMoveStruct::WithFields(fields) => {
+                let fields = fields
+                    .into_iter()
+                    .map(|(key, value)| {
+                        let value = match value {
+                            SuiMoveValue::Struct(move_struct) => move_struct.to_json_value(),
+                            SuiMoveValue::Vector(values) => {
+                                SuiMoveStruct::Runtime(values).to_json_value()
+                            }
+                            _ => serde_json::to_value(&value),
+                        };
+                        value.map(|value| (key, value))
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                serde_json::to_value(&fields)
+            }
+        }?;
+        serde_json::to_value(&unwrapped)
+    }
 }
 
 impl Display for SuiMoveStruct {
@@ -1512,5 +1553,32 @@ impl TryInto<EventFilter> for SuiEventFilter {
             Or(filter_a, filter_b) => Any(vec![*filter_a, *filter_b]).try_into()?,
             EventType(type_) => EventFilter::EventType(type_),
         })
+    }
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionBytes {
+    pub tx_bytes: Base64,
+    pub gas: SuiObjectRef,
+    pub input_objects: Vec<SuiInputObjectKind>,
+}
+
+impl TransactionBytes {
+    pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            tx_bytes: Base64::from_bytes(&data.to_bytes()),
+            gas: data.gas().into(),
+            input_objects: data
+                .input_objects()?
+                .into_iter()
+                .map(SuiInputObjectKind::from)
+                .collect(),
+        })
+    }
+
+    pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
+        TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
     }
 }
