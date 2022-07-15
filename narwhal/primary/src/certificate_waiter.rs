@@ -22,6 +22,7 @@ use tokio::{
         oneshot, watch,
     },
     task::JoinHandle,
+    time::{sleep, Duration, Instant},
 };
 use tracing::error;
 use types::{
@@ -35,7 +36,6 @@ pub mod certificate_waiter_tests;
 
 /// The resolution of the timer that checks whether we received replies to our parent requests, and triggers
 /// a round of GC if we didn't.
-#[allow(dead_code)]
 const GC_RESOLUTION: u64 = 10_000;
 
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
@@ -113,6 +113,9 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
     async fn run(&mut self) {
         let mut waiting = FuturesUnordered::new();
 
+        let timer = sleep(Duration::from_millis(GC_RESOLUTION));
+        tokio::pin!(timer);
+
         loop {
             tokio::select! {
                 Some(certificate) = self.rx_synchronizer.recv() => {
@@ -129,10 +132,10 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                     // Add the certificate to the waiter pool. The waiter will return it to us when
                     // all its parents are in the store.
                     let wait_for = certificate
-                        .header
-                        .parents
-                        .iter().cloned()
-                        .collect();
+                    .header
+                    .parents
+                    .iter().cloned()
+                    .collect();
                     let (tx_cancel, rx_cancel) = oneshot::channel();
                     self.pending.insert(header_id, (certificate.round(), tx_cancel));
                     let fut = Self::waiter(wait_for, &self.store, certificate, rx_cancel);
@@ -163,14 +166,38 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                     }
 
                 }
+                () = &mut timer => {
+                    // We still would like to GC even if we do not receive anything from either the synchronizer or
+                    //  the Waiter. This can happen, as we may have asked for certificates that (at the time of ask)
+                    // were not past our GC bound, but which round swept up past our GC bound as we advanced rounds
+                    // & caught up with the network.
+                    // Those certificates may get stuck in pending, unless we periodically clean up.
+
+                    // Reschedule the timer.
+                    timer.as_mut().reset(Instant::now() + Duration::from_millis(GC_RESOLUTION));
+                },
             }
 
-            // Cleanup internal state. Deliver the certificates waiting on garbage collected ancestors.
             let round = self.consensus_round.load(Ordering::Relaxed);
-            if round > self.gc_depth {
-                let gc_round = round - self.gc_depth;
-                self.pending = self
-                    .pending
+            let gc_depth = self.gc_depth;
+            if let Some(fresh_pending) = Self::clean_pending(round, gc_depth, &mut self.pending) {
+                self.pending = fresh_pending;
+            }
+
+            self.update_metrics();
+        }
+    }
+
+    fn clean_pending(
+        round: Round,
+        gc_depth: u64,
+        pending: &mut HashMap<HeaderDigest, (Round, oneshot::Sender<()>)>,
+    ) -> Option<HashMap<HeaderDigest, (Round, oneshot::Sender<()>)>> {
+        // Cleanup internal state. Deliver the certificates waiting on garbage collected ancestors.
+        if round > gc_depth {
+            let gc_round = round - gc_depth;
+            Some(
+                pending
                     .drain()
                     .flat_map(|(digest, (r, handler))| {
                         if r <= gc_round {
@@ -182,10 +209,10 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                             Some((digest, (r, handler)))
                         }
                     })
-                    .collect();
-            }
-
-            self.update_metrics();
+                    .collect::<HashMap<_, _>>(),
+            )
+        } else {
+            None
         }
     }
 
