@@ -49,8 +49,8 @@ move-disassembler = { git = "https://github.com/move-language/move", rev = "7733
 move-ir-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5b744fa722aa5d002ec17db3602cb709f7514fb3", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "29e853d2d65e543fa0f1dbc634d01576c0e8e60e", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "29e853d2d65e543fa0f1dbc634d01576c0e8e60e", package = "crypto" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
