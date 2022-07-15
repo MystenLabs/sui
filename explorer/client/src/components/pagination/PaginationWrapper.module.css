@@ -3,33 +3,20 @@
 }
 
 button.btncontainer,
-button.pagenumber {
-    @apply w-[32px] h-[32px] rounded font-sans inline-block px-0 cursor-pointer border-none bg-inherit hover:bg-sui
-  py-2
-  text-sui-grey-75 stroke-sui-grey-75
-  hover:text-white hover:stroke-white
-  items-center border-[1px] border-solid
-  mx-[4px];
-}
-
-button.pagenumber {
-    @apply select-none border-solid border-sui-dark text-sui-dark hover:text-sui-dark cursor-default;
-
-    background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
+button.pagenumber,
+button.ellipsis {
+    @apply w-[32px] h-[32px] px-0 py-2 mx-[4px] inline-block
+    rounded border-[1px] border-solid border-sui-grey-50
+    font-sans items-center 
+    text-sui-grey-75 stroke-sui-grey-75 bg-inherit;
 }
 
 button.btncontainer {
-    @apply border-solid hover:border-sui;
+    @apply hover:bg-sui hover:text-white hover:stroke-white hover:border-sui cursor-pointer;
 }
 
-.paginationheading {
-    @apply block;
-}
+button.pagenumber {
+    @apply select-none border-solid border-sui-dark text-sui-dark;
 
-.paginationheading > button {
-    @apply block lg:inline mb-2 bg-sui hover:bg-sui-dark hover:text-white rounded-r-md border-none cursor-pointer p-2;
-}
-
-.paginationheading > h2 {
-    @apply inline lg:ml-5;
+    background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
 }
