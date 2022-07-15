@@ -1,7 +1,7 @@
 button.btncontainer,
 button.pagenumber,
 button.nointeract {
-    @apply w-[32px] h-[32px] px-0 py-2 mx-[4px] inline-block
+    @apply w-[7vw] sm:w-[32px] h-[32px] px-0 py-2 mx-[1vw] sm:mx-[4px] inline-block
     rounded border-[1px] border-solid border-sui-grey-50
     font-sans items-center 
     text-sui-grey-75 stroke-sui-grey-75 bg-inherit;
