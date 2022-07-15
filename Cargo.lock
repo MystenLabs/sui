@@ -5671,21 +5671,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdk-example-tic-tac-toe"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-recursion",
- "bcs",
- "clap 3.1.18",
- "dirs",
- "serde 1.0.139",
- "sui-sdk",
- "tokio",
- "workspace-hack 0.1.0",
-]
-
-[[package]]
 name = "security-framework"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6804,8 +6789,14 @@ name = "sui-sdk"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "async-trait",
+ "bcs",
+ "clap 3.1.18",
+ "dirs",
  "ed25519-dalek",
+ "futures",
+ "futures-core",
  "jsonrpsee",
  "serde 1.0.139",
  "serde_json",
@@ -6813,6 +6804,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-types",
+ "tokio",
  "workspace-hack 0.1.0",
 ]
 

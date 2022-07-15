@@ -1,9 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use futures::StreamExt;
+use futures_core::Stream;
+use jsonrpsee::core::client::Subscription;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use sui_json::SuiJsonValue;
+use sui_json_rpc::api::EventStreamingApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
 use sui_json_rpc::api::RpcFullNodeReadApiClient;
 use sui_json_rpc::api::RpcGatewayApiClient;
@@ -12,16 +17,16 @@ use sui_json_rpc::api::RpcTransactionBuilderClient;
 use sui_json_rpc::api::WalletSyncApiClient;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
-    RPCTransactionRequestParams, SuiObjectInfo, SuiTypeTag, TransactionBytes,
-    TransactionEffectsResponse, TransactionResponse,
+    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
+    TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::sui_serde::Base64;
-
 pub mod crypto;
 
 // re-export essential sui crates
 pub use sui_json as json;
+pub use sui_json_rpc_types as rpc_types;
 pub use sui_types as types;
 
 pub struct SuiClient {
@@ -332,6 +337,22 @@ impl SuiClient {
             Client::Ws(c) => c.sync_account_state(address),
         }
         .await?)
+    }
+
+    pub async fn subscribe_event(
+        &self,
+        filter: SuiEventFilter,
+    ) -> anyhow::Result<impl Stream<Item = Result<SuiEventEnvelope, anyhow::Error>>> {
+        match &self.client {
+            Client::Ws(c) => {
+                let subscription: Subscription<SuiEventEnvelope> =
+                    c.subscribe_event(filter).await?;
+                Ok(subscription.map(|item| Ok(item?)))
+            }
+            _ => Err(anyhow!(
+                "Subscription only supported with web socket client."
+            )),
+        }
     }
 }
 
