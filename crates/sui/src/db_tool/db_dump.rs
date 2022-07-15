@@ -89,19 +89,19 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStoreReadonly
             let s_path = &secondary_path;
             let db_options = Some(options.clone());
             let opt_cfs: &[(&str, &rocksdb::Options)] = &[
-                ("objects", &point_lookup),
-                ("transactions", &point_lookup),
-                ("owner_index", &options),
-                ("certificates", &point_lookup),
-                ("pending_execution", &options),
-                ("parent_sync", &options),
-                ("effects", &point_lookup),
-                ("sequenced", &options),
-                ("schedule", &options),
-                ("executed_sequence", &options),
-                ("batches", &options),
-                ("last_consensus_index", &options),
-                ("epochs", &options),
+                (OBJECTS_TABLE_NAME, &point_lookup),
+                (TX_TABLE_NAME, &point_lookup),
+                (OWNER_INDEX_TABLE_NAME, &options),
+                (CERTS_TABLE_NAME, &point_lookup),
+                (PENDING_EXECUTION, &options),
+                (PARENT_SYNC_TABLE_NAME, &options),
+                (EFFECTS_TABLE_NAME, &point_lookup),
+                (SEQUENCED_TABLE_NAME, &options),
+                (SCHEDULE_TABLE_NAME, &options),
+                (EXEC_SEQ_TABLE_NAME, &options),
+                (BATCHES_TABLE_NAME, &options),
+                (LAST_CONSENSUS_TABLE_NAME, &options),
+                (EPOCH_TABLE_NAME, &options),
             ];
 
             typed_store::rocks::open_cf_opts_secondary(path, Some(s_path), db_options, opt_cfs)
@@ -109,7 +109,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStoreReadonly
         .expect("Cannot open DB.");
 
         let executed_sequence =
-            DBMap::reopen(&db, Some("executed_sequence")).expect("Cannot open CF.");
+            DBMap::reopen(&db, Some(EXEC_SEQ_TABLE_NAME)).expect("Cannot open CF.");
 
         let (
             objects,
@@ -126,18 +126,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStoreReadonly
             epochs,
         ) = reopen! (
             &db,
-            "objects";<ObjectKey, Object>,
-            "owner_index";<(Owner, ObjectID), ObjectInfo>,
-            "transactions";<TransactionDigest, TransactionEnvelope<S>>,
-            "certificates";<TransactionDigest, CertifiedTransaction>,
-            "pending_execution";<InternalSequenceNumber, TransactionDigest>,
-            "parent_sync";<ObjectRef, TransactionDigest>,
-            "effects";<TransactionDigest, TransactionEffectsEnvelope<S>>,
-            "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
-            "schedule";<ObjectID, SequenceNumber>,
-            "batches";<TxSequenceNumber, SignedBatch>,
-            "last_consensus_index";<u64, ExecutionIndices>,
-            "epochs";<EpochId, EpochInfoLocals>
+            OBJECTS_TABLE_NAME;<ObjectKey, Object>,
+            OWNER_INDEX_TABLE_NAME;<(Owner, ObjectID), ObjectInfo>,
+            TX_TABLE_NAME;<TransactionDigest, TransactionEnvelope<S>>,
+            CERTS_TABLE_NAME;<TransactionDigest, CertifiedTransaction>,
+            PENDING_EXECUTION;<InternalSequenceNumber, TransactionDigest>,
+            PARENT_SYNC_TABLE_NAME;<ObjectRef, TransactionDigest>,
+            EFFECTS_TABLE_NAME;<TransactionDigest, TransactionEffectsEnvelope<S>>,
+            SEQUENCED_TABLE_NAME;<(TransactionDigest, ObjectID), SequenceNumber>,
+            SCHEDULE_TABLE_NAME;<ObjectID, SequenceNumber>,
+            BATCHES_TABLE_NAME;<TxSequenceNumber, SignedBatch>,
+            LAST_CONSENSUS_TABLE_NAME;<u64, ExecutionIndices>,
+            EPOCH_TABLE_NAME;<EpochId, EpochInfoLocals>
         );
         Self {
             objects,
