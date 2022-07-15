@@ -82,10 +82,14 @@ impl<C> SafeClient<C> {
 
         if let Some(signed_effects) = &response.signed_effects {
             // Check signature
-            signed_effects
-                .auth_signature
-                .signature
-                .verify(&signed_effects.effects, self.address)?;
+            signed_effects.verify(&self.committee)?;
+            // Check it has the right signer
+            fp_ensure!(
+                signed_effects.auth_signature.authority == self.address,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address
+                }
+            );
             // Checks it concerns the right tx
             fp_ensure!(
                 signed_effects.effects.transaction_digest == digest,
@@ -102,13 +106,6 @@ impl<C> SafeClient<C> {
                     }
                 );
             }
-            // Check it has the right signer
-            fp_ensure!(
-                signed_effects.auth_signature.authority == self.address,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
-                }
-            );
         }
 
         Ok(())

@@ -734,19 +734,17 @@ impl SignedTransaction {
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn verify(&self, committee: &Committee) -> Result<u64, SuiError> {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
         let mut obligation = VerificationObligation::default();
         self.add_sender_sig_to_verification_obligation(&mut obligation)?;
-        let weight = committee.weight(&self.auth_sign_info.authority);
-        fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        let mut message = Vec::new();
-        self.data.write(&mut message);
-        let idx = obligation.add_message(message);
-        self.auth_sign_info
-            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+        self.auth_sign_info.add_to_verification_obligation(
+            &self.data,
+            committee,
+            &mut obligation,
+        )?;
 
         obligation.verify_all()?;
-        Ok(weight)
+        Ok(())
     }
 
     // Turn a SignedTransaction into a Transaction. This is needed when we are
@@ -1432,6 +1430,10 @@ pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo
 impl SignedTransactionEffects {
     pub fn digest(&self) -> [u8; 32] {
         sha3_hash(&self.effects)
+    }
+
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.auth_signature.verify(&self.effects, committee)
     }
 }
 
