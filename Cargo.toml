@@ -22,6 +22,7 @@ members = [
     "crates/sui-quorum-driver",
     "crates/sui-storage",
     "crates/sui-swarm",
+    "crates/sui-tool",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-verifier",
