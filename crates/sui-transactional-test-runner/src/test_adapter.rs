@@ -351,9 +351,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         macro_rules! get_obj {
             ($fake_id:ident) => {{
                 let id = match self.fake_to_real_object_id($fake_id) {
-                    None => panic!(
+                    None => bail!(
                         "task {}, lines {}-{}. Unbound fake id {}",
-                        number, start_line, command_lines_stop, $fake_id
+                        number,
+                        start_line,
+                        command_lines_stop,
+                        $fake_id
                     ),
                     Some(res) => res,
                 };

@@ -5,7 +5,7 @@
 module sui::test_scenarioTests {
     use sui::id;
     use sui::test_scenario::{Self, Scenario};
-    use sui::transfer::{Self, ChildRef};
+    use sui::transfer;
     use sui::tx_context;
 
     const ID_BYTES_MISMATCH: u64 = 0;
@@ -24,13 +24,13 @@ module sui::test_scenarioTests {
 
     struct Parent has key {
         id: id::VersionedID,
-        child: ChildRef<Object>,
+        child: id::ID,
     }
 
     struct MultiChildParent has key {
         id: id::VersionedID,
-        child1: ChildRef<Object>,
-        child2: ChildRef<Object>,
+        child1: id::ID,
+        child2: id::ID,
     }
 
     #[test]
@@ -331,13 +331,13 @@ module sui::test_scenarioTests {
         };
         let child2_id = *id::id(&child2);
         let parent_id = test_scenario::new_id(&mut scenario);
-        let (parent_id, child1_ref) = transfer::transfer_to_object_id(child1, parent_id);
-        let (parent_id, child2_ref) = transfer::transfer_to_object_id(child2, parent_id);
+        transfer::transfer_to_object_id(child1, &parent_id);
+        transfer::transfer_to_object_id(child2, &parent_id);
 
         let parent = MultiChildParent {
             id: parent_id,
-            child1: child1_ref,
-            child2: child2_ref,
+            child1: child1_id,
+            child2: child2_id,
         };
         transfer::transfer(parent, sender);
 
@@ -362,10 +362,11 @@ module sui::test_scenarioTests {
             id: test_scenario::new_id(scenario),
             value: 10,
         };
-        let (parent_id, child) = transfer::transfer_to_object_id(object, parent_id);
+        let child_id = *id::id(&object);
+        transfer::transfer_to_object_id(object, &parent_id);
         let parent = Parent {
             id: parent_id,
-            child,
+            child: child_id,
         };
         transfer::transfer(parent, test_scenario::sender(scenario));
     }

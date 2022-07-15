@@ -5,8 +5,9 @@
 module sui::collection_tests {
     use sui::bag::{Self, Bag};
     use sui::collection::{Self, Collection};
-    use sui::id::{Self, VersionedID};
+    use sui::id::VersionedID;
     use sui::test_scenario;
+    use sui::typed_id;
     use sui::tx_context;
 
     struct Object has key, store {
@@ -31,16 +32,14 @@ module sui::collection_tests {
             assert!(collection::size(&collection) == 0, 0);
 
             let obj1 = Object { id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            let id1 = *id::id(&obj1);
             let obj2 = Object { id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            let id2 = *id::id(&obj2);
 
-            collection::add(&mut collection, obj1);
-            collection::add(&mut collection, obj2);
+            let item_id1 = collection::add(&mut collection, obj1, test_scenario::ctx(scenario));
+            let item_id2 = collection::add(&mut collection, obj2, test_scenario::ctx(scenario));
             assert!(collection::size(&collection) == 2, 0);
 
-            assert!(collection::contains(&collection, &id1), 0);
-            assert!(collection::contains(&collection, &id2), 0);
+            assert!(collection::contains(&collection, typed_id::as_id(&item_id1)), 0);
+            assert!(collection::contains(&collection, typed_id::as_id(&item_id2)), 0);
 
             test_scenario::return_owned(scenario, collection);
         };
@@ -63,7 +62,7 @@ module sui::collection_tests {
         {
             let collection = test_scenario::take_owned<Collection<Object>>(scenario);
             let obj = Object { id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            collection::add(&mut collection, obj);
+            collection::add(&mut collection, obj, test_scenario::ctx(scenario));
             test_scenario::return_owned(scenario, collection);
         };
 
@@ -72,15 +71,14 @@ module sui::collection_tests {
         {
             let collection = test_scenario::take_owned<Collection<Object>>(scenario);
             let bag = test_scenario::take_owned<Bag>(scenario);
-            let obj = test_scenario::take_child_object<Collection<Object>, Object>(scenario, &collection);
-            let id = *id::id(&obj);
+            let obj = test_scenario::take_child_object<Collection<Object>, collection::Item<Object>>(scenario, &collection);
 
-            let (obj, child_ref) = collection::remove(&mut collection, obj);
-            bag::add_child_object(&mut bag, obj, child_ref);
+            let obj = collection::remove(&mut collection, obj);
+            let item_id = bag::add(&mut bag, obj, test_scenario::ctx(scenario));
 
             assert!(collection::size(&collection) == 0, 0);
             assert!(bag::size(&bag) == 1, 0);
-            assert!(bag::contains(&bag, &id), 0);
+            assert!(bag::contains(&bag, typed_id::as_id(&item_id)), 0);
 
             test_scenario::return_owned(scenario, collection);
             test_scenario::return_owned(scenario, bag);
@@ -91,15 +89,14 @@ module sui::collection_tests {
         {
             let collection = test_scenario::take_owned<Collection<Object>>(scenario);
             let bag = test_scenario::take_owned<Bag>(scenario);
-            let obj = test_scenario::take_child_object<Bag, Object>(scenario, &bag);
-            let id = *id::id(&obj);
+            let obj = test_scenario::take_child_object<Bag, bag::Item<Object>>(scenario, &bag);
 
             let obj = bag::remove(&mut bag, obj);
-            collection::add(&mut collection, obj);
+            let item_id = collection::add(&mut collection, obj, test_scenario::ctx(scenario));
 
             assert!(collection::size(&collection) == 1, 0);
             assert!(bag::size(&bag) == 0, 0);
-            assert!(collection::contains(&collection, &id), 0);
+            assert!(collection::contains(&collection, typed_id::as_id(&item_id)), 0);
 
             test_scenario::return_owned(scenario, collection);
             test_scenario::return_owned(scenario, bag);
@@ -108,7 +105,7 @@ module sui::collection_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 520)]
+    #[expected_failure(abort_code = 0)]
     fun test_init_with_invalid_max_capacity() {
         let ctx = tx_context::dummy();
         // Sui::collection::DEFAULT_MAX_CAPACITY is not readable outside the module
@@ -118,7 +115,7 @@ module sui::collection_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 520)]
+    #[expected_failure(abort_code = 0)]
     fun test_init_with_zero() {
         let ctx = tx_context::dummy();
         let collection = collection::new_with_max_capacity<Object>(&mut ctx, 0);
@@ -126,15 +123,15 @@ module sui::collection_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 776)]
+    #[expected_failure(abort_code = 1)]
     fun test_exceed_max_capacity() {
         let ctx = tx_context::dummy();
         let collection = collection::new_with_max_capacity<Object>(&mut ctx, 1);
 
         let obj1 = Object { id: tx_context::new_id(&mut ctx) };
-        collection::add(&mut collection, obj1);
+        collection::add(&mut collection, obj1, &mut ctx);
         let obj2 = Object { id: tx_context::new_id(&mut ctx) };
-        collection::add(&mut collection, obj2);
+        collection::add(&mut collection, obj2, &mut ctx);
         collection::transfer(collection, tx_context::sender(&ctx));
     }
 }
