@@ -15,13 +15,8 @@ telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", re
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68" }
 
 sui-core = { path = "../sui-core" }
-sui-framework = { path = "../sui-framework" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
-sui-json = { path = "../sui-json" }
-sui-gateway = { path = "../sui-gateway" }
-sui-swarm = { path = "../sui-swarm" }
-sui-json-rpc-api = { path = "../sui-json-rpc-api" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
