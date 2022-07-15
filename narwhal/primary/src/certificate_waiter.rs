@@ -4,16 +4,15 @@
 use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use crypto::traits::VerifyingKey;
+use dashmap::DashMap;
 use futures::{
     future::try_join_all,
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+use once_cell::sync::OnceCell;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 use store::Store;
 use tokio::{
@@ -58,7 +57,8 @@ pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     /// List of digests (certificates) that are waiting to be processed. Their processing will
     /// resume when we get all their dependencies. The map holds a cancellation `Sender`
     /// which we can use to give up on a certificate.
-    pending: HashMap<HeaderDigest, (Round, oneshot::Sender<()>)>,
+    // TODO: remove the OnceCell once drain_filter stabilizes
+    pending: DashMap<HeaderDigest, (Round, OnceCell<oneshot::Sender<()>>)>,
     /// The metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -83,7 +83,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                 rx_reconfigure,
                 rx_synchronizer,
                 tx_core,
-                pending: HashMap::new(),
+                pending: DashMap::new(),
                 metrics,
             }
             .run()
@@ -131,13 +131,15 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
 
                     // Add the certificate to the waiter pool. The waiter will return it to us when
                     // all its parents are in the store.
-                    let wait_for = certificate
-                    .header
-                    .parents
-                    .iter().cloned()
-                    .collect();
+                    let wait_for = certificate.header.parents.iter().cloned().collect();
                     let (tx_cancel, rx_cancel) = oneshot::channel();
-                    self.pending.insert(header_id, (certificate.round(), tx_cancel));
+                    // TODO: remove all this once drain_filter is stabilized.
+                    let once_cancel = {
+                        let inner = OnceCell::new();
+                        inner.set(tx_cancel).expect("OnceCell invariant violated");
+                        inner
+                    };
+                    self.pending.insert(header_id, (certificate.round(), once_cancel));
                     let fut = Self::waiter(wait_for, &self.store, certificate, rx_cancel);
                     waiting.push(fut);
                 }
@@ -178,41 +180,26 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                 },
             }
 
+            // Cleanup internal state. Deliver the certificates waiting on garbage collected ancestors.
             let round = self.consensus_round.load(Ordering::Relaxed);
-            let gc_depth = self.gc_depth;
-            if let Some(fresh_pending) = Self::clean_pending(round, gc_depth, &mut self.pending) {
-                self.pending = fresh_pending;
+            if round > self.gc_depth {
+                let gc_round = round - self.gc_depth;
+
+                self.pending.retain(|_digest, (r, once_cancel)| {
+                    if *r <= gc_round {
+                        once_cancel
+                            .take()
+                            .expect("This should be protected by a write lock")
+                            .send(())
+                            .expect("fatal error sending pending cancellation signal");
+                        false
+                    } else {
+                        true
+                    }
+                });
             }
 
             self.update_metrics();
-        }
-    }
-
-    fn clean_pending(
-        round: Round,
-        gc_depth: u64,
-        pending: &mut HashMap<HeaderDigest, (Round, oneshot::Sender<()>)>,
-    ) -> Option<HashMap<HeaderDigest, (Round, oneshot::Sender<()>)>> {
-        // Cleanup internal state. Deliver the certificates waiting on garbage collected ancestors.
-        if round > gc_depth {
-            let gc_round = round - gc_depth;
-            Some(
-                pending
-                    .drain()
-                    .flat_map(|(digest, (r, handler))| {
-                        if r <= gc_round {
-                            handler
-                                .send(())
-                                .expect("fatal error sending pending cancellation signal");
-                            None
-                        } else {
-                            Some((digest, (r, handler)))
-                        }
-                    })
-                    .collect::<HashMap<_, _>>(),
-            )
-        } else {
-            None
         }
     }
 
