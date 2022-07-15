@@ -11,8 +11,8 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 tokio = { version = "1.18.2", features = ["full"] }
 tracing = "0.1.35"
 clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "40dae350a699f59f2e296152e02c78765db34e68" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7e9b7568fc7184b4938976330122f3c8064e3236" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7e9b7568fc7184b4938976330122f3c8064e3236" }
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
