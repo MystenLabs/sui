@@ -13,12 +13,6 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::sui_serde::Base64;
 
-// TODO: Refactor this and sui-client::api
-// sui-client::api is a copy of this file, ideally we only need 1 copy of api to share between client and server
-// However the jsonrpsee rpc proc marco removes the Api traits when generate the RpcServer and RpcClient implementation,
-// we might want to replace the proc marco with handcrafted PRC server methods to make it easier to maintain.
-// Note: Please make sure to update sui-client::api if you are adding methods to the Api
-
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGatewayApi {

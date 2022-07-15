@@ -3,10 +3,8 @@
 
 use anyhow::Error;
 use async_trait::async_trait;
-use sui_client::apis::{
-    RpcBcsApi, RpcGatewayApi, RpcReadApi, RpcTransactionBuilder, WalletSyncApi,
-};
-use sui_client::SuiRpcClient;
+
+use sui_client::SuiClient;
 use tokio::runtime::Handle;
 
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
@@ -19,12 +17,12 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 pub struct RpcGatewayClient {
-    client: SuiRpcClient,
+    client: SuiClient,
 }
 impl RpcGatewayClient {
     pub fn new(server_url: String) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            client: SuiRpcClient::new_http_client(&server_url)?,
+            client: SuiClient::new_http_client(&server_url)?,
         })
     }
 }

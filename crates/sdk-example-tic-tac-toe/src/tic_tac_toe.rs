@@ -12,7 +12,6 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 use sui_client::{
-    apis::{RpcBcsApi, RpcGatewayApi, RpcTransactionBuilder, WalletSyncApi},
     crypto::{Keystore, SuiKeystore},
     json::SuiJsonValue,
     types::{
@@ -22,7 +21,7 @@ use sui_client::{
         messages::TransactionData,
         sui_serde::Base64,
     },
-    SuiRpcClient,
+    SuiClient,
 };
 
 #[tokio::main]
@@ -33,7 +32,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
-        client: SuiRpcClient::new_http_client(&opts.rpc_server_url)?,
+        client: SuiClient::new_http_client(&opts.rpc_server_url)?,
         keystore,
     };
 
@@ -54,7 +53,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 struct TicTacToe {
     game_package_id: ObjectID,
-    client: SuiRpcClient,
+    client: SuiClient,
     keystore: SuiKeystore,
 }
 

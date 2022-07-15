@@ -1,11 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::apis::{
-    RpcBcsApi, RpcFullNodeReadApi, RpcGatewayApi, RpcReadApi, RpcTransactionBuilder, WalletSyncApi,
-};
-
-use async_trait::async_trait;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use sui_json::SuiJsonValue;
@@ -23,18 +18,17 @@ use sui_json_rpc_types::{
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::sui_serde::Base64;
 
-pub mod apis;
 pub mod crypto;
 
 // re-export essential sui crates
 pub use sui_json as json;
 pub use sui_types as types;
 
-pub struct SuiRpcClient {
+pub struct SuiClient {
     client: Client,
 }
 
-impl SuiRpcClient {
+impl SuiClient {
     pub fn new_http_client(server_url: &str) -> Result<Self, anyhow::Error> {
         let client = HttpClientBuilder::default().build(server_url)?;
         Ok(Self {
@@ -50,14 +44,8 @@ impl SuiRpcClient {
     }
 }
 
-enum Client {
-    Http(HttpClient),
-    Ws(WsClient),
-}
-
-#[async_trait]
-impl RpcReadApi for SuiRpcClient {
-    async fn get_objects_owned_by_address(
+impl SuiClient {
+    pub async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
     ) -> anyhow::Result<Vec<SuiObjectInfo>> {
@@ -68,7 +56,7 @@ impl RpcReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_objects_owned_by_object(
+    pub async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<Vec<SuiObjectInfo>> {
@@ -79,7 +67,7 @@ impl RpcReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_total_transaction_number(&self) -> anyhow::Result<u64> {
+    pub async fn get_total_transaction_number(&self) -> anyhow::Result<u64> {
         Ok(match &self.client {
             Client::Http(c) => c.get_total_transaction_number(),
             Client::Ws(c) => c.get_total_transaction_number(),
@@ -87,7 +75,7 @@ impl RpcReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_transactions_in_range(
+    pub async fn get_transactions_in_range(
         &self,
         start: GatewayTxSeqNumber,
         end: GatewayTxSeqNumber,
@@ -99,7 +87,7 @@ impl RpcReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_recent_transactions(
+    pub async fn get_recent_transactions(
         &self,
         count: u64,
     ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
@@ -110,7 +98,7 @@ impl RpcReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_transaction(
+    pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> anyhow::Result<TransactionEffectsResponse> {
@@ -121,18 +109,15 @@ impl RpcReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> anyhow::Result<GetObjectDataResponse> {
+    pub async fn get_object(&self, object_id: ObjectID) -> anyhow::Result<GetObjectDataResponse> {
         Ok(match &self.client {
             Client::Http(c) => c.get_object(object_id),
             Client::Ws(c) => c.get_object(object_id),
         }
         .await?)
     }
-}
 
-#[async_trait]
-impl RpcBcsApi for SuiRpcClient {
-    async fn get_raw_object(
+    pub async fn get_raw_object(
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<GetRawObjectDataResponse> {
@@ -142,11 +127,8 @@ impl RpcBcsApi for SuiRpcClient {
         }
         .await?)
     }
-}
 
-#[async_trait]
-impl RpcFullNodeReadApi for SuiRpcClient {
-    async fn get_transactions_by_input_object(
+    pub async fn get_transactions_by_input_object(
         &self,
         object: ObjectID,
     ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
@@ -157,7 +139,7 @@ impl RpcFullNodeReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_transactions_by_mutated_object(
+    pub async fn get_transactions_by_mutated_object(
         &self,
         object: ObjectID,
     ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
@@ -168,7 +150,7 @@ impl RpcFullNodeReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_transactions_by_move_function(
+    pub async fn get_transactions_by_move_function(
         &self,
         package: ObjectID,
         module: Option<String>,
@@ -181,7 +163,7 @@ impl RpcFullNodeReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_transactions_from_addr(
+    pub async fn get_transactions_from_addr(
         &self,
         addr: SuiAddress,
     ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
@@ -192,7 +174,7 @@ impl RpcFullNodeReadApi for SuiRpcClient {
         .await?)
     }
 
-    async fn get_transactions_to_addr(
+    pub async fn get_transactions_to_addr(
         &self,
         addr: SuiAddress,
     ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
@@ -202,11 +184,8 @@ impl RpcFullNodeReadApi for SuiRpcClient {
         }
         .await?)
     }
-}
 
-#[async_trait]
-impl RpcGatewayApi for SuiRpcClient {
-    async fn execute_transaction(
+    pub async fn execute_transaction(
         &self,
         tx_bytes: Base64,
         signature: Base64,
@@ -218,11 +197,8 @@ impl RpcGatewayApi for SuiRpcClient {
         }
         .await?)
     }
-}
 
-#[async_trait]
-impl RpcTransactionBuilder for SuiRpcClient {
-    async fn transfer_object(
+    pub async fn transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -237,7 +213,7 @@ impl RpcTransactionBuilder for SuiRpcClient {
         .await?)
     }
 
-    async fn transfer_sui(
+    pub async fn transfer_sui(
         &self,
         signer: SuiAddress,
         sui_object_id: ObjectID,
@@ -252,7 +228,7 @@ impl RpcTransactionBuilder for SuiRpcClient {
         .await?)
     }
 
-    async fn move_call(
+    pub async fn move_call(
         &self,
         signer: SuiAddress,
         package_object_id: ObjectID,
@@ -288,7 +264,7 @@ impl RpcTransactionBuilder for SuiRpcClient {
         .await?)
     }
 
-    async fn publish(
+    pub async fn publish(
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Base64>,
@@ -302,7 +278,7 @@ impl RpcTransactionBuilder for SuiRpcClient {
         .await?)
     }
 
-    async fn split_coin(
+    pub async fn split_coin(
         &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
@@ -317,7 +293,7 @@ impl RpcTransactionBuilder for SuiRpcClient {
         .await?)
     }
 
-    async fn merge_coin(
+    pub async fn merge_coin(
         &self,
         signer: SuiAddress,
         primary_coin: ObjectID,
@@ -332,7 +308,7 @@ impl RpcTransactionBuilder for SuiRpcClient {
         .await?)
     }
 
-    async fn batch_transaction(
+    pub async fn batch_transaction(
         &self,
         signer: SuiAddress,
         single_transaction_params: Vec<RPCTransactionRequestParams>,
@@ -349,15 +325,17 @@ impl RpcTransactionBuilder for SuiRpcClient {
         }
         .await?)
     }
-}
 
-#[async_trait]
-impl WalletSyncApi for SuiRpcClient {
-    async fn sync_account_state(&self, address: SuiAddress) -> anyhow::Result<()> {
+    pub async fn sync_account_state(&self, address: SuiAddress) -> anyhow::Result<()> {
         Ok(match &self.client {
             Client::Http(c) => c.sync_account_state(address),
             Client::Ws(c) => c.sync_account_state(address),
         }
         .await?)
     }
+}
+
+enum Client {
+    Http(HttpClient),
+    Ws(WsClient),
 }
