@@ -223,6 +223,7 @@ function LatestTxCardAPIInitialLoad() {
 
     //Whenever network changes, we get a new list of recent tx:
     useEffect(() => {
+        setResults(initState);
         rpc(network)
             .getRecentTransactions(NUMBER_OF_TX_PER_PAGE)
             .then((res: GetTxnDigestsResponse) =>
@@ -323,7 +324,7 @@ function LatestTxCardAPIWP({ pagedNum }: { pagedNum: number }) {
         return () => {
             isMounted = false;
         };
-    }, [count, network, pagedNum]);
+    }, [network, pagedNum]);
 
     if (results.loadState === 'pending') {
         return (
