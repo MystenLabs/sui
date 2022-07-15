@@ -277,6 +277,10 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
+    pub fn is_fullnode(&self) -> bool {
+        self.committee.authority_exists(&self.name)
+    }
+
     /// Get a broadcast receiver for updates
     pub fn subscribe_batch(&self) -> BroadcastReceiver {
         self.batch_channels.subscribe()

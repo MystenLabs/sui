@@ -142,6 +142,7 @@ pub async fn checkpoint_process<A>(
     if active_authority.state.checkpoints.is_none() {
         // If the checkpointing database is not present, do not
         // operate the active checkpointing logic.
+        info!("No checkpoint database present - exiting checkpoint process");
         return;
     }
     info!("Start active checkpoint process.");
