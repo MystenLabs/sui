@@ -23,6 +23,7 @@ type TxResultState = {
     txId: string;
     status: ExecutionStatusType;
     txKindName: TransactionKindName;
+    error?: string;
 };
 
 function TxAddressHeader({ data }: { data: TxResultState }) {
@@ -70,6 +71,17 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                         {' '}
                         <TxResultStatus /> {statusName}
                     </div>
+                    {data.error && (
+                        <div
+                            className={cl([
+                                styles.txresulttype,
+                                styles.failed,
+                                styles.error,
+                            ])}
+                        >
+                            {data.error}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
