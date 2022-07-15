@@ -79,6 +79,7 @@ mod authority_store;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
+use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
@@ -280,6 +281,10 @@ impl AuthorityState {
     /// Get a broadcast receiver for updates
     pub fn subscribe_batch(&self) -> BroadcastReceiver {
         self.batch_channels.subscribe()
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.committee.load().epoch
     }
 
     async fn handle_transaction_impl(
