@@ -81,5 +81,9 @@ div.txadd {
 }
 
 .txlatestresults td a {
-    @apply font-mono;
+    @apply font-mono text-[#4E555D];
+}
+
+.txlatestresults td:nth-child(1) {
+    @apply text-xs;
 }
