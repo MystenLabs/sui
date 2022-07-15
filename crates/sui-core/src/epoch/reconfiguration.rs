@@ -115,7 +115,7 @@ where
             let new_net = Arc::new(AuthorityAggregator::new(
                 new_committee,
                 self.net.load().clone_inner_clients(),
-                self.gateway_metrics.clone(),
+                self.net.load().metrics.clone(),
             ));
             self.net.store(new_net);
         }
@@ -213,7 +213,7 @@ where
         let new_net = Arc::new(AuthorityAggregator::new(
             new_committee,
             new_clients,
-            self.gateway_metrics.clone(),
+            self.net.load().metrics.clone(),
         ));
         self.net.store(new_net);
         Ok(())

@@ -17,7 +17,7 @@ use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
 
 fn verification_failure(error: String) -> ExecutionError {
-    ExecutionError::new_with_source(ExecutionErrorKind::ModuleVerificationFailure, error)
+    ExecutionError::new_with_source(ExecutionErrorKind::SuiMoveVerificationError, error)
 }
 
 // TODO move these to move bytecode utils

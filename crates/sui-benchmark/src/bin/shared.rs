@@ -19,7 +19,7 @@ use test_utils::authority::{
     spawn_test_authorities, test_and_configure_authority_configs, test_authority_aggregator,
 };
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
-use test_utils::objects::{generate_gas_object, generate_gas_objects};
+use test_utils::objects::generate_gas_objects_for_testing;
 use test_utils::transaction::publish_counter_package;
 use tokio::time;
 use tokio::time::Instant;
@@ -84,8 +84,8 @@ async fn main() {
 
     // Create enough gas objects to cover for creating and incrementing counters
     let mut gas = vec![];
-    let mut counters_gas = generate_gas_objects(num_shared_counters);
-    let publish_module_gas = generate_gas_object();
+    let mut counters_gas = generate_gas_objects_for_testing(num_shared_counters);
+    let publish_module_gas = generate_gas_objects_for_testing(1).pop().unwrap();
     gas.append(&mut counters_gas);
     gas.push(publish_module_gas.clone());
 

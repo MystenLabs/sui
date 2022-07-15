@@ -37,7 +37,7 @@ module sui::id {
     /// An object ID. Unlike `UniqueID`, this is *not* guaranteed to be globally
     /// unique--anyone can create an `ID`, and ID's can be freely copied and dropped
     /// Useful for comparing with `UniqueID`'s.
-    struct ID has store, drop, copy {
+    struct ID has copy, drop, store {
         // We use `address` instead of `vector<u8>` here because `address` has a more
         // compact serialization. `address` is serialized as a BCS fixed-length sequence,
         // which saves us the length prefix we would pay for if this were `vector<u8>`.

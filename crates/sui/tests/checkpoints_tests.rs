@@ -3,10 +3,10 @@
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::HashSet;
 use std::sync::Arc;
+use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::{
     authority::AuthorityState,
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
-    gateway_state::GatewayMetrics,
 };
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
@@ -32,19 +32,14 @@ fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<Transaction
 
     // Get all transactions in the first 10 checkpoints.
     (0..10)
-        .flat_map(|checkpoint_sequence| {
-            // Get enough sequence numbers (one or two are enough).
-            (0..10)
-                .filter_map(|i| {
-                    checkpoints_store
-                        .lock()
-                        .checkpoint_contents
-                        .get(&(checkpoint_sequence, i))
-                        .unwrap()
-                })
-                .map(|x| x.transaction)
-                .collect::<HashSet<_>>()
+        .filter_map(|checkpoint_sequence| {
+            checkpoints_store
+                .lock()
+                .checkpoint_contents
+                .get(&checkpoint_sequence)
+                .unwrap()
         })
+        .flat_map(|x| x.iter().map(|tx| tx.transaction).collect::<HashSet<_>>())
         .collect::<HashSet<_>>()
 }
 
@@ -145,24 +140,19 @@ async fn end_to_end() {
     // Start active part of each authority.
     for authority in &handles {
         let state = authority.state().clone();
-        let clients = aggregator.clone_inner_clients();
-        let _active_authority_handle = tokio::spawn(async move {
-            let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
-                    state,
-                    clients,
-                    GatewayMetrics::new_for_tests(),
-                )
-                .unwrap(),
-            );
-            let checkpoint_process_control = CheckpointProcessControl {
-                long_pause_between_checkpoints: Duration::from_millis(10),
-                ..CheckpointProcessControl::default()
-            };
-            active_state
-                .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
-                .await
-        });
+        let inner_agg = aggregator.clone();
+        let active_state =
+            Arc::new(ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap());
+        let checkpoint_process_control = CheckpointProcessControl {
+            long_pause_between_checkpoints: Duration::from_millis(10),
+            ..CheckpointProcessControl::default()
+        };
+        let _active_authority_handle = active_state
+            .spawn_checkpoint_process_with_config(
+                checkpoint_process_control,
+                CheckpointMetrics::new_for_tests(),
+            )
+            .await;
     }
 
     // Send the transactions for execution.
@@ -215,6 +205,8 @@ async fn end_to_end() {
 
 #[tokio::test]
 async fn checkpoint_with_shared_objects() {
+    telemetry_subscribers::init_for_testing();
+
     // Get some gas objects to submit shared-objects transactions.
     let mut gas_objects = test_gas_objects();
 
@@ -235,28 +227,23 @@ async fn checkpoint_with_shared_objects() {
     // Start active part of each authority.
     for authority in &handles {
         let state = authority.state().clone();
-        let clients = aggregator.clone_inner_clients();
-        let _active_authority_handle = tokio::spawn(async move {
-            let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
-                    state,
-                    clients,
-                    GatewayMetrics::new_for_tests(),
-                )
-                .unwrap(),
-            );
-            let checkpoint_process_control = CheckpointProcessControl {
-                long_pause_between_checkpoints: Duration::from_millis(10),
-                ..CheckpointProcessControl::default()
-            };
+        let inner_agg = aggregator.clone();
+        let active_state =
+            Arc::new(ActiveAuthority::new_with_ephemeral_follower_store(state, inner_agg).unwrap());
+        let checkpoint_process_control = CheckpointProcessControl {
+            long_pause_between_checkpoints: Duration::from_millis(10),
+            ..CheckpointProcessControl::default()
+        };
 
-            println!("Start active execution process.");
-            active_state.clone().spawn_execute_process().await;
+        println!("Start active execution process.");
+        active_state.clone().spawn_execute_process().await;
 
-            active_state
-                .spawn_checkpoint_process_with_config(Some(checkpoint_process_control))
-                .await
-        });
+        let _active_authority_handle = active_state
+            .spawn_checkpoint_process_with_config(
+                checkpoint_process_control,
+                CheckpointMetrics::new_for_tests(),
+            )
+            .await;
     }
 
     // Publish the move package to all authorities and get the new package ref.
@@ -332,6 +319,7 @@ async fn checkpoint_with_shared_objects() {
     transaction_digests.insert(*increment_counter_transaction.digest());
 
     // Wait for the transactions to be executed and end up in a checkpoint.
+    let mut cnt = 0;
     loop {
         // Ensure all submitted transactions are in the checkpoint.
         let ok = handles
@@ -341,8 +329,10 @@ async fn checkpoint_with_shared_objects() {
 
         match ok {
             true => break,
-            false => tokio::time::sleep(Duration::from_millis(10)).await,
+            false => tokio::time::sleep(Duration::from_secs(1)).await,
         }
+        cnt += 1;
+        assert!(cnt <= 20);
     }
 
     // Ensure all authorities moved to the next checkpoint sequence number.

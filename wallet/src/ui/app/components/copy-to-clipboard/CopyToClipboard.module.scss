@@ -1,10 +1,21 @@
+@use '_values/colors';
+
 .container {
     display: inline-flex;
     flex-flow: row nowrap;
     align-items: center;
+    max-width: 100%;
 }
 
 .copy-icon {
     margin-left: 6px;
     cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    color: colors.$gray-60;
+    font-size: 10px;
+}
+
+.copied {
+    transform: scale(150%, 150%);
+    color: colors.$sui-blue;
 }

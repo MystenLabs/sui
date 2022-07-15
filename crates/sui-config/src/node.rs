@@ -4,11 +4,8 @@
 use crate::genesis;
 use crate::Config;
 use anyhow::Result;
-use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
-use narwhal_config::SharedCommittee as ConsensusCommittee;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -111,8 +108,6 @@ pub struct ConsensusConfig {
     pub consensus_db_path: PathBuf,
 
     pub narwhal_config: ConsensusParameters,
-
-    pub narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
 }
 
 impl ConsensusConfig {
@@ -127,10 +122,6 @@ impl ConsensusConfig {
     pub fn narwhal_config(&self) -> &ConsensusParameters {
         &self.narwhal_config
     }
-
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
-        &self.narwhal_committee
-    }
 }
 
 /// Publicly known information about a validator
@@ -138,13 +129,25 @@ impl ConsensusConfig {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
+    pub name: String,
     pub public_key: PublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub network_address: Multiaddr,
+    pub narwhal_primary_to_primary: Multiaddr,
+
+    //TODO remove all of these as they shouldn't be needed to be encoded in genesis
+    pub narwhal_worker_to_primary: Multiaddr,
+    pub narwhal_primary_to_worker: Multiaddr,
+    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_consensus_address: Multiaddr,
 }
 
 impl ValidatorInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn sui_address(&self) -> SuiAddress {
         SuiAddress::from(self.public_key())
     }

@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 jsonrpsee = { version = "0.14.0", features = ["full"] }
 jsonrpsee-core = "0.14.0"
+jsonrpsee-proc-macros = "0.14.0"
 prometheus = "0.13.1"
 anyhow = "1.0.58"
 tracing = "0.1.35"
@@ -22,5 +23,6 @@ sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-open-rpc = { path = "../sui-open-rpc" }
-sui-json-rpc-api = { path = "../sui-json-rpc-api" }
+sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
+sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 workspace-hack = { path = "../workspace-hack"}

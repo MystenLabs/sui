@@ -305,11 +305,11 @@ current_directory
 ```
 
 For convenience, make sure the path to Sui binaries
-(`~/.cargo/bin`), including the sui-move command used throughout
+(`~/.cargo/bin`), including the `sui` command used throughout
 this tutorial, is part of your system path:
 
 ```
-$ which sui-move
+$ which sui
 ```
 
 ### Creating the directory structure
@@ -422,7 +422,7 @@ file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
 ``` shell
-$ sui-move build
+$ sui move build
 ```
 
 A successful build yields results resembling:
@@ -451,7 +451,7 @@ upon executing the following command (in the `my_move_package`
 directory as per our running example):
 
 ``` shell
-$ sui-move test
+$ sui move test
 ```
 
 If you execute this command for the package created in the
@@ -502,7 +502,7 @@ read-only reference argument.
 Now that we have written a test, let's try to run the tests again:
 
 ``` shell
-$ sui-move test
+$ sui move test
 ```
 
 After running the test command, however, instead of a test result we
@@ -584,12 +584,12 @@ Test result: OK. Total tests: 1; passed: 1; failed: 0
 **Tip:**
 If you want to run only a subset of the unit tests, you can filter by test name using the `--filter` option. Example:
 ```
-$ sui-move test --filter sword
+$ sui move test --filter sword
 ```
 The above command will run all tests whose name contains "sword".
 You can discover more testing options through:
 ```
-$ sui-move test -h
+$ sui move test -h
 ```
 
 ---
@@ -785,7 +785,7 @@ has to be _published_ to Sui's [distributed ledger](../learn/how-sui-works.md)
 where it is represented as a Sui object.
 
 At this point, however, the
-`sui-move` command does not support package publishing. In fact, it is
+`sui move` command does not support package publishing. In fact, it is
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
 testing framework. Instead, one can use a Sui CLI client to
@@ -810,7 +810,7 @@ in order to be executed at publication:
 - no return values
 - private visibility
 
-While the `sui-move` command does not support publishing explicitly,
+While the `sui move` command does not support publishing explicitly,
 we can still test module initializers using our testing framework -
 one can simply dedicate the first transaction to executing the
 initializer function. Let us use a concrete example to illustrate

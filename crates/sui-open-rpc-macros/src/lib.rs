@@ -71,7 +71,7 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
         #trait_data
         pub struct #open_rpc_name;
         impl #open_rpc_name {
-            pub fn module_doc() -> Module{
+            pub fn module_doc() -> sui_open_rpc::Module{
                 let mut builder = sui_open_rpc::RpcModuleDocBuilder::new();
                 #(#methods)*
                 builder.build()

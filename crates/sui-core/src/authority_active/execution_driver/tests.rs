@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gateway_state::GatewayMetrics;
 use crate::{authority_active::ActiveAuthority, checkpoints::checkpoint_tests::TestSetup};
 
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::messages::ExecutionStatus;
@@ -28,18 +28,17 @@ async fn pending_exec_storage_notify() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
-        let _active_handle = tokio::task::spawn(async move {
-            let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
-                    inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
-                )
-                .unwrap(),
-            );
-            active_state.spawn_checkpoint_process().await
-        });
+        let inner_agg = aggregator.clone();
+        let active_state = Arc::new(
+            ActiveAuthority::new_with_ephemeral_follower_store(
+                inner_state.authority.clone(),
+                inner_agg,
+            )
+            .unwrap(),
+        );
+        let _active_handle = active_state
+            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+            .await;
     }
 
     let sender_aggregator = aggregator.clone();
@@ -112,19 +111,20 @@ async fn pending_exec_full() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_follower_store(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );
 
             active_state.clone().spawn_execute_process().await;
-            active_state.spawn_checkpoint_process().await;
+            active_state
+                .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+                .await;
         });
     }
 

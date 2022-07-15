@@ -14,8 +14,8 @@ use move_core_types::{
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use sui_json_rpc_types::SuiMoveStruct;
 
-use crate::event_handler::to_json_value;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::gas_coin::GasCoin;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -33,10 +33,11 @@ fn test_to_json_value() {
         ],
     };
     let event_bytes = bcs::to_bytes(&move_event).unwrap();
-    let sui_move_struct = MoveStruct::simple_deserialize(&event_bytes, &TestEvent::layout())
-        .unwrap()
-        .into();
-    let json_value = to_json_value(sui_move_struct).unwrap();
+    let sui_move_struct: SuiMoveStruct =
+        MoveStruct::simple_deserialize(&event_bytes, &TestEvent::layout())
+            .unwrap()
+            .into();
+    let json_value = sui_move_struct.to_json_value().unwrap();
 
     assert_eq!(
         Some(&json!(1000000)),

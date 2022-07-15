@@ -36,9 +36,7 @@ function TransferNFTPage() {
         () => searchParams.get('objectId'),
         [searchParams]
     );
-    const address = useAppSelector(
-        ({ account: { address } }) => address && `0x${address}`
-    );
+    const address = useAppSelector(({ account: { address } }) => address);
 
     let selectedNFT;
     const nftCollections = useAppSelector(accountNftsSelector);

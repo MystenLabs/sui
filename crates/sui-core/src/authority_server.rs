@@ -177,7 +177,7 @@ impl ValidatorService {
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
             consensus_keypair,
-            consensus_config.narwhal_committee().to_owned(),
+            config.genesis()?.narwhal_committee(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
             /* consensus */ true, // Indicate that we want to run consensus.
@@ -189,7 +189,7 @@ impl ValidatorService {
         narwhal_node::Node::spawn_workers(
             consensus_name,
             /* ids */ vec![0], // We run a single worker with id '0'.
-            consensus_config.narwhal_committee().to_owned(),
+            config.genesis()?.narwhal_committee(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
             prometheus_registry,

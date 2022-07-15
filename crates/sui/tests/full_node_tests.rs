@@ -21,11 +21,9 @@ use tracing::info;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::rpc_types::{
-    SplitCoinResponse, SuiEventEnvelope, SuiEventFilter, TransactionResponse,
-};
-use sui_json_rpc_api::rpc_types::{
-    SuiEvent, SuiMoveStruct, SuiMoveValue, SuiObjectInfo, SuiObjectRead,
+use sui_json_rpc_types::{
+    SplitCoinResponse, SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue,
+    SuiObjectInfo, SuiObjectRead, TransactionResponse,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;

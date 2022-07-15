@@ -10,7 +10,6 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
-    gateway_state::GatewayMetrics,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -25,6 +24,7 @@ use sui_types::{
     waypoint::GlobalCheckpoint,
 };
 
+use crate::authority_aggregator::AuthAggMetrics;
 use parking_lot::Mutex;
 use sui_types::crypto::KeyPair;
 
@@ -187,21 +187,29 @@ fn make_checkpoint_db() {
 
     // You cannot make a checkpoint without processing all transactions
     assert!(cps
-        .update_new_checkpoint(0, &[t1, t2, t4, t5], PendCertificateForExecutionNoop)
+        .update_new_checkpoint(
+            0,
+            &CheckpointContents::new([t1, t2, t4, t5].into_iter()),
+            PendCertificateForExecutionNoop
+        )
         .is_err());
 
     // Now process the extra transactions in the checkpoint
     cps.update_processed_transactions(&[(4, t4), (5, t5)])
         .unwrap();
 
-    cps.update_new_checkpoint(0, &[t1, t2, t4, t5], PendCertificateForExecutionNoop)
-        .unwrap();
-    assert_eq!(cps.checkpoint_contents.iter().count(), 4);
+    cps.update_new_checkpoint(
+        0,
+        &CheckpointContents::new([t1, t2, t4, t5].into_iter()),
+        PendCertificateForExecutionNoop,
+    )
+    .unwrap();
+    assert_eq!(cps.checkpoint_contents.iter().count(), 1);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
     assert_eq!(cps.next_checkpoint(), 1);
 
     cps.update_processed_transactions(&[(6, t6)]).unwrap();
-    assert_eq!(cps.checkpoint_contents.iter().count(), 4);
+    assert_eq!(cps.checkpoint_contents.iter().count(), 1);
     assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
 
     let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
@@ -248,7 +256,11 @@ fn make_proposals() {
 
     // if not all transactions are processed we fail
     assert!(cps1
-        .update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
+        .update_new_checkpoint(
+            0,
+            &CheckpointContents::new(ckp_items.iter().cloned()),
+            PendCertificateForExecutionNoop
+        )
         .is_err());
 
     cps1.update_processed_transactions(&[(3, t1), (4, t4)])
@@ -263,14 +275,30 @@ fn make_proposals() {
     cps4.update_processed_transactions(&[(3, t1), (4, t2), (5, t3)])
         .unwrap();
 
-    cps1.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
-        .unwrap();
-    cps2.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
-        .unwrap();
-    cps3.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
-        .unwrap();
-    cps4.update_new_checkpoint(0, &ckp_items[..], PendCertificateForExecutionNoop)
-        .unwrap();
+    cps1.update_new_checkpoint(
+        0,
+        &CheckpointContents::new(ckp_items.iter().cloned()),
+        PendCertificateForExecutionNoop,
+    )
+    .unwrap();
+    cps2.update_new_checkpoint(
+        0,
+        &CheckpointContents::new(ckp_items.iter().cloned()),
+        PendCertificateForExecutionNoop,
+    )
+    .unwrap();
+    cps3.update_new_checkpoint(
+        0,
+        &CheckpointContents::new(ckp_items.iter().cloned()),
+        PendCertificateForExecutionNoop,
+    )
+    .unwrap();
+    cps4.update_new_checkpoint(
+        0,
+        &CheckpointContents::new(ckp_items.iter().cloned()),
+        PendCertificateForExecutionNoop,
+    )
+    .unwrap();
 
     assert_eq!(
         cps4.extra_transactions.keys().collect::<HashSet<_>>(),
@@ -398,7 +426,9 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::None));
 
         let current_proposal = current.unwrap();
-        current_proposal.verify().expect("no signature error");
+        current_proposal
+            .verify(&committee, None)
+            .expect("no signature error");
         assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
 
@@ -418,7 +448,7 @@ fn latest_proposal() {
 
         let current_proposal = current.unwrap();
         current_proposal
-            .verify_with_transactions(response.detail.as_ref().unwrap())
+            .verify(&committee, response.detail.as_ref())
             .expect("no signature error");
         assert_eq!(*current_proposal.summary.sequence_number(), 0);
     }
@@ -543,7 +573,9 @@ fn latest_proposal() {
         assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
 
         let current_proposal = current.unwrap();
-        current_proposal.verify().expect("no signature error");
+        current_proposal
+            .verify(&committee, None)
+            .expect("no signature error");
         assert_eq!(current_proposal.summary.sequence_number, 1);
     }
 }
@@ -664,9 +696,7 @@ fn set_get_checkpoint() {
         AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(..))
     ));
     if let AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) = response.info {
-        signed
-            .verify_with_transactions(&response.detail.unwrap())
-            .unwrap();
+        signed.verify(&committee, response.detail.as_ref()).unwrap();
     }
 
     // Make a certificate
@@ -1654,7 +1684,7 @@ pub async fn checkpoint_tests_setup(
                 )
             })
             .collect(),
-        GatewayMetrics::new_for_tests(),
+        AuthAggMetrics::new_for_tests(),
     );
 
     TestSetup {
@@ -1708,7 +1738,7 @@ async fn checkpoint_messaging_flow() {
     for auth in &setup.authorities {
         auth.checkpoint
             .lock()
-            .new_proposal(setup.committee.epoch)
+            .set_proposal(setup.committee.epoch)
             .unwrap();
     }
 
@@ -1852,7 +1882,7 @@ async fn test_no_more_fragments() {
         let proposal = auth
             .checkpoint
             .lock()
-            .new_proposal(setup.committee.epoch)
+            .set_proposal(setup.committee.epoch)
             .unwrap();
         proposals.push(proposal);
     }

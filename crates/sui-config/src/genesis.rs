@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ValidatorInfo;
-use anyhow::Context;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
+use camino::Utf8Path;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
@@ -17,20 +17,22 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
+use sui_types::crypto::PublicKeyBytes;
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
 use sui_types::messages::Transaction;
 use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
-    base_types::TxContext,
+    base_types::{encode_bytes_hex, TxContext},
     committee::{Committee, EpochId},
     error::SuiResult,
     object::Object,
 };
-use tracing::{info, trace};
+use tracing::trace;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Genesis {
@@ -58,8 +60,63 @@ impl Genesis {
         )
     }
 
+    pub fn narwhal_committee(
+        &self,
+    ) -> narwhal_config::SharedCommittee<narwhal_crypto::ed25519::Ed25519PublicKey> {
+        let narwhal_committee = self
+            .validator_set
+            .iter()
+            .map(|validator| {
+                let name = validator
+                    .public_key()
+                    .make_narwhal_public_key()
+                    .expect("Can't get narwhal public key");
+                let primary = narwhal_config::PrimaryAddresses {
+                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                    worker_to_primary: validator.narwhal_worker_to_primary.clone(),
+                };
+                let workers = [(
+                    0, // worker_id
+                    narwhal_config::WorkerAddresses {
+                        primary_to_worker: validator.narwhal_primary_to_worker.clone(),
+                        transactions: validator.narwhal_consensus_address.clone(),
+                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                    },
+                )]
+                .into_iter()
+                .collect();
+                let authority = narwhal_config::Authority {
+                    stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
+                    primary,
+                    workers,
+                };
+
+                (name, authority)
+            })
+            .collect();
+        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
+            authorities: narwhal_committee,
+            epoch: self.epoch() as narwhal_config::Epoch,
+        }))
+    }
+
+    pub fn sui_system_object(&self) -> SuiSystemState {
+        let sui_system_object = self
+            .objects()
+            .iter()
+            .find(|o| o.id() == sui_types::SUI_SYSTEM_STATE_OBJECT_ID)
+            .expect("Sui System State object must always exist");
+        let move_object = sui_system_object
+            .data
+            .try_as_move()
+            .expect("Sui System State object must be a Move object");
+        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
+            .expect("Sui System State object deserialization cannot fail");
+        result
+    }
+
     pub fn get_default_genesis() -> Self {
-        Builder::new_with_context(sui_adapter::genesis::get_genesis_context()).build()
+        Builder::new().build()
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -77,6 +134,10 @@ impl Genesis {
         fs::write(path, bytes)
             .with_context(|| format!("Unable to save Genesis to {}", path.display()))?;
         Ok(())
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        bcs::to_bytes(self).expect("failed to serialize genesis")
     }
 }
 
@@ -141,12 +202,8 @@ impl<'de> Deserialize<'de> for Genesis {
 }
 
 pub struct Builder {
-    sui_framework: Option<Vec<CompiledModule>>,
-    move_framework: Option<Vec<CompiledModule>>,
-    move_modules: Vec<Vec<CompiledModule>>,
-    objects: Vec<Object>,
-    genesis_ctx: TxContext,
-    validators: Vec<ValidatorInfo>,
+    objects: BTreeMap<ObjectID, Object>,
+    validators: BTreeMap<PublicKeyBytes, ValidatorInfo>,
 }
 
 impl Default for Builder {
@@ -157,80 +214,149 @@ impl Default for Builder {
 
 impl Builder {
     pub fn new() -> Self {
-        let genesis_ctx = sui_adapter::genesis::get_genesis_context();
-        Self::new_with_context(genesis_ctx)
-    }
-
-    pub fn new_with_context(genesis_ctx: TxContext) -> Self {
         Self {
-            sui_framework: None,
-            move_framework: None,
-            move_modules: vec![],
-            objects: vec![],
-            genesis_ctx,
-            validators: vec![],
+            objects: Default::default(),
+            validators: Default::default(),
         }
     }
 
-    pub fn sui_framework(mut self, sui_framework: Vec<CompiledModule>) -> Self {
-        self.sui_framework = Some(sui_framework);
-        self
-    }
-
-    pub fn move_framework(mut self, move_framework: Vec<CompiledModule>) -> Self {
-        self.move_framework = Some(move_framework);
-        self
-    }
-
-    pub fn add_move_modules(mut self, modules: Vec<Vec<CompiledModule>>) -> Self {
-        self.move_modules = modules;
-        self
-    }
-
     pub fn add_object(mut self, object: Object) -> Self {
-        self.objects.push(object);
+        self.objects.insert(object.id(), object);
         self
     }
 
     pub fn add_objects(mut self, objects: Vec<Object>) -> Self {
-        self.objects.extend(objects);
+        for object in objects {
+            self.objects.insert(object.id(), object);
+        }
         self
     }
 
     pub fn add_validator(mut self, validator: ValidatorInfo) -> Self {
-        self.validators.push(validator);
+        self.validators.insert(validator.public_key(), validator);
         self
     }
 
     pub fn build(self) -> Genesis {
-        let mut modules = Vec::new();
-        let objects = self.objects;
-        let mut genesis_ctx = self.genesis_ctx;
+        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
 
-        // Load Move Framework
-        info!("Loading Move framework lib from {:?}", self.move_framework);
-        let move_modules = self
-            .move_framework
-            .unwrap_or_else(sui_framework::get_move_stdlib);
-        modules.push(move_modules);
+        // Get Move and Sui Framework
+        let modules = [
+            sui_framework::get_move_stdlib(),
+            sui_framework::get_sui_framework(),
+        ];
 
-        // Load Sui Framework
-        info!("Loading Sui framework lib from {:?}", self.sui_framework);
-        let sui_modules = self
-            .sui_framework
-            .unwrap_or_else(sui_framework::get_sui_framework);
-        modules.push(sui_modules);
+        let objects = self.objects.into_iter().map(|(_, o)| o).collect::<Vec<_>>();
+        let validators = self
+            .validators
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect::<Vec<_>>();
+        let objects = create_genesis_objects(&mut genesis_ctx, &modules, &objects, &validators);
 
-        // add custom modules
-        modules.extend(self.move_modules);
-
-        let objects =
-            create_genesis_objects(&mut genesis_ctx, &modules, &objects, &self.validators);
-
-        Genesis {
+        let genesis = Genesis {
             objects,
-            validator_set: self.validators,
+            validator_set: validators,
+        };
+
+        // Verify that all the validators were properly created onchain
+        let system_object = genesis.sui_system_object();
+        assert_eq!(system_object.epoch, 0);
+
+        for (validator, onchain_validator) in genesis
+            .validator_set()
+            .iter()
+            .zip(system_object.validators.active_validators.iter())
+        {
+            assert_eq!(validator.stake(), onchain_validator.stake_amount);
+            assert_eq!(
+                validator.sui_address().to_vec(),
+                onchain_validator.metadata.sui_address.to_vec(),
+            );
+            assert_eq!(
+                validator.public_key().to_vec(),
+                onchain_validator.metadata.pubkey_bytes,
+            );
+            assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
+            assert_eq!(
+                validator.network_address().to_vec(),
+                onchain_validator.metadata.net_address
+            );
         }
+
+        genesis
+    }
+
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref();
+        let path: &Utf8Path = path.try_into()?;
+        trace!("Reading Genesis Builder from {}", path);
+
+        if !path.is_dir() {
+            bail!("path must be a directory");
+        }
+
+        // Load Objects
+        let mut objects = BTreeMap::new();
+        for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
+            let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let object_bytes = fs::read(path)?;
+            let object: Object = serde_yaml::from_slice(&object_bytes)?;
+            objects.insert(object.id(), object);
+        }
+
+        // Load validator infos
+        let mut committee = BTreeMap::new();
+        for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
+            let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let validator_info_bytes = fs::read(path)?;
+            let validator_info: ValidatorInfo = serde_yaml::from_slice(&validator_info_bytes)?;
+            committee.insert(validator_info.public_key(), validator_info);
+        }
+
+        Ok(Self {
+            objects,
+            validators: committee,
+        })
+    }
+
+    pub fn save<P: AsRef<Path>>(self, path: P) -> Result<(), anyhow::Error> {
+        let path = path.as_ref();
+        trace!("Writing Genesis Builder to {}", path.display());
+
+        std::fs::create_dir_all(path)?;
+
+        // Write Objects
+        let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
+        std::fs::create_dir_all(&object_dir)?;
+
+        for (_id, object) in self.objects {
+            let object_bytes = serde_yaml::to_vec(&object)?;
+            let hex_digest = encode_bytes_hex(&object.digest());
+            fs::write(object_dir.join(hex_digest), object_bytes)?;
+        }
+
+        // Write validator infos
+        let committee_dir = path.join(GENESIS_BUILDER_COMMITTEE_DIR);
+        std::fs::create_dir_all(&committee_dir)?;
+
+        for (_pubkey, validator) in self.validators {
+            let validator_info_bytes = serde_yaml::to_vec(&validator)?;
+            let hex_name = encode_bytes_hex(&validator.public_key());
+            fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -349,12 +475,11 @@ pub fn generate_genesis_system_object(
     let mut names = Vec::new();
     let mut stakes = Vec::new();
 
-    for (i, validator) in committee.iter().enumerate() {
+    for validator in committee {
         pubkeys.push(validator.public_key());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
-        // TODO: Allow config to specify human readable validator names.
-        names.push(format!("validator-{i}").into_bytes());
+        names.push(validator.name().to_owned().into_bytes());
         stakes.push(validator.stake());
     }
 
@@ -382,17 +507,52 @@ pub fn generate_genesis_system_object(
     Ok(())
 }
 
+const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
+const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
+
 #[cfg(test)]
 mod test {
     use super::Builder;
+    use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
+    use sui_types::crypto::get_key_pair_from_rng;
 
     #[test]
     fn roundtrip() {
-        let genesis =
-            Builder::new_with_context(sui_adapter::genesis::get_genesis_context()).build();
+        let genesis = Builder::new().build();
 
         let s = serde_yaml::to_string(&genesis).unwrap();
         let from_s = serde_yaml::from_str(&s).unwrap();
         assert_eq!(genesis, from_s);
+    }
+
+    #[test]
+    fn ceremony() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        let genesis_config = GenesisConfig::for_local_testing();
+        let (_account_keys, objects) = genesis_config
+            .generate_accounts(&mut rand::rngs::OsRng)
+            .unwrap();
+
+        let mut builder = Builder::new().add_objects(objects);
+
+        let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let validator = ValidatorInfo {
+            name: "0".into(),
+            public_key: *key.public_key_bytes(),
+            stake: 1,
+            delegation: 0,
+            network_address: utils::new_network_address(),
+            narwhal_primary_to_primary: utils::new_network_address(),
+            narwhal_worker_to_primary: utils::new_network_address(),
+            narwhal_primary_to_worker: utils::new_network_address(),
+            narwhal_worker_to_worker: utils::new_network_address(),
+            narwhal_consensus_address: utils::new_network_address(),
+        };
+
+        builder = builder.add_validator(validator);
+
+        builder.save(dir.path()).unwrap();
+        Builder::load(dir.path()).unwrap();
     }
 }

@@ -10,13 +10,11 @@
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
 module sui::bag {
-    use std::errors;
-    use std::option::{Self, Option};
     use sui::id::{Self, ID, VersionedID};
-    use sui::transfer::{Self, ChildRef};
+    use sui::transfer;
+    use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
-    use sui::vec_set::VecSet;
-    use sui::vec_set;
+    use sui::vec_set::{Self, VecSet};
 
     // Error codes
     /// Adding the same object to the collection twice is not allowed.
@@ -39,6 +37,11 @@ module sui::bag {
         max_capacity: u64,
     }
 
+    struct Item<T: store> has key {
+        id: VersionedID,
+        value: T,
+    }
+
     /// Create a new Bag and return it.
     public fun new(ctx: &mut TxContext): Bag {
         new_with_max_capacity(ctx, DEFAULT_MAX_CAPACITY)
@@ -46,10 +49,7 @@ module sui::bag {
 
     /// Create a new Bag with custom size limit and return it.
     public fun new_with_max_capacity(ctx: &mut TxContext, max_capacity: u64): Bag {
-        assert!(
-            max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            errors::limit_exceeded(EInvalidMaxCapacity)
-        );
+        assert!(max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0, EInvalidMaxCapacity);
         Bag {
             id: tx_context::new_id(ctx),
             objects: vec_set::empty(),
@@ -67,37 +67,17 @@ module sui::bag {
         vec_set::size(&c.objects)
     }
 
-    /// Add an object to the Bag.
-    /// Abort if the object is already in the Bag.
-    /// If the object was owned by another object, an `old_child_ref` would be around
-    /// and need to be consumed as well.
-    fun add_impl<T: key + store>(c: &mut Bag, object: T, old_child_ref: Option<ChildRef<T>>) {
-        assert!(
-            size(c) + 1 <= c.max_capacity,
-            errors::limit_exceeded(EMaxCapacityExceeded)
-        );
-        let id = id::id(&object);
-        if (contains(c, id)) {
-            abort EObjectDoubleAdd
-        };
-        vec_set::insert(&mut c.objects, *id);
-        transfer::transfer_to_object_unsafe(object, old_child_ref, c);
-    }
-
     /// Add a new object to the Bag.
-    /// Abort if the object is already in the Bag.
-    public fun add<T: key + store>(c: &mut Bag, object: T) {
-        add_impl(c, object, option::none())
+    public fun add<T: store>(c: &mut Bag, value: T, ctx: &mut TxContext): TypedID<Item<T>> {
+        assert!(size(c) + 1 <= c.max_capacity, EMaxCapacityExceeded);
+        let id = tx_context::new_id(ctx);
+        vec_set::insert(&mut c.objects, *id::inner(&id));
+        let item = Item { id, value };
+        let item_id = typed_id::new(&item);
+        transfer::transfer_to_object(item, c);
+        item_id
     }
 
-    /// Transfer a object that was owned by another object to the bag.
-    /// Since the object is a child object of another object, an `old_child_ref`
-    /// is around and needs to be consumed.
-    public fun add_child_object<T: key + store>(c: &mut Bag, object: T, old_child_ref: ChildRef<T>) {
-        add_impl(c, object, option::some(old_child_ref))
-    }
-
-    /// Check whether the Bag contains a specific object,
     /// identified by the object id in bytes.
     public fun contains(c: &Bag, id: &ID): bool {
         vec_set::contains(&c.objects, id)
@@ -105,14 +85,20 @@ module sui::bag {
 
     /// Remove and return the object from the Bag.
     /// Abort if the object is not found.
-    public fun remove<T: key + store>(c: &mut Bag, object: T): T {
-        vec_set::remove(&mut c.objects, id::id(&object));
-        object
+    public fun remove<T: store>(c: &mut Bag, item: Item<T>): T {
+        let Item { id, value } = item;
+        vec_set::remove(&mut c.objects, id::inner(&id));
+        id::delete(id);
+        value
     }
 
     /// Remove the object from the Bag, and then transfer it to the signer.
-    public entry fun remove_and_take<T: key + store>(c: &mut Bag, object: T, ctx: &mut TxContext) {
-        let object = remove(c, object);
+    public entry fun remove_and_take<T: key + store>(
+        c: &mut Bag,
+        item: Item<T>,
+        ctx: &mut TxContext,
+    ) {
+        let object = remove(c, item);
         transfer::transfer(object, tx_context::sender(ctx));
     }
 
@@ -123,8 +109,8 @@ module sui::bag {
 
     public fun transfer_to_object_id(
         obj: Bag,
-        owner_id: VersionedID,
-    ): (VersionedID, ChildRef<Bag>) {
+        owner_id: &VersionedID,
+    ) {
         transfer::transfer_to_object_id(obj, owner_id)
     }
 }

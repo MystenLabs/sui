@@ -14,8 +14,8 @@ function Footer() {
                 <div className={styles.logodesktop}>
                     <SuiLogoIcon />
                     <div className={styles.copyright}>
-                        <div>&copy;2022 Copyright Sui.</div>
-                        <div>All rights reserved.</div>
+                        <div>&copy;2022 Sui</div>
+                        <div>All rights reserved</div>
                     </div>
                 </div>
 
@@ -86,7 +86,7 @@ function Footer() {
             <div className={styles.logomobile}>
                 <SuiLogoIcon />
                 <div className={styles.copyright}>
-                    <div>&copy;2022 Copyright Sui. All rights reserved.</div>
+                    <div>&copy;2022 Sui. All rights reserved.</div>
                 </div>
             </div>
 

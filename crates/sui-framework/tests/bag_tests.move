@@ -4,8 +4,9 @@
 #[test_only]
 module sui::bag_tests {
     use sui::bag::{Self, Bag};
-    use sui::id::{Self, VersionedID};
+    use sui::id::VersionedID;
     use sui::test_scenario;
+    use sui::typed_id;
     use sui::tx_context;
 
     const EBAG_SIZE_MISMATCH: u64 = 0;
@@ -37,16 +38,14 @@ module sui::bag_tests {
             assert!(bag::size(&bag) == 0, EBAG_SIZE_MISMATCH);
 
             let obj1 = Object1 { id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            let id1 = *id::id(&obj1);
             let obj2 = Object2 { id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            let id2 = *id::id(&obj2);
 
-            bag::add(&mut bag, obj1);
-            bag::add(&mut bag, obj2);
+            let item_id1 = bag::add(&mut bag, obj1, test_scenario::ctx(scenario));
+            let item_id2 = bag::add(&mut bag, obj2, test_scenario::ctx(scenario));
             assert!(bag::size(&bag) == 2, EBAG_SIZE_MISMATCH);
 
-            assert!(bag::contains(&bag, &id1), EOBJECT_NOT_FOUND);
-            assert!(bag::contains(&bag, &id2), EOBJECT_NOT_FOUND);
+            assert!(bag::contains(&bag, typed_id::as_id(&item_id1)), EOBJECT_NOT_FOUND);
+            assert!(bag::contains(&bag, typed_id::as_id(&item_id2)), EOBJECT_NOT_FOUND);
 
             test_scenario::return_owned(scenario, bag);
         };
@@ -54,7 +53,7 @@ module sui::bag_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 264)]
+    #[expected_failure(abort_code = 1)]
     fun test_init_with_invalid_max_capacity() {
         let ctx = tx_context::dummy();
         // Sui::bag::DEFAULT_MAX_CAPACITY is not readable outside the module
@@ -64,7 +63,7 @@ module sui::bag_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 264)]
+    #[expected_failure(abort_code = 1)]
     fun test_init_with_zero() {
         let ctx = tx_context::dummy();
         let bag = bag::new_with_max_capacity(&mut ctx, 0);
@@ -72,15 +71,15 @@ module sui::bag_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 520)]
+    #[expected_failure(abort_code = 2)]
     fun test_exceed_max_capacity() {
         let ctx = tx_context::dummy();
         let bag = bag::new_with_max_capacity(&mut ctx, 1);
 
         let obj1 = Object1 { id: tx_context::new_id(&mut ctx) };
-        bag::add(&mut bag, obj1);
+        bag::add(&mut bag, obj1, &mut ctx);
         let obj2 = Object2 { id: tx_context::new_id(&mut ctx) };
-        bag::add(&mut bag, obj2);
+        bag::add(&mut bag, obj2, &mut ctx);
         bag::transfer(bag, tx_context::sender(&ctx));
     }
 }
