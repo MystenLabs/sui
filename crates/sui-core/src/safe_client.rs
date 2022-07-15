@@ -391,55 +391,45 @@ where
         Ok(transaction_info)
     }
 
-    fn verify_authenticated_checkpoint(
+    fn verify_checkpoint_sequence(
         &self,
         expected_seq: Option<CheckpointSequenceNumber>,
         checkpoint: &AuthenticatedCheckpoint,
     ) -> SuiResult {
         let observed_seq = match checkpoint {
             AuthenticatedCheckpoint::None => None,
-            AuthenticatedCheckpoint::Signed(s) => {
-                s.verify()?;
-                Some(*s.summary.sequence_number())
-            }
-            AuthenticatedCheckpoint::Certified(c) => {
-                c.verify(&self.committee)?;
-                Some(*c.summary.sequence_number())
-            }
+            AuthenticatedCheckpoint::Signed(s) => Some(*s.summary.sequence_number()),
+            AuthenticatedCheckpoint::Certified(c) => Some(*c.summary.sequence_number()),
         };
 
-        match (expected_seq, observed_seq) {
-            (Some(e), Some(o)) => {
-                fp_ensure!(
-                    e == o,
-                    SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                    }
-                );
-                Ok(())
-            }
-            (None, _) => Ok(()),
-            _ => Err(SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address,
-            }),
+        if let (Some(e), Some(o)) = (expected_seq, observed_seq) {
+            fp_ensure!(
+                e == o,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                }
+            );
         }
+        Ok(())
     }
 
     pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
+        let detail = request.detail;
         let req_type = request.request_type.clone();
 
         let resp = self.authority_client.handle_checkpoint(request).await?;
 
-        match req_type {
+        // Verify signatures
+        resp.verify(&self.committee)?;
+
+        // Verify response data was correct for request
+        match &req_type {
             CheckpointRequestType::LatestCheckpointProposal => {
-                if let AuthorityCheckpointInfo::Proposal { current, previous } = &resp.info {
-                    if let Some(current) = current {
-                        current.verify()?;
-                    }
-                    self.verify_authenticated_checkpoint(None, previous)?;
+                if let AuthorityCheckpointInfo::Proposal { previous, .. } = &resp.info {
+                    self.verify_checkpoint_sequence(None, previous)?;
                     Ok(resp)
                 } else {
                     Err(SuiError::ByzantineAuthoritySuspicion {
@@ -449,7 +439,22 @@ where
             }
             CheckpointRequestType::PastCheckpoint(seq) => {
                 if let AuthorityCheckpointInfo::Past(past) = &resp.info {
-                    self.verify_authenticated_checkpoint(Some(seq), past)?;
+                    match past {
+                        AuthenticatedCheckpoint::Signed(_)
+                        | AuthenticatedCheckpoint::Certified(_) => {
+                            if detail && resp.detail.is_none() {
+                                // peer has the checkpoint, but refused to give us the contents.
+                                // (For AuthorityCheckpointInfo::Proposal, contents are not
+                                // guaranteed to exist yet).
+                                return Err(SuiError::ByzantineAuthoritySuspicion {
+                                    authority: self.address,
+                                });
+                            }
+                        }
+                        // Checkpoint wasn't found, so detail is obviously not required.
+                        AuthenticatedCheckpoint::None => (),
+                    }
+                    self.verify_checkpoint_sequence(Some(*seq), past)?;
                     Ok(resp)
                 } else {
                     Err(SuiError::ByzantineAuthoritySuspicion {

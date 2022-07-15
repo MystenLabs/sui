@@ -599,8 +599,7 @@ where
     if let Some(AuthenticatedCheckpoint::Signed(signed)) = &latest_checkpoint {
         let seq = *signed.summary.sequence_number();
         debug!("Partial Sync ({_name:?}): {seq:?}",);
-        let (past, _contents) =
-            get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
+        let (past, _) = get_one_checkpoint(net.clone(), seq, false, &available_authorities).await?;
 
         checkpoint_db
             .lock()
