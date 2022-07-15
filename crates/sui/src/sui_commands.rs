@@ -4,11 +4,8 @@
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
-<<<<<<< HEAD
 use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
-=======
 use crate::genesis_ceremony::{run, Ceremony};
->>>>>>> a8a20ba0ac9cfb58cc56cb0576997f47d895b55d
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::{self, execute_move_command};
 use anyhow::{anyhow, bail};
