@@ -172,7 +172,7 @@ const convertResults = (inputResults: {
 
 // 1) Sui Explorer decides between Static (-> 2A) or Live API (-> 2B) mode:
 const LatestTxCard = () =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPIInitialLoad />;
+    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI />;
 
 // 2A) Static mode has no footer and pulls from the static dataset:
 function LatestTxCardStatic() {
@@ -198,10 +198,28 @@ function LatestTxCardStatic() {
     );
 }
 
-// 2B) In Live API mode under the inital load, the Explorer first displays the most recent transactions (-> 3):
+// 2B) In Live API mode under the inital load,
+// either a page is not specified in the URL (-> 2BA) or the page is specified (-> 2BB).
+
+function LatestTxCardAPI() {
+    const [searchParams] = useSearchParams();
+    const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
+
+    return pagedNum > 1 ? (
+        // A page is specified in the URL that is greater than 1:
+        <LatestTxCardAPIWP pagedNum={pagedNum} />
+    ) : (
+        // A page is not specified:
+        <LatestTxCardAPIInitialLoad />
+    );
+}
+
+// 2BA) When no page is specified, the Explorer first displays the most recent transactions
+// and then displays the footer when the count is found (-> 3):
 function LatestTxCardAPIInitialLoad() {
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
+    const [count, setCount] = useState<'TBC' | number>('TBC');
 
     //Whenever network changes, we get a new list of recent tx:
     useEffect(() => {
@@ -228,6 +246,14 @@ function LatestTxCardAPIInitialLoad() {
             });
     }, [network]);
 
+    //Whenever the network changes we initially close the footer, find the count and then re-open with new count:
+    useEffect(() => {
+        setCount('TBC');
+        rpc(network)
+            .getTotalTransactionNumber()
+            .then((resp: number) => setCount(resp));
+    }, [network]);
+
     if (results.loadState === 'pending') {
         return (
             <div className={theme.textresults}>
@@ -249,7 +275,82 @@ function LatestTxCardAPIInitialLoad() {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
-    return <LatestTxAPIView results={results} />;
+    return <LatestTxAPIView results={results} txCount={count} />;
+}
+
+// 2BB) When a page is specified the website waits for both the count and transaction data before displaying:
+function LatestTxCardAPIWP({ pagedNum }: { pagedNum: number }) {
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [results, setResults] = useState(initState);
+    const [network] = useContext(NetworkContext);
+    const [count, setCount] = useState<'TBC' | number>('TBC');
+
+    useEffect(() => {
+        let isMounted = true;
+
+        rpc(network)
+            .getTotalTransactionNumber()
+            .then((resp: number) => {
+                setCount(resp);
+                return getRecentTransactionsInRange(
+                    network,
+                    resp,
+                    NUMBER_OF_TX_PER_PAGE,
+                    pagedNum
+                );
+            })
+            .then(async (resp: any) => {
+                if (isMounted) {
+                    setIsLoaded(true);
+                }
+                setResults({
+                    loadState: 'loaded',
+                    latestTx: resp,
+                });
+            })
+            .catch((err) => {
+                setResults({
+                    ...initState,
+                    loadState: 'fail',
+                });
+                setIsLoaded(false);
+                console.error(
+                    'Encountered error when fetching recent transactions',
+                    err
+                );
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, [count, network, pagedNum]);
+
+    if (results.loadState === 'pending') {
+        return (
+            <div className={theme.textresults}>
+                <div className={styles.content}>Loading...</div>
+            </div>
+        );
+    }
+
+    if (!isLoaded && results.loadState === 'fail') {
+        return (
+            <ErrorResult
+                id=""
+                errorMsg="There was an issue getting the latest transactions"
+            />
+        );
+    }
+
+    if (results.loadState === 'loaded' && !results.latestTx.length) {
+        return <ErrorResult id="" errorMsg="No Transactions Found" />;
+    }
+
+    return (
+        <>
+            <LatestTxAPIView results={results} txCount={count} />
+        </>
+    );
 }
 
 // 3) On the initial load, the most recent transactions are displayed.
@@ -259,10 +360,11 @@ function LatestTxCardAPIInitialLoad() {
 
 function LatestTxAPIView({
     results,
+    txCount,
 }: {
     results: { loadState: string; latestTx: TxnData[] };
+    txCount: 'TBC' | number;
 }) {
-    const [count, setCount] = useState<'TBC' | number>('TBC');
     const [searchParams, setSearchParams] = useSearchParams();
     const pageParam = parseInt(searchParams.get('p') || '1', 10);
     const [showNextPage, setShowNextPage] = useState(false);
@@ -272,27 +374,19 @@ function LatestTxAPIView({
     //Initialize results to be the most recent transactions:
     const [newResults, setResults] = useState(results);
 
-    //Whenever the network changes we initially close the footer, find the count and then re-open with new count:
     useEffect(() => {
-        setCount('TBC');
-        rpc(network)
-            .getTotalTransactionNumber()
-            .then((resp: number) => setCount(resp));
-    }, [network]);
-
-    useEffect(() => {
-        if (count === 'TBC') return;
-        setShowNextPage(NUMBER_OF_TX_PER_PAGE < count);
-    }, [count]);
+        if (txCount === 'TBC') return;
+        setShowNextPage(NUMBER_OF_TX_PER_PAGE < txCount);
+    }, [txCount]);
 
     const changePage = useCallback(() => {
         const nextpage = pageParam + (showNextPage ? 1 : 0);
         setSearchParams({ p: nextpage.toString() });
-        setShowNextPage(Math.ceil(NUMBER_OF_TX_PER_PAGE * nextpage) < count);
+        setShowNextPage(Math.ceil(NUMBER_OF_TX_PER_PAGE * nextpage) < txCount);
 
         getRecentTransactionsInRange(
             network,
-            count as number,
+            txCount as number,
             NUMBER_OF_TX_PER_PAGE,
             nextpage
         )
@@ -308,13 +402,13 @@ function LatestTxAPIView({
                     err
                 );
             });
-    }, [network, pageParam, count, showNextPage, setSearchParams]);
+    }, [network, pageParam, txCount, showNextPage, setSearchParams]);
 
     //TODO update initial state and match the latestTx table data
     const defaultActiveTab = 0;
     const tabsFooter = {
         stats: {
-            count: count || 0,
+            count: txCount || 0,
             stats_text: 'total transactions',
         },
     };
@@ -323,7 +417,7 @@ function LatestTxAPIView({
             <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
                     <TableCard tabledata={convertResults(newResults)} />
-                    {count !== 'TBC' && (
+                    {txCount !== 'TBC' && (
                         <TabFooter stats={tabsFooter.stats}>
                             {showNextPage ? (
                                 <button
