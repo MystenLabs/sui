@@ -157,6 +157,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     }
 }
 
+#[ignore]
 #[tokio::test]
 async fn process_certificate_check_gc_fires() {
     let kp = keys(None).pop().unwrap();
