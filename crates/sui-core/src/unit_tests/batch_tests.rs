@@ -568,7 +568,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         let mut items = Vec::new();
         let mut last_batch = AuthorityBatch::initial();
         items.push({
-            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+            let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
@@ -584,7 +584,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
             last_batch = new_batch;
             items.push({
-                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
                 BatchInfoResponseItem(UpdateItem::Batch(item))
             });
         }
@@ -684,7 +684,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         let mut items = Vec::new();
         let mut last_batch = AuthorityBatch::initial();
         items.push({
-            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+            let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
@@ -706,7 +706,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
             last_batch = new_batch;
             items.push({
-                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
                 BatchInfoResponseItem(UpdateItem::Batch(item))
             });
         }

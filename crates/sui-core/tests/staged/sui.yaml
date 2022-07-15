@@ -26,6 +26,13 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
+AuthoritySignInfo:
+  STRUCT:
+    - epoch: U64
+    - authority:
+        TYPENAME: PublicKeyBytes
+    - signature:
+        TYPENAME: AuthoritySignature
 AuthoritySignature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -320,10 +327,8 @@ SignedBatch:
   STRUCT:
     - batch:
         TYPENAME: AuthorityBatch
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
+    - auth_signature:
+        TYPENAME: AuthoritySignInfo
 SingleTransactionKind:
   ENUM:
     0:

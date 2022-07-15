@@ -86,8 +86,12 @@ impl crate::authority::AuthorityState {
             Some((_, last_batch)) => last_batch.batch,
             None => {
                 // Make a batch at zero
-                let zero_batch =
-                    SignedBatch::new(AuthorityBatch::initial(), &*self.secret, self.name);
+                let zero_batch = SignedBatch::new(
+                    self.epoch(),
+                    AuthorityBatch::initial(),
+                    &*self.secret,
+                    self.name,
+                );
                 self.db().batches.insert(&0, &zero_batch)?;
                 zero_batch.batch
             }
@@ -104,6 +108,7 @@ impl crate::authority::AuthorityState {
         if !transactions.is_empty() {
             // Make a new batch, to put the old transactions not in a batch in.
             let last_signed_batch = SignedBatch::new(
+                self.epoch(),
                 // Unwrap safe due to check not empty
                 AuthorityBatch::make_next(&last_batch, &transactions)?,
                 &*self.secret,
@@ -190,6 +195,7 @@ impl crate::authority::AuthorityState {
 
                 // Make and store a new batch.
                 let new_batch = SignedBatch::new(
+                    self.epoch(),
                     // Unwrap safe since we tested above it is not empty
                     AuthorityBatch::make_next(&prev_batch, &current_batch).unwrap(),
                     &*self.secret,
