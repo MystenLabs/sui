@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module examples::strings {
-    use sui::id::VersionedID;
+    use sui::object::Info;
     use sui::tx_context::{Self, TxContext};
 
     // Use this dependency to get a type wrapper for UTF8 Strings
@@ -10,7 +10,7 @@ module examples::strings {
 
     /// A dummy Object that holds a String type
     struct Name has key, store {
-        id: VersionedID,
+        info: Info,
 
         /// Here it is - the String type
         name: String
@@ -21,7 +21,7 @@ module examples::strings {
         name_bytes: vector<u8>, ctx: &mut TxContext
     ): Name {
         Name {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             name: utf8::string_unsafe(name_bytes)
         }
     }

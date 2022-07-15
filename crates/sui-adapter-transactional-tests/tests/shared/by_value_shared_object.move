@@ -8,22 +8,22 @@
 //# publish
 
 module t2::o2 {
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     struct O2 has key, store {
-        id: VersionedID,
+        info: Info,
     }
 
     public entry fun create(ctx: &mut TxContext) {
-        let o = O2 { id: tx_context::new_id(ctx) };
+        let o = O2 { info: object::new(ctx) };
         transfer::share_object(o)
     }
 
     public entry fun consume_o2(o2: O2) {
-        let O2 { id } = o2;
-        id::delete(id);
+        let O2 { info } = o2;
+        object::delete(info);
     }
 }
 

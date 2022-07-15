@@ -7,13 +7,13 @@
 module Test::M {
     use sui::tx_context::{Self, TxContext};
     struct Obj has key {
-        id: sui::id::VersionedID,
+        info: sui::object::Info,
         value: u64
     }
 
     public entry fun mint(ctx: &mut TxContext) {
         sui::transfer::transfer(
-            Obj { id: tx_context::new_id(ctx), value: 0 },
+            Obj { info: sui::object::new(ctx), value: 0 },
             tx_context::sender(ctx),
         )
     }

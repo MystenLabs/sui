@@ -436,7 +436,7 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
                 if let SuiMoveValue::Number(balance) = fields["balance"].clone() {
-                    if let SuiMoveValue::VersionedID { id, version } = fields["id"].clone() {
+                    if let SuiMoveValue::Info { id, version } = fields["info"].clone() {
                         return Ok(GasCoin::new(id, SequenceNumber::from(version), balance));
                     }
                 }
@@ -573,7 +573,7 @@ pub enum SuiMoveValue {
     Vector(Vec<SuiMoveValue>),
     Bytearray(Base64),
     String(String),
-    VersionedID { id: ObjectID, version: u64 },
+    Info { id: ObjectID, version: u64 },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
@@ -601,7 +601,7 @@ impl Display for SuiMoveValue {
             SuiMoveValue::String(value) => {
                 write!(writer, "{}", value)?;
             }
-            SuiMoveValue::VersionedID { id, version } => {
+            SuiMoveValue::Info { id, version } => {
                 write!(writer, "{id}[{version}]")?;
             }
             SuiMoveValue::Struct(value) => {
@@ -764,20 +764,15 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
             }
         }
         "0x2::url::Url" => return Some(fields["url"].clone()),
-        "0x2::id::ID" => {
+        "0x2::object::ID" => {
             if let SuiMoveValue::Address(id) = fields["bytes"] {
                 return Some(SuiMoveValue::Address(id));
             }
         }
-        "0x2::id::UniqueID" => {
-            if let SuiMoveValue::Address(id) = fields["id"].clone() {
-                return Some(SuiMoveValue::Address(id));
-            }
-        }
-        "0x2::id::VersionedID" => {
+        "0x2::object::Info" => {
             if let SuiMoveValue::Address(address) = fields["id"].clone() {
                 if let SuiMoveValue::Number(version) = fields["version"].clone() {
-                    return Some(SuiMoveValue::VersionedID {
+                    return Some(SuiMoveValue::Info {
                         id: address.into(),
                         version,
                     });

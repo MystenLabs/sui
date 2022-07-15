@@ -3,21 +3,21 @@
 
 module examples::item {
     use sui::transfer;
-    use sui::id::VersionedID;
+    use sui::object::Info;
     use sui::utf8::{Self, String};
     use sui::tx_context::{Self, TxContext};
 
     /// Type that marks Capability to create new `Item`s.
-    struct AdminCap has key { id: VersionedID }
+    struct AdminCap has key { info: Info }
 
     /// Custom NFT-like type.
-    struct Item has key, store { id: VersionedID, name: String }
+    struct Item has key, store { info: Info, name: String }
 
     /// Module initializer is called once on module publish.
     /// Here we create only one instance of `AdminCap` and send it to the publisher.
     fun item(ctx: &mut TxContext) {
         transfer::transfer(AdminCap {
-            id: tx_context::new_id(ctx)
+            info: object::new(ctx)
         }, tx_context::sender(ctx))
     }
 
@@ -28,7 +28,7 @@ module examples::item {
         _: &AdminCap, name: vector<u8>, to: address, ctx: &mut TxContext
     ) {
         transfer::transfer(Item {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             name: utf8::string_unsafe(name)
         }, to)
     }

@@ -3,23 +3,23 @@
 
 #[test_only]
 module sui::id_tests {
-    use sui::id;
+    use sui::object;
     use sui::tx_context;
 
     const ID_BYTES_MISMATCH: u64 = 0;
 
     struct Object has key {
-        id: id::VersionedID,
+        info: object::Info,
     }
 
     #[test]
     fun test_get_id() {
         let ctx = tx_context::dummy();
-        let versioned_id = tx_context::new_id(&mut ctx);
-        let obj_id = *id::inner(&versioned_id);
-        let obj = Object { id: versioned_id };
-        assert!(*id::id(&obj) == obj_id, ID_BYTES_MISMATCH);
-        let Object { id } = obj;
-        id::delete(id);
+        let info = object::new(&mut ctx);
+        let obj_id = *object::info_id(&info);
+        let obj = Object { info };
+        assert!(*object::id(&obj) == obj_id, ID_BYTES_MISMATCH);
+        let Object { info } = obj;
+        object::delete(info);
     }
 }

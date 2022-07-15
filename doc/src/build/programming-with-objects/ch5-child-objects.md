@@ -32,12 +32,12 @@ Let's look at some code. The full source code can be found in [object_owner.move
 First we define two object types for the parent and the child:
 ```rust
 struct Parent has key {
-    id: VersionedID,
+    info: Info,
     child: Option<ChildRef<Child>>,
 }
 
 struct Child has key {
-    id: VersionedID,
+    info: Info,
 }
 ```
 `Parent` type contains a `child` field that is an optional child reference to an object of `Child` type.
@@ -45,7 +45,7 @@ First we define an API to create an object of `Child` type:
 ```rust
 public entry fun create_child(ctx: &mut TxContext) {
     transfer::transfer(
-        Child { id: tx_context::new_id(ctx) },
+        Child { info: object::new(ctx) },
         tx_context::sender(ctx),
     );
 }
@@ -55,7 +55,7 @@ Similarly, we can define an API to create an object of `Parent` type:
 ```rust
 public entry fun create_parent(ctx: &mut TxContext) {
     let parent = Parent {
-        id: tx_context::new_id(ctx),
+        info: object::new(ctx),
         child: option::none(),
     };
     transfer::transfer(parent, tx_context::sender(ctx));
@@ -84,18 +84,18 @@ public fun transfer_to_object_id<T: key>(
     owner_id: VersionedID,
 ): (VersionedID, ChildRef<T>);
 ```
-To use this API, we don't need to create a parent object yet; we need only the object ID of the parent object, which can be created in advance through `tx_context::new_id(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by value only to return it. This is to ensure that the caller of the function does indeed own a `VersionedID` that hasn't been used in any object yet. Without this, it can be easy to make mistakes.
+To use this API, we don't need to create a parent object yet; we need only the object ID of the parent object, which can be created in advance through `object::new(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by value only to return it. This is to ensure that the caller of the function does indeed own a `Info` that hasn't been used in any object yet. Without this, it can be easy to make mistakes.
 Let's see how this is used in action. First we define another object type that has a non-optional child field:
 ```rust
 struct AnotherParent has key {
-    id: VersionedID,
+    info: Info,
     child: ChildRef<Child>,
 }
 ```
 And let's see how we define the API to create `AnotherParent` instance:
 ```rust
 public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
-    let id = tx_context::new_id(ctx);
+    let info = object::new(ctx);
     let (id, child_ref) = transfer::transfer_to_object_id(child, id);
     let parent = AnotherParent {
         id,

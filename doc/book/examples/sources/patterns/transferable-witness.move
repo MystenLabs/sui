@@ -10,19 +10,19 @@
 /// For these, rather rare, scerarios a storable witness is a perfect solution.
 module examples::transferable_witness {
     use sui::transfer;
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::tx_context::{Self, TxContext};
 
     /// Witness now has a `store` which allows us to store it inside a wrapper.
     struct WITNESS has store, drop {}
 
     /// Carries the witness type. Can only be used once to get a Witness.
-    struct WitnessCarrier has key { id: VersionedID, witness: WITNESS }
+    struct WitnessCarrier has key { info: Info, witness: WITNESS }
 
     /// Send a `WitnessCarrier` to the module publisher.
     fun init(ctx: &mut TxContext) {
         transfer::transfer(
-            WitnessCarrier { id: tx_context::new_id(ctx), witness: WITNESS {} },
+            WitnessCarrier { info: object::new(ctx), witness: WITNESS {} },
             tx_context::sender(ctx)
         )
     }
@@ -30,7 +30,7 @@ module examples::transferable_witness {
     /// Unwrap a carrier and get the inner WITNESS type.
     public fun get_witness(carrier: WitnessCarrier): WITNESS {
         let WitnessCarrier { id, witness } = carrier;
-        id::delete(id);
+        object::delete(id);
         witness
     }
 }

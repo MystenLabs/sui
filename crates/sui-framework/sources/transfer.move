@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::transfer {
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
@@ -14,7 +14,7 @@ module sui::transfer {
 
     /// Transfer ownership of `obj` to another object `owner`.
     public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R) {
-        let owner_id = id::id_address(id::id(owner));
+        let owner_id = object::id_address(object::id(owner));
         transfer_internal(obj, owner_id, true);
     }
 
@@ -24,11 +24,11 @@ module sui::transfer {
     /// use this function to transfer an object to the parent object identified by its id.
     /// Additionally, this API is useful for transfering to objects, outside of that object's
     /// module. The object's module can expose a function that returns a reference to the object's
-    /// verssioned ID, `&VersionedID`. Which can then be used with this function.
+    /// verssioned ID, `&Info`. Which can then be used with this function.
     /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
-    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &VersionedID) {
-        let inner_owner_id = *id::inner(owner_id);
-        transfer_internal(obj, id::id_address(&inner_owner_id), true);
+    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &Info) {
+        let inner_owner_id = *object::info_id(owner_id);
+        transfer_internal(obj, object::id_address(&inner_owner_id), true);
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no

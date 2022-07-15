@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::epoch_reward_record {
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     friend sui::sui_system;
     friend sui::validator_set;
@@ -16,7 +16,7 @@ module sui::epoch_reward_record {
     /// Delegation reward is simply proportional to to overall delegation reward ratio
     /// and the delegation amount.
     struct EpochRewardRecord has key {
-        id: VersionedID,
+        info: Info,
         epoch: u64,
         computation_charge: u64,
         total_stake: u64,
@@ -33,7 +33,7 @@ module sui::epoch_reward_record {
         ctx: &mut TxContext,
     ) {
         transfer::share_object(EpochRewardRecord {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             epoch,
             computation_charge,
             total_stake,

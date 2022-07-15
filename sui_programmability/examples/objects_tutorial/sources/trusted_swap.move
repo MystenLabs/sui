@@ -4,7 +4,7 @@
 module tutorial::trusted_swap {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -12,13 +12,13 @@ module tutorial::trusted_swap {
     const MIN_FEE: u64 = 1000;
 
     struct Object has key, store {
-        id: VersionedID,
+        info: Info,
         scarcity: u8,
         style: u8,
     }
 
     struct ObjectWrapper has key {
-        id: VersionedID,
+        info: Info,
         original_owner: address,
         to_swap: Object,
         fee: Balance<SUI>,
@@ -26,7 +26,7 @@ module tutorial::trusted_swap {
 
     public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
         let object = Object {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             scarcity,
             style,
         };
@@ -42,7 +42,7 @@ module tutorial::trusted_swap {
     public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
         assert!(coin::value(&fee) >= MIN_FEE, 0);
         let wrapper = ObjectWrapper {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             original_owner: tx_context::sender(ctx),
             to_swap: object,
             fee: coin::into_balance(fee),
@@ -59,14 +59,14 @@ module tutorial::trusted_swap {
 
         // Unpack both wrappers, cross send them to the other owner.
         let ObjectWrapper {
-            id: id1,
+            info: id1,
             original_owner: original_owner1,
             to_swap: object1,
             fee: fee1,
         } = wrapper1;
 
         let ObjectWrapper {
-            id: id2,
+            info: id2,
             original_owner: original_owner2,
             to_swap: object2,
             fee: fee2,
@@ -82,7 +82,7 @@ module tutorial::trusted_swap {
         transfer::transfer(coin::from_balance(fee1, ctx), service_address);
 
         // Effectively delete the wrapper objects.
-        id::delete(id1);
-        id::delete(id2);
+        object::delete(id1);
+        object::delete(id2);
     }
 }

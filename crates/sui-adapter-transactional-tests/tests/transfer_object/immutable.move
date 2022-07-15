@@ -9,15 +9,15 @@
 
 module test::m {
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use sui::id::VersionedID;
+    use sui::tx_context::TxContext;
+    use sui::object::{Self, Info};
 
-    struct S has store, key { id: VersionedID }
-    struct Cup<phantom T: store> has store, key { id: VersionedID }
+    struct S has store, key { info: Info }
+    struct Cup<phantom T: store> has store, key { info: Info }
 
     public entry fun mint_s(ctx: &mut TxContext) {
-        let id = tx_context::new_id(ctx);
-        transfer::freeze_object(S { id })
+        let info = object::new(ctx);
+        transfer::freeze_object(S { info })
     }
 }
 

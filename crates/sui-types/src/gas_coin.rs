@@ -15,7 +15,7 @@ use crate::{
     base_types::{ObjectID, SequenceNumber},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
-    id::VersionedID,
+    id::Info,
     object::{Data, MoveObject, Object},
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -45,7 +45,7 @@ pub struct GasCoin(pub Coin);
 
 impl GasCoin {
     pub fn new(id: ObjectID, version: SequenceNumber, value: u64) -> Self {
-        Self(Coin::new(VersionedID::new(id, version), value))
+        Self(Coin::new(Info::new(id, version), value))
     }
 
     pub fn value(&self) -> u64 {

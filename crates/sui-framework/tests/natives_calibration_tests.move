@@ -7,14 +7,14 @@
 // Isolating the native function is tricky, so we run two functions with and without the native
 // The difference in execution times is the time the native takes
 // functions prefixed with __baseline do not have the natives
-// Many parts of the code are written in such a way that the bytecode diffs yield exactly the 
+// Many parts of the code are written in such a way that the bytecode diffs yield exactly the
 // native to be isolated
 
 // TBD: Try objects of different sizes in natives
 
 #[test_only]
 module sui::NativesCalibrationTests {
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
 
     use sui::test_scenario;
     use sui::transfer;
@@ -29,9 +29,9 @@ module sui::NativesCalibrationTests {
     // A very basic object to be used in calls
     struct ObjectSimple has key, store, drop, copy {
     }
-    // A very basic object which has an VersionedID to be used in calls
+    // A very basic object which has an Info to be used in calls
     struct ObjectWithID has key, store{
-        id: VersionedID,
+        info: Info,
     }
 
 
@@ -43,7 +43,7 @@ module sui::NativesCalibrationTests {
     // event::emit
     // =================================================================
     // This native emits an event given an object
-    // > Note: this function's execution time depends on the size of the object, however we assume 
+    // > Note: this function's execution time depends on the size of the object, however we assume
     // > a flat cost for all operations
 
     // This test function calls the native in a typical manner
@@ -171,7 +171,7 @@ module sui::NativesCalibrationTests {
     // =================================================================
 
     // =================================================================
-    // id::bytes_to_address
+    // object::bytes_to_address
     // =================================================================
     // This native converts bytes to addresses
 
@@ -181,7 +181,7 @@ module sui::NativesCalibrationTests {
         let trials: u64 = NUM_TRIALS;
         while (trials > 0) {
             let bytes = x"3a985da74fe225b2045c172d6bd390bd855f086e";
-            id::calibrate_bytes_to_address(bytes);
+            object::calibrate_bytes_to_address(bytes);
             trials = trials - 1;
         }
     }
@@ -191,47 +191,47 @@ module sui::NativesCalibrationTests {
         let trials: u64 = NUM_TRIALS;
         while (trials > 0) {
             let bytes = x"3a985da74fe225b2045c172d6bd390bd855f086e";
-            id::calibrate_bytes_to_address_nop(bytes);
+            object::calibrate_bytes_to_address_nop(bytes);
             trials = trials - 1;
         }
     }
 
     // =================================================================
-    // id::get_versioned_id
+    // object::get_versioned_id
     // =================================================================
     // This native extracts the versioned ID from an object
 
     // This test function calls the native in a typical manner
     #[test]
-    public entry fun test_calibrate_id_get_versioned_id() {
+    public entry fun test_calibrate_id_get_info() {
         let trials: u64 = NUM_TRIALS;
         let sender = @0x0;
         let scenario = &mut test_scenario::begin(&sender);
 
         while (trials > 0) {
-            let obj = ObjectWithID {id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            id::calibrate_get_versioned_id(&obj);
-            let ObjectWithID { id } = obj;
-            id::delete(id);
+            let obj = ObjectWithID {info: object::new(test_scenario::ctx(scenario)) };
+            object::calibrate_get_info(&obj);
+            let ObjectWithID { info } = obj;
+            object::delete(info);
 
             trials = trials - 1;
 
-        }            
+        }
     }
     // This test function excludes the natives
     #[test]
-    public entry fun test_calibrate_id_get_versioned_id__baseline() {
+    public entry fun test_calibrate_id_get_info__baseline() {
         let trials: u64 = NUM_TRIALS;
         let sender = @0x0;
         let scenario = &mut test_scenario::begin(&sender);
 
         while (trials > 0) {
-            let obj = ObjectWithID {id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            id::calibrate_get_versioned_id_nop(&obj);
-            // This forces an immutable borrow to counter the ImmBorrowLoc in id::get_versioned_id
+            let obj = ObjectWithID {info: object::new(test_scenario::ctx(scenario)) };
+            object::calibrate_get_info_nop(&obj);
+            // This forces an immutable borrow to counter the ImmBorrowLoc in object::get_versioned_id
             let _ = &obj;
-            let ObjectWithID { id } = obj;
-            id::delete(id);
+            let ObjectWithID { info } = obj;
+            object::delete(info);
 
             trials = trials - 1;
         }

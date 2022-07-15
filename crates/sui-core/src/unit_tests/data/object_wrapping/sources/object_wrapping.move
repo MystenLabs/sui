@@ -5,21 +5,21 @@ module object_wrapping::object_wrapping {
     use std::option::{Self, Option};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
 
     struct Child has key, store {
-        id: VersionedID,
+        info: Info,
     }
 
     struct Parent has key {
-        id: VersionedID,
+        info: Info,
         child: Option<Child>,
     }
 
     public entry fun create_child(ctx: &mut TxContext) {
         transfer::transfer(
             Child {
-                id: tx_context::new_id(ctx),
+                info: object::new(ctx),
             },
             tx_context::sender(ctx),
         )
@@ -28,7 +28,7 @@ module object_wrapping::object_wrapping {
     public entry fun create_parent(child: Child, ctx: &mut TxContext) {
         transfer::transfer(
             Parent {
-                id: tx_context::new_id(ctx),
+                info: object::new(ctx),
                 child: option::some(child),
             },
             tx_context::sender(ctx),
@@ -48,12 +48,12 @@ module object_wrapping::object_wrapping {
     }
 
     public entry fun delete_parent(parent: Parent) {
-        let Parent { id: parent_id, child: child_opt } = parent;
-        id::delete(parent_id);
+        let Parent { info: parent_id, child: child_opt } = parent;
+        object::delete(parent_id);
         if (option::is_some(&child_opt)) {
             let child = option::extract(&mut child_opt);
-            let Child { id: child_id } = child;
-            id::delete(child_id);
+            let Child { info: child_id } = child;
+            object::delete(child_id);
         };
         option::destroy_none(child_opt)
     }

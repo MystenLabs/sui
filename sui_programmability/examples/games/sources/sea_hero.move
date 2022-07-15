@@ -12,14 +12,14 @@ module games::sea_hero {
     use games::hero::{Self, Hero};
 
     use sui::balance::{Self, Balance, Supply};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
     struct SeaHeroAdmin has key {
-        id: VersionedID,
+        info: Info,
         /// Permission to mint RUM
         supply: Supply<RUM>,
         /// Total number of monsters created so far
@@ -32,7 +32,7 @@ module games::sea_hero {
 
     /// A new kind of monster for the hero to fight
     struct SeaMonster has key, store {
-        id: VersionedID,
+        info: Info,
         /// Tokens that the user will earn for slaying this monster
         reward: Balance<RUM>
     }
@@ -59,7 +59,7 @@ module games::sea_hero {
     fun init(ctx: &mut TxContext) {
         transfer::transfer(
             SeaHeroAdmin {
-                id: tx_context::new_id(ctx),
+                info: object::new(ctx),
                 supply: balance::create_supply<RUM>(RUM {}),
                 monsters_created: 0,
                 token_supply_max: 1000000,
@@ -75,8 +75,8 @@ module games::sea_hero {
     /// exchange.
     /// Aborts if the hero is not strong enough to slay the monster
     public fun slay(hero: &Hero, monster: SeaMonster): Balance<RUM> {
-        let SeaMonster { id, reward } = monster;
-        id::delete(id);
+        let SeaMonster { info, reward } = monster;
+        object::delete(info);
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
@@ -107,7 +107,7 @@ module games::sea_hero {
         assert!(admin.monster_max - 1 >= admin.monsters_created, 2);
 
         let monster = SeaMonster {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             reward: balance::increase_supply(&mut admin.supply, reward_amount),
         };
         admin.monsters_created = admin.monsters_created + 1;

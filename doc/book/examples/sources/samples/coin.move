@@ -7,7 +7,7 @@ module examples::my_coin {
     use sui::tx_context::{Self, TxContext};
 
     /// The type identifier of coin. The coin will have a type
-    /// tag of kind: `Coin<package_id::my_coin::MYCOIN>`
+    /// tag of kind: `Coin<package_object::my_coin::MYCOIN>`
     struct MYCOIN has drop {}
 
     /// Module initializer is called once on module publish. A treasury
