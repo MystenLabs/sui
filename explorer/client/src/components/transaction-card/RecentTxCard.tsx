@@ -136,7 +136,7 @@ function LatestTxView({
     const defaultActiveTab = 0;
     const recentTx = {
         data: results.latestTx.map((txn) => ({
-            date: `${timeAgo(txn.timestamp_ms, undefined, true)} `,
+            date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
             transactionId: [
                 {
                     url: txn.txId,
