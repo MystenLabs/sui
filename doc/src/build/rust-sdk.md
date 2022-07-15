@@ -21,7 +21,7 @@ Use the devnet branch if you are connecting to the devnet.
 sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
 ```
 
-### 1. Get all objects owned by an address
+### Example 1 - Get all objects owned by an address
 ```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
@@ -39,7 +39,7 @@ async fn main() -> Result<(), anyhow::Error> {
 This will print a summary of objects owned my the address "0xec11cad080d0496a53bafcea629fcbcfff2a9866".
 You can verify the result with the [Sui explorer](https://explorer.devnet.sui.io/) if you are using the Sui devnet.
 
-### 2. Create and execute transaction
+### Example 2 - Create and execute transaction
 ```rust
 use std::str::FromStr;
 use sui_sdk::crypto::{Keystore, SuiKeystore};
@@ -84,7 +84,7 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 ```
 
-### 3. Event subscription
+### Example 3 - Event subscription
 ```rust
 use futures::StreamExt;
 use sui_sdk::rpc_types::SuiEventFilter;
