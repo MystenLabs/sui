@@ -128,6 +128,7 @@
             "name": "Try Sui Wallet Browser Extension",
             "url": "/explore/wallet-browser",
           },
+          {
             "name": "Learn Sui Move",
             "url": "https://sui.io/resources-move/why-we-created-sui-move/",
             "external": true
