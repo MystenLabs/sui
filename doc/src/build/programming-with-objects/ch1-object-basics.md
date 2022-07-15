@@ -82,9 +82,9 @@ public fun get_color(self: &ColorObject): (u8, u8, u8) {
 
 Find the full code online in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
 
-To compile the code, make sure you have [installed Sui](../install.md) so that `sui-move` is in `PATH`. In the code root directory (where `Move.toml` is), run:
+To compile the code, make sure you have [installed Sui](../install.md) so that `sui` is in `PATH`. In the code root directory (where `Move.toml` is), run:
 ```
-sui-move build
+sui move build
 ```
 
 ### Writing unit tests
@@ -142,7 +142,7 @@ Again, you can find the full code in [color_object.move](https://github.com/Myst
 
 To run the test, simply run the following in the code root directory:
 ```
-sui-move test
+sui move test
 ```
 
 ### On-chain Interactions
