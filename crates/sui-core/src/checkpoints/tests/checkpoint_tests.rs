@@ -429,7 +429,7 @@ fn latest_proposal() {
         current_proposal
             .verify(&committee, None)
             .expect("no signature error");
-        assert_eq!(*current_proposal.summary.sequence_number(), 0);
+        assert_eq!(current_proposal.summary.sequence_number, 0);
     }
 
     // --- TEST 2 ---
@@ -450,7 +450,7 @@ fn latest_proposal() {
         current_proposal
             .verify(&committee, response.detail.as_ref())
             .expect("no signature error");
-        assert_eq!(*current_proposal.summary.sequence_number(), 0);
+        assert_eq!(current_proposal.summary.sequence_number, 0);
     }
 
     // ---
@@ -1762,7 +1762,7 @@ async fn checkpoint_messaging_flow() {
 
             proposals.push((
                 *auth,
-                CheckpointProposal::new(
+                CheckpointProposal::new_from_signed_proposal_summary(
                     current.as_ref().unwrap().clone(),
                     response.detail.unwrap(),
                 ),

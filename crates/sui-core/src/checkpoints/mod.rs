@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod causal_order_effects;
-pub mod proposal;
 pub mod reconstruction;
 
 #[cfg(test)]
@@ -14,6 +13,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
+use sui_types::messages_checkpoint::CheckpointProposal;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     batch::TxSequenceNumber,
@@ -40,7 +40,6 @@ use crate::{
     authority_active::execution_driver::PendCertificateForExecution,
 };
 
-use self::proposal::CheckpointProposal;
 use self::reconstruction::FragmentReconstruction;
 
 pub type DBLabel = usize;
@@ -184,18 +183,15 @@ impl CheckpointStore {
                 .filter(|(_, seq)| seq < locals.proposal_next_transaction.as_ref().unwrap())
                 .map(|(digest, _)| digest);
             let transactions = CheckpointContents::new(transactions);
-            let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
-            let summary = SignedCheckpointSummary::new(
+            let proposal = CheckpointProposal::new(
                 epoch,
                 checkpoint_sequence,
                 self.name,
                 &*self.secret,
-                &transactions,
-                previous_digest,
+                transactions,
             );
 
-            let proposal_and_transactions = CheckpointProposal::new(summary, transactions);
-            locals.current_proposal = Some(proposal_and_transactions);
+            locals.current_proposal = Some(proposal);
         }
 
         // No need to sync exclusive access
@@ -446,7 +442,7 @@ impl CheckpointStore {
                 &self.fragments,
                 self.fragments.iter().filter_map(|(k, v)| {
                     // Delete all keys for checkpoints smaller than what we are committing now.
-                    if *v.proposer.summary.sequence_number() <= checkpoint_sequence_number {
+                    if v.proposer.summary.sequence_number <= checkpoint_sequence_number {
                         Some(k)
                     } else {
                         None
@@ -491,7 +487,7 @@ impl CheckpointStore {
         // Does the fragment event suggest it is for the current round?
         let next_checkpoint_seq = self.next_checkpoint();
         fp_ensure!(
-            *fragment.proposer.summary.sequence_number() == next_checkpoint_seq,
+            fragment.proposer.summary.sequence_number == next_checkpoint_seq,
             SuiError::GenericAuthorityError {
                 error: format!(
                     "Incorrect sequence number, expected {}",
@@ -589,7 +585,7 @@ impl CheckpointStore {
 
         // If the fragment contains us also save it in the list of local fragments
         let next_sequence_number = self.next_checkpoint();
-        if *fragment.proposer.summary.sequence_number() == next_sequence_number {
+        if fragment.proposer.summary.sequence_number == next_sequence_number {
             if fragment.proposer.authority() == &self.name {
                 self.local_fragments
                     .insert(fragment.other.authority(), &fragment)
@@ -649,7 +645,7 @@ impl CheckpointStore {
         let fragments: Vec<_> = self
             .fragments
             .values()
-            .filter(|frag| *frag.proposer.summary.sequence_number() == next_sequence_number)
+            .filter(|frag| frag.proposer.summary.sequence_number == next_sequence_number)
             .collect();
 
         // Run the reconstruction logic to build a checkpoint.
@@ -827,29 +823,23 @@ impl CheckpointStore {
             0
         };
 
-        // Extract the previous checkpoint digest if there is one.
-        let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
-
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
-        let summary = SignedCheckpointSummary::new(
+        let checkpoint_proposal = CheckpointProposal::new(
             epoch,
             checkpoint_sequence,
             self.name,
             &*self.secret,
-            &transactions,
-            previous_digest,
+            transactions,
         );
-
-        let proposal_and_transactions = CheckpointProposal::new(summary, transactions);
 
         // Record the checkpoint in the locals
         let mut new_locals = locals.as_ref().clone();
-        new_locals.current_proposal = Some(proposal_and_transactions.clone());
+        new_locals.current_proposal = Some(checkpoint_proposal.clone());
         new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
         info!(cp_seq=?checkpoint_sequence, "A new checkpoint proposal is created");
-        Ok(proposal_and_transactions)
+        Ok(checkpoint_proposal)
     }
 
     fn check_checkpoint_transactions<'a>(
