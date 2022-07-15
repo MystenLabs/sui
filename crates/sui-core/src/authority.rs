@@ -389,7 +389,13 @@ impl AuthorityState {
                 .acquire_shared_locks_from_effects(&certificate, &signed_effects.effects)?;
         }
 
-        self.process_certificate(tx_guard, certificate).await?;
+        let resp = self.process_certificate(tx_guard, certificate).await?;
+
+        let expected_effects_digest = signed_effects.effects.digest();
+        let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.effects.digest());
+        if observed_effects_digest != Some(expected_effects_digest) {
+            error!(?expected_effects_digest, ?observed_effects_digest, ?signed_effects, ?resp.signed_effects, "Locally executed effects do not match canonical effects!");
+        }
         Ok(())
     }
 
@@ -1358,6 +1364,7 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
+        let effects_digest = &signed_effects.effects.digest();
         let res = self
             .database
             .update_state(
@@ -1365,11 +1372,13 @@ impl AuthorityState {
                 certificate,
                 seq,
                 signed_effects,
-                &signed_effects.effects.digest(),
+                effects_digest,
             )
             .await;
 
-        debug!(digest = ?certificate.digest(), "commit_certificate finished");
+        let digest = certificate.digest();
+
+        debug!(?digest, ?effects_digest, "commit_certificate finished");
 
         res
 
