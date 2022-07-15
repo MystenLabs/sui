@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import cl from 'classnames';
-import { Link } from 'react-router-dom';
+import { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as CallTypeIcon } from '../../assets/SVGIcons/Call.svg';
 import { ReactComponent as PublishTypeIcon } from '../../assets/SVGIcons/Publish.svg';
@@ -39,12 +40,16 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
     const statusName = data.status === 'success' ? 'success' : 'failed';
     const TxResultStatus = TxStatus[statusName];
 
+    const navigate = useNavigate();
+
+    const previousPage = useCallback(() => navigate(-1), [navigate]);
+
     return (
         <div className={styles.txheader}>
             <div className={styles.txback}>
-                <Link className={styles.longtext} to={`/`}>
+                <button className={styles.longtext} onClick={previousPage}>
                     <ContentBackArrowDark /> Go Back
-                </Link>
+                </button>
             </div>
             <div className={styles.txtypes}>
                 <Icon /> {TxKindName}

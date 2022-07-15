@@ -9,7 +9,7 @@
 }
 
 .table th {
-    @apply text-left font-normal uppercase text-[#767A81] text-xs;
+    @apply text-left font-semibold uppercase text-[#767A81] text-xs;
 }
 
 .table td {
@@ -17,7 +17,7 @@
 }
 
 .table tbody tr {
-    @apply space-y-10 mt-10;
+    @apply space-y-10 mt-10 hover:bg-[#6fbcf014];
 }
 
 .addresses {
@@ -29,5 +29,5 @@
 }
 
 .tablespacing {
-    @apply pb-1 pt-1;
+    @apply pb-2 pt-2;
 }
