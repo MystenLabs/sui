@@ -75,5 +75,15 @@ div.txadd {
 }
 
 .moretxbtn {
-    @apply text-left bg-transparent cursor-pointer border-0 pl-0 pr-0 text-[#636870]  hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm;
+    @apply text-left bg-transparent cursor-pointer border-0 pl-0 pr-0 text-sui-grey-90  hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm w-full;
+
+    text-decoration: none;
+}
+
+.txlatestresults td a {
+    @apply font-mono text-[#4E555D];
+}
+
+.txlatestresults td:nth-child(1) {
+    @apply text-xs;
 }

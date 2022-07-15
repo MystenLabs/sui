@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import cl from 'classnames';
+
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
@@ -12,16 +12,17 @@ import {
 } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
-import styles from './Home.module.css';
+import styles from './Transactions.module.css';
 
 const initState = { count: 0, loadState: 'pending' };
-
+const TXN_PER_PAGE = 20;
+const TRUNCATE_LENGTH = 45;
 // Moved this method to the Home.tsx file so getTotalTransactionNumber can be called once across the entire component.
 async function getTransactionCount(network: Network | string): Promise<number> {
     return rpc(network).getTotalTransactionNumber();
 }
 
-function HomeStatic() {
+function TransactionsStatic() {
     const [count] = useState(500);
     return (
         <div data-testid="home-page" id="home" className={styles.home}>
@@ -30,7 +31,7 @@ function HomeStatic() {
     );
 }
 
-function HomeAPI() {
+function TransactionsAPI() {
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
@@ -73,18 +74,22 @@ function HomeAPI() {
     }
     return (
         <div
-            data-testid="home-page"
-            id="home"
-            className={cl([styles.home, styles.container])}
+            data-testid="transaction-page"
+            id="transaction"
+            className={styles.container}
         >
-            <section className="left-item">
-                <LastestTxCard count={results.count} />
-            </section>
-            <section className="right-item"></section>
+            <h1 className={styles.title}>Transactions</h1>
+            <LastestTxCard
+                count={results.count}
+                txPerPage={TXN_PER_PAGE}
+                paginationtype="pagination"
+                truncateLength={TRUNCATE_LENGTH}
+            />
         </div>
     );
 }
 
-const Home = () => (IS_STATIC_ENV ? <HomeStatic /> : <HomeAPI />);
+const Transactions = () =>
+    IS_STATIC_ENV ? <TransactionsStatic /> : <TransactionsAPI />;
 
-export default Home;
+export default Transactions;

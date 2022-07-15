@@ -9,15 +9,23 @@
 }
 
 .table th {
-    @apply text-left font-normal uppercase text-[#767A81] text-xs;
+    @apply text-left font-semibold uppercase text-[#767A81] text-xs;
 }
 
 .table td {
-    @apply pr-5 text-[#4E555D];
+    @apply pr-5 text-[#767A81] text-sm;
 }
 
 .table tbody tr {
-    @apply space-y-10 mt-10;
+    @apply space-y-10 mt-10 hover:bg-[#6fbcf014];
+}
+
+td:nth-child(1) {
+    @apply text-xs;
+}
+
+.table tbody tr:hover td {
+    @apply text-black;
 }
 
 .addresses {
@@ -29,5 +37,9 @@
 }
 
 .tablespacing {
-    @apply pb-1 pt-1;
+    @apply pb-2 pt-2;
+}
+
+td a {
+    @apply font-mono text-[#4E555D];
 }
