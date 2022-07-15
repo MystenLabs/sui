@@ -14,7 +14,7 @@ use std::sync::atomic::AtomicU64;
 use sui_storage::{
     default_db_options,
     mutex_table::{LockGuard, MutexTable},
-    write_ahead_log::DBWriteAheadLog,
+    write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
 };
 use sui_types::base_types::SequenceNumber;
@@ -32,6 +32,8 @@ pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
 
 pub type InternalSequenceNumber = u64;
+
+type CertLockGuard<'a> = LockGuard<'a>;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -240,6 +242,35 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             last_consensus_index,
             epochs,
         }
+    }
+
+    pub async fn acquire_tx_guard<'a, 'b>(
+        &'a self,
+        cert: &'b CertifiedTransaction,
+    ) -> SuiResult<CertTxGuard<'a>> {
+        let digest = cert.digest();
+        match self.wal.begin_tx(digest, cert).await? {
+            Some(g) => Ok(g),
+            None => {
+                // If the tx previously errored out without committing, we return an
+                // error now as well. We could retry the transaction on behalf of
+                // the client right now, but:
+                //
+                // a) This keeps the normal and recovery paths separated.
+                // b) If a client finds a way to create a tx that always fails here,
+                //    allowing them to retry it on command could be a DoS channel.
+                let err = "previous attempt of transaction resulted in an error - \
+                          transaction will be retried offline"
+                    .to_owned();
+                debug!(?digest, "{}", err);
+                Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err })
+            }
+        }
+    }
+
+    /// Acquire the lock for a tx without writing to the WAL.
+    pub async fn acquire_tx_lock<'a>(&'a self, digest: &TransactionDigest) -> CertLockGuard<'a> {
+        self.wal.acquire_lock(digest).await
     }
 
     // TODO: Async retry method, using tokio-retry crate.
@@ -1116,6 +1147,9 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         &self,
         certificate: &CertifiedTransaction,
         effects: &TransactionEffects,
+        // Do not remove unused arg - ensures that this function is not called without holding a
+        // lock.
+        _tx_guard: &CertTxGuard<'_>,
     ) -> SuiResult {
         let digest = *certificate.digest();
 
@@ -1136,7 +1170,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
     /// last consensus index.
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
-    pub fn persist_certificate_and_lock_shared_objects(
+    pub async fn persist_certificate_and_lock_shared_objects(
         &self,
         certificate: CertifiedTransaction,
         consensus_index: ExecutionIndices,
@@ -1183,6 +1217,15 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Schedule the certificate for execution
         self.add_pending_certificates(vec![(transaction_digest, Some(certificate.clone()))])?;
+
+        // Holding _tx_lock avoids the following race:
+        // - we check effects_exist, returns false
+        // - another task (starting from handle_node_sync_certificate) writes effects,
+        //    and then deletes locks from assigned_object_versions
+        // - we write to assigned_object versions, re-creating the locks that were just deleted
+        // - now it's possible to run a new tx against old versions of the shared objects.
+        let _tx_lock = self.acquire_tx_lock(&transaction_digest).await;
+
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.
 

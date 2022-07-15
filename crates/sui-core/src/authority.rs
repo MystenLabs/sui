@@ -382,11 +382,14 @@ impl AuthorityState {
             }
         );
 
-        let tx_guard = self.acquire_tx_guard(&certificate).await?;
+        let tx_guard = self.database.acquire_tx_guard(&certificate).await?;
 
         if certificate.contains_shared_object() {
-            self.database
-                .acquire_shared_locks_from_effects(&certificate, &signed_effects.effects)?;
+            self.database.acquire_shared_locks_from_effects(
+                &certificate,
+                &signed_effects.effects,
+                &tx_guard,
+            )?;
         }
 
         self.process_certificate(tx_guard, certificate).await?;
@@ -410,33 +413,9 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let tx_guard = self.acquire_tx_guard(&certificate).await?;
+        let tx_guard = self.database.acquire_tx_guard(&certificate).await?;
 
         self.process_certificate(tx_guard, certificate).await
-    }
-
-    async fn acquire_tx_guard<'a, 'b>(
-        &'a self,
-        cert: &'b CertifiedTransaction,
-    ) -> SuiResult<CertTxGuard<'a>> {
-        let digest = cert.digest();
-        match self.database.wal.begin_tx(digest, cert).await? {
-            Some(g) => Ok(g),
-            None => {
-                // If the tx previously errored out without committing, we return an
-                // error now as well. We could retry the transaction on behalf of
-                // the client right now, but:
-                //
-                // a) This keeps the normal and recovery paths separated.
-                // b) If a client finds a way to create a tx that always fails here,
-                //    allowing them to retry it on command could be a DoS channel.
-                let err = "previous attempt of transaction resulted in an error - \
-                          transaction will be retried offline"
-                    .to_owned();
-                debug!(?digest, "{}", err);
-                Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err })
-            }
-        }
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -1466,7 +1445,8 @@ impl ExecutionState for AuthorityState {
                 certificate.verify(&self.committee.load())?;
 
                 self.database
-                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)?;
+                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
+                    .await?;
 
                 // TODO: This return time is not ideal.
                 Ok(Vec::default())
