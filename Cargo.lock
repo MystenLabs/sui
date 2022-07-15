@@ -6358,9 +6358,10 @@ dependencies = [
  "sui-framework",
  "sui-gateway",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-node",
  "sui-quorum-driver",
+ "sui-sdk",
  "sui-swarm",
  "sui-types",
  "telemetry-subscribers",
@@ -6447,7 +6448,8 @@ dependencies = [
  "sui-config",
  "sui-faucet",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
+ "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -6521,7 +6523,7 @@ dependencies = [
  "sui-config",
  "sui-framework",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-network",
  "sui-storage",
  "sui-types",
@@ -6550,7 +6552,7 @@ dependencies = [
  "serde 1.0.139",
  "sui",
  "sui-config",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-types",
  "telemetry-subscribers",
  "test-utils",
@@ -6615,8 +6617,9 @@ dependencies = [
  "sui-framework",
  "sui-json",
  "sui-json-rpc",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-node",
+ "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
  "test-utils",
@@ -6656,12 +6659,14 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "jsonrpsee-core",
+ "jsonrpsee-proc-macros",
  "prometheus",
  "serde 1.0.139",
  "sui-core",
  "sui-json",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-open-rpc",
+ "sui-open-rpc-macros",
  "sui-types",
  "tokio",
  "tracing",
@@ -6669,7 +6674,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-json-rpc-api"
+name = "sui-json-rpc-types"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -6748,7 +6753,7 @@ dependencies = [
  "sui-config",
  "sui-json",
  "sui-json-rpc",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-types",
  "test-utils",
  "tokio",
@@ -6776,6 +6781,30 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
+name = "sui-sdk"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "async-trait",
+ "bcs",
+ "clap 3.1.18",
+ "dirs",
+ "ed25519-dalek",
+ "futures",
+ "futures-core",
+ "jsonrpsee",
+ "serde 1.0.139",
+ "serde_json",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-types",
+ "tokio",
  "workspace-hack 0.1.0",
 ]
 
@@ -7166,8 +7195,9 @@ dependencies = [
  "sui-framework",
  "sui-gateway",
  "sui-json-rpc",
- "sui-json-rpc-api",
+ "sui-json-rpc-types",
  "sui-node",
+ "sui-sdk",
  "sui-swarm",
  "sui-types",
  "tempfile",

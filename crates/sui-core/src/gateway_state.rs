@@ -42,7 +42,7 @@ use crate::{
     authority_client::AuthorityAPI, query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui_json_rpc_api::rpc_types::{
+use sui_json_rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
     PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
     SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,

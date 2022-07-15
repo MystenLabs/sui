@@ -6,7 +6,7 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveValue};
 
-use crate::rpc_types::{SuiMoveStruct, SuiMoveValue};
+use crate::{SuiMoveStruct, SuiMoveValue};
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
