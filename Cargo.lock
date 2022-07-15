@@ -6506,7 +6506,6 @@ dependencies = [
  "camino",
  "clap 3.2.2",
  "colored",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5b744fa722aa5d002ec17db3602cb709f7514fb3)",
  "futures",
  "jemalloc-ctl",
  "jemallocator",
