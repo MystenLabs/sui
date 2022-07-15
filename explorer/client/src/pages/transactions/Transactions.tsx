@@ -15,7 +15,8 @@ import { IS_STATIC_ENV } from '../../utils/envUtil';
 import styles from './Transactions.module.css';
 
 const initState = { count: 0, loadState: 'pending' };
-
+const TXN_PER_PAGE = 20;
+const TRUNCATE_LENGTH = 45;
 // Moved this method to the Home.tsx file so getTotalTransactionNumber can be called once across the entire component.
 async function getTransactionCount(network: Network | string): Promise<number> {
     return rpc(network).getTotalTransactionNumber();
@@ -80,9 +81,9 @@ function TransactionsAPI() {
             <h1 className={styles.title}>Transactions</h1>
             <LastestTxCard
                 count={results.count}
-                txPerPage={20}
+                txPerPage={TXN_PER_PAGE}
                 paginationtype="pagination"
-                truncateLength={45}
+                truncateLength={TRUNCATE_LENGTH}
             />
         </div>
     );

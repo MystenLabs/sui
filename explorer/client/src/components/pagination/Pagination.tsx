@@ -82,12 +82,14 @@ function Pagination({
                                     1
                                 </button>
                             </li>
-                            <li className="page-item">
-                                <button className={styles.paginationdot}>
-                                    ...
-                                </button>
-                            </li>
                         </>
+                    )}
+                    {pageIndex > pagiData.range && (
+                        <li className="page-item">
+                            <button className={styles.paginationdot}>
+                                ...
+                            </button>
+                        </li>
                     )}
                     {pagiData.listItems.map((itm: any, index: number) => (
                         <li className="page-item" key={index}>

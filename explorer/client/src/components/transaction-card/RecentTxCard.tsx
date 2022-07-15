@@ -267,12 +267,11 @@ function LatestTxCardAPI({ ...data }: RecentTx) {
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
     const [searchParams] = useSearchParams();
-    const [txNumPerPage] = useState(txPerPage);
 
     useEffect(() => {
         let isMounted = true;
         const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
-        getRecentTransactions(network, count, txNumPerPage, pagedNum)
+        getRecentTransactions(network, count, txPerPage, pagedNum)
             .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
@@ -307,7 +306,6 @@ function LatestTxCardAPI({ ...data }: RecentTx) {
         paginationtype,
         searchParams,
         truncateLength,
-        txNumPerPage,
         txPerPage,
     ]);
 
