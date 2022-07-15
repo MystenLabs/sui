@@ -1,10 +1,6 @@
-.gone {
-    @apply invisible;
-}
-
 button.btncontainer,
 button.pagenumber,
-button.ellipsis {
+button.nointeract {
     @apply w-[32px] h-[32px] px-0 py-2 mx-[4px] inline-block
     rounded border-[1px] border-solid border-sui-grey-50
     font-sans items-center 
@@ -19,4 +15,8 @@ button.pagenumber {
     @apply select-none border-solid border-sui-dark text-sui-dark;
 
     background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
+}
+
+button.gone {
+    @apply opacity-30;
 }

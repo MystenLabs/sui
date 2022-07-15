@@ -42,29 +42,33 @@ export default function PaginationWrapper({
     );
 
     const FirstButton = (
-        <span className={pageIndex === 0 ? styles.gone : ''}>
-            <button
-                className={styles.btncontainer}
-                id="backBtn"
-                onClick={handleBackClick}
-                disabled={pageIndex === 0}
-            >
-                &larr;
-            </button>
-        </span>
+        <button
+            className={
+                pageIndex === 0
+                    ? `${styles.nointeract} ${styles.gone}`
+                    : styles.btncontainer
+            }
+            id="backBtn"
+            onClick={handleBackClick}
+            disabled={pageIndex === 0}
+        >
+            &larr;
+        </button>
     );
 
     const LastButton = (
-        <span className={pageIndex === FINAL_PAGE_NO - 1 ? styles.gone : ''}>
-            <button
-                id="nextBtn"
-                className={styles.btncontainer}
-                disabled={pageIndex === FINAL_PAGE_NO - 1}
-                onClick={handleNextClick}
-            >
-                &rarr;
-            </button>
-        </span>
+        <button
+            id="nextBtn"
+            className={
+                pageIndex === FINAL_PAGE_NO - 1
+                    ? `${styles.nointeract} ${styles.gone}`
+                    : styles.btncontainer
+            }
+            disabled={pageIndex === FINAL_PAGE_NO - 1}
+            onClick={handleNextClick}
+        >
+            &rarr;
+        </button>
     );
     // When Total Number of Pages at most 5, list all always:
 
@@ -127,7 +131,7 @@ export default function PaginationWrapper({
                         2
                     </button>
                     {pageIndex > 2 && (
-                        <button className={styles.ellipsis}>...</button>
+                        <button className={styles.nointeract}>...</button>
                     )}
 
                     {pageIndex > 1 && pageIndex < FINAL_PAGE_NO - 2 && (
@@ -137,7 +141,7 @@ export default function PaginationWrapper({
                     )}
 
                     {pageIndex < FINAL_PAGE_NO - 3 && (
-                        <button className={styles.ellipsis}>...</button>
+                        <button className={styles.nointeract}>...</button>
                     )}
 
                     <button
