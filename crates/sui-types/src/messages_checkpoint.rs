@@ -299,16 +299,9 @@ impl SignedCheckpointSummary {
             .verify(&self.summary, self.auth_signature.authority)?;
 
         if let Some(contents) = contents {
-            let recomputed = CheckpointSummary::new(
-                self.summary.epoch,
-                *self.summary.sequence_number(),
-                contents,
-                self.summary.previous_digest,
-            );
-
             fp_ensure!(
-                recomputed == self.summary,
-                SuiError::from("Transaction digest mismatch")
+                contents.digest() == self.summary.content_digest,
+                SuiError::from("Checkpoint contents digest mismatch")
             );
         }
 
@@ -385,16 +378,9 @@ impl CertifiedCheckpointSummary {
         obligation.verify_all()?;
 
         if let Some(contents) = contents {
-            let recomputed = CheckpointSummary::new(
-                self.summary.epoch,
-                *self.summary.sequence_number(),
-                contents,
-                self.summary.previous_digest,
-            );
-
             fp_ensure!(
-                recomputed == self.summary,
-                SuiError::from("Transaction digest mismatch")
+                contents.digest() == self.summary.content_digest,
+                SuiError::from("Checkpoint contents digest mismatch")
             );
         }
 
