@@ -31,6 +31,9 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
         Publish: PublishTypeIcon,
         TransferObject: TransferObjectTypeIcon,
         Call: CallTypeIcon,
+        // TODO: use a different icon
+        ChangeEpoch: CallTypeIcon,
+        TransferSui: TransferObjectTypeIcon,
     };
     const TxKindName = data.txKindName;
     const Icon = TxTransferTypeIcon[TxKindName];
