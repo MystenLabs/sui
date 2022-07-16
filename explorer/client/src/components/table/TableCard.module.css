@@ -1,5 +1,5 @@
 .content {
-    @apply container overflow-x-auto text-left text-[#4E555D];
+    @apply w-full overflow-x-auto text-left text-[#4E555D];
 }
 
 .table {
