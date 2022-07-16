@@ -1,5 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import cl from 'classnames';
+
 import Longtext from '../../components/longtext/Longtext';
 
 import styles from './SendReceiveView.module.css';
@@ -21,7 +23,12 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                     )}
                 </h3>
             </div>
-            <div className={styles.txaddresssender}>
+            <div
+                className={cl([
+                    styles.txaddresssender,
+                    data.recipient?.length ? styles.recipient : '',
+                ])}
+            >
                 <Longtext
                     text={data.sender}
                     category="addresses"
