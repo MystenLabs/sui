@@ -225,7 +225,7 @@ describe('End-to-end Tests', () => {
 
             //Click on Owner text:
             await cssInteract(page)
-                .with('div#owner > span:first-child')
+                .with('div#owner > div >span:first-child')
                 .click();
 
             //Looking for object or address?
@@ -274,7 +274,7 @@ describe('End-to-end Tests', () => {
             ).toBe('noImage');
 
             //Parent Object contains an image:
-            await page.click('div#owner > span:first-child');
+            await page.click('div#owner > div > span:first-child');
             await page.waitForFunction(
                 () => !document.querySelector('#pleaseWaitImage')
             );
