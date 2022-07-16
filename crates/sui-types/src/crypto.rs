@@ -12,7 +12,7 @@ use base64ct::Encoding;
 use digest::Digest;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
-use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
+use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
@@ -57,10 +57,7 @@ impl KeyPair {
     /// Make a Narwhal-compatible key pair from a Sui keypair.
     pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
         let key = self.copy();
-        Ed25519KeyPair {
-            name: Ed25519PublicKey(key.key_pair.public),
-            secret: Ed25519PrivateKey(key.key_pair.secret),
-        }
+        key.key_pair.into()
     }
 }
 
