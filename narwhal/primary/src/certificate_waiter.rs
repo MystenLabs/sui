@@ -187,11 +187,12 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
 
                 self.pending.retain(|_digest, (r, once_cancel)| {
                     if *r <= gc_round {
-                        once_cancel
+                        // note: this send can fail, harmlessly, if the certificate has been delivered (`notify_read`)
+                        // and the present code path fires before the corresponding `waiting` item is unpacked above.
+                        let _ = once_cancel
                             .take()
                             .expect("This should be protected by a write lock")
-                            .send(())
-                            .expect("fatal error sending pending cancellation signal");
+                            .send(());
                         false
                     } else {
                         true

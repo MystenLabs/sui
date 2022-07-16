@@ -5,14 +5,18 @@ use base64ct::{Base64, Encoding};
 use serde::{de, Deserialize, Serialize};
 use serde_with::serde_as;
 use signature::{Signature, Signer, Verifier};
-use std::fmt::{self, Display};
-use std::str::FromStr;
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
-use crate::pubkey_bytes::PublicKeyBytes;
-use crate::serde_helpers::Ed25519Signature as Ed25519Sig;
-use crate::traits::{
-    AggregateAuthenticator, Authenticator, EncodeDecodeBase64, KeyPair, SigningKey, ToFromBytes,
-    VerifyingKey,
+use crate::{
+    pubkey_bytes::PublicKeyBytes,
+    serde_helpers::Ed25519Signature as Ed25519Sig,
+    traits::{
+        AggregateAuthenticator, Authenticator, EncodeDecodeBase64, KeyPair, SigningKey,
+        ToFromBytes, VerifyingKey,
+    },
 };
 
 ///

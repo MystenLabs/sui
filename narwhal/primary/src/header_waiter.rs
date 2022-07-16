@@ -344,9 +344,9 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                     .drain()
                     .flat_map(|(digest, (r, handler))| {
                         if r <= gc_round {
-                            handler
-                                .send(())
-                                .expect("fatal error sending pending cancellation signal");
+                            // note: this send can fail, harmlessly, if the certificate has been delivered (`notify_read`)
+                            // and the present code path fires before the corresponding `waiting` item is unpacked above.
+                            let _ = handler.send(());
                             None
                         } else {
                             Some((digest, (r, handler)))

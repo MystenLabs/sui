@@ -3,10 +3,11 @@
 
 use base64ct::Encoding as _;
 use blst::min_sig as blst;
-use serde::de::{Deserializer, Error};
-use serde::ser::Serializer;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{
+    de::{Deserializer, Error},
+    ser::Serializer,
+    Deserialize, Serialize,
+};
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 use std::fmt::Debug;
 
