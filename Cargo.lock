@@ -408,7 +408,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "miniz_oxide",
- "object 0.28.4",
+ "object",
  "rustc-demangle",
 ]
 
@@ -750,12 +750,6 @@ checksum = "4c24dab4283a142afa2fdca129b80ad2c6284e073930f964c3a1293c225ee39a"
 dependencies = [
  "rustc_version 0.4.0",
 ]
-
-[[package]]
-name = "cast"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
@@ -1104,7 +1098,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1604dafd25fba2fe2d5895a9da139f8dc9b319a5fe5354ca137cbbce4e178d10"
 dependencies = [
  "atty",
- "cast 0.2.7",
+ "cast",
  "clap 2.34.0",
  "criterion-plot",
  "csv",
@@ -1129,7 +1123,7 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d00996de9f2f7559f7f4dc286073197f83e92256a59ed395f9aac01fe717da57"
 dependencies = [
- "cast 0.2.7",
+ "cast",
  "itertools",
 ]
 
@@ -4355,15 +4349,6 @@ name = "object"
 version = "0.28.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e42c982f2d955fac81dd7e1d0e1426a7d702acd9c98d19ab01083a6a0328c424"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "object"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
 dependencies = [
  "memchr",
 ]
@@ -8494,8 +8479,7 @@ dependencies = [
  "cargo-platform",
  "cargo_metadata",
  "cassowary",
- "cast 0.2.7",
- "cast 0.3.0",
+ "cast",
  "cc",
  "cexpr",
  "cfg-expr",
@@ -8770,7 +8754,7 @@ dependencies = [
  "num_cpus",
  "num_enum",
  "num_enum_derive",
- "object 0.29.0",
+ "object",
  "once_cell",
  "oorandom",
  "opaque-debug 0.3.0",
@@ -9111,7 +9095,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "bzip2-sys",
- "cast 0.2.7",
+ "cast",
  "cc",
  "cexpr",
  "cfg-if 1.0.0",
