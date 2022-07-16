@@ -10,6 +10,7 @@ import {
     getTransferObjectTransaction,
     getMovePackageContent,
     getObjectId,
+    getTransferSuiTransaction,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
@@ -193,7 +194,9 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
-    const recipient = getTransferObjectTransaction(txdetails);
+    const recipient =
+        getTransferObjectTransaction(txdetails) ||
+        getTransferSuiTransaction(txdetails);
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
     const TabName = `${txKindName} Details`;
 
@@ -271,7 +274,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                           value: txKindData.module.value,
                       },
                       {
-                          label: 'Funtion',
+                          label: 'Function',
                           monotypeClass: true,
                           value: txKindData.function.value,
                       },
