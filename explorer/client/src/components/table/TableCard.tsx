@@ -60,7 +60,7 @@ function TxAddresses({ content }: { content: Link[] }) {
     return (
         <section className={styles.addresses}>
             {content.map((itm, idx) => (
-                <div key={idx + itm.url}>
+                <div key={idx + itm.url} className={styles.longtextwrapper}>
                     <Longtext
                         text={itm.url}
                         alttext={itm.name}

@@ -36,16 +36,20 @@
 
 .itemviewcontent {
     @apply mb-2 mt-2;
+
+    box-sizing: border-box;
 }
 
 .itemviewcontent .itemviewcontentitem {
     @apply grid gap-1 text-[14px] md:text-[15px] text-gray-500;
 
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: 1fr 3fr;
 }
 
 .itemviewcontentvalue {
-    @apply text-sm pt-2 pb-2 text-gray-800;
+    @apply text-sm pt-2 pb-2 text-gray-800 contents md:block;
+
+    box-sizing: border-box;
 }
 
 .itemviewcontent .itemviewcontentitem a,

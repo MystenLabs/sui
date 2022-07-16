@@ -14,7 +14,15 @@
 
 .recipient.txaddresssender a,
 .recipient.txaddresssender span {
-    @apply pl-2 pr-0;
+    @apply pl-0 pr-0 mx-0;
+}
+
+.txaddress ul li div {
+    @apply ml-2;
+}
+
+.recipient.txaddresssender > div {
+    @apply ml-2;
 }
 
 .txaddress ul li {
@@ -83,7 +91,7 @@
     height: 16px;
     width: 16px;
     position: absolute;
-    left: 4px;
+    left: 8px;
     z-index: 2;
     display: flex;
     align-items: center;
