@@ -21,7 +21,7 @@
 }
 
 .txsender {
-    @apply col-start-2 md:col-start-3 md:row-start-1 md:row-end-2;
+    @apply col-start-2 md:col-start-3 md:row-start-1 md:row-end-2 mt-1;
 }
 
 .itemviewtitle,
