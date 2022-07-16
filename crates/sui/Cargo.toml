@@ -26,6 +26,7 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-gateway = { path = "../sui-gateway" }
 sui-swarm = { path = "../sui-swarm" }
+sui-storage = { path = "../sui-storage" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
 
@@ -34,6 +35,10 @@ rustyline-derive = "0.6.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
+rocksdb = "0.18.0"
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7e9b7568fc7184b4938976330122f3c8064e3236"}
+tempfile = "3.3.0"
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "4bfce23c673549a6a7b5d4eeeae6f26a6a430353", package = "executor" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f", features = ["address20"] }
 move-prover = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
