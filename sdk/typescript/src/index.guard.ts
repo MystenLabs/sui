@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferObjectTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferObject, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, PublishResponse, SuiPackage, TransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferObjectTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, PublishResponse, SuiPackage, TransactionResponse } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
 import { PublicKey } from "./cryptography/publickey";
@@ -352,11 +352,35 @@ export function isTransferObject(obj: any, _argumentName?: string): obj is Trans
     )
 }
 
+export function isSuiTransferSui(obj: any, _argumentName?: string): obj is SuiTransferSui {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.recipient) as boolean &&
+        (obj.amount === null ||
+            isSequenceNumber(obj.amount) as boolean)
+    )
+}
+
+export function isSuiChangeEpoch(obj: any, _argumentName?: string): obj is SuiChangeEpoch {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSequenceNumber(obj.epoch) as boolean &&
+        isSequenceNumber(obj.storage_charge) as boolean &&
+        isSequenceNumber(obj.computation_charge) as boolean
+    )
+}
+
 export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
     return (
         (obj === "TransferObject" ||
             obj === "Publish" ||
-            obj === "Call")
+            obj === "Call" ||
+            obj === "TransferSui" ||
+            obj === "ChangeEpoch")
     )
 }
 
@@ -373,7 +397,15 @@ export function isSuiTransactionKind(obj: any, _argumentName?: string): obj is S
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isMoveCall(obj.Call) as boolean)
+            isMoveCall(obj.Call) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isSuiTransferSui(obj.TransferSui) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isSuiChangeEpoch(obj.ChangeEpoch) as boolean)
     )
 }
 

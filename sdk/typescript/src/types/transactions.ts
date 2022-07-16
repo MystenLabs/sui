@@ -9,11 +9,29 @@ export type TransferObject = {
   objectRef: SuiObjectRef;
 };
 
-export type TransactionKindName = 'TransferObject' | 'Publish' | 'Call';
+export type SuiTransferSui = {
+  recipient: SuiAddress;
+  amount: number | null;
+};
+
+export type SuiChangeEpoch = {
+  epoch: EpochId;
+  storage_charge: number;
+  computation_charge: number;
+};
+
+export type TransactionKindName =
+  | 'TransferObject'
+  | 'Publish'
+  | 'Call'
+  | 'TransferSui'
+  | 'ChangeEpoch';
 export type SuiTransactionKind =
   | { TransferObject: TransferObject }
   | { Publish: SuiMovePackage }
-  | { Call: MoveCall };
+  | { Call: MoveCall }
+  | { TransferSui: SuiTransferSui }
+  | { ChangeEpoch: SuiChangeEpoch };
 export type TransactionData = {
   transactions: SuiTransactionKind[];
   sender: SuiAddress;
@@ -140,13 +158,13 @@ export type PublishResponse = {
   createdObjects: SuiObject[];
   package: SuiPackage;
   updatedGas: SuiObject;
-}
+};
 
 export type SuiPackage = {
   digest: string;
   objectId: string;
   version: number;
-}
+};
 
 export type TransactionResponse =
   | {
@@ -219,6 +237,18 @@ export function getMoveCallTransaction(
   data: SuiTransactionKind
 ): MoveCall | undefined {
   return 'Call' in data ? data.Call : undefined;
+}
+
+export function getTransferSuiTransaction(
+  data: SuiTransactionKind
+): SuiTransferSui | undefined {
+  return 'TransferSui' in data ? data.TransferSui : undefined;
+}
+
+export function getChangeEpochTransaction(
+  data: SuiTransactionKind
+): SuiChangeEpoch | undefined {
+  return 'ChangeEpoch' in data ? data.ChangeEpoch : undefined;
 }
 
 export function getTransactions(
