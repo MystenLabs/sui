@@ -4,6 +4,7 @@
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
+use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::{self, execute_move_command};
@@ -105,6 +106,16 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
+    },
+
+    /// Tool to read validator & gateway db.
+    #[clap(name = "db-tool")]
+    DbTool {
+        /// Path of the DB to read
+        #[clap(long = "db_path")]
+        db_path: String,
+        #[clap(subcommand)]
+        cmd: Option<DbToolCommand>,
     },
 }
 
@@ -353,6 +364,13 @@ impl SuiCommand {
                 build_config,
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
+            SuiCommand::DbTool { db_path, cmd } => {
+                let path = PathBuf::from(db_path);
+                match cmd {
+                    Some(c) => execute_db_tool_command(path, c),
+                    None => print_db_all_tables(path),
+                }
+            }
         }
     }
 }
