@@ -1,6 +1,6 @@
-use std::path::PathBuf;
-use clap::Parser;
 use self::db_dump::{dump_table, list_tables};
+use clap::Parser;
+use std::path::PathBuf;
 
 pub mod db_dump;
 
