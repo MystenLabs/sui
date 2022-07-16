@@ -14,6 +14,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use narwhal_crypto::traits::KeyPair;
 use prometheus::Registry;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
@@ -173,7 +174,7 @@ impl ValidatorService {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.key_pair().make_narwhal_keypair();
-        let consensus_name = consensus_keypair.name.clone();
+        let consensus_name = consensus_keypair.public().clone();
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
             consensus_keypair,
