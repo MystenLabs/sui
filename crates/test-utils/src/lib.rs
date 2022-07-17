@@ -10,7 +10,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
-    crypto::{get_key_pair_from_rng, KeyPair},
+    crypto::{get_key_pair_from_rng, KeyPair, NarwhalKeypair, PublicKeyBytes},
 };
 
 /// The size of the committee used for tests.
@@ -30,7 +30,7 @@ pub fn test_committee() -> Committee {
         0,
         test_keys()
             .into_iter()
-            .map(|(_, x)| (*x.public_key_bytes(), /* voting right */ 1))
+            .map(|(_, x)| (PublicKeyBytes::from(x.public()), /* voting right */ 1))
             .collect(),
     )
     .unwrap()

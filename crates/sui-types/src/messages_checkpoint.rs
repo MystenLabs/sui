@@ -13,7 +13,9 @@ use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{sha3_hash, AuthoritySignature, BcsSignable, VerificationObligation},
+    crypto::{
+        sha3_hash, AuthoritySignature, BcsSignable, SuiAuthoritySignature, VerificationObligation,
+    },
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
@@ -296,7 +298,7 @@ impl SignedCheckpointSummary {
         );
         self.auth_signature
             .signature
-            .verify(&self.summary, self.auth_signature.authority)?;
+            .verify(&self.summary, self.auth_signature.authority.clone())?;
 
         if let Some(contents) = contents {
             let recomputed = CheckpointSummary::new(
@@ -491,7 +493,7 @@ mod tests {
     fn test_signed_proposal() {
         let mut rng = StdRng::from_seed(RNG_SEED);
         let (authority_key, committee) = make_committee_key(&mut rng);
-        let name = authority_key[0].public_key_bytes();
+        let name = authority_key[0].public().into() as PublicKeyBytes;
 
         let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
@@ -525,7 +527,7 @@ mod tests {
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
-                let name = k.public_key_bytes();
+                let name = k.public().into();
 
                 SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
             })
@@ -552,7 +554,7 @@ mod tests {
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
-                let name = k.public_key_bytes();
+                let name = k.public().into();
 
                 SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
             })
@@ -568,7 +570,7 @@ mod tests {
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
-                let name = k.public_key_bytes();
+                let name = k.public().into();
                 let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 

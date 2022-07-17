@@ -31,7 +31,7 @@ pub async fn init_local_authorities(
     let mut key_pairs = Vec::new();
     for i in 0..committee_size {
         let (_, key_pair) = get_key_pair();
-        let authority_name = *key_pair.public_key_bytes();
+        let authority_name = *key_pair.public().into() as PublicKeyBytes;
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
             public_key: authority_name,

@@ -13,7 +13,10 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
+use sui_types::{
+    base_types::encode_bytes_hex,
+    crypto::{get_key_pair_from_rng, NarwhalKeypair, PublicKeyBytes},
+};
 
 pub struct ConfigBuilder<R = OsRng> {
     rng: R,
@@ -88,7 +91,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .enumerate()
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
-                let public_key = *validator.key_pair.public_key_bytes();
+                let public_key: PublicKeyBytes = validator.key_pair.public().into();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
 
@@ -127,17 +130,17 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
-                let public_key = validator.key_pair.public_key_bytes();
+                let public_key: PublicKeyBytes = validator.key_pair.public().into();
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(public_key));
+                    .join(encode_bytes_hex(&public_key));
                 let network_address = validator.network_address;
                 let consensus_address = validator.narwhal_consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(public_key));
+                    .join(encode_bytes_hex(&public_key));
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
+use crate::crypto::PublicKey;
 use crate::error::{SuiError, SuiResult};
-use ed25519_dalek::PublicKey;
 use itertools::Itertools;
 use rand_latest::rngs::OsRng;
 use rand_latest::seq::SliceRandom;
@@ -122,8 +122,11 @@ impl Committee {
 
     pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<PublicKey> {
         match self.expanded_keys.get(authority) {
-            Some(v) => Ok(*v),
-            None => (*authority).try_into(),
+            // TODO: Check if this is unnecessary copying.
+            Some(v) => Ok(v.clone()),
+            None => (*authority).try_into().map_err(|_| {
+                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
+            }),
         }
     }
 

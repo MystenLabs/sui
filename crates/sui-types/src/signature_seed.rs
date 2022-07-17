@@ -7,6 +7,7 @@ use crate::base_types::SuiAddress;
 use crate::crypto::{KeyPair, Signable, Signature};
 use crate::error::SuiError;
 use hkdf::Hkdf;
+use narwhal_crypto::traits::KeyPair as NarwhalKeypair;
 use rand::{CryptoRng, RngCore};
 use sha3::Sha3_256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -161,7 +162,7 @@ impl SignatureSeed {
         domain: Option<&[u8]>,
     ) -> Result<SuiAddress, SuiError> {
         let keypair = SignatureSeed::new_deterministic_keypair(self, id, domain)?;
-        Ok(SuiAddress::from(keypair.public_key_bytes()))
+        Ok(SuiAddress::try_from(keypair.public().as_ref())?)
     }
 
     /// Sign a message using a deterministically derived key from some `id` input.

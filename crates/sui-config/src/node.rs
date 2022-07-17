@@ -12,7 +12,9 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
+use sui_types::base_types::ToAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::NarwhalKeypair;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -77,11 +79,11 @@ impl NodeConfig {
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {
-        *self.key_pair.public_key_bytes()
+        self.key_pair.clone().public().into()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
+        self.public_key().to_address()
     }
 
     pub fn db_path(&self) -> &Path {
@@ -149,7 +151,7 @@ impl ValidatorInfo {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
+        self.public_key().to_address()
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {

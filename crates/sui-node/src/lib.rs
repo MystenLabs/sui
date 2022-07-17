@@ -31,12 +31,13 @@ use sui_storage::{
     node_sync_store::NodeSyncStore,
     IndexStore,
 };
+use sui_types::crypto::ToFromBytes;
 
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::{NarwhalKeypair, PublicKeyBytes};
 
 pub mod metrics;
 
@@ -148,7 +149,7 @@ impl SuiNode {
                         let channel = net_config.connect_lazy(&address)?;
                         let client = NetworkAuthorityClient::new(channel);
                         let name: &[u8] = &validator.metadata.name;
-                        let public_key_bytes = PublicKeyBytes::try_from(name)?;
+                        let public_key_bytes = PublicKeyBytes::from_bytes(name)?;
                         authority_clients.insert(public_key_bytes, client);
                     }
                 } else {

@@ -1582,9 +1582,9 @@ async fn test_store_revert_state_update() {
 #[cfg(test)]
 fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStore>) {
     let (authority_address, authority_key) = get_key_pair();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
-        /* address */ *authority_key.public_key_bytes(),
+        /* address */ *authority_key.public().into(),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -1604,7 +1604,7 @@ pub async fn init_state() -> AuthorityState {
     let (committee, _, authority_key, store) = init_state_parameters();
     AuthorityState::new(
         committee,
-        *authority_key.public_key_bytes(),
+        *authority_key.public().into(),
         Arc::pin(authority_key),
         store,
         None,

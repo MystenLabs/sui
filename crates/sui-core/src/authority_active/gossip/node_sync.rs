@@ -457,7 +457,7 @@ mod tests {
 
     fn random_authority_name() -> AuthorityName {
         let key = get_key_pair();
-        *key.1.public_key_bytes()
+        *key.1.public().into() as PublicKeyBytes
     }
 
     #[test]
