@@ -404,6 +404,12 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         })
     }
 
+    pub fn len(
+        &self
+    ) -> u64 {
+        self.signers_map.len()
+    }
+
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,

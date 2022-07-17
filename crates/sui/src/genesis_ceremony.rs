@@ -223,7 +223,7 @@ mod test {
                 let keypair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
                 let info = ValidatorInfo {
                     name: format!("validator-{i}"),
-                    public_key: PublicKeyBytes::from(keypair.public().into()),
+                    public_key: PublicKeyBytes::from(keypair.public()),
                     stake: 1,
                     delegation: 0,
                     network_address: utils::new_network_address(),

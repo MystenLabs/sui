@@ -20,7 +20,7 @@ use sui_adapter::genesis;
 use sui_types::object::Data;
 use sui_types::{
     base_types::dbg_addr,
-    crypto::KeyPair,
+    crypto::{KeyPair, NarwhalKeypair},
     crypto::{get_key_pair, Signature},
     messages::Transaction,
     object::{Owner, OBJECT_START_VERSION},
@@ -61,7 +61,7 @@ const MAX_GAS: u64 = 10000;
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
     assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
-    assert_eq!(o1.auth_sign_info.signatures, o2.auth_sign_info.signatures);
+    assert_eq!(o1.auth_sign_info.signature, o2.auth_sign_info.signature);
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -75,8 +75,8 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
         (Some(cert1), Some(cert2)) => {
             assert_eq!(cert1.digest(), cert2.digest());
             assert_eq!(
-                cert1.auth_sign_info.signatures,
-                cert2.auth_sign_info.signatures
+                cert1.auth_sign_info.signature,
+                cert2.auth_sign_info.signature
             );
         }
         (None, None) => (),
@@ -1581,10 +1581,13 @@ async fn test_store_revert_state_update() {
 
 #[cfg(test)]
 fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStore>) {
+    use narwhal_crypto::{traits::KeyPair};
+    use sui_types::crypto::PublicKeyBytes;
+
     let (authority_address, authority_key) = get_key_pair();
     let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
-        /* address */ *authority_key.public().into(),
+        /* address */ authority_key.public().into(),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -1604,7 +1607,7 @@ pub async fn init_state() -> AuthorityState {
     let (committee, _, authority_key, store) = init_state_parameters();
     AuthorityState::new(
         committee,
-        *authority_key.public().into(),
+        authority_key.public().into(),
         Arc::pin(authority_key),
         store,
         None,

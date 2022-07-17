@@ -14,7 +14,7 @@ use std::{fs::File, io::Write};
 use sui_types::{
     base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
     batch::UpdateItem,
-    crypto::{get_key_pair, AuthoritySignature, Signature},
+    crypto::{get_key_pair, AuthoritySignature, Signature, NarwhalKeypair, PublicKeyBytes},
     messages::{
         CallArg, EntryArgumentErrorKind, ExecutionFailureStatus, ExecutionStatus, ObjectArg,
         ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
@@ -32,7 +32,7 @@ fn get_registry() -> Result<Registry> {
     // with all the base types contained in messages, especially the ones with custom serializers;
     // or involving generics (see [serde_reflection documentation](https://novifinancial.github.io/serde-reflection/serde_reflection/index.html)).
     let (addr, kp) = get_key_pair();
-    let pk = kp.public().into();
+    let pk: PublicKeyBytes = kp.public().into();
     tracer.trace_value(&mut samples, &addr)?;
     tracer.trace_value(&mut samples, &kp)?;
     tracer.trace_value(&mut samples, &pk)?;
