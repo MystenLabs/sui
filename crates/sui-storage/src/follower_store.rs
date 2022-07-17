@@ -61,7 +61,7 @@ mod test {
         let follower_store = FollowerStore::open(&working_dir).expect("cannot open db");
 
         let (_, key_pair) = get_key_pair();
-        let val_name = key_pair.public_key_bytes();
+        let val_name = key_pair.public().into() as PublicKeyBytes;
 
         let seq = follower_store
             .get_next_sequence(val_name)

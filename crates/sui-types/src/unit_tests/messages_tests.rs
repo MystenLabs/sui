@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use roaring::RoaringBitmap;
 
-use crate::crypto::get_key_pair;
+use crate::crypto::{get_key_pair, PublicKey};
 
 use super::*;
 
@@ -20,18 +20,18 @@ fn random_object_ref() -> ObjectRef {
 
 #[test]
 fn test_signed_values() {
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     // TODO: refactor this test to not reuse the same keys for user and authority signing
     let (a1, sec1) = get_key_pair();
     let (a2, sec2) = get_key_pair();
     let (_, sec3) = get_key_pair();
 
     authorities.insert(
-        /* address */ *sec1.public_key_bytes(),
+        /* address */ sec1.public().into(),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ *sec2.public_key_bytes(),
+        /* address */ sec2.public().into(),
         /* voting right */ 0,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -48,32 +48,28 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec1.public_key_bytes(),
-        &sec1,
+        PublicKeyBytes::from(sec1.public()) & sec1,
     );
     assert!(v.verify(&committee).is_ok());
 
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec2.public_key_bytes(),
-        &sec2,
+        PublicKeyBytes::from(sec2.public()) & sec2,
     );
     assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction,
-        *sec3.public_key_bytes(),
-        &sec3,
+        PublicKeyBytes::from(sec3.public()) & sec3,
     );
     assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
         bad_transaction,
-        *sec1.public_key_bytes(),
-        &sec1,
+        PublicKeyBytes::from(sec1.public()) & sec1,
     );
     assert!(v.verify(&committee).is_err());
 }
@@ -84,13 +80,13 @@ fn test_certificates() {
     let (a2, sec2) = get_key_pair();
     let (_, sec3) = get_key_pair();
 
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
-        /* address */ *sec1.public_key_bytes(),
+        /* address */ PublicKeyBytes::from(sec1.public()),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ *sec2.public_key_bytes(),
+        /* address */ PublicKeyBytes::from(sec2.public()),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
@@ -107,20 +103,17 @@ fn test_certificates() {
     let v1 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec1.public_key_bytes(),
-        &sec1,
+        PublicKeyBytes::from(sec1.public()) & sec1,
     );
     let v2 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec2.public_key_bytes(),
-        &sec2,
+        PublicKeyBytes::from(sec2.public()) & sec2,
     );
     let v3 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        *sec3.public_key_bytes(),
-        &sec3,
+        PublicKeyBytes::from(sec3.public()) & sec3,
     );
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
@@ -155,16 +148,16 @@ impl BcsSignable for Foo {}
 #[test]
 fn test_new_with_signatures() {
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
 
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        signatures.push((*sec.public_key_bytes(), sig));
-        authorities.insert(*sec.public_key_bytes(), 1);
+        signatures.push((PublicKeyBytes::from(sec.public()), sig));
+        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
     }
     let (_, sec) = get_key_pair();
-    authorities.insert(*sec.public_key_bytes(), 1);
+    authorities.insert(PublicKeyBytes::from(sec.public()), 1);
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
@@ -189,14 +182,14 @@ fn test_new_with_signatures() {
 #[test]
 fn test_add_signatures() {
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     let mut quorum = AuthorityStrongQuorumSignInfo::new(0);
 
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        signatures.push((*sec.public_key_bytes(), sig));
-        authorities.insert(*sec.public_key_bytes(), 1);
+        signatures.push((PublicKeyBytes::from(sec.public()), sig));
+        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
@@ -238,13 +231,13 @@ where
 fn test_handle_reject_malicious_signature() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
 
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(*sec.public_key_bytes(), 1);
-        signatures.push((*sec.public_key_bytes(), sig));
+        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+        signatures.push((PublicKeyBytes::from(sec.public()), sig));
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
@@ -267,12 +260,12 @@ fn test_handle_reject_malicious_signature() {
 fn test_bitmap_out_of_range() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(*sec.public_key_bytes(), 1);
-        signatures.push((*sec.public_key_bytes(), sig));
+        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+        signatures.push((PublicKeyBytes::from(sec.public()), sig));
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
@@ -292,12 +285,12 @@ fn test_bitmap_out_of_range() {
 fn test_reject_extra_public_key() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(*sec.public_key_bytes(), 1);
-        signatures.push((*sec.public_key_bytes(), sig));
+        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+        signatures.push((PublicKeyBytes::from(sec.public()), sig));
     }
 
     signatures.sort_by_key(|k| k.0);
@@ -321,12 +314,12 @@ fn test_reject_extra_public_key() {
 fn test_reject_reuse_signatures() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(*sec.public_key_bytes(), 1);
-        signatures.push((*sec.public_key_bytes(), sig));
+        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+        signatures.push((PublicKeyBytes::from(sec.public()), sig));
     }
 
     let used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
@@ -346,12 +339,12 @@ fn test_reject_reuse_signatures() {
 fn test_empty_bitmap() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(*sec.public_key_bytes(), 1);
-        signatures.push((*sec.public_key_bytes(), sig));
+        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+        signatures.push((PublicKeyBytes::from(sec.public()), sig));
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();

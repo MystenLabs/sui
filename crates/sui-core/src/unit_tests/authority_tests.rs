@@ -1613,7 +1613,7 @@ pub async fn init_state_with_committee(committee: Option<(Committee, KeyPair)>) 
 
     AuthorityState::new(
         committee,
-        *authority_key.public_key_bytes(),
+        *authority_key.public().into(),
         Arc::pin(authority_key),
         store,
         None,

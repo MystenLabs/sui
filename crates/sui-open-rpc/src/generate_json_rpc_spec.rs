@@ -307,7 +307,7 @@ async fn create_error_response(
         .keystore
         .sign(&address, &response.tx_bytes.to_vec()?)?;
     let signature_byte = Base64::encode(signature.signature_bytes());
-    let pub_key = Base64::encode(signature.public_key_bytes());
+    let pub_key = Base64::encode(signature.public().into() as PublicKeyBytes);
     let tx_data = response.tx_bytes.encoded();
 
     let client = Client::new();
