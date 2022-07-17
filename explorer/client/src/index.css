@@ -39,3 +39,10 @@ textarea:focus,
 select:focus {
     outline: none;
 }
+
+/* Fix inconsistent font size rendering on iphone */
+@media screen and (max-device-width: 480px) {
+    body {
+        text-size-adjust: none;
+    }
+}

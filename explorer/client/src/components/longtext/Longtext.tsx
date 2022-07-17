@@ -4,8 +4,8 @@
 import { useCallback, useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { ReactComponent as ContentCopyIcon } from '../../assets/SVGIcons/Copy.svg';
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
-import { ReactComponent as ContentCopyIcon } from '../../assets/content_copy_black_18dp.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import ExternalLink from '../external-link/ExternalLink';
@@ -110,13 +110,16 @@ function Longtext({
             );
         }
     } else {
-        textComponent = <span>{alttext ? alttext : text}</span>;
+        textComponent = (
+            <span className={styles.linktext}>{alttext ? alttext : text}</span>
+        );
     }
 
     return (
-        <>
-            {textComponent}&nbsp;{icon}
-        </>
+        <div className={styles.longtextwrapper}>
+            {textComponent}
+            {icon}
+        </div>
     );
 }
 
