@@ -26,7 +26,7 @@ use serde_with::Bytes;
 use sha3::Sha3_256;
 
 use crate::committee::EpochId;
-use crate::crypto::PublicKeyBytes;
+use crate::crypto::{PublicKey, PublicKeyBytes};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -183,21 +183,25 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<&PublicKeyBytes> for SuiAddress {
-    fn from(key: &PublicKeyBytes) -> SuiAddress {
-        Self::from(*key)
+pub trait ToAddress {
+    fn to_address(&self) -> SuiAddress;
+}
+
+impl ToAddress for PublicKeyBytes {
+    fn to_address(&self) -> SuiAddress {
+        let mut hasher = Sha3_256::default();
+        hasher.update(self);
+        let g_arr = hasher.finalize();
+
+        let res = [0u8; SUI_ADDRESS_LENGTH];
+        SuiAddress(res)
     }
 }
 
-impl From<PublicKeyBytes> for SuiAddress {
-    fn from(key: PublicKeyBytes) -> SuiAddress {
-        let mut hasher = Sha3_256::default();
-        hasher.update(key.as_ref());
-        let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        Self(res)
+impl ToAddress for PublicKey {
+    fn to_address(&self) -> SuiAddress {
+        let pk_bytes: PublicKeyBytes = self.into();
+        pk_bytes.to_address()
     }
 }
 

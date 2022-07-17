@@ -219,7 +219,7 @@ pub async fn init_configurable_authorities(
     let mut voting_rights = BTreeMap::new();
     for _ in 0..authority_count {
         let (_, key_pair) = get_key_pair();
-        let authority_name = *key_pair.public_key_bytes();
+        let authority_name = *key_pair.public().into() as PublicKeyBytes;
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }

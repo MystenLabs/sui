@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ExecutionDigests};
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
+use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, SuiAuthoritySignature};
 use crate::error::SuiError;
 use serde::{Deserialize, Serialize};
 

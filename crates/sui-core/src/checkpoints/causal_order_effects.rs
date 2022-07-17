@@ -296,7 +296,7 @@ mod tests {
             path,
             None,
             committee.epoch,
-            *k.public_key_bytes(),
+            k.public().into(),
             Arc::pin(k.copy()),
         )
         .unwrap();

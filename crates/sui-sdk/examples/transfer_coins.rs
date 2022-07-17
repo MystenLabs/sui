@@ -34,7 +34,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .execute_transaction(
             transfer_tx.tx_bytes,
             Base64::from_bytes(signature.signature_bytes()),
-            Base64::from_bytes(signature.public_key_bytes()),
+            Base64::from_bytes(signature.public().into() as PublicKeyBytes),
         )
         .await?;
 
