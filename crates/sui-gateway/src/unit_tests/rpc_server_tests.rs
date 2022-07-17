@@ -59,7 +59,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let pub_key = Base64::from_bytes(signature.public().into() as PublicKeyBytes);
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, signature_bytes, pub_key)
@@ -99,7 +99,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let pub_key = Base64::from_bytes(signature.public().into() as PublicKeyBytes);
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, signature_bytes, pub_key)
@@ -148,7 +148,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let pub_key = Base64::from_bytes(signature.public().into() as PublicKeyBytes);
 
     let tx_response: TransactionResponse = http_client
         .execute_transaction(tx_bytes, signature_bytes, pub_key)
@@ -201,7 +201,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
         let tx_bytes = Base64::from_bytes(&tx_bytes);
         let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        let pub_key = Base64::from_bytes(signature.public().into() as PublicKeyBytes);
 
         let response: TransactionResponse = http_client
             .execute_transaction(tx_bytes, signature_bytes, pub_key)

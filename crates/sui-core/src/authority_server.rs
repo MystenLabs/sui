@@ -173,7 +173,7 @@ impl ValidatorService {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
-        let consensus_keypair = config.key_pair().make_narwhal_keypair();
+        let consensus_keypair = config.key_pair().copy();
         let consensus_name = consensus_keypair.public().clone();
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
