@@ -231,6 +231,7 @@ mod tests {
 
     use crate::checkpoints::causal_order_effects::EffectsStore;
     use crate::checkpoints::CheckpointStore;
+    use narwhal_crypto::traits::KeyPair;
     use rand::{prelude::StdRng, SeedableRng};
     use sui_types::{
         base_types::{ExecutionDigests, ObjectDigest, ObjectID, SequenceNumber, TransactionDigest},
