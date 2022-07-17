@@ -476,8 +476,10 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
+    use narwhal_crypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
+    use tonic::codegen::http::uri::Authority;
     use std::collections::BTreeSet;
 
     use super::*;
@@ -493,13 +495,13 @@ mod tests {
     fn test_signed_proposal() {
         let mut rng = StdRng::from_seed(RNG_SEED);
         let (authority_key, committee) = make_committee_key(&mut rng);
-        let name = authority_key[0].public().into() as PublicKeyBytes;
+        let name: AuthorityName = authority_key[0].public().into();
 
         let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
 
         let mut proposal =
-            SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
+            SignedCheckpointSummary::new(committee.epoch, 1, name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.verify(&committee, Some(&set)).is_ok());
@@ -529,7 +531,7 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 
@@ -556,7 +558,7 @@ mod tests {
             .map(|k| {
                 let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 
@@ -574,7 +576,7 @@ mod tests {
                 let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 
