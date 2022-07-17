@@ -6,6 +6,14 @@
     @apply flex flex-row items-center justify-center list-none  p-0 m-0;
 }
 
+.arrow {
+    @apply block opacity-50 cursor-default !important;
+}
+
+.arrow button {
+    @apply border-transparent cursor-default;
+}
+
 .pagination ul li {
     @apply mr-2 hidden md:block;
 }
@@ -18,12 +26,12 @@
     transition: all 0.4s ease;
 }
 
-.arrow {
-    @apply block !important;
+button.activepag {
+    @apply bg-[#F4FBFF] text-sui-dark border-sui-dark !important;
 }
 
-.activepag {
-    @apply bg-[#F4FBFF] text-sui-dark border-sui-dark !important;
+.activearrow {
+    @apply block opacity-100 cursor-pointer !important;
 }
 
 .paginationleft svg {
