@@ -9,7 +9,7 @@ use std::str::FromStr;
 use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
-use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair};
+use crate::crypto::{AuthoritySignature, KeyPair};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,
@@ -348,16 +348,16 @@ fn test_move_package_size_for_gas_metering() {
 #[cfg(test)]
 const SAMPLE_ADDRESS: &str = "ee0437cf625b77af4d12bff98af1a88332b00638";
 
-// Derive a sample address and public key tuple from KeyPair bytes.
-fn derive_sample_address() -> (SuiAddress, KeyPair) {
-    let (address, pub_key) = get_key_pair_from_bytes(&[
-        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
-        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
-        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
-        105, 254, 59, 163,
-    ]);
-    (address, pub_key)
-}
+// // Derive a sample address and public key tuple from KeyPair bytes.
+// fn derive_sample_address() -> (SuiAddress, KeyPair) {
+//     let (address, pub_key) = get_key_pair_from_bytes(&[
+//         10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
+//         92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
+//         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
+//         105, 254, 59, 163,
+//     ]);
+//     (address, pub_key)
+// }
 
 // Required to capture address derivation algorithm updates that break some tests and deployments.
 #[test]
