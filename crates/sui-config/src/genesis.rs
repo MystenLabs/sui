@@ -514,6 +514,7 @@ const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
+    use narwhal_crypto::traits::KeyPair;
     use sui_types::crypto::get_key_pair_from_rng;
 
     #[test]
@@ -539,7 +540,7 @@ mod test {
         let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
-            public_key: *key.public().into(),
+            public_key: key.public().into(),
             stake: 1,
             delegation: 0,
             network_address: utils::new_network_address(),

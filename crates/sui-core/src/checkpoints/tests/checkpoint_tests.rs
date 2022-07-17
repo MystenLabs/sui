@@ -17,7 +17,7 @@ use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duratio
 use sui_types::{
     base_types::{AuthorityName, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    crypto::get_key_pair_from_rng,
+    crypto::{get_key_pair_from_rng, NarwhalKeypair},
     messages::{CertifiedTransaction, ExecutionStatus},
     object::Object,
     utils::{make_committee_key, make_committee_key_num},
@@ -70,7 +70,7 @@ fn random_ckpoint_store_num(
                 path.clone(),
                 None,
                 committee.epoch,
-                *k.public().into(),
+                k.public().into(),
                 Arc::pin(k.copy()),
             )
             .unwrap();
