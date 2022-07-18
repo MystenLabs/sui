@@ -108,13 +108,23 @@ jobs:
           channel-id: 'build-failures-sui'
           payload: |
             {
-              "text": "Workflow ${{ github.workflow }} failed\nLogs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "text": "Workflow *${{ github.workflow }}* failed",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Workflow ${{ github.workflow }} failed\nLogs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "Workflow *${{ github.workflow }}* failed"
+                  }
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
                 }
               ]
