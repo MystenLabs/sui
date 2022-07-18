@@ -303,7 +303,7 @@ impl Display for TransactionKind {
         let mut writer = String::new();
         match &self {
             Self::Single(s) => {
-                writeln!(writer, "{}", s)?;
+                write!(writer, "{}", s)?;
             }
             Self::Batch(b) => {
                 writeln!(writer, "Transaction Kind : Batch")?;
