@@ -1269,7 +1269,8 @@ pub enum SuiEvent {
         transaction_module: String,
         sender: SuiAddress,
         type_: String,
-        fields: SuiMoveStruct,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fields: Option<SuiMoveStruct>,
         #[serde_as(as = "Base64")]
         #[schemars(with = "Base64")]
         bcs: Vec<u8>,
@@ -1325,9 +1326,20 @@ impl SuiEvent {
                 contents,
             } => {
                 let bcs = contents.to_vec();
-                let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
-                let (type_, fields) =
-                    SuiParsedMoveObject::try_type_and_fields_from_move_struct(&type_, move_struct)?;
+
+                // Resolver is not guaranteed to have knowledge of the event struct layout in the gateway server.
+                let (type_, fields) = if let Ok(move_struct) =
+                    Event::move_event_to_move_struct(&type_, &contents, resolver)
+                {
+                    let (type_, field) = SuiParsedMoveObject::try_type_and_fields_from_move_struct(
+                        &type_,
+                        move_struct,
+                    )?;
+                    (type_, Some(field))
+                } else {
+                    (type_.to_string(), None)
+                };
+
                 SuiEvent::MoveEvent {
                     package_id,
                     transaction_module: transaction_module.to_string(),
