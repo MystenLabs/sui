@@ -75,7 +75,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
-    tracer.trace_type::<UpdateItem>(&samples)?;
+    // tracer.trace_type::<UpdateItem>(&samples)?;
 
     tracer.registry()
 }
