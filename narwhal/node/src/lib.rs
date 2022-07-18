@@ -201,7 +201,7 @@ impl Node {
         }
 
         handlers.extend(primary_handles);
-        Ok(primary_handles)
+        Ok(handlers)
     }
 
     /// Spawn the consensus core and the client executing transactions.
