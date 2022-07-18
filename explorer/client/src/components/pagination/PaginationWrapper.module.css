@@ -20,3 +20,15 @@ button.pagenumber {
 button.gone {
     @apply opacity-30;
 }
+
+.footer {
+    @apply sm:grid sm:grid-cols-12;
+}
+
+.footer > div:first-child {
+    @apply col-span-8 self-center;
+}
+
+.footer > div:nth-child(2) {
+    @apply col-span-4;
+}

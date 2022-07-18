@@ -14,7 +14,6 @@ import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as BackArrow } from '../../assets/SVGIcons/back-arrow-dark.svg';
 import tablestyle from '../../components/table/TableCard.module.css';
-import TabFooter from '../../components/tabs/TabFooter';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -207,8 +206,8 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
                     <PaginationWrapper
                         results={other_results}
                         viewComponentFn={viewFn}
+                        stats={nftFooter.stats}
                     />
-                    <TabFooter stats={nftFooter.stats} />
                 </div>
             )}
         </div>
