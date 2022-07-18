@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::{SuiAddress, ToAddress};
-use sui_types::crypto::{get_key_pair, KeyPair, KeypairTraits, PublicKeyBytes, Signature};
+use sui_types::crypto::{get_key_pair, KeyPair, KeypairTraits, Signature};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]

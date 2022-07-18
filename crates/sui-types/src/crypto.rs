@@ -233,8 +233,7 @@ impl Signature {
     pub fn get_verification_inputs(
         &self,
         author: SuiAddress,
-    ) -> Result<(AccountSignature, PublicKeyBytes), SuiError>
-    {
+    ) -> Result<(AccountSignature, PublicKeyBytes), SuiError> {
         // Is this signature emitted by the expected author?
         let public_key_bytes: PublicKeyBytes =
             PublicKeyBytes::from_bytes(self.public_key_bytes()).expect("byte lengths match");

@@ -24,7 +24,7 @@ use sui_config::{
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
 use sui_sdk::SuiClient;
 use sui_swarm::memory::Swarm;
-use sui_types::base_types::{SuiAddress, ToAddress};
+use sui_types::base_types::ToAddress;
 use sui_types::crypto::KeypairTraits;
 use tracing::info;
 
