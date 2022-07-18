@@ -266,7 +266,7 @@ describe('End-to-end Tests', () => {
             ).toBe('No Image was Found');
 
             // 3) Click on owner:
-            await page.click('div#owner > span:first-child');
+            await page.click('div#owner span:first-child');
 
             await page.waitForFunction(() =>
                 document.querySelector('#loadedImage')
