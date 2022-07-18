@@ -155,12 +155,6 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 ));
             }
 
-            let kp2 = get_key_pair().1;
-            let signature: Signature = kp2.try_sign(&built_genesis_bytes)?;
-            let sig = AuthoritySignature::from_bytes(signature.signature_bytes())?;
-            println!("sig: {:?}", sig);
-            kp2.public().verify(&built_genesis_bytes, &sig)?;
-
             // Sign the genesis bytes
             let signature: Signature = keypair.try_sign(&built_genesis_bytes)?;
 
