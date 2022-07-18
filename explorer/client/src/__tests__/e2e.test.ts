@@ -21,7 +21,7 @@ const coinGroup = (num: number) => {
 
 const mainBodyCSS = 'main > section > div';
 
-const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;
 
 //Standardized Expectations
 const cssInteract = (page: Page) => ({
@@ -257,7 +257,7 @@ describe('End-to-end Tests', () => {
             //Click on child in Owned Objects List:
             await cssInteract(page).with(nftObject(1)).click();
 
-            const noImageCSS = `${mainBodyCSS} > div:first-child > div > div`;
+            const noImageCSS = `div#displayContainer > div`;
 
             // First see Please Wait Message:
             expect(
@@ -280,14 +280,14 @@ describe('End-to-end Tests', () => {
             );
             expect(
                 await cssInteract(page)
-                    .with(`${mainBodyCSS} > div:first-child > div > img`)
+                    .with(`${noImageCSS} > img`)
                     .get.attribute('id')
             ).toBe('loadedImage');
 
             //And no No Image / Please Wait message:
             await expect(
                 page.$eval(
-                    `${mainBodyCSS} > div:first-child > div > div`,
+                    `${noImageCSS} > div`,
                     () => {}
                 )
             ).rejects.toThrow(
@@ -304,7 +304,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe('player0');
+            expect(value.trim()).toBe('Image2');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
@@ -348,7 +348,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe('player0');
+            expect(value.trim()).toBe('player5');
         });
 
         it('to go to first page', async () => {
