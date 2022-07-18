@@ -38,6 +38,7 @@ use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_types::crypto::PublicKeyBytes;
 
+pub mod admin;
 pub mod metrics;
 
 pub struct SuiNode {

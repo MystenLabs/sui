@@ -149,6 +149,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
+                    admin_interface_port: utils::get_available_port(),
                     json_rpc_address: utils::available_local_socket_address(),
                     websocket_address: None,
                     consensus_config: Some(consensus_config),
