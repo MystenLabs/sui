@@ -618,14 +618,13 @@ where
         let (past, contents) =
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
 
-        // TODO: enable
-        // sync_checkpoint_certs(
-        //     state.clone(),
-        //     active_authority.node_sync_store.clone(),
-        //     net.clone(),
-        //     &contents,
-        // )
-        // .await?;
+        sync_checkpoint_certs(
+            state.clone(),
+            active_authority.node_sync_store.clone(),
+            net.clone(),
+            &contents,
+        )
+        .await?;
 
         checkpoint_db.lock().process_new_checkpoint_certificate(
             &past,
@@ -639,7 +638,6 @@ where
 }
 
 /// Fetch and execute all certificates in the checkpoint.
-#[allow(dead_code)]
 async fn sync_checkpoint_certs<A>(
     state: Arc<AuthorityState>,
     node_sync_store: Arc<NodeSyncStore>,
