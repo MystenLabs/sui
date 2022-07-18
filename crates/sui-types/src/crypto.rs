@@ -9,7 +9,6 @@ use crate::sui_serde::SuiBitmap;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
-// use narwhal_crypto::bls12381::BLS12381KeyPair;
 use narwhal_crypto::ed25519::{
     Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519PublicKeyBytes,
 };
