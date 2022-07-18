@@ -33,6 +33,7 @@ use typed_store::{
     Map,
 };
 
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use crate::checkpoints::causal_order_effects::CausalOrder;
 use crate::{
     authority::StableSyncAuthoritySigner,
@@ -740,16 +741,17 @@ impl CheckpointStore {
         &mut self,
         checkpoint: &CertifiedCheckpointSummary,
         committee: &Committee,
+        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
             self.latest_stored_checkpoint()?,
             Some(AuthenticatedCheckpoint::Signed(_))
         ));
-        self.checkpoints.insert(
-            checkpoint.summary.sequence_number(),
-            &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
-        )?;
+        let seq = checkpoint.summary.sequence_number();
+        self.checkpoints
+            .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
+        metrics.checkpoint_sequence_number.set(*seq as i64);
         Ok(())
     }
 
@@ -762,18 +764,20 @@ impl CheckpointStore {
         contents: &CheckpointContents,
         committee: &Committee,
         effects_store: impl CausalOrder + PendCertificateForExecution,
+        metrics: &CheckpointMetrics,
     ) -> SuiResult {
-        debug_assert!(self
-            .checkpoints
-            .get(checkpoint.summary.sequence_number())?
-            .is_none());
+        let seq = checkpoint.summary.sequence_number();
+        debug_assert!(self.checkpoints.get(seq)?.is_none());
         // Check and process contents
         checkpoint.verify(committee, Some(contents))?;
+
         self.handle_internal_set_checkpoint(
             &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
             contents,
             effects_store,
-        )
+        )?;
+        metrics.checkpoint_sequence_number.set(*seq as i64);
+        Ok(())
     }
 
     // Helper read functions

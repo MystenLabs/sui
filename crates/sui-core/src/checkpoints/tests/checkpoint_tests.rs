@@ -583,6 +583,7 @@ fn latest_proposal() {
 #[test]
 fn set_get_checkpoint() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
+    let metrics = CheckpointMetrics::new_for_tests();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
     let (_, mut cps3) = stores.pop().unwrap();
@@ -718,7 +719,7 @@ fn set_get_checkpoint() {
         CertifiedCheckpointSummary::aggregate(signed_checkpoint, &committee).unwrap();
 
     // Send the certificate to a party that has the data
-    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee)
+    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee, &metrics)
         .unwrap();
 
     // Now we have a certified checkpoint
@@ -736,6 +737,7 @@ fn set_get_checkpoint() {
         &transactions.clone(),
         &committee,
         TestCausalOrderPendCertNoop,
+        &metrics,
     );
     assert!(response_ckp.is_err());
 
@@ -746,6 +748,7 @@ fn set_get_checkpoint() {
         &transactions,
         &committee,
         TestCausalOrderPendCertNoop,
+        &metrics,
     )
     .unwrap();
 
@@ -1711,6 +1714,7 @@ async fn checkpoint_messaging_flow_bug() {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow() {
     let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
+    let metrics = CheckpointMetrics::new_for_tests();
 
     // Check that the system is running.
     let t = setup.transactions.pop().unwrap();
@@ -1840,12 +1844,13 @@ async fn checkpoint_messaging_flow() {
                     &contents,
                     &setup.committee,
                     TestCausalOrderPendCertNoop,
+                    &metrics,
                 )
                 .unwrap();
         } else {
             auth.checkpoint
                 .lock()
-                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee)
+                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee, &metrics)
                 .unwrap();
         }
     }
