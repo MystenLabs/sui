@@ -158,7 +158,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
             std::fs::create_dir_all(&signature_dir)?;
 
-            let hex_name = encode_bytes_hex(keypair.public());
+            let hex_name = encode_bytes_hex(&PublicKeyBytes::from(keypair.public()));
             fs::write(signature_dir.join(hex_name), signature)?;
         }
 
@@ -175,8 +175,15 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
                 let path = entry.path();
                 let signature_bytes = fs::read(path)?;
-                let signature: Signature = signature::Signature::from_bytes(&signature_bytes)?;
+                println!("{:?}", signature_bytes);
+                let signature: Signature = Signature::from_bytes(&signature_bytes)?;
+                println!("{:?}", signature);
+                println!("{:?}", signature.signature_bytes());
+ 
                 let public_key = PublicKeyBytes::from_bytes(signature.public_key_bytes())?;
+
+                assert!(public_key.verify(&genesis_bytes, &signature).is_ok());
+                println!("passing genesis");
                 signatures.insert(public_key, signature);
             }
 
