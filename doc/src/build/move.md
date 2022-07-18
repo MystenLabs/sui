@@ -145,7 +145,7 @@ represent different types of user-defined coins as Sui objects:
 
 ``` rust
 struct Coin<phantom T> has key, store {
-    id: VersionedID,
+    info: Info,
     value: u64
 }
 ```
@@ -161,9 +161,9 @@ and [structs](https://github.com/move-language/move/blob/main/language/documenta
 in the Move book.
 
 In order for a Move struct type to define a Sui object type such as
-`Coin`, its first field must be `id: VersionedID`, which is a
+`Coin`, its first field must be `info: Info`, which is a
 struct type defined in the
-[ID module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move). The
+[object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move). The
 Move struct type must
 also have the `key` ability, which allows the object to be persisted
 in Sui's global storage. Abilities of a Move struct are listed after
@@ -358,11 +358,11 @@ definitions in the `m1.move` file:
 
 ``` rust
 module my_first_package::m1 {
-    use sui::id::VersionedID;
+    use sui::object::Info;
     use sui::tx_context::TxContext;
 
     struct Sword has key, store {
-        id: VersionedID,
+        info: Info,
         magic: u64,
         strength: u64,
     }
@@ -375,7 +375,7 @@ Since we are developing a fantasy game, in addition to the mandatory
 describing its respective attribute values. Please note that we need
 to import the
 [ID package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) from
-Sui framework to gain access to the `VersionedID` struct type defined
+Sui framework to gain access to the `Info` struct type defined
 in this package.
 
 If we want to access sword attributes from a different package, we
@@ -480,7 +480,7 @@ file:
 
         // create a sword
         let sword = Sword {
-            id: tx_context::new_id(&mut ctx),
+            info: object::new(&mut ctx),
             magic: 42,
             strength: 7,
         };
@@ -495,7 +495,7 @@ create a dummy instance of the `TxContext` struct needed to create
 a unique identifier of our sword object, then create the sword itself,
 and finally call its accessor functions to verify that they return
 correct values. Note the dummy context is passed to the
-`tx_context::new_id` function as a mutable reference argument (`&mut`),
+`object::new` function as a mutable reference argument (`&mut`),
 and the sword itself is passed to its accessor functions as a
 read-only reference argument.
 
@@ -518,7 +518,7 @@ error[E06001]: unused value without 'drop'
 27 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             id: tx_context::new_id(&mut ctx),
+28 │ │             info: object::new(&mut ctx),
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
@@ -641,7 +641,7 @@ sword creation and transfer and put them into the `m1.move` file:
         use sui::tx_context;
         // create a sword
         let sword = Sword {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             magic: magic,
             strength: strength,
         };
@@ -824,7 +824,7 @@ number of created swords as follows and put into the `m1.move` file:
 
 ``` rust
     struct Forge has key, store {
-        id: VersionedID,
+        info: Info,
         swords_created: u64,
     }
 
@@ -843,7 +843,7 @@ And module initializer is the perfect place to do it:
         use sui::transfer;
         use sui::tx_context;
         let admin = Forge {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
@@ -944,11 +944,11 @@ transfer::transfer_to_object(obj, &mut owner);
 This function returns a `ChildRef` instance that cannot be dropped arbitrarily. It can be stored in the parent as a field.
 Sometimes we need to set the child field of a parent while constructing it. In this case, we don't yet have a parent object to transfer into. In this case, we can call the `transfer_to_object_id` API. Example:
 ```
-let parent_id = tx_context::new_id(ctx);
-let child = Child { id: tx_context::new_id(ctx) };
-let (parent_id, child_ref) = transfer::transfer_to_object_id(child, parent_id);
+let parent_info = object::new(ctx);
+let child = Child { info: object::new(ctx) };
+let (parent_id, child_ref) = transfer::transfer_to_object_id(child, parent_info);
 let parent = Parent {
-    id: parent_id,
+    info: parent_info,
     child: child_ref,
 };
 transfer::transfer(parent, tx_context::sender(ctx));
@@ -991,15 +991,13 @@ Shared mutable object can be powerful in that it will make programming a lot sim
 
 To create a new ID for a new object:
 ```
-use sui::tx_context;
-
 // assmue `ctx` has type `&mut TxContext`.
-let id = tx_context::new_id(ctx);
+let info = sui::object::new(ctx);
 ```
 
 To obtain the current transaction sender's account address:
 ```
-tx_context::sender(ctx)
+sui::tx_context::sender(ctx)
 ```
 
 ## Next steps

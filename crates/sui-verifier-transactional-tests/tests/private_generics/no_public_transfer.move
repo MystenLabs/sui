@@ -7,7 +7,7 @@
 
 //# publish
 module a::m {
-    struct S has key { id: sui::id::VersionedID }
+    struct S has key { info: sui::object::Info }
 }
 
 //# publish
@@ -21,10 +21,10 @@ module test::m {
 module test::m {
     fun t(
         s: a::m::S,
-        owner_id: &sui::id::VersionedID,
+        owner_info: &sui::object::Info,
         ctx: &mut sui::tx_context::TxContext,
     ) {
-        sui::transfer::transfer_to_object_id(s, owner_id)
+        sui::transfer::transfer_to_object_id(s, owner_info)
     }
 }
 
@@ -44,7 +44,7 @@ module test::m {
 
 //# publish
 module test::m {
-    struct R has key { id: sui::id::VersionedID }
+    struct R has key { info: sui::object::Info }
     fun t(child: a::m::S, owner: &mut R) {
         sui::transfer::transfer_to_object(child, owner)
     }
@@ -52,7 +52,7 @@ module test::m {
 
 //# publish
 module test::m {
-    struct R has key { id: sui::id::VersionedID }
+    struct R has key { info: sui::object::Info }
     fun t(child: R, owner: &mut a::m::S) {
         sui::transfer::transfer_to_object(child, owner)
     }
@@ -60,8 +60,8 @@ module test::m {
 
 //# publish
 module test::m {
-    struct R has key { id: sui::id::VersionedID }
-    fun t(child: a::m::S, owner: &sui::id::VersionedID) {
+    struct R has key { info: sui::object::Info }
+    fun t(child: a::m::S, owner: &sui::object::Info) {
         sui::transfer::transfer_to_object_id(child, owner)
     }
 }

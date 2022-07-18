@@ -92,7 +92,7 @@ GET /object_info?objectId={{monster_id}}
 
 ```
    struct Monster has key, store {
-        id: VersionedID,
+        info: Info,
         monster_name: String,
         monster_img_index: u64,
         breed: u8,
@@ -150,7 +150,7 @@ GET /object_info?objectId={{monster_id}}
     ): Monster {
 
         Monster {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             monster_name: ASCII::string(monster_name),
             monster_img_index,
             breed,

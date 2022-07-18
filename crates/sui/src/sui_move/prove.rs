@@ -45,7 +45,7 @@ impl Prove {
                             "0x2::transfer".to_string(),
                             "transfer_instances".to_string(),
                         ),
-                        ("0x2::id".to_string(), "id_instances".to_string()),
+                        ("0x2::object".to_string(), "id_instances".to_string()),
                         ("0x2::event".to_string(), "sui_event_instances".to_string()),
                     ],
                 });

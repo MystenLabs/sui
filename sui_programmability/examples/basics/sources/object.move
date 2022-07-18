@@ -3,17 +3,17 @@
 
 /// An example of a custom object with comments explaining the relevant bits
 module basics::object {
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// A custom sui object. Every object must have the `key` attribute
     /// (indicating that it is allowed to be a key in the sui global object
-    /// pool), and must have a field `id: ID` corresponding to its sui ObjId.
+    /// pool), and must have a field `info: Info` corresponding to its sui ObjId.
     /// Other object attributes present at the protocol level (authenticator,
     /// sequence number, TxDigest, ...) are intentionally not exposed here.
     struct Object has key {
-        id: VersionedID,
+        info: Info,
         /// Custom objects can have fields of arbitrary type...
         custom_field: u64,
         /// ... including other objects
@@ -32,7 +32,7 @@ module basics::object {
     /// An object that can live either in the global object pool or as a nested
     /// object.
     struct AnotherObject has key, store {
-        id: VersionedID,
+        info: Info,
     }
 
     /// Example of updating an object. All Move fields are private, so the
@@ -61,10 +61,10 @@ module basics::object {
     /// from this module to read/write it, package it into another object, ...)
     public fun create(tx: &mut TxContext): Object {
         Object {
-            id: tx_context::new_id(tx),
+            info: object::new(tx),
             custom_field: 0,
             child_obj: ChildObject { a_field: false },
-            nested_obj: AnotherObject { id: tx_context::new_id(tx) }
+            nested_obj: AnotherObject { info: object::new(tx) }
         }
     }
 

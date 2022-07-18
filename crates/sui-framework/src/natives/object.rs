@@ -34,7 +34,7 @@ pub fn bytes_to_address(
     Ok(NativeResult::ok(cost, smallvec![Value::address(addr)]))
 }
 
-pub fn get_versioned_id(
+pub fn get_info(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -43,15 +43,15 @@ pub fn get_versioned_id(
     debug_assert!(args.len() == 1);
 
     let obj = pop_arg!(args, StructRef);
-    let id_field = obj.borrow_field(0)?;
+    let info_field = obj.borrow_field(0)?;
 
     // TODO: what should the cost of this be?
     let cost = native_gas(context.cost_table(), NativeCostIndex::SIGNER_BORROW, 0);
 
-    Ok(NativeResult::ok(cost, smallvec![id_field]))
+    Ok(NativeResult::ok(cost, smallvec![info_field]))
 }
 
-pub fn delete_id(
+pub fn delete_impl(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -61,12 +61,12 @@ pub fn delete_id(
 
     // unwrap safe because the interface of native function guarantees it.
     let ty = ty_args.pop().unwrap();
-    let versioned_id = args.pop_back().unwrap();
+    let info = args.pop_back().unwrap();
 
     // TODO: what should the cost of this be?
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
 
-    if !context.save_event(vec![], EventType::DeleteObjectID as u64, ty, versioned_id)? {
+    if !context.save_event(vec![], EventType::DeleteObjectID as u64, ty, info)? {
         return Ok(NativeResult::err(cost, 0));
     }
 

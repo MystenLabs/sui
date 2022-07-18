@@ -647,18 +647,13 @@
                                 "fields": {
                                     "id": {
                                         "fields": {
-                                            "id": {
-                                                "fields": {
-                                                    "bytes": "37196de8502e6d80e6a31fba1a5d6986cc018805"
-                                                },
-                                                "type": "0x2::id::ID"
-                                            }
+                                            "bytes": "37196de8502e6d80e6a31fba1a5d6986cc018805"
                                         },
-                                        "type": "0x2::id::UniqueID"
+                                        "type": "0x2::object::ID"
                                     },
                                     "version": 0
                                 },
-                                "type": "0x2::id::VersionedID"
+                                "type": "0x2::object::Info"
                             },
                             "value": 100000
                         },

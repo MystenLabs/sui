@@ -5,7 +5,7 @@ module sui::delegation {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -23,7 +23,7 @@ module sui::delegation {
     /// When the delegation is deactivated, we keep track of the ending epoch
     /// so that we know the ending epoch that the delegator can still claim reward.
     struct Delegation has key {
-        id: VersionedID,
+        info: Info,
         /// The delegated stake, if the delegate is still active
         active_delegation: Option<Balance<SUI>>,
         /// If the delegation is inactive, `ending_epoch` will be
@@ -54,7 +54,7 @@ module sui::delegation {
     ) {
         let delegate_amount = coin::value(&stake);
         let delegation = Delegation {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             active_delegation: option::some(coin::into_balance(stake)),
             ending_epoch: option::none(),
             delegate_amount,
@@ -74,7 +74,7 @@ module sui::delegation {
         let delegate_amount = locked_coin::value(&stake);
         let (balance, epoch_lock) = locked_coin::into_balance(stake);
         let delegation = Delegation {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             active_delegation: option::some(balance),
             ending_epoch: option::none(),
             delegate_amount,
@@ -109,7 +109,7 @@ module sui::delegation {
 
     /// Switch the delegation from the current validator to `new_validator_address`.
     /// The current `Delegation` object `self` becomes inactive and the balance inside is
-    /// extracted to the new `Delegation` object. 
+    /// extracted to the new `Delegation` object.
     public(friend) fun switch_delegation(
         self: &mut Delegation,
         new_validator_address: address,
@@ -120,17 +120,17 @@ module sui::delegation {
         let balance = option::extract(&mut self.active_delegation);
         let delegate_amount = balance::value(&balance);
 
-        let new_epoch_lock = 
+        let new_epoch_lock =
             if (option::is_some(&self.coin_locked_until_epoch)) {
                 option::some(option::extract(&mut self.coin_locked_until_epoch))
-            } else { 
-                option::none() 
+            } else {
+                option::none()
             };
 
         self.ending_epoch = option::some(current_epoch);
 
         let new_delegation = Delegation {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             active_delegation: option::some(balance),
             ending_epoch: option::none(),
             delegate_amount,
@@ -159,7 +159,7 @@ module sui::delegation {
         assert!(!is_active(&self), 0);
 
         let Delegation {
-            id,
+            info,
             active_delegation,
             ending_epoch,
             delegate_amount: _,
@@ -167,7 +167,7 @@ module sui::delegation {
             coin_locked_until_epoch,
             validator_address: _,
         } = self;
-        id::delete(id);
+        object::delete(info);
         option::destroy_none(active_delegation);
         option::destroy_none(coin_locked_until_epoch);
         let ending_epoch = *option::borrow(&ending_epoch);

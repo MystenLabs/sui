@@ -5,19 +5,19 @@
 
 //# publish
 module Test::M1 {
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
     struct Object has key, store {
-        id: VersionedID,
+        info: Info,
         value: u64,
     }
 
     // initializer that should be executed upon publishing this module
     fun init(ctx: &mut TxContext) {
         let value = 42;
-        let singleton = Object { id: tx_context::new_id(ctx), value };
+        let singleton = Object { info: object::new(ctx), value };
         transfer::transfer(singleton, tx_context::sender(ctx))
     }
 }

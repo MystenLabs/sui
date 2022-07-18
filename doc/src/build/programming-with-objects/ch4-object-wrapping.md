@@ -5,7 +5,7 @@ title: Chapter 4 - Object Wrapping
 In many programming languages, we organize data structures in layers by nesting complex data structures in another data structure. In Move, you may do the same by putting a field of `struct` type in another, like the following:
 ```rust
 struct Foo has key {
-    id: VersionedID,
+    info: Info,
     bar: Bar,
 }
 struct Bar has store {
@@ -18,7 +18,7 @@ In the above example, `Bar` is a normal Move struct, but it is not a Sui object,
 In some cases, however, we want to put a Sui object struct type as a field in another Sui object struct type. In the above example, we may change `Bar` into:
 ```rust
 struct Bar has key, store {
-    id: VersionedID,
+    info: Info,
     value: u64,
 }
 ```
@@ -42,7 +42,7 @@ Let's walk through an example implementation of a trusted swap to demonstrate ho
 First of all, let's define such an object type:
 ```rust
 struct Object has key, store {
-    id: VersionedID,
+    info: Info,
     scarcity: u8,
     style: u8,
 }
@@ -51,7 +51,7 @@ In a real application, we probably would make sure that there is a limited suppl
 ```rust
 public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
     let object = Object {
-        id: tx_context::new_id(ctx),
+        info: object::new(ctx),
         scarcity,
         style,
     };
@@ -74,7 +74,7 @@ Another common solution is to "send" your object to a pool (e.g. a marketplace i
 To be able to perform a swap of objects, both objects must be owned by the same account. We can imagine that a third party builds infrastructure to provide swap services. Anyone who wants to swap their object can send their objects to the third party, and the third party will help perform the swap and send the objects back. But we don't fully trust the third party and don't want to give them full custody of our objects. To achieve this, we can use direct wrapping. We define a wrapper object type as following:
 ```rust
 struct ObjectWrapper has key {
-    id: VersionedID,
+    info: Info,
     original_owner: address,
     to_swap: Object,
     fee: Balance<SUI>,
@@ -85,7 +85,7 @@ struct ObjectWrapper has key {
 public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
     assert!(coin::value(&fee) >= MIN_FEE, 0);
     let wrapper = ObjectWrapper {
-        id: tx_context::new_id(ctx),
+        info: object::new(ctx),
         original_owner: tx_context::sender(ctx),
         to_swap: object,
         fee: coin::into_balance(fee),
@@ -154,7 +154,7 @@ When Sui object type `Bar` is directly wrapped into `Foo`, there is not much fle
 Let's demonstrate this use case by designing a simple game character: A warrior with a sword and shield. A warrior may or may not have a sword and shield, and they should be able to replace them anytime. To design this, we define a `SimpleWarrior` type as following:
 ```rust
 struct SimpleWarrior has key {
-    id: VersionedID,
+    info: Info,
     sword: Option<Sword>,
     shield: Option<Shield>,
 }
@@ -162,12 +162,12 @@ struct SimpleWarrior has key {
 Each `SimpleWarrior` type has an optional `sword` and `shield` wrapped in it, defined as:
 ```rust
 struct Sword has key, store {
-    id: VersionedID,
+    info: Info,
     strength: u8,
 }
 
 struct Shield has key, store {
-    id: VersionedID,
+    info: Info,
     armor: u8,
 }
 ```
@@ -175,7 +175,7 @@ When we are creating a new warrior, we can set the `sword` and `shield` to `none
 ```rust
 public entry fun create_warrior(ctx: &mut TxContext) {
     let warrior = SimpleWarrior {
-        id: tx_context::new_id(ctx),
+        info: object::new(ctx),
         sword: option::none(),
         shield: option::none(),
     };
@@ -206,12 +206,12 @@ The concept of wrapping objects in a vector field of another Sui object is very 
 We won't use a full example to demonstrate this use case, but wrapping through vector may resemble:
 ```rust
 struct Pet has key, store {
-    id: VersionedID,
+    info: Info,
     cuteness: u64,
 }
 
 struct Farm has key {
-    id: VersionedID,
+    info: Info,
     pets: vector<Pet>,
 }
 ```
