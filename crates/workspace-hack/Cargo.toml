@@ -89,7 +89,7 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-4f63edeb5d858dd6 = { package = "config", git = "https://github.com/punwai/narwhal-1", default-features = false }
+config-1e10607d614594a8 = { package = "config", git = "https://github.com/punwai/narwhal-1", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/punwai/narwhal-1", features = ["benchmark", "rand"] }
 constant_time_eq = { version = "0.1", default-features = false }
@@ -642,7 +642,7 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-4f63edeb5d858dd6 = { package = "config", git = "https://github.com/punwai/narwhal-1", default-features = false }
+config-1e10607d614594a8 = { package = "config", git = "https://github.com/punwai/narwhal-1", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/punwai/narwhal-1", features = ["benchmark", "rand"] }
 constant_time_eq = { version = "0.1", default-features = false }

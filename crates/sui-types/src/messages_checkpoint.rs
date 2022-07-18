@@ -298,7 +298,7 @@ impl SignedCheckpointSummary {
         );
         self.auth_signature
             .signature
-            .verify(&self.summary, self.auth_signature.authority.clone())?;
+            .verify(&self.summary, self.auth_signature.authority)?;
 
         if let Some(contents) = contents {
             let recomputed = CheckpointSummary::new(
@@ -480,7 +480,6 @@ mod tests {
     use rand::prelude::StdRng;
     use rand::SeedableRng;
     use std::collections::BTreeSet;
-    use tonic::codegen::http::uri::Authority;
 
     use super::*;
     use crate::utils::make_committee_key;
