@@ -133,10 +133,7 @@ fn test_certificates() {
         .unwrap()
         .is_none());
     let c = builder
-        .append(
-            v2.auth_sign_info.authority,
-            v2.auth_sign_info.signature
-        )
+        .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
         .unwrap()
         .unwrap();
 
@@ -144,10 +141,7 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder
-        .append(
-            v1.auth_sign_info.authority,
-            v1.auth_sign_info.signature
-        )
+        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature)
         .unwrap()
         .is_none());
     assert!(builder
