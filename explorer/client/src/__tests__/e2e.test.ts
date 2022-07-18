@@ -11,11 +11,10 @@ const BASE_URL = 'http://localhost:8080';
 //Standardized CSS Selectors
 
 const coinGroup = (num: number) => {
-    const trunk = `#groupCollection > div:nth-child(${num})`;
+    const trunk = `#groupCollection > tr:nth-child(${num + 1})`;
     return {
         base: () => trunk,
-        field: (numField: number) =>
-            `${trunk} > div > div:nth-child(${numField})`,
+        field: (numField: number) => `${trunk} > td:nth-child(${numField})`,
     };
 };
 
@@ -311,9 +310,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe(
-                '7bc832ec31709638cd8d9323e90edf332gff4389'
-            );
+            expect(value.trim()).toBe('CollectionObject');
         });
 
         it('where last and next disappear in final page', async () => {
@@ -387,25 +384,25 @@ describe('End-to-end Tests', () => {
                 await cssInteract(page)
                     .with(coinGroup(1).field(1))
                     .get.textContent()
-            ).toBe('Type0x2::USD::USD');
+            ).toBe('0x2::USD::USD');
 
             expect(
                 await cssInteract(page)
                     .with(coinGroup(1).field(2))
                     .get.textContent()
-            ).toBe('Balance9007199254740993');
+            ).toBe('9007199254740993');
 
             expect(
                 await cssInteract(page)
                     .with(coinGroup(2).field(1))
                     .get.textContent()
-            ).toBe('TypeSUI');
+            ).toBe('SUI');
 
             expect(
                 await cssInteract(page)
                     .with(coinGroup(2).field(2))
                     .get.textContent()
-            ).toBe('Balance200');
+            ).toBe('200');
         });
     });
     describe('Transactions for ID', () => {
