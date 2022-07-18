@@ -3,9 +3,9 @@
 
 use rand::{prelude::StdRng, SeedableRng};
 use sui_types::committee::Committee;
-use sui_types::crypto::PublicKeyBytes;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::crypto::PublicKeyBytes;
 use sui_types::crypto::{KeyPair, KeypairTraits};
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;

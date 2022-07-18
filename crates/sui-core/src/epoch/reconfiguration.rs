@@ -213,10 +213,8 @@ where
                 .unwrap();
             let client: A = A::recreate(channel);
             let name: &[u8] = &validator.name;
-            let public_key_bytes =
-                PublicKeyBytes::from_bytes(name).map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })?;
+            let public_key_bytes = PublicKeyBytes::from_bytes(name)
+                .map_err(|e| SuiError::KeyConversionError(e.to_string()))?;
             new_clients.insert(public_key_bytes, client);
         }
 
