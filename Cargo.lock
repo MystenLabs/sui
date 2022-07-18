@@ -6920,6 +6920,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-network",
  "sui-storage",
+ "sui-telemetry",
  "sui-types",
  "telemetry-subscribers",
  "tokio",
@@ -7045,6 +7046,17 @@ dependencies = [
  "tempfile",
  "tokio",
  "tonic-health",
+ "tracing",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
+name = "sui-telemetry"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde 1.0.140",
+ "tokio",
  "tracing",
  "workspace-hack 0.1.0",
 ]

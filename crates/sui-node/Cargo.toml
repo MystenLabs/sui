@@ -23,6 +23,7 @@ sui-core = { path = "../sui-core" }
 sui-storage = { path = "../sui-storage" }
 sui-network = { path = "../sui-network" }
 sui-json-rpc = { path = "../sui-json-rpc" }
+sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
