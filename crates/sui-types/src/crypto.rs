@@ -12,7 +12,7 @@ use digest::Digest;
 use narwhal_crypto::ed25519::{
     Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519PublicKeyBytes,
 };
-pub use narwhal_crypto::traits::KeyPair as NarwhalKeypair;
+pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
 pub use narwhal_crypto::traits::{
     AggregateAuthenticator, Authenticator, SigningKey, ToFromBytes, VerifyingKey,
 };
@@ -34,14 +34,14 @@ pub type PublicKey = Ed25519PublicKey;
 pub type PublicKeyBytes = Ed25519PublicKeyBytes;
 
 // Signatures for Authorities
-pub type AuthoritySignature = <<KeyPair as NarwhalKeypair>::PubKey as VerifyingKey>::Sig;
+pub type AuthoritySignature = <<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig;
 pub type AggregateAuthoritySignature =
-    <<<KeyPair as NarwhalKeypair>::PubKey as VerifyingKey>::Sig as Authenticator>::AggregateSig;
+    <<<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig as Authenticator>::AggregateSig;
 
 // Signatures for Users
-pub type AccountSignature = <<KeyPair as NarwhalKeypair>::PubKey as VerifyingKey>::Sig;
+pub type AccountSignature = <<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig;
 pub type AggregateAccountSignature =
-    <<<KeyPair as NarwhalKeypair>::PubKey as VerifyingKey>::Sig as Authenticator>::AggregateSig;
+    <<<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig as Authenticator>::AggregateSig;
 
 pub trait SuiAuthoritySignature {
     fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
@@ -83,7 +83,7 @@ impl SuiAuthoritySignature for AuthoritySignature {
 
 impl signature::Signer<Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        let signature_bytes: <<KeyPair as NarwhalKeypair>::PrivKey as SigningKey>::Sig =
+        let signature_bytes: <<KeyPair as KeypairTraits>::PrivKey as SigningKey>::Sig =
             self.try_sign(msg)?;
         println!("signature_bytes: {:?}", signature_bytes);
         self.public().verify(msg, &signature_bytes)?;
@@ -92,9 +92,9 @@ impl signature::Signer<Signature> for KeyPair {
         let pk_bytes: PublicKeyBytes = self.public().into();
         let public_key_bytes = pk_bytes.as_ref();
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
-        result_bytes[..<KeyPair as NarwhalKeypair>::Sig::LENGTH]
+        result_bytes[..<KeyPair as KeypairTraits>::Sig::LENGTH]
             .copy_from_slice(signature_bytes.as_ref());
-        result_bytes[<KeyPair as NarwhalKeypair>::Sig::LENGTH..].copy_from_slice(public_key_bytes);
+        result_bytes[<KeyPair as KeypairTraits>::Sig::LENGTH..].copy_from_slice(public_key_bytes);
         Ok(Signature(result_bytes))
     }
 }
@@ -221,7 +221,7 @@ impl Signature {
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
-        let public_key = <KeyPair as NarwhalKeypair>::PubKey::from_bytes(public_key_bytes.as_ref())
+        let public_key = <KeyPair as KeypairTraits>::PubKey::from_bytes(public_key_bytes.as_ref())
             .map_err(|err| SuiError::InvalidSignature {
                 error: err.to_string(),
             })?;

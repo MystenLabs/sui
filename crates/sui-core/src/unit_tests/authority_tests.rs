@@ -24,7 +24,7 @@ use sui_adapter::genesis;
 use sui_types::object::Data;
 use sui_types::{
     base_types::dbg_addr,
-    crypto::{KeyPair, NarwhalKeypair},
+    crypto::{KeyPair, KeypairTraits},
     crypto::{get_key_pair, Signature},
     messages::Transaction,
     object::{Owner, OBJECT_START_VERSION},

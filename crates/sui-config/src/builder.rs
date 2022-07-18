@@ -15,7 +15,7 @@ use std::{
 };
 use sui_types::{
     base_types::encode_bytes_hex,
-    crypto::{get_key_pair_from_rng, NarwhalKeypair, PublicKeyBytes},
+    crypto::{get_key_pair_from_rng, KeypairTraits, PublicKeyBytes},
 };
 
 pub struct ConfigBuilder<R = OsRng> {

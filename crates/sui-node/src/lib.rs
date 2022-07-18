@@ -37,7 +37,7 @@ use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_types::crypto::{NarwhalKeypair, PublicKeyBytes};
+use sui_types::crypto::{KeypairTraits, PublicKeyBytes};
 
 pub mod metrics;
 
