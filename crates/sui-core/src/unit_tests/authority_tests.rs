@@ -12,7 +12,11 @@ use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
 use narwhal_executor::ExecutionIndices;
-use rand::{prelude::StdRng, SeedableRng};
+use rand::{
+    distributions::{Distribution, Uniform},
+    prelude::StdRng,
+    Rng, SeedableRng,
+};
 use std::collections::BTreeMap;
 use std::fs;
 use std::{convert::TryInto, env};
@@ -1578,30 +1582,35 @@ async fn test_store_revert_state_update() {
 }
 
 // helpers
-
 #[cfg(test)]
-fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStore>) {
-    let (authority_address, authority_key) = get_key_pair();
-    let mut authorities = BTreeMap::new();
-    authorities.insert(
-        /* address */ *authority_key.public_key_bytes(),
-        /* voting right */ 1,
-    );
-    let committee = Committee::new(0, authorities).unwrap();
-
-    // Create a random directory to store the DB
-
-    let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    fs::create_dir(&path).unwrap();
-
-    let store = Arc::new(AuthorityStore::open(path, None));
-    (committee, authority_address, authority_key, store)
+fn init_store() -> Arc<AuthorityStore> {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("authority_db");
+    Arc::new(AuthorityStore::open(path, None))
 }
 
 #[cfg(test)]
 pub async fn init_state() -> AuthorityState {
-    let (committee, _, authority_key, store) = init_state_parameters();
+    init_state_with_committee(None).await
+}
+
+#[cfg(test)]
+pub async fn init_state_with_committee(committee: Option<(Committee, KeyPair)>) -> AuthorityState {
+    let (committee, authority_key) = match committee {
+        Some(c) => c,
+        None => {
+            let (_authority_address, authority_key) = get_key_pair();
+            let mut authorities = BTreeMap::new();
+            authorities.insert(
+                /* address */ *authority_key.public_key_bytes(),
+                /* voting right */ 1,
+            );
+            (Committee::new(0, authorities).unwrap(), authority_key)
+        }
+    };
+
+    let store = init_store();
+
     AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
@@ -1643,7 +1652,14 @@ pub async fn init_state_with_ids_and_versions<
 }
 
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
-    let state = init_state().await;
+    init_state_with_objects_and_committee(objects, None).await
+}
+
+pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object>>(
+    objects: I,
+    committee_and_keypair: Option<(Committee, KeyPair)>,
+) -> AuthorityState {
+    let state = init_state_with_committee(committee_and_keypair).await;
     for o in objects {
         state.insert_genesis_object(o).await;
     }
@@ -1793,6 +1809,57 @@ pub async fn create_move_object(
     .await
 }
 
+#[cfg(test)]
+async fn make_test_transaction(
+    sender: &SuiAddress,
+    sender_key: &KeyPair,
+    shared_object_id: ObjectID,
+    gas_object_ref: &ObjectRef,
+    authorities: &[&AuthorityState],
+    arg_value: u64,
+) -> CertifiedTransaction {
+    // Make a sample transaction.
+    let module = "object_basics";
+    let function = "set_value";
+    let package_object_ref = authorities[0].get_framework_object_ref().await.unwrap();
+
+    let data = TransactionData::new_move_call(
+        *sender,
+        package_object_ref,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        *gas_object_ref,
+        /* args */
+        vec![
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
+            CallArg::Pure(arg_value.to_le_bytes().to_vec()),
+        ],
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, sender_key);
+    let transaction = Transaction::new(data, signature);
+
+    let committee = authorities[0].committee.load();
+    let mut sig = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
+
+    for authority in authorities {
+        let response = authority
+            .handle_transaction(transaction.clone())
+            .await
+            .unwrap();
+        let vote = response.signed_transaction.unwrap();
+        if let Some(cert) = sig
+            .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
+            .unwrap()
+        {
+            return cert;
+        }
+    }
+
+    unreachable!("couldn't form cert")
+}
+
 #[tokio::test]
 async fn shared_object() {
     let (sender, keypair) = get_key_pair();
@@ -1814,41 +1881,16 @@ async fn shared_object() {
 
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
 
-    // Make a sample transaction.
-    let module = "object_basics";
-    let function = "create";
-    let package_object_ref = authority.get_framework_object_ref().await.unwrap();
-
-    let data = TransactionData::new_move_call(
-        sender,
-        package_object_ref,
-        ident_str!(module).to_owned(),
-        ident_str!(function).to_owned(),
-        /* type_args */ vec![],
-        gas_object_ref,
-        /* args */
-        vec![
-            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
-            CallArg::Pure(16u64.to_le_bytes().to_vec()),
-            CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
-        ],
-        MAX_GAS,
-    );
-    let signature = Signature::new(&data, &keypair);
-    let transaction = Transaction::new(data, signature);
-    let transaction_digest = *transaction.digest();
-
-    // Submit the transaction and assemble a certificate.
-    let response = authority
-        .handle_transaction(transaction.clone())
-        .await
-        .unwrap();
-    let vote = response.signed_transaction.unwrap();
-    let certificate = SignatureAggregator::try_new(transaction, &authority.committee.load())
-        .unwrap()
-        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
-        .unwrap()
-        .unwrap();
+    let certificate = make_test_transaction(
+        &sender,
+        &keypair,
+        shared_object_id,
+        &gas_object_ref,
+        &[&authority],
+        16,
+    )
+    .await;
+    let transaction_digest = certificate.digest();
 
     // Sending the certificate now fails since it was not sequenced.
     let result = authority.handle_certificate(certificate.clone()).await;
@@ -1865,7 +1907,7 @@ async fn shared_object() {
 
     let shared_object_version = authority
         .db()
-        .sequenced(&transaction_digest, [shared_object_id].iter())
+        .get_assigned_object_versions(transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
     assert_eq!(shared_object_version, OBJECT_START_VERSION);
@@ -1879,7 +1921,7 @@ async fn shared_object() {
 
     let shared_object_lock = authority
         .db()
-        .sequenced(&transaction_digest, [shared_object_id].iter())
+        .get_assigned_object_versions(transaction_digest, [shared_object_id].iter())
         .unwrap()[0];
     assert!(shared_object_lock.is_none());
 
@@ -1890,4 +1932,141 @@ async fn shared_object() {
         .unwrap()
         .version();
     assert_eq!(shared_object_version, SequenceNumber::from(2));
+}
+
+#[tokio::test]
+async fn test_consensus_message_processed() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender, keypair) = get_key_pair();
+
+    let mut authorities = BTreeMap::new();
+    let (_a1, sec1) = get_key_pair();
+    let (_a2, sec2) = get_key_pair();
+    authorities.insert(*sec1.public_key_bytes(), 1);
+    authorities.insert(*sec2.public_key_bytes(), 1);
+
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let mut gas_object_ref = gas_object.compute_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::gas_coin::GasCoin;
+        use sui_types::object::MoveObject;
+
+        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
+        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
+        Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
+    };
+
+    let authority1 = init_state_with_objects_and_committee(
+        vec![gas_object.clone(), shared_object.clone()],
+        Some((committee.clone(), sec1)),
+    )
+    .await;
+    let authority2 = init_state_with_objects_and_committee(
+        vec![gas_object.clone(), shared_object.clone()],
+        Some((committee.clone(), sec2)),
+    )
+    .await;
+
+    async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
+        authority
+            .handle_consensus_transaction(
+                ExecutionIndices::default(),
+                ConsensusTransaction::UserTransaction(Box::new(cert.clone())),
+            )
+            .await
+            .unwrap();
+    }
+
+    async fn handle_cert(
+        authority: &AuthorityState,
+        cert: &CertifiedTransaction,
+    ) -> SignedTransactionEffects {
+        if let TransactionInfoResponse {
+            signed_effects: Some(effects),
+            ..
+        } = authority.handle_certificate(cert.clone()).await.unwrap()
+        {
+            effects
+        } else {
+            unreachable!("authority1 should have returned effects");
+        }
+    }
+
+    let seed = [1u8; 32];
+    let mut rng = StdRng::from_seed(seed);
+    for _ in 0..50 {
+        let certificate = make_test_transaction(
+            &sender,
+            &keypair,
+            shared_object_id,
+            &gas_object_ref,
+            &[&authority1, &authority2],
+            Uniform::from(0..100000).sample(&mut rng),
+        )
+        .await;
+        let transaction_digest = certificate.digest();
+
+        // on authority1, we always sequence via consensus
+        send_consensus(&authority1, &certificate).await;
+        let effects1 = handle_cert(&authority1, &certificate).await;
+
+        // now, on authority2, we send 0 or 1 consensus messages, then we either sequence and execute via
+        // effects or via handle_certificate, then send 0 or 1 consensus messages.
+        let send_first = rng.gen_bool(0.5);
+        if send_first {
+            send_consensus(&authority2, &certificate).await;
+        }
+
+        let effects2 = if send_first && rng.gen_bool(0.5) {
+            handle_cert(&authority2, &certificate).await
+        } else {
+            authority2
+                .handle_node_sync_certificate(certificate.clone(), effects1.clone())
+                .await
+                .unwrap();
+            authority2
+                .database
+                .effects
+                .get(transaction_digest)
+                .unwrap()
+                .unwrap()
+        };
+
+        assert_eq!(effects1.effects, effects2.effects);
+
+        // If we didn't send consensus before handle_node_sync_certificate, we need to do it now.
+        if !send_first {
+            send_consensus(&authority2, &certificate).await;
+        }
+
+        // Sometimes send one more consensus message.
+        if rng.gen_bool(0.5) {
+            send_consensus(&authority2, &certificate).await;
+        }
+
+        // Update to the new gas object for new tx
+        gas_object_ref = *effects1
+            .effects
+            .mutated
+            .iter()
+            .map(|(objref, _)| objref)
+            .find(|objref| objref.0 == gas_object_ref.0)
+            .unwrap();
+    }
+
+    // verify the two validators are in sync.
+    assert_eq!(
+        authority1
+            .database
+            .get_next_object_version(&shared_object_id),
+        authority2
+            .database
+            .get_next_object_version(&shared_object_id),
+    );
 }
