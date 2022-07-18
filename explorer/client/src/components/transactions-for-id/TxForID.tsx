@@ -136,7 +136,13 @@ function TxForIDStatic({
         .map((id) => findTxDatafromID(id))
         .filter((x) => x !== undefined) as TxnData[];
     if (!data) return <></>;
-    return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
+    return (
+        <PaginationWrapper
+            results={data}
+            viewComponentFn={viewFn}
+            ITEMS_PER_PAGE={10}
+        />
+    );
 }
 
 function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
@@ -182,7 +188,13 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     if (showData.loadState === 'loaded') {
         const data = showData.data;
         if (!data) return <></>;
-        return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
+        return (
+            <PaginationWrapper
+                results={data}
+                viewComponentFn={viewFn}
+                ITEMS_PER_PAGE={10}
+            />
+        );
     }
 
     return (

@@ -286,10 +286,7 @@ describe('End-to-end Tests', () => {
 
             //And no No Image / Please Wait message:
             await expect(
-                page.$eval(
-                    `${noImageCSS} > div`,
-                    () => {}
-                )
+                page.$eval(`${noImageCSS} > div`, () => {})
             ).rejects.toThrow(
                 `Error: failed to find element matching selector "${mainBodyCSS} > div:first-child > div > div"`
             );
