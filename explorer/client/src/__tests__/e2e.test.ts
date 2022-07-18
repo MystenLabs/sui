@@ -253,42 +253,31 @@ describe('End-to-end Tests', () => {
             const parentValue = 'ObjectWBrokenChild';
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
-            //Click on child in Owned Objects List:
+            // 1) Click on child in Owned Objects List:
             await cssInteract(page).with(nftObject(1)).click();
 
-            const noImageCSS = `div#displayContainer > div`;
-
-            // First see Please Wait Message:
-            expect(
-                await cssInteract(page).with(noImageCSS).get.attribute('id')
-            ).toBe('pleaseWaitImage');
-
-            await page.waitForFunction(
-                () => !document.querySelector('#pleaseWaitImage')
+            await page.waitForFunction(() =>
+                document.querySelector('#noImage')
             );
 
-            //Then see No Image Warning:
+            // 2) This leads to a no image warning:
             expect(
-                await cssInteract(page).with(noImageCSS).get.attribute('id')
-            ).toBe('noImage');
+                await cssInteract(page).with('#noImage').get.textContent()
+            ).toBe('No Image was Found');
 
-            //Parent Object contains an image:
-            await page.click('div#owner > div > span:first-child');
-            await page.waitForFunction(
-                () => !document.querySelector('#pleaseWaitImage')
+            // 3) Click on owner:
+            await page.click('div#owner > span:first-child');
+
+            await page.waitForFunction(() =>
+                document.querySelector('#loadedImage')
             );
+
+            // 4) This leads to an image:
             expect(
                 await cssInteract(page)
-                    .with(`${noImageCSS} > img`)
+                    .with('div#displayContainer > img')
                     .get.attribute('id')
             ).toBe('loadedImage');
-
-            //And no No Image / Please Wait message:
-            await expect(
-                page.$eval(`${noImageCSS} > div`, () => {})
-            ).rejects.toThrow(
-                `Error: failed to find element matching selector "${mainBodyCSS} > div:first-child > div > div"`
-            );
         });
     });
     describe('PaginationWrapper has buttons', () => {
