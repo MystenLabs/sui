@@ -105,7 +105,7 @@ impl signature::Verifier<Signature> for PublicKeyBytes {
 
         let public_key =
             PublicKey::from_bytes(self.as_ref()).map_err(|_| signature::Error::new())?;
-
+        
         // perform cryptographic signature check
         public_key
             .verify(message, &signature)
@@ -242,7 +242,7 @@ impl Signature {
         // Is this signature emitted by the expected author?
         let public_key_bytes: PublicKeyBytes =
             PublicKeyBytes::from_bytes(self.public_key_bytes()).expect("byte lengths match");
-        let received_addr = SuiAddress::try_from(public_key_bytes.as_bytes())?;
+        let received_addr = public_key_bytes.to_address();
         if received_addr != author {
             return Err(SuiError::IncorrectSigner {
                 error: format!("Signature get_verification_inputs() failure. Author is {author}, received address is {received_addr}")
