@@ -23,12 +23,15 @@ pub struct NodeConfig {
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
-    #[serde(default = "default_metrics_address")]
-    pub metrics_address: SocketAddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
     #[serde(default = "default_websocket_address")]
     pub websocket_address: Option<SocketAddr>,
+
+    #[serde(default = "default_metrics_address")]
+    pub metrics_address: SocketAddr,
+    #[serde(default = "default_admin_interface_port")]
+    pub admin_interface_port: u16,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
@@ -57,6 +60,10 @@ fn default_grpc_address() -> Multiaddr {
 fn default_metrics_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
+}
+
+pub fn default_admin_interface_port() -> u16 {
+    1337
 }
 
 pub fn default_json_rpc_address() -> SocketAddr {
