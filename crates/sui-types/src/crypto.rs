@@ -443,6 +443,11 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                 error: "Signature Aggregation failed".to_string(),
             })?;
 
+        let selected_public_keys = obligation
+            .public_keys
+            .get_mut(message_index)
+            .ok_or(SuiError::InvalidAuthenticator)?;
+
         for authority_index in self.signers_map.iter() {
             let authority = committee
                 .authority_by_index(authority_index)
@@ -453,9 +458,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
             weight += voting_rights;
 
-            obligation
-            .public_keys
-            .push(committee.public_key(authority)?);
+            selected_public_keys.push(committee.public_key(authority)?);
         }
 
         let threshold = if STRONG_THRESHOLD {
