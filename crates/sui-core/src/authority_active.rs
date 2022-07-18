@@ -254,6 +254,9 @@ where
                     error: "Checkpoint not supported".to_owned(),
                 })?;
 
+        // TODO: fullnode should not get proposals
+        // TODO: potentially move get_latest_proposal_and_checkpoint_from_all and
+        // sync_to_checkpoint out of checkpoint_driver
         let (checkpoint_summary, _) = get_latest_proposal_and_checkpoint_from_all(
             self.net(),
             checkpoint_process_control.extra_time_after_quorum,
