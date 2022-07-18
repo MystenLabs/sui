@@ -142,12 +142,17 @@ where
     (kp.public().to_address(), kp)
 }
 
-// // TODO: C-GETTER
-// pub fn get_key_pair_from_bytes(bytes: &[u8]) -> SuiResult<(SuiAddress, KeyPair)> {
-//     let
-//     let kp = KeyPair::generate_from_bytes(bytes).map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
-//     Ok((SuiAddress::from(kp.public().into() as PublicKeyBytes), kp))
-// }
+// TODO: C-GETTER
+pub fn get_key_pair_from_bytes(bytes: &[u8]) -> SuiResult<(SuiAddress, KeyPair)> {
+    let sk = PrivateKey::from_bytes(&bytes[..<KeyPair as KeypairTraits>::PrivKey::LENGTH]).map_err(
+        |_| SuiError::InvalidPrivateKey
+    )?;
+    let kp: KeyPair = sk.into();
+    if kp.public().as_ref() != &bytes[<KeyPair as KeypairTraits>::PrivKey::LENGTH..] {
+        return Err(SuiError::InvalidAddress);
+    }
+    Ok((kp.public().to_address(), kp))
+}
 
 // TODO: replace this with a byte interpretation based on multicodec
 pub const SUI_SIGNATURE_LENGTH: usize = PublicKey::LENGTH + AccountSignature::LENGTH;
