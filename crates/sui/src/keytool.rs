@@ -54,7 +54,7 @@ impl KeyToolCommand {
                     println!(
                         " {0: ^42} | {1: ^45} ",
                         keypair.public().to_address(),
-                        Base64::encode(keypair.public().as_ref().to_vec()),
+                        Base64::encode(keypair.public().as_ref()),
                     );
                 }
             }
