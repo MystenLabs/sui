@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::WorkerId;
+use std::fmt::Debug;
 use store::StoreError;
 use thiserror::Error;
 use types::SequenceNumber;
@@ -64,7 +65,7 @@ impl From<Box<bincode::ErrorKind>> for SubscriberError {
 
 /// Trait do separate execution errors in two categories: (i) errors caused by a bad client, (ii)
 /// errors caused by a fault in the authority.
-pub trait ExecutionStateError {
+pub trait ExecutionStateError: Debug {
     /// Whether the error is due to a fault in the authority (eg. internal storage error).
     fn node_error(&self) -> bool;
 

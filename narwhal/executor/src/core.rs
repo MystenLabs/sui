@@ -56,9 +56,12 @@ where
         execution_state: Arc<State>,
         rx_subscriber: Receiver<ConsensusOutput<PublicKey>>,
         tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
-    ) -> JoinHandle<SubscriberResult<()>> {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let execution_indices = execution_state.load_execution_indices().await?;
+            let execution_indices = execution_state
+                .load_execution_indices()
+                .await
+                .expect("Couldn't load execution indices");
             Self {
                 store,
                 execution_state,
@@ -68,6 +71,7 @@ where
             }
             .run()
             .await
+            .unwrap();
         })
     }
 

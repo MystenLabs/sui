@@ -418,6 +418,15 @@ fn test_public_key_bytes_conversion() {
     assert_eq!(kp.public().as_bytes(), rebuilded_pk.as_bytes());
 }
 
+#[test]
+fn test_copy_key_pair() {
+    let kp = keys().pop().unwrap();
+    let kp_copied = kp.copy();
+
+    assert_eq!(kp.public().0.as_bytes(), kp_copied.public().0.as_bytes());
+    assert_eq!(kp.private().0.as_bytes(), kp_copied.private().0.as_bytes());
+}
+
 #[tokio::test]
 async fn signature_service() {
     // Get a keypair.

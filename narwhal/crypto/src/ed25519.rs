@@ -339,7 +339,7 @@ impl KeyPair for Ed25519KeyPair {
     fn copy(&self) -> Self {
         Self {
             name: Ed25519PublicKey::from_bytes(self.name.as_ref()).unwrap(),
-            secret: Ed25519PrivateKey::from_bytes(self.name.as_ref()).unwrap(),
+            secret: Ed25519PrivateKey::from_bytes(self.secret.as_ref()).unwrap(),
         }
     }
 

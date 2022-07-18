@@ -10,6 +10,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
+use tracing::{info, instrument};
 use types::{
     Certificate, CertificateDigest, ConsensusPrimaryMessage, ConsensusStore, Round, StoreResult,
 };
@@ -53,6 +54,7 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
         }
     }
 
+    #[instrument(level = "info", skip_all)]
     pub async fn new_from_store(
         genesis: Vec<Certificate<PublicKey>>,
         metrics: Arc<ConsensusMetrics>,
@@ -85,12 +87,18 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
         }
     }
 
+    #[instrument(level = "info", skip_all)]
     pub async fn construct_dag_from_cert_store(
         cert_store: Store<CertificateDigest, Certificate<PublicKey>>,
         last_committed_round: Round,
         gc_depth: Round,
     ) -> Dag<PublicKey> {
         let mut dag: Dag<PublicKey> = HashMap::new();
+        info!(
+            "Recreating dag from last committed round: {}",
+            last_committed_round
+        );
+
         let min_round = last_committed_round.saturating_sub(gc_depth);
         let cert_map = cert_store
             .iter(Some(Box::new(move |(_dig, cert)| {
@@ -199,9 +207,9 @@ where
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
-    ) -> JoinHandle<StoreResult<()>> {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let consensus_index = store.read_last_consensus_index()?;
+            let consensus_index = store.read_last_consensus_index().expect("Store error");
             let recovered_last_committed = store.read_last_committed();
             let committee: &Committee<PublicKey> = &committee.load();
             let genesis = Certificate::genesis(committee);
@@ -216,6 +224,7 @@ where
             }
             .run(recovered_last_committed, cert_store, gc_depth)
             .await
+            .unwrap();
         })
     }
 
@@ -269,6 +278,7 @@ where
                 }
             }
         }
+
         Ok(())
     }
 }

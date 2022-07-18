@@ -127,6 +127,7 @@ impl Node {
 
         // Compute the public key of this authority.
         let name = keypair.public().clone();
+        let mut handlers = Vec::new();
 
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Tusk");
@@ -135,7 +136,7 @@ impl Node {
                 Dag::new(&*committee.load(), rx_new_certificates, consensus_metrics);
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
-            Self::spawn_consensus(
+            handlers = Self::spawn_consensus(
                 name.clone(),
                 committee.clone(),
                 store,
@@ -167,7 +168,9 @@ impl Node {
             registry,
         );
 
-        Ok(primary_handles)
+        handlers.extend(primary_handles);
+
+        Ok(handlers)
     }
 
     /// Spawn the consensus core and the client executing transactions.
@@ -181,7 +184,7 @@ impl Node {
         tx_feedback: Sender<ConsensusPrimaryMessage<PublicKey>>,
         tx_confirmation: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
         registry: &Registry,
-    ) -> SubscriberResult<()>
+    ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
@@ -197,7 +200,7 @@ impl Node {
             store: store.consensus_store.clone(),
             gc_depth: parameters.gc_depth,
         };
-        Consensus::spawn(
+        let consensus_handler = Consensus::spawn(
             committee.clone(),
             store.consensus_store.clone(),
             store.certificate_store.clone(),
@@ -212,7 +215,7 @@ impl Node {
         // The subscriber handler receives the ordered sequence from consensus and feed them
         // to the executor. The executor has its own state and data store who may crash
         // independently of the narwhal node.
-        SubscriberHandler::spawn(
+        let subscriber_handler = SubscriberHandler::spawn(
             store.consensus_store.clone(),
             store.certificate_store.clone(),
             rx_sequence,
@@ -222,7 +225,7 @@ impl Node {
 
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
-        Executor::spawn(
+        let executor_handlers = Executor::spawn(
             name,
             committee,
             store.batch_store.clone(),
@@ -233,7 +236,10 @@ impl Node {
         )
         .await?;
 
-        Ok(())
+        let mut handlers = vec![consensus_handler, subscriber_handler];
+        handlers.extend(executor_handlers);
+
+        Ok(handlers)
     }
 
     /// Spawn a specified number of workers.

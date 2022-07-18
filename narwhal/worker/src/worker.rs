@@ -129,7 +129,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
             .unwrap();
-        PrimaryReceiverHandler { tx_synchronizer }.spawn(address.clone());
+        let primary_handle = PrimaryReceiverHandler { tx_synchronizer }.spawn(address.clone());
 
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
@@ -152,7 +152,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             self.id, address
         );
 
-        vec![handle]
+        vec![handle, primary_handle]
     }
 
     /// Spawn all tasks responsible to handle clients transactions.
@@ -175,7 +175,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
             .unwrap();
-        TxReceiverHandler { tx_batch_maker }.spawn(address.clone());
+        let tx_receiver_handle = TxReceiverHandler { tx_batch_maker }.spawn(address.clone());
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -216,7 +216,12 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             self.id, address
         );
 
-        vec![batch_maker_handle, quorum_waiter_handle, processor_handle]
+        vec![
+            batch_maker_handle,
+            quorum_waiter_handle,
+            processor_handle,
+            tx_receiver_handle,
+        ]
     }
 
     /// Spawn all tasks responsible to handle messages from other workers.
@@ -239,7 +244,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
             .unwrap();
-        WorkerReceiverHandler {
+        let worker_handle = WorkerReceiverHandler {
             tx_worker_helper,
             tx_client_helper,
             tx_processor,
@@ -272,7 +277,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             self.id, address
         );
 
-        vec![helper_handle, processor_handle]
+        vec![helper_handle, processor_handle, worker_handle]
     }
 }
 
@@ -283,7 +288,7 @@ struct TxReceiverHandler {
 }
 
 impl TxReceiverHandler {
-    fn spawn(self, address: Multiaddr) {
+    fn spawn(self, address: Multiaddr) -> JoinHandle<()> {
         tokio::spawn(async move {
             let config = mysten_network::config::Config::new();
             config
@@ -294,7 +299,8 @@ impl TxReceiverHandler {
                 .unwrap()
                 .serve()
                 .await
-        });
+                .unwrap()
+        })
     }
 }
 
@@ -340,7 +346,7 @@ struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
-    fn spawn(self, address: Multiaddr, max_concurrent_requests: usize) {
+    fn spawn(self, address: Multiaddr, max_concurrent_requests: usize) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut config = mysten_network::config::Config::new();
             config.concurrency_limit_per_connection = Some(max_concurrent_requests);
@@ -352,7 +358,8 @@ impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
                 .unwrap()
                 .serve()
                 .await
-        });
+                .unwrap()
+        })
     }
 }
 
@@ -426,7 +433,7 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    fn spawn(self, address: Multiaddr) {
+    fn spawn(self, address: Multiaddr) -> JoinHandle<()> {
         tokio::spawn(async move {
             let config = mysten_network::config::Config::new();
             config
@@ -437,7 +444,8 @@ impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
                 .unwrap()
                 .serve()
                 .await
-        });
+                .unwrap()
+        })
     }
 }
 

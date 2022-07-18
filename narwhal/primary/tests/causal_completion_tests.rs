@@ -14,17 +14,17 @@ async fn test_read_causal_signed_certificates() {
     // nodes logs.
     setup_tracing();
 
-    let mut cluster = Cluster::new(None);
+    let mut cluster = Cluster::new(None, None);
 
     // start the cluster
-    let nodes = cluster.start(4).await;
+    cluster.start(Some(4), Some(1)).await;
 
     // Let primaries advance little bit
     tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Ensure all nodes advanced
-    for node in nodes {
-        let metric_family = node.registry.gather();
+    for authority in cluster.authorities() {
+        let metric_family = authority.primary.registry.gather();
 
         for metric in metric_family {
             if metric.get_name() == CURRENT_ROUND_METRIC {
@@ -46,16 +46,18 @@ async fn test_read_causal_signed_certificates() {
     tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Now start the validator 0 again
-    let node = cluster.start_node(0).await.unwrap();
+    cluster.start_node(0, true, Some(1)).await;
 
     // Now check that the current round advances. Give the opportunity with a few
     // iterations. If metric hasn't picked up then we know that node can't make
     // progress.
     let mut node_made_progress = false;
+    let node = cluster.authority(0);
+
     for _ in 0..10 {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        let metric_family = node.registry.gather();
+        let metric_family = node.primary.registry.gather();
 
         for metric in metric_family {
             if metric.get_name() == CURRENT_ROUND_METRIC {

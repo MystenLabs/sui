@@ -52,7 +52,7 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
         tx_batch_loader: Sender<ConsensusOutput<PublicKey>>,
         tx_executor: Sender<ConsensusOutput<PublicKey>>,
         next_consensus_index: SequenceNumber,
-    ) -> JoinHandle<SubscriberResult<()>> {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 store,
@@ -64,6 +64,7 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
             }
             .run()
             .await
+            .unwrap();
         })
     }
 

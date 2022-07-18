@@ -87,11 +87,7 @@ impl Executor {
         rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
         tx_consensus: Sender<ConsensusSyncRequest>,
         tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
-    ) -> SubscriberResult<(
-        JoinHandle<SubscriberResult<()>>,
-        JoinHandle<SubscriberResult<()>>,
-        JoinHandle<SubscriberResult<()>>,
-    )>
+    ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
         PublicKey: VerifyingKey,
@@ -143,6 +139,10 @@ impl Executor {
 
         // Return the handle.
         info!("Consensus subscriber successfully started");
-        Ok((subscriber_handle, executor_handle, batch_loader_handle))
+        Ok(vec![
+            subscriber_handle,
+            executor_handle,
+            batch_loader_handle,
+        ])
     }
 }
