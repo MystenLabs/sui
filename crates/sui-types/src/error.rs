@@ -351,6 +351,8 @@ pub enum SuiError {
     HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
+    #[error("Key Conversion Error: {0}")]
+    KeyConversionError(String),
 
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]

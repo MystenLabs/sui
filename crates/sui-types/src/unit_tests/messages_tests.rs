@@ -45,7 +45,7 @@ fn test_signed_values() {
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec2,
     );
-    
+
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
@@ -66,7 +66,7 @@ fn test_signed_values() {
         committee.epoch(),
         transaction,
         PublicKeyBytes::from(sec3.public()),
-        &sec3
+        &sec3,
     );
     assert!(v.verify(&committee).is_err());
 
@@ -135,11 +135,17 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
-        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature.clone())
+        .append(
+            v1.auth_sign_info.authority,
+            v1.auth_sign_info.signature.clone()
+        )
         .unwrap()
         .is_none());
     let mut c = builder
-        .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature.clone())
+        .append(
+            v2.auth_sign_info.authority,
+            v2.auth_sign_info.signature.clone(),
+        )
         .unwrap()
         .unwrap();
 
@@ -150,7 +156,10 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder
-        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature.clone())
+        .append(
+            v1.auth_sign_info.authority,
+            v1.auth_sign_info.signature.clone()
+        )
         .unwrap()
         .is_none());
     assert!(builder
@@ -200,7 +209,9 @@ fn test_new_with_signatures() {
     );
 }
 
-fn get_obligation_input<T>(value: &T) -> (VerificationObligation<AggregateAuthoritySignature>, usize)
+fn get_obligation_input<T>(
+    value: &T,
+) -> (VerificationObligation<AggregateAuthoritySignature>, usize)
 where
     T: BcsSignable,
 {
@@ -223,7 +234,9 @@ fn test_handle_reject_malicious_signature() {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
         authorities.insert(PublicKeyBytes::from(sec.public()), 1);
-        if i < 4 { signatures.push((PublicKeyBytes::from(sec.public()), sig)) };
+        if i < 4 {
+            signatures.push((PublicKeyBytes::from(sec.public()), sig))
+        };
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
@@ -281,8 +294,12 @@ fn test_reject_extra_public_key() {
 
     signatures.sort_by_key(|k| k.0);
 
-    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
-        vec![signatures[0].clone(), signatures[1].clone(), signatures[2].clone(), signatures[3].clone()];
+    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> = vec![
+        signatures[0].clone(),
+        signatures[1].clone(),
+        signatures[2].clone(),
+        signatures[3].clone(),
+    ];
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
@@ -308,8 +325,12 @@ fn test_reject_reuse_signatures() {
         signatures.push((PublicKeyBytes::from(sec.public()), sig));
     }
 
-    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> =
-        vec![signatures[0].clone(), signatures[1].clone(), signatures[2].clone(), signatures[2].clone()];
+    let used_signatures: Vec<(AuthorityName, AuthoritySignature)> = vec![
+        signatures[0].clone(),
+        signatures[1].clone(),
+        signatures[2].clone(),
+        signatures[2].clone(),
+    ];
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
