@@ -42,7 +42,7 @@ Finally, users prove ownership to the Sui network by providing a signature confi
 ![SuiEchoNFTMint](/static/suipanzerdogs4.png)
 *Letting the user select an NFT, prove ownership, and SuiEcho it*
 
-And that’s it! After following these steps, the user now owns a new Sui-based NFT that was brought into Sui through the SuiEcho white-label solution. To confirm ownership, the user can check the [Sui Explorer](https://github.com/MystenLabs/sui/blob/explorer-rest/explorer/README.md) and read additional information relevant to each NFT.
+And that’s it! After following these steps, the user now owns a new Sui-based NFT that was brought into Sui through the SuiEcho white-label solution. To confirm ownership, the user can check the [Sui Explorer](https://explorer.devnet.sui.io/) and read additional information relevant to each NFT.
 
 ![SuiExplorer](/static/suipanzerdogs5.png)
 *Sui NFTs can be viewed in the Sui Explorer*
