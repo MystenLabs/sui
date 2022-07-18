@@ -410,9 +410,9 @@ describe('End-to-end Tests', () => {
     });
     describe('Transactions for ID', () => {
         const txResults =
-            'TxIdTimeTxTypeStatusAddressesXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZPTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressGHTP9gcFmF5K...KFhdqfpdK8=1min3secsagoTransfer✖From:senderAddressTo:receiv...dress';
+            'TxIdTimeTxTypeStatusAddressesXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dress';
 
-        it('are displayed deduplicated from and to address', async () => {
+        it('are displayed from and to address', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
@@ -420,7 +420,7 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(fromResults.replace(/\s/g, '')).toBe(txResults);
         });
-        it('are displayed deduplicated for input and mutated object', async () => {
+        it('are displayed for input and mutated object', async () => {
             const address = 'CollectionObject';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
