@@ -73,8 +73,7 @@ camino = { version = "1", default-features = false, features = ["serde", "serde1
 cargo-platform = { version = "0.1", default-features = false }
 cargo_metadata = { version = "0.14" }
 cassowary = { version = "0.3", default-features = false }
-cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
-cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
+cast = { version = "0.2", features = ["std"] }
 cfg-expr = { version = "0.10", features = ["target-lexicon", "targets"] }
 cfg-if-c65f7effa3be6d31 = { package = "cfg-if", version = "0.1", default-features = false }
 cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features = false }
@@ -317,8 +316,7 @@ num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default
 num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "std"] }
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
-object-1f5adca70f036a62 = { package = "object", version = "0.28", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
-object-b73a96c0a5f6a7d9 = { package = "object", version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+object = { version = "0.28", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
@@ -620,8 +618,7 @@ camino = { version = "1", default-features = false, features = ["serde", "serde1
 cargo-platform = { version = "0.1", default-features = false }
 cargo_metadata = { version = "0.14" }
 cassowary = { version = "0.3", default-features = false }
-cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
-cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
+cast = { version = "0.2", features = ["std"] }
 cc = { version = "1", default-features = false, features = ["jobserver", "parallel"] }
 cexpr = { version = "0.6", default-features = false }
 cfg-expr = { version = "0.10", features = ["target-lexicon", "targets"] }
@@ -896,8 +893,7 @@ num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", feature
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
 num_enum_derive = { version = "0.5", default-features = false, features = ["proc-macro-crate", "std"] }
-object-1f5adca70f036a62 = { package = "object", version = "0.28", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
-object-b73a96c0a5f6a7d9 = { package = "object", version = "0.29", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
+object = { version = "0.28", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
 once_cell = { version = "1", features = ["alloc", "race", "std"] }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }

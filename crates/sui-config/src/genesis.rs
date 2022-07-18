@@ -8,7 +8,6 @@ use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
-use narwhal_crypto::traits::VerifyingKey;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::{BTreeMap, HashSet};
 use std::{fs, path::Path};
