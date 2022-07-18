@@ -17,7 +17,7 @@ use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duratio
 use sui_types::{
     base_types::{AuthorityName, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    crypto::{get_key_pair_from_rng, NarwhalKeypair},
+    crypto::{get_key_pair_from_rng, KeypairTraits},
     messages::{CertifiedTransaction, ExecutionStatus},
     object::Object,
     utils::{make_committee_key, make_committee_key_num},
