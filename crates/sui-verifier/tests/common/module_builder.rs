@@ -55,13 +55,13 @@ impl ModuleBuilder {
         }
     }
 
-    /// Creates the "id" module in framework address, along with the "VersionedID" struct.
-    /// Both the module and the ID struct information are returned.
+    /// Creates the "object" module in framework address, along with the "Info" struct.
+    /// Both the module and the Info struct information are returned.
     pub fn default() -> (Self, StructInfo) {
-        let mut module = Self::new(SUI_FRAMEWORK_ADDRESS, "id");
+        let mut module = Self::new(SUI_FRAMEWORK_ADDRESS, OBJECT_MODULE_NAME);
         let id = module.add_struct(
             module.get_self_index(),
-            "VersionedID",
+            INFO_STRUCT_NAME,
             AbilitySet::EMPTY | Ability::Store | Ability::Drop,
             vec![],
         );

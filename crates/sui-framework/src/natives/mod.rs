@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod event;
-mod id;
+mod object;
 mod test_scenario;
 mod transfer;
 mod tx_context;
@@ -18,9 +18,9 @@ pub fn all_natives(
 ) -> NativeFunctionTable {
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("event", "emit", event::emit),
-        ("id", "bytes_to_address", id::bytes_to_address),
-        ("id", "delete_id", id::delete_id),
-        ("id", "get_versioned_id", id::get_versioned_id),
+        ("object", "bytes_to_address", object::bytes_to_address),
+        ("object", "delete_impl", object::delete_impl),
+        ("object", "get_info", object::get_info),
         (
             "test_scenario",
             "drop_object_for_testing",
@@ -77,10 +77,10 @@ pub fn all_natives(
         .collect()
 }
 
-// Object { id: VersionedID { id: UniqueID { id: ID { bytes: address } } } .. }
-// Extract the first field of the struct 4 times to get the id bytes.
+// Object { info: Info { id: ID { bytes: address } } .. }
+// Extract the first field of the struct 3 times to get the id bytes.
 pub fn get_object_id(object: Value) -> Result<Value, PartialVMError> {
-    get_nested_struct_field(object, &[0, 0, 0, 0])
+    get_nested_struct_field(object, &[0, 0, 0])
 }
 
 // Extract a field valye that's nested inside value `v`. The offset of each nesting

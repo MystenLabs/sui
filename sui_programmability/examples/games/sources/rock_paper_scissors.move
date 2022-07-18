@@ -26,7 +26,7 @@
 // - If game owner never took or revealed the results (incentives?)
 
 module games::rock_paper_scissors {
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer::{Self};
     use std::vector;
@@ -55,7 +55,7 @@ module games::rock_paper_scissors {
     /// The Prize that's being held inside the [`Game`] object. Should be
     /// eventually replaced with some generic T inside the [`Game`].
     struct ThePrize has key, store {
-        id: VersionedID
+        info: Info
     }
 
     /// The main resource of the rock_paper_scissors module. Contains all the
@@ -64,7 +64,7 @@ module games::rock_paper_scissors {
     /// Being destroyed in the end, once [`select_winner`] is called and the game
     /// has reached its final state by that time.
     struct Game has key {
-        id: VersionedID,
+        info: Info,
         prize: ThePrize,
         player_one: address,
         player_two: address,
@@ -78,7 +78,7 @@ module games::rock_paper_scissors {
     /// submitted their moves to the Game. The turn is passed to the
     /// game owner who then adds a hash to the Game object.
     struct PlayerTurn has key {
-        id: VersionedID,
+        info: Info,
         hash: vector<u8>,
         player: address,
     }
@@ -86,7 +86,7 @@ module games::rock_paper_scissors {
     /// Secret object which is used to reveal the move. Just like [`PlayerTurn`]
     /// it is used to reveal the actual gesture a player has submitted.
     struct Secret has key {
-        id: VersionedID,
+        info: Info,
         salt: vector<u8>,
         player: address,
     }
@@ -119,8 +119,8 @@ module games::rock_paper_scissors {
     /// todo: extend with generics + T as prize
     public entry fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
         transfer::transfer(Game {
-            id: tx_context::new_id(ctx),
-            prize: ThePrize { id: tx_context::new_id(ctx) },
+            info: object::new(ctx),
+            prize: ThePrize { info: object::new(ctx) },
             player_one,
             player_two,
             hash_one: vector[],
@@ -137,7 +137,7 @@ module games::rock_paper_scissors {
     public entry fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
         transfer::transfer(PlayerTurn {
             hash,
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             player: tx_context::sender(ctx),
         }, at);
     }
@@ -145,7 +145,7 @@ module games::rock_paper_scissors {
     /// Add a hashed gesture to the game. Store it as a `hash_one` or `hash_two` depending
     /// on the player number (one or two)
     public entry fun add_hash(game: &mut Game, cap: PlayerTurn) {
-        let PlayerTurn { hash, id, player } = cap;
+        let PlayerTurn { hash, info, player } = cap;
         let status = status(game);
 
         assert!(status == STATUS_HASH_SUBMISSION || status == STATUS_READY, 0);
@@ -159,14 +159,14 @@ module games::rock_paper_scissors {
             abort 0 // unreachable!()
         };
 
-        id::delete(id);
+        object::delete(info);
     }
 
     /// Submit a [`Secret`] to the game owner who then matches the hash and saves the
     /// gesture in the [`Game`] object.
     public entry fun reveal(at: address, salt: vector<u8>, ctx: &mut TxContext) {
         transfer::transfer(Secret {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             salt,
             player: tx_context::sender(ctx),
         }, at);
@@ -176,7 +176,7 @@ module games::rock_paper_scissors {
     /// in the [`Game`] object.
     /// TODO: think of ways to
     public entry fun match_secret(game: &mut Game, secret: Secret) {
-        let Secret { salt, player, id } = secret;
+        let Secret { salt, player, info } = secret;
 
         assert!(player == game.player_one || player == game.player_two, 0);
 
@@ -186,7 +186,7 @@ module games::rock_paper_scissors {
             game.gesture_two = find_gesture(salt, &game.hash_two);
         };
 
-        id::delete(id);
+        object::delete(info);
     }
 
     /// The final accord to the game logic. After both secrets have been revealed,
@@ -195,7 +195,7 @@ module games::rock_paper_scissors {
         assert!(status(&game) == STATUS_REVEALED, 0);
 
         let Game {
-            id,
+            info,
             prize,
             player_one,
             player_two,
@@ -208,7 +208,7 @@ module games::rock_paper_scissors {
         let p1_wins = play(gesture_one, gesture_two);
         let p2_wins = play(gesture_two, gesture_one);
 
-        id::delete(id);
+        object::delete(info);
 
         // If one of the players wins, he takes the prize.
         // If there's a tie, the game owner gets the prize.

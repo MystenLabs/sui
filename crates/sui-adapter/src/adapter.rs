@@ -30,7 +30,7 @@ use sui_types::{
     error::{ExecutionErrorKind, SuiError},
     event::{Event, TransferType},
     gas::SuiGasStatus,
-    id::VersionedID,
+    id::Info,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
@@ -478,12 +478,12 @@ fn process_successful_execution<
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
                 // native call delete_id, which guarantees the type of the id.
-                let id: VersionedID = bcs::from_bytes(&event_bytes).unwrap();
-                let obj_id = id.object_id();
+                let info: Info = bcs::from_bytes(&event_bytes).unwrap();
+                let obj_id = info.object_id();
                 // We don't care about IDs that are generated in this same transaction
                 // but only to be deleted.
                 if !newly_generated_ids.contains(obj_id) {
-                    match by_value_objects.remove(id.object_id()) {
+                    match by_value_objects.remove(info.object_id()) {
                         Some(_) => {
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
@@ -491,7 +491,7 @@ fn process_successful_execution<
                                 ctx.sender(),
                                 *obj_id,
                             ));
-                            state_view.delete_object(obj_id, id.version(), DeleteKind::Normal)
+                            state_view.delete_object(obj_id, info.version(), DeleteKind::Normal)
                         }
                         None => {
                             // This object wasn't in the input, and is being deleted. It must
@@ -509,7 +509,7 @@ fn process_successful_execution<
                             ));
                             state_view.delete_object(
                                 obj_id,
-                                id.version().increment(),
+                                info.version().increment(),
                                 DeleteKind::UnwrapThenDelete,
                             )
                         }

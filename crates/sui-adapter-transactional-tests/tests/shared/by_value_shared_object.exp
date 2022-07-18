@@ -14,7 +14,7 @@ written: object(106)
 
 task 4 'view-object'. lines 43-43:
 Owner: Shared
-Contents: t2::o2::O2 {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(107)}}, version: 1u64}}
+Contents: t2::o2::O2 {info: sui::object::Info {id: sui::object::ID {bytes: fake(107)}, version: 1u64}}
 
 task 5 'run'. lines 45-45:
 Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.

@@ -10,19 +10,19 @@
 module test::m {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
 
-    struct S has key { id: VersionedID }
-    struct Cup<phantom T> has key { id: VersionedID }
+    struct S has key { info: Info }
+    struct Cup<phantom T> has key { info: Info }
 
     public entry fun mint_s(ctx: &mut TxContext) {
-        let id = tx_context::new_id(ctx);
-        transfer::transfer(S { id }, tx_context::sender(ctx))
+        let info = object::new(ctx);
+        transfer::transfer(S { info }, tx_context::sender(ctx))
     }
 
     public entry fun mint_cup<T>(ctx: &mut TxContext) {
-        let id = tx_context::new_id(ctx);
-        transfer::transfer(Cup<T> { id }, tx_context::sender(ctx))
+        let info = object::new(ctx);
+        transfer::transfer(Cup<T> { info }, tx_context::sender(ctx))
     }
 }
 

@@ -38,7 +38,7 @@ fn test_to_json_value() {
             .unwrap()
             .into();
     let json_value = sui_move_struct.to_json_value().unwrap();
-
+    dbg!(&json_value);
     assert_eq!(
         Some(&json!(1000000)),
         json_value.pointer("/coins/0/balance")
@@ -53,11 +53,20 @@ fn test_to_json_value() {
     );
     assert_eq!(
         Some(&json!(move_event.coins[0].id().to_string())),
-        json_value.pointer("/coins/0/id/id")
+        json_value.pointer("/coins/0/info/id")
     );
-    assert_eq!(Some(&json!(10)), json_value.pointer("/coins/0/id/version"));
-    assert_eq!(Some(&json!(20)), json_value.pointer("/coins/1/id/version"));
-    assert_eq!(Some(&json!(30)), json_value.pointer("/coins/2/id/version"));
+    assert_eq!(
+        Some(&json!(10)),
+        json_value.pointer("/coins/0/info/version")
+    );
+    assert_eq!(
+        Some(&json!(20)),
+        json_value.pointer("/coins/1/info/version")
+    );
+    assert_eq!(
+        Some(&json!(30)),
+        json_value.pointer("/coins/2/info/version")
+    );
     assert_eq!(
         Some(&json!(format!("{:#x}", move_event.creator))),
         json_value.pointer("/creator")

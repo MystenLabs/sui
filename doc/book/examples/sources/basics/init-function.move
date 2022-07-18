@@ -3,12 +3,12 @@
 
 module examples::one_timer {
     use sui::transfer;
-    use sui::id::VersionedID;
+    use sui::object::Info;
     use sui::tx_context::{Self, TxContext};
 
     /// The one of a kind - created in the module initializer.
     struct CreatorCapability has key {
-        id: VersionedID
+        info: Info
     }
 
     /// This function is only called once on module publish.
@@ -17,7 +17,7 @@ module examples::one_timer {
     /// `CreatorCapability` struct.
     fun init(ctx: &mut TxContext) {
         transfer::transfer(CreatorCapability {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
         }, tx_context::sender(ctx))
     }
 }

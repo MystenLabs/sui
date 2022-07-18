@@ -16,7 +16,7 @@
 /// We then know that `child1` is an ID for an object of type `A` and that `child2` is an `ID`
 /// of an object of type `B`
 module sui::typed_id {
-    use sui::id::{Self, ID};
+    use sui::object::{Self, ID};
 
     /// An ID of an of type `T`. See `ID` for more details
     /// By construction, it is guaranteed that the `ID` represents an object of type `T`
@@ -26,7 +26,7 @@ module sui::typed_id {
 
     /// Get the underlying `ID` of `obj`, and remember the type
     public fun new<T: key>(obj: &T): TypedID<T> {
-        TypedID { id: *id::id(obj) }
+        TypedID { id: *object::id(obj) }
     }
 
     /// Borrow the inner `ID` of `typed_id`
@@ -42,6 +42,6 @@ module sui::typed_id {
 
     /// Check that underlying `ID` in the `typed_id` equals the objects ID
     public fun equals_object<T: key>(typed_id: &TypedID<T>, obj: &T): bool {
-        &typed_id.id == id::id(obj)
+        &typed_id.id == object::id(obj)
     }
 }

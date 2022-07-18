@@ -4,7 +4,7 @@
 #[test_only]
 module sui::bag_tests {
     use sui::bag::{Self, Bag};
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::test_scenario;
     use sui::typed_id;
     use sui::tx_context;
@@ -13,11 +13,11 @@ module sui::bag_tests {
     const EOBJECT_NOT_FOUND: u64 = 1;
 
     struct Object1 has key, store {
-        id: VersionedID,
+        info: Info,
     }
 
     struct Object2 has key, store {
-        id: VersionedID,
+        info: Info,
     }
 
     #[test]
@@ -37,8 +37,8 @@ module sui::bag_tests {
             let bag = test_scenario::take_owned<Bag>(scenario);
             assert!(bag::size(&bag) == 0, EBAG_SIZE_MISMATCH);
 
-            let obj1 = Object1 { id: tx_context::new_id(test_scenario::ctx(scenario)) };
-            let obj2 = Object2 { id: tx_context::new_id(test_scenario::ctx(scenario)) };
+            let obj1 = Object1 { info: object::new(test_scenario::ctx(scenario)) };
+            let obj2 = Object2 { info: object::new(test_scenario::ctx(scenario)) };
 
             let item_id1 = bag::add(&mut bag, obj1, test_scenario::ctx(scenario));
             let item_id2 = bag::add(&mut bag, obj2, test_scenario::ctx(scenario));
@@ -76,9 +76,9 @@ module sui::bag_tests {
         let ctx = tx_context::dummy();
         let bag = bag::new_with_max_capacity(&mut ctx, 1);
 
-        let obj1 = Object1 { id: tx_context::new_id(&mut ctx) };
+        let obj1 = Object1 { info: object::new(&mut ctx) };
         bag::add(&mut bag, obj1, &mut ctx);
-        let obj2 = Object2 { id: tx_context::new_id(&mut ctx) };
+        let obj2 = Object2 { info: object::new(&mut ctx) };
         bag::add(&mut bag, obj2, &mut ctx);
         bag::transfer(bag, tx_context::sender(&ctx));
     }

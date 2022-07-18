@@ -7,9 +7,9 @@ module nfts::auction_tests {
 
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::test_scenario::Self;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     use nfts::auction::{Self, Bid};
     use nfts::auction_lib::Auction;
@@ -19,7 +19,7 @@ module nfts::auction_tests {
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
-        id: VersionedID,
+        info: Info,
         value: u64,
     }
 
@@ -54,18 +54,18 @@ module nfts::auction_tests {
         test_scenario::next_tx(scenario, &owner);
         let ctx = test_scenario::ctx(scenario);
         let to_sell = SomeItemToSell {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             value: 42,
         };
         // generate unique auction ID (it would be more natural to
         // generate one in crate_auction and return it, but we cannot
         // do this at the moment)
-        let id = tx_context::new_id(ctx);
+        let id = object::new(ctx);
         // we need to dereference (copy) right here rather wherever
         // auction_id is used - otherwise id would still be considered
         // borrowed and could not be passed argument to a function
         // consuming it
-        let auction_id = *id::inner(&id);
+        let auction_id = *object::info_id(&id);
         auction::create_auction(to_sell, id, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid

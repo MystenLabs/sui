@@ -6,16 +6,16 @@
 //# publish
 
 module T3::O3 {
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct O3 has key, store {
-        id: VersionedID,
+        info: Info,
     }
 
     public entry fun create(ctx: &mut TxContext) {
-        let o = O3 { id: tx_context::new_id(ctx) };
+        let o = O3 { info: object::new(ctx) };
         transfer::transfer(o, tx_context::sender(ctx))
     }
 }
@@ -23,13 +23,13 @@ module T3::O3 {
 //# publish
 
 module T2::O2 {
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use T3::O3::O3;
 
     struct O2 has key, store {
-        id: VersionedID,
+        info: Info,
     }
 
     public entry fun create_shared(child: O3, ctx: &mut TxContext) {
@@ -45,9 +45,9 @@ module T2::O2 {
     }
 
     fun new(child: O3, ctx: &mut TxContext): O2 {
-        let id = tx_context::new_id(ctx);
-        transfer::transfer_to_object_id(child, &id);
-        O2 { id }
+        let info = object::new(ctx);
+        transfer::transfer_to_object_id(child, &info);
+        O2 { info }
     }
 }
 
@@ -55,14 +55,14 @@ module T2::O2 {
 //# publish
 
 module T1::O1 {
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use T2::O2::O2;
     use T3::O3::O3;
 
     struct O1 has key {
-        id: VersionedID,
+        info: Info,
     }
 
     public entry fun create_shared(child: O2, ctx: &mut TxContext) {
@@ -75,9 +75,9 @@ module T1::O1 {
     }
 
     fun new(child: O2, ctx: &mut TxContext): O1 {
-        let id = tx_context::new_id(ctx);
-        transfer::transfer_to_object_id(child, &id);
-        O1 { id }
+        let info = object::new(ctx);
+        transfer::transfer_to_object_id(child, &info);
+        O1 { info }
     }
 }
 

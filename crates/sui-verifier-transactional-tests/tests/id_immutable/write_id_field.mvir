@@ -3,17 +3,17 @@
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
+    import 0x2.object;
 
     struct Foo has key {
-        id: id.VersionedID,
+        info: object.Info,
     }
 
-    foo(f: Self.Foo, id: id.VersionedID) {
-        let x: &mut id.VersionedID;
+    foo(f: Self.Foo, info: object.Info) {
+        let x: &mut object.Info;
         label l0:
-        x = &mut (&mut f).Foo::id;
-        *move(x) = move(id);
+        x = &mut (&mut f).Foo::info;
+        *move(x) = move(info);
         abort 0;
     }
 
