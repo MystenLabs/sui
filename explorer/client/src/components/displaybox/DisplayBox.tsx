@@ -75,10 +75,10 @@ function DisplayBox({ display }: { display: string }) {
         );
     } else {
         return (
-            <div className={styles['display-container']}>
+            <div className={styles['display-container']} id="displayContainer">
                 {!hasDisplayLoaded && (
                     <div className={styles.imagebox} id="pleaseWaitImage">
-                        image loading...
+                        Image Loading...
                     </div>
                 )}
                 {hasFailedToLoad && (
