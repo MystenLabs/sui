@@ -21,7 +21,7 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
-use sui_types::crypto::NarwhalKeypair;
+use sui_types::crypto::KeypairTraits;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 
 use test_utils::network::{setup_network_and_wallet, start_test_network};

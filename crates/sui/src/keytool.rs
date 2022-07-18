@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_types::base_types::{decode_bytes_hex, ToAddress};
-use sui_types::crypto::NarwhalKeypair;
+use sui_types::crypto::KeypairTraits;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::SuiAddress,

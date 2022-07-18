@@ -10,7 +10,7 @@ use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_types::crypto::{get_key_pair, PublicKeyBytes};
-use sui_types::crypto::{KeyPair, Signature, NarwhalKeypair};
+use sui_types::crypto::{KeyPair, Signature, KeypairTraits};
 
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
