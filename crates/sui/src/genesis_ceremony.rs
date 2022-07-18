@@ -14,7 +14,7 @@ use sui_config::{
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
     crypto::KeyPair,
-    crypto::{NarwhalKeypair, PublicKey, PublicKeyBytes, Signature, ToFromBytes},
+    crypto::{NarwhalKeypair, PublicKey, PublicKeyBytes, Signature, ToFromBytes, AuthoritySignature, get_key_pair},
     object::Object,
 };
 
@@ -152,9 +152,27 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 ));
             }
 
+            let kp2 = get_key_pair().1;
+            let signature: Signature = kp2.try_sign(&built_genesis_bytes)?;
+            let sig = AuthoritySignature::from_bytes(signature.signature_bytes())?;
+            println!("sig: {:?}", sig);
+            kp2.public().verify(&built_genesis_bytes, &sig)?;
+
+
             // Sign the genesis bytes
             let signature: Signature = keypair.try_sign(&built_genesis_bytes)?;
+            let sig = AuthoritySignature::from_bytes(signature.signature_bytes())?;
+            println!("sig: {:?}", sig);
+            keypair.public().verify(&built_genesis_bytes, &sig)?;
+            println!("VERI2");
+            let pk_bytes: PublicKeyBytes = PublicKeyBytes::from_bytes(signature.public_key_bytes()).unwrap();
+            println!("{:?}", signature);
+            pk_bytes.verify(&built_genesis_bytes, &signature)?;
+            let sig: AuthoritySignature = AuthoritySignature::from_bytes(signature.signature_bytes()).unwrap();
 
+            println!("{:?}", signature);
+            keypair.public().verify(&built_genesis_bytes[..], &sig)?;
+            
             let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
             std::fs::create_dir_all(&signature_dir)?;
 
@@ -243,6 +261,7 @@ mod test {
                 (keypair, info)
             })
             .collect::<Vec<_>>();
+        let s: Signature = validators[0].0.try_sign(b"123")?;
 
         // Initialize
         let command = Ceremony {
