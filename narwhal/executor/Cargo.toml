@@ -14,7 +14,7 @@ futures = "0.3.21"
 rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib"], default-features = false }
 serde = { version = "1.0.139", features = ["derive"] }
 thiserror = "1.0.31"
-tokio = { version = "1.19.2", features = ["sync"] }
+tokio = { version = "1.20.0", features = ["sync"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tracing = "0.1.35"
 config = { path = "../config" }

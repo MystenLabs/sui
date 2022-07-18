@@ -14,7 +14,7 @@ bytes = "1.1.0"
 ed25519-dalek = "1.0.1"
 futures = "0.3.21"
 serde = { version = "1.0.139", features = ["derive"] }
-tokio = { version = "1.19.2", features = ["sync", "rt", "macros"] }
+tokio = { version = "1.20.0", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tracing = "0.1.35"
 tonic = "0.7.2"
