@@ -29,8 +29,8 @@ use std::hash::{Hash, Hasher};
 
 // Comment the one you want to use
 pub type KeyPair = Ed25519KeyPair; // Associated Types don't work here yet for some reason.
-pub type PrivateKey = <KeyPair as KeypairTraits>::PrivKey;
-pub type PublicKey = <KeyPair as KeypairTraits>::PubKey;
+pub type PrivateKey = Ed25519PrivateKey;
+pub type PublicKey = Ed25519PublicKey;
 pub type PublicKeyBytes = Ed25519PublicKeyBytes;
 
 // Signatures for Authorities
@@ -349,8 +349,8 @@ pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
 // certificates that differ on signers aren't.
 //
 // see also https://github.com/MystenLabs/sui/issues/266
-// static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
-// static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
+static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
+static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
 
 impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
 
