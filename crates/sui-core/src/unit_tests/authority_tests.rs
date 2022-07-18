@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
-use sui_types::object::Data;
+use sui_types::{object::Data, crypto::PublicKeyBytes};
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -1600,9 +1600,9 @@ pub async fn init_state_with_committee(committee: Option<(Committee, KeyPair)>) 
         Some(c) => c,
         None => {
             let (_authority_address, authority_key) = get_key_pair();
-            let mut authorities = BTreeMap::new();
+            let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
             authorities.insert(
-                /* address */ *authority_key.public_key_bytes(),
+                /* address */ authority_key.public().into(),
                 /* voting right */ 1,
             );
             (Committee::new(0, authorities).unwrap(), authority_key)
@@ -1940,11 +1940,11 @@ async fn test_consensus_message_processed() {
 
     let (sender, keypair) = get_key_pair();
 
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     let (_a1, sec1) = get_key_pair();
     let (_a2, sec2) = get_key_pair();
-    authorities.insert(*sec1.public_key_bytes(), 1);
-    authorities.insert(*sec2.public_key_bytes(), 1);
+    authorities.insert(sec1.public().into(), 1);
+    authorities.insert(sec2.public().into(), 1);
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
 

@@ -12,25 +12,6 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 20
-AuthorityBatch:
-  STRUCT:
-    - next_sequence_number: U64
-    - initial_sequence_number: U64
-    - size: U64
-    - previous_digest:
-        OPTION:
-          TUPLEARRAY:
-            CONTENT: U8
-            SIZE: 32
-    - transactions_digest:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 32
-AuthoritySignature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
 CallArg:
   ENUM:
     0:
@@ -60,6 +41,17 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
+Ed25519KeyPair:
+  STRUCT:
+    - type: STR
+    - name:
+        TYPENAME: Ed25519PublicKey
+    - secret:
+        TYPENAME: Ed25519PublicKey
+Ed25519PublicKey:
+  NEWTYPESTRUCT: STR
+Ed25519Signature:
+  NEWTYPESTRUCT: BYTES
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8
@@ -79,12 +71,6 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
-ExecutionDigests:
-  STRUCT:
-    - transaction:
-        TYPENAME: TransactionDigest
-    - effects:
-        TYPENAME: TransactionEffectsDigest
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -310,20 +296,16 @@ Owner:
       Shared: UNIT
     3:
       Immutable: UNIT
+PhantomData: UNITSTRUCT
 PublicKeyBytes:
-  NEWTYPESTRUCT: BYTES
+  STRUCT:
+    - bytes: BYTES
+    - phantom:
+        TYPENAME: PhantomData
 SequenceNumber:
   NEWTYPESTRUCT: U64
 Signature:
   NEWTYPESTRUCT: BYTES
-SignedBatch:
-  STRUCT:
-    - batch:
-        TYPENAME: AuthorityBatch
-    - authority:
-        TYPENAME: PublicKeyBytes
-    - signature:
-        TYPENAME: AuthoritySignature
 SingleTransactionKind:
   ENUM:
     0:
@@ -427,16 +409,4 @@ TypedStoreError:
         NEWTYPE: STR
     3:
       CrossDBBatch: UNIT
-UpdateItem:
-  ENUM:
-    0:
-      Transaction:
-        NEWTYPE:
-          TUPLE:
-            - U64
-            - TYPENAME: ExecutionDigests
-    1:
-      Batch:
-        NEWTYPE:
-          TYPENAME: SignedBatch
 
