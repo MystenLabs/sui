@@ -21,7 +21,6 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
-use sui_types::{object::Data, crypto::PublicKeyBytes};
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
@@ -31,6 +30,7 @@ use sui_types::{
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use sui_types::{crypto::PublicKeyBytes, object::Data};
 
 pub enum TestCallArg {
     Object(ObjectID),
