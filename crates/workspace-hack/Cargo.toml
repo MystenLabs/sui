@@ -340,7 +340,7 @@ pest = { version = "2", default-features = false }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5", features = ["graphmap", "matrix_graph", "stable_graph"] }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", features = ["graphmap", "matrix_graph", "stable_graph"] }
 phf = { version = "0.10", default-features = false, features = ["uncased"] }
-phf_shared = { version = "0.10", features = ["std", "uncased"] }
+phf_shared = { version = "0.11", features = ["std", "uncased"] }
 pin-project = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
@@ -926,7 +926,7 @@ petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", features = 
 phf = { version = "0.10", default-features = false, features = ["uncased"] }
 phf_codegen = { version = "0.10", default-features = false }
 phf_generator = { version = "0.10", default-features = false }
-phf_shared = { version = "0.10", features = ["std", "uncased"] }
+phf_shared = { version = "0.11", features = ["std", "uncased"] }
 pin-project = { version = "1", default-features = false }
 pin-project-internal = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
