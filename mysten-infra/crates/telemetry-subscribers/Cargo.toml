@@ -10,9 +10,9 @@ publish = false
 
 [dependencies]
 tokio = { version = "1.19.2", features = ["sync", "macros", "rt", "rt-multi-thread"] }
-tracing = { version = "0.1.35", features = ["log"] }
+tracing = "0.1.35"
 tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.14", features = ["time", "registry", "env-filter"] }
+tracing-subscriber = { version = "0.3.14", features = ["std", "time", "registry", "env-filter"] }
 tracing-bunyan-formatter = "0.3.3"
 tracing-opentelemetry = { version = "0.17.4", optional = true }
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"], optional = true }
@@ -27,3 +27,6 @@ default = ["jaeger", "chrome"]
 tokio-console = ["console-subscriber"]
 jaeger = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-jaeger"]
 chrome = ["tracing-chrome"]
+
+[dev-dependencies]
+camino = "1.0.9"

@@ -19,17 +19,20 @@
 
 use std::{env, io::stderr};
 use tracing::metadata::LevelFilter;
-use tracing::subscriber::set_global_default;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
-use tracing_subscriber::Layer;
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
-    EnvFilter, Registry,
+    reload,
+    util::SubscriberInitExt,
+    EnvFilter, Layer, Registry,
 };
 
 use crossterm::tty::IsTty;
+
+/// Alias for a type-erased error type.
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// Configuration for different logging/tracing options
 /// ===
@@ -63,6 +66,23 @@ pub struct TelemetryGuards {
 
     #[cfg(feature = "chrome")]
     chrome_guard: Option<tracing_chrome::FlushGuard>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FilterHandle(reload::Handle<EnvFilter, Registry>);
+
+impl FilterHandle {
+    pub fn update<S: AsRef<str>>(&self, directives: S) -> Result<(), BoxError> {
+        let filter = EnvFilter::try_new(directives)?;
+        self.0.reload(filter)?;
+        Ok(())
+    }
+
+    pub fn get(&self) -> Result<String, BoxError> {
+        self.0
+            .with_current(|filter| filter.to_string())
+            .map_err(Into::into)
+    }
 }
 
 fn get_output(log_file: Option<String>) -> (NonBlocking, WorkerGuard) {
@@ -144,37 +164,35 @@ impl TelemetryConfig {
         self
     }
 
-    pub fn init(self) -> TelemetryGuards {
+    pub fn init(self) -> (TelemetryGuards, FilterHandle) {
         let config = self;
-
-        let registry = Registry::default();
-
-        // tokio-console layer
-        #[cfg(feature = "tokio-console")]
-        let tokio_console = config.tokio_console.then_some(console_subscriber::spawn());
-
-        #[cfg(feature = "tokio-console")]
-        let registry = registry.with(tokio_console);
 
         // Setup an EnvFilter which will filter all downstream layers
         let log_level = config.log_level.unwrap_or_else(|| "info".into());
         let env_filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
-        let registry = registry.with(env_filter);
+        let (filter, reload_handle) = reload::Layer::new(env_filter);
+        let filter_handle = FilterHandle(reload_handle);
+
+        let mut layers = Vec::new();
+
+        // tokio-console layer
+        #[cfg(feature = "tokio-console")]
+        if config.tokio_console {
+            layers.push(console_subscriber::spawn().boxed());
+        }
 
         #[cfg(feature = "chrome")]
-        let (chrome_layer, chrome_guard) = if config.chrome_trace_output {
+        let chrome_guard = if config.chrome_trace_output {
             let (chrome_layer, guard) = tracing_chrome::ChromeLayerBuilder::new().build();
-            (Some(chrome_layer), Some(guard))
+            layers.push(chrome_layer.boxed());
+            Some(guard)
         } else {
-            (None, None)
+            None
         };
 
-        #[cfg(feature = "chrome")]
-        let registry = registry.with(chrome_layer);
-
         #[cfg(feature = "jaeger")]
-        let jaeger_layer = if config.enable_tracing {
+        if config.enable_tracing {
             // Install a tracer to send traces to Jaeger.  Batching for better performance.
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_service_name(&config.service_name)
@@ -191,39 +209,31 @@ impl TelemetryConfig {
                 opentelemetry::sdk::propagation::TraceContextPropagator::new(),
             );
 
-            Some(telemetry)
-        } else {
-            None
-        };
-
-        #[cfg(feature = "jaeger")]
-        let registry = registry.with(jaeger_layer);
-
-        // Setup formatter and optional storage layer
-        let json_storage_layer = config.json_log_output.then_some(JsonStorageLayer);
-
-        let registry = registry.with(json_storage_layer);
+            layers.push(telemetry.boxed());
+        }
 
         let (nb_output, worker_guard) = get_output(config.log_file.clone());
-        let fmt_layer: Box<dyn Layer<_> + Send + Sync + 'static> = {
-            if config.json_log_output {
-                // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
-                // Also Bunyan layer addes JSON logging for tracing spans with duration information
-                let json_layer = BunyanFormattingLayer::new(config.service_name, nb_output);
-                Box::new(json_layer)
-            } else {
-                // Output to file or to stderr with ANSI colors
-                let fmt_layer = fmt::layer()
-                    .with_ansi(config.log_file.is_none() && stderr().is_tty())
-                    .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-                    .with_writer(nb_output);
-                Box::new(fmt_layer)
-            }
-        };
+        if config.json_log_output {
+            // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter
+            // Also Bunyan layer addes JSON logging for tracing spans with duration information
+            let json_layer = JsonStorageLayer
+                .and_then(BunyanFormattingLayer::new(config.service_name, nb_output))
+                .boxed();
+            layers.push(json_layer);
+        } else {
+            // Output to file or to stderr with ANSI colors
+            let fmt_layer = fmt::layer()
+                .with_ansi(config.log_file.is_none() && stderr().is_tty())
+                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                .with_writer(nb_output)
+                .boxed();
+            layers.push(fmt_layer);
+        }
 
-        let registry = registry.with(fmt_layer);
-
-        set_global_default(registry).expect("Failed to set subscriber");
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(layers)
+            .init();
 
         if config.panic_hook {
             set_panic_hook();
@@ -231,11 +241,13 @@ impl TelemetryConfig {
 
         // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
         // gets flushed and closed. If this is dropped too early then no output will appear!
-        TelemetryGuards {
+        let guards = TelemetryGuards {
             worker_guard,
             #[cfg(feature = "chrome")]
             chrome_guard,
-        }
+        };
+
+        (guards, filter_handle)
     }
 }
 
