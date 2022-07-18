@@ -24,7 +24,7 @@ use sui_json_rpc::gateway_api::{
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::{SuiAddress, ToAddress};
-use sui_types::crypto::NarwhalKeypair;
+use sui_types::crypto::KeypairTraits;
 const NUM_VALIDAOTR: usize = 4;
 
 pub async fn start_test_network(

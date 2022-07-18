@@ -14,7 +14,7 @@ use sui_config::{
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
     crypto::KeyPair,
-    crypto::{NarwhalKeypair, PublicKey, PublicKeyBytes, Signature, ToFromBytes, AuthoritySignature, get_key_pair},
+    crypto::{KeypairTraits, PublicKey, PublicKeyBytes, Signature, ToFromBytes, AuthoritySignature, get_key_pair},
     object::Object,
 };
 

@@ -8,7 +8,7 @@ use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
     crypto::{
-        get_key_pair, AuthoritySignature, KeyPair, NarwhalKeypair, PublicKeyBytes, Signature,
+        get_key_pair, AuthoritySignature, KeyPair, KeypairTraits, PublicKeyBytes, Signature,
         SuiAuthoritySignature,
     },
     messages::*,

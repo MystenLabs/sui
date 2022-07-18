@@ -7,7 +7,7 @@ use crate::base_types::{SuiAddress, ToAddress};
 use crate::crypto::{KeyPair, Signable, Signature};
 use crate::error::SuiError;
 use hkdf::Hkdf;
-use narwhal_crypto::traits::KeyPair as NarwhalKeypair;
+use narwhal_crypto::traits::KeyPair as KeypairTraits;
 use rand::{CryptoRng, RngCore};
 use sha3::Sha3_256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
