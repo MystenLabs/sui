@@ -434,6 +434,7 @@ sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
+smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7" }
 spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
@@ -465,7 +466,7 @@ test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
-textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", default-features = false }
+textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 thiserror = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
@@ -523,6 +524,7 @@ unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3", features = ["hardcoded-data", "std"] }
 unicode-ident = { version = "1", default-features = false }
+unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1", features = ["std"] }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
@@ -1043,6 +1045,7 @@ sized-chunks = { version = "0.6", features = ["std"] }
 slab = { version = "0.4", features = ["std"] }
 slug = { version = "0.1", default-features = false }
 smallvec = { version = "1", default-features = false }
+smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7" }
 spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
@@ -1081,7 +1084,7 @@ test-fuzz-internal = { version = "3", default-features = false }
 test-fuzz-macro = { version = "3", default-features = false }
 test-fuzz-runtime = { version = "3", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
-textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", default-features = false }
+textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
 thread_local = { version = "1", default-features = false }
@@ -1145,6 +1148,7 @@ unic-ucd-version = { version = "0.9", default-features = false }
 unicase = { version = "2", default-features = false }
 unicode-bidi = { version = "0.3", features = ["hardcoded-data", "std"] }
 unicode-ident = { version = "1", default-features = false }
+unicode-linebreak = { version = "0.1", default-features = false }
 unicode-normalization = { version = "0.1", features = ["std"] }
 unicode-segmentation = { version = "1", default-features = false }
 unicode-width = { version = "0.1" }
