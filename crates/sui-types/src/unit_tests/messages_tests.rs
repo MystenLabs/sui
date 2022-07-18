@@ -85,25 +85,32 @@ fn test_certificates() {
     let (a2, sec2) = get_key_pair();
     let (_, sec3) = get_key_pair();
 
+    println!("1");
     let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
         /* address */ PublicKeyBytes::from(sec1.public()),
         /* voting right */ 1,
     );
+    println!("2");
     authorities.insert(
         /* address */ PublicKeyBytes::from(sec2.public()),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
 
+    println!("3");
+
     let transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec1,
     );
+    println!("3.5");
     let bad_transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec2,
     );
+
+    println!("4");
 
     let v1 = SignedTransaction::new(
         committee.epoch(),
@@ -124,6 +131,8 @@ fn test_certificates() {
         &sec3,
     );
 
+    println!("5");
+
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
         .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature.clone())
@@ -133,7 +142,11 @@ fn test_certificates() {
         .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature.clone())
         .unwrap()
         .unwrap();
-    assert!(c.verify(&committee).is_ok());
+
+    println!("55");
+    assert!(c.verify(&committee).is_err());
+
+    println!("5");
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder
@@ -145,6 +158,8 @@ fn test_certificates() {
         .is_err());
 
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
+
+    println!("6");
 }
 
 #[derive(Serialize, Deserialize)]
