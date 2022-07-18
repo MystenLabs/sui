@@ -29,8 +29,8 @@ use std::hash::{Hash, Hasher};
 
 // Comment the one you want to use
 pub type KeyPair = Ed25519KeyPair; // Associated Types don't work here yet for some reason.
-pub type PrivateKey = Ed25519PrivateKey;
-pub type PublicKey = Ed25519PublicKey;
+pub type PrivateKey = <KeyPair as KeypairTraits>::PrivKey;
+pub type PublicKey = <KeyPair as KeypairTraits>::PubKey;
 pub type PublicKeyBytes = Ed25519PublicKeyBytes;
 
 // Signatures for Authorities
@@ -85,16 +85,12 @@ impl signature::Signer<Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
         let signature_bytes: <<KeyPair as KeypairTraits>::PrivKey as SigningKey>::Sig =
             self.try_sign(msg)?;
-        println!("signature_bytes: {:?}", signature_bytes);
-        self.public().verify(msg, &signature_bytes)?;
-
-        println!("VERIFIED! {:?}", signature_bytes);
-        let pk_bytes: PublicKeyBytes = self.public().into();
-        let public_key_bytes = pk_bytes.as_ref();
+        let public_key_bytes: PublicKeyBytes = self.public().into();
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
         result_bytes[..<KeyPair as KeypairTraits>::Sig::LENGTH]
             .copy_from_slice(signature_bytes.as_ref());
-        result_bytes[<KeyPair as KeypairTraits>::Sig::LENGTH..].copy_from_slice(public_key_bytes);
+        result_bytes[<KeyPair as KeypairTraits>::Sig::LENGTH..]
+            .copy_from_slice(public_key_bytes.as_ref());
         Ok(Signature(result_bytes))
     }
 }
@@ -108,7 +104,7 @@ impl signature::Verifier<Signature> for PublicKeyBytes {
 
         let public_key =
             PublicKey::from_bytes(self.as_ref()).map_err(|_| signature::Error::new())?;
-        
+
         // perform cryptographic signature check
         public_key
             .verify(message, &signature)
@@ -407,9 +403,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         })
     }
 
-    pub fn len(
-        &self
-    ) -> u64 {
+    pub fn len(&self) -> u64 {
         self.signers_map.len()
     }
 
@@ -428,10 +422,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         );
 
         let mut weight = 0;
-        let pk_vec = obligation
-            .public_keys
-            .get_mut(message_index)
-            .ok_or(SuiError::InvalidAddress)?;
 
         // Create obligations for the committee signatures
         obligation
@@ -453,7 +443,9 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
             weight += voting_rights;
 
-            pk_vec.push(committee.public_key(authority)?);
+            obligation
+            .public_keys
+            .push(committee.public_key(authority)?);
         }
 
         let threshold = if STRONG_THRESHOLD {

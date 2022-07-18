@@ -479,8 +479,8 @@ mod tests {
     use narwhal_crypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
-    use tonic::codegen::http::uri::Authority;
     use std::collections::BTreeSet;
+    use tonic::codegen::http::uri::Authority;
 
     use super::*;
     use crate::utils::make_committee_key;
