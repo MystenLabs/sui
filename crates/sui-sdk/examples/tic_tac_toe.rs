@@ -97,7 +97,7 @@ impl TicTacToe {
         // Create a signature using the keystore.
         let signature = self.keystore.sign(&player_x, &transaction_bytes)?;
         let signature_base64 = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes().as_ref());
+        let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
         // Execute the transaction.
         let response = self
@@ -187,7 +187,7 @@ impl TicTacToe {
             let transaction_bytes = place_mark_call.tx_bytes.to_vec()?;
             let signature = self.keystore.sign(&my_identity, &transaction_bytes)?;
             let signature_base64 = Base64::from_bytes(signature.signature_bytes());
-            let pub_key = Base64::from_bytes(signature.public_key_bytes().as_ref());
+            let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
             // Execute the transaction.
             let response = self

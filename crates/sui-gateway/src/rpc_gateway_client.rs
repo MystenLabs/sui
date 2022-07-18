@@ -33,7 +33,7 @@ impl GatewayAPI for RpcGatewayClient {
         let signature = tx.tx_signature;
         let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
         let signature_bytes = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes().as_ref());
+        let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
         Ok(self
             .client

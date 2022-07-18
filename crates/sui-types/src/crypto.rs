@@ -86,6 +86,10 @@ impl signature::Signer<Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
         let signature_bytes: <<KeyPair as NarwhalKeypair>::PrivKey as SigningKey>::Sig =
             self.try_sign(msg)?;
+        println!("signature_bytes: {:?}", signature_bytes);
+        self.public().verify(msg, &signature_bytes)?;
+
+        println!("VERIFIED! {:?}", signature_bytes);
         let pk_bytes: PublicKeyBytes = self.public().into();
         let public_key_bytes = pk_bytes.as_ref();
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
@@ -178,7 +182,7 @@ impl signature::Signature for Signature {
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = base64ct::Base64::encode_string(self.signature_bytes());
-        let p = base64ct::Base64::encode_string(self.public_key_bytes().into());
+        let p = base64ct::Base64::encode_string(self.public_key_bytes());
         write!(f, "{s}@{p}")?;
         Ok(())
     }

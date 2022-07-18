@@ -45,7 +45,7 @@ fn test_signed_values() {
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec2,
     );
-
+    
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
