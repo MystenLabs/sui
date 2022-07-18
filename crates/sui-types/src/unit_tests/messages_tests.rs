@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use narwhal_crypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
-use crate::crypto::{get_key_pair, PublicKey, PublicKeyBytes};
+use crate::crypto::{get_key_pair, PublicKeyBytes};
 
 use super::*;
 
@@ -85,32 +85,25 @@ fn test_certificates() {
     let (a2, sec2) = get_key_pair();
     let (_, sec3) = get_key_pair();
 
-    println!("1");
     let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
         /* address */ PublicKeyBytes::from(sec1.public()),
         /* voting right */ 1,
     );
-    println!("2");
     authorities.insert(
         /* address */ PublicKeyBytes::from(sec2.public()),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
 
-    println!("3");
-
     let transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec1,
     );
-    println!("3.5");
     let bad_transaction = Transaction::from_data(
         TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
         &sec2,
     );
-
-    println!("4");
 
     let v1 = SignedTransaction::new(
         committee.epoch(),
@@ -131,8 +124,6 @@ fn test_certificates() {
         &sec3,
     );
 
-    println!("5");
-
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
         .append(
@@ -141,24 +132,21 @@ fn test_certificates() {
         )
         .unwrap()
         .is_none());
-    let mut c = builder
+    let c = builder
         .append(
             v2.auth_sign_info.authority,
-            v2.auth_sign_info.signature.clone(),
+            v2.auth_sign_info.signature
         )
         .unwrap()
         .unwrap();
 
-    println!("55");
-    assert!(c.verify(&committee).is_err());
-
-    println!("5");
+    assert!(c.verify(&committee).is_ok());
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder
         .append(
             v1.auth_sign_info.authority,
-            v1.auth_sign_info.signature.clone()
+            v1.auth_sign_info.signature
         )
         .unwrap()
         .is_none());
@@ -167,8 +155,6 @@ fn test_certificates() {
         .is_err());
 
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
-
-    println!("6");
 }
 
 #[derive(Serialize, Deserialize)]
@@ -245,8 +231,7 @@ fn test_handle_reject_malicious_signature() {
     {
         let (_, sec) = get_key_pair();
         let sig = AuthoritySignature::new(&message, &sec);
-        let sigs_len = quorum.authorities(&committee).count();
-        quorum.signature.add_signature(sig);
+        quorum.signature.add_signature(sig).unwrap();
     }
     let (mut obligation, idx) = get_obligation_input(&message);
     assert!(quorum

@@ -7883,13 +7883,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic",
-<<<<<<< HEAD
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7e9b7568fc7184b4938976330122f3c8064e3236)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=57734672c6fd82f761d9e546a7c96c608de3bd85)",
-=======
  "typed-store",
  "workspace-hack 0.1.0 (git+https://github.com/punwai/narwhal-1)",
->>>>>>> 55c29866 (use narwhal library)
 ]
 
 [[package]]

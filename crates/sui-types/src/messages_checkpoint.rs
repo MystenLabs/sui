@@ -289,6 +289,13 @@ impl SignedCheckpointSummary {
             self.summary.epoch == self.auth_signature.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
+        fp_ensure!(
+            committee.weight(&self.auth_signature.authority) > 0,
+            SuiError::UnknownSigner
+        );
+        self.auth_signature
+            .signature
+            .verify(&self.summary, self.auth_signature.authority)?;
 
         self.auth_signature.verify(&self.summary, committee)?;
 
@@ -616,7 +623,6 @@ mod tests {
     use rand::prelude::StdRng;
     use rand::SeedableRng;
     use std::collections::BTreeSet;
-    use tonic::codegen::http::uri::Authority;
 
     use super::*;
     use crate::utils::make_committee_key;
