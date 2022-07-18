@@ -10,8 +10,6 @@ use sui_config::genesis::Genesis;
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_types::{base_types::*, messages::*};
 
-use textwrap;
-
 use clap::*;
 
 #[derive(Parser)]
@@ -160,7 +158,7 @@ impl std::fmt::Display for ConciseObjectOutput {
                         write!(f, " {:<66} {:<45}", objref, cert)?;
                     }
                 }
-                writeln!(f, "")?;
+                writeln!(f)?;
             }
         }
         Ok(())
