@@ -86,7 +86,7 @@ impl NodeConfig {
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {
-        self.key_pair.clone().public().into()
+        self.key_pair.public().into()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
