@@ -353,6 +353,8 @@ pub enum SuiError {
     SignatureKeyGenError(String),
     #[error("Key Conversion Error: {0}")]
     KeyConversionError(String),
+    #[error("Invalid Private Key provided")]
+    InvalidPrivateKey,
 
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
