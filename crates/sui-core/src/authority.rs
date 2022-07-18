@@ -32,6 +32,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
+    time::Duration,
 };
 use sui_adapter::adapter;
 use sui_config::genesis::Genesis;
@@ -40,6 +41,7 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+use sui_telemetry::send_telemetry_event;
 
 use sui_types::{
     base_types::*,
@@ -54,6 +56,8 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tokio::sync::broadcast::error::RecvError;
+use tokio::task;
+use tokio::time::sleep;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
@@ -1052,6 +1056,14 @@ impl AuthorityState {
                 }
             }
         }
+        task::spawn(async move {
+            loop {
+                sleep(Duration::from_secs(3600)).await;
+                send_telemetry_event().await;
+            }
+        })
+        .await
+        .expect("Should spawn a task to send telemetry event, but failed!");
 
         state
     }
