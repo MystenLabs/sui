@@ -10,8 +10,8 @@ use std::{
 
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -87,7 +87,7 @@ impl Default for CheckpointProcessControl {
 
 #[derive(Clone)]
 pub struct CheckpointMetrics {
-    checkpoint_certificates_stored: IntCounter,
+    pub checkpoint_sequence_number: IntGauge,
     checkpoints_signed: IntCounter,
     checkpoint_frequency: Histogram,
     checkpoint_num_fragments_sent: Histogram,
@@ -96,9 +96,9 @@ pub struct CheckpointMetrics {
 impl CheckpointMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            checkpoint_certificates_stored: register_int_counter_with_registry!(
-                "checkpoint_certificates_stored",
-                "Total number of unique checkpoint certificates stored in this validator",
+            checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "checkpoint_sequence_number",
+                "Latest sequence number of certified checkpoint stored in this validator",
                 registry,
             )
             .unwrap(),
@@ -199,6 +199,7 @@ pub async fn checkpoint_process<A>(
                     active_authority,
                     state_checkpoints.clone(),
                     checkpoint.clone(),
+                    &metrics,
                 )
                 .await
                 {
@@ -213,8 +214,13 @@ pub async fn checkpoint_process<A>(
                 continue;
             }
 
-            let result =
-                update_latest_checkpoint(active_authority, &state_checkpoints, &checkpoint).await;
+            let result = update_latest_checkpoint(
+                active_authority,
+                &state_checkpoints,
+                &checkpoint,
+                &metrics,
+            )
+            .await;
             match result {
                 Err(err) => {
                     warn!(
@@ -225,9 +231,6 @@ pub async fn checkpoint_process<A>(
                     continue;
                 }
                 Ok(true) => {
-                    let _name = state_checkpoints.lock().name;
-                    let _next_checkpoint = state_checkpoints.lock().next_checkpoint();
-                    metrics.checkpoint_certificates_stored.inc();
                     metrics
                         .checkpoint_frequency
                         .observe(last_cert_time.elapsed().as_secs_f64());
@@ -494,6 +497,7 @@ async fn update_latest_checkpoint<A>(
     active_authority: &ActiveAuthority<A>,
     state_checkpoints: &Arc<Mutex<CheckpointStore>>,
     checkpoint: &CertifiedCheckpointSummary,
+    metrics: &CheckpointMetrics,
 ) -> SuiResult<bool>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -527,7 +531,7 @@ where
         Action::Promote => {
             state_checkpoints
                 .lock()
-                .promote_signed_checkpoint_to_cert(checkpoint, committee)?;
+                .promote_signed_checkpoint_to_cert(checkpoint, committee, metrics)?;
             info!(
                 cp_seq=?checkpoint.summary.sequence_number(),
                 "Updated local signed checkpoint to certificate",
@@ -561,6 +565,7 @@ where
                     &contents,
                     committee,
                     active_authority.state.database.clone(),
+                    metrics,
                 )?;
             info!(
                 cp_seq=?checkpoint.summary.sequence_number(),
@@ -577,6 +582,7 @@ pub async fn sync_to_checkpoint<A>(
     active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     latest_known_checkpoint: CertifiedCheckpointSummary,
+    metrics: &CheckpointMetrics,
 ) -> SuiResult
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -603,7 +609,7 @@ where
 
         checkpoint_db
             .lock()
-            .promote_signed_checkpoint_to_cert(&past, &net.committee)?;
+            .promote_signed_checkpoint_to_cert(&past, &net.committee, metrics)?;
     }
 
     let full_sync_start = latest_checkpoint
@@ -620,6 +626,7 @@ where
             &contents,
             &net.committee,
             active_authority.state.database.clone(),
+            metrics,
         )?;
     }
 
