@@ -206,6 +206,7 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
                     <PaginationWrapper
                         results={other_results}
                         viewComponentFn={viewFn}
+                        ITEMS_PER_PAGE={6}
                         stats={nftFooter.stats}
                     />
                 </div>
@@ -281,7 +282,11 @@ function GroupView({ results }: { results: resultType }) {
                     </button>
                     <h2>{handleCoinType(subObjs[0].Type)}</h2>
                 </div>
-                <PaginationWrapper results={subObjs} viewComponentFn={viewFn} />
+                <PaginationWrapper
+                    results={subObjs}
+                    viewComponentFn={viewFn}
+                    ITEMS_PER_PAGE={6}
+                />
             </div>
         );
     }

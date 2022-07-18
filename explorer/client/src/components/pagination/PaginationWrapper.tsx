@@ -9,18 +9,18 @@ import styles from './PaginationWrapper.module.css';
 export default function PaginationWrapper({
     results,
     viewComponentFn,
+    ITEMS_PER_PAGE,
     stats,
 }: {
     results: any;
     viewComponentFn: Function;
+    ITEMS_PER_PAGE: number;
     stats?: {
         stats_text: string;
         count: number;
     };
 }) {
     const [pageIndex, setPageIndex] = useState(0);
-
-    const ITEMS_PER_PAGE = 6;
 
     const FINAL_PAGE_NO =
         Math.floor(results.length / ITEMS_PER_PAGE) +
@@ -45,7 +45,7 @@ export default function PaginationWrapper({
         () =>
             (pageIndex + 1) * ITEMS_PER_PAGE < results.length &&
             setPageIndex(pageIndex + 1),
-        [pageIndex, results.length]
+        [pageIndex, ITEMS_PER_PAGE, results.length]
     );
 
     const FirstButton = (
