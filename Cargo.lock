@@ -7904,8 +7904,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic",
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ae032178da474f74d5ec49f775a5a675460906aa)",
  "typed-store",
  "workspace-hack 0.1.0 (git+https://github.com/punwai/narwhal-1)",
 ]

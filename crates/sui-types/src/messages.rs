@@ -542,7 +542,7 @@ impl<S> TransactionEnvelope<S> {
 
         let (signature, public_key) = self
             .tx_signature
-            .get_verification_inputs(&self.data, self.data.sender)?;
+            .get_verification_inputs(self.data.sender)?;
         let key = obligation.lookup_public_key(&public_key)?;
 
         obligation

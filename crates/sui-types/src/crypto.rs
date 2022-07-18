@@ -74,7 +74,7 @@ impl SuiAuthoritySignature for AuthoritySignature {
 
         // perform cryptographic signature check
         public_key
-            .verify(&message, &self)
+            .verify(&message, self)
             .map_err(|error| SuiError::InvalidSignature {
                 error: error.to_string(),
             })
@@ -213,7 +213,7 @@ impl Signature {
     {
         let mut message: Vec<u8> = Vec::new();
         value.write(&mut message);
-        let (signature, public_key_bytes) = self.get_verification_inputs(value, author)?;
+        let (signature, public_key_bytes) = self.get_verification_inputs(author)?;
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
@@ -230,13 +230,10 @@ impl Signature {
             })
     }
 
-    pub fn get_verification_inputs<T>(
+    pub fn get_verification_inputs(
         &self,
-        value: &T,
         author: SuiAddress,
     ) -> Result<(AccountSignature, PublicKeyBytes), SuiError>
-    where
-        T: Signable<Vec<u8>>,
     {
         // Is this signature emitted by the expected author?
         let public_key_bytes: PublicKeyBytes =
@@ -249,7 +246,6 @@ impl Signature {
         }
 
         // deserialize the signature
-
         let signature =
             <AccountSignature as signature::Signature>::from_bytes(self.signature_bytes())
                 .map_err(|err| SuiError::InvalidSignature {
@@ -415,6 +411,10 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 
     pub fn len(&self) -> u64 {
         self.signers_map.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.signers_map.is_empty()
     }
 
     pub fn add_to_verification_obligation(

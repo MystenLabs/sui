@@ -38,11 +38,7 @@
         "fields": {
           "balance": 100000000,
           "id": {
-<<<<<<< HEAD
-            "id": "0x041aa7ce3014836ee1222429dce10b096906245f",
-=======
             "id": "0x056c280e46b30ba81efa118c2401e2517f831243",
->>>>>>> c032b685 (fix deser test)
             "version": 0
           }
         }
