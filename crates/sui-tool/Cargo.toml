@@ -13,6 +13,7 @@ tracing = "0.1.35"
 clap = { version = "3.1.17", features = ["derive"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "bdaf6ee818497e6772f3000f938f1e5710f6890f" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "bdaf6ee818497e6772f3000f938f1e5710f6890f" }
+textwrap = "0.15"
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
