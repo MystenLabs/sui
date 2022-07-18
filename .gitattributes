@@ -1,4 +1,4 @@
-# Best-effort syntax highlighting for Move: just use Rust
+# Use Move syntax highlighter for Move IR code
 *.mvir linguist-language=Move
 
 # This file is used in "porcelain" file comparison,
