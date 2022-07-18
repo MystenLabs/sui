@@ -193,7 +193,8 @@ impl ToAddress for PublicKeyBytes {
         hasher.update(self);
         let g_arr = hasher.finalize();
 
-        let res = [0u8; SUI_ADDRESS_LENGTH];
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
         SuiAddress(res)
     }
 }

@@ -3,7 +3,7 @@
 
 //! A secret seed value, useful for deterministic private key and SuiAddress generation.
 
-use crate::base_types::SuiAddress;
+use crate::base_types::{SuiAddress, ToAddress};
 use crate::crypto::{KeyPair, Signable, Signature};
 use crate::error::SuiError;
 use hkdf::Hkdf;
@@ -162,7 +162,7 @@ impl SignatureSeed {
         domain: Option<&[u8]>,
     ) -> Result<SuiAddress, SuiError> {
         let keypair = SignatureSeed::new_deterministic_keypair(self, id, domain)?;
-        Ok(SuiAddress::try_from(keypair.public().as_ref())?)
+        Ok(keypair.public().to_address())
     }
 
     /// Sign a message using a deterministically derived key from some `id` input.
