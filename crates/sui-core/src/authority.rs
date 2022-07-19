@@ -106,6 +106,9 @@ pub struct AuthorityMetrics {
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
+    pub follower_items_streamed: IntCounter,
+    pub follower_connections: IntCounter,
+
     pub gossip_queued_count: IntCounter,
     pub gossip_sync_count: IntCounter,
     pub gossip_task_success_count: IntCounter,
@@ -181,6 +184,18 @@ impl AuthorityMetrics {
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            follower_items_streamed: register_int_counter_with_registry!(
+                "follower_items_streamed",
+                "Number of transactions/signed batches streamed to followers",
+                registry,
+            )
+            .unwrap(),
+            follower_connections: register_int_counter_with_registry!(
+                "follower_connections",
+                "Number of follower connections initiated",
                 registry,
             )
             .unwrap(),
@@ -264,7 +279,7 @@ pub struct AuthorityState {
     /// Ensures there can only be a single consensus client is updating the state.
     pub consensus_guardrail: AtomicUsize,
 
-    pub metrics: AuthorityMetrics,
+    pub metrics: Arc<AuthorityMetrics>,
 
     // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
     latest_checkpoint_num: AtomicU64,
@@ -997,7 +1012,7 @@ impl AuthorityState {
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),
-            metrics: AuthorityMetrics::new(prometheus_registry),
+            metrics: Arc::new(AuthorityMetrics::new(prometheus_registry)),
             latest_checkpoint_num: AtomicU64::new(0),
         };
 

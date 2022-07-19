@@ -11,7 +11,10 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
+use crate::authority::AuthorityMetrics;
+
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -231,6 +234,9 @@ impl crate::authority::AuthorityState {
         &self,
         request: BatchInfoRequest,
     ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, SuiError> {
+        let metrics = self.metrics.clone();
+        metrics.follower_connections.inc();
+
         // Register a subscriber to not miss any updates
         let subscriber = self.subscribe_batch();
 
@@ -246,6 +252,7 @@ impl crate::authority::AuthorityState {
             subscriber: Receiver<UpdateItem>,
             exit: bool,
             should_subscribe: bool,
+            metrics: Arc<AuthorityMetrics>,
         }
 
         let local_state = BatchStreamingLocals {
@@ -260,6 +267,7 @@ impl crate::authority::AuthorityState {
             exit: false,
             // A flag indicating if real-time subscrition is needed.
             should_subscribe,
+            metrics,
         };
 
         // Construct the stream
@@ -282,6 +290,7 @@ impl crate::authority::AuthorityState {
                     }
                 }
 
+                local_state.metrics.follower_items_streamed.inc();
                 Some((Ok(BatchInfoResponseItem(item)), local_state))
             } else {
                 // Release memory now that the historical items have been processed.
@@ -318,6 +327,7 @@ impl crate::authority::AuthorityState {
                                     }
                                 }
 
+                                local_state.metrics.follower_items_streamed.inc();
                                 return Some((Ok(BatchInfoResponseItem(item)), local_state));
                             }
                             Err(RecvError::Closed) => {
