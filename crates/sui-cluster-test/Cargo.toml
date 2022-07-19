@@ -14,7 +14,7 @@ tokio = { version = "1.20.0", features = ["full"] }
 tracing = { version = "0.1.35", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
 reqwest = { version = "0.11.11", features = ["blocking", "json"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "bdaf6ee818497e6772f3000f938f1e5710f6890f" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
 
 sui-faucet = { path = "../sui-faucet" }
 sui = { path = "../sui" }
