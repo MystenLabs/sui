@@ -1,4 +1,6 @@
 @use '_variables' as v;
+@use '_values/sizing';
+@use '_utils';
 
 .container {
     display: flex;
@@ -35,9 +37,11 @@
 
 .main {
     overflow: auto;
-    padding: 25px;
-    padding-bottom: calc(v.use(v.$sizing-nav-height-placeholder) + 12px);
+    padding: 25px sizing.$main-sides-space;
     flex-grow: 1;
+    width: 100%;
+
+    @include utils.main-extra-space-for-nav;
 }
 
 .logo {
