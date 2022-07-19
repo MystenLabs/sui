@@ -999,7 +999,7 @@ rustls-pemfile = { version = "1", default-features = false }
 rustversion = { version = "1", default-features = false }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout", "wait-timeout"] }
 rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
-rustyline-derive = { version = "0.6", default-features = false }
+rustyline-derive = { version = "0.7", default-features = false }
 ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
