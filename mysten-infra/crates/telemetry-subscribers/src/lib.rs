@@ -54,7 +54,7 @@ pub struct TelemetryConfig {
     /// If defined, write output to a file starting with this name, ex app.log
     pub log_file: Option<String>,
     /// Log level to set, defaults to info
-    pub log_level: Option<String>,
+    pub log_string: Option<String>,
     /// Set a panic hook
     pub panic_hook: bool,
 }
@@ -130,9 +130,14 @@ impl TelemetryConfig {
             json_log_output: false,
             chrome_trace_output: false,
             log_file: None,
-            log_level: None,
+            log_string: None,
             panic_hook: true,
         }
+    }
+
+    pub fn with_log_level(mut self, log_string: &str) -> Self {
+        self.log_string = Some(log_string.to_owned());
+        self
     }
 
     pub fn with_log_file(mut self, filename: &str) -> Self {
@@ -168,7 +173,7 @@ impl TelemetryConfig {
         let config = self;
 
         // Setup an EnvFilter which will filter all downstream layers
-        let log_level = config.log_level.unwrap_or_else(|| "info".into());
+        let log_level = config.log_string.unwrap_or_else(|| "info".into());
         let env_filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
         let (filter, reload_handle) = reload::Layer::new(env_filter);
