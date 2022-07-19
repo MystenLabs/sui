@@ -52,6 +52,8 @@ const DATATYPE_DEFAULT: resultType = [
     },
 ];
 
+const ITEMS_PER_PAGE: number = 6;
+
 const lastRowHas2Elements = (itemList: any[]): boolean =>
     itemList.length % 3 === 2;
 
@@ -206,7 +208,7 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
                     <PaginationWrapper
                         results={other_results}
                         viewComponentFn={viewFn}
-                        ITEMS_PER_PAGE={6}
+                        ITEMS_PER_PAGE={ITEMS_PER_PAGE}
                         stats={nftFooter.stats}
                     />
                 </div>
@@ -285,7 +287,7 @@ function GroupView({ results }: { results: resultType }) {
                 <PaginationWrapper
                     results={subObjs}
                     viewComponentFn={viewFn}
-                    ITEMS_PER_PAGE={6}
+                    ITEMS_PER_PAGE={ITEMS_PER_PAGE}
                 />
             </div>
         );
