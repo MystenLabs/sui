@@ -45,6 +45,10 @@ use self::reconstruction::FragmentReconstruction;
 pub type DBLabel = usize;
 const LOCALS: DBLabel = 0;
 
+// TODO: Make last checkpoint number of each epoch more flexible.
+// TODO: Make this bigger.
+pub const CHECKPOINT_COUNT_PER_EPOCH: u64 = 3;
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct CheckpointLocals {
     // The next checkpoint number expected.
@@ -798,6 +802,16 @@ impl CheckpointStore {
             .skip_to_last()
             .next()
             .map(|(_, ckp)| ckp))
+    }
+
+    pub fn is_ready_to_start_epoch_change(&mut self) -> bool {
+        let next_seq = self.next_checkpoint();
+        next_seq % CHECKPOINT_COUNT_PER_EPOCH == 0 && next_seq != 0
+    }
+
+    pub fn is_ready_to_finish_epoch_change(&mut self) -> bool {
+        let next_seq = self.next_checkpoint();
+        next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
     }
 
     // Helper write functions

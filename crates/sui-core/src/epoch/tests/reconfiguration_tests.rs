@@ -21,9 +21,10 @@ use sui_types::{
 };
 
 use crate::{
-    authority::TemporaryStore, authority_active::ActiveAuthority,
+    authority::TemporaryStore,
+    authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
-    checkpoints::CheckpointLocals, epoch::reconfiguration::CHECKPOINT_COUNT_PER_EPOCH,
+    checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
     execution_engine,
 };
 
@@ -44,7 +45,7 @@ async fn test_start_epoch_change() {
         .unwrap()
         .lock()
         .set_locals_for_testing(CheckpointLocals {
-            next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH - 1,
+            next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
             proposal_next_transaction: None,
             next_transaction_sequence: 0,
             no_more_fragments: true,
@@ -168,7 +169,7 @@ async fn test_finish_epoch_change() {
             async {
                 // Set the checkpoint number to be near the end of epoch.
                 let mut locals = CheckpointLocals {
-                    next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH - 1,
+                    next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
                     proposal_next_transaction: None,
                     next_transaction_sequence: 0,
                     no_more_fragments: true,

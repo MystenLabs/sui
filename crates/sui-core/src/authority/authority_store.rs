@@ -269,7 +269,10 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Acquire the lock for a tx without writing to the WAL.
-    pub async fn acquire_tx_lock<'a>(&'a self, digest: &TransactionDigest) -> CertLockGuard<'a> {
+    pub async fn acquire_tx_lock<'a, 'b>(
+        &'a self,
+        digest: &'b TransactionDigest,
+    ) -> CertLockGuard<'a> {
         self.wal.acquire_lock(digest).await
     }
 

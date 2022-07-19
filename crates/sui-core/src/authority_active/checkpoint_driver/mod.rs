@@ -26,6 +26,7 @@ use sui_types::{
 };
 use tokio::time::Instant;
 
+use crate::epoch::reconfiguration::Reconfigurable;
 use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
@@ -36,7 +37,7 @@ use crate::{
 
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::{Committee, StakeUnit};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -73,6 +74,11 @@ pub struct CheckpointProcessControl {
     /// The amount of time we wait on any specific authority
     /// per request (it could be byzantine)
     pub per_other_authority_delay: Duration,
+
+    /// The amount if time we wait before retrying anything
+    /// during an epoch change. We want this duration to be very small
+    /// to minimize the amount of time to finish epoch change.
+    pub epoch_change_retry_delay: Duration,
 }
 
 impl Default for CheckpointProcessControl {
@@ -86,6 +92,7 @@ impl Default for CheckpointProcessControl {
             extra_time_after_quorum: Duration::from_millis(200),
             consensus_delay_estimate: Duration::from_secs(1),
             per_other_authority_delay: Duration::from_secs(30),
+            epoch_change_retry_delay: Duration::from_millis(100),
         }
     }
 }
@@ -138,8 +145,9 @@ pub async fn checkpoint_process<A>(
     active_authority: &ActiveAuthority<A>,
     timing: &CheckpointProcessControl,
     metrics: CheckpointMetrics,
+    enable_reconfig: bool,
 ) where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
+    A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
 {
     if active_authority.state.checkpoints.is_none() {
         // If the checkpointing database is not present, do not
@@ -240,6 +248,21 @@ pub async fn checkpoint_process<A>(
                         .checkpoint_frequency
                         .observe(last_cert_time.elapsed().as_secs_f64());
                     last_cert_time = Instant::now();
+                    if enable_reconfig {
+                        if state_checkpoints.lock().is_ready_to_start_epoch_change() {
+                            while let Err(err) = active_authority.start_epoch_change().await {
+                                error!("Failed to start epoch change: {:?}", err);
+                                tokio::time::sleep(timing.epoch_change_retry_delay).await;
+                            }
+                            // No long pause to minimize the reconfiguration latency.
+                            continue;
+                        } else if state_checkpoints.lock().is_ready_to_finish_epoch_change() {
+                            while let Err(err) = active_authority.finish_epoch_change().await {
+                                error!("Failed to finish epoch change: {:?}", err);
+                                tokio::time::sleep(timing.epoch_change_retry_delay).await;
+                            }
+                        }
+                    }
                     tokio::time::sleep(timing.long_pause_between_checkpoints).await;
                     continue;
                 }
