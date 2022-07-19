@@ -213,10 +213,7 @@ pub struct NodeSyncState<A> {
     pending_txes: Waiter<TransactionDigest, ()>,
 }
 
-impl<A> NodeSyncState<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl<A> NodeSyncState<A> {
     pub fn new(
         state: Arc<AuthorityState>,
         aggregator: Arc<AuthorityAggregator<A>>,
@@ -233,9 +230,14 @@ where
             pending_txes: Waiter::new(),
         }
     }
+}
 
-    fn start(self, receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
-        let state = Arc::new(self);
+impl<A> NodeSyncState<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    fn start(self: Arc<Self>, receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
+        let state = self;
         tokio::spawn(async move {
             state
                 .handle_stream(SyncMode::Follow, ReceiverStream::new(receiver))
@@ -243,15 +245,17 @@ where
         })
     }
 
-    pub async fn sync_checkpoint(self, checkpoint_contents: &CheckpointContents) -> SuiResult {
+    pub async fn sync_checkpoint(
+        self: Arc<Self>,
+        checkpoint_contents: &CheckpointContents,
+    ) -> SuiResult {
         let stream = tokio_stream::iter(
             checkpoint_contents
                 .transactions
                 .iter()
                 .map(DigestsMessage::new_for_ckpt),
         );
-        let state = Arc::new(self);
-        state.handle_stream(SyncMode::Checkpoint, stream).await;
+        self.handle_stream(SyncMode::Checkpoint, stream).await;
         Ok(())
     }
 
@@ -496,18 +500,11 @@ pub struct NodeSyncDigestHandler {
 }
 
 impl NodeSyncDigestHandler {
-    pub fn new<A>(
-        state: Arc<AuthorityState>,
-        aggregator: Arc<AuthorityAggregator<A>>,
-        node_sync_store: Arc<NodeSyncStore>,
-    ) -> Self
+    pub fn new<A>(sync_state: Arc<NodeSyncState<A>>) -> Self
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
-
-        let sync_state = NodeSyncState::new(state, aggregator, node_sync_store);
-
         let _sync_join_handle = Arc::new(sync_state.start(receiver));
 
         Self {

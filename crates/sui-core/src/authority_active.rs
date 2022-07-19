@@ -42,7 +42,7 @@ use tracing::info;
 
 use crate::{
     authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority_client::AuthorityAPI, node_sync::NodeSyncState,
 };
 use tokio::time::Instant;
 
@@ -107,7 +107,8 @@ impl AuthorityHealth {
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
-    pub node_sync_store: Arc<NodeSyncStore>,
+    pub node_sync_state: Arc<NodeSyncState<A>>,
+
     pub follower_store: Arc<FollowerStore>,
     // The network interfaces to other authorities
     pub net: ArcSwap<AuthorityAggregator<A>>,
@@ -124,6 +125,14 @@ impl<A> ActiveAuthority<A> {
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
+        let net = Arc::new(net);
+
+        let node_sync_state = Arc::new(NodeSyncState::new(
+            authority.clone(),
+            net.clone(),
+            node_sync_store,
+        ));
+
         Ok(ActiveAuthority {
             health: Arc::new(Mutex::new(
                 committee
@@ -132,9 +141,9 @@ impl<A> ActiveAuthority<A> {
                     .collect(),
             )),
             state: authority,
-            node_sync_store,
+            node_sync_state,
             follower_store,
-            net: ArcSwap::from(Arc::new(net)),
+            net: ArcSwap::from(net),
         })
     }
 
@@ -206,7 +215,7 @@ impl<A> Clone for ActiveAuthority<A> {
     fn clone(&self) -> Self {
         ActiveAuthority {
             state: self.state.clone(),
-            node_sync_store: self.node_sync_store.clone(),
+            node_sync_state: self.node_sync_state.clone(),
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
@@ -277,7 +286,7 @@ where
         let target_num_tasks = committee.num_members();
 
         tokio::task::spawn(async move {
-            node_sync_process(&self, target_num_tasks, self.node_sync_store.clone()).await;
+            node_sync_process(&self, target_num_tasks).await;
         })
     }
 
