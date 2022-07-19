@@ -7,7 +7,7 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable, EmptySignInfo, Signable,
-    Signature, SuiAuthoritySignature, VerificationObligation,
+    Signature, SuiAuthoritySignature, VerificationObligation, PublicKeyBytes, AccountSignature,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::CheckpointFragment;
@@ -543,7 +543,10 @@ impl<S> TransactionEnvelope<S> {
         let (signature, public_key) = self
             .tx_signature
             .get_verification_inputs(self.data.sender)?;
-        let key = obligation.lookup_public_key(&public_key)?;
+        let key = public_key.try_into()
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Invalid public key".to_owned(),
+            })?;
 
         obligation
             .public_keys
