@@ -53,6 +53,8 @@ const DATATYPE_DEFAULT: resultType = [
 ];
 
 const ITEMS_PER_PAGE: number = 6;
+const alttextgen = (value: number | string | boolean | BN): string =>
+    truncate(String(value), 19);
 
 const lastRowHas2Elements = (itemList: any[]): boolean =>
     itemList.length % 3 === 2;
@@ -361,11 +363,8 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                                                     isCopyButton={
                                                                         false
                                                                     }
-                                                                    alttext={truncate(
-                                                                        String(
-                                                                            value
-                                                                        ),
-                                                                        19
+                                                                    alttext={alttextgen(
+                                                                        value
                                                                     )}
                                                                 />
                                                             </div>
@@ -377,9 +376,8 @@ function OwnedObjectView({ results }: { results: resultType }) {
                                                             text={String(value)}
                                                             category="objects"
                                                             isCopyButton={false}
-                                                            alttext={truncate(
-                                                                String(value),
-                                                                19
+                                                            alttext={alttextgen(
+                                                                value
                                                             )}
                                                         />
                                                     );
