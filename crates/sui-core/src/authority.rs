@@ -307,6 +307,10 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
+    pub fn is_fullnode(&self) -> bool {
+        !self.committee.load().authority_exists(&self.name)
+    }
+
     /// Get a broadcast receiver for updates
     pub fn subscribe_batch(&self) -> BroadcastReceiver {
         self.batch_channels.subscribe()
@@ -442,6 +446,12 @@ impl AuthorityState {
         &self,
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
+        if self.is_fullnode() {
+            return Err(SuiError::GenericStorageError(
+                "cannot execute cert without effects on fullnode".into(),
+            ));
+        }
+
         let digest = certificate.digest();
         debug!(?digest, "handle_confirmation_transaction");
 
