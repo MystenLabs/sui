@@ -20,6 +20,9 @@ It will be useful to also document here the source of each icon.
 -   [clipboard.svg](./svgs/clipboard.svg) - exported from [figma](https://www.figma.com/file/OzLaRFzevjxdQAbybWEZk0/Sui-Visualize?node-id=1609%3A19253)
 -   [logout.svg](./svgs/logout.svg) - exported from [figma](https://www.figma.com/file/OzLaRFzevjxdQAbybWEZk0/Sui-Visualize?node-id=1609%3A19253)
 -   [sui-chevron-right.svg](./svgs/sui-chevron-right.svg) - exported from [figma](https://www.figma.com/file/OzLaRFzevjxdQAbybWEZk0/Sui-Visualize?node-id=1607%3A18842)
+-   [coins.svg](./svgs/coins.svg) - exported from [figma](https://www.figma.com/file/OzLaRFzevjxdQAbybWEZk0/Sui-Visualize?node-id=2251%3A47447)
+-   [hand-coins.svg](./svgs/hand-coins.svg) - exported from [figma](https://www.figma.com/file/OzLaRFzevjxdQAbybWEZk0/Sui-Visualize?node-id=2251%3A47447)
+-   [percentage-polygon.svg](./svgs/percentage-polygon.svg) - exported from [figma](https://www.figma.com/file/OzLaRFzevjxdQAbybWEZk0/Sui-Visualize?node-id=2251%3A47447)
 
 # Troubleshooting
 
