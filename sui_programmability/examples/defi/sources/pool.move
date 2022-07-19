@@ -84,8 +84,8 @@ module defi::pool {
     /// Create new `Pool` for token `T`. Each Pool holds a `Coin<T>`
     /// and a `Coin<SUI>`. Swaps are available in both directions.
     ///
-    /// - `share` argument defines the initial amount of LSP tokens
-    /// received by the creator of the Pool.
+    /// Share is calculated based on Uniswap's constant product formula:
+    ///  liquidity = sqrt( X * Y )
     public fun create_pool<P: drop, T>(
         _: P,
         token: Coin<T>,
