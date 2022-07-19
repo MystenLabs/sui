@@ -1,3 +1,7 @@
+---
+title: Debug and Publish the SUi Move Package
+---
+
 ## Debugging a package
 At the moment there isn't a yet debugger for Move. To help with debugging, however, you could use `Std::Debug` module to print out arbitrary value. To do so, first import the `Debug` module:
 ```
