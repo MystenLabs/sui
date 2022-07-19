@@ -26,7 +26,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 // Comment the one you want to use
