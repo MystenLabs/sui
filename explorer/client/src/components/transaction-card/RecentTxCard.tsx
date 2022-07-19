@@ -160,11 +160,17 @@ function LatestTxCard({ ...data }: RecentTx) {
 
     useEffect(() => {
         let isMounted = true;
+
+        // If pageIndex is greater than maxTxPage, set to maxTxPage
+        const maxTxPage = Math.ceil(count / txPerPage);
+        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
+        setpageIndex(pg);
+
         pageIndex > 1
-            ? setSearchParams({ p: pageIndex.toString() })
+            ? setSearchParams({ p: pg.toString() })
             : setSearchParams({});
 
-        getRecentTransactions(network, count, txPerPage, pageIndex)
+        getRecentTransactions(network, count, txPerPage, pg)
             .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
@@ -190,15 +196,7 @@ function LatestTxCard({ ...data }: RecentTx) {
         return () => {
             isMounted = false;
         };
-    }, [
-        count,
-        network,
-        pageIndex,
-        paginationtype,
-        searchParams,
-        setSearchParams,
-        txPerPage,
-    ]);
+    }, [count, network, pageIndex, paginationtype, setSearchParams, txPerPage]);
 
     // update the page index when the user clicks on the pagination buttons
 
