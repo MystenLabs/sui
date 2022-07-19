@@ -22,7 +22,7 @@ module t1::m {
 module t2::m {
     fun t(
         s: a::m::S,
-        owner_info: &sui::object::Info,
+        owner_info: &mut sui::object::Info,
     ) {
         sui::transfer::transfer_to_object_id(s, owner_info)
     }
@@ -60,7 +60,7 @@ module t6::m {
 
 //# publish
 module t7::m {
-    fun t(child: a::m::S, owner: &sui::object::Info) {
+    fun t(child: a::m::S, owner: &mut sui::object::Info) {
         sui::transfer::transfer_to_object_id(child, owner)
     }
 }

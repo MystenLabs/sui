@@ -299,6 +299,7 @@ fn transfer_sui<S>(
                 bcs::to_bytes(&GasCoin::new(
                     tx_ctx.fresh_id(),
                     OBJECT_START_VERSION,
+                    None,
                     amount,
                 ))
                 .expect("Serializing gas object cannot fail"),

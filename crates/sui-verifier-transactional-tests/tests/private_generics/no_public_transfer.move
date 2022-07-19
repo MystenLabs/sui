@@ -21,7 +21,7 @@ module test::m {
 module test::m {
     fun t(
         s: a::m::S,
-        owner_info: &sui::object::Info,
+        owner_info: &mut sui::object::Info,
         ctx: &mut sui::tx_context::TxContext,
     ) {
         sui::transfer::transfer_to_object_id(s, owner_info)
@@ -61,7 +61,7 @@ module test::m {
 //# publish
 module test::m {
     struct R has key { info: sui::object::Info }
-    fun t(child: a::m::S, owner: &sui::object::Info) {
+    fun t(child: a::m::S, owner: &mut sui::object::Info) {
         sui::transfer::transfer_to_object_id(child, owner)
     }
 }

@@ -44,8 +44,13 @@ impl GAS {
 pub struct GasCoin(pub Coin);
 
 impl GasCoin {
-    pub fn new(id: ObjectID, version: SequenceNumber, value: u64) -> Self {
-        Self(Coin::new(Info::new(id, version), value))
+    pub fn new(
+        id: ObjectID,
+        version: SequenceNumber,
+        child_count: Option<u64>,
+        value: u64,
+    ) -> Self {
+        Self(Coin::new(Info::new(id, version, child_count), value))
     }
 
     pub fn value(&self) -> u64 {

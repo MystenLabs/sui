@@ -21,6 +21,7 @@ pub fn all_natives(
         ("object", "bytes_to_address", object::bytes_to_address),
         ("object", "delete_impl", object::delete_impl),
         ("object", "get_info", object::get_info),
+        ("object", "get_info_mut", object::get_info),
         (
             "test_scenario",
             "drop_object_for_testing",

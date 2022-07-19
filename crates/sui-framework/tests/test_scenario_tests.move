@@ -331,8 +331,8 @@ module sui::test_scenarioTests {
         };
         let child2_id = *object::id(&child2);
         let parent_info = test_scenario::new_object(&mut scenario);
-        transfer::transfer_to_object_id(child1, &parent_info);
-        transfer::transfer_to_object_id(child2, &parent_info);
+        transfer::transfer_to_object_id(child1, &mut parent_info);
+        transfer::transfer_to_object_id(child2, &mut parent_info);
 
         let parent = MultiChildParent {
             info: parent_info,
@@ -363,7 +363,7 @@ module sui::test_scenarioTests {
             value: 10,
         };
         let child_id = *object::id(&object);
-        transfer::transfer_to_object_id(object, &parent_info);
+        transfer::transfer_to_object_id(object, &mut parent_info);
         let parent = Parent {
             info: parent_info,
             child: child_id,
