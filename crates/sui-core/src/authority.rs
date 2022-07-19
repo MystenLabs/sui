@@ -107,6 +107,7 @@ pub struct AuthorityMetrics {
     batch_size: Histogram,
 
     pub follower_items_streamed: IntCounter,
+    pub follower_items_loaded: IntCounter,
     pub follower_connections: IntCounter,
 
     pub gossip_queued_count: IntCounter,
@@ -190,6 +191,12 @@ impl AuthorityMetrics {
             follower_items_streamed: register_int_counter_with_registry!(
                 "follower_items_streamed",
                 "Number of transactions/signed batches streamed to followers",
+                registry,
+            )
+            .unwrap(),
+            follower_items_loaded: register_int_counter_with_registry!(
+                "follower_items_loaded",
+                "Number of transactions/signed batches loaded from db to be streamed to followers",
                 registry,
             )
             .unwrap(),

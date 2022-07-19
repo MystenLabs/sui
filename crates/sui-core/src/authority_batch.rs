@@ -244,6 +244,8 @@ impl crate::authority::AuthorityState {
         let (items, (should_subscribe, _start, end)) =
             self.handle_batch_info_request(request).await?;
 
+        metrics.follower_items_loaded.inc_by(items.len());
+
         // Define a local structure to support the stream construction.
         struct BatchStreamingLocals {
             items: VecDeque<UpdateItem>,
