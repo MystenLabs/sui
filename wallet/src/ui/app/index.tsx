@@ -24,12 +24,10 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
-import { loadNetworkFromStorage } from '_redux/slices/app';
 
 const App = () => {
     const dispatch = useAppDispatch();
     useEffect(() => {
-        dispatch(loadNetworkFromStorage());
         dispatch(loadAccountFromStorage());
     }, [dispatch]);
     const isPopup = useAppSelector(
