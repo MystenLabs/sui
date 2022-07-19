@@ -22,7 +22,7 @@ export default function PaginationWrapper({
 }) {
     const [pageIndex, setPageIndex] = useState(0);
 
-    const FINAL_PAGE_NO =
+    const finalPageNo =
         Math.floor(results.length / itemsPerPage) +
         (results.length % itemsPerPage !== 0 ? 1 : 0);
 
@@ -67,11 +67,11 @@ export default function PaginationWrapper({
         <button
             id="nextBtn"
             className={
-                pageIndex === FINAL_PAGE_NO - 1
+                pageIndex === finalPageNo - 1
                     ? `${styles.nointeract} ${styles.gone}`
                     : styles.btncontainer
             }
-            disabled={pageIndex === FINAL_PAGE_NO - 1}
+            disabled={pageIndex === finalPageNo - 1}
             onClick={handleNextClick}
         >
             &rarr;
@@ -79,14 +79,14 @@ export default function PaginationWrapper({
     );
     // When Total Number of Pages at most 5, list all always:
 
-    if (FINAL_PAGE_NO > 1 && FINAL_PAGE_NO <= 5) {
+    if (finalPageNo > 1 && finalPageNo <= 5) {
         return (
             <>
                 {viewComponentFn(objectSample)}
                 <div className={styles.footer}>
                     <div>
                         {FirstButton}
-                        {Array(FINAL_PAGE_NO)
+                        {Array(finalPageNo)
                             .fill(0)
                             .map((_: number, arrayIndex: number) => (
                                 <button
@@ -120,7 +120,7 @@ export default function PaginationWrapper({
             {viewComponentFn(objectSample)}
             <div className={styles.footer}>
                 <div>
-                    {FINAL_PAGE_NO > 1 && (
+                    {finalPageNo > 1 && (
                         <>
                             {FirstButton}
                             <button
@@ -154,13 +154,13 @@ export default function PaginationWrapper({
                                 </button>
                             )}
 
-                            {pageIndex > 1 && pageIndex < FINAL_PAGE_NO - 2 && (
+                            {pageIndex > 1 && pageIndex < finalPageNo - 2 && (
                                 <button className={styles.pagenumber}>
                                     {pageIndex + 1}
                                 </button>
                             )}
 
-                            {pageIndex < FINAL_PAGE_NO - 3 && (
+                            {pageIndex < finalPageNo - 3 && (
                                 <button className={styles.nointeract}>
                                     ...
                                 </button>
@@ -168,27 +168,27 @@ export default function PaginationWrapper({
 
                             <button
                                 className={
-                                    pageIndex === FINAL_PAGE_NO - 2
+                                    pageIndex === finalPageNo - 2
                                         ? styles.pagenumber
                                         : styles.btncontainer
                                 }
                                 id="secondLastBtn"
-                                onClick={handleBtnClick(FINAL_PAGE_NO - 2)}
-                                disabled={pageIndex === FINAL_PAGE_NO - 2}
+                                onClick={handleBtnClick(finalPageNo - 2)}
+                                disabled={pageIndex === finalPageNo - 2}
                             >
-                                {FINAL_PAGE_NO - 1}
+                                {finalPageNo - 1}
                             </button>
                             <button
                                 id="lastBtn"
-                                disabled={pageIndex === FINAL_PAGE_NO - 1}
-                                onClick={handleBtnClick(FINAL_PAGE_NO - 1)}
+                                disabled={pageIndex === finalPageNo - 1}
+                                onClick={handleBtnClick(finalPageNo - 1)}
                                 className={
-                                    pageIndex === FINAL_PAGE_NO - 1
+                                    pageIndex === finalPageNo - 1
                                         ? styles.pagenumber
                                         : styles.btncontainer
                                 }
                             >
-                                {FINAL_PAGE_NO}
+                                {finalPageNo}
                             </button>
 
                             {LastButton}
