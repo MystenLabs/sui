@@ -13,6 +13,7 @@ use narwhal_crypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
     Ed25519PublicKeyBytes, Ed25519Signature,
 };
+use narwhal_crypto::pubkey_bytes::PublicKeyBytes as NWPKBytes;
 pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
 pub use narwhal_crypto::traits::{
     AggregateAuthenticator, Authenticator, SigningKey, ToFromBytes, VerifyingKey,
@@ -42,16 +43,20 @@ pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
 pub type AccountSignature = Ed25519Signature;
 pub type AggregateAccountSignature = Ed25519AggregateSignature;
 
-pub trait SuiAuthoritySignature {
+pub trait SuiAuthoritySignature<S: Authenticator> {
     fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
     where
         T: Signable<Vec<u8>>;
-    fn verify<T>(&self, value: &T, author: PublicKeyBytes) -> Result<(), SuiError>
+    fn verify<T, const N: usize>(
+        &self,
+        value: &T,
+        author: NWPKBytes<S::PubKey, N>,
+    ) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>;
 }
 
-impl SuiAuthoritySignature for AuthoritySignature {
+impl<S: Authenticator> SuiAuthoritySignature<S> for S {
     fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
     where
         T: Signable<Vec<u8>>,
@@ -61,12 +66,17 @@ impl SuiAuthoritySignature for AuthoritySignature {
         secret.sign(&message)
     }
 
-    fn verify<T>(&self, value: &T, author: PublicKeyBytes) -> Result<(), SuiError>
+    fn verify<T, const N: usize>(
+        &self,
+        value: &T,
+        author: NWPKBytes<S::PubKey, N>,
+    ) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
     {
         // is this a cryptographically valid public Key?
-        let public_key: PublicKey = author.try_into().map_err(|_| SuiError::InvalidAddress)?;
+        let public_key =
+            S::PubKey::from_bytes(author.as_ref()).map_err(|_| SuiError::InvalidAddress)?;
         // serialize the message (see BCS serialization for determinism)
         let mut message = Vec::new();
         value.write(&mut message);
