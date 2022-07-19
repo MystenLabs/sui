@@ -22,7 +22,10 @@ use node::{
 };
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver};
-use tracing::{info, subscriber::set_global_default};
+use tracing::info;
+#[cfg(feature = "benchmark")]
+use tracing::subscriber::set_global_default;
+#[cfg(feature = "benchmark")]
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 #[tokio::main]
@@ -64,6 +67,7 @@ async fn main() -> Result<()> {
         3 => "debug",
         _ => "trace",
     };
+
     // some of the network is very verbose, so we require more 'v's
     let network_tracing_level = match matches.occurrences_of("v") {
         0 | 1 => "error",
@@ -74,34 +78,36 @@ async fn main() -> Result<()> {
     };
 
     // In benchmarks, transactions are not deserializable => many errors at the debug level
+    // Moreover, we need RFC 3339 timestamps to parse properly => we use a custom subscriber.
     cfg_if::cfg_if! {
         if #[cfg(feature = "benchmark")] {
             let custom_directive = "executor::core=info";
-        } else {
-            let custom_directive = "";
-        }
-    }
+            let filter = EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .parse(format!(
+                    "{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},{custom_directive}"
+                ))?;
 
-    let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .parse(format!(
-            "{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},{custom_directive}"
-        ))?;
+            let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "benchmark")] {
             let timer = tracing_subscriber::fmt::time::UtcTime::rfc_3339();
             let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
                 .with_env_filter(env_filter)
                 .with_timer(timer).with_ansi(false);
+            let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+            set_global_default(subscriber).expect("Failed to set subscriber");
         } else {
-            let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
-                .with_env_filter(env_filter);
+
+            let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
+
+            let _guard = telemetry_subscribers::TelemetryConfig::new("narwhal")
+                // load env variables
+                .with_env()
+                // load special log filter
+                .with_log_level(&log_filter)
+                .init();
         }
     }
-    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-    set_global_default(subscriber).expect("Failed to set subscriber");
 
     match matches.subcommand() {
         ("generate_keys", Some(sub_matches)) => {

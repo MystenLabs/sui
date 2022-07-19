@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::time::Duration;
 use test_utils::cluster::Cluster;
-use tracing::{info, subscriber::set_global_default};
-use tracing_subscriber::filter::{EnvFilter, LevelFilter};
+use tracing::info;
 
 #[ignore]
 #[tokio::test]
@@ -86,15 +85,12 @@ fn setup_tracing() {
     let tracing_level = "debug";
     let network_tracing_level = "info";
 
-    let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .parse(format!(
-            "{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}"
-        )).unwrap();
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
-    let subscriber_builder =
-        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
+    let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
 
-    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-    set_global_default(subscriber).expect("Failed to set subscriber");
+    let _guard = telemetry_subscribers::TelemetryConfig::new("narwhal")
+        // load env variables
+        .with_env()
+        // load special log filter
+        .with_log_level(&log_filter)
+        .init();
 }
