@@ -523,8 +523,6 @@ where
     }
 }
 
-pub type PubKeyLookup<P> = HashMap<<P as VerifyingKey>::Bytes, P>;
-
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
     signable.write(&mut digest);
@@ -537,33 +535,15 @@ pub struct VerificationObligation<S>
 where
     S: AggregateAuthenticator,
 {
-    lookup: PubKeyLookup<S::PubKey>,
     pub messages: Vec<Vec<u8>>,
     pub signatures: Vec<S>,
     pub public_keys: Vec<Vec<S::PubKey>>,
 }
 
 impl<S: AggregateAuthenticator> VerificationObligation<S> {
-    pub fn new(lookup: PubKeyLookup<S::PubKey>) -> VerificationObligation<S> {
+    pub fn new() -> VerificationObligation<S> {
         VerificationObligation {
-            lookup,
             ..Default::default()
-        }
-    }
-
-    pub fn lookup_public_key(
-        &mut self,
-        key_bytes: &<<S as AggregateAuthenticator>::PubKey as VerifyingKey>::Bytes,
-    ) -> Result<S::PubKey, SuiError> {
-        match self.lookup.get(key_bytes) {
-            Some(v) => Ok(v.clone()),
-            None => {
-                let public_key: S::PubKey = (*key_bytes)
-                    .try_into()
-                    .map_err(|_| SuiError::UnknownSigner)?;
-                self.lookup.insert(*key_bytes, public_key.clone());
-                Ok(public_key)
-            }
         }
     }
 
@@ -576,7 +556,7 @@ impl<S: AggregateAuthenticator> VerificationObligation<S> {
         self.messages.len() - 1
     }
 
-    pub fn verify_all(self) -> SuiResult<PubKeyLookup<S::PubKey>> {
+    pub fn verify_all(self) -> SuiResult<()> {
         S::batch_verify(
             &self.signatures[..],
             &self.public_keys.iter().map(|x| &x[..]).collect::<Vec<_>>(),
@@ -586,6 +566,6 @@ impl<S: AggregateAuthenticator> VerificationObligation<S> {
             error: format!("{error}"),
         })?;
 
-        Ok(self.lookup)
+        Ok(())
     }
 }
