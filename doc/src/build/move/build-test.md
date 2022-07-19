@@ -1,5 +1,5 @@
 ---
-title: Build and Test the SUi Move Package
+title: Build and Test the Sui Move Package
 ---
 
 ## Building a package
