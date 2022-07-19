@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { memo, useState, useCallback, useEffect } from 'react';
 
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 
@@ -42,25 +41,43 @@ const generatePaginationArr = (
 function Pagination({
     totalTxCount,
     txNum,
+    currentPage = 0,
+    onPagiChangeFn,
 }: {
     totalTxCount: number;
     txNum: number;
+    currentPage: number;
+    onPagiChangeFn: Function;
 }) {
-    const [searchParams, setSearchParams] = useSearchParams();
-    const pageIndex = parseInt(searchParams.get('p') || '1', 10) || 1;
-    const initData = generatePaginationArr(pageIndex, txNum, totalTxCount);
+    const [txNumPerPage, setTxNumPerPage] = useState(txNum);
+    const initData = generatePaginationArr(
+        currentPage,
+        txNumPerPage,
+        totalTxCount
+    );
     const [pagiData, setPagiData] = useState(initData);
+
+    useEffect(() => {
+        setPagiData(
+            generatePaginationArr(currentPage, txNumPerPage, totalTxCount)
+        );
+        setTxNumPerPage(txNum);
+    }, [currentPage, totalTxCount, txNum, txNumPerPage]);
 
     const changePage = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
             const pageNum = parseInt(e.currentTarget.dataset.pagidata || '0');
             // don't allow page to be less than 1 or equal to current page index
-            if (pageNum < 1 || pageNum === pageIndex || pageNum > pagiData.max)
+            if (
+                pageNum < 1 ||
+                pageNum === currentPage ||
+                pageNum > pagiData.max
+            )
                 return;
-            setSearchParams({ p: pageNum.toString() });
-            setPagiData(generatePaginationArr(pageNum, txNum, totalTxCount));
+            // call parent function to change page
+            onPagiChangeFn(pageNum);
         },
-        [pageIndex, pagiData.max, setSearchParams, txNum, totalTxCount]
+        [currentPage, pagiData.max, onPagiChangeFn]
     );
 
     return (
@@ -70,12 +87,12 @@ function Pagination({
                     <li
                         className={cl(
                             styles.arrow,
-                            pageIndex > 1 ? styles.activearrow : ''
+                            currentPage > 1 ? styles.activearrow : ''
                         )}
                     >
                         <button
                             className={styles.paginationleft}
-                            data-pagidata={Math.max(0, pageIndex - 1)}
+                            data-pagidata={Math.max(0, currentPage - 1)}
                             onClick={changePage}
                         >
                             <ContentForwardArrowDark />
@@ -83,7 +100,9 @@ function Pagination({
                     </li>
                     <li className={styles.pagilink}>
                         <button
-                            className={pageIndex === 1 ? styles.activepag : ''}
+                            className={
+                                currentPage === 1 ? styles.activepag : ''
+                            }
                             onClick={changePage}
                             data-pagidata={1}
                         >
@@ -91,8 +110,8 @@ function Pagination({
                         </button>
                     </li>
 
-                    {pageIndex > pagiData.range &&
-                        pageIndex > pagiData.range + 1 && (
+                    {currentPage > pagiData.range &&
+                        currentPage > pagiData.range + 1 && (
                             <li className={styles.paginationdot}>...</li>
                         )}
                     {pagiData.listItems
@@ -100,13 +119,13 @@ function Pagination({
                         .map((itm: any, index: number) => (
                             <li
                                 className={
-                                    pageIndex === itm ? styles.pagilink : ''
+                                    currentPage === itm ? styles.pagilink : ''
                                 }
                                 key={index}
                             >
                                 <button
                                     className={
-                                        pageIndex === itm
+                                        currentPage === itm
                                             ? styles.activepag
                                             : ''
                                     }
@@ -118,7 +137,7 @@ function Pagination({
                             </li>
                         ))}
 
-                    {pageIndex < pagiData.max - (pagiData.range + 1) && (
+                    {currentPage < pagiData.max - (pagiData.range + 1) && (
                         <>
                             <li className={styles.paginationdot}>...</li>
                         </>
@@ -127,7 +146,7 @@ function Pagination({
                     <li className={styles.pagilink}>
                         <button
                             className={
-                                pageIndex === pagiData.max
+                                currentPage === pagiData.max
                                     ? styles.activepag
                                     : ''
                             }
@@ -140,12 +159,12 @@ function Pagination({
                     <li
                         className={cl(
                             styles.arrow,
-                            pageIndex < pagiData.max ? styles.activearrow : ''
+                            currentPage < pagiData.max ? styles.activearrow : ''
                         )}
                     >
                         <button
                             className="page-link"
-                            data-pagidata={pageIndex + 1}
+                            data-pagidata={currentPage + 1}
                             onClick={changePage}
                         >
                             <ContentForwardArrowDark />

@@ -22,7 +22,7 @@
 }
 
 .tabsfooter {
-    @apply flex justify-between text-xs text-gray-500 capitalize items-center p-0;
+    @apply block md:flex justify-between text-gray-500 capitalize items-center p-0 mt-2  text-sm;
 }
 
 .tabsfooter a {
@@ -30,9 +30,56 @@
 }
 
 .stats {
-    @apply ml-auto w-full text-right;
+    @apply ml-auto w-full text-center md:text-right flex gap-2 justify-center md:justify-end items-center;
 }
 
 .tabsfooter nav {
     @apply flex flex-row items-center;
+}
+
+.pagedropdown button {
+    @apply text-[#767A81] font-[500] py-2 px-3 cursor-pointer 
+   border-[1px]  border-white bg-[#FFFFFF] hover:bg-[#F4FBFF] hidden md:flex text-[13px] w-[122px] justify-between items-center rounded-[6px];
+
+    border: 1px solid #f0f1f2;
+    transition: all 0.4s ease;
+}
+
+.pagedropdown svg {
+    @apply align-bottom;
+}
+
+.pagedropdown ul {
+    @apply absolute z-50 bg-[#FFFFFF] w-[120px] m-auto list-none  p-0 text-[13px] hidden;
+
+    border: 1px solid #f0f1f2;
+    border-radius: 0 0 6px 6px;
+    margin-top: -3px;
+    border-top: none;
+    transition: all 0.4s ease;
+}
+
+.pagedropdown ul li {
+    border-bottom: 1px solid #f0f1f2;
+}
+
+.pagedropdown ul li button {
+    @apply py-2 w-full;
+
+    border: none;
+    border-radius: 0;
+}
+
+.pagedropdown ul.open {
+    @apply block;
+}
+
+.pagedropdown ul li:first-child {
+    border-top: 1px solid #f0f1f2;
+}
+
+.pagedropdown select {
+    @apply text-[#767A81] font-[500] py-1.5 px-3 rounded-[6px] text-[13px] hidden md:block;
+
+    border: 1px solid #f0f1f2;
 }
