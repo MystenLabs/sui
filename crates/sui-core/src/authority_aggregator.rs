@@ -1627,12 +1627,12 @@ where
         &self,
         digests: &ExecutionDigests,
         // authorities known to have the effects we are requesting.
-        authorities: &BTreeSet<AuthorityName>,
+        authorities: Option<&BTreeSet<AuthorityName>>,
         timeout_total: Option<Duration>,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
         self.quorum_once_with_timeout(
             &[],
-            Some(authorities),
+            authorities,
             |authority, client| {
                 Box::pin(async move {
                     let resp = client
@@ -1641,9 +1641,17 @@ where
 
                     match (resp.certified_transaction, resp.signed_effects) {
                         (Some(cert), Some(effects)) => Ok((cert, effects)),
-                        // The caller is passing in authorities that have claimed to have the cert and
-                        // effects, so if they now say they don't, they're byzantine.
-                        _ => Err(SuiError::ByzantineAuthoritySuspicion { authority }),
+                        _ => {
+                            if authorities.is_some() {
+                                // The caller is passing in authorities that have claimed to have the
+                                // cert and effects, so if they now say they don't, they're byzantine.
+                                Err(SuiError::ByzantineAuthoritySuspicion { authority })
+                            } else {
+                                Err(SuiError::TransactionNotFound {
+                                    digest: digests.transaction,
+                                })
+                            }
+                        }
                     }
                 })
             },
