@@ -78,6 +78,7 @@ allow = [
     "Apache-2.0",
     "ISC",
     "LicenseRef-ring",
+    "Unicode-DFS-2016",
     #"Apache-2.0 WITH LLVM-exception",
 ]
 # List of explictly disallowed licenses
