@@ -3,31 +3,87 @@
 
 import { useMemo } from 'react';
 
-import CoinBalance from '_components/coin-balance';
-import ObjectsLayout from '_components/objects-layout';
-import { useAppSelector } from '_hooks';
+import CoinBalance from './coin-balance';
+import IconLink from './icon-link';
+import AccountAddress from '_components/account-address';
+import Alert from '_components/alert';
+import Loading from '_components/loading';
+import { SuiIcons } from '_font-icons/output/sui-icons';
+import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+
+import st from './TokensPage.module.scss';
 
 function TokensPage() {
+    const { loading, error, showError } = useObjectsState();
     const balances = useAppSelector(accountAggregateBalancesSelector);
-    const coinTypes = useMemo(() => Object.keys(balances), [balances]);
+    const suiBalance = balances[GAS_TYPE_ARG] || BigInt(0);
+    const otherCoinTypes = useMemo(
+        () => Object.keys(balances).filter((aType) => aType !== GAS_TYPE_ARG),
+        [balances]
+    );
     return (
-        <ObjectsLayout
-            totalItems={coinTypes?.length}
-            emptyMsg="No tokens found"
-        >
-            {coinTypes.map((aCoinType) => {
-                const aCoinBalance = balances[aCoinType];
-                return (
+        <div className={st.container}>
+            {showError && error ? (
+                <Alert className={st.alert}>
+                    <strong>Sync error (data might be outdated).</strong>{' '}
+                    <small>{error.message}</small>
+                </Alert>
+            ) : null}
+            <AccountAddress showLink={false} mode="faded" />
+            <div className={st.balanceContainer}>
+                <Loading loading={loading}>
                     <CoinBalance
-                        type={aCoinType}
-                        balance={aCoinBalance}
-                        stake={true}
-                        key={aCoinType}
+                        balance={suiBalance}
+                        type={GAS_TYPE_ARG}
+                        mode="standalone"
                     />
-                );
-            })}
-        </ObjectsLayout>
+                </Loading>
+            </div>
+            <div className={st.actions}>
+                <IconLink
+                    icon={SuiIcons.Coins}
+                    to="/"
+                    disabled={true}
+                    text="Buy, Sell & Swap"
+                />
+                <IconLink
+                    icon={SuiIcons.HandCoins}
+                    to="/"
+                    disabled={true}
+                    text="Send & Receive"
+                />
+                <IconLink
+                    icon={SuiIcons.PercentagePolygon}
+                    to="/"
+                    disabled={true}
+                    text="Stake & Earn"
+                />
+            </div>
+            <div className={st.title}>OTHER COINS</div>
+            <div className={st.otherCoins}>
+                <Loading loading={loading} className={st.othersLoader}>
+                    {otherCoinTypes.length ? (
+                        otherCoinTypes.map((aCoinType) => {
+                            const aCoinBalance = balances[aCoinType];
+                            return (
+                                <CoinBalance
+                                    type={aCoinType}
+                                    balance={aCoinBalance}
+                                    key={aCoinType}
+                                />
+                            );
+                        })
+                    ) : (
+                        <div className={st.empty}>
+                            No coins have added. When you have multiple coins in
+                            your wallet, they will be listed here.
+                        </div>
+                    )}
+                </Loading>
+            </div>
+        </div>
     );
 }
 

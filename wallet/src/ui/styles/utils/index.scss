@@ -1,0 +1,24 @@
+@use '_variables' as v;
+@use '_values/sizing';
+
+$main-space-var: v.use(v.$sizing-nav-height-placeholder);
+$main-extra-space: sizing.$main-bottom-space;
+
+@mixin main-extra-space-for-nav() {
+    padding-bottom: calc($main-space-var + $main-extra-space);
+}
+
+@mixin override-main-padding() {
+    margin-left: sizing.$main-sides-space * -1;
+    margin-right: sizing.$main-sides-space * -1;
+    margin-bottom: calc(($main-space-var + $main-extra-space) * -1);
+    padding-left: sizing.$main-sides-space;
+    padding-right: sizing.$main-sides-space;
+    @include main-extra-space-for-nav;
+}
+
+@mixin overflow-ellipsis() {
+    max-width: 100%;
+    overflow-x: hidden;
+    text-overflow: ellipsis;
+}

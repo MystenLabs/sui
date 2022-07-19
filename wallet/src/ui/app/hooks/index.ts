@@ -11,3 +11,4 @@ export { default as useSuiObjectFields } from './useSuiObjectFields';
 export { default as useNumberDelimiters } from './useNumberDelimiters';
 export { default as useOnClickOutside } from './useOnClickOutside';
 export { default as useOnKeyboardEvent } from './useOnKeyboardEvent';
+export { useObjectsState } from './useObjectsState';
