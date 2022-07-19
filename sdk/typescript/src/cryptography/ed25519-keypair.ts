@@ -118,8 +118,7 @@ export class Ed25519Keypair implements Keypair {
       .map(part => part.toLowerCase())
       .join(' ');
 
-    const seed = bip39.mnemonicToSeed(normalizeMnemonics);
-    const { key } = derivePath(path, seed.toString('hex'));
+    const { key } = derivePath(path, bip39.mnemonicToSeedHex(normalizeMnemonics));
 
     return Ed25519Keypair.fromSeed(key);
   }
