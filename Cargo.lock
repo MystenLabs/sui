@@ -5594,10 +5594,11 @@ dependencies = [
 
 [[package]]
 name = "rustyline-derive"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb35a55ab810b5c0fe31606fe9b47d1354e4dc519bec0a102655f78ea2b38057"
+checksum = "107c3d5d7f370ac09efa62a78375f94d94b8a33c61d8c278b96683fb4dbf2d8d"
 dependencies = [
+ "proc-macro2 1.0.40",
  "quote 1.0.20",
  "syn 1.0.98",
 ]
