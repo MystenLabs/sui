@@ -37,6 +37,7 @@ use sui_types::event::{Event, TransferType};
 use sui_types::event_filter::EventFilter;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
+use sui_types::id::{INFO_CHILD_COUNT_FIELD, INFO_ID_FIELD, INFO_VERSION_FIELD};
 use sui_types::messages::{
     CallArg, CertifiedTransaction, ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg,
     SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
@@ -437,8 +438,18 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
                 if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
-                    if let Some(SuiMoveValue::Info { id, version }) = fields.get("info") {
-                        return Ok(GasCoin::new(*id, SequenceNumber::from(*version), *balance));
+                    if let Some(SuiMoveValue::Info {
+                        id,
+                        version,
+                        child_count,
+                    }) = fields.get("info")
+                    {
+                        return Ok(GasCoin::new(
+                            *id,
+                            SequenceNumber::from(*version),
+                            *child_count,
+                            *balance,
+                        ));
                     }
                 }
             }
@@ -574,7 +585,11 @@ pub enum SuiMoveValue {
     Vector(Vec<SuiMoveValue>),
     Bytearray(Base64),
     String(String),
-    Info { id: ObjectID, version: u64 },
+    Info {
+        id: ObjectID,
+        version: u64,
+        child_count: Option<u64>,
+    },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
@@ -602,8 +617,19 @@ impl Display for SuiMoveValue {
             SuiMoveValue::String(value) => {
                 write!(writer, "{}", value)?;
             }
-            SuiMoveValue::Info { id, version } => {
+            SuiMoveValue::Info {
+                id,
+                version,
+                child_count: None,
+            } => {
                 write!(writer, "{id}[{version}]")?;
+            }
+            SuiMoveValue::Info {
+                id,
+                version,
+                child_count: Some(child_count),
+            } => {
+                write!(writer, "{id}[{version}, {child_count}]")?;
             }
             SuiMoveValue::Struct(value) => {
                 write!(writer, "{}", value)?;
@@ -633,7 +659,8 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(value) => {
                 // Try convert bytearray
-                if value.iter().all(|value| matches!(value, MoveValue::U8(_))) {
+                if !value.is_empty() && value.iter().all(|value| matches!(value, MoveValue::U8(_)))
+                {
                     let bytearray = value
                         .iter()
                         .flat_map(|value| {
@@ -754,53 +781,75 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .iter()
         .map(|(id, value)| (id.to_string(), value.clone().into()))
         .collect::<BTreeMap<_, SuiMoveValue>>();
-    match struct_name.as_str() {
+    let res = try_convert_type_impl(&struct_name, &fields);
+    if res.is_none() {
+        warn!(
+            fields =? fields,
+            "Failed to convert {struct_name} to SuiMoveValue"
+        );
+    }
+    res
+}
+
+fn try_convert_type_impl(
+    struct_name: &str,
+    fields: &BTreeMap<String, SuiMoveValue>,
+) -> Option<SuiMoveValue> {
+    Some(match struct_name {
         "0x2::utf8::String" | "0x1::ascii::String" => {
-            if let Some(SuiMoveValue::Bytearray(bytes)) = fields.get("bytes") {
-                if let Ok(bytes) = bytes.to_vec() {
-                    if let Ok(s) = String::from_utf8(bytes) {
-                        return Some(SuiMoveValue::String(s));
-                    }
-                }
-            }
+            let bytes = match fields.get("bytes")? {
+                SuiMoveValue::Bytearray(bytes) => bytes,
+                _ => return None,
+            };
+            SuiMoveValue::String(String::from_utf8(bytes.to_vec().ok()?).ok()?)
         }
-        "0x2::url::Url" => {
-            if let Some(url) = fields.get("url") {
-                return Some(url.clone());
-            }
-        }
+        "0x2::url::Url" => fields.get("url")?.clone(),
         "0x2::object::ID" => {
-            if let Some(SuiMoveValue::Address(id)) = fields.get("bytes") {
-                return Some(SuiMoveValue::Address(*id));
-            }
+            let id = match fields.get("bytes")? {
+                SuiMoveValue::Address(id) => *id,
+                _ => return None,
+            };
+            SuiMoveValue::Address(id)
         }
         "0x2::object::Info" => {
-            if let Some(SuiMoveValue::Address(address)) = fields.get("id") {
-                if let Some(SuiMoveValue::Number(version)) = fields.get("version") {
-                    return Some(SuiMoveValue::Info {
-                        id: ObjectID::from(*address),
-                        version: *version,
-                    });
-                }
+            let id = match fields.get(INFO_ID_FIELD.as_str())? {
+                SuiMoveValue::Address(address) => (*address).into(),
+                _ => return None,
+            };
+            let version = match &fields.get(INFO_VERSION_FIELD.as_str())? {
+                SuiMoveValue::Number(version) => *version,
+                _ => return None,
+            };
+            let child_count = match &fields.get(INFO_CHILD_COUNT_FIELD.as_str())? {
+                SuiMoveValue::Option(inner) => match &**inner {
+                    None => None,
+                    Some(SuiMoveValue::Number(n)) => Some(*n),
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            SuiMoveValue::Info {
+                id,
+                version,
+                child_count,
             }
         }
         "0x2::balance::Balance" => {
-            if let Some(SuiMoveValue::Number(value)) = fields.get("value") {
-                return Some(SuiMoveValue::Number(*value));
-            }
+            let value = match fields.get("value")? {
+                SuiMoveValue::Number(value) => *value,
+                _ => return None,
+            };
+            SuiMoveValue::Number(value)
         }
         "0x1::option::Option" => {
-            if let Some(SuiMoveValue::Vector(values)) = fields.get("vec") {
-                return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
-            }
+            let values = match fields.get("vec")? {
+                SuiMoveValue::Vector(values) => values,
+                _ => return None,
+            };
+            SuiMoveValue::Option(Box::new(values.first().cloned()))
         }
         _ => return None,
-    }
-    warn!(
-        fields =? fields,
-        "Failed to convert {struct_name} to SuiMoveValue"
-    );
-    None
+    })
 }
 
 impl From<MoveStruct> for SuiMoveStruct {

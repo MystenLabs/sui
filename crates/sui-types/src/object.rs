@@ -47,6 +47,12 @@ type BcsU64 = [u8; 8];
 const ID_END_INDEX: usize = ObjectID::LENGTH;
 /// Index marking the end of the object's version + the beginning of type-specific data
 const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
+/// Index marking the end of the object's child count, assuming it is `Some`
+/// vector<u64> so 1 byte for length + 8 for u64
+const SOME_CHILD_COUNT_END_INDEX: usize = VERSION_END_INDEX + 9;
+/// Index marking the end of the object's child count, assuming it is `None`
+/// vector<u64> so 1 byte for length
+const NONE_CHILD_COUNT_END_INDEX: usize = VERSION_END_INDEX + 1;
 
 /// Different schemes for converting a Move value into a structured representation
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -100,15 +106,38 @@ impl MoveObject {
         SequenceNumber::from(u64::from_le_bytes(*self.version_bytes()))
     }
 
+    pub fn child_count(&self) -> u64 {
+        if self.child_count_is_some() {
+            let u64_bytes: BcsU64 = self.child_count_bytes()[1..].try_into().unwrap();
+            u64::from_le_bytes(u64_bytes)
+        } else {
+            0
+        }
+    }
+
+    fn child_count_is_some(&self) -> bool {
+        let move_option_length: u8 = self.contents[VERSION_END_INDEX];
+        debug_assert!(move_option_length == 0 || move_option_length == 1);
+        move_option_length == 1
+    }
+
+    fn info_end_index(&self) -> usize {
+        if self.child_count_is_some() {
+            SOME_CHILD_COUNT_END_INDEX
+        } else {
+            NONE_CHILD_COUNT_END_INDEX
+        }
+    }
+
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
     pub fn type_specific_contents(&self) -> &[u8] {
-        &self.contents[VERSION_END_INDEX..]
+        &self.contents[self.info_end_index()..]
     }
 
-    pub fn id_version_contents(&self) -> &[u8] {
-        &self.contents[..VERSION_END_INDEX]
+    pub fn info_contents(&self) -> &[u8] {
+        &self.contents[..self.info_end_index()]
     }
 
     /// Update the contents of this object and increment its version
@@ -150,6 +179,27 @@ impl MoveObject {
 
     fn version_bytes_mut(&mut self) -> &mut [u8] {
         &mut self.contents[ID_END_INDEX..VERSION_END_INDEX]
+    }
+
+    fn child_count_bytes(&self) -> &[u8] {
+        &self.contents[VERSION_END_INDEX..self.info_end_index()]
+    }
+
+    pub fn decrement_child_count(&mut self, amount: u64) {
+        debug_assert!(
+            self.child_count_is_some(),
+            "Decrementing not set child count"
+        );
+        let cur_count = self.child_count();
+        debug_assert!(
+            cur_count >= amount,
+            "Decrementing child count by an mount greater than the number of children",
+        );
+        let new_count = cur_count - amount;
+        // TODO do we want to set the option to None if the count is 0?
+        let end = self.info_end_index();
+        let child_count_bytes = &mut self.contents[VERSION_END_INDEX + 1..end];
+        child_count_bytes.copy_from_slice(bcs::to_bytes(&new_count).unwrap().as_slice())
     }
 
     pub fn contents(&self) -> &[u8] {
@@ -476,7 +526,8 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            contents: GasCoin::new(id, SequenceNumber::new(), None, GAS_VALUE_FOR_TESTING)
+                .to_bcs_bytes(),
         });
         Self {
             owner: Owner::Immutable,
@@ -490,7 +541,7 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), gas).to_bcs_bytes(),
+            contents: GasCoin::new(id, SequenceNumber::new(), None, gas).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),
@@ -504,7 +555,8 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            contents: GasCoin::new(id, SequenceNumber::new(), None, GAS_VALUE_FOR_TESTING)
+                .to_bcs_bytes(),
         });
         Self {
             owner: Owner::ObjectOwner(owner.into()),
@@ -527,7 +579,7 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, version, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            contents: GasCoin::new(id, version, None, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),

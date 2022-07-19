@@ -45,7 +45,7 @@ fn test_max_sequence_number() {
 #[test]
 fn test_gas_coin_ser_deser_roundtrip() {
     let id = ObjectID::random();
-    let coin = GasCoin::new(id, SequenceNumber::new(), 10);
+    let coin = GasCoin::new(id, SequenceNumber::new(), None, 10);
     let coin_bytes = coin.to_bcs_bytes();
 
     let deserialized_coin: GasCoin = bcs::from_bytes(&coin_bytes).unwrap();
@@ -59,7 +59,7 @@ fn test_increment_version() {
     let id = ObjectID::random();
     let version = SequenceNumber::from(257);
     let value = 10;
-    let coin = GasCoin::new(id, version, value);
+    let coin = GasCoin::new(id, version, None, value);
     assert_eq!(coin.id(), &id);
     assert_eq!(coin.value(), value);
     assert_eq!(coin.version(), version);

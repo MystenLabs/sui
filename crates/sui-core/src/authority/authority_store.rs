@@ -16,12 +16,12 @@ use sui_storage::{
     write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
 };
-use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::{Owner, OBJECT_START_VERSION};
+use sui_types::{base_types::SequenceNumber, storage::DeleteEvent};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
@@ -807,10 +807,17 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             temporary_store.write_object(object);
         }
         for obj_ref in &effects.effects.deleted {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+            // A bit of a hack, but at this point, we should know that the deleted object
+            // has no children.
+            // TODO don't use `TemporaryStore` for this
+            temporary_store.delete_object(
+                &obj_ref.0,
+                obj_ref.1,
+                DeleteEvent::Normal { child_count: 0 },
+            );
         }
         for obj_ref in &effects.effects.wrapped {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteEvent::Wrap);
         }
 
         let mut write_batch = self.certificates.batch();

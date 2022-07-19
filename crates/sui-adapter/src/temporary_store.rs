@@ -12,7 +12,7 @@ use sui_types::error::{ExecutionError, SuiError};
 use sui_types::fp_bail;
 use sui_types::messages::{ExecutionStatus, InputObjects, TransactionEffects};
 use sui_types::object::{Data, Object};
-use sui_types::storage::{BackingPackageStore, DeleteKind, Storage};
+use sui_types::storage::{BackingPackageStore, DeleteEvent, DeleteKind, Storage};
 use sui_types::{
     event::Event,
     gas::{GasCostSummary, SuiGasStatus},
@@ -34,15 +34,26 @@ pub struct TemporaryStore<S> {
     package_store: S,
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
-    mutable_inputs: Vec<ObjectRef>, // Inputs that are mutable
-    written: BTreeMap<ObjectID, (ObjectRef, Object)>, // Objects written
+    mutable_inputs: Vec<ObjectRef>,      // Inputs that are mutable
+    written: BTreeMap<ObjectID, Object>, // Objects written
     /// Objects actively deleted.
-    deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    /// Child count is Some for Normal/UnwrapThenDelete events, and is None for wraps
+    deleted: BTreeMap<
+        ObjectID,
+        (
+            SequenceNumber,
+            /* child count */ Option<u64>,
+            DeleteKind,
+        ),
+    >,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
     created_object_ids: HashSet<ObjectID>,
+    // temporary store of decrements to child counts, yet to be applied
+    // will be applied to either written or deleted objects
+    child_count_decrements: BTreeMap<ObjectID, u64>,
 }
 
 impl<S> TemporaryStore<S> {
@@ -64,6 +75,7 @@ impl<S> TemporaryStore<S> {
             deleted: BTreeMap::new(),
             events: Vec::new(),
             created_object_ids: HashSet::new(),
+            child_count_decrements: BTreeMap::new(),
         }
     }
 
@@ -72,25 +84,48 @@ impl<S> TemporaryStore<S> {
         &self.objects
     }
 
-    pub fn written(&self) -> &BTreeMap<ObjectID, (ObjectRef, Object)> {
+    pub fn written(&self) -> &BTreeMap<ObjectID, Object> {
         &self.written
     }
 
-    pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, DeleteKind)> {
+    pub fn deleted(
+        &self,
+    ) -> &BTreeMap<
+        ObjectID,
+        (
+            SequenceNumber,
+            /* child count */ Option<u64>,
+            DeleteKind,
+        ),
+    > {
         &self.deleted
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
+        debug_assert!(
+            self.child_count_decrements.is_empty(),
+            "Either these have been applied, or there was an error and 'reset' has been called"
+        );
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
         }
+        let written = self
+            .written
+            .into_iter()
+            .map(|(id, obj)| (id, (obj.compute_object_reference(), obj)))
+            .collect();
+        let deleted = self
+            .deleted
+            .into_iter()
+            .map(|(id, (version, _child_count, kind))| (id, (version, kind)))
+            .collect();
         (
             self.objects,
             self.mutable_inputs,
-            self.written,
-            self.deleted,
+            written,
+            deleted,
             self.events,
         )
     }
@@ -108,8 +143,7 @@ impl<S> TemporaryStore<S> {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
-                self.written
-                    .insert(*id, (object.compute_object_reference(), object));
+                self.written.insert(*id, object);
             }
         }
     }
@@ -132,7 +166,7 @@ impl<S> TemporaryStore<S> {
         )?;
         objects_to_update.push(gas_object.clone());
 
-        for (object_id, (_object_ref, object)) in &mut self.written {
+        for (object_id, object) in &mut self.written {
             let (old_object_size, storage_rebate) =
                 if let Some(old_object) = self.objects.get(object_id) {
                     (
@@ -187,61 +221,60 @@ impl<S> TemporaryStore<S> {
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
     ) -> TransactionEffects {
+        debug_assert!(
+            self.child_count_decrements.is_empty(),
+            "Either these have been applied, or there was an error and 'reset' has been called"
+        );
+        let written = self
+            .written
+            .iter()
+            .map(|(id, obj)| (*id, (obj.compute_object_reference(), obj.owner)))
+            .collect::<BTreeMap<_, _>>();
+
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
         let updated_gas_object_info = if gas_object_ref.0 == ObjectID::ZERO {
             (gas_object_ref, Owner::AddressOwner(SuiAddress::default()))
         } else {
-            let (gas_reference, gas_object) = &self.written[&gas_object_ref.0];
-            (*gas_reference, gas_object.owner)
+            written[&gas_object_ref.0]
         };
+        let mut created = vec![];
+        let mut mutated = vec![];
+        let mut unwrapped = vec![];
+        for (id, object_ref_and_owner) in written {
+            match (
+                self.created_object_ids.contains(&id),
+                self.objects.contains_key(&id),
+            ) {
+                (true, _) => created.push(object_ref_and_owner),
+                (false, true) => mutated.push(object_ref_and_owner),
+                (false, false) => unwrapped.push(object_ref_and_owner),
+            }
+        }
+
+        let mut deleted = vec![];
+        let mut wrapped = vec![];
+        for (id, (version, _child_count, kind)) in &self.deleted {
+            match kind {
+                DeleteKind::Normal | DeleteKind::UnwrapThenDelete => {
+                    deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
+                }
+                DeleteKind::Wrap => {
+                    wrapped.push((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
+                }
+            }
+        }
+
         TransactionEffects {
             status,
             gas_used: gas_cost_summary,
             shared_objects: shared_object_refs,
             transaction_digest: *transaction_digest,
-            created: self
-                .written
-                .iter()
-                .filter(|(id, _)| self.created_object_ids.contains(*id))
-                .map(|(_, (object_ref, object))| (*object_ref, object.owner))
-                .collect(),
-            mutated: self
-                .written
-                .iter()
-                .filter(|(id, _)| self.objects.contains_key(*id))
-                .map(|(_, (object_ref, object))| (*object_ref, object.owner))
-                .collect(),
-            unwrapped: self
-                .written
-                .iter()
-                .filter(|(id, _)| {
-                    !self.objects.contains_key(*id) && !self.created_object_ids.contains(*id)
-                })
-                .map(|(_, (object_ref, object))| (*object_ref, object.owner))
-                .collect(),
-            deleted: self
-                .deleted
-                .iter()
-                .filter_map(|(id, (version, kind))| {
-                    if kind != &DeleteKind::Wrap {
-                        Some((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-            wrapped: self
-                .deleted
-                .iter()
-                .filter_map(|(id, (version, kind))| {
-                    if kind == &DeleteKind::Wrap {
-                        Some((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
+            created,
+            mutated,
+            unwrapped,
+            deleted,
+            wrapped,
             gas_object: updated_gas_object_info,
             events: self.events.clone(),
             dependencies: transaction_dependencies,
@@ -290,15 +323,13 @@ impl<S> Storage for TemporaryStore<S> {
         self.deleted.clear();
         self.events.clear();
         self.created_object_ids.clear();
+        self.child_count_decrements.clear();
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(id) == None);
-        match self.written.get(id) {
-            Some((_, obj)) => Some(obj),
-            None => self.objects.get(id),
-        }
+        self.written.get(id).or_else(|| self.objects.get(id))
     }
 
     fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
@@ -325,11 +356,10 @@ impl<S> Storage for TemporaryStore<S> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
-        self.written
-            .insert(object.id(), (object.compute_object_reference(), object));
+        self.written.insert(object.id(), object);
     }
 
-    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
+    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteEvent) {
         // there should be no deletion after write
         debug_assert!(self.written.get(id) == None);
         // Check it is not read-only
@@ -342,13 +372,78 @@ impl<S> Storage for TemporaryStore<S> {
             }
         }
 
+        let (child_count, kind) = match kind {
+            DeleteEvent::Normal { child_count } => (Some(child_count), DeleteKind::Normal),
+            DeleteEvent::UnwrapThenDelete { child_count } => {
+                (Some(child_count), DeleteKind::UnwrapThenDelete)
+            }
+            DeleteEvent::Wrap => (None, DeleteKind::Wrap),
+        };
+
         // For object deletion, we increment their version so that they will
         // eventually show up in the parent_sync table with an updated version.
-        self.deleted.insert(*id, (version.increment(), kind));
+        self.deleted
+            .insert(*id, (version.increment(), child_count, kind));
     }
 
     fn log_event(&mut self, event: Event) {
         self.events.push(event)
+    }
+
+    fn decrement_parents_child_count(&mut self, parent_id: ObjectID) {
+        let count = self.child_count_decrements.entry(parent_id).or_insert(0);
+        *count += 1
+    }
+
+    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, u64)> {
+        // write parents that have not yet been written (or weren't deleted)
+        let non_modified_parents = self
+            .child_count_decrements
+            .keys()
+            .filter(|id| !self.written.contains_key(id) && !self.deleted.contains_key(id))
+            .copied()
+            .collect::<Vec<_>>();
+        for id in non_modified_parents {
+            if !self.written.contains_key(&id) && !self.deleted.contains_key(&id) {
+                let mut object = self
+                    .read_object(&id)
+                    .expect("Parent is guaranteed to be in input objects")
+                    .clone();
+                object
+                    .data
+                    .try_as_move_mut()
+                    .expect("Parent must be Move object")
+                    .increment_version();
+                self.write_object(object);
+            }
+        }
+
+        // apply child decrements
+        for (id, count) in std::mem::take(&mut self.child_count_decrements) {
+            match (self.written.get_mut(&id), self.deleted.get_mut(&id)) {
+                (None, None) => debug_assert!(false, "Invalid state, manually written above"),
+                (Some(_), Some(_)) => {
+                    debug_assert!(
+                        false,
+                        "Invalid state, parent is in both written/deleted set"
+                    )
+                }
+                (Some(written), None) => written
+                    .data
+                    .try_as_move_mut()
+                    .unwrap()
+                    .decrement_child_count(count),
+                (None, Some((_version, Some(child_count), _kind))) => *child_count -= count,
+                (None, Some((_version, None, _kind))) => (),
+            }
+        }
+
+        // gather deleted objects that are not wrapped
+        // wrapped will have child_count set to None
+        self.deleted
+            .iter()
+            .filter_map(|(id, (_, child_count, _))| Some((*id, (*child_count)?)))
+            .collect()
     }
 }
 

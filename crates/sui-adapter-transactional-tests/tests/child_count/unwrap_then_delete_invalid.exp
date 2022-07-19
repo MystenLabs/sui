@@ -1,0 +1,32 @@
+processed 8 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 8-42:
+created: object(105)
+written: object(104)
+
+task 2 'run'. lines 44-44:
+created: object(107)
+written: object(106)
+
+task 3 'run'. lines 46-46:
+created: object(109)
+written: object(108)
+
+task 4 'run'. lines 48-48:
+written: object(107), object(109), object(110)
+
+task 5 'run'. lines 50-50:
+created: object(112)
+written: object(111)
+deleted: object(107)
+
+task 6 'view-object'. lines 52-52:
+Owner: Account Address ( A )
+Contents: test::m::R {info: sui::object::Info {id: sui::object::ID {bytes: fake(112)}, version: 1u64, child_count: std::option::Option<u64> {vec: vector[]}}, s: test::m::S {info: sui::object::Info {id: sui::object::ID {bytes: fake(107)}, version: 2u64, child_count: std::option::Option<u64> {vec: vector[1u64]}}}}
+
+task 7 'run'. lines 54-54:
+Error: Transaction Effects Status: Invalid Deletion of Parent Object with Children. Invalid deletion of parent object fake(107) before its children were deleted or transferred.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidParentDeletion(InvalidParentDeletion { object: fake(107) }), source: None } }

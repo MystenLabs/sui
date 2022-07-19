@@ -40,7 +40,7 @@ module object_owner::object_owner {
         let parent_id = object::new(ctx);
         let child = Child { info: object::new(ctx) };
         let child_id = *object::id(&child);
-        transfer::transfer_to_object_id(child, &parent_id);
+        transfer::transfer_to_object_id(child, &mut parent_id);
         let parent = Parent {
             info: parent_id,
             child: option::some(child_id),
@@ -93,7 +93,7 @@ module object_owner::object_owner {
     public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
         let info = object::new(ctx);
         let child_id = *object::id(&child);
-        transfer::transfer_to_object_id(child, &info);
+        transfer::transfer_to_object_id(child, &mut info);
         let parent = AnotherParent {
             info,
             child: child_id,

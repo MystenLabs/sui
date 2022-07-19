@@ -46,7 +46,7 @@ module T2::O2 {
 
     fun new(child: O3, ctx: &mut TxContext): O2 {
         let info = object::new(ctx);
-        transfer::transfer_to_object_id(child, &info);
+        transfer::transfer_to_object_id(child, &mut info);
         O2 { info }
     }
 }
@@ -76,7 +76,7 @@ module T1::O1 {
 
     fun new(child: O2, ctx: &mut TxContext): O1 {
         let info = object::new(ctx);
-        transfer::transfer_to_object_id(child, &info);
+        transfer::transfer_to_object_id(child, &mut info);
         O1 { info }
     }
 }

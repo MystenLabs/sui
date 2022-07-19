@@ -981,6 +981,8 @@ pub enum ExecutionFailureStatus {
     MissingObjectOwner(MissingObjectOwner),
     InvalidSharedChildUse(InvalidSharedChildUse),
     InvalidSharedByValue(InvalidSharedByValue),
+    InvalidParentDeletion(InvalidParentDeletion),
+    InvalidParentFreezing(InvalidParentFreezing),
 
     //
     // MovePublish errors
@@ -1040,6 +1042,16 @@ pub struct InvalidSharedByValue {
     pub object: ObjectID,
 }
 
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct InvalidParentDeletion {
+    pub object: ObjectID,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct InvalidParentFreezing {
+    pub object: ObjectID,
+}
+
 impl ExecutionFailureStatus {
     pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
         EntryArgumentError { argument_idx, kind }.into()
@@ -1059,6 +1071,14 @@ impl ExecutionFailureStatus {
 
     pub fn invalid_shared_by_value(object: ObjectID) -> Self {
         InvalidSharedByValue { object }.into()
+    }
+
+    pub fn invalid_parent_deletion(object: ObjectID) -> Self {
+        InvalidParentDeletion { object }.into()
+    }
+
+    pub fn invalid_parent_freezing(object: ObjectID) -> Self {
+        InvalidParentFreezing { object }.into()
     }
 }
 
@@ -1109,10 +1129,16 @@ impl std::fmt::Display for ExecutionFailureStatus {
                 write!(f, "Missing Object Owner. {data}")
             }
             ExecutionFailureStatus::InvalidSharedChildUse(data) => {
-                write!(f, "Invalid Shared Child Object Usage. {data}.")
+                write!(f, "Invalid Shared Child Object Usage. {data}")
             }
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
-                write!(f, "Invalid Shared Object By-Value Usage. {data}.")
+                write!(f, "Invalid Shared Object By-Value Usage. {data}")
+            }
+            ExecutionFailureStatus::InvalidParentDeletion(data) => {
+                write!(f, "Invalid Deletion of Parent Object with Children. {data}")
+            }
+            ExecutionFailureStatus::InvalidParentFreezing(data) => {
+                write!(f, "Invalid Freezing of Parent Object with Children. {data}")
             }
             ExecutionFailureStatus::PublishErrorEmptyPackage => write!(
                 f,
@@ -1233,6 +1259,28 @@ impl Display for InvalidSharedByValue {
     }
 }
 
+impl Display for InvalidParentDeletion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let InvalidParentDeletion { object } = self;
+        write!(
+            f,
+            "Invalid deletion of parent object {object} before its children \
+            were deleted or transferred."
+        )
+    }
+}
+
+impl Display for InvalidParentFreezing {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let InvalidParentFreezing { object } = self;
+        write!(
+            f,
+            "Invalid freezing of parent object {object} before its children \
+            were deleted or transferred."
+        )
+    }
+}
+
 impl std::error::Error for ExecutionFailureStatus {}
 
 impl ExecutionStatus {
@@ -1294,6 +1342,18 @@ impl From<InvalidSharedChildUse> for ExecutionFailureStatus {
 impl From<InvalidSharedByValue> for ExecutionFailureStatus {
     fn from(error: InvalidSharedByValue) -> Self {
         Self::InvalidSharedByValue(error)
+    }
+}
+
+impl From<InvalidParentDeletion> for ExecutionFailureStatus {
+    fn from(error: InvalidParentDeletion) -> Self {
+        Self::InvalidParentDeletion(error)
+    }
+}
+
+impl From<InvalidParentFreezing> for ExecutionFailureStatus {
+    fn from(error: InvalidParentFreezing) -> Self {
+        Self::InvalidParentFreezing(error)
     }
 }
 

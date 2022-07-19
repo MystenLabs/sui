@@ -207,7 +207,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, 10);
+        let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, None, 10);
         let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
@@ -1874,7 +1874,7 @@ async fn shared_object() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
+        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, None, 10);
         let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
@@ -1957,7 +1957,7 @@ async fn test_consensus_message_processed() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
+        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, None, 10);
         let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };

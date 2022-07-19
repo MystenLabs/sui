@@ -304,7 +304,7 @@ module nfts::geniteam {
 
         // Transfer ownership of inventory to player.
         let inventory_id = typed_id::new(&inventory);
-        bag::transfer_to_object_id(inventory, &info);
+        bag::transfer_to_object_id(inventory, &mut info);
 
         let player = Player {
             info,
@@ -333,7 +333,7 @@ module nfts::geniteam {
 
         // Transfer ownership of pet monsters to farm.
         let pet_monsters_id = typed_id::new(&pet_monsters);
-        collection::transfer_to_object_id(pet_monsters, &info);
+        collection::transfer_to_object_id(pet_monsters, &mut info);
 
 
         let farm = Farm {

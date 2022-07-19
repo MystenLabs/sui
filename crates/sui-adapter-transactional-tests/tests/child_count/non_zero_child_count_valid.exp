@@ -1,0 +1,104 @@
+processed 28 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 8-47:
+created: object(105)
+written: object(104)
+
+task 2 'run'. lines 49-49:
+created: object(107)
+written: object(106)
+
+task 3 'run'. lines 51-51:
+created: object(109)
+written: object(108)
+
+task 4 'run'. lines 53-53:
+created: object(111)
+written: object(110)
+
+task 5 'run'. lines 55-55:
+written: object(109), object(111), object(112)
+
+task 6 'view-object'. lines 57-57:
+Owner: Account Address ( A )
+Contents: test::m::S {info: sui::object::Info {id: sui::object::ID {bytes: fake(109)}, version: 2u64, child_count: std::option::Option<u64> {vec: vector[1u64]}}}
+
+task 7 'run'. lines 59-63:
+written: object(107), object(109), object(113)
+
+task 8 'run'. lines 65-65:
+created: object(115)
+written: object(114)
+
+task 9 'run'. lines 67-67:
+created: object(117)
+written: object(116)
+
+task 10 'run'. lines 69-69:
+written: object(115), object(117), object(118)
+
+task 11 'view-object'. lines 71-71:
+Owner: Account Address ( A )
+Contents: test::m::S {info: sui::object::Info {id: sui::object::ID {bytes: fake(115)}, version: 2u64, child_count: std::option::Option<u64> {vec: vector[1u64]}}}
+
+task 12 'run'. lines 73-77:
+written: object(115), object(119)
+
+task 13 'run'. lines 79-79:
+created: object(121)
+written: object(120)
+
+task 14 'run'. lines 81-81:
+created: object(123)
+written: object(122)
+
+task 15 'run'. lines 83-83:
+written: object(121), object(123), object(124)
+
+task 16 'view-object'. lines 85-85:
+Owner: Account Address ( A )
+Contents: test::m::S {info: sui::object::Info {id: sui::object::ID {bytes: fake(121)}, version: 2u64, child_count: std::option::Option<u64> {vec: vector[1u64]}}}
+
+task 17 'run'. lines 87-91:
+written: object(121), object(125)
+
+task 18 'run'. lines 93-93:
+created: object(127)
+written: object(126)
+
+task 19 'run'. lines 95-95:
+created: object(129)
+written: object(128)
+
+task 20 'run'. lines 97-97:
+written: object(127), object(129), object(130)
+
+task 21 'view-object'. lines 99-99:
+Owner: Account Address ( A )
+Contents: test::m::S {info: sui::object::Info {id: sui::object::ID {bytes: fake(127)}, version: 2u64, child_count: std::option::Option<u64> {vec: vector[1u64]}}}
+
+task 22 'transfer-object'. lines 101-105:
+written: object(127), object(131)
+
+task 23 'run'. lines 107-107:
+created: object(133)
+written: object(132)
+
+task 24 'run'. lines 109-109:
+created: object(135)
+written: object(134)
+
+task 25 'run'. lines 111-111:
+written: object(133), object(135), object(136)
+
+task 26 'view-object'. lines 113-113:
+Owner: Account Address ( A )
+Contents: test::m::S {info: sui::object::Info {id: sui::object::ID {bytes: fake(133)}, version: 2u64, child_count: std::option::Option<u64> {vec: vector[1u64]}}}
+
+task 27 'run'. lines 115-115:
+created: object(138)
+written: object(137)
+deleted: object(133)
