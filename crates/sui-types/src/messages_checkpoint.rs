@@ -458,9 +458,11 @@ impl SignedCheckpointProposalSummary {
     ) -> SuiResult {
         self.auth_signature.verify(&self.summary, committee)?;
         if let Some(contents) = contents {
+            // Taking advantage of the constructor to check both content digest and waypoint.
+            let recomputed = CheckpointProposalSummary::new(self.summary.sequence_number, contents);
             fp_ensure!(
-                contents.digest() == self.summary.content_digest,
-                SuiError::from("Checkpoint contents digest mismatch in proposal")
+                recomputed == self.summary,
+                SuiError::from("Checkpoint proposal content doesn't match with the summary")
             );
         }
         Ok(())

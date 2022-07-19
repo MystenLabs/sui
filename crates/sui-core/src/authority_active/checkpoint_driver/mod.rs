@@ -19,9 +19,9 @@ use sui_types::{
     messages::{CertifiedTransaction, TransactionInfoRequest},
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, SignedCheckpointSummary,
-        CheckpointProposal, SignedCheckpointProposalSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointProposal,
+        CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
+        SignedCheckpointProposalSummary, SignedCheckpointSummary,
     },
 };
 use tokio::time::Instant;
@@ -33,6 +33,7 @@ use crate::{
     checkpoints::CheckpointStore,
     node_sync::NodeSyncState,
 };
+
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::{Committee, StakeUnit};
 use tracing::{debug, info, warn};
