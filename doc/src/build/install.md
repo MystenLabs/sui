@@ -96,6 +96,8 @@ Get the `cmake` command to build Sui:
 $ sudo apt install cmake
 ```
 
+If you run into issues, follow this detailed [CMake Installation](https://riptutorial.com/cmake/example/4459/cmake-installation) tutorial.
+
 ### Linux
 
 In Linux, also install:
