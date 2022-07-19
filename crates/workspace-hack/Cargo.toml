@@ -401,7 +401,7 @@ rustyline = { version = "9", features = ["dirs-next", "with-dirs"] }
 ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
-scopeguard = { version = "1", default-features = false }
+scopeguard = { version = "1", features = ["use_std"] }
 sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
 sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
@@ -1004,7 +1004,7 @@ ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 schemars_derive = { version = "0.8", default-features = false }
-scopeguard = { version = "1", default-features = false }
+scopeguard = { version = "1", features = ["use_std"] }
 sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
 sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }

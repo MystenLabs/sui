@@ -11,7 +11,10 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
+use crate::authority::AuthorityMetrics;
+
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -231,6 +234,15 @@ impl crate::authority::AuthorityState {
         &self,
         request: BatchInfoRequest,
     ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, SuiError> {
+        let metrics = self.metrics.clone();
+        metrics.follower_connections.inc();
+
+        metrics.follower_connections_concurrent.inc();
+
+        let follower_connections_concurrent_guard = scopeguard::guard(metrics.clone(), |metrics| {
+            metrics.follower_connections_concurrent.dec();
+        });
+
         // Register a subscriber to not miss any updates
         let subscriber = self.subscribe_batch();
 
@@ -238,14 +250,21 @@ impl crate::authority::AuthorityState {
         let (items, (should_subscribe, _start, end)) =
             self.handle_batch_info_request(request).await?;
 
+        // unwrap safe - converting usize -> u64
+        metrics
+            .follower_items_loaded
+            .inc_by(items.len().try_into().unwrap());
+
         // Define a local structure to support the stream construction.
-        struct BatchStreamingLocals {
+        struct BatchStreamingLocals<GuardT> {
             items: VecDeque<UpdateItem>,
             next_expected_seq: TxSequenceNumber,
             next_expected_batch: TxSequenceNumber,
             subscriber: Receiver<UpdateItem>,
             exit: bool,
             should_subscribe: bool,
+            metrics: Arc<AuthorityMetrics>,
+            _guard: GuardT,
         }
 
         let local_state = BatchStreamingLocals {
@@ -260,6 +279,8 @@ impl crate::authority::AuthorityState {
             exit: false,
             // A flag indicating if real-time subscrition is needed.
             should_subscribe,
+            metrics,
+            _guard: follower_connections_concurrent_guard,
         };
 
         // Construct the stream
@@ -282,6 +303,7 @@ impl crate::authority::AuthorityState {
                     }
                 }
 
+                local_state.metrics.follower_items_streamed.inc();
                 Some((Ok(BatchInfoResponseItem(item)), local_state))
             } else {
                 // Release memory now that the historical items have been processed.
@@ -318,6 +340,7 @@ impl crate::authority::AuthorityState {
                                     }
                                 }
 
+                                local_state.metrics.follower_items_streamed.inc();
                                 return Some((Ok(BatchInfoResponseItem(item)), local_state));
                             }
                             Err(RecvError::Closed) => {
