@@ -9,12 +9,12 @@ import styles from './PaginationWrapper.module.css';
 export default function PaginationWrapper({
     results,
     viewComponentFn,
-    ITEMS_PER_PAGE,
+    itemsPerPage,
     stats,
 }: {
     results: any;
     viewComponentFn: Function;
-    ITEMS_PER_PAGE: number;
+    itemsPerPage: number;
     stats?: {
         stats_text: string;
         count: number;
@@ -23,12 +23,12 @@ export default function PaginationWrapper({
     const [pageIndex, setPageIndex] = useState(0);
 
     const FINAL_PAGE_NO =
-        Math.floor(results.length / ITEMS_PER_PAGE) +
-        (results.length % ITEMS_PER_PAGE !== 0 ? 1 : 0);
+        Math.floor(results.length / itemsPerPage) +
+        (results.length % itemsPerPage !== 0 ? 1 : 0);
 
     const objectSample = results.slice(
-        pageIndex * ITEMS_PER_PAGE,
-        (pageIndex + 1) * ITEMS_PER_PAGE
+        pageIndex * itemsPerPage,
+        (pageIndex + 1) * itemsPerPage
     );
 
     const handleBtnClick = useCallback(
@@ -43,9 +43,9 @@ export default function PaginationWrapper({
 
     const handleNextClick = useCallback(
         () =>
-            (pageIndex + 1) * ITEMS_PER_PAGE < results.length &&
+            (pageIndex + 1) * itemsPerPage < results.length &&
             setPageIndex(pageIndex + 1),
-        [pageIndex, ITEMS_PER_PAGE, results.length]
+        [pageIndex, itemsPerPage, results.length]
     );
 
     const FirstButton = (
