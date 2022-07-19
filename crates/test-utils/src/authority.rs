@@ -3,12 +3,16 @@
 use crate::{messages::make_certificates, TEST_COMMITTEE_SIZE};
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
-use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::{
-    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
-    authority_client::NetworkAuthorityClient,
+    authority_active::{
+        checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
+        ActiveAuthority,
+    },
+    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
 };
 use sui_node::SuiNode;
 use sui_types::{
@@ -33,6 +37,8 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     for config in configs.validator_configs.iter_mut() {
         // Disable gossip by default to reduce non-determinism.
         // TODO: Once this library is more broadly used, we can make this a config argument.
+        // Note: Enabling this will break checkpoint_catchup test, which needs a way to keep one
+        // authority behind the others.
         config.enable_gossip = false;
 
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
@@ -63,6 +69,30 @@ where
         handles.push(node);
     }
     handles
+}
+
+/// Spawn checkpoint processes with very short checkpointing intervals.
+pub async fn spawn_checkpoint_processes(
+    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    handles: &[SuiNode],
+) {
+    // Start active part of each authority.
+    for authority in handles {
+        let state = authority.state().clone();
+        let inner_agg = aggregator.clone();
+        let active_state =
+            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
+        let checkpoint_process_control = CheckpointProcessControl {
+            long_pause_between_checkpoints: Duration::from_millis(10),
+            ..CheckpointProcessControl::default()
+        };
+        let _active_authority_handle = active_state
+            .spawn_checkpoint_process_with_config(
+                checkpoint_process_control,
+                CheckpointMetrics::new_for_tests(),
+            )
+            .await;
+    }
 }
 
 /// Create a test authority aggregator.
