@@ -5874,7 +5874,7 @@ checksum = "678b5a069e50bf00ecd22d0cd8ddf7c236f68581b03db652061ed5eb13a312ff"
 dependencies = [
  "hex",
  "serde 1.0.139",
- "serde_with_macros",
+ "serde_with_macros 1.5.2",
 ]
 
 [[package]]
@@ -5884,6 +5884,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e182d6ec6f05393cc0e5ed1bf81ad6db3a8feedf8ee515ecdd369809bcce8082"
 dependencies = [
  "darling 0.13.4",
+ "proc-macro2 1.0.40",
+ "quote 1.0.20",
+ "syn 1.0.98",
+]
+
+[[package]]
+name = "serde_with_macros"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de337f322382fcdfbb21a014f7c224ee041a23785651db67b9827403178f698f"
+dependencies = [
+ "darling 0.14.1",
  "proc-macro2 1.0.40",
  "quote 1.0.20",
  "syn 1.0.98",
@@ -7336,10 +7348,11 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.19.2"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c51a52ed6686dd62c320f9b89299e9dfb46f730c7a48e635c19f21d116cb1439"
+checksum = "57aec3cfa4c296db7255446efb4928a6be304b431a806216105542a67b6ca82e"
 dependencies = [
+ "autocfg",
  "bytes",
  "libc",
  "memchr",
@@ -8911,7 +8924,7 @@ dependencies = [
  "serde_test",
  "serde_urlencoded",
  "serde_with",
- "serde_with_macros",
+ "serde_with_macros 2.0.0",
  "serde_yaml",
  "sha-1 0.10.0",
  "sha-1 0.9.8",
@@ -9340,7 +9353,7 @@ dependencies = [
  "serde_test",
  "serde_urlencoded",
  "serde_with",
- "serde_with_macros",
+ "serde_with_macros 1.5.2",
  "serde_yaml",
  "sha2 0.9.9",
  "sha3 0.10.1",
