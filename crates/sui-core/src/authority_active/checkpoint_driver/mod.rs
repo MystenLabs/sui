@@ -28,14 +28,12 @@ use tokio::time::Instant;
 
 use crate::epoch::reconfiguration::Reconfigurable;
 use crate::{
-    authority::AuthorityState,
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
     authority_client::AuthorityAPI,
-    checkpoints::CheckpointStore,
+    checkpoints::{proposal::CheckpointProposal, CheckpointStore},
     node_sync::NodeSyncState,
 };
 
-use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::{Committee, StakeUnit};
 use tracing::{debug, error, info, warn};
 
@@ -649,13 +647,11 @@ where
         let (past, contents) =
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
 
-        sync_checkpoint_certs(
-            state.clone(),
-            active_authority.node_sync_store.clone(),
-            net.clone(),
-            &contents,
-        )
-        .await?;
+        active_authority
+            .node_sync_state
+            .clone()
+            .sync_checkpoint(&contents)
+            .await?;
 
         checkpoint_db.lock().process_new_checkpoint_certificate(
             &past,
@@ -667,20 +663,6 @@ where
     }
 
     Ok(())
-}
-
-/// Fetch and execute all certificates in the checkpoint.
-async fn sync_checkpoint_certs<A>(
-    state: Arc<AuthorityState>,
-    node_sync_store: Arc<NodeSyncStore>,
-    net: Arc<AuthorityAggregator<A>>,
-    contents: &CheckpointContents,
-) -> SuiResult
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    let sync = NodeSyncState::new(state, net, node_sync_store);
-    sync.sync_checkpoint(contents).await
 }
 
 pub async fn get_one_checkpoint_with_contents<A>(

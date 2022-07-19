@@ -20,7 +20,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
+use sui_storage::follower_store::FollowerStore;
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -76,19 +76,14 @@ where
     .await;
 }
 
-pub async fn node_sync_process<A>(
-    active_authority: &ActiveAuthority<A>,
-    degree: usize,
-    node_sync_store: Arc<NodeSyncStore>,
-) where
+pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
+where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let state = active_authority.state.clone();
-    let aggregator = active_authority.net.load().clone();
     follower_process(
         active_authority,
         degree,
-        NodeSyncDigestHandler::new(state, aggregator, node_sync_store),
+        NodeSyncDigestHandler::new(active_authority.node_sync_state.clone()),
         GossipType::Full,
     )
     .await;
