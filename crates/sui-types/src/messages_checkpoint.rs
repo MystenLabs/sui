@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
@@ -143,7 +143,7 @@ pub enum AuthorityCheckpointInfo {
     // Returns the current proposal if any, and
     // the previous checkpoint.
     Proposal {
-        current: Option<SignedCheckpointSummary>,
+        current: Option<SignedCheckpointProposalSummary>,
         previous: AuthenticatedCheckpoint,
         // Include in all responses the local state of the sequence
         // of transaction to allow followers to track the latest
@@ -194,10 +194,8 @@ pub type CheckpointContentsDigest = [u8; 32];
 pub struct CheckpointSummary {
     pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
-    pub waypoint: Box<Waypoint>, // Bigger structure, can live on heap.
     pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
-    // TODO: add digest of previous checkpoint summary
 }
 
 impl CheckpointSummary {
@@ -217,7 +215,6 @@ impl CheckpointSummary {
         Self {
             epoch,
             sequence_number,
-            waypoint,
             content_digest,
             previous_digest,
         }
@@ -294,16 +291,9 @@ impl SignedCheckpointSummary {
         self.auth_signature.verify(&self.summary, committee)?;
 
         if let Some(contents) = contents {
-            let recomputed = CheckpointSummary::new(
-                self.summary.epoch,
-                *self.summary.sequence_number(),
-                contents,
-                self.summary.previous_digest,
-            );
-
             fp_ensure!(
-                recomputed == self.summary,
-                SuiError::from("Transaction digest mismatch")
+                contents.digest() == self.summary.content_digest,
+                SuiError::from("Checkpoint contents digest mismatch")
             );
         }
 
@@ -380,16 +370,9 @@ impl CertifiedCheckpointSummary {
         obligation.verify_all()?;
 
         if let Some(contents) = contents {
-            let recomputed = CheckpointSummary::new(
-                self.summary.epoch,
-                *self.summary.sequence_number(),
-                contents,
-                self.summary.previous_digest,
-            );
-
             fp_ensure!(
-                recomputed == self.summary,
-                SuiError::from("Transaction digest mismatch")
+                contents.digest() == self.summary.content_digest,
+                SuiError::from("Checkpoint contents digest mismatch")
             );
         }
 
@@ -426,11 +409,169 @@ impl CheckpointContents {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CheckpointProposalSummary {
+    pub sequence_number: CheckpointSequenceNumber,
+    pub waypoint: Box<Waypoint>, // Bigger structure, can live on heap.
+    pub content_digest: CheckpointContentsDigest,
+}
+
+impl CheckpointProposalSummary {
+    pub fn new(
+        sequence_number: CheckpointSequenceNumber,
+        transactions: &CheckpointContents,
+    ) -> Self {
+        let mut waypoint = Box::new(Waypoint::default());
+        transactions.transactions.iter().for_each(|tx| {
+            waypoint.insert(tx);
+        });
+
+        Self {
+            sequence_number,
+            waypoint,
+            content_digest: transactions.digest(),
+        }
+    }
+
+    pub fn digest(&self) -> [u8; 32] {
+        sha3_hash(self)
+    }
+}
+
+impl BcsSignable for CheckpointProposalSummary {}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignedCheckpointProposalSummary {
+    pub summary: CheckpointProposalSummary,
+    pub auth_signature: AuthoritySignInfo,
+}
+
+impl SignedCheckpointProposalSummary {
+    pub fn authority(&self) -> &AuthorityName {
+        &self.auth_signature.authority
+    }
+
+    pub fn verify(
+        &self,
+        committee: &Committee,
+        contents: Option<&CheckpointContents>,
+    ) -> SuiResult {
+        self.auth_signature.verify(&self.summary, committee)?;
+        if let Some(contents) = contents {
+            // Taking advantage of the constructor to check both content digest and waypoint.
+            let recomputed = CheckpointProposalSummary::new(self.summary.sequence_number, contents);
+            fp_ensure!(
+                recomputed == self.summary,
+                SuiError::from("Checkpoint proposal content doesn't match with the summary")
+            );
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointProposal {
+    /// Summary of the checkpoint proposal.
+    pub signed_summary: SignedCheckpointProposalSummary,
+    /// The transactions included in the proposal.
+    /// TODO: only include a commitment by default.
+    pub transactions: CheckpointContents,
+}
+
+impl CheckpointProposal {
+    pub fn new_from_signed_proposal_summary(
+        signed_summary: SignedCheckpointProposalSummary,
+        transactions: CheckpointContents,
+    ) -> Self {
+        debug_assert!(signed_summary.summary.content_digest == transactions.digest());
+        Self {
+            signed_summary,
+            transactions,
+        }
+    }
+
+    /// Create a proposal for a checkpoint at a particular height
+    /// This contains a signed proposal summary and the list of transactions
+    /// in the proposal.
+    pub fn new(
+        epoch: EpochId,
+        sequence_number: CheckpointSequenceNumber,
+        authority: AuthorityName,
+        signer: &dyn signature::Signer<AuthoritySignature>,
+        transactions: CheckpointContents,
+    ) -> Self {
+        let proposal_summary = CheckpointProposalSummary::new(sequence_number, &transactions);
+        let signature = AuthoritySignature::new(&proposal_summary, signer);
+        Self {
+            signed_summary: SignedCheckpointProposalSummary {
+                summary: proposal_summary,
+                auth_signature: AuthoritySignInfo {
+                    epoch,
+                    authority,
+                    signature,
+                },
+            },
+            transactions,
+        }
+    }
+
+    /// Returns the sequence number of this proposal
+    pub fn sequence_number(&self) -> &CheckpointSequenceNumber {
+        &self.signed_summary.summary.sequence_number
+    }
+
+    // Iterate over all transaction/effects
+    pub fn transactions(&self) -> impl Iterator<Item = &ExecutionDigests> {
+        self.transactions.transactions.iter()
+    }
+
+    // Get the authority name
+    pub fn name(&self) -> &AuthorityName {
+        &self.signed_summary.auth_signature.authority
+    }
+
+    /// Construct a Diff structure between this proposal and another
+    /// proposal. A diff structure has to contain keys. The diff represents
+    /// the elements that each proposal need to be augmented by to
+    /// contain the same elements.
+    ///
+    /// TODO: down the line we can include other methods to get diffs
+    /// line MerkleTrees or IBLT filters that do not require O(n) download
+    /// of both proposals.
+    pub fn fragment_with(&self, other_proposal: &CheckpointProposal) -> CheckpointFragment {
+        let all_elements = self
+            .transactions()
+            .chain(other_proposal.transactions())
+            .collect::<HashSet<_>>();
+
+        let my_transactions = self.transactions().collect();
+        let iter_missing_me = all_elements.difference(&my_transactions).map(|x| **x);
+        let other_transactions = other_proposal.transactions().collect();
+        let iter_missing_other = all_elements.difference(&other_transactions).map(|x| **x);
+
+        let diff = WaypointDiff::new(
+            *self.name(),
+            *self.signed_summary.summary.waypoint.clone(),
+            iter_missing_me,
+            *other_proposal.name(),
+            *other_proposal.signed_summary.summary.waypoint.clone(),
+            iter_missing_other,
+        );
+
+        CheckpointFragment {
+            proposer: self.signed_summary.clone(),
+            other: other_proposal.signed_summary.clone(),
+            diff,
+            certs: BTreeMap::new(),
+        }
+    }
+}
+
 // The construction of checkpoints is based on the aggregation of fragments.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointFragment {
-    pub proposer: SignedCheckpointSummary,
-    pub other: SignedCheckpointSummary,
+    pub proposer: SignedCheckpointProposalSummary,
+    pub other: SignedCheckpointProposalSummary,
     pub diff: WaypointDiff<AuthorityName, ExecutionDigests>,
     pub certs: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
@@ -463,7 +604,7 @@ impl CheckpointFragment {
     }
 
     pub fn proposer_sequence_number(&self) -> &CheckpointSequenceNumber {
-        self.proposer.summary.sequence_number()
+        &self.proposer.summary.sequence_number
     }
 }
 
