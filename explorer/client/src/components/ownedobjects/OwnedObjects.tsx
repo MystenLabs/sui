@@ -210,7 +210,7 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
                     <PaginationWrapper
                         results={other_results}
                         viewComponentFn={viewFn}
-                        ITEMS_PER_PAGE={ITEMS_PER_PAGE}
+                        itemsPerPage={ITEMS_PER_PAGE}
                         stats={nftFooter.stats}
                     />
                 </div>
@@ -289,7 +289,7 @@ function GroupView({ results }: { results: resultType }) {
                 <PaginationWrapper
                     results={subObjs}
                     viewComponentFn={viewFn}
-                    ITEMS_PER_PAGE={ITEMS_PER_PAGE}
+                    itemsPerPage={ITEMS_PER_PAGE}
                 />
             </div>
         );

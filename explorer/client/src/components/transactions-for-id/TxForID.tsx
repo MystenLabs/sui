@@ -26,6 +26,7 @@ import PaginationWrapper from '../pagination/PaginationWrapper';
 import styles from './TxForID.module.css';
 
 const TRUNCATE_LENGTH = 14;
+const ITEMS_PER_PAGE = 10;
 
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
@@ -140,7 +141,7 @@ function TxForIDStatic({
         <PaginationWrapper
             results={data}
             viewComponentFn={viewFn}
-            ITEMS_PER_PAGE={10}
+            itemsPerPage={ITEMS_PER_PAGE}
         />
     );
 }
@@ -192,7 +193,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
             <PaginationWrapper
                 results={data}
                 viewComponentFn={viewFn}
-                ITEMS_PER_PAGE={10}
+                itemsPerPage={ITEMS_PER_PAGE}
             />
         );
     }
