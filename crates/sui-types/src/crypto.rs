@@ -92,14 +92,14 @@ impl<S: Authenticator> SuiAuthoritySignature<S> for S {
 
 impl signature::Signer<Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        let signature_bytes: <<KeyPair as KeypairTraits>::PrivKey as SigningKey>::Sig =
-            self.try_sign(msg)?;
+        let signature_bytes: AccountSignature =
+            <Self as signature::Signer<AccountSignature>>::try_sign(self, msg)?;
         let public_key_bytes: PublicKeyBytes = self.public().into();
+
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
-        result_bytes[..<KeyPair as KeypairTraits>::Sig::LENGTH]
-            .copy_from_slice(signature_bytes.as_ref());
-        result_bytes[<KeyPair as KeypairTraits>::Sig::LENGTH..]
-            .copy_from_slice(public_key_bytes.as_ref());
+        let sig_length = <KeyPair as narwhal_crypto::traits::KeyPair>::Sig::LENGTH;
+        result_bytes[..sig_length].copy_from_slice(signature_bytes.as_ref());
+        result_bytes[sig_length..].copy_from_slice(public_key_bytes.as_ref());    
         Ok(Signature(result_bytes))
     }
 }
@@ -153,10 +153,11 @@ where
 
 // TODO: C-GETTER
 pub fn get_key_pair_from_bytes(bytes: &[u8]) -> SuiResult<(SuiAddress, KeyPair)> {
-    let sk = PrivateKey::from_bytes(&bytes[..<KeyPair as KeypairTraits>::PrivKey::LENGTH])
-        .map_err(|_| SuiError::InvalidPrivateKey)?;
+    let priv_length = <KeyPair as narwhal_crypto::traits::KeyPair>::PrivKey::LENGTH;
+    let sk =
+        PrivateKey::from_bytes(&bytes[..priv_length]).map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KeyPair = sk.into();
-    if kp.public().as_ref() != &bytes[<KeyPair as KeypairTraits>::PrivKey::LENGTH..] {
+    if kp.public().as_ref() != &bytes[priv_length..] {
         return Err(SuiError::InvalidAddress);
     }
     Ok((kp.public().into(), kp))
@@ -230,10 +231,11 @@ impl Signature {
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
-        let public_key = <KeyPair as KeypairTraits>::PubKey::from_bytes(public_key_bytes.as_ref())
-            .map_err(|err| SuiError::InvalidSignature {
+        let public_key = PublicKey::from_bytes(public_key_bytes.as_ref()).map_err(|err| {
+            SuiError::InvalidSignature {
                 error: err.to_string(),
-            })?;
+            }
+        })?;
 
         // perform cryptographic signature check
         public_key
