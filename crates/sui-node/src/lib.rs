@@ -190,7 +190,8 @@ impl SuiNode {
                         ),
                     )
                 } else {
-                    active_authority.sync_to_latest_checkpoint().await?;
+                    let metrics = CheckpointMetrics::new(&prometheus_registry);
+                    active_authority.sync_to_latest_checkpoint(&metrics).await?;
                     (
                         Some(active_authority.spawn_node_sync_process().await),
                         None,

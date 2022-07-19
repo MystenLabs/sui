@@ -237,13 +237,14 @@ where
         })
     }
 
-    pub async fn sync_to_latest_checkpoint(&self) -> SuiResult {
-        self.sync_to_latest_checkpoint_with_config(Default::default())
+    pub async fn sync_to_latest_checkpoint(&self, metrics: &CheckpointMetrics) -> SuiResult {
+        self.sync_to_latest_checkpoint_with_config(metrics, Default::default())
             .await
     }
 
     pub async fn sync_to_latest_checkpoint_with_config(
         &self,
+        metrics: &CheckpointMetrics,
         checkpoint_process_control: CheckpointProcessControl,
     ) -> SuiResult {
         let checkpoint_store =
@@ -272,7 +273,7 @@ where
             }
         };
 
-        sync_to_checkpoint(self, checkpoint_store, checkpoint_summary).await
+        sync_to_checkpoint(self, checkpoint_store, checkpoint_summary, metrics).await
     }
 
     /// Spawn gossip process
