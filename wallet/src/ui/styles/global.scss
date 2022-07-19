@@ -2,7 +2,13 @@
 @use '_variables' as v;
 
 @import url('bootstrap-icons');
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+@font-face {
+    font-family: Inter;
+    font-style: normal;
+    font-display: swap;
+    src: url('_assets/fonts/inter.ttf');
+}
 
 html,
 body {
@@ -16,6 +22,7 @@ body {
     background-color: v.use(v.$colors-background-color);
     color: black;
     scroll-behavior: smooth;
+    font-family: Inter, sans-serif;
 }
 
 #root {
