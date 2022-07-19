@@ -9,7 +9,7 @@ use std::str::FromStr;
 use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
-use crate::crypto::{AuthoritySignature, SuiAuthoritySignature, KeyPair, get_key_pair_from_bytes};
+use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair, SuiAuthoritySignature};
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,
@@ -354,7 +354,8 @@ fn derive_sample_address() -> (SuiAddress, KeyPair) {
         92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
         105, 254, 59, 163,
-    ]).unwrap();
+    ])
+    .unwrap();
     (address, pub_key)
 }
 

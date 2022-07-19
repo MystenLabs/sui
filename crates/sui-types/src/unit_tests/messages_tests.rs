@@ -196,11 +196,8 @@ where
     T: BcsSignable,
 {
     let mut obligation = VerificationObligation::default();
-
     // Add the obligation of the authority signature verifications.
-    let mut sign_message: Vec<u8> = Vec::new();
-    value.write(&mut sign_message);
-    let idx = obligation.add_message(sign_message);
+    let idx = obligation.add_message(value);
     (obligation, idx)
 }
 

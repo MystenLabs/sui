@@ -7,7 +7,7 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable, EmptySignInfo, Signable,
-    Signature, SuiAuthoritySignature, VerificationObligation, PublicKeyBytes, AccountSignature,
+    Signature, SuiAuthoritySignature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
@@ -543,7 +543,8 @@ impl<S> TransactionEnvelope<S> {
         let (signature, public_key) = self
             .tx_signature
             .get_verification_inputs(self.data.sender)?;
-        let key = public_key.try_into()
+        let key = public_key
+            .try_into()
             .map_err(|_| SuiError::InvalidSignature {
                 error: "Invalid public key".to_owned(),
             })?;
@@ -675,9 +676,7 @@ impl Transaction {
     pub fn verify(&self) -> Result<(), SuiError> {
         let mut obligation = VerificationObligation::default();
 
-        let mut message = Vec::new();
-        self.data.write(&mut message);
-        let idx = obligation.add_message(message);
+        let idx = obligation.add_message(&self.data);
 
         self.add_sender_sig_to_verification_obligation(&mut obligation, idx)?;
         obligation.verify_all().map(|_| ())
@@ -759,14 +758,9 @@ impl SignedTransaction {
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         let mut obligation = VerificationObligation::default();
 
-        let mut message = Vec::new();
-        self.data.write(&mut message);
-        let idx = obligation.add_message(message);
+        let idx = obligation.add_message(&self.data);
+
         self.add_sender_sig_to_verification_obligation(&mut obligation, idx)?;
-
-        let weight = committee.weight(&self.auth_sign_info.authority);
-        fp_ensure!(weight > 0, SuiError::UnknownSigner);
-
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -1732,9 +1726,7 @@ impl CertifiedTransaction {
         obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
     ) -> SuiResult<()> {
         // Add the obligation of the authority signature verifications.
-        let mut message = Vec::new();
-        self.data.write(&mut message);
-        let idx = obligation.add_message(message);
+        let idx = obligation.add_message(&self.data);
 
         // Add the obligation of the sender signature verification.
         self.add_sender_sig_to_verification_obligation(obligation, idx)?;

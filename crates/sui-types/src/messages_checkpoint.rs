@@ -6,7 +6,7 @@ use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
-use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable};
+use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
@@ -289,13 +289,6 @@ impl SignedCheckpointSummary {
             self.summary.epoch == self.auth_signature.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
-        fp_ensure!(
-            committee.weight(&self.auth_signature.authority) > 0,
-            SuiError::UnknownSigner
-        );
-        self.auth_signature
-            .signature
-            .verify(&self.summary, self.auth_signature.authority)?;
 
         self.auth_signature.verify(&self.summary, committee)?;
 
@@ -371,11 +364,10 @@ impl CertifiedCheckpointSummary {
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
         let mut obligation = VerificationObligation::default();
-        let mut message = Vec::new();
-        self.summary.write(&mut message);
-        let idx = obligation.add_message(message);
+        let idx = obligation.add_message(&self.summary);
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
+
         obligation.verify_all()?;
 
         if let Some(contents) = contents {

@@ -11,9 +11,8 @@ use base64ct::Encoding;
 use digest::Digest;
 use narwhal_crypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
-    Ed25519PublicKeyBytes, Ed25519Signature,
+    Ed25519Signature,
 };
-use narwhal_crypto::pubkey_bytes::PublicKeyBytes as NWPKBytes;
 pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
 pub use narwhal_crypto::traits::{
     AggregateAuthenticator, Authenticator, SigningKey, ToFromBytes, VerifyingKey,
@@ -26,14 +25,14 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
-use std::collections::HashMap;
+use std::fmt::Display;
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
 
 // Comment the one you want to use
 pub type KeyPair = Ed25519KeyPair; // Associated Types don't work here yet for some reason.
 pub type PrivateKey = Ed25519PrivateKey;
 pub type PublicKey = Ed25519PublicKey;
-pub type PublicKeyBytes = Ed25519PublicKeyBytes;
 
 // Signatures for Authorities
 pub type AuthoritySignature = Ed25519Signature;
@@ -43,20 +42,90 @@ pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
 pub type AccountSignature = Ed25519Signature;
 pub type AggregateAccountSignature = Ed25519AggregateSignature;
 
-pub trait SuiAuthoritySignature<S: Authenticator> {
+//
+// Define Bytes representation of the Authority's PublicKey
+//
+
+#[serde_as]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct PublicKeyBytes(#[serde_as(as = "Bytes")] [u8; PublicKey::LENGTH]);
+
+impl TryFrom<PublicKeyBytes> for PublicKey {
+    type Error = signature::Error;
+
+    fn try_from(bytes: PublicKeyBytes) -> Result<PublicKey, Self::Error> {
+        PublicKey::from_bytes(bytes.as_ref()).map_err(|_| Self::Error::new())
+    }
+}
+
+impl From<&PublicKey> for PublicKeyBytes {
+    fn from(pk: &PublicKey) -> PublicKeyBytes {
+        PublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
+    }
+}
+
+impl AsRef<[u8]> for PublicKeyBytes {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
+impl Display for PublicKeyBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = hex::encode(&self.0);
+        write!(f, "k#{}", s)?;
+        Ok(())
+    }
+}
+
+impl ToFromBytes for PublicKeyBytes {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
+        let bytes: [u8; PublicKey::LENGTH] =
+            bytes.try_into().map_err(signature::Error::from_source)?;
+        Ok(PublicKeyBytes(bytes))
+    }
+}
+
+impl PublicKeyBytes {
+    /// This ensures it's impossible to construct an instance with other than registered lengths
+    pub fn new(bytes: [u8; PublicKey::LENGTH]) -> PublicKeyBytes
+where {
+        PublicKeyBytes(bytes)
+    }
+
+    // this is probably derivable, but we'd rather have it explicitly laid out for instructional purposes,
+    // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
+    #[allow(dead_code)]
+    fn default() -> Self {
+        Self([0u8; PublicKey::LENGTH])
+    }
+}
+
+impl FromStr for PublicKeyBytes {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.strip_prefix("0x").unwrap_or(s);
+        let value = hex::decode(s)?;
+        Self::from_bytes(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
+    }
+}
+
+//
+// Add helper calls for Authority Signature
+//
+
+pub trait SuiAuthoritySignature {
     fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
     where
         T: Signable<Vec<u8>>;
-    fn verify<T, const N: usize>(
-        &self,
-        value: &T,
-        author: NWPKBytes<S::PubKey, N>,
-    ) -> Result<(), SuiError>
+
+    fn verify<T>(&self, value: &T, author: PublicKeyBytes) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>;
 }
 
-impl<S: Authenticator> SuiAuthoritySignature<S> for S {
+impl SuiAuthoritySignature for AuthoritySignature {
     fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
     where
         T: Signable<Vec<u8>>,
@@ -66,17 +135,13 @@ impl<S: Authenticator> SuiAuthoritySignature<S> for S {
         secret.sign(&message)
     }
 
-    fn verify<T, const N: usize>(
-        &self,
-        value: &T,
-        author: NWPKBytes<S::PubKey, N>,
-    ) -> Result<(), SuiError>
+    fn verify<T>(&self, value: &T, author: PublicKeyBytes) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
     {
         // is this a cryptographically valid public Key?
         let public_key =
-            S::PubKey::from_bytes(author.as_ref()).map_err(|_| SuiError::InvalidAddress)?;
+            PublicKey::from_bytes(author.as_ref()).map_err(|_| SuiError::InvalidAddress)?;
         // serialize the message (see BCS serialization for determinism)
         let mut message = Vec::new();
         value.write(&mut message);
@@ -92,14 +157,14 @@ impl<S: Authenticator> SuiAuthoritySignature<S> for S {
 
 impl signature::Signer<Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        let signature_bytes: <<KeyPair as KeypairTraits>::PrivKey as SigningKey>::Sig =
-            self.try_sign(msg)?;
+        let signature_bytes: AccountSignature =
+            <Self as signature::Signer<AccountSignature>>::try_sign(self, msg)?;
         let public_key_bytes: PublicKeyBytes = self.public().into();
+
         let mut result_bytes = [0u8; SUI_SIGNATURE_LENGTH];
-        result_bytes[..<KeyPair as KeypairTraits>::Sig::LENGTH]
-            .copy_from_slice(signature_bytes.as_ref());
-        result_bytes[<KeyPair as KeypairTraits>::Sig::LENGTH..]
-            .copy_from_slice(public_key_bytes.as_ref());
+        let sig_length = <KeyPair as narwhal_crypto::traits::KeyPair>::Sig::LENGTH;
+        result_bytes[..sig_length].copy_from_slice(signature_bytes.as_ref());
+        result_bytes[sig_length..].copy_from_slice(public_key_bytes.as_ref());
         Ok(Signature(result_bytes))
     }
 }
@@ -153,10 +218,11 @@ where
 
 // TODO: C-GETTER
 pub fn get_key_pair_from_bytes(bytes: &[u8]) -> SuiResult<(SuiAddress, KeyPair)> {
-    let sk = PrivateKey::from_bytes(&bytes[..<KeyPair as KeypairTraits>::PrivKey::LENGTH])
-        .map_err(|_| SuiError::InvalidPrivateKey)?;
+    let priv_length = <KeyPair as narwhal_crypto::traits::KeyPair>::PrivKey::LENGTH;
+    let sk =
+        PrivateKey::from_bytes(&bytes[..priv_length]).map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KeyPair = sk.into();
-    if kp.public().as_ref() != &bytes[<KeyPair as KeypairTraits>::PrivKey::LENGTH..] {
+    if kp.public().as_ref() != &bytes[priv_length..] {
         return Err(SuiError::InvalidAddress);
     }
     Ok((kp.public().into(), kp))
@@ -230,10 +296,11 @@ impl Signature {
 
         // is this a cryptographically correct public key?
         // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
-        let public_key = <KeyPair as KeypairTraits>::PubKey::from_bytes(public_key_bytes.as_ref())
-            .map_err(|err| SuiError::InvalidSignature {
+        let public_key = PublicKey::from_bytes(public_key_bytes.as_ref()).map_err(|err| {
+            SuiError::InvalidSignature {
                 error: err.to_string(),
-            })?;
+            }
+        })?;
 
         // perform cryptographic signature check
         public_key
@@ -304,12 +371,15 @@ impl PartialEq for AuthoritySignInfo {
 }
 
 impl AuthoritySignInfo {
-    pub fn add_to_verification_obligation<T>(
+    pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
         obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
         message_index: usize,
     ) -> SuiResult<()> {
+        let weight = committee.weight(&self.authority);
+        fp_ensure!(weight > 0, SuiError::UnknownSigner);
+
         obligation
             .public_keys
             .get_mut(message_index)
@@ -331,7 +401,8 @@ impl AuthoritySignInfo {
         T: Signable<Vec<u8>>,
     {
         let mut obligation = VerificationObligation::default();
-        self.add_to_verification_obligation(data, committee, &mut obligation)?;
+        let idx = obligation.add_message(data);
+        self.add_to_verification_obligation(committee, &mut obligation, idx)?;
         obligation.verify_all()?;
         Ok(())
     }
@@ -387,7 +458,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         committee: &Committee,
     ) -> SuiResult<Self> {
         let mut map = RoaringBitmap::new();
-
         signatures.sort_by_key(|(public_key, _)| *public_key);
 
         for (pk, _) in &signatures {
@@ -570,7 +640,13 @@ impl<S: AggregateAuthenticator> VerificationObligation<S> {
 
     /// Add a new message to the list of messages to be verified.
     /// Returns the index of the message.
-    pub fn add_message(&mut self, message: Vec<u8>) -> usize {
+    pub fn add_message<T>(&mut self, message_value: &T) -> usize
+    where
+        T: Signable<Vec<u8>>,
+    {
+        let mut message = Vec::new();
+        message_value.write(&mut message);
+
         self.signatures.push(S::default());
         self.public_keys.push(Vec::new());
         self.messages.push(message);

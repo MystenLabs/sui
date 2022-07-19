@@ -322,12 +322,8 @@ Owner:
       Shared: UNIT
     3:
       Immutable: UNIT
-PhantomData: UNITSTRUCT
 PublicKeyBytes:
-  STRUCT:
-    - bytes: BYTES
-    - phantom:
-        TYPENAME: PhantomData
+  NEWTYPESTRUCT: BYTES
 SequenceNumber:
   NEWTYPESTRUCT: U64
 Signature:
