@@ -31,7 +31,7 @@ So there is no global storage in Sui Move. None of the global storage-related op
 
 In Move, there is a special _address_ type. This type is used to represent account addresses in core Move. Core Move needs to know the address of an account when dealing with the global storage. The _address_ type is 16 bytes, which is sufficient for the core Move security model.
 
-In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [id.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) file in Sui framework for an understanding of address use.
+In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [object.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) file in Sui framework for an understanding of address use.
 
 ## Object with key ability, globally unique IDs
 
