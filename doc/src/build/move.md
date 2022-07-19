@@ -374,7 +374,7 @@ Since we are developing a fantasy game, in addition to the mandatory
 `Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the
-[ID package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) from
+[Object package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) from
 Sui framework to gain access to the `Info` struct type defined
 in this package.
 
