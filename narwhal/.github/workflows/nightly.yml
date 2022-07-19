@@ -45,7 +45,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features
+          args: --features celo
 
   release:
     name: build release binaries
@@ -57,7 +57,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all-targets --all-features --release --profile=release
+          args: --all-targets --features celo --release --profile=release
 
   cargo-udeps:
     runs-on: ubuntu-latest

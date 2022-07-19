@@ -69,10 +69,10 @@ jobs:
           path: ~/.cargo/registry/src/**/librocksdb-sys-*
       - name: cargo test
         run: |
-          cargo nextest run --all-features --profile ci
+          cargo nextest run --features celo --profile ci
       - name: Doctests
         run: |
-          cargo test --doc --all-features
+          cargo test --doc --features celo
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
 
