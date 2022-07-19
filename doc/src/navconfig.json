@@ -3,7 +3,7 @@
     "title": "QUICK LINKS",
     "items": [
       {
-        "label": "DevNet",
+        "label": "Devnet",
         "link": "explore/devnet"
       },
       {
@@ -112,8 +112,8 @@
         "fileName": "build/move"
       },
       {
-        "label": "Create Sui Wallet",
-        "fileName": "build/wallet"
+        "label": "Use Sui CLI",
+        "fileName": "build/cli-client"
       },
       {
         "label": "Program with Objects",
@@ -151,11 +151,19 @@
         "fileName": "build/sui-json"
       },
       {
-        "label": "Run Full Node",
+        "label": "Run a Fullnode",
         "fileName": "build/fullnode"
+      },
+      {
+        "label": "Subscribe to Events",
+        "fileName": "build/pubsub"
       }
     ],
     "explore": [
+      {
+        "label": "Wallet in Browser",
+        "fileName": "explore/wallet-browser"
+      },
       {
         "label": "DevNet",
         "fileName": "explore/devnet"

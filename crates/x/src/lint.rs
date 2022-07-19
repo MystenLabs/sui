@@ -7,7 +7,10 @@ use nexlint_lints::{
     content::*,
     handle_lint_results,
     package::*,
-    project::{BannedDeps, BannedDepsConfig, DirectDepDups, DirectDepDupsConfig},
+    project::{
+        BannedDeps, BannedDepsConfig, DirectDepDups, DirectDepDupsConfig,
+        DirectDuplicateGitDependencies,
+    },
 };
 
 static LICENSE_HEADER: &str = "Copyright (c) 2022, Mysten Labs, Inc.\n\
@@ -20,7 +23,10 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> crate::Result<()> {
-    let direct_dups_config = DirectDepDupsConfig { allow: vec![] };
+    // rand can be removed if/when ed25519_dalek upgrades to rand 0.8
+    let direct_dups_config = DirectDepDupsConfig {
+        allow: vec!["rand".to_string()],
+    };
     let banned_deps_config = BannedDepsConfig {
         direct: vec![
             (
@@ -38,6 +44,7 @@ pub fn run(args: Args) -> crate::Result<()> {
     let project_linters: &[&dyn ProjectLinter] = &[
         &DirectDepDups::new(&direct_dups_config),
         &BannedDeps::new(&banned_deps_config),
+        &DirectDuplicateGitDependencies,
     ];
 
     let package_linters: &[&dyn PackageLinter] = &[

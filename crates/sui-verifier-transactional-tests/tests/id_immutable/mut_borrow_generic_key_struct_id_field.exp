@@ -1,4 +1,5 @@
 processed 1 task
 
 task 0 'publish'. lines 4-18:
-Error: Failed to verify the Move module, reason: "In function foo: ID field of struct Foo cannot be mut borrowed because ID is immutable.".
+created: object(103)
+written: object(102)

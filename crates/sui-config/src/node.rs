@@ -4,12 +4,10 @@
 use crate::genesis;
 use crate::Config;
 use anyhow::Result;
-use debug_ignore::DebugIgnore;
 use multiaddr::Multiaddr;
-use narwhal_config::Committee as ConsensusCommittee;
 use narwhal_config::Parameters as ConsensusParameters;
-use narwhal_crypto::ed25519::Ed25519PublicKey;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -25,10 +23,15 @@ pub struct NodeConfig {
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
-    #[serde(default = "default_metrics_address")]
-    pub metrics_address: SocketAddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
+    #[serde(default = "default_websocket_address")]
+    pub websocket_address: Option<SocketAddr>,
+
+    #[serde(default = "default_metrics_address")]
+    pub metrics_address: SocketAddr,
+    #[serde(default = "default_admin_interface_port")]
+    pub admin_interface_port: u16,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
@@ -38,6 +41,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub enable_gossip: bool,
+
+    #[serde(default)]
+    pub enable_reconfig: bool,
 
     pub genesis: Genesis,
 }
@@ -56,9 +62,18 @@ fn default_metrics_address() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
 }
 
+pub fn default_admin_interface_port() -> u16 {
+    1337
+}
+
 pub fn default_json_rpc_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
+}
+
+pub fn default_websocket_address() -> Option<SocketAddr> {
+    use std::net::{IpAddr, Ipv4Addr};
+    Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
 }
 
 impl Config for NodeConfig {}
@@ -99,12 +114,7 @@ pub struct ConsensusConfig {
     pub consensus_address: Multiaddr,
     pub consensus_db_path: PathBuf,
 
-    //TODO make narwhal config serializable
-    #[serde(skip_serializing)]
-    #[serde(default)]
-    pub narwhal_config: DebugIgnore<ConsensusParameters>,
-
-    pub narwhal_committee: DebugIgnore<ConsensusCommittee<Ed25519PublicKey>>,
+    pub narwhal_config: ConsensusParameters,
 }
 
 impl ConsensusConfig {
@@ -119,10 +129,6 @@ impl ConsensusConfig {
     pub fn narwhal_config(&self) -> &ConsensusParameters {
         &self.narwhal_config
     }
-
-    pub fn narwhal_committee(&self) -> &ConsensusCommittee<Ed25519PublicKey> {
-        &self.narwhal_committee
-    }
 }
 
 /// Publicly known information about a validator
@@ -130,12 +136,25 @@ impl ConsensusConfig {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
+    pub name: String,
     pub public_key: PublicKeyBytes,
     pub stake: StakeUnit,
+    pub delegation: StakeUnit,
     pub network_address: Multiaddr,
+    pub narwhal_primary_to_primary: Multiaddr,
+
+    //TODO remove all of these as they shouldn't be needed to be encoded in genesis
+    pub narwhal_worker_to_primary: Multiaddr,
+    pub narwhal_primary_to_worker: Multiaddr,
+    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_consensus_address: Multiaddr,
 }
 
 impl ValidatorInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn sui_address(&self) -> SuiAddress {
         SuiAddress::from(self.public_key())
     }
@@ -148,8 +167,24 @@ impl ValidatorInfo {
         self.stake
     }
 
+    pub fn delegation(&self) -> StakeUnit {
+        self.delegation
+    }
+
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
+    }
+
+    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<PublicKeyBytes, u64> {
+        validator_set
+            .iter()
+            .map(|validator| {
+                (
+                    validator.public_key(),
+                    validator.stake() + validator.delegation(),
+                )
+            })
+            .collect()
     }
 }
 

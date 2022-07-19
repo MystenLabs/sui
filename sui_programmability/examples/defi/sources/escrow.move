@@ -3,13 +3,13 @@
 
 /// An escrow for atomic swap of objects that trusts a third party for liveness, but not safety.
 module defi::escrow {
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
-        id: VersionedID,
+        info: Info,
         /// owner of the escrowed object
         sender: address,
         /// intended recipient of the escrowed object
@@ -40,11 +40,11 @@ module defi::escrow {
         ctx: &mut TxContext
     ) {
         let sender = tx_context::sender(ctx);
-        let id = tx_context::new_id(ctx);
+        let info = object::new(ctx);
         // escrow the object with the trusted third party
         transfer::transfer(
             EscrowedObj<T,ExchangeForT> {
-                id, sender, recipient, exchange_for, escrowed
+                info, sender, recipient, exchange_for, escrowed
             },
             third_party
         );
@@ -56,27 +56,27 @@ module defi::escrow {
         obj2: EscrowedObj<T2, T1>,
     ) {
         let EscrowedObj {
-            id: id1,
+            info: id1,
             sender: sender1,
             recipient: recipient1,
             exchange_for: exchange_for1,
             escrowed: escrowed1,
         } = obj1;
         let EscrowedObj {
-            id: id2,
+            info: id2,
             sender: sender2,
             recipient: recipient2,
             exchange_for: exchange_for2,
             escrowed: escrowed2,
         } = obj2;
-        id::delete(id1);
-        id::delete(id2);
+        object::delete(id1);
+        object::delete(id2);
         // check sender/recipient compatibility
         assert!(&sender1 == &recipient2, EMismatchedSenderRecipient);
         assert!(&sender2 == &recipient1, EMismatchedSenderRecipient);
         // check object ID compatibility
-        assert!(id::id(&escrowed1) == &exchange_for2, EMismatchedExchangeObject);
-        assert!(id::id(&escrowed2) == &exchange_for1, EMismatchedExchangeObject);
+        assert!(object::id(&escrowed1) == &exchange_for2, EMismatchedExchangeObject);
+        assert!(object::id(&escrowed2) == &exchange_for1, EMismatchedExchangeObject);
         // everything matches. do the swap!
         transfer::transfer(escrowed1, sender2);
         transfer::transfer(escrowed2, sender1)
@@ -87,9 +87,9 @@ module defi::escrow {
         obj: EscrowedObj<T, ExchangeForT>,
     ) {
         let EscrowedObj {
-            id, sender, recipient: _, exchange_for: _, escrowed
+            info, sender, recipient: _, exchange_for: _, escrowed
         } = obj;
-        id::delete(id);
+        object::delete(info);
         transfer::transfer(escrowed, sender)
     }
 }

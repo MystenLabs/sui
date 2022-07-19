@@ -2,17 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useState, useCallback } from 'react';
+import ReactJson from 'react-json-view';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
+import TxForID from '../../components/transactions-for-id/TxForID';
+import codestyle from '../../styles/bytecode.module.css';
 import theme from '../../styles/theme.module.css';
-import { type AddressOwner } from '../../utils/api/DefaultRpcClient';
-import { parseImageURL } from '../../utils/objectUtils';
-import {
-    asciiFromNumberBytes,
-    trimStdLibPrefix,
-} from '../../utils/stringUtils';
+import { getOwnerStr, parseImageURL } from '../../utils/objectUtils';
+import { trimStdLibPrefix } from '../../utils/stringUtils';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
@@ -22,12 +21,19 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const [showDescription, setShowDescription] = useState(true);
     const [showProperties, setShowProperties] = useState(false);
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
+    const [showTx, setShowTx] = useState(true);
 
     useEffect(() => {
         setShowDescription(true);
         setShowProperties(true);
         setShowConnectedEntities(true);
-    }, [setShowDescription, setShowProperties, setShowConnectedEntities]);
+        setShowTx(true);
+    }, [
+        setShowDescription,
+        setShowProperties,
+        setShowConnectedEntities,
+        setShowTx,
+    ]);
 
     const clickSetShowDescription = useCallback(
         () => setShowDescription(!showDescription),
@@ -41,146 +47,30 @@ function ObjectLoaded({ data }: { data: DataType }) {
         () => setShowConnectedEntities(!showConnectedEntities),
         [showConnectedEntities]
     );
+    const clickSetShowTx = useCallback(() => setShowTx(!showTx), [showTx]);
     const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
 
-    //TODO - a backend convention on how owned objects are labelled and how values are stored
-    //This would facilitate refactoring the below and stopping bugs when a variant is missed:
-    const addrOwnerPattern = /^AddressOwner\(k#/;
-    const endParensPattern = /\){1}$/;
-
-    //TODO - improve move code handling:
-    // const isMoveVecType = (value: { vec?: [] }) => Array.isArray(value?.vec);
-    // TODO - merge / replace with other version of same thing
     const stdLibRe = /0x2::/;
     const prepObjTypeValue = (typeString: string) =>
         typeString.replace(stdLibRe, '');
 
-    const extractOwnerData = (owner: string | AddressOwner): string => {
-        switch (typeof owner) {
-            case 'string':
-                if (addrOwnerPattern.test(owner)) {
-                    let ownerId = getAddressOwnerId(owner);
-                    return ownerId ? ownerId : '';
-                }
-                const singleOwnerPattern = /SingleOwner\(k#(.*)\)/;
-                const result = singleOwnerPattern.exec(owner);
-                return result ? result[1] : '';
-            case 'object':
-                if ('AddressOwner' in owner) {
-                    let ownerId = extractAddressOwner(owner.AddressOwner);
-                    return ownerId ? ownerId : '';
-                }
-                return '';
-            default:
-                return '';
-        }
-    };
-    const getAddressOwnerId = (addrOwner: string): string | null => {
-        if (
-            !addrOwnerPattern.test(addrOwner) ||
-            !endParensPattern.test(addrOwner)
-        )
-            return null;
-
-        let str = addrOwner.replace(addrOwnerPattern, '');
-        return str.replace(endParensPattern, '');
-    };
-
-    const extractAddressOwner = (addrOwner: number[]): string | null => {
-        if (addrOwner.length !== 20) {
-            console.log('address owner byte length must be 20');
-            return null;
-        }
-
-        return asciiFromNumberBytes(addrOwner);
-    };
-    type SuiIdBytes = { bytes: number[] };
-
-    function handleSpecialDemoNameArrays(data: {
-        name?: string;
-        player_name?: SuiIdBytes | string;
-        monster_name?: SuiIdBytes | string;
-        farm_name?: SuiIdBytes | string;
-    }): string {
-        let bytesObj: SuiIdBytes = { bytes: [] };
-
-        if ('player_name' in data) {
-            bytesObj = data.player_name as SuiIdBytes;
-            const ascii = asciiFromNumberBytes(bytesObj.bytes);
-            delete data.player_name;
-            return ascii;
-        } else if ('monster_name' in data) {
-            bytesObj = data.monster_name as SuiIdBytes;
-            const ascii = asciiFromNumberBytes(bytesObj.bytes);
-            delete data.monster_name;
-            return ascii;
-        } else if ('farm_name' in data) {
-            bytesObj = data.farm_name as SuiIdBytes;
-            const ascii = asciiFromNumberBytes(bytesObj.bytes);
-            delete data.farm_name;
-            return ascii;
-        } else if ('name' in data) {
-            return data['name'] as string;
-        } else {
-            bytesObj = { bytes: [] };
-        }
-
-        return asciiFromNumberBytes(bytesObj.bytes);
-    }
-
-    function toHexString(byteArray: number[]): string {
-        return (
-            '0x' +
-            Array.prototype.map
-                .call(byteArray, (byte) => {
-                    return ('0' + (byte & 0xff).toString(16)).slice(-2);
-                })
-                .join('')
-        );
-    }
-
-    function processName(name: string | undefined) {
-        // hardcode a friendly name for gas for now
-        const gasTokenTypeStr = 'Coin::Coin<0x2::GAS::GAS>';
-        const gasTokenId = '0000000000000000000000000000000000000003';
-        if (data.objType === gasTokenTypeStr && data.id === gasTokenId)
-            return 'GAS';
-
-        if (!name) {
-            return handleSpecialDemoNameArrays(data.data.contents);
-        }
-    }
-
-    function processOwner(owner: any) {
-        if (typeof owner === 'object' && 'AddressOwner' in owner) {
-            return toHexString(owner.AddressOwner);
-        }
-
-        return owner;
-    }
-
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(data.objType),
-        name: processName(data.name),
-        tx_digest:
-            data.data.tx_digest && typeof data.data.tx_digest === 'object'
-                ? toHexString(data.data.tx_digest as number[])
-                : data.data.tx_digest,
-        owner: processOwner(data.owner),
+        name: data.name,
+        tx_digest: data.data.tx_digest,
+        owner: getOwnerStr(data.owner),
         url: parseImageURL(data.data.contents),
     };
 
-    //TO DO remove when have distinct name field under Description
     const nameKeyValue = Object.entries(viewedData.data?.contents)
-        .filter(([key, _]) => /name/i.test(key))
+        .filter(([key, _]) => key === 'name')
         .map(([_, value]) => value);
 
     const properties = Object.entries(viewedData.data?.contents)
-        //TO DO: remove when have distinct 'name' field in Description
-        .filter(([key, _]) => !/name/i.test(key))
+        .filter(([key, _]) => key !== 'name')
         .filter(([_, value]) => checkIsPropertyType(value));
 
     const descriptionTitle =
@@ -190,6 +80,18 @@ function ObjectLoaded({ data }: { data: DataType }) {
         data.objType === 'Move Package'
             ? 'Disassembled Bytecode'
             : 'Properties';
+
+    const isPublisherGenesis =
+        data.objType === 'Move Package' && data?.publisherAddress === 'Genesis';
+
+    const structProperties = Object.entries(viewedData.data?.contents)
+        .filter(([_, value]) => typeof value == 'object')
+        .filter(([key, _]) => key !== 'id');
+
+    let structPropertiesDisplay: any[] = [];
+    if (structProperties.length > 0) {
+        structPropertiesDisplay = Object.values(structProperties);
+    }
 
     return (
         <>
@@ -231,7 +133,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     />
                                 </div>
                             </div>
-                            {data.data?.tx_digest && (
+                            {data.data?.tx_digest && !isPublisherGenesis && (
                                 <div>
                                     <div>Last Transaction ID</div>
                                     <div id="lasttxID">
@@ -243,11 +145,22 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     </div>
                                 </div>
                             )}
-
                             <div>
                                 <div>Version</div>
                                 <div>{data.version}</div>
                             </div>
+                            {data?.publisherAddress && (
+                                <div>
+                                    <div>Publisher</div>
+                                    <div id="lasttxID">
+                                        <Longtext
+                                            text={data.publisherAddress}
+                                            category="addresses"
+                                            isLink={!isPublisherGenesis}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             {data.readonly && (
                                 <div>
                                     <div>Read Only?</div>
@@ -279,14 +192,17 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     <div>Owner</div>
                                     <div id="owner">
                                         <Longtext
-                                            text={extractOwnerData(data.owner)}
+                                            text={
+                                                typeof viewedData.owner ===
+                                                'string'
+                                                    ? viewedData.owner
+                                                    : typeof viewedData.owner
+                                            }
                                             category="unknown"
-                                            // TODO: make this more elegant
                                             isLink={
-                                                extractOwnerData(data.owner) !==
+                                                viewedData.owner !==
                                                     'Immutable' &&
-                                                extractOwnerData(data.owner) !==
-                                                    'Shared'
+                                                viewedData.owner !== 'Shared'
                                             }
                                         />
                                     </div>
@@ -349,6 +265,25 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         </>
                     )}
                     {}
+                    {structProperties.length > 0 &&
+                        structPropertiesDisplay.map((itm, index) => (
+                            <div key={index}>
+                                <div className={styles.propertybox}>
+                                    <div>
+                                        <p>{itm[0]}</p>
+                                    </div>
+                                </div>
+                                <div className={styles.jsondata}>
+                                    <div>
+                                        <ReactJson
+                                            src={itm[1]}
+                                            collapsed={2}
+                                            name={false}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     {data.objType !== 'Move Package' ? (
                         <h2
                             className={styles.clickableheader}
@@ -369,7 +304,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
                                             <div>{prepLabel(key)}</div>
-                                            <div>{value}</div>
+                                            <div className={codestyle.code}>
+                                                {value}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -380,6 +317,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                         data.objType !== 'Move Package' && (
                             <OwnedObjects id={data.id} byAddress={false} />
                         )}
+                    <h2
+                        className={styles.clickableheader}
+                        onClick={clickSetShowTx}
+                    >
+                        Transactions {showTx ? '' : '+'}
+                    </h2>
+                    {showTx && <TxForID id={data.id} category="object" />}
                 </div>
             </div>
         </>

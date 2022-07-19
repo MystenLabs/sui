@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::test_scenario {
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, Info};
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
     use std::vector;
@@ -137,6 +137,31 @@ module sui::test_scenario {
         remove_unique_object_from_inventory(scenario, objects)
     }
 
+    /// Remove the object of type `T` from the inventory of the current tx sender in `scenario`
+    /// that wast most recently created.
+    /// Aborts if there is no object of type `T` in the inventory of the tx sender.
+    public fun take_last_created_owned<T: key>(scenario: &mut Scenario): T {
+        let signer_address = sender(scenario);
+        let objects: vector<T> = get_account_owned_inventory<T>(
+            signer_address,
+            last_tx_start_index(scenario)
+        );
+        let num_objects = vector::length(&objects);
+        assert!(num_objects > 0, EEmptyInventory);
+        let res = vector::pop_back(&mut objects);
+        let removed_id = object::id(&res);
+        assert!(!vector::contains(&scenario.removed, removed_id), EAlreadyRemovedObject);
+        vector::push_back(&mut scenario.removed, *removed_id);
+        let i = 0;
+        // Put the rest of the objects back into the storage.
+        while (i < num_objects - 1) {
+            update_object(vector::remove(&mut objects, 0));
+            i = i + 1
+        };
+        vector::destroy_empty(objects);
+        res
+    }
+
     /// Similar to take_owned, but only return objects that are immutable with type `T`.
     /// In this case, the sender is irrelevant.
     /// Returns a wrapper that only supports a `borrow` API to get the read-only reference.
@@ -186,7 +211,7 @@ module sui::test_scenario {
         let signer_address = sender(scenario);
         let objects = get_object_owned_inventory<T2>(
             signer_address,
-            id::id_address(id::id(parent_obj)),
+            object::id_address(object::id(parent_obj)),
             last_tx_start_index(scenario),
         );
         remove_unique_object_from_inventory(scenario, objects)
@@ -201,16 +226,8 @@ module sui::test_scenario {
             sender,
             last_tx_start_index(scenario)
         );
-        let object_opt: Option<T> = find_object_by_id_in_inventory(inventory, &id);
-
-        let objects = if (option::is_some(&object_opt)) {
-            let object = option::extract(&mut object_opt);
-            vector::singleton(object)
-        } else {
-            vector[]
-        };
-        option::destroy_none(object_opt);
-        remove_unique_object_from_inventory(scenario, objects)
+        let object_opt = find_object_by_id_in_inventory(inventory, &id);
+        remove_unique_object_from_inventory(scenario, option::to_vec(object_opt))
     }
 
     /// This function tells you whether calling `take_owned_by_id` would succeed.
@@ -240,18 +257,11 @@ module sui::test_scenario {
         let signer_address = sender(scenario);
         let objects = get_object_owned_inventory<T2>(
             signer_address,
-            id::id_address(id::id(parent_obj)),
+            object::id_address(object::id(parent_obj)),
             last_tx_start_index(scenario),
         );
         let child_object_opt = find_object_by_id_in_inventory(objects, &child_id);
-        let child_objects = if (option::is_some(&child_object_opt)) {
-            let child_object = option::extract(&mut child_object_opt);
-            vector::singleton(child_object)
-        } else {
-            vector[]
-        };
-        option::destroy_none(child_object_opt);
-        remove_unique_object_from_inventory(scenario, child_objects)
+        remove_unique_object_from_inventory(scenario, option::to_vec(child_object_opt))
     }
 
     /// Return `t` to the global object pool maintained by `scenario`.
@@ -259,7 +269,7 @@ module sui::test_scenario {
     /// transaction sender.
     /// Aborts if `t` was not previously taken from the inventory via a call to `take_owned` or similar.
     public fun return_owned<T: key>(scenario: &mut Scenario, t: T) {
-        let id = id::id(&t);
+        let id = object::id(&t);
         let removed = &mut scenario.removed;
         // TODO: add Vector::remove_element to Std that does this 3-liner
         let (is_mem, idx) = vector::index_of(removed, id);
@@ -296,7 +306,7 @@ module sui::test_scenario {
         // yet been removed from the inventory.
         let res = vector::length(&objects) == 1;
         if (res) {
-            let id = id::id(vector::borrow(&objects, 0));
+            let id = object::id(vector::borrow(&objects, 0));
             res = !vector::contains(&scenario.removed, id);
         };
         drop_object_for_testing(objects);
@@ -309,8 +319,8 @@ module sui::test_scenario {
     }
 
     /// Generate a fresh ID for the current tx associated with this `scenario`
-    public fun new_id(scenario: &mut Scenario): VersionedID {
-        tx_context::new_id(&mut scenario.ctx)
+    public fun new_object(scenario: &mut Scenario): Info {
+        object::new(&mut scenario.ctx)
     }
 
     /// Return the sender of the current tx in this `scenario`
@@ -345,7 +355,7 @@ module sui::test_scenario {
         if (objects_len == 1) {
             // found a unique object. ensure that it hasn't already been removed, then return it
             let t = vector::pop_back(&mut inventory);
-            let id = id::id(&t);
+            let id = object::id(&t);
             vector::destroy_empty(inventory);
 
             assert!(!vector::contains(&scenario.removed, id), EAlreadyRemovedObject);
@@ -362,7 +372,7 @@ module sui::test_scenario {
         let object_opt = option::none();
         while (!vector::is_empty(&inventory)) {
             let element = vector::pop_back(&mut inventory);
-            if (id::id(&element) == id) {
+            if (object::id(&element) == id) {
                 // Within the same test scenario, there is no way to
                 // create two objects with the same ID. So this should
                 // be unique.

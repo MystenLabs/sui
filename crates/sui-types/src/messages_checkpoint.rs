@@ -1,10 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
+use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
-use crate::crypto::Signable;
+use crate::committee::EpochId;
+use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable};
+use crate::error::SuiResult;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
@@ -96,23 +99,6 @@ impl CheckpointRequest {
             detail,
         }
     }
-
-    pub fn set_checkpoint(
-        certificate: CertifiedCheckpoint,
-        contents: Option<CheckpointContents>,
-    ) -> CheckpointRequest {
-        CheckpointRequest {
-            request_type: CheckpointRequestType::SetCertificate(certificate, contents),
-            detail: false,
-        }
-    }
-
-    pub fn set_fragment(fragment: CheckpointFragment) -> CheckpointRequest {
-        CheckpointRequest {
-            request_type: CheckpointRequestType::SetFragment(Box::new(fragment)),
-            detail: false,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -121,10 +107,6 @@ pub enum CheckpointRequestType {
     LatestCheckpointProposal,
     // Requests a past checkpoint
     PastCheckpoint(CheckpointSequenceNumber),
-    // Set a checkpoint certificate
-    SetCertificate(CertifiedCheckpoint, Option<CheckpointContents>),
-    // Submit a consensus fragment to a node
-    SetFragment(Box<CheckpointFragment>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -137,6 +119,23 @@ pub struct CheckpointResponse {
     pub detail: Option<CheckpointContents>,
 }
 
+impl CheckpointResponse {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        match &self.info {
+            AuthorityCheckpointInfo::Success => Ok(()),
+            AuthorityCheckpointInfo::Proposal { current, previous } => {
+                if let Some(current) = current {
+                    current.verify(committee, self.detail.as_ref())?;
+                    // detail pertains to the current proposal, not the previous
+                    previous.verify(committee, None)?;
+                }
+                Ok(())
+            }
+            AuthorityCheckpointInfo::Past(ckpt) => ckpt.verify(committee, self.detail.as_ref()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
     // Denotes success of he operation with no return
@@ -144,7 +143,7 @@ pub enum AuthorityCheckpointInfo {
     // Returns the current proposal if any, and
     // the previous checkpoint.
     Proposal {
-        current: Option<SignedCheckpointProposal>,
+        current: Option<SignedCheckpointSummary>,
         previous: AuthenticatedCheckpoint,
         // Include in all responses the local state of the sequence
         // of transaction to allow followers to track the latest
@@ -163,33 +162,47 @@ pub enum AuthenticatedCheckpoint {
     None,
     // The checkpoint with just a single authority
     // signature.
-    Signed(SignedCheckpoint),
+    Signed(SignedCheckpointSummary),
     // The checkpoint with a quorum of signatures.
-    Certified(CertifiedCheckpoint),
+    Certified(CertifiedCheckpointSummary),
 }
 
-// Proposals are signed by a single authority, and 2f+1 are collected
-// to actually form a checkpoint, so we never expect a certificate on
-// a proposal.
-// TODO: SignedCheckpointProposal is redundant of SignedCheckpoint, should merge.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SignedCheckpointProposal(pub SignedCheckpoint);
+impl AuthenticatedCheckpoint {
+    pub fn summary(&self) -> &CheckpointSummary {
+        match self {
+            Self::Signed(s) => &s.summary,
+            Self::Certified(c) => &c.summary,
+            Self::None => unreachable!(),
+        }
+    }
+
+    pub fn verify(&self, committee: &Committee, detail: Option<&CheckpointContents>) -> SuiResult {
+        match self {
+            Self::Signed(s) => s.verify(committee, detail),
+            Self::Certified(c) => c.verify(committee, detail),
+            Self::None => Ok(()),
+        }
+    }
+}
 
 pub type CheckpointDigest = [u8; 32];
+pub type CheckpointContentsDigest = [u8; 32];
 
 // The constituent parts of checkpoints, signed and certified
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CheckpointSummary {
+    pub epoch: EpochId,
     pub sequence_number: CheckpointSequenceNumber,
     pub waypoint: Box<Waypoint>, // Bigger structure, can live on heap.
-    pub content_digest: CheckpointDigest,
+    pub content_digest: CheckpointContentsDigest,
     pub previous_digest: Option<CheckpointDigest>,
     // TODO: add digest of previous checkpoint summary
 }
 
 impl CheckpointSummary {
     pub fn new(
+        epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
@@ -202,6 +215,7 @@ impl CheckpointSummary {
         let content_digest = transactions.digest();
 
         Self {
+            epoch,
             sequence_number,
             waypoint,
             content_digest,
@@ -213,67 +227,91 @@ impl CheckpointSummary {
         &self.sequence_number
     }
 
-    pub fn digest(&self) -> [u8; 32] {
+    pub fn digest(&self) -> CheckpointDigest {
         sha3_hash(self)
     }
 }
 
 impl BcsSignable for CheckpointSummary {}
 
-// TODO: Rename SignedCheckpoint to SignedCheckpointSummary
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SignedCheckpoint {
-    pub checkpoint: CheckpointSummary,
-    pub authority: AuthorityName,
-    signature: AuthoritySignature,
+pub struct CheckpointSummaryEnvelope<S> {
+    pub summary: CheckpointSummary,
+    pub auth_signature: S,
 }
 
-impl SignedCheckpoint {
+pub type SignedCheckpointSummary = CheckpointSummaryEnvelope<AuthoritySignInfo>;
+
+impl SignedCheckpointSummary {
     /// Create a new signed checkpoint proposal for this authority
     pub fn new(
+        epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
         transactions: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
-    ) -> SignedCheckpoint {
-        let checkpoint = CheckpointSummary::new(sequence_number, transactions, previous_digest);
-        SignedCheckpoint::new_from_summary(checkpoint, authority, signer)
+    ) -> SignedCheckpointSummary {
+        let checkpoint =
+            CheckpointSummary::new(epoch, sequence_number, transactions, previous_digest);
+        SignedCheckpointSummary::new_from_summary(checkpoint, authority, signer)
     }
 
     pub fn new_from_summary(
         checkpoint: CheckpointSummary,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
-    ) -> SignedCheckpoint {
+    ) -> SignedCheckpointSummary {
         let signature = AuthoritySignature::new(&checkpoint, signer);
 
-        SignedCheckpoint {
-            checkpoint,
-            authority,
-            signature,
+        let epoch = checkpoint.epoch;
+        SignedCheckpointSummary {
+            summary: checkpoint,
+            auth_signature: AuthoritySignInfo {
+                epoch,
+                authority,
+                signature,
+            },
         }
     }
 
-    /// Checks that the signature on the digest is correct
-    pub fn verify(&self) -> Result<(), SuiError> {
-        self.signature.verify(&self.checkpoint, self.authority)?;
-        Ok(())
+    pub fn authority(&self) -> &AuthorityName {
+        &self.auth_signature.authority
     }
 
-    // Check that the digest and transactions are correctly signed
-    pub fn verify_with_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
-        self.verify()?;
-        let recomputed = CheckpointSummary::new(
-            *self.checkpoint.sequence_number(),
-            contents,
-            self.checkpoint.previous_digest,
-        );
-
+    /// Checks that the signature on the digest is correct, and verify the contents as well if
+    /// provided.
+    pub fn verify(
+        &self,
+        committee: &Committee,
+        contents: Option<&CheckpointContents>,
+    ) -> Result<(), SuiError> {
         fp_ensure!(
-            recomputed == self.checkpoint,
-            SuiError::from("Transaction digest mismatch")
+            self.summary.epoch == self.auth_signature.epoch,
+            SuiError::from("Epoch in the summary doesn't match with the signature")
         );
+        fp_ensure!(
+            committee.weight(&self.auth_signature.authority) > 0,
+            SuiError::UnknownSigner
+        );
+        self.auth_signature
+            .signature
+            .verify(&self.summary, self.auth_signature.authority)?;
+
+        if let Some(contents) = contents {
+            let recomputed = CheckpointSummary::new(
+                self.summary.epoch,
+                *self.summary.sequence_number(),
+                contents,
+                self.summary.previous_digest,
+            );
+
+            fp_ensure!(
+                recomputed == self.summary,
+                SuiError::from("Transaction digest mismatch")
+            );
+        }
+
         Ok(())
     }
 }
@@ -286,129 +324,109 @@ impl SignedCheckpoint {
 // or other authenticated data structures to support light
 // clients and more efficient sync protocols.
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CertifiedCheckpoint {
-    pub checkpoint: CheckpointSummary,
-    signatures: Vec<(AuthorityName, AuthoritySignature)>,
-}
+pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
 
-impl CertifiedCheckpoint {
+impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
     pub fn aggregate(
-        signed_checkpoints: Vec<SignedCheckpoint>,
+        signed_checkpoints: Vec<SignedCheckpointSummary>,
         committee: &Committee,
-    ) -> Result<CertifiedCheckpoint, SuiError> {
+    ) -> Result<CertifiedCheckpointSummary, SuiError> {
         fp_ensure!(
             !signed_checkpoints.is_empty(),
             SuiError::from("Need at least one signed checkpoint to aggregate")
         );
+        fp_ensure!(
+            signed_checkpoints
+                .iter()
+                .all(|c| c.summary.epoch == committee.epoch),
+            SuiError::from("SignedCheckpoint is from different epoch as committee")
+        );
 
-        let certified_checkpoint = CertifiedCheckpoint {
-            checkpoint: signed_checkpoints[0].checkpoint.clone(),
-            signatures: signed_checkpoints
-                .into_iter()
-                .map(|v| (v.authority, v.signature))
-                .collect(),
+        let certified_checkpoint = CertifiedCheckpointSummary {
+            summary: signed_checkpoints[0].summary.clone(),
+            auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
+                committee.epoch,
+                signed_checkpoints
+                    .into_iter()
+                    .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
+                    .collect(),
+                committee,
+            )?,
         };
 
-        certified_checkpoint.verify(committee)?;
+        certified_checkpoint.verify(committee, None)?;
         Ok(certified_checkpoint)
     }
 
-    pub fn signatory_authorities(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.signatures.iter().map(|(name, _)| name)
+    pub fn signatory_authorities<'a>(
+        &'a self,
+        committee: &'a Committee,
+    ) -> impl Iterator<Item = SuiResult<&AuthorityName>> {
+        self.auth_signature.authorities(committee)
     }
 
     /// Check that a certificate is valid, and signed by a quorum of authorities
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
-        // Note: this code is nearly the same as the code that checks
-        // transaction certificates. There is an opportunity to unify this
-        // logic.
-
-        let mut weight = 0;
-        let mut used_authorities = HashSet::new();
-        for (authority, _) in self.signatures.iter() {
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
-            // Update weight.
-            let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-            weight += voting_rights;
-        }
-        fp_ensure!(
-            // NOTE: here we only require f+1 weight to accept it, since
-            //       we only need to ensure one honest node signs it, and
-            //       do not require quorum intersection properties between
-            //       any two sets of signers. Further f+1 is the most honest
-            //       nodes we can be sure is in the set of 2f+1 that were
-            //       used to create the checkpoint from fragments.
-            weight >= committee.validity_threshold(),
-            SuiError::CertificateRequiresQuorum
-        );
-
-        let mut obligation = VerificationObligation::default();
-
-        // We verify the same message, so that ensures all signatures are
-        // one a single and same message.
-        let mut message = Vec::new();
-        self.checkpoint.write(&mut message);
-
-        let idx = obligation.add_message(message);
-
-        for tuple in self.signatures.iter() {
-            let (authority, signature) = tuple;
-            obligation
-                .public_keys
-                .push(committee.public_key(authority)?);
-
-            // build a signature
-            obligation.signatures.push(signature.0);
-
-            // collect the message
-            obligation.message_index.push(idx);
-        }
-
-        obligation.verify_all().map(|_| ())?;
-        Ok(())
-    }
-
-    /// Check the certificate and whether it matches with a set of transactions.
-    pub fn verify_with_transactions(
+    pub fn verify(
         &self,
         committee: &Committee,
-        contents: &CheckpointContents,
+        contents: Option<&CheckpointContents>,
     ) -> Result<(), SuiError> {
-        self.verify(committee)?;
         fp_ensure!(
-            contents.digest() == self.checkpoint.content_digest,
-            SuiError::from("Transaction digest mismatch")
+            self.summary.epoch == committee.epoch,
+            SuiError::from("Epoch in the summary doesn't match with the committee")
         );
+        let mut obligation = VerificationObligation::default();
+        let mut message = Vec::new();
+        self.summary.write(&mut message);
+        let idx = obligation.add_message(message);
+        self.auth_signature
+            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+        obligation.verify_all()?;
+
+        if let Some(contents) = contents {
+            let recomputed = CheckpointSummary::new(
+                self.summary.epoch,
+                *self.summary.sequence_number(),
+                contents,
+                self.summary.previous_digest,
+            );
+
+            fp_ensure!(
+                recomputed == self.summary,
+                SuiError::from("Transaction digest mismatch")
+            );
+        }
+
         Ok(())
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    pub transactions: BTreeSet<ExecutionDigests>,
+    pub transactions: Vec<ExecutionDigests>,
 }
 
 impl BcsSignable for CheckpointContents {}
 
+// TODO: We should create a type for ordered contents,
+// instead of mixing them in the same type.
+// https://github.com/MystenLabs/sui/issues/3038
 impl CheckpointContents {
     pub fn new<T>(contents: T) -> CheckpointContents
     where
         T: Iterator<Item = ExecutionDigests>,
     {
         CheckpointContents {
-            transactions: contents.collect(),
+            transactions: contents.collect::<BTreeSet<_>>().into_iter().collect(),
         }
     }
 
-    pub fn digest(&self) -> [u8; 32] {
+    pub fn iter(&self) -> Iter<'_, ExecutionDigests> {
+        self.transactions.iter()
+    }
+
+    pub fn digest(&self) -> CheckpointContentsDigest {
         sha3_hash(self)
     }
 }
@@ -416,31 +434,24 @@ impl CheckpointContents {
 // The construction of checkpoints is based on the aggregation of fragments.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointFragment {
-    pub proposer: SignedCheckpointProposal,
-    pub other: SignedCheckpointProposal,
+    pub proposer: SignedCheckpointSummary,
+    pub other: SignedCheckpointSummary,
     pub diff: WaypointDiff<AuthorityName, ExecutionDigests>,
     pub certs: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
 
 impl CheckpointFragment {
-    pub fn verify(&self, _committee: &Committee) -> Result<(), SuiError> {
+    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
         // Check the signatures of proposer and other
-        self.proposer.0.verify()?;
-        self.other.0.verify()?;
-
-        // Check the proposers are authorities
-        fp_ensure!(
-            _committee.weight(&self.proposer.0.authority) > 0
-                && _committee.weight(&self.other.0.authority) > 0,
-            SuiError::from("Authorities not in the committee")
-        );
+        self.proposer.verify(committee, None)?;
+        self.other.verify(committee, None)?;
 
         // Check consistency between checkpoint summary and waypoints.
         fp_ensure!(
-            self.diff.first.waypoint == *self.proposer.0.checkpoint.waypoint
-                && self.diff.second.waypoint == *self.other.0.checkpoint.waypoint
-                && self.diff.first.key == self.proposer.0.authority
-                && self.diff.second.key == self.other.0.authority,
+            self.diff.first.waypoint == *self.proposer.summary.waypoint
+                && self.diff.second.waypoint == *self.other.summary.waypoint
+                && &self.diff.first.key == self.proposer.authority()
+                && &self.diff.second.key == self.other.authority(),
             SuiError::from("Waypoint diff and checkpoint summary inconsistent")
         );
 
@@ -457,7 +468,7 @@ impl CheckpointFragment {
     }
 
     pub fn proposer_sequence_number(&self) -> &CheckpointSequenceNumber {
-        self.proposer.0.checkpoint.sequence_number()
+        self.proposer.summary.sequence_number()
     }
 }
 
@@ -465,6 +476,7 @@ impl CheckpointFragment {
 mod tests {
     use rand::prelude::StdRng;
     use rand::SeedableRng;
+    use std::collections::BTreeSet;
 
     use super::*;
     use crate::utils::make_committee_key;
@@ -478,27 +490,55 @@ mod tests {
     #[test]
     fn test_signed_proposal() {
         let mut rng = StdRng::from_seed(RNG_SEED);
-        let (authority_key, _committee) = make_committee_key(&mut rng);
+        let (authority_key, committee) = make_committee_key(&mut rng);
         let name = authority_key[0].public_key_bytes();
 
         let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
 
-        let mut proposal = SignedCheckpoint::new(1, *name, &authority_key[0], &set, None);
+        let mut proposal =
+            SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
-        assert!(proposal.verify().is_ok());
-        assert!(proposal.verify_with_transactions(&set).is_ok());
+        assert!(proposal.verify(&committee, Some(&set)).is_ok());
 
         // Error on different transactions
         let contents = CheckpointContents {
             transactions: [ExecutionDigests::random()].into_iter().collect(),
         };
-        assert!(proposal.verify_with_transactions(&contents).is_err());
+        assert!(proposal.verify(&committee, Some(&contents)).is_err());
 
         // Modify the proposal, and observe the signature fail
-        proposal.checkpoint.sequence_number = 2;
-        assert!(proposal.verify().is_err());
+        proposal.summary.sequence_number = 2;
+        assert!(proposal.verify(&committee, None).is_err());
+    }
+
+    #[test]
+    fn test_signed_checkpoint() {
+        let mut rng = StdRng::from_seed(RNG_SEED);
+        let (keys, committee) = make_committee_key(&mut rng);
+        let (_, committee2) = make_committee_key(&mut rng);
+
+        let set = [ExecutionDigests::random()];
+        let set = CheckpointContents::new(set.iter().cloned());
+
+        let signed_checkpoints: Vec<_> = keys
+            .iter()
+            .map(|k| {
+                let name = k.public_key_bytes();
+
+                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+            })
+            .collect();
+
+        signed_checkpoints
+            .iter()
+            .for_each(|c| c.verify(&committee, None).expect("signature ok"));
+
+        // fails when not signed by member of committee
+        signed_checkpoints
+            .iter()
+            .for_each(|c| assert!(c.verify(&committee2, None).is_err()));
     }
 
     #[test]
@@ -514,17 +554,15 @@ mod tests {
             .map(|k| {
                 let name = k.public_key_bytes();
 
-                SignedCheckpoint::new(1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
             })
             .collect();
 
-        let checkpoint_cert =
-            CertifiedCheckpoint::aggregate(signed_checkpoints, &committee).expect("Cert is OK");
+        let checkpoint_cert = CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee)
+            .expect("Cert is OK");
 
         // Signature is correct on proposal, and with same transactions
-        assert!(checkpoint_cert
-            .verify_with_transactions(&committee, &set)
-            .is_ok());
+        assert!(checkpoint_cert.verify(&committee, Some(&set)).is_ok());
 
         // Make a bad proposal
         let signed_checkpoints: Vec<_> = keys
@@ -534,10 +572,10 @@ mod tests {
                 let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 
-                SignedCheckpoint::new(1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
             })
             .collect();
 
-        assert!(CertifiedCheckpoint::aggregate(signed_checkpoints, &committee).is_err());
+        assert!(CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee).is_err());
     }
 }

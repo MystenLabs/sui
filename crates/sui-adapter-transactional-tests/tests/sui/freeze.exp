@@ -11,7 +11,9 @@ task 2 'run'. lines 10-10:
 written: object(104), object(105)
 
 task 3 'run'. lines 12-12:
-Error: Type error while binding function arguments: "Only owned object can be passed by-value, violation found in argument 0".
+Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }
 
 task 4 'run'. lines 14-14:
-Error: Type error while binding function arguments: "Argument 0 is expected to be mutable, immutable object found".
+Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable objects cannot be passed by mutable reference, &mut.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByMuteRef }), source: Some("Argument 0 is expected to be mutable, immutable object found") } }

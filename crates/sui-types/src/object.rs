@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
-use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
+use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
 use crate::move_package::MovePackage;
 use crate::{
@@ -34,6 +34,9 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
+    /// Determines if it is usable with the TransferObject
+    /// Derived from the type_
+    has_public_transfer: bool,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
@@ -56,8 +59,37 @@ pub struct ObjectFormatOptions {
 }
 
 impl MoveObject {
-    pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
-        Self { type_, contents }
+    /// Creates a new Move object of type `type_` with BCS encoded bytes in `contents`
+    /// `has_public_transfer` is determined by the abilities of the `type_`, but resolving
+    /// the abilities requires the compiled modules of the `type_: StructTag`.
+    /// In other words, `has_public_transfer` will be the same for all objects of the same `type_`.
+    ///
+    /// # Safety
+    ///
+    /// This function should ONLY be called if has_public_transfer has been determined by the type_.
+    /// Yes, this is a bit of an abuse of the `unsafe` marker, but bad things will happen if this
+    /// is inconsistent
+    pub unsafe fn new_from_execution(
+        type_: StructTag,
+        has_public_transfer: bool,
+        contents: Vec<u8>,
+    ) -> Self {
+        // coins should always have public transfer, as they always should have store.
+        // Thus, type_ == GasCoin::type_() ==> has_public_transfer
+        debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
+        Self {
+            type_,
+            has_public_transfer,
+            contents,
+        }
+    }
+
+    pub fn new_gas_coin(contents: Vec<u8>) -> Self {
+        unsafe { Self::new_from_execution(GasCoin::type_(), true, contents) }
+    }
+
+    pub fn has_public_transfer(&self) -> bool {
+        self.has_public_transfer
     }
 
     pub fn id(&self) -> ObjectID {
@@ -136,7 +168,15 @@ impl MoveObject {
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<MoveStructLayout, SuiError> {
-        let type_ = TypeTag::Struct(self.type_.clone());
+        Self::get_layout_from_struct_tag(self.type_.clone(), format, resolver)
+    }
+
+    pub fn get_layout_from_struct_tag(
+        struct_tag: StructTag,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<MoveStructLayout, SuiError> {
+        let type_ = TypeTag::Struct(struct_tag);
         let layout = if format.include_types {
             TypeLayoutBuilder::build_with_types(&type_, resolver)
         } else {
@@ -178,7 +218,8 @@ impl MoveObject {
     pub fn object_size_for_gas_metering(&self) -> usize {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
-        self.contents.len() + seriealized_type_tag.len()
+        // + 1 for 'has_public_transfer'
+        self.contents.len() + seriealized_type_tag.len() + 1
     }
 }
 
@@ -250,14 +291,16 @@ impl Owner {
     }
 
     pub fn is_immutable(&self) -> bool {
-        self == &Owner::Immutable
+        matches!(self, Owner::Immutable)
     }
 
-    pub fn is_owned(&self) -> bool {
-        match self {
-            Owner::AddressOwner(_) | Owner::ObjectOwner(_) => true,
-            Owner::Shared | Owner::Immutable => false,
-        }
+    /// Is owned by an address or an object
+    /// In the object case, it might be owned by an address owned object, a shared object, or
+    /// another object owned object.
+    /// If the root of this ownership is a shared object, we refer to these objects as
+    /// "quasi-shared", as they are not shared themselves, but behave similarly in some cases
+    pub fn is_owned_or_quasi_shared(&self) -> bool {
+        matches!(self, Owner::AddressOwner(_) | Owner::ObjectOwner(_))
     }
 
     pub fn is_shared(&self) -> bool {
@@ -347,8 +390,8 @@ impl Object {
         self.owner.is_immutable()
     }
 
-    pub fn is_owned(&self) -> bool {
-        self.owner.is_owned()
+    pub fn is_owned_or_quasi_shared(&self) -> bool {
+        self.owner.is_owned_or_quasi_shared()
     }
 
     pub fn is_shared(&self) -> bool {
@@ -419,24 +462,22 @@ impl Object {
 
     /// Change the owner of `self` to `new_owner`. This function does not increase the version
     /// number of the object.
-    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) -> SuiResult {
-        self.is_transfer_eligible()?;
+    pub fn transfer_without_version_change(&mut self, new_owner: SuiAddress) {
         self.owner = Owner::AddressOwner(new_owner);
-        Ok(())
     }
 
     /// Change the owner of `self` to `new_owner`. This function will increment the version
     /// number of the object after transfer.
-    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) -> SuiResult {
-        self.transfer_without_version_change(new_owner)?;
+    pub fn transfer_and_increment_version(&mut self, new_owner: SuiAddress) {
+        self.transfer_without_version_change(new_owner);
         let data = self.data.try_as_move_mut().unwrap();
         data.increment_version();
-        Ok(())
     }
 
     pub fn immutable_with_id_for_testing(id: ObjectID) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
+            has_public_transfer: true,
             contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
@@ -450,10 +491,25 @@ impl Object {
     pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: SuiAddress, gas: u64) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
+            has_public_transfer: true,
             contents: GasCoin::new(id, SequenceNumber::new(), gas).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        }
+    }
+
+    pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
+            has_public_transfer: true,
+            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+        });
+        Self {
+            owner: Owner::ObjectOwner(owner.into()),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
@@ -472,6 +528,7 @@ impl Object {
     ) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
+            has_public_transfer: true,
             contents: GasCoin::new(id, version, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
@@ -518,13 +575,17 @@ impl Object {
         Ok(type_tag)
     }
 
-    pub fn is_transfer_eligible(&self) -> SuiResult {
-        fp_ensure!(self.is_owned(), SuiError::TransferUnownedError);
-        let is_coin = match &self.data {
-            Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
+    pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
+        if !matches!(self.owner, Owner::AddressOwner(_)) {
+            return Err(ExecutionErrorKind::InvalidTransferObject.into());
+        }
+        let has_public_transfer = match &self.data {
+            Data::Move(m) => m.has_public_transfer(),
             Data::Package(_) => false,
         };
-        fp_ensure!(is_coin, SuiError::TransferNonCoinError);
+        if !has_public_transfer {
+            return Err(ExecutionErrorKind::InvalidTransferObject.into());
+        }
         Ok(())
     }
 }
@@ -554,6 +615,22 @@ impl Default for ObjectFormatOptions {
     fn default() -> Self {
         ObjectFormatOptions {
             include_types: true,
+        }
+    }
+}
+
+impl Display for ObjectRead {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Deleted(oref) => {
+                write!(f, "ObjectRead::Deleted ({:?})", oref)
+            }
+            Self::NotExists(id) => {
+                write!(f, "ObjectRead::NotExists ({:?})", id)
+            }
+            Self::Exists(oref, _, _) => {
+                write!(f, "ObjectRead::Exists ({:?})", oref)
+            }
         }
     }
 }

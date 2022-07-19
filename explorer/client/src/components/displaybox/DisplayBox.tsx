@@ -3,22 +3,45 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-import { processDisplayValue } from '../../utils/stringUtils';
+import {
+    FALLBACK_IMAGE,
+    ImageModClient,
+} from '../../utils/imageModeratorClient';
+import { transformURL } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
-function DisplayBox({ display }: { display: string | { bytes: number[] } }) {
+function DisplayBox({ display }: { display: string }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
+    const [hasImgBeenChecked, setHasImgBeenChecked] = useState(false);
+    const [imgAllowState, setImgAllowState] = useState(false);
+
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
-    const handleImageLoad = useCallback(
-        () => setHasDisplayLoaded(true),
-        [setHasDisplayLoaded]
-    );
+    const handleImageLoad = useCallback(() => {
+        setHasDisplayLoaded(true);
+        setHasFailedToLoad(false);
+    }, [setHasDisplayLoaded]);
 
     useEffect(() => {
         setHasFailedToLoad(false);
+        setHasImgBeenChecked(false);
+        setImgAllowState(false);
+
+        new ImageModClient()
+            .checkImage(transformURL(display))
+            .then(({ ok }) => {
+                setImgAllowState(ok);
+            })
+            .catch((error) => {
+                console.warn(error);
+                // default to allow, so a broken img check service doesn't break NFT display
+                setImgAllowState(true);
+            })
+            .finally(() => {
+                setHasImgBeenChecked(true);
+            });
     }, [display]);
 
     const handleImageFail = useCallback(
@@ -30,30 +53,53 @@ function DisplayBox({ display }: { display: string | { bytes: number[] } }) {
         [setHasFailedToLoad]
     );
 
-    return (
-        <div className={styles['display-container']}>
-            {!hasDisplayLoaded && (
-                <div className={styles.imagebox} id="pleaseWaitImage">
-                    Please wait for display to load
-                </div>
-            )}
-            {hasFailedToLoad ? (
-                <div className={styles.imagebox} id="noImage">
-                    No Image was Found
-                </div>
-            ) : (
-                <img
-                    id="loadedImage"
-                    className={styles.imagebox}
-                    style={imageStyle}
-                    alt="NFT"
-                    src={processDisplayValue(display)}
-                    onLoad={handleImageLoad}
-                    onError={handleImageFail}
-                />
-            )}
-        </div>
-    );
+    const loadedWithoutAllowedState = hasDisplayLoaded && !imgAllowState;
+
+    let showAutoModNotice =
+        !hasFailedToLoad && hasImgBeenChecked && !imgAllowState;
+
+    if (loadedWithoutAllowedState && hasImgBeenChecked) {
+        display = FALLBACK_IMAGE;
+        showAutoModNotice = true;
+    }
+
+    if (showAutoModNotice) {
+        return (
+            <div className={styles['display-container']}>
+                {showAutoModNotice && (
+                    <div className={styles.automod} id="modnotice">
+                        NFT image hidden
+                    </div>
+                )}
+            </div>
+        );
+    } else {
+        return (
+            <div className={styles['display-container']}>
+                {!hasDisplayLoaded && (
+                    <div className={styles.imagebox} id="pleaseWaitImage">
+                        image loading...
+                    </div>
+                )}
+                {hasFailedToLoad && (
+                    <div className={styles.imagebox} id="noImage">
+                        No Image was Found
+                    </div>
+                )}
+                {!hasFailedToLoad && (
+                    <img
+                        id="loadedImage"
+                        className={styles.imagebox}
+                        style={imageStyle}
+                        alt="NFT"
+                        src={transformURL(display)}
+                        onLoad={handleImageLoad}
+                        onError={handleImageFail}
+                    />
+                )}
+            </div>
+        );
+    }
 }
 
 export default DisplayBox;

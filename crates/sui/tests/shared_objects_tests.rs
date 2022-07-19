@@ -3,8 +3,10 @@
 
 use std::sync::Arc;
 use sui_core::authority_client::AuthorityAPI;
-use sui_core::gateway_state::{GatewayAPI, GatewayState};
-use sui_types::messages::{CallArg, ExecutionStatus, ObjectInfoRequest, ObjectInfoRequestKind};
+use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
+use sui_types::messages::{
+    CallArg, ExecutionStatus, ObjectArg, ObjectInfoRequest, ObjectInfoRequestKind,
+};
 use sui_types::object::OBJECT_START_VERSION;
 use test_utils::authority::{get_client, test_authority_aggregator};
 use test_utils::transaction::{
@@ -98,7 +100,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -114,7 +116,7 @@ async fn call_shared_object_contract() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
     let effects = submit_shared_object_transaction(transaction, &configs.validator_set()[0..1])
         .await
@@ -129,7 +131,7 @@ async fn call_shared_object_contract() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -143,6 +145,7 @@ async fn call_shared_object_contract() {
 /// transaction (one copy per authority).
 #[tokio::test]
 async fn shared_object_flood() {
+    telemetry_subscribers::init_for_testing();
     let mut gas_objects = test_gas_objects();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
@@ -176,7 +179,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
@@ -192,7 +195,7 @@ async fn shared_object_flood() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
     let effects = submit_shared_object_transaction(transaction, configs.validator_set())
         .await
@@ -207,7 +210,7 @@ async fn shared_object_flood() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(counter_id),
+            CallArg::Object(ObjectArg::SharedObject(counter_id)),
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
@@ -277,7 +280,7 @@ async fn shared_object_sync() {
         "counter",
         "increment",
         package_ref,
-        vec![CallArg::SharedObject(counter_id)],
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
 
     // Let's submit the transaction to the first authority (the only one up-to-date).
@@ -366,7 +369,9 @@ async fn shared_object_on_gateway() {
     let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
     let clients = test_authority_aggregator(&configs);
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway = Arc::new(GatewayState::new_with_authorities(path, clients).unwrap());
+    let gateway = Arc::new(
+        GatewayState::new_with_authorities(path, clients, GatewayMetrics::new_for_tests()).unwrap(),
+    );
 
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
@@ -397,6 +402,7 @@ async fn shared_object_on_gateway() {
     // to only filter "timeout" errors, but the game way simply returns `anyhow::Error`, this
     // will be fixed by issue #1717. Note that the gateway has an internal retry mechanism but
     // it is not an infinite loop.
+    let mut retry = 10;
     loop {
         let futures: Vec<_> = gas_objects
             .iter()
@@ -408,7 +414,8 @@ async fn shared_object_on_gateway() {
                     "counter",
                     "increment",
                     package_ref,
-                    /* arguments */ vec![CallArg::SharedObject(shared_object_id)],
+                    /* arguments */
+                    vec![CallArg::Object(ObjectArg::SharedObject(shared_object_id))],
                 );
                 async move { g.execute_transaction(increment_counter_transaction).await }
             })
@@ -422,6 +429,10 @@ async fn shared_object_on_gateway() {
         if replies.iter().all(|result| result.is_ok()) {
             break;
         }
+        if retry == 0 {
+            unreachable!("Failed after 10 retries. Latest replies: {:?}", replies);
+        }
+        retry -= 1;
     }
 
     let assert_value_transaction = move_transaction(
@@ -430,7 +441,7 @@ async fn shared_object_on_gateway() {
         "assert_value",
         package_ref,
         vec![
-            CallArg::SharedObject(shared_object_id),
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
             CallArg::Pure((increment_amount as u64).to_le_bytes().to_vec()),
         ],
     );

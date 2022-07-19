@@ -1,5 +1,5 @@
 .resultbox {
-    @apply flex flex-wrap w-[95vw];
+    @apply flex flex-wrap w-full;
 }
 
 h1.title {
@@ -10,7 +10,7 @@ h1.title {
 
 .display {
     @apply ml-[5vw] mx-auto mt-[1vh]
-    w-[88vw] lg:w-[35vw] min-h-[88vw] lg:min-h-[35vw];
+    w-[88vw] lg:w-[35vw] min-h-[35vw] lg:min-h-[35vw];
 }
 
 .display > div > img {
@@ -89,6 +89,11 @@ div.bytecodebox > div > div:first-child {
 }
 
 div.bytecodebox > div > div:nth-child(2) {
-    @apply overflow-auto h-[30vh] w-[65vw] 
-  border-solid border-stone-300 mt-[2vh] mb-[5vh] p-2 whitespace-pre text-sm;
+    @apply w-[65vw] h-[30vh] mt-[2vh] mb-[5vh];
+}
+
+div.jsondata {
+    @apply border-solid border-stone-300 mb-[5vh] p-5 bg-white whitespace-pre text-lg font-mono;
+
+    overflow-x: scroll;
 }

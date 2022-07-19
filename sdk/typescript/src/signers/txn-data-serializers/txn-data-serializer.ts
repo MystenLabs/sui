@@ -6,7 +6,7 @@ import { ObjectId, SuiAddress, SuiJsonValue } from '../../types';
 
 ///////////////////////////////
 // Exported Types
-export interface TransferCoinTransaction {
+export interface TransferObjectTransaction {
   objectId: ObjectId;
   gasPayment?: ObjectId;
   gasBudget: number;
@@ -37,15 +37,22 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
+export interface PublishTransaction {
+  compiledModules: string[],
+  gasPayment?: ObjectId;
+  gasBudget: number;
+}
+
+
 ///////////////////////////////
 // Exported Abstracts
 /**
  * Serializes a transaction to a string that can be signed by a `Signer`.
  */
 export interface TxnDataSerializer {
-  newTransferCoin(
+  newTransferObject(
     signerAddress: SuiAddress,
-    txn: TransferCoinTransaction
+    txn: TransferObjectTransaction
   ): Promise<Base64DataBuffer>;
 
   newMoveCall(
@@ -61,5 +68,10 @@ export interface TxnDataSerializer {
   newSplitCoin(
     signerAddress: SuiAddress,
     txn: SplitCoinTransaction
+  ): Promise<Base64DataBuffer>;
+
+  newPublish(
+    signerAddress: SuiAddress,
+    txn: PublishTransaction
   ): Promise<Base64DataBuffer>;
 }

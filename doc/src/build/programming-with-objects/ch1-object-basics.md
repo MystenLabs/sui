@@ -12,12 +12,12 @@ struct Color {
 }
 ```
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
-To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `VersionedID` from the [ID library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move):
+To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `Info` from the [object library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move):
 ```rust
-use sui::id::VersionedID;
+use sui::object::Info;
 
 struct ColorObject has key {
-    id: VersionedID,
+    info: Info,
     red: u8,
     green: u8,
     blue: u8,
@@ -26,19 +26,22 @@ struct ColorObject has key {
 Now `ColorObject` represents a Sui object type and can be used to create Sui objects that can be eventually stored on the Sui chain.
 > :books: In both core Move and Sui Move, the [key ability](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key) denotes a type that can appear as a key in global storage. However, the structure of global storage is a bit different: core Move uses a (type, `address`)-indexed map, whereas Sui Move uses a map keyed by object IDs.
 
-> :bulb: The `VersionedID` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the unique `ID` of the object and the version of the object. Each time a mutable object is used in a transaction, its version will increase by 1.
+> :bulb: The `Info` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the unique `ID` of the object and the version of the object. Each time a mutable object is used in a transaction, its version will increase by 1.
 
 ### Create Sui object
-Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `id`. The only way to create a new unique `VersionedID` for a Sui object is to call `tx_context::new_id`. The `new_id` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
+Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `info`. The only way to create a new unique `Info` for a Sui object is to call `object::new`. The `new` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
 ```rust
-/// tx_context::Self represents the TxContext module, which allows us call
-/// functions in the module, such as the `new_id` function.
-/// tx_context::TxContext represents the TxContext struct in TxContext module.
-use sui::tx_context::{Self, TxContext};
+// object represents the object module, which allows us call
+// functions in the module, such as the `new` function, without fully
+// qualifying, e.g. `sui::object::new`.
+use sui::object;
+// tx_context::TxContext represents the TxContext struct in tx_context module.
+use sui::tx_context::TxContext;
+
 
 fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
     ColorObject {
-        id: tx_context::new_id(ctx),
+        info: object::new(ctx),
         red,
         green,
         blue,
@@ -50,7 +53,7 @@ fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
 ### Store Sui object
 We have defined a constructor for the `ColorObject`. Calling this constructor will put the value in a local variable where it can be returned from the current function, passed to other functions, or stored inside another struct. And of course, the object can be placed in persistent global storage so it can be read by the outside world and accessed in subsequent transactions.
 
-All of the APIs for adding objects to persistent storage live in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) module. One key API is:
+All of the APIs for adding objects to persistent storage live in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module. One key API is:
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
@@ -80,11 +83,11 @@ public fun get_color(self: &ColorObject): (u8, u8, u8) {
 }
 ```
 
-Find the full code online in [ColorObject.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
+Find the full code online in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
 
-To compile the code, make sure you have [installed Sui](../install.md) so that `sui-move` is in `PATH`. In the code root directory (where `Move.toml` is), run:
+To compile the code, make sure you have [installed Sui](../install.md) so that `sui` is in `PATH`. In the code root directory (where `Move.toml` is), run:
 ```
-sui-move build
+sui move build
 ```
 
 ### Writing unit tests
@@ -138,25 +141,25 @@ test_scenario::next_tx(scenario, &owner);
 `test_scenario::take_owned` removes the object of given type from global storage that's owned by the current transaction sender (it also implicitly checks `can_take_owned`). If this line of code succeeds, it means that `owner` indeed owns an object of type `ColorObject`.
 We also check that the field values of the object match with what we set in creation. At the end, we must return the object back to the global storage by calling `test_scenario::return_owned` so that it's back to the global storage. This also ensures that if any mutations happened to the object during the test, the global storage is aware of the changes.
 
-Again, you can find the full code in [ColorObject.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move).
+Again, you can find the full code in [color_object.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move).
 
 To run the test, simply run the following in the code root directory:
 ```
-sui-move test
+sui move test
 ```
 
 ### On-chain Interactions
-Now let's try to call `create` in actual transactions and see what happens. To do this, we need to start Sui and the wallet. Follow the [Wallet guide](../wallet.md) to start the Sui network and set up the wallet.
+Now let's try to call `create` in actual transactions and see what happens. To do this, we need to start Sui and the CLI client. Follow the [Sui CLI client guide](../cli-client.md) to start the Sui network and set up the client.
 
-Before starting, let's take a look at the default wallet address (this is the address that will eventually own the object later):
+Before starting, let's take a look at the default client address (this is the address that will eventually own the object later):
 ```
-$ wallet active-address
+$ sui client active-address
 ```
-This will tell you the current wallet address.
+This will tell you the current client address.
 
 First, we need to publish the code on-chain. Assuming the path to the root of the repository containing Sui source code is $ROOT:
 ```
-$ wallet publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+$ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
 You can find the published package object ID in the **Publish Results** output:
 ```
@@ -169,7 +172,7 @@ $ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
 Next we can call the function to create a color object:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
@@ -183,7 +186,7 @@ $ export OBJECT=0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 ```
 We can inspect this object and see what kind of object it is:
 ```
-$ wallet object --id $OBJECT
+$ sui client object --id $OBJECT
 ```
 This will show you the metadata of the object with its type:
 ```
@@ -193,11 +196,11 @@ ID: 0x5eb2c3e55693282faa7f5b07ce1c4803e6fdc1bb
 Readonly: false
 Type: 0x57258f32746fd1443f2a077c0c6ec03282087c19::color_object::ColorObject
 ```
-As we can see, it's owned by the current default wallet address that we saw earlier. And the type of this object is `ColorObject`!
+As we can see, it's owned by the current default client address that we saw earlier. And the type of this object is `ColorObject`!
 
 You can also look at the data content of the object by adding the `--json` parameter:
 ```
-$ wallet object --id $OBJECT --json
+$ sui client object --id $OBJECT --json
 ```
 This will print the values of all the fields in the Move object, such as the values of `red`, `green`, and `blue`.
 

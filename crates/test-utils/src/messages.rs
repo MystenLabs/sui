@@ -8,9 +8,11 @@ use move_core_types::ident_str;
 use move_package::BuildConfig;
 use std::path::PathBuf;
 use sui_adapter::genesis;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::messages::{
-    CertifiedTransaction, SignatureAggregator, SignedTransaction, Transaction, TransactionData,
+    CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
+    TransactionData,
 };
 use sui_types::object::Object;
 use sui_types::{base_types::SuiAddress, crypto::Signature};
@@ -100,7 +102,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
             gas_object.compute_object_reference(),
             /* args */
             vec![
-                CallArg::SharedObject(shared_object_id),
+                CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
                 CallArg::Pure(16u64.to_le_bytes().to_vec()),
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
@@ -115,7 +117,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
 /// Make a transaction to publish a test move contracts package.
 pub fn create_publish_move_package_transaction(gas_object: Object, path: PathBuf) -> Transaction {
     let build_config = BuildConfig::default();
-    let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
 
     let all_module_bytes = modules
         .iter()
@@ -140,6 +142,64 @@ pub fn make_transfer_sui_transaction(gas_object: Object, recipient: SuiAddress) 
         sender,
         None,
         gas_object.compute_object_reference(),
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    Transaction::new(data, signature)
+}
+
+pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
+    let (sender, keypair) = test_keys().pop().unwrap();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../sui_programmability/examples/basics");
+    let build_config = BuildConfig::default();
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let all_module_bytes = modules
+        .iter()
+        .map(|m| {
+            let mut module_bytes = Vec::new();
+            m.serialize(&mut module_bytes).unwrap();
+            module_bytes
+        })
+        .collect();
+    let data = TransactionData::new_module(sender, gas_object, all_module_bytes, MAX_GAS);
+    let signature = Signature::new(&data, &keypair);
+    Transaction::new(data, signature)
+}
+
+pub fn make_counter_create_transaction(
+    gas_object: ObjectRef,
+    package_ref: ObjectRef,
+) -> Transaction {
+    let (sender, keypair) = test_keys().pop().unwrap();
+    let data = TransactionData::new_move_call(
+        sender,
+        package_ref,
+        "counter".parse().unwrap(),
+        "create".parse().unwrap(),
+        Vec::new(),
+        gas_object,
+        vec![],
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    Transaction::new(data, signature)
+}
+
+pub fn make_counter_increment_transaction(
+    gas_object: ObjectRef,
+    package_ref: ObjectRef,
+    counter_id: ObjectID,
+) -> Transaction {
+    let (sender, keypair) = test_keys().pop().unwrap();
+    let data = TransactionData::new_move_call(
+        sender,
+        package_ref,
+        "counter".parse().unwrap(),
+        "increment".parse().unwrap(),
+        Vec::new(),
+        gas_object,
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
         MAX_GAS,
     );
     let signature = Signature::new(&data, &keypair);

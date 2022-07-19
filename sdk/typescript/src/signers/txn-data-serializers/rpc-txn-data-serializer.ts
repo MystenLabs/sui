@@ -9,7 +9,8 @@ import {
   MoveCallTransaction,
   MergeCoinTransaction,
   SplitCoinTransaction,
-  TransferCoinTransaction,
+  TransferObjectTransaction,
+  PublishTransaction,
   TxnDataSerializer,
 } from './txn-data-serializer';
 
@@ -32,13 +33,13 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     this.client = new JsonRpcClient(endpoint);
   }
 
-  async newTransferCoin(
+  async newTransferObject(
     signerAddress: SuiAddress,
-    t: TransferCoinTransaction
+    t: TransferObjectTransaction
   ): Promise<Base64DataBuffer> {
     try {
       const resp = await this.client.requestWithType(
-        'sui_transferCoin',
+        'sui_transferObject',
         [signerAddress, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
         isTransactionBytes
       );
@@ -114,6 +115,27 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
       throw new Error(`Error splitting coin: ${err}`);
+    }
+  }
+
+  async newPublish(
+    signerAddress: SuiAddress,
+    t: PublishTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_publish',
+        [
+          signerAddress,
+          t.compiledModules,
+          t.gasPayment,
+          t.gasBudget,
+        ],
+        isTransactionBytes
+      );
+      return new Base64DataBuffer(resp.txBytes);
+    } catch (err) {
+      throw new Error(`Error publishing package ${err}`);
     }
   }
 }

@@ -32,12 +32,12 @@ Let's look at some code. The full source code can be found in [object_owner.move
 First we define two object types for the parent and the child:
 ```rust
 struct Parent has key {
-    id: VersionedID,
+    info: Info,
     child: Option<ChildRef<Child>>,
 }
 
 struct Child has key {
-    id: VersionedID,
+    info: Info,
 }
 ```
 `Parent` type contains a `child` field that is an optional child reference to an object of `Child` type.
@@ -45,7 +45,7 @@ First we define an API to create an object of `Child` type:
 ```rust
 public entry fun create_child(ctx: &mut TxContext) {
     transfer::transfer(
-        Child { id: tx_context::new_id(ctx) },
+        Child { info: object::new(ctx) },
         tx_context::sender(ctx),
     );
 }
@@ -55,7 +55,7 @@ Similarly, we can define an API to create an object of `Parent` type:
 ```rust
 public entry fun create_parent(ctx: &mut TxContext) {
     let parent = Parent {
-        id: tx_context::new_id(ctx),
+        info: object::new(ctx),
         child: option::none(),
     };
     transfer::transfer(parent, tx_context::sender(ctx));
@@ -84,18 +84,18 @@ public fun transfer_to_object_id<T: key>(
     owner_id: VersionedID,
 ): (VersionedID, ChildRef<T>);
 ```
-To use this API, we don't need to create a parent object yet; we need only the object ID of the parent object, which can be created in advance through `tx_context::new_id(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by value only to return it. This is to ensure that the caller of the function does indeed own a `VersionedID` that hasn't been used in any object yet. Without this, it can be easy to make mistakes.
+To use this API, we don't need to create a parent object yet; we need only the object ID of the parent object, which can be created in advance through `object::new(ctx)`. The function returns a tuple: it will return the `owner_id` that was passed in, along with the `ChildRef` representing a reference to the child object `obj`. It may seem strange that we require passing in `owner_id` by value only to return it. This is to ensure that the caller of the function does indeed own a `Info` that hasn't been used in any object yet. Without this, it can be easy to make mistakes.
 Let's see how this is used in action. First we define another object type that has a non-optional child field:
 ```rust
 struct AnotherParent has key {
-    id: VersionedID,
+    info: Info,
     child: ChildRef<Child>,
 }
 ```
 And let's see how we define the API to create `AnotherParent` instance:
 ```rust
 public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
-    let id = tx_context::new_id(ctx);
+    let info = object::new(ctx);
     let (id, child_ref) = transfer::transfer_to_object_id(child, id);
     let parent = AnotherParent {
         id,
@@ -119,7 +119,7 @@ Both functions will compile successfully, because object ownership relationships
 
 Let's try to interact with these two entry functions on-chain and see what happens. First we publish the sample code:
 ```
-$ wallet publish --path sui_core/src/unit_tests/data/object_owner --gas-budget 5000
+$ sui client publish --path sui_core/src/unit_tests/data/object_owner --gas-budget 5000
 ```
 ```
 ----- Publish Results ----
@@ -128,7 +128,7 @@ The newly published package object ID: 0x3cfcee192b2fbafbce74a211e40eaf9e4cb746b
 Then we create a child object:
 ```
 $ export PKG=0x3cfcee192b2fbafbce74a211e40eaf9e4cb746b9
-$ wallet call --package $PKG --module object_owner --function create_child  --gas-budget 1000
+$ sui client call --package $PKG --module object_owner --function create_child  --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -138,7 +138,7 @@ Created Objects:
 At this point we only created the child object, but it's still owned by an account address. We can verify that we should be able to call `mutate_child` function by only passing in the child object:
 ```
 $ export CHILD=0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941
-$ wallet call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
+$ sui client call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -150,7 +150,7 @@ Indeed the transasaction succeeded.
 
 Now let's create the `Parent` object as well:
 ```
-$ wallet call --package $PKG --module object_owner --function create_parent --gas-budget 1000
+$ sui client call --package $PKG --module object_owner --function create_parent --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -160,7 +160,7 @@ Created Objects:
 Now we can make the parent object own the child object:
 ```
 $ export PARENT=0x2f893c18241cfbcd390875f6e1566f4db949392e
-$ wallet call --package $PKG --module object_owner --function add_child --args $PARENT $CHILD --gas-budget 1000
+$ sui client call --package $PKG --module object_owner --function add_child --args $PARENT $CHILD --gas-budget 1000
 ```
 ```
 ----- Transaction Effects ----
@@ -171,7 +171,7 @@ As we can see, the owner of the child object has been changed to the parent obje
 
 Now if we try to call `mutate_child` again, we will see an error:
 ```
-$ wallet call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
+$ sui client call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
 ```
 ```
 Object 0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941 is owned by object 0x2f893c18241cfbcd390875f6e1566f4db949392e, which is not in the input
@@ -179,7 +179,7 @@ Object 0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941 is owned by object 0x2f893c182
 
 To be able to mutate the child object, we must also pass the parent object as argument. Hence we need to call the `mutate_child_with_parent` function:
 ```
-$ wallet call --package $PKG --module object_owner  --function mutate_child_with_parent --args $CHILD $PARENT --gas-budget 1000
+$ sui client call --package $PKG --module object_owner  --function mutate_child_with_parent --args $CHILD $PARENT --gas-budget 1000
 ```
 It will finish successfully.
 
@@ -191,7 +191,7 @@ There are two ways to transfer a child object:
 2. Transfer it to another object, thus it will still be a child object but with the parent object changed.
 
 #### transfer_child_to_address
-First of all, let's look at how to transfer a child object to an account address. The [Transfer](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) library provides the following API:
+First of all, let's look at how to transfer a child object to an account address. The [Transfer](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) library provides the following API:
 ```rust
 public fun transfer_child_to_address<T: key>(
     child: T,
@@ -251,7 +251,7 @@ public entry fun delete_child(child: Child, _parent: &mut Parent) {
     id::delete(id);
 }
 ```
-If you follow the wallet interaction above and then try to call the `delete_child` function here on a child object, you will see the following runtime error:
+If you follow the client interaction above and then try to call the `delete_child` function here on a child object, you will see the following runtime error:
 ```
 An object that's owned by another object cannot be deleted or wrapped.
 It must be transferred to an account address first before deletion

@@ -13,12 +13,12 @@ use sui_types::{
         STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
         TX_CONTEXT_STRUCT_NAME,
     },
-    error::{SuiError, SuiResult},
-    id::{ID_MODULE_NAME, ID_STRUCT_NAME},
+    error::ExecutionError,
+    id::{ID_STRUCT_NAME, OBJECT_MODULE_NAME},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{format_signature_token, resolve_struct};
+use crate::{format_signature_token, resolve_struct, verification_failure};
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
@@ -29,23 +29,20 @@ pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 /// - The function must have the name specified by `INIT_FN_NAME`
 /// - The function must have `Visibility::Private`
 /// - The function can have a single parameter: &mut TxContext (see `is_tx_context`)
-/// - Alternatively, the function can have zero parameters
 ///
 /// For transaction entry points
 /// - The function must have `is_entry` true
 /// - The function must have at least one parameter: &mut TxContext (see `is_tx_context`)
 ///   - The transaction context parameter must be the last parameter
 /// - The function cannot have any return values
-pub fn verify_module(module: &CompiledModule) -> SuiResult {
+pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     for func_def in &module.function_defs {
-        verify_init_not_called(module, func_def)
-            .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+        verify_init_not_called(module, func_def).map_err(verification_failure)?;
 
         let handle = module.function_handle_at(func_def.function);
         let name = module.identifier_at(handle.name);
         if name == INIT_FN_NAME {
-            verify_init_function(module, func_def)
-                .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+            verify_init_function(module, func_def).map_err(verification_failure)?;
             continue;
         }
 
@@ -55,8 +52,7 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
             // it's not an entry function
             continue;
         }
-        verify_entry_function_impl(module, func_def)
-            .map_err(|error| SuiError::ModuleVerificationFailure { error })?;
+        verify_entry_function_impl(module, func_def).map_err(verification_failure)?;
     }
     Ok(())
 }
@@ -199,7 +195,7 @@ fn verify_param_type(
 }
 
 pub const RESOLVED_SUI_ID: (&AccountAddress, &IdentStr, &IdentStr) =
-    (&SUI_FRAMEWORK_ADDRESS, ID_MODULE_NAME, ID_STRUCT_NAME);
+    (&SUI_FRAMEWORK_ADDRESS, OBJECT_MODULE_NAME, ID_STRUCT_NAME);
 pub const RESOLVED_STD_OPTION: (&AccountAddress, &IdentStr, &IdentStr) = (
     &MOVE_STDLIB_ADDRESS,
     STD_OPTION_MODULE_NAME,

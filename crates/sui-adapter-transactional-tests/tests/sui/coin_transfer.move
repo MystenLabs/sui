@@ -16,5 +16,3 @@
 //# run sui::coin::transfer --type-args sui::sui::SUI --args object(100) @C --sender B
 
 //# view-object 100
-
-//# view-object 107

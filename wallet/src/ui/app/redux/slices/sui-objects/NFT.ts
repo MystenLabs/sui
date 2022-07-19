@@ -30,4 +30,19 @@ export class ExampleNFT {
             gasBudget: 10000,
         });
     }
+
+    // TODO marge this method with mintExampleNFT. Import type from @mysten/sui.js
+    // transfer NFT to another address
+    public static async TransferNFT(
+        signer: RawSigner,
+        nftId: string,
+        recipientID: string,
+        transferCost: number
+    ): Promise<TransactionResponse> {
+        return await signer.transferObject({
+            objectId: nftId,
+            gasBudget: transferCost,
+            recipient: recipientID,
+        });
+    }
 }

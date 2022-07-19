@@ -5,10 +5,13 @@ created: object(103)
 written: object(102)
 
 task 2 'run'. lines 26-26:
-Error: Non-`entry` function used for entry point to execution: "Can only call `entry` functions".
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` functions") } }
 
 task 3 'run'. lines 28-28:
-Error: Non-`entry` function used for entry point to execution: "Can only call `entry` functions".
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` functions") } }
 
 task 4 'run'. lines 30-30:
-Error: Non-`entry` function used for entry point to execution: "Can only call `entry` functions".
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` functions") } }

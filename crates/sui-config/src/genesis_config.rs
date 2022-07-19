@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use move_binary_format::CompiledModule;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
-use sui_types::base_types::{ObjectID, SuiAddress, TxContext};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
 use sui_types::object::Object;
@@ -20,9 +18,6 @@ pub struct GenesisConfig {
     pub validator_genesis_info: Option<Vec<ValidatorGenesisInfo>>,
     pub committee_size: usize,
     pub accounts: Vec<AccountConfig>,
-    pub move_packages: Vec<PathBuf>,
-    pub sui_framework_lib_path: Option<PathBuf>,
-    pub move_framework_lib_path: Option<PathBuf>,
 }
 
 impl Config for GenesisConfig {}
@@ -82,36 +77,6 @@ impl GenesisConfig {
 
         Ok((keys, preload_objects))
     }
-
-    pub fn generate_custom_move_modules(
-        &self,
-        genesis_ctx: &mut TxContext,
-    ) -> Result<Vec<Vec<CompiledModule>>> {
-        let mut custom_modules = Vec::new();
-        // Build custom move packages
-        if !self.move_packages.is_empty() {
-            info!(
-                "Loading {} Move packages from {:?}",
-                self.move_packages.len(),
-                self.move_packages,
-            );
-
-            for path in &self.move_packages {
-                let mut modules = sui_framework::build_move_package(
-                    path,
-                    move_package::BuildConfig::default(),
-                    false,
-                )?;
-
-                let package_id =
-                    sui_adapter::adapter::generate_package_id(&mut modules, genesis_ctx)?;
-
-                info!("Loaded package [{}] from {:?}.", package_id, path);
-                custom_modules.push(modules)
-            }
-        }
-        Ok(custom_modules)
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -160,7 +125,7 @@ fn default_gas_value() -> u64 {
     DEFAULT_GAS_AMOUNT
 }
 
-const DEFAULT_GAS_AMOUNT: u64 = 100000;
+const DEFAULT_GAS_AMOUNT: u64 = 100000000;
 const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
 const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
@@ -213,9 +178,6 @@ impl Default for GenesisConfig {
             validator_genesis_info: None,
             committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
             accounts: vec![],
-            move_packages: vec![],
-            sui_framework_lib_path: None,
-            move_framework_lib_path: None,
         }
     }
 }

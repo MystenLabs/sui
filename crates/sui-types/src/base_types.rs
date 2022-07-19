@@ -27,6 +27,8 @@ use sha3::Sha3_256;
 
 use crate::committee::EpochId;
 use crate::crypto::PublicKeyBytes;
+use crate::error::ExecutionError;
+use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::object::{Object, Owner};
 use crate::sui_serde::Base64;
@@ -337,6 +339,10 @@ impl TxContext {
         TransactionDigest::new(self.digest.clone().try_into().unwrap())
     }
 
+    pub fn sender(&self) -> SuiAddress {
+        SuiAddress::from(ObjectID(self.sender))
+    }
+
     pub fn to_vec(&self) -> Vec<u8> {
         bcs::to_bytes(&self).unwrap()
     }
@@ -345,12 +351,12 @@ impl TxContext {
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
-    pub fn update_state(&mut self, other: TxContext) -> Result<(), SuiError> {
+    pub fn update_state(&mut self, other: TxContext) -> Result<(), ExecutionError> {
         if self.sender != other.sender
             || self.digest != other.digest
             || other.ids_created < self.ids_created
         {
-            return Err(SuiError::InvalidTxUpdate);
+            return Err(ExecutionErrorKind::InvalidTransactionUpdate.into());
         }
         self.ids_created = other.ids_created;
         Ok(())

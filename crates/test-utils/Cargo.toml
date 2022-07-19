@@ -7,35 +7,28 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
-tokio = { version = "1.18.2", features = ["sync", "rt"] }
-tokio-util = { version = "0.7.2", features = ["codec"] }
-bytes = "1.1.0"
+anyhow = { version = "1.0.58", features = ["backtrace"] }
 futures = "0.3.21"
-async-trait = "0.1.53"
 rand = "0.7.3"
-rocksdb = "0.18.0"
-tracing = "0.1.34"
 tempfile = "3.3.0"
 bcs = "0.1.3"
-jsonrpsee-http-server = "0.13.1"
-jsonrpsee-http-client = "0.13.1"
+jsonrpsee-http-server = "0.14.0"
+jsonrpsee-http-client = "0.14.0"
+prometheus = "0.13.1"
 
+sui = { path = "../sui" }
 sui-adapter = { path = "../sui-adapter" }
+sui-config = { path = "../sui-config" }
+sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
 sui-gateway = { path = "../sui-gateway" }
-move-package = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "c2949bc7967de5b93f0850ce4987fc06c529f9f2", features = ["address20"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="ff5c1d69057fe93be658377462ca2875a57a0223"}
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "2c5e8236c0702a3ff47dd769c2bbc94b029bf4a9", package = "config" }
-
-sui-config = { path = "../sui-config" }
-sui-types = { path = "../sui-types" }
-sui-core = { path = "../sui-core" }
-sui-network = { path = "../sui-network" }
+sui-json-rpc = { path = "../sui-json-rpc" }
+sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-node = { path = "../sui-node" }
 sui-swarm = { path = "../sui-swarm" }
-sui = { path = "../sui" }
-sui-json-rpc = { path = "../sui-json-rpc" }
-sui-json-rpc-api = { path = "../sui-json-rpc-api" }
+sui-types = { path = "../sui-types" }
+sui-sdk = { path = "../sui-sdk" }
+
+move-package = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f", features = ["address20"] }
 workspace-hack = { path = "../workspace-hack"}

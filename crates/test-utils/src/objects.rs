@@ -17,6 +17,24 @@ pub fn test_gas_objects() -> Vec<Object> {
         .collect()
 }
 
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_gas_object() -> Object {
+    let gas_object_id = ObjectID::random();
+    let (owner, _) = test_keys().pop().unwrap();
+    Object::with_id_owner_for_testing(gas_object_id, owner)
+}
+
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_gas_objects_for_testing(count: usize) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
+            let (owner, _) = test_keys().pop().unwrap();
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, u64::MAX)
+        })
+        .collect()
+}
+
 /// Make a few test gas objects with a specific owners.
 pub fn test_gas_objects_with_owners<O>(owners: O) -> Vec<Object>
 where
@@ -38,6 +56,6 @@ pub fn test_shared_object() -> Object {
     let seed = "0x6666666666666660";
     let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
     let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
-    let obj = MoveObject::new(/* type */ GasCoin::type_(), content.to_bcs_bytes());
+    let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
     Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
 }

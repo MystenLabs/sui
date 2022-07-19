@@ -55,22 +55,22 @@ There is no relationship between Sui/Mysten and Aptos. The similarity is that th
 
 ### Can I buy the Sui token?
 
-We will have a public token for the Sui mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
+We will have a public token for the Sui Mainnet. But it is not available right now and there is no timeline as of yet. Anyone who claims otherwise (offering tokens, whitelists, pre-sale, etc.) is running a scam.
 
 ### Will the token name be SUI?
 
 Yes, the token name will be SUI.
 
 
-### When is the Sui devnet/testnet/mainnet launching?
+### When is the Sui Devnet/Testnet/Mainnet launching?
 
-We have launched our [Sui DevNet](../explore/devnet.md) in May 2022. A testnet is coming in a few months. 
+We have launched our [Sui Devnet](../explore/devnet.md) in May 2022. A Testnet is coming in a few months. 
 
 See our roadmap: \
 [https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap) 
 
 
-### Is there some kind of waitlist for the testnet?
+### Is there some kind of waitlist for the Testnet?
 
 No. More information is forthcoming.
 
@@ -85,9 +85,10 @@ Join our [Discord](https://discord.gg/sui) and follow our [Twitter](https://twit
 For developers:
 
 1. [Install Sui](https://docs.sui.io/build/install).
-1. Spin up a [local node](../build/wallet.md).
-1. Join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
-1. [Start building](https://docs.sui.io/build)!
+2. Spin up a [Sui Fullnode](../build/fullnode.md).
+3. Experiment with the [Sui CLI client](../build/cli-client.md).
+4. Join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
+5. [Start building](https://docs.sui.io/build)!
 
 ### Are there things we can already try if we are not a developer?
 
@@ -129,14 +130,22 @@ Not currently. Packages are immutable objects, and this property is relied upon 
 
 Section four in the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper is the best reference for node architecture.
 
+See the instructions to [run a Sui Fullnode](../build/fullnode.md).
+
 
 ### Can I run a Sui validator node?
 
-We now have a public [Sui DevNet](../explore/devnet.md) with nodes operated by Mysten Labs. Soon we will have a TestNet that allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, you can run a local, non-networked Sui node for development. Check out our [Wallet](../build/wallet.md) documentation to get started. You can interact with the local node via either the [Wallet CLI](../build/wallet.md#command-line-mode) or [RPC API](../build/json-rpc.md).
+We have a public [Sui Devnet](../explore/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
 
-### What does a local node do and what are the hardware requirements to run it? How is it different from a testnet node?
+You may also run a local, non-networked Sui node for development using the [Sui CLI client](../build/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../build/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
 
-A local node allows you to start building software using Move for Sui, and can be run on commodity hardware. A testnet node will be part of a live network of validators.
+Soon we will have a Testnet that allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, 
+
+### What does a local node do and what are the hardware requirements to run it? How is it different from a Testnet node?
+
+A local node allows you to immediately start building software using Move for Sui, and can be run on commodity hardware. See the [Sui Fullnode](../build/fullnode.md) documentation for system requirements.
+
+A Testnet node will be part of a live network of validators.
 
 
 ## Technology

@@ -80,7 +80,7 @@ const signer = new RawSigner(
   keypair,
   new JsonRpcProvider('https://gateway.devnet.sui.io:443')
 );
-const transferTxn = await signer.transferCoin({
+const transferTxn = await signer.transferObject({
   objectId: '0x5015b016ab570df14c87649eda918e09e5cc61e0',
   gasBudget: 1000,
   recipient: '0xd84058cb73bdeabe123b56632713dcd65e1a6c92',
@@ -150,4 +150,25 @@ const moveCallTxn = await signer.executeMoveCall({
   gasBudget: 10000,
 });
 console.log('moveCallTxn', moveCallTxn);
+```
+
+To publish a package:
+
+```typescript
+import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+import * as fs from 'fs/promises';
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const signer = new RawSigner(
+  keypair,
+  new JsonRpcProvider('https://gateway.devnet.sui.io:443')
+);
+const bytecode = await fs.readFile('path/to/project/build/project_name/bytecode_modules/module_name.mv', 'base64');  
+const publishTxn = await signer.publish(
+  {
+    compiledModules: [bytecode.toString()],
+    gasBudget: 1000
+  }
+);
+console.log('publishTxn', publishTxn);
 ```

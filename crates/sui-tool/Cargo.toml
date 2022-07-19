@@ -1,0 +1,27 @@
+[package]
+name = "sui-tool"
+version = "0.6.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.58", features = ["backtrace"] }
+tokio = { version = "1.18.2", features = ["full"] }
+tracing = "0.1.35"
+clap = { version = "3.1.17", features = ["derive"] }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "bdaf6ee818497e6772f3000f938f1e5710f6890f" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "bdaf6ee818497e6772f3000f938f1e5710f6890f" }
+
+sui-core = { path = "../sui-core" }
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+
+rustyline = "9.1.2"
+rustyline-derive = "0.6.0"
+colored = "2.0.0"
+unescape = "0.1.0"
+shell-words = "1.1.0"
+
+workspace-hack = { path = "../workspace-hack"}

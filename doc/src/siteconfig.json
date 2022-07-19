@@ -125,12 +125,27 @@
         "name": "See what's New",
         "sublist": [
           {
-            "name": "Run Full Node",
-            "url": "/build/fullnode"
+            "name": "Try Sui Wallet Browser Extension",
+            "url": "/explore/wallet-browser"
           },
           {
-            "name": "Program Sui Objects",
-            "url": "/build/programming-with-objects/index"
+            "name": "Learn Sui Move",
+            "url": "https://sui.io/resources-move/why-we-created-sui-move/",
+            "external": true
+          },
+          {
+            "name": "Use Move VSCode Plugin",
+            "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
+            "external": true
+          },
+          {
+            "name": "Join Incentivized Testnet",
+            "url": "https://sui.io/resources-sui/announcing-sui-incentivized-testnet/",
+            "external": true
+          },
+          {
+            "name": "Run a Fullnode",
+            "url": "/build/fullnode"
           },
           {
             "name": "Learn Sui Tokenomics",
@@ -142,12 +157,16 @@
         "name": "Get Started",
         "sublist": [
           {
-            "name": "Move Quick Start",
+            "name": "Create Smart Contracts",
             "url": "/build/move"
           },
           {
-            "name": "Wallet Quick Start",
-            "url": "/build/wallet"
+            "name": "Start Sui Network",
+            "url": "/build/cli-client"
+          },
+          {
+            "name": "Program Sui Objects",
+            "url": "/build/programming-with-objects/index"
           }
         ]
       },
@@ -161,6 +180,14 @@
           {
             "name": "Sui Compared to other Blockchains",
             "url": "/learn/sui-compared"
+          },
+          {
+            "name": "Why Move?",
+            "url": "/learn/why-move"
+          },
+          {
+            "name": "How Sui Move and Core Move differ",
+            "url": "/learn/sui-move-diffs"
           }
         ]
       },
@@ -182,12 +209,12 @@
         "sublist": [
           {
             "name": "Create an escrow",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Escrow.move",
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move",
             "external": true
           },
           {
             "name": "Try A flash loan",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/FlashLender.move",
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/flash_lender.move",
             "external": true
           },
           {

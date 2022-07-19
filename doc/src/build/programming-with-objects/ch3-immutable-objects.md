@@ -8,13 +8,13 @@ Objects in Sui can have different types of [ownership](../objects.md#object-owne
 
 ### Create immutable object
 
-Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [Transfer Library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move):
+Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [Transfer Library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 ```rust
 public native fun freeze_object<T: key>(obj: T);
 ```
 After this call, the specified object will become permanently immutable. This is a non-reversible operation; hence, freeze an object only when you are certain that it will never need to be mutated.
 
-Let's add an entry function to the [ColorObject](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/ColorObject.move) module to turn an existing (owned) `ColorObject` into an immutable object:
+Let's add an entry function to the [ColorObject](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move) module to turn an existing (owned) `ColorObject` into an immutable object:
 ```rust
 public entry fun freeze_object(object: ColorObject) {
     transfer::freeze_object(object)
@@ -102,40 +102,40 @@ To summarize, we introduced three new API functions to interact with immutable o
 ### On-chain interactions
 First of all, take a look at the current list of objects you own:
 ```
-$ export ADDR=`wallet active-address`
-$ wallet objects --address=$ADDR
+$ export ADDR=`sui client active-address`
+$ sui client objects --address=$ADDR
 ```
 
-Let's publish the `ColorObject` code on-chain using the wallet:
+Let's publish the `ColorObject` code on-chain using the Sui CLI client:
 ```
-$ wallet publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+$ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
 Set the package object ID to the `$PACKAGE` environment variable as we did in previous chapters.
 
 Then create a new `ColorObject`:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
-Set the newly created object ID to `$OBJECT`. If we look at the list of objects in the current active account address's wallet:
+Set the newly created object ID to `$OBJECT`. If we look at the list of objects in the current active account address:
 ```
-$ wallet objects --address=$ADDR
+$ sui client objects --address=$ADDR
 ```
 There should be one more, with ID `$OBJECT`. Let's turn it into an immutable object:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"0x$OBJECT\"
 ```
 Now let's look at the list of objects we own again:
 ```
-$ wallet objects --address=$ADDR
+$ sui client objects --address=$ADDR
 ```
 `$OBJECT` is no longer there. It's no longer owned by anyone. You can see that it's now immutable by querying the object information:
 ```
-$ wallet object --id $OBJECT
+$ sui client object --id $OBJECT
 Owner: Immutable
 ...
 ```
 If we try to mutate it:
 ```
-$ wallet call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "update" --args \"0x$OBJECT\" 0 0 0
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "update" --args \"0x$OBJECT\" 0 0 0
 ```
 It will complain that an immutable object cannot be passed to a mutable argument.

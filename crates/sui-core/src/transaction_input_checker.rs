@@ -1,110 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
-
-use prometheus_exporter::prometheus::IntCounter;
+use crate::authority::SuiDataStore;
+use prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
-use sui_types::base_types::TransactionDigest;
+use std::collections::HashSet;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
     fp_ensure,
     gas::{self, SuiGasStatus},
-    messages::{InputObjectKind, SingleTransactionKind, TransactionData, TransactionEnvelope},
+    messages::{
+        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, TransactionEnvelope,
+    },
     object::{Object, Owner},
 };
-use tracing::{debug, instrument};
-
-use crate::authority::SuiDataStore;
-
-// TODO: read this from onchain source (e.g. SystemState)
-const STORAGE_GAS_PRICE: u64 = 1;
-pub struct InputObjects {
-    objects: Vec<(InputObjectKind, Object)>,
-}
-
-impl InputObjects {
-    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
-        Self { objects }
-    }
-
-    pub fn len(&self) -> usize {
-        self.objects.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.objects.is_empty()
-    }
-
-    pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
-        let owned_objects: Vec<_> = self
-            .objects
-            .iter()
-            .filter_map(|(object_kind, object)| match object_kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(_) => None,
-            })
-            .collect();
-
-        debug!(
-            num_mutable_objects = owned_objects.len(),
-            "Checked locks and found mutable objects"
-        );
-
-        owned_objects
-    }
-
-    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
-        self.objects
-            .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
-            .map(|(_, obj)| obj.compute_object_reference())
-            .collect()
-    }
-
-    pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
-        self.objects
-            .iter()
-            .map(|(_, obj)| obj.previous_transaction)
-            .collect()
-    }
-
-    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
-        self.objects
-            .iter()
-            .filter_map(|(kind, object)| match kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
-            })
-            .collect()
-    }
-
-    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
-        self.objects
-            .into_iter()
-            .map(|(_, object)| (object.id(), object))
-            .collect()
-    }
-}
+use tracing::instrument;
 
 #[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<const A: bool, S, T>(
-    store: &SuiDataStore<A, S>,
+pub async fn check_transaction_input<S, T>(
+    store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
     shared_obj_metric: &IntCounter,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
@@ -138,8 +53,8 @@ where
 /// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
-async fn check_gas<const A: bool, S>(
-    store: &SuiDataStore<A, S>,
+async fn check_gas<S>(
+    store: &SuiDataStore<S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
     computation_gas_price: u64,
@@ -155,18 +70,24 @@ where
         let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
             object_id: gas_payment_id,
         })?;
-        let gas_price = std::cmp::max(computation_gas_price, STORAGE_GAS_PRICE);
+
+        //TODO: cache this storage_gas_price in memory
+        let storage_gas_price = store
+            .get_sui_system_state_object()?
+            .parameters
+            .storage_gas_price;
+
+        let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
         gas::check_gas_balance(&gas_object, gas_budget, gas_price)?;
-        // TODO: Pass in real computation gas unit price and storage gas unit price.
         let gas_status =
-            gas::start_gas_metering(gas_budget, computation_gas_price, STORAGE_GAS_PRICE)?;
+            gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
         Ok(gas_status)
     }
 }
 
 #[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
-async fn fetch_objects<const A: bool, S>(
-    store: &SuiDataStore<A, S>,
+async fn fetch_objects<S>(
+    store: &SuiDataStore<S>,
     input_objects: &[InputObjectKind],
 ) -> Result<Vec<Option<Object>>, SuiError>
 where
@@ -179,8 +100,8 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_locks<const A: bool, S>(
-    store: &SuiDataStore<A, S>,
+async fn check_locks<S>(
+    store: &SuiDataStore<S>,
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>
 where
@@ -221,13 +142,14 @@ where
         .kind
         .single_transactions()
         .filter_map(|s| {
-            if let SingleTransactionKind::TransferCoin(t) = s {
+            if let SingleTransactionKind::TransferObject(t) = s {
                 Some(t.object_ref.0)
             } else {
                 None
             }
         })
         .collect();
+
     for (object_kind, object) in input_objects.into_iter().zip(objects) {
         // All objects must exist in the DB.
         let object = match object {
@@ -238,7 +160,7 @@ where
             }
         };
         if transfer_object_ids.contains(&object.id()) {
-            object.is_transfer_eligible()?;
+            object.ensure_public_transfer_eligible()?;
         }
         // Check if the object contents match the type of lock we need for
         // this object.

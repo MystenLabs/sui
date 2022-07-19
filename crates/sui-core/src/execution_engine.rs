@@ -1,23 +1,27 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::ident_str;
+use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
 
-use crate::authority::AuthorityTemporaryStore;
+use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::committee::EpochId;
+use sui_types::error::ExecutionError;
+use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages::ObjectArg;
 use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
-    error::SuiResult,
     event::{Event, TransferType},
     gas::{self, SuiGasStatus},
     messages::{
         CallArg, ChangeEpoch, ExecutionStatus, MoveCall, MoveModulePublish, SingleTransactionKind,
-        TransactionData, TransactionEffects, TransferCoin, TransferSui,
+        TransactionData, TransactionEffects, TransferObject, TransferSui,
     },
     object::Object,
     storage::{BackingPackageStore, Storage},
@@ -29,7 +33,7 @@ use tracing::{debug, instrument, trace};
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     shared_object_refs: Vec<ObjectRef>,
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
@@ -37,11 +41,11 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
     epoch: EpochId,
-) -> SuiResult<TransactionEffects> {
+) -> (TransactionEffects, Option<ExecutionError>) {
     let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
     let gas_object_ref = *transaction_data.gas_payment_object_ref();
-    let status = execute_transaction(
+    let (gas_cost_summary, execution_result) = execute_transaction(
         temporary_store,
         transaction_data,
         gas_object_ref.0,
@@ -50,7 +54,14 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         native_functions,
         gas_status,
     );
-    let gas_cost_summary = status.gas_cost_summary();
+
+    let (status, execution_error) = match execution_result {
+        Ok(()) => (ExecutionStatus::Success, None),
+        Err(error) => (
+            ExecutionStatus::new_failure(error.to_execution_status()),
+            Some(error),
+        ),
+    };
     debug!(
         computation_gas_cost = gas_cost_summary.computation_cost,
         storage_gas_cost = gas_cost_summary.storage_cost,
@@ -66,16 +77,17 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
+        gas_cost_summary,
         status,
         gas_object_ref,
     );
-    Ok(effects)
+    (effects, execution_error)
 }
 
 fn charge_gas_for_object_read<S>(
-    temporary_store: &AuthorityTemporaryStore<S>,
+    temporary_store: &TemporaryStore<S>,
     gas_status: &mut SuiGasStatus,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     // Charge gas for reading all objects from the DB.
     // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
     // fetching only unique objects.
@@ -89,14 +101,14 @@ fn charge_gas_for_object_read<S>(
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     native_functions: &NativeFunctionTable,
     mut gas_status: SuiGasStatus,
-) -> ExecutionStatus {
+) -> (GasCostSummary, Result<(), ExecutionError>) {
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let mut result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -105,7 +117,7 @@ fn execute_transaction<S: BackingPackageStore>(
         // once across single tx, we should be able to run them in parallel.
         for single_tx in transaction_data.kind.into_single_transactions() {
             result = match single_tx {
-                SingleTransactionKind::TransferCoin(TransferCoin {
+                SingleTransactionKind::TransferObject(TransferObject {
                     recipient,
                     object_ref,
                 }) => {
@@ -115,7 +127,7 @@ fn execute_transaction<S: BackingPackageStore>(
                         .get(&object_ref.0)
                         .unwrap()
                         .clone();
-                    transfer_coin(temporary_store, object, recipient)
+                    transfer_object(temporary_store, object, tx_ctx.sender(), recipient)
                 }
                 SingleTransactionKind::TransferSui(TransferSui { recipient, amount }) => {
                     let gas_object = temporary_store
@@ -166,7 +178,7 @@ fn execute_transaction<S: BackingPackageStore>(
                         &function,
                         vec![],
                         vec![
-                            CallArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID),
+                            CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
                             CallArg::Pure(bcs::to_bytes(&epoch).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&storage_charge).unwrap()),
                             CallArg::Pure(bcs::to_bytes(&computation_charge).unwrap()),
@@ -226,24 +238,24 @@ fn execute_transaction<S: BackingPackageStore>(
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
-    match result {
-        Ok(()) => ExecutionStatus::Success {
-            gas_cost: cost_summary,
-        },
-        Err(error) => ExecutionStatus::new_failure(cost_summary, error),
-    }
+    (cost_summary, result)
 }
 
-fn transfer_coin<S>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+fn transfer_object<S>(
+    temporary_store: &mut TemporaryStore<S>,
     mut object: Object,
+    sender: SuiAddress,
     recipient: SuiAddress,
-) -> SuiResult {
-    object.transfer_and_increment_version(recipient)?;
+) -> Result<(), ExecutionError> {
+    object.ensure_public_transfer_eligible()?;
+    object.transfer_and_increment_version(recipient);
     temporary_store.log_event(Event::TransferObject {
+        package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+        transaction_module: Identifier::from(ident_str!("native")),
+        sender,
+        recipient: Owner::AddressOwner(recipient),
         object_id: object.id(),
         version: object.version(),
-        destination_addr: recipient,
         type_: TransferType::Coin,
     });
     temporary_store.write_object(object);
@@ -258,18 +270,19 @@ fn transfer_coin<S>(
 /// We make sure that the gas object's version is not incremented after this function call, because
 /// when we charge gas later, its version will be officially incremented.
 fn transfer_sui<S>(
-    temporary_store: &mut AuthorityTemporaryStore<S>,
+    temporary_store: &mut TemporaryStore<S>,
     mut object: Object,
     recipient: SuiAddress,
     amount: Option<u64>,
     tx_ctx: &mut TxContext,
-) -> SuiResult {
+) -> Result<(), ExecutionError> {
     #[cfg(debug_assertions)]
     let version = object.version();
 
     if let Some(amount) = amount {
         // Deduct the amount from the gas coin and update it.
-        let mut gas_coin = GasCoin::try_from(&object)?;
+        let mut gas_coin = GasCoin::try_from(&object)
+            .expect("gas object is transferred, so already checked to be a SUI coin");
         gas_coin.0.balance.withdraw(amount)?;
         let move_object = object
             .data
@@ -282,8 +295,7 @@ fn transfer_sui<S>(
 
         // Creat a new gas coin with the amount.
         let new_object = Object::new_move(
-            MoveObject::new(
-                GasCoin::type_(),
+            MoveObject::new_gas_coin(
                 bcs::to_bytes(&GasCoin::new(
                     tx_ctx.fresh_id(),
                     OBJECT_START_VERSION,
@@ -302,7 +314,7 @@ fn transfer_sui<S>(
     } else {
         // If amount is not specified, we simply transfer the entire coin object.
         // We don't want to increment the version number yet because latter gas charge will do it.
-        object.transfer_without_version_change(recipient)?;
+        object.transfer_without_version_change(recipient);
     }
 
     // TODO: Emit a new event type for this.

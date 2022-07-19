@@ -10,7 +10,7 @@ pub mod reconfiguration;
 #[path = "./tests/reconfiguration_tests.rs"]
 mod reconfiguration_tests;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EpochInfoLocals {
     pub committee: Committee,
     pub validator_halted: bool,

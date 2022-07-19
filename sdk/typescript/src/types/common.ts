@@ -9,6 +9,7 @@ export type SuiAddress = string;
 export type ObjectOwner =
   | { AddressOwner: SuiAddress }
   | { ObjectOwner: SuiAddress }
+  | { SingleOwner: SuiAddress }
   | 'Shared'
   | 'Immutable';
 

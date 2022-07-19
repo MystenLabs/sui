@@ -37,14 +37,25 @@ In addition to the common metadata above, a publish transaction includes Package
 
 Native transactions are optimized versions of common Sui operations. Each native transaction is semantically equivalent to a specific Move call but has a lower gas cost.
 
-### Transfer
+### Transfer object
 
-This transaction type transfers coins from the sender to the specified recipients.
+This transaction type transfers objects from the sender to the specified recipients.
 
-In addition to the common metadata above, a transfer transaction includes the following fields:
-* Input: An object reference pointing to a mutable object owned by the sender. The object must be of type `sui::coin::Coin<T>` with arbitrary `T`--that is, any fungible token. The gas input object from above cannot also appear as an object input.
-* Recipients: The addresses that will receive payments from this transfer. This list must be non-empty.
-* Amounts: A list of unsigned integers encoding the amount that each recipient will receive. This list must be the same length as the recipients list. Each amount will be debited from the input object, wrapped in a freshly created coin object, and sent to the corresponding recipient address. The value of the input object must be greater than or equal to the sum of the amounts.
+In addition to the common metadata above, a transfer object transaction includes the following fields:
+
+* Input: An object reference pointing to a mutable object owned by the sender. The object must be of type that allows for public transfers--that is, any type with the `store` ability. The gas input object from above cannot also appear as the object input.
+* Recipient: The address that will receive the object from this transfer.
+
+### Transfer SUI
+
+This transaction type is similar to the Transfer Object transaction type, but the input object type must be a SUI coin--that is, an object of type `sui::coin::Coin<sui::sui::SUI>`. The benefit of this transaction type is that a separate coin object is not needed for gas. The gas payment is taken from the SUI coin being transferred.
+Optionally, an amount can be specified for partial transfers.
+
+In addition to the common metadata above, a transfer SUI transaction includes the following fields:
+
+* Input: An object reference pointing to a `sui::coin::Coin<sui::sui::SUI>` object owned by the sender.
+* (Optional) Amount: An unsigned integer encoding the amount that the recipient will receive. The amount will be debited from the input object, wrapped in a freshly created coin object, and sent to the corresponding recipient address. The value of the input object must be greater than or equal to the amount specified.
+* Recipient: The address that will receive the coin from this transfer.
 
 ### Join
 

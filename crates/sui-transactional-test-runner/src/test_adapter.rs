@@ -3,8 +3,8 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
-use crate::{args::*, in_memory_storage::InMemoryStorage};
-use anyhow::{anyhow, bail};
+use crate::args::*;
+use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
@@ -36,9 +36,10 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_adapter::in_memory_storage::InMemoryStorage;
+use sui_adapter::temporary_store::TemporaryStore;
 use sui_adapter::{adapter::new_move_vm, genesis};
-use sui_core::transaction_input_checker::InputObjects;
-use sui_core::{authority::AuthorityTemporaryStore, execution_engine};
+use sui_core::execution_engine;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
     base_types::{
@@ -46,10 +47,9 @@ use sui_types::{
         SUI_ADDRESS_LENGTH,
     },
     crypto::{get_key_pair_from_rng, KeyPair, Signature},
-    error::SuiError,
     event::Event,
     gas,
-    messages::{ExecutionStatus, Transaction, TransactionData, TransactionEffects},
+    messages::{ExecutionStatus, InputObjects, Transaction, TransactionData, TransactionEffects},
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -348,19 +348,27 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             stop_line: _,
             data: _,
         } = task;
-        match command {
-            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
-                let id = match self.fake_to_real_object_id(fake_id) {
-                    None => panic!(
+        macro_rules! get_obj {
+            ($fake_id:ident) => {{
+                let id = match self.fake_to_real_object_id($fake_id) {
+                    None => bail!(
                         "task {}, lines {}-{}. Unbound fake id {}",
-                        number, start_line, command_lines_stop, fake_id
+                        number,
+                        start_line,
+                        command_lines_stop,
+                        $fake_id
                     ),
                     Some(res) => res,
                 };
-                let obj = match self.storage.get_object(&id) {
-                    None => return Ok(Some(format!("No object at id {}", fake_id))),
+                match self.storage.get_object(&id) {
+                    None => return Ok(Some(format!("No object at id {}", $fake_id))),
                     Some(obj) => obj,
-                };
+                }
+            }};
+        }
+        match command {
+            SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
+                let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj
@@ -390,6 +398,26 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     }
                 }))
             }
+            SuiSubcommand::TransferObject(TransferObjectCommand {
+                id: fake_id,
+                recipient,
+                sender,
+                gas_budget,
+            }) => {
+                let obj = get_obj!(fake_id);
+                let obj_ref = obj.compute_object_reference();
+                let recipient = match self.accounts.get(&recipient) {
+                    Some((recipient, _)) => *recipient,
+                    None => panic!("Unbound account {}", recipient),
+                };
+                let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
+                let transaction = self.sign_txn(sender, |sender, gas| {
+                    TransactionData::new_transfer(recipient, obj_ref, sender, gas, gas_budget)
+                });
+                let summary = self.execute_txn(transaction, gas_budget)?;
+                let output = self.object_summary_output(&summary, false);
+                Ok(output)
+            }
         }
     }
 }
@@ -401,6 +429,7 @@ impl<'a> SuiTestAdapter<'a> {
         txn_data: impl FnOnce(/* sender */ SuiAddress, /* gas */ ObjectRef) -> TransactionData,
     ) -> Transaction {
         let gas_object_id = ObjectID::new(self.rng.gen());
+        assert!(!self.object_enumeration.contains_left(&gas_object_id));
         self.enumerate_fake(gas_object_id);
         let new_key_pair;
         let (sender, sender_key) = match sender {
@@ -446,20 +475,23 @@ impl<'a> SuiTestAdapter<'a> {
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
-        let TransactionEffects {
-            status,
-            events,
-            created,
-            // TODO display all these somehow
-            transaction_digest: _,
-            mutated: _,
-            unwrapped: _,
-            deleted: _,
-            wrapped: _,
-            gas_object: _,
-            ..
-        } = execution_engine::execute_transaction_to_effects(
+            TemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
+        let (
+            TransactionEffects {
+                status,
+                events,
+                created,
+                // TODO display all these somehow
+                transaction_digest: _,
+                mutated: _,
+                unwrapped: _,
+                deleted: _,
+                wrapped: _,
+                gas_object: _,
+                ..
+            },
+            execution_error,
+        ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             &mut temporary_store,
             transaction.data,
@@ -470,7 +502,7 @@ impl<'a> SuiTestAdapter<'a> {
             gas_status,
             // TODO: Support different epochs in transactional tests.
             0,
-        )?;
+        );
         let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();
@@ -505,7 +537,15 @@ impl<'a> SuiTestAdapter<'a> {
                 deleted: deleted_ids,
                 events,
             }),
-            ExecutionStatus::Failure { error, .. } => Err(self.render_sui_error(*error)),
+            ExecutionStatus::Failure { error, .. } => {
+                Err(anyhow::anyhow!(self.stabilize_str(format!(
+                    "Transaction Effects Status: {}\nExecution Error: {}",
+                    error,
+                    execution_error.expect(
+                        "to have an execution error if a transaction's status is a failure"
+                    )
+                ))))
+            }
         }
     }
 
@@ -598,11 +638,6 @@ impl<'a> SuiTestAdapter<'a> {
             .map(|id| format!("object({})", self.real_to_fake_object_id(id).unwrap()))
             .collect::<Vec<_>>()
             .join(", ")
-    }
-
-    fn render_sui_error(&self, sui_error: SuiError) -> anyhow::Error {
-        let error_string: String = format!("{}", sui_error);
-        anyhow!(self.stabilize_str(&error_string))
     }
 
     fn stabilize_str(&self, input: impl AsRef<str>) -> String {

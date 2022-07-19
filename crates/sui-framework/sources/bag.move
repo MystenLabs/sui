@@ -10,36 +10,36 @@
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
 module sui::bag {
-    use std::errors;
-    use std::option::{Self, Option};
-    use std::vector::Self;
-    use sui::id::{Self, ID, VersionedID};
-    use sui::transfer::{Self, ChildRef};
+    use sui::object::{Self, ID, Info};
+    use sui::transfer;
+    use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
+    use sui::vec_set::{Self, VecSet};
 
     // Error codes
-    /// When removing an object from the collection, EObjectNotFound
-    /// will be triggered if the object is not owned by the collection.
-    const EObjectNotFound: u64 = 0;
-
     /// Adding the same object to the collection twice is not allowed.
-    const EObjectDoubleAdd: u64 = 1;
+    const EObjectDoubleAdd: u64 = 0;
 
     /// The max capacity set for the collection cannot exceed the hard limit
     /// which is DEFAULT_MAX_CAPACITY.
-    const EInvalidMaxCapacity: u64 = 2;
+    const EInvalidMaxCapacity: u64 = 1;
 
     /// Trying to add object to the collection when the collection is
     /// already at its maximum capacity.
-    const EMaxCapacityExceeded: u64 = 3;
+    const EMaxCapacityExceeded: u64 = 2;
 
     // TODO: this is a placeholder number
     const DEFAULT_MAX_CAPACITY: u64 = 65536;
 
     struct Bag has key {
-        id: VersionedID,
-        objects: vector<ID>,
+        info: Info,
+        objects: VecSet<ID>,
         max_capacity: u64,
+    }
+
+    struct Item<T: store> has key {
+        info: Info,
+        value: T,
     }
 
     /// Create a new Bag and return it.
@@ -49,13 +49,10 @@ module sui::bag {
 
     /// Create a new Bag with custom size limit and return it.
     public fun new_with_max_capacity(ctx: &mut TxContext, max_capacity: u64): Bag {
-        assert!(
-            max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
-            errors::limit_exceeded(EInvalidMaxCapacity)
-        );
+        assert!(max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0, EInvalidMaxCapacity);
         Bag {
-            id: tx_context::new_id(ctx),
-            objects: vector::empty(),
+            info: object::new(ctx),
+            objects: vec_set::empty(),
             max_capacity,
         }
     }
@@ -67,59 +64,41 @@ module sui::bag {
 
     /// Returns the size of the Bag.
     public fun size(c: &Bag): u64 {
-        vector::length(&c.objects)
-    }
-
-    /// Add an object to the Bag.
-    /// Abort if the object is already in the Bag.
-    /// If the object was owned by another object, an `old_child_ref` would be around
-    /// and need to be consumed as well.
-    fun add_impl<T: key + store>(c: &mut Bag, object: T, old_child_ref: Option<ChildRef<T>>) {
-        assert!(
-            size(c) + 1 <= c.max_capacity,
-            errors::limit_exceeded(EMaxCapacityExceeded)
-        );
-        let id = id::id(&object);
-        if (contains(c, id)) {
-            abort EObjectDoubleAdd
-        };
-        vector::push_back(&mut c.objects, *id);
-        transfer::transfer_to_object_unsafe(object, old_child_ref, c);
+        vec_set::size(&c.objects)
     }
 
     /// Add a new object to the Bag.
-    /// Abort if the object is already in the Bag.
-    public fun add<T: key + store>(c: &mut Bag, object: T) {
-        add_impl(c, object, option::none())
+    public fun add<T: store>(c: &mut Bag, value: T, ctx: &mut TxContext): TypedID<Item<T>> {
+        assert!(size(c) + 1 <= c.max_capacity, EMaxCapacityExceeded);
+        let info = object::new(ctx);
+        vec_set::insert(&mut c.objects, *object::info_id(&info));
+        let item = Item { info, value };
+        let item_id = typed_id::new(&item);
+        transfer::transfer_to_object(item, c);
+        item_id
     }
 
-    /// Transfer a object that was owned by another object to the bag.
-    /// Since the object is a child object of another object, an `old_child_ref`
-    /// is around and needs to be consumed.
-    public fun add_child_object<T: key + store>(c: &mut Bag, object: T, old_child_ref: ChildRef<T>) {
-        add_impl(c, object, option::some(old_child_ref))
-    }
-
-    /// Check whether the Bag contains a specific object,
     /// identified by the object id in bytes.
     public fun contains(c: &Bag, id: &ID): bool {
-        option::is_some(&find(c, id))
+        vec_set::contains(&c.objects, id)
     }
 
     /// Remove and return the object from the Bag.
     /// Abort if the object is not found.
-    public fun remove<T: key + store>(c: &mut Bag, object: T): T {
-        let idx = find(c, id::id(&object));
-        if (option::is_none(&idx)) {
-            abort EObjectNotFound
-        };
-        vector::remove(&mut c.objects, *option::borrow(&idx));
-        object
+    public fun remove<T: store>(c: &mut Bag, item: Item<T>): T {
+        let Item { info, value } = item;
+        vec_set::remove(&mut c.objects, object::info_id(&info));
+        object::delete(info);
+        value
     }
 
     /// Remove the object from the Bag, and then transfer it to the signer.
-    public entry fun remove_and_take<T: key + store>(c: &mut Bag, object: T, ctx: &mut TxContext) {
-        let object = remove(c, object);
+    public entry fun remove_and_take<T: key + store>(
+        c: &mut Bag,
+        item: Item<T>,
+        ctx: &mut TxContext,
+    ) {
+        let object = remove(c, item);
         transfer::transfer(object, tx_context::sender(ctx));
     }
 
@@ -130,22 +109,8 @@ module sui::bag {
 
     public fun transfer_to_object_id(
         obj: Bag,
-        owner_id: VersionedID,
-    ): (VersionedID, ChildRef<Bag>) {
+        owner_id: &Info,
+    ) {
         transfer::transfer_to_object_id(obj, owner_id)
-    }
-
-    /// Look for the object identified by `id_bytes` in the Bag.
-    /// Returns the index if found, none if not found.
-    fun find(c: &Bag, id: &ID): Option<u64> {
-        let i = 0;
-        let len = size(c);
-        while (i < len) {
-            if (vector::borrow(&c.objects, i) == id) {
-                return option::some(i)
-            };
-            i = i + 1;
-        };
-        return option::none()
     }
 }

@@ -11,17 +11,16 @@ futures = "0.3.21"
 serde_json = "1.0.80"
 tempfile = "3.3.0"
 tokio = { version = "1.17.0", features = ["full"] }
-async-trait = "0.1.53"
-serde_with = { version = "1.13.0", features = ["hex"] }
-tracing = { version = "0.1.34", features = ["log"] }
+tracing = { version = "0.1.35", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
-reqwest = { version = "0.11.10", features = ["blocking", "json"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "ff5c1d69057fe93be658377462ca2875a57a0223" }
+reqwest = { version = "0.11.11", features = ["blocking", "json"] }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "bdaf6ee818497e6772f3000f938f1e5710f6890f" }
 
 sui-faucet = { path = "../sui-faucet" }
 sui = { path = "../sui" }
-sui-json-rpc-api = { path = "../sui-json-rpc-api" }
-sui-core = { path = "../sui-core" }
+sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
+sui-sdk = { path = "../sui-sdk" }
 sui-json = { path = "../sui-json" }
+sui-config = { path = "../sui-config" }
 workspace-hack = { path = "../workspace-hack"}

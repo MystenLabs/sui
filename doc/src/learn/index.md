@@ -16,14 +16,15 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
-* [Run Full Node](../build/fullnode.md) in Sui to have your own local copy of full blockchain state, contribute to Sui, and qualify to be a potential validator.
-* [Programming with objects](../build/programming-with-objects/index.md) tutorial series offers detailed guidance on manipulating Sui objects, from creation and storage through wrapping and using child objects.
-* Sui [version 0.3.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.3.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
-* [Sui tokenomics](../learn/tokenomics/index.md) are now fully explained and cover:
-  * [Sui token](../learn/tokenomics/sui-token.md).
-  * [Gas-pricing mechanism](../learn/tokenomics/gas-pricing.md).
-  * [Sui storage fund](../learn/tokenomics/storage-fund.md).
-  * [Delegated proof-of-stake system](../learn/tokenomics/proof-of-stake.md).
+* Install the [Sui Wallet Browser Extension](../explore/wallet-browser.md) to create NFTs, transfer coins, and carry out common transactions in a Chrome tab.
+* [Sui Move is feature complete](https://sui.io/resources-move/why-we-created-sui-move/) and ready for you to write safe and efficient smart contracts. See https://examples.sui.io/ to learn Sui Move by example.
+* Sui [version 0.6.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
+* If your application is written in JavaScript or TypeScript, follow the [TypeScript SDK documentation](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+* Employ the enhanced [Move Visual Studio Code (VSCode) plugin](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) as described in the [related announcement](https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin).
+* Get ready to participate in [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/)!
+* The former `wallet` binary has been replaced with the [Sui CLI client](../build/cli-client.md) and combined with related functions.
+* [JSON-RPC PubSub](../build/pubsub.md) is supported by Sui [fullnode](../build/fullnode.md) to publish / subscribe using notifications via websocket.
+* [Docker Compose](../build/fullnode.md#using-docker-compose) enables simple creation of Sui Fullnodes using [Docker](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme).
 
 For a complete view of all changes in the Sui `devnet` branch, see:
 https://github.com/MystenLabs/sui/commits/devnet
@@ -35,33 +36,25 @@ See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/d
 
 ## Kickstart development
 
-### Move quick start
+### Write Smart Contracts with Move
 Go to the [Move Quick Start](../build/move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
-### Wallet quick start
-See the [Wallet Quick Start](../build/wallet.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+### Start the Sui network with Sui CLI client
+See the [Sui CLI client Quick Start](../build/cli-client.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
-### End-to-end tutorial
-Finish with the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
+### Take end-to-end tutorial
+Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
+
+### Program with Objects
+Finish with the detailed [Programming with objects](../build/programming-with-objects/index.md) tutorial series offering detailed guidance on manipulating Sui objects, from creation and storage through wrapping and using child objects.
 
 ## Navigate this site
 
 Navigate and search this site however you see fit. Here is the order we recommend if you are new to Sui:
 
-1. Learn [about Sui](../learn/about-sui.md), how [Sui differs from Move](../learn/why-move.md), and [how Sui works](../learn/how-sui-works.md) starting in this very section.
-1. [Build](../build/index.md) smart contracts, wallets, validators, transactions, and more.
+1. Learn [about Sui](../learn/about-sui.md), how [Sui Move differs from Core Move](../learn/sui-move-diffs.md), and [how Sui works](../learn/how-sui-works.md) starting in this very section.
+1. [Build](../build/index.md) smart contracts, the Sui client, a Sui fullnode, and more.
 1. [Explore](../explore/index.md) prototypes and examples.
 1. [Contribute](../contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
-
-## Use supporting sites
-
-Take note of these related repositories of information to make best use of the knowledge here:
-
-* [Move & Sui podcast](https://zeroknowledge.fm/228-2/) on Zero Knowledge where programmable objects are described in detail.
-* Original [Move Book](https://move-book.com/index.html) written by a member of the Sui team.
-* [Core Move](https://github.com/move-language/move/tree/main/language/documentation) documentation, including:
-  * [Tutorial](https://github.com/move-language/move/blob/main/language/documentation/tutorial/README.md) - A step-by-step guide through writing a Move module.
-  * [Book](https://github.com/move-language/move/blob/main/language/documentation/book/src/introduction.md) - A summary with pages on [various topics](https://github.com/move-language/move/tree/main/language/documentation/book/src).
-  * [Examples](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/move-language/move/tree/main/language/documentation/examples/experimental/coin-swap).
-* [Awesome Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) - A summary of resources related to Move, from blockchains through code samples.
-* [Sui API Reference](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false) - The reference files for the [Sui JSON-RPC API](../build/json-rpc.md).
+1. Employ the [Sui API Reference](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false) reference files for the [Sui JSON-RPC API](../build/json-rpc.md).
+1. View the [Mysten Labs](https://www.youtube.com/channel/UCI7pCUVxSLcndVhPpZOwZgg) YouTube channel for introductory videos on technology and partners.

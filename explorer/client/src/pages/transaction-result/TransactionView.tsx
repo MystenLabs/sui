@@ -7,15 +7,21 @@ import {
     getTransactionKindName,
     getTransactions,
     getTransactionSender,
-    getTransferCoinTransaction,
+    getTransferObjectTransaction,
     getMovePackageContent,
     getObjectId,
+    getTransferSuiTransaction,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
-import { type DataType } from './TransactionResultType';
+import Tabs from '../../components/tabs/Tabs';
+import SendReceiveView from './SendReceiveView';
+import TxLinks from './TxLinks';
+import TxModulesWrapper from './TxModulesWrapper';
+import TxResultHeader from './TxResultHeader';
 
+import type { DataType, Category } from './TransactionResultType';
 import type {
     CertifiedTransaction,
     TransactionKindName,
@@ -28,55 +34,20 @@ import styles from './TransactionResult.module.css';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
+    timestamp_ms: number | null;
     gasFee: number;
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
 };
 
-// Generate an Arr of Obj with Label and Value
-// TODO rewrite to use sui.js, verify tx types and dynamically generate list
-function formatTxResponse(tx: TxDataProps, txId: string) {
-    // TODO: handle multiple transactions
-    const txData = getTransactions(tx)[0];
-    const txKindName = getTransactionKindName(txData);
-
+function generateMutatedCreated(tx: TxDataProps) {
     return [
-        {
-            label: 'Transaction ID',
-            value: txId,
-            className: 'columnheader',
-        },
-        {
-            // May change later
-            label: 'Status',
-            value:
-                tx.status === 'success' ? 'Success' : `Failed - ${tx.txError}`,
-            classAttr:
-                tx.status === 'success' ? 'status-success' : 'status-fail',
-        },
-        {
-            label: 'Transaction Type',
-            value: txKindName,
-        },
-        // txKind Transfer or Call
-        ...(formatByTransactionKind(
-            txKindName,
-            txData,
-            getTransactionSender(tx)
-        ) ?? []),
-        {
-            label: 'Transaction Signature',
-            value: tx.txSignature,
-        },
         ...(tx.mutated?.length
             ? [
                   {
                       label: 'Mutated',
-                      category: 'objects',
-                      value: tx.mutated.map((obj) => getObjectId(obj)),
-                      list: true,
-                      link: true,
+                      links: tx.mutated.map((obj) => obj.objectId),
                   },
               ]
             : []),
@@ -84,34 +55,10 @@ function formatTxResponse(tx: TxDataProps, txId: string) {
             ? [
                   {
                       label: 'Created',
-                      value: tx.created.map((obj) => getObjectId(obj)),
-                      category: 'objects',
-                      list: true,
-                      link: true,
+                      links: tx.created.map((obj) => obj.objectId),
                   },
               ]
             : []),
-        {
-            label: 'Gas Payment',
-            value: tx.data.gasPayment.objectId,
-            link: true,
-        },
-        {
-            label: 'Gas Fee',
-            value: tx.gasFee,
-        },
-        {
-            label: 'Gas Budget',
-            value: tx.data.gasBudget,
-        },
-        {
-            label: 'Validator Signatures',
-            value: tx.authSignInfo.signatures,
-            list: true,
-            sublist: true,
-            // Todo - assumes only two itmes in list ['A', 'B']
-            subLabel: ['Name', 'Signature'],
-        },
     ];
 }
 
@@ -121,239 +68,299 @@ function formatByTransactionKind(
     sender: string
 ) {
     switch (kind) {
-        case 'TransferCoin':
-            const transfer = getTransferCoinTransaction(data)!;
-            return [
-                {
-                    label: 'Object',
+        case 'TransferObject':
+            const transfer = getTransferObjectTransaction(data)!;
+            return {
+                title: 'Transfer',
+                sender: {
+                    value: sender,
+                    link: true,
+                    category: 'addresses',
+                },
+                objectId: {
                     value: transfer.objectRef.objectId,
                     link: true,
                     category: 'objects',
                 },
-                {
-                    label: 'Sender',
-                    value: sender,
-                    link: true,
-                    category: 'addresses',
-                    className: 'Receiver',
-                },
-                {
-                    label: 'To',
+                recipient: {
                     value: transfer.recipient,
                     category: 'addresses',
                     link: true,
                 },
-            ];
+            };
         case 'Call':
             const moveCall = getMoveCallTransaction(data)!;
-            return [
-                {
-                    label: 'From',
+            return {
+                title: 'Call',
+                sender: {
                     value: sender,
                     link: true,
                     category: 'addresses',
                 },
-                {
-                    label: 'Package',
-                    category: 'objects',
+                package: {
                     value: getObjectId(moveCall.package),
                     link: true,
+                    category: 'objects',
                 },
-                {
-                    label: 'Module',
+                module: {
                     value: moveCall.module,
                 },
-                {
-                    label: 'Function',
+                function: {
                     value: moveCall.function,
                 },
-                {
-                    label: 'Arguments',
-                    value: JSON.stringify(moveCall.arguments),
-                },
-            ];
-        case 'Publish':
-            const publish = getPublishTransaction(data)!;
-            return [
-                {
-                    label: 'Modules',
-                    // TODO: render modules correctly
-                    value: Object.entries(getMovePackageContent(publish)!),
+                arguments: {
+                    value: moveCall.arguments,
                     list: true,
                 },
+            };
+        case 'Publish':
+            const publish = getPublishTransaction(data)!;
+            return {
+                title: 'publish',
+                module: {
+                    value: Object.entries(getMovePackageContent(publish)!),
+                },
                 ...(sender
-                    ? [
-                          {
-                              label: 'Sender ',
+                    ? {
+                          sender: {
                               value: sender,
                               link: true,
                               category: 'addresses',
                           },
-                      ]
-                    : []),
-            ];
+                      }
+                    : {}),
+            };
+
         default:
-            return [];
+            return {};
     }
 }
 
-function TransactionView({ txdata }: { txdata: DataType }) {
-    return (
-        <>
-            {txdata && (
-                <div>
-                    <div id="txview" className={styles.txcard}>
-                        {formatTxResponse(txdata, txdata.txId).map(
-                            (itm: any, index: number) => (
-                                <div
-                                    key={index}
-                                    className={cl(
-                                        styles.txcardgrid,
-                                        itm.className
-                                            ? styles[itm.className]
-                                            : ''
-                                    )}
-                                >
-                                    <div>{itm.label}</div>
-                                    <div
-                                        className={cl(
-                                            styles.txcardgridlarge,
-                                            itm.classAttr
-                                                ? styles[itm.classAttr]
-                                                : ''
-                                        )}
-                                        id={
-                                            itm.label === 'Transaction ID'
-                                                ? 'transactionID'
-                                                : ''
-                                        }
-                                    >
-                                        {itm.list ? (
-                                            <ul className={styles.listitems}>
-                                                {itm.value.map(
-                                                    (list: any, n: number) =>
-                                                        itm.sublist ? (
-                                                            <li
-                                                                className={
-                                                                    styles.list
-                                                                }
-                                                                key={n}
-                                                            >
-                                                                <div>
-                                                                    {list.map(
-                                                                        (
-                                                                            sublist: string,
-                                                                            l: number
-                                                                        ) => (
-                                                                            <div
-                                                                                className={
-                                                                                    styles.sublist
-                                                                                }
-                                                                                key={
-                                                                                    l
-                                                                                }
-                                                                            >
-                                                                                <div
-                                                                                    className={
-                                                                                        styles.sublist
-                                                                                    }
-                                                                                >
-                                                                                    {itm.subLabel ? (
-                                                                                        <div
-                                                                                            className={
-                                                                                                styles.sublistlabel
-                                                                                            }
-                                                                                        >
-                                                                                            {
-                                                                                                itm
-                                                                                                    .subLabel[
-                                                                                                    l
-                                                                                                ]
-                                                                                            }
+type TxItemView = {
+    title: string;
+    content: {
+        label?: string | number | any;
+        value: string | number;
+        link?: boolean;
+        category?: string;
+        monotypeClass?: boolean;
+    }[];
+};
 
-                                                                                            :
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        ''
-                                                                                    )}
-                                                                                    <div
-                                                                                        className={
-                                                                                            styles.sublistvalue
-                                                                                        }
-                                                                                    >
-                                                                                        {itm.link ? (
-                                                                                            <Longtext
-                                                                                                text={
-                                                                                                    sublist
-                                                                                                }
-                                                                                                category={
-                                                                                                    itm.category
-                                                                                                        ? itm.category
-                                                                                                        : 'unknown'
-                                                                                                }
-                                                                                                isLink={
-                                                                                                    true
-                                                                                                }
-                                                                                            />
-                                                                                        ) : (
-                                                                                            sublist
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        )
-                                                                    )}
-                                                                </div>
-                                                            </li>
-                                                        ) : (
-                                                            <li
-                                                                className={
-                                                                    styles.list
-                                                                }
-                                                                key={n}
-                                                            >
-                                                                {itm.link ? (
-                                                                    <Longtext
-                                                                        text={
-                                                                            list
-                                                                        }
-                                                                        category={
-                                                                            itm.category
-                                                                                ? itm.category
-                                                                                : 'unknown'
-                                                                        }
-                                                                        isLink={
-                                                                            true
-                                                                        }
-                                                                    />
-                                                                ) : (
-                                                                    list
-                                                                )}
-                                                            </li>
-                                                        )
-                                                )}
-                                            </ul>
-                                        ) : itm.link ? (
-                                            <Longtext
-                                                text={itm.value}
-                                                category={
-                                                    itm.category
-                                                        ? itm.category
-                                                        : 'unknown'
-                                                }
-                                                isLink={true}
-                                            />
-                                        ) : (
-                                            itm.value
-                                        )}
-                                    </div>
+function ItemView({ data }: { data: TxItemView }) {
+    return (
+        <div className={styles.itemView}>
+            <div className={styles.itemviewtitle}>{data.title}</div>
+            <div className={styles.itemviewcontent}>
+                {data.content.map((item, index) => {
+                    return (
+                        <div
+                            key={index}
+                            className={cl(
+                                styles.itemviewcontentitem,
+                                !item.label && styles.singleitem
+                            )}
+                        >
+                            {item.label && (
+                                <div className={styles.itemviewcontentlabel}>
+                                    {item.label}
                                 </div>
-                            )
+                            )}
+                            <div
+                                className={cl(
+                                    styles.itemviewcontentvalue,
+                                    item.monotypeClass && styles.mono
+                                )}
+                            >
+                                {item.link ? (
+                                    <Longtext
+                                        text={item.value as string}
+                                        category={item.category as Category}
+                                        isLink={true}
+                                    />
+                                ) : (
+                                    item.value
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function TransactionView({ txdata }: { txdata: DataType }) {
+    const txdetails = getTransactions(txdata)[0];
+    const txKindName = getTransactionKindName(txdetails);
+    const sender = getTransactionSender(txdata);
+    const recipient =
+        getTransferObjectTransaction(txdetails) ||
+        getTransferSuiTransaction(txdetails);
+    const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
+    const TabName = `${txKindName} Details`;
+
+    const txHeaderData = {
+        txId: txdata.txId,
+        status: txdata.status,
+        txKindName: txKindName,
+        ...(txdata.txError ? { error: txdata.txError } : {}),
+    };
+
+    const transactionSignatureData = {
+        title: 'Transaction Signatures',
+        content: [
+            {
+                label: 'Signature',
+                value: txdata.txSignature,
+                monotypeClass: true,
+            },
+        ],
+    };
+
+    const validatorSignatureData = {
+        title: 'Validator Signatures',
+        content: txdata.authSignInfo.signatures.map((validatorSign) => ({
+            value: validatorSign,
+            monotypeClass: true,
+        })),
+    };
+
+    const createdMutateData = generateMutatedCreated(txdata);
+
+    const sendreceive = {
+        sender: sender,
+        ...(txdata.timestamp_ms
+            ? {
+                  timestamp_ms: txdata.timestamp_ms,
+              }
+            : {}),
+        recipient: [...(recipient?.recipient ? [recipient.recipient] : [])],
+    };
+    const GasStorageFees = {
+        title: 'Gas & Storage Fees',
+        content: [
+            {
+                label: 'Gas Payment',
+                value: txdata.data.gasPayment.objectId,
+                link: true,
+            },
+            {
+                label: 'Gas Fees',
+                value: txdata.gasFee,
+            },
+            {
+                label: 'Gas Budget',
+                value: txdata.data.gasBudget,
+            },
+            //TODO: Add Storage Fees
+        ],
+    };
+    const typearguments =
+        txKindData.title === 'Call' && txKindData.package
+            ? {
+                  title: 'Package Details',
+                  content: [
+                      {
+                          label: 'Package ID',
+                          monotypeClass: true,
+                          link: true,
+                          category: 'objects',
+                          value: txKindData.package.value,
+                      },
+                      {
+                          label: 'Module',
+                          monotypeClass: true,
+                          value: txKindData.module.value,
+                      },
+                      {
+                          label: 'Function',
+                          monotypeClass: true,
+                          value: txKindData.function.value,
+                      },
+                      {
+                          label: 'Argument',
+                          monotypeClass: true,
+                          value: JSON.stringify(txKindData.arguments.value),
+                      },
+                  ],
+              }
+            : false;
+    const defaultActiveTab = 0;
+
+    const modules =
+        txKindData?.module?.value && Array.isArray(txKindData?.module?.value)
+            ? {
+                  title: 'Modules',
+                  content: txKindData?.module?.value,
+              }
+            : false;
+
+    return (
+        <div className={cl(styles.txdetailsbg)}>
+            <TxResultHeader data={txHeaderData} />
+            <Tabs selected={defaultActiveTab}>
+                <section title={TabName} className={styles.txtabs}>
+                    <div className={styles.txgridcomponent} id={txdata.txId}>
+                        {typearguments && (
+                            <section
+                                className={cl([
+                                    styles.txcomponent,
+                                    styles.txgridcolspan2,
+                                    styles.packagedetails,
+                                ])}
+                            >
+                                <ItemView data={typearguments} />
+                            </section>
+                        )}
+                        {sender && (
+                            <section
+                                className={cl([
+                                    styles.txcomponent,
+                                    styles.txsender,
+                                ])}
+                            >
+                                <div className={styles.txaddress}>
+                                    <SendReceiveView data={sendreceive} />
+                                </div>
+                            </section>
+                        )}
+                        <section
+                            className={cl([
+                                styles.txcomponent,
+                                styles.txgridcolspan2,
+                            ])}
+                        >
+                            <div className={styles.txlinks}>
+                                {createdMutateData.map((item, idx) => (
+                                    <TxLinks data={item} key={idx} />
+                                ))}
+                            </div>
+                        </section>
+
+                        {modules && (
+                            <section
+                                className={cl([
+                                    styles.txcomponent,
+                                    styles.txgridcolspan3,
+                                ])}
+                            >
+                                <TxModulesWrapper data={modules} />
+                            </section>
                         )}
                     </div>
-                </div>
-            )}
-        </>
+                    <div className={styles.txgridcomponent}>
+                        <ItemView data={GasStorageFees} />
+                    </div>
+                </section>
+                <section title="Signatures">
+                    <div className={styles.txgridcomponent}>
+                        <ItemView data={transactionSignatureData} />
+                        <ItemView data={validatorSignatureData} />
+                    </div>
+                </section>
+            </Tabs>
+        </div>
     );
 }
 

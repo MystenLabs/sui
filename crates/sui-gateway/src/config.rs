@@ -19,6 +19,7 @@ use sui_core::{
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId},
+    error::SuiResult,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -64,9 +65,15 @@ impl GatewayType {
         Ok(match self {
             GatewayType::Embedded(config) => {
                 let path = config.db_folder_path.clone();
-                let committee = config.make_committee();
+                let committee = config.make_committee()?;
                 let authority_clients = config.make_authority_clients();
-                Arc::new(GatewayState::new(path, committee, authority_clients)?)
+                let registry = prometheus::Registry::new();
+                Arc::new(GatewayState::new(
+                    path,
+                    committee,
+                    authority_clients,
+                    &registry,
+                )?)
             }
             GatewayType::RPC(url) => Arc::new(RpcGatewayClient::new(url.clone())?),
         })
@@ -86,13 +93,11 @@ pub struct GatewayConfig {
 impl Config for GatewayConfig {}
 
 impl GatewayConfig {
-    pub fn make_committee(&self) -> Committee {
-        let voting_rights = self
-            .validator_set
-            .iter()
-            .map(|validator| (validator.public_key(), validator.stake()))
-            .collect();
-        Committee::new(self.epoch, voting_rights)
+    pub fn make_committee(&self) -> SuiResult<Committee> {
+        Committee::new(
+            self.epoch,
+            ValidatorInfo::voting_rights(&self.validator_set),
+        )
     }
 
     pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {

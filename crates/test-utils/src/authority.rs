@@ -3,19 +3,22 @@
 use crate::{messages::make_certificates, TEST_COMMITTEE_SIZE};
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_core::{
-    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
-    authority_client::NetworkAuthorityClient,
+    authority_active::{
+        checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
+        ActiveAuthority,
+    },
+    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_client::{AuthorityAPI, NetworkAuthorityClient},
 };
 use sui_node::SuiNode;
 use sui_types::{
     committee::Committee,
     error::SuiResult,
-    messages::{
-        ConfirmationTransaction, ConsensusTransaction, Transaction, TransactionInfoResponse,
-    },
+    messages::{Transaction, TransactionInfoResponse},
     object::Object,
 };
 
@@ -24,12 +27,18 @@ pub const NETWORK_BUFFER_SIZE: usize = 65_000;
 
 /// Make an authority config for each of the `TEST_COMMITTEE_SIZE` authorities in the test committee.
 pub fn test_authority_configs() -> NetworkConfig {
+    test_and_configure_authority_configs(TEST_COMMITTEE_SIZE)
+}
+
+pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkConfig {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
-    let mut configs = NetworkConfig::generate_with_rng(&config_dir, TEST_COMMITTEE_SIZE, rng);
+    let mut configs = NetworkConfig::generate_with_rng(&config_dir, committee_size, rng);
     for config in configs.validator_configs.iter_mut() {
         // Disable gossip by default to reduce non-determinism.
         // TODO: Once this library is more broadly used, we can make this a config argument.
+        // Note: Enabling this will break checkpoint_catchup test, which needs a way to keep one
+        // authority behind the others.
         config.enable_gossip = false;
 
         let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
@@ -62,16 +71,36 @@ where
     handles
 }
 
+/// Spawn checkpoint processes with very short checkpointing intervals.
+pub async fn spawn_checkpoint_processes(
+    aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    handles: &[SuiNode],
+) {
+    // Start active part of each authority.
+    for authority in handles {
+        let state = authority.state().clone();
+        let inner_agg = aggregator.clone();
+        let active_state =
+            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
+        let checkpoint_process_control = CheckpointProcessControl {
+            long_pause_between_checkpoints: Duration::from_millis(10),
+            ..CheckpointProcessControl::default()
+        };
+        let _active_authority_handle = active_state
+            .spawn_checkpoint_process_with_config(
+                checkpoint_process_control,
+                CheckpointMetrics::new_for_tests(),
+            )
+            .await;
+    }
+}
+
 /// Create a test authority aggregator.
 pub fn test_authority_aggregator(
     config: &NetworkConfig,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
-    let voting_rights: BTreeMap<_, _> = validators_info
-        .iter()
-        .map(|config| (config.public_key(), config.stake()))
-        .collect();
-    let committee = Committee::new(0, voting_rights);
+    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
@@ -81,7 +110,8 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    AuthorityAggregator::new(committee, clients)
+    let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
+    AuthorityAggregator::new(committee, clients, metrics)
 }
 
 /// Get a network client to communicate with the consensus.
@@ -95,13 +125,12 @@ pub async fn submit_single_owner_transaction(
     configs: &[ValidatorInfo],
 ) -> Vec<TransactionInfoResponse> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let txn = ConfirmationTransaction { certificate };
 
     let mut responses = Vec::new();
     for config in configs {
         let client = get_client(config);
         let reply = client
-            .handle_confirmation_transaction(txn.clone())
+            .handle_certificate(certificate.clone())
             .await
             .unwrap();
         responses.push(reply);
@@ -117,15 +146,14 @@ pub async fn submit_shared_object_transaction(
     configs: &[ValidatorInfo],
 ) -> Vec<SuiResult<TransactionInfoResponse>> {
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
-    let message = ConsensusTransaction::UserTransaction(Box::new(certificate));
 
     loop {
         let futures: Vec<_> = configs
             .iter()
             .map(|config| {
                 let client = get_client(config);
-                let txn = message.clone();
-                async move { client.handle_consensus_transaction(txn).await }
+                let cert = certificate.clone();
+                async move { client.handle_certificate(cert).await }
             })
             .collect();
 

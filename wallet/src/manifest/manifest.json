@@ -20,5 +20,18 @@
         "32": "manifest/icons/sui-icon-32.png",
         "48": "manifest/icons/sui-icon-48.png",
         "128": "manifest/icons/sui-icon-128.png"
-    }
+    },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content-script.js"],
+            "run_at": "document_start"
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": ["dapp-interface.js"],
+            "matches": ["<all_urls>"]
+        }
+    ]
 }

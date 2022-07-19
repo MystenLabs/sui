@@ -1,0 +1,11 @@
+[book]
+title = "Sui Move by Example"
+description = "Handy collection of Examples for Sui blockchain. Made with love by MystenLabs"
+authors = ["damirka"]
+language = "en"
+multilingual = false
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/MystenLabs/sui"
+git-repository-icon = "fa-github"

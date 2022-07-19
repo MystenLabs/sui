@@ -5,7 +5,7 @@ import { memo } from 'react';
 
 import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
-import BsIcon from '_components/bs-icon';
+import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector } from '_hooks';
 
@@ -49,7 +49,7 @@ function ObjectsLayout({ children, emptyMsg, totalItems }: ObjectsLayoutProps) {
                 {showItems ? children : null}
                 {showEmptyNotice ? (
                     <div className={st.empty}>
-                        <BsIcon icon="droplet" className={st['empty-icon']} />
+                        <Icon icon="droplet" className={st['empty-icon']} />
                         <div className={st['empty-text']}>{emptyMsg}</div>
                     </div>
                 ) : null}

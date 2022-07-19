@@ -3,31 +3,26 @@
 
 use anyhow::Error;
 use async_trait::async_trait;
-use move_core_types::language_storage::TypeTag;
+
+use sui_sdk::SuiClient;
 use tokio::runtime::Handle;
 
 use sui_core::gateway_state::{GatewayAPI, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::client::SuiRpcClient;
-use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse,
-    TransactionResponse,
+use sui_json_rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo,
+    SuiTypeTag, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_json_rpc_api::QuorumDriverApiClient;
-use sui_json_rpc_api::RpcBcsApiClient;
-use sui_json_rpc_api::RpcTransactionBuilderClient;
-use sui_json_rpc_api::TransactionBytes;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
 pub struct RpcGatewayClient {
-    client: SuiRpcClient,
+    client: SuiClient,
 }
-use sui_json_rpc_api::RpcReadApiClient;
 impl RpcGatewayClient {
     pub fn new(server_url: String) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            client: SuiRpcClient::new(&server_url)?,
+            client: SuiClient::new_http_client(&server_url)?,
         })
     }
 }
@@ -42,12 +37,11 @@ impl GatewayAPI for RpcGatewayClient {
 
         Ok(self
             .client
-            .quorum_driver()
             .execute_transaction(tx_bytes, signature_bytes, pub_key)
             .await?)
     }
 
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -57,8 +51,7 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .transaction_builder()
-            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
+            .transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
         bytes.to_data()
     }
@@ -73,17 +66,13 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .transaction_builder()
             .transfer_sui(signer, sui_object_id, gas_budget, recipient, amount)
             .await?;
         bytes.to_data()
     }
 
     async fn sync_account_state(&self, account_addr: SuiAddress) -> Result<(), Error> {
-        self.client
-            .quorum_driver()
-            .sync_account_state(account_addr)
-            .await?;
+        self.client.sync_account_state(account_addr).await?;
         Ok(())
     }
 
@@ -93,23 +82,19 @@ impl GatewayAPI for RpcGatewayClient {
         package_object_id: ObjectID,
         module: String,
         function: String,
-        type_arguments: Vec<TypeTag>,
+        type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .transaction_builder()
             .move_call(
                 signer,
                 package_object_id,
                 module,
                 function,
-                type_arguments
-                    .into_iter()
-                    .map(|tag| tag.try_into())
-                    .collect::<Result<Vec<_>, _>>()?,
+                type_arguments,
                 arguments,
                 gas,
                 gas_budget,
@@ -131,7 +116,6 @@ impl GatewayAPI for RpcGatewayClient {
             .collect();
         let bytes: TransactionBytes = self
             .client
-            .transaction_builder()
             .publish(signer, package_bytes, gas, gas_budget)
             .await?;
         bytes.to_data()
@@ -147,7 +131,6 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .transaction_builder()
             .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
             .await?;
         bytes.to_data()
@@ -163,48 +146,51 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<TransactionData, Error> {
         let bytes: TransactionBytes = self
             .client
-            .transaction_builder()
             .merge_coin(signer, primary_coin, coin_to_merge, gas, gas_budget)
             .await?;
         bytes.to_data()
     }
 
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        single_transaction_params: Vec<RPCTransactionRequestParams>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, Error> {
+        let bytes: TransactionBytes = self
+            .client
+            .batch_transaction(signer, single_transaction_params, gas, gas_budget)
+            .await?;
+        bytes.to_data()
+    }
+
     async fn get_object(&self, object_id: ObjectID) -> Result<GetObjectDataResponse, Error> {
-        Ok(self.client.read_api().get_object(object_id).await?)
+        Ok(self.client.get_object(object_id).await?)
     }
 
     async fn get_raw_object(&self, object_id: ObjectID) -> Result<GetRawObjectDataResponse, Error> {
-        Ok(self.client.read_api().get_raw_object(object_id).await?)
+        Ok(self.client.get_raw_object(object_id).await?)
     }
 
     async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
     ) -> Result<Vec<SuiObjectInfo>, Error> {
-        Ok(self
-            .client
-            .read_api()
-            .get_objects_owned_by_address(address)
-            .await?)
+        Ok(self.client.get_objects_owned_by_address(address).await?)
     }
 
     async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
     ) -> Result<Vec<SuiObjectInfo>, Error> {
-        Ok(self
-            .client
-            .read_api()
-            .get_objects_owned_by_object(object_id)
-            .await?)
+        Ok(self.client.get_objects_owned_by_object(object_id).await?)
     }
 
     fn get_total_transaction_number(&self) -> Result<u64, Error> {
         let handle = Handle::current();
         let _ = handle.enter();
-        Ok(futures::executor::block_on(
-            self.client.read_api().get_total_transaction_number(),
-        )?)
+        futures::executor::block_on(self.client.get_total_transaction_number())
     }
 
     fn get_transactions_in_range(
@@ -214,9 +200,7 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, Error> {
         let handle = Handle::current();
         let _ = handle.enter();
-        Ok(futures::executor::block_on(
-            self.client.read_api().get_transactions_in_range(start, end),
-        )?)
+        futures::executor::block_on(self.client.get_transactions_in_range(start, end))
     }
 
     fn get_recent_transactions(
@@ -225,15 +209,13 @@ impl GatewayAPI for RpcGatewayClient {
     ) -> Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>, Error> {
         let handle = Handle::current();
         let _ = handle.enter();
-        Ok(futures::executor::block_on(
-            self.client.read_api().get_recent_transactions(count),
-        )?)
+        futures::executor::block_on(self.client.get_recent_transactions(count))
     }
 
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, Error> {
-        Ok(self.client.read_api().get_transaction(digest).await?)
+        Ok(self.client.get_transaction(digest).await?)
     }
 }

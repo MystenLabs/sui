@@ -4,17 +4,34 @@
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
-export type TransferCoin = {
+export type TransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
 };
-export type RawAuthoritySignInfo = [AuthorityName, AuthoritySignature];
 
-export type TransactionKindName = 'TransferCoin' | 'Publish' | 'Call';
+export type SuiTransferSui = {
+  recipient: SuiAddress;
+  amount: number | null;
+};
+
+export type SuiChangeEpoch = {
+  epoch: EpochId;
+  storage_charge: number;
+  computation_charge: number;
+};
+
+export type TransactionKindName =
+  | 'TransferObject'
+  | 'Publish'
+  | 'Call'
+  | 'TransferSui'
+  | 'ChangeEpoch';
 export type SuiTransactionKind =
-  | { TransferCoin: TransferCoin }
+  | { TransferObject: TransferObject }
   | { Publish: SuiMovePackage }
-  | { Call: MoveCall };
+  | { Call: MoveCall }
+  | { TransferSui: SuiTransferSui }
+  | { ChangeEpoch: SuiChangeEpoch };
 export type TransactionData = {
   transactions: SuiTransactionKind[];
   sender: SuiAddress;
@@ -27,7 +44,7 @@ export type EpochId = number;
 
 export type AuthorityQuorumSignInfo = {
   epoch: EpochId;
-  signatures: RawAuthoritySignInfo[];
+  signatures: AuthoritySignature[];
 };
 
 export type CertifiedTransaction = {
@@ -46,7 +63,6 @@ export type GasCostSummary = {
 export type ExecutionStatusType = 'success' | 'failure';
 export type ExecutionStatus = {
   status: ExecutionStatusType;
-  gas_cost: GasCostSummary;
   error?: string;
 };
 
@@ -59,6 +75,7 @@ export type OwnedObjectRef = {
 export type TransactionEffects = {
   /** The status of the execution */
   status: ExecutionStatus;
+  gasUsed: GasCostSummary;
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects?: SuiObjectRef[];
   /** The transaction digest */
@@ -92,6 +109,7 @@ export type TransactionEffects = {
 export type TransactionEffectsResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
+  timestamp_ms: number | null;
 };
 
 export type GatewayTxSeqNumber = number;
@@ -135,16 +153,31 @@ export type SplitCoinResponse = {
   updatedGas: SuiObject;
 };
 
+export type PublishResponse = {
+  certificate: CertifiedTransaction;
+  createdObjects: SuiObject[];
+  package: SuiPackage;
+  updatedGas: SuiObject;
+};
+
+export type SuiPackage = {
+  digest: string;
+  objectId: string;
+  version: number;
+};
+
 export type TransactionResponse =
   | {
       EffectResponse: TransactionEffectsResponse;
-      // TODO: Add Publish Response
     }
   | {
       SplitCoinResponse: SplitCoinResponse;
     }
   | {
       MergeCoinResponse: MergeCoinResponse;
+    }
+  | {
+      PublishResponse: PublishResponse;
     };
 
 /* -------------------------------------------------------------------------- */
@@ -188,10 +221,10 @@ export function getTransactionGasBudget(tx: CertifiedTransaction): number {
   return tx.data.gasBudget;
 }
 
-export function getTransferCoinTransaction(
+export function getTransferObjectTransaction(
   data: SuiTransactionKind
-): TransferCoin | undefined {
-  return 'TransferCoin' in data ? data.TransferCoin : undefined;
+): TransferObject | undefined {
+  return 'TransferObject' in data ? data.TransferObject : undefined;
 }
 
 export function getPublishTransaction(
@@ -204,6 +237,18 @@ export function getMoveCallTransaction(
   data: SuiTransactionKind
 ): MoveCall | undefined {
   return 'Call' in data ? data.Call : undefined;
+}
+
+export function getTransferSuiTransaction(
+  data: SuiTransactionKind
+): SuiTransferSui | undefined {
+  return 'TransferSui' in data ? data.TransferSui : undefined;
+}
+
+export function getChangeEpochTransaction(
+  data: SuiTransactionKind
+): SuiChangeEpoch | undefined {
+  return 'ChangeEpoch' in data ? data.ChangeEpoch : undefined;
 }
 
 export function getTransactions(
@@ -241,7 +286,7 @@ export function getExecutionStatusError(
 export function getExecutionStatusGasSummary(
   data: TransactionEffectsResponse
 ): GasCostSummary {
-  return getExecutionStatus(data).gas_cost;
+  return data.effects.gasUsed;
 }
 
 export function getTotalGasUsed(data: TransactionEffectsResponse): number {
@@ -271,6 +316,12 @@ export function getMergeCoinResponse(
   data: TransactionResponse
 ): MergeCoinResponse | undefined {
   return 'MergeCoinResponse' in data ? data.MergeCoinResponse : undefined;
+}
+
+export function getPublishResponse(
+  data: TransactionResponse
+): PublishResponse | undefined {
+  return 'PublishResponse' in data ? data.PublishResponse : undefined;
 }
 
 /**

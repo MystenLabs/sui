@@ -11,18 +11,17 @@
 module games::sea_hero {
     use games::hero::{Self, Hero};
 
-    use sui::balance::{Self, Balance};
-    use sui::id::{Self, VersionedID};
-    use sui::coin::{Self, TreasuryCap};
+    use sui::balance::{Self, Balance, Supply};
+    use sui::object::{Self, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
     struct SeaHeroAdmin has key {
-        id: VersionedID,
+        info: Info,
         /// Permission to mint RUM
-        treasury_cap: TreasuryCap<RUM>,
+        supply: Supply<RUM>,
         /// Total number of monsters created so far
         monsters_created: u64,
         /// cap on the supply of RUM
@@ -33,7 +32,7 @@ module games::sea_hero {
 
     /// A new kind of monster for the hero to fight
     struct SeaMonster has key, store {
-        id: VersionedID,
+        info: Info,
         /// Tokens that the user will earn for slaying this monster
         reward: Balance<RUM>
     }
@@ -60,8 +59,8 @@ module games::sea_hero {
     fun init(ctx: &mut TxContext) {
         transfer::transfer(
             SeaHeroAdmin {
-                id: tx_context::new_id(ctx),
-                treasury_cap: coin::create_currency<RUM>(RUM{}, ctx),
+                info: object::new(ctx),
+                supply: balance::create_supply<RUM>(RUM {}),
                 monsters_created: 0,
                 token_supply_max: 1000000,
                 monster_max: 10,
@@ -76,8 +75,8 @@ module games::sea_hero {
     /// exchange.
     /// Aborts if the hero is not strong enough to slay the monster
     public fun slay(hero: &Hero, monster: SeaMonster): Balance<RUM> {
-        let SeaMonster { id, reward } = monster;
-        id::delete(id);
+        let SeaMonster { info, reward } = monster;
+        object::delete(info);
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
@@ -98,7 +97,7 @@ module games::sea_hero {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let current_coin_supply = coin::total_supply(&admin.treasury_cap);
+        let current_coin_supply = balance::supply_value(&admin.supply);
         let token_supply_max = admin.token_supply_max;
         // TODO: create error codes
         // ensure token supply cap is respected
@@ -108,11 +107,12 @@ module games::sea_hero {
         assert!(admin.monster_max - 1 >= admin.monsters_created, 2);
 
         let monster = SeaMonster {
-            id: tx_context::new_id(ctx),
-            reward: coin::mint_balance(reward_amount, &mut admin.treasury_cap)
+            info: object::new(ctx),
+            reward: balance::increase_supply(&mut admin.supply, reward_amount),
         };
         admin.monsters_created = admin.monsters_created + 1;
-        transfer::transfer(monster, recipient);
+
+        transfer::transfer(monster, recipient)
     }
 
     /// Send `monster` to `recipient`

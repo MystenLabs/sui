@@ -1,5 +1,5 @@
 ---
-title: Quickstart Smart Contracts with Move
+title: Write Smart Contracts with Sui Move
 ---
 
 Welcome to the Sui tutorial for building smart contracts with
@@ -7,6 +7,11 @@ the [Move](https://github.com/MystenLabs/awesome-move) language.
 This tutorial provides a brief explanation of the Move language and
 includes concrete examples to demonstrate how Move can be used in Sui.
 
+## Quick links
+
+* [Why Move?](../../learn/why-move.md) - Quick links to external Move resources and a comparison with Solidity
+* [How Sui Move differs from Core Move](../../learn/sui-move-diffs.md) - Highlights the differences between the core Move language and the Move we use in Sui
+* [Programming Objects Tutorial Series](../../build/programming-with-objects/index.md) - Tutorial series that walks through all the powerful ways to interact with objects in Sui Move.
 
 ## Move
 
@@ -64,7 +69,7 @@ more module files are located:
 my_move_package
 ├── Move.toml
 ├── sources
-    ├── M1.move
+    ├── m1.move
 ```
 
 See
@@ -83,7 +88,7 @@ user-defined coin types, which are custom assets defined in the Move
 language. Sui framework code contains the `Coin` module supporting
 creation and management of custom coins. The `Coin` module is
 located in the
-[Coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Coin.move)
+[coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/coin.move)
 file. As you would expect, the manifest file describing how to build the
 package containing the `Coin` module is located in the corresponding
 [Move.toml](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/Move.toml)
@@ -101,6 +106,12 @@ module sui::coin {
 read more about
 [modules](https://github.com/move-language/move/blob/main/language/documentation/book/src/modules-and-scripts.md#modules)
 in the Move book later.)
+
+> **Important:** In Sui Move, package names are always in CamelCase, while
+> the address alias is lowercase, for examples `sui = 0x2` and `std = 0x1`.
+> So: `Sui` = name of the imported package (Sui = sui framework), `sui` = address
+> alias of 0x2, `sui::sui` = module sui under the address 0x2, and
+> `sui::sui::SUI` = type in the module above.
 
 As we can see, when defining a module we specify the module name
 (`Coin`), preceded by the name of the package where this module resides
@@ -134,7 +145,7 @@ represent different types of user-defined coins as Sui objects:
 
 ``` rust
 struct Coin<phantom T> has key, store {
-    id: VersionedID,
+    info: Info,
     value: u64
 }
 ```
@@ -150,9 +161,9 @@ and [structs](https://github.com/move-language/move/blob/main/language/documenta
 in the Move book.
 
 In order for a Move struct type to define a Sui object type such as
-`Coin`, its first field must be `id: VersionedID`, which is a
+`Coin`, its first field must be `info: Info`, which is a
 struct type defined in the
-[ID module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move). The
+[object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move). The
 Move struct type must
 also have the `key` ability, which allows the object to be persisted
 in Sui's global storage. Abilities of a Move struct are listed after
@@ -180,7 +191,7 @@ In particular, one type of custom coin already defined in Sui is
 `Coin<SUI>`, which represents a token used to pay for Sui
 computations (more generally known as _gas_) - in this case, the concrete type used to parameterize the
 `Coin` struct is the `SUI` struct in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move):
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move):
 
 ``` rust
 struct SUI has drop {}
@@ -195,7 +206,7 @@ section describing how to
 Similarly to other popular programming languages, the main unit of
 computation in Move is a function. Let us look at one of the simplest
 functions defined in the
-[Coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Coin.move), that is
+[Coin module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/coin.move), that is
 the `value` function.
 
 ``` rust
@@ -228,7 +239,7 @@ to define the new ones in the section describing how to
 In addition to functions callable from other functions, however, the
 Sui flavor of the Move language also defines so called _entry
 functions_ that can be called directly from Sui (e.g., from a Sui
-wallet application that can be written in a different language) and
+application that can be written in a different language) and
 must satisfy a certain set of properties.
 
 #### Entry functions
@@ -237,7 +248,7 @@ One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/move-language/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the
-[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/SUI.move)
+[SUI module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/sui.move)
 to implement gas object transfer:
 
 ```rust
@@ -256,7 +267,7 @@ In general, an entry function, must satisfy the following properties:
   - Note: The visibility does not matter. The function can be `public`, `public(friend)`, or internal.
 - have no return value
 - (optional) have a mutable reference to an instance of the `TxContext` struct
-  defined in the [TxContext module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/TxContext.move) as the last parameter
+  defined in the [TxContext module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/tx_context.move) as the last parameter
 
 More concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -270,8 +281,8 @@ value, and has three parameters:
   in the function's body as indicated by its name starting with `_`)
   - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
-You can see how the `transfer` function is called from a sample Sui
-wallet in [Calling Move code](wallet.md#calling-move-code).
+You can see how the `transfer` function is called from a Sui
+CLI client in [Calling Move code](cli-client.md#calling-move-code).
 
 
 ## Writing a package
@@ -282,7 +293,7 @@ this package, first [install Sui binaries](install.md#binaries) and
 you have the Sui repository source code in your current directory.
 
 Refer to the code example developed for this tutorial in the
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move) file.
+[m1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move) file.
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
@@ -294,12 +305,14 @@ current_directory
 ```
 
 For convenience, make sure the path to Sui binaries
-(`~/.cargo/bin`), including the sui-move command used throughout
+(`~/.cargo/bin`), including the `sui` command used throughout
 this tutorial, is part of your system path:
 
 ```
-$ which sui-move
+$ which sui
 ```
+
+### Creating the directory structure
 
 Now proceed to creating a package directory structure in the current
 directory, parallel to the `sui` repository. It will contain an
@@ -307,11 +320,12 @@ empty manifest file and an empty module source file following the
 [Move code organization](#move-code-organization)
 described earlier.
 
-So from the same directory containing the `sui` repository, run:
+So from the same directory containing the `sui` repository create a
+parallel directory to it by running:
 
 ``` shell
 $ mkdir -p my_move_package/sources
-touch my_move_package/sources/M1.move
+touch my_move_package/sources/m1.move
 touch my_move_package/Move.toml
 ```
 
@@ -323,9 +337,10 @@ current_directory
 ├── my_move_package
     ├── Move.toml
     ├── sources
-        ├── M1.move
+        ├── m1.move
 ```
 
+### Defining the package
 
 Let us assume that our module is part of an implementation of a
 fantasy game set in medieval times, where heroes roam the land slaying
@@ -339,14 +354,15 @@ is a `Coin` struct type.
 
 
 Let us put the following module and struct
-definitions in the `M1.move` file:
+definitions in the `m1.move` file:
 
 ``` rust
-module MyFirstPackage::M1 {
-    use sui::id::VersionedID;
+module my_first_package::m1 {
+    use sui::object::Info;
+    use sui::tx_context::TxContext;
 
     struct Sword has key, store {
-        id: VersionedID,
+        info: Info,
         magic: u64,
         strength: u64,
     }
@@ -358,8 +374,8 @@ Since we are developing a fantasy game, in addition to the mandatory
 `Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the
-[ID package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/ID.move) from
-Sui framework to gain access to the `VersionedID` struct type defined
+[ID package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) from
+Sui framework to gain access to the `Info` struct type defined
 in this package.
 
 If we want to access sword attributes from a different package, we
@@ -384,7 +400,7 @@ In order to build a package containing this simple module, we need to
 put some required metadata into the `Move.toml` file, including package
 name, package version, local dependency path to locate Sui framework
 code, and package numeric ID, which must be `0x0` for user-defined modules
-to facilitate [package publishing](wallet.md#publish-packages).
+to facilitate [package publishing](cli-client.md#publish-packages).
 
 ```
 [package]
@@ -392,19 +408,21 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../crates/sui-framework" }
+Sui = { local = "../sui/crates/sui-framework" }
 
 [addresses]
-MyFirstPackage = "0x0"
+my_first_package = "0x0"
 ```
 
 See the [Move.toml](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/Move.toml)
 file used in our [end-to-end tutorial](../explore/tutorials.md) for an example.
 
+## Building the package
+
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
 ``` shell
-$ sui-move build
+$ sui move build
 ```
 
 A successful build yields results resembling:
@@ -433,7 +451,7 @@ upon executing the following command (in the `my_move_package`
 directory as per our running example):
 
 ``` shell
-$ sui-move test
+$ sui move test
 ```
 
 If you execute this command for the package created in the
@@ -449,7 +467,7 @@ Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
 
-Let us write a simple test function and insert it into the `M1.move`
+Let us write a simple test function and insert it into the `m1.move`
 file:
 
 ``` rust
@@ -462,7 +480,7 @@ file:
 
         // create a sword
         let sword = Sword {
-            id: tx_context::new_id(&mut ctx),
+            info: object::new(&mut ctx),
             magic: 42,
             strength: 7,
         };
@@ -477,14 +495,14 @@ create a dummy instance of the `TxContext` struct needed to create
 a unique identifier of our sword object, then create the sword itself,
 and finally call its accessor functions to verify that they return
 correct values. Note the dummy context is passed to the
-`tx_context::new_id` function as a mutable reference argument (`&mut`),
+`object::new` function as a mutable reference argument (`&mut`),
 and the sword itself is passed to its accessor functions as a
 read-only reference argument.
 
 Now that we have written a test, let's try to run the tests again:
 
 ``` shell
-$ sui-move test
+$ sui move test
 ```
 
 After running the test command, however, instead of a test result we
@@ -492,7 +510,7 @@ get a compilation error:
 
 ``` shell
 error[E06001]: unused value without 'drop'
-   ┌─ ./sources/M1.move:34:65
+   ┌─ ./sources/m1.move:34:65
    │
  4 │       struct Sword has key, store {
    │              ----- To satisfy the constraint, the 'drop' ability would need to be added here
@@ -500,7 +518,7 @@ error[E06001]: unused value without 'drop'
 27 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             id: tx_context::new_id(&mut ctx),
+28 │ │             info: object::new(&mut ctx),
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
@@ -533,7 +551,7 @@ problem is to transfer ownership of the sword.
 
 In order to get our test to work, we then add the following line to
 the beginning of our testing function to import the
-[Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move):
+[Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 
 ``` rust
         use sui::transfer;
@@ -566,12 +584,12 @@ Test result: OK. Total tests: 1; passed: 1; failed: 0
 **Tip:**
 If you want to run only a subset of the unit tests, you can filter by test name using the `--filter` option. Example:
 ```
-$ sui-move test --filter sword
+$ sui move test --filter sword
 ```
 The above command will run all tests whose name contains "sword".
 You can discover more testing options through:
 ```
-$ sui-move test -h
+$ sui move test -h
 ```
 
 ---
@@ -615,7 +633,7 @@ Let us extend our running example with a multi-transaction test that
 uses the `test_scenario` to test sword creation and transfer from the
 point of view of a Sui developer. First, let us create
 [entry functions](#entry-functions) callable from Sui that implement
-sword creation and transfer and put them into the `M1.move` file:
+sword creation and transfer and put them into the `m1.move` file:
 
 ``` rust
     public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
@@ -623,7 +641,7 @@ sword creation and transfer and put them into the `M1.move` file:
         use sui::tx_context;
         // create a sword
         let sword = Sword {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             magic: magic,
             strength: strength,
         };
@@ -767,13 +785,13 @@ has to be _published_ to Sui's [distributed ledger](../learn/how-sui-works.md)
 where it is represented as a Sui object.
 
 At this point, however, the
-`sui-move` command does not support package publishing. In fact, it is
+`sui move` command does not support package publishing. In fact, it is
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
-testing framework. Instead, one can use a sample Sui wallet to
-[publish](wallet.md#publish-packages) Move code and to
-[call](wallet.md#calling-move-code) it. See the
-[wallet documentation](wallet.md) for a description of how
+testing framework. Instead, one can use a Sui CLI client to
+[publish](cli-client.md#publish-packages) Move code and to
+[call](cli-client.md#calling-move-code) it. See the
+[Sui CLI client documentation](cli-client.md) for a description of how
 to publish the package we have [written](#writing-a-package) as as
 part of this tutorial.
 
@@ -792,7 +810,7 @@ in order to be executed at publication:
 - no return values
 - private visibility
 
-While the `sui-move` command does not support publishing explicitly,
+While the `sui move` command does not support publishing explicitly,
 we can still test module initializers using our testing framework -
 one can simply dedicate the first transaction to executing the
 initializer function. Let us use a concrete example to illustrate
@@ -802,11 +820,11 @@ Continuing our fantasy game example, let's introduce a
 concept of a forge that will be involved in the process of creating
 swords - for starters let it keep track of how many swords have been
 created. Let us define the `Forge` struct and a function returning the
-number of created swords as follows and put into the `M1.move` file:
+number of created swords as follows and put into the `m1.move` file:
 
 ``` rust
     struct Forge has key, store {
-        id: VersionedID,
+        info: Info,
         swords_created: u64,
     }
 
@@ -825,7 +843,7 @@ And module initializer is the perfect place to do it:
         use sui::transfer;
         use sui::tx_context;
         let admin = Forge {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
@@ -886,7 +904,7 @@ encounter compilation errors in the existing tests due to the
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
-[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/M1.move).
+[m1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/m1.move).
 
 ## Sui Move library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
@@ -899,7 +917,7 @@ Objects in Sui can have different ownership types. Specifically, they are:
 - Shared and mutable (work-in-progress).
 
 #### Transfer to address
-The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
+The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
@@ -926,11 +944,11 @@ transfer::transfer_to_object(obj, &mut owner);
 This function returns a `ChildRef` instance that cannot be dropped arbitrarily. It can be stored in the parent as a field.
 Sometimes we need to set the child field of a parent while constructing it. In this case, we don't yet have a parent object to transfer into. In this case, we can call the `transfer_to_object_id` API. Example:
 ```
-let parent_id = tx_context::new_id(ctx);
-let child = Child { id: tx_context::new_id(ctx) };
-let (parent_id, child_ref) = transfer::transfer_to_object_id(child, parent_id);
+let parent_info = object::new(ctx);
+let child = Child { info: object::new(ctx) };
+let (parent_id, child_ref) = transfer::transfer_to_object_id(child, parent_info);
 let parent = Parent {
-    id: parent_id,
+    info: parent_info,
     child: child_ref,
 };
 transfer::transfer(parent, tx_context::sender(ctx));
@@ -948,7 +966,7 @@ This call also requires to have the `child_ref` as proof of original ownership.
 After this transfer, the object will be owned by `recipient`.
 
 More examples of how objects can be transferred and owned can be found in
-[ObjectOwner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
+[object_owner.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/unit_tests/data/object_owner/sources/object_owner.move).
 
 #### Freeze an object
 To make an object `obj` shared and immutable, one can call:
@@ -966,22 +984,20 @@ transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
 
-Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/TicTacToe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/SharedTicTacToe.move).
+Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move).
 
 ### Transaction context
 `TxContext` module provides a few important APIs that operate based on the current transaction context.
 
 To create a new ID for a new object:
 ```
-use sui::tx_context;
-
 // assmue `ctx` has type `&mut TxContext`.
-let id = tx_context::new_id(ctx);
+let info = sui::object::new(ctx);
 ```
 
 To obtain the current transaction sender's account address:
 ```
-tx_context::sender(ctx)
+sui::tx_context::sender(ctx)
 ```
 
 ## Next steps

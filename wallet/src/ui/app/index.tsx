@@ -4,26 +4,32 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import HomePage from './pages/home';
-import NftsPage from './pages/home/nfts';
-import SettingsPage from './pages/home/settings';
-import TokensPage from './pages/home/tokens';
-import TransactionsPage from './pages/home/transactions';
-import InitializePage from './pages/initialize';
-import BackupPage from './pages/initialize/backup';
-import CreatePage from './pages/initialize/create';
-import ImportPage from './pages/initialize/import';
-import SelectPage from './pages/initialize/select';
-import TransactionDetailsPage from './pages/transaction-details';
-import TransferCoinPage from './pages/transfer-coin';
-import WelcomePage from './pages/welcome';
 import { AppType } from './redux/slices/app/AppType';
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
+import HomePage, {
+    NftsPage,
+    StakePage,
+    TokensPage,
+    TransactionDetailsPage,
+    TransactionsPage,
+    TransferCoinPage,
+    TransferNFTPage,
+} from '_pages/home';
+import InitializePage from '_pages/initialize';
+import BackupPage from '_pages/initialize/backup';
+import CreatePage from '_pages/initialize/create';
+import ImportPage from '_pages/initialize/import';
+import SelectPage from '_pages/initialize/select';
+import SiteConnectPage from '_pages/site-connect';
+import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
+import { loadNetworkFromStorage } from '_redux/slices/app';
 
 const App = () => {
     const dispatch = useAppDispatch();
     useEffect(() => {
+        dispatch(loadNetworkFromStorage());
         dispatch(loadAccountFromStorage());
     }, [dispatch]);
     const isPopup = useAppSelector(
@@ -42,8 +48,9 @@ const App = () => {
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
-                <Route path="settings" element={<SettingsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
+                <Route path="send-nft" element={<TransferNFTPage />} />
+                <Route path="stake" element={<StakePage />} />
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
@@ -56,6 +63,8 @@ const App = () => {
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
             </Route>
+            <Route path="/connect/:requestID" element={<SiteConnectPage />} />
+            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
             <Route
                 path="*"
                 element={<Navigate to="/tokens" replace={true} />}

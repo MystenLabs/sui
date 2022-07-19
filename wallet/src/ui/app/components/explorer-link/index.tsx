@@ -5,8 +5,8 @@ import { memo, useMemo } from 'react';
 
 import { Explorer } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
-import BsIcon from '_components/bs-icon';
 import ExternalLink from '_components/external-link';
+import Icon from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { activeAccountSelector } from '_redux/slices/account';
 
@@ -38,21 +38,27 @@ function useAddress(props: ExplorerLinkProps) {
 function ExplorerLink(props: ExplorerLinkProps) {
     const { type, children, className, title } = props;
     const address = useAddress(props);
+    const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
     const objectID = type === ExplorerLinkType.object ? props.objectID : null;
     const transactionID =
         type === ExplorerLinkType.transaction ? props.transactionID : null;
     const explorerHref = useMemo(() => {
         switch (type) {
             case ExplorerLinkType.address:
-                return address && Explorer.getAddressUrl(address);
+                return (
+                    address && Explorer.getAddressUrl(address, selectedApiEnv)
+                );
             case ExplorerLinkType.object:
-                return objectID && Explorer.getObjectUrl(objectID);
+                return (
+                    objectID && Explorer.getObjectUrl(objectID, selectedApiEnv)
+                );
             case ExplorerLinkType.transaction:
                 return (
-                    transactionID && Explorer.getTransactionUrl(transactionID)
+                    transactionID &&
+                    Explorer.getTransactionUrl(transactionID, selectedApiEnv)
                 );
         }
-    }, [type, address, objectID, transactionID]);
+    }, [type, address, objectID, transactionID, selectedApiEnv]);
     if (!explorerHref) {
         return null;
     }
@@ -64,7 +70,7 @@ function ExplorerLink(props: ExplorerLinkProps) {
             showIcon={false}
         >
             <>
-                {children} <BsIcon icon="box-arrow-up-right" />
+                {children} <Icon icon="box-arrow-up-right" />
             </>
         </ExternalLink>
     );

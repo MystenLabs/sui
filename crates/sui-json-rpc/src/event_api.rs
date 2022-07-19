@@ -1,29 +1,30 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::collections::BTreeMap;
+use crate::api::EventReadApiServer;
+use crate::api::EventStreamingApiServer;
+use crate::SuiRpcModule;
+use async_trait::async_trait;
+use futures::{StreamExt, TryStream};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee_core::error::SubscriptionClosed;
+use jsonrpsee_core::server::rpc_module::RpcModule;
+use jsonrpsee_core::server::rpc_module::{PendingSubscription, SubscriptionSink};
+use serde::Serialize;
 use std::fmt::Display;
 use std::sync::Arc;
-
-use futures::{StreamExt, TryStream};
-use jsonrpsee_core::error::SubscriptionClosed;
-use jsonrpsee_core::server::rpc_module::{PendingSubscription, SubscriptionSink};
-use move_core_types::parser::parse_struct_tag;
-use serde::Serialize;
-use serde_json::Value;
+use sui_core::authority::AuthorityState;
+use sui_core::event_handler::EventHandler;
+use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope, SuiEventFilter};
+use sui_open_rpc::Module;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use tracing::warn;
 
-use sui_core::authority::AuthorityState;
-use sui_core::event_filter::EventFilter;
-use sui_core::event_handler::EventHandler;
-use sui_json_rpc_api::rpc_types::SuiEvent;
-use sui_json_rpc_api::EventApiServer;
-pub struct EventApiImpl {
+pub struct EventStreamingApiImpl {
     state: Arc<AuthorityState>,
     event_handler: Arc<EventHandler>,
 }
 
-impl EventApiImpl {
+impl EventStreamingApiImpl {
     pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
         Self {
             state,
@@ -32,17 +33,13 @@ impl EventApiImpl {
     }
 }
 
-impl EventApiServer for EventApiImpl {
-    fn subscribe_move_event_by_type(
-        &self,
-        pending: PendingSubscription,
-        event: String,
-        field_filter: BTreeMap<String, Value>,
-    ) {
-        // parse_struct_tag converts StructTag string e.g. `0x2::DevNetNFT::MintNFTEvent` to StructTag object,
-        let event_type = match parse_struct_tag(&event) {
-            Ok(event) => event,
+#[async_trait]
+impl EventStreamingApiServer for EventStreamingApiImpl {
+    fn subscribe_event(&self, pending: PendingSubscription, filter: SuiEventFilter) {
+        let filter = match filter.try_into() {
+            Ok(filter) => filter,
             Err(e) => {
+                let e: anyhow::Error = e;
                 let e: jsonrpsee_core::Error = e.into();
                 warn!(error = ?e, "Rejecting subscription request.");
                 pending.reject(e);
@@ -52,10 +49,15 @@ impl EventApiServer for EventApiImpl {
 
         if let Some(sink) = pending.accept() {
             let state = self.state.clone();
-            let type_filter = EventFilter::ByMoveEventType(event_type);
-            let field_filter = EventFilter::ByMoveEventFields(field_filter);
-            let stream = self.event_handler.subscribe(type_filter.and(field_filter));
-            let stream = stream.map(move |e| SuiEvent::try_from(e.event, &state.module_cache));
+            let stream = self.event_handler.subscribe(filter);
+            let stream = stream.map(move |e| {
+                let event = SuiEvent::try_from(e.event, &state.module_cache);
+                event.map(|event| SuiEventEnvelope {
+                    timestamp: e.timestamp,
+                    tx_digest: e.tx_digest,
+                    event,
+                })
+            });
             spawn_subscript(sink, stream);
         }
     }
@@ -79,4 +81,101 @@ where
             }
         };
     });
+}
+
+impl SuiRpcModule for EventStreamingApiImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::EventStreamingApiOpenRpc::module_doc()
+    }
+}
+
+#[allow(unused)]
+pub struct EventReadApiImpl {
+    state: Arc<AuthorityState>,
+    event_handler: Arc<EventHandler>,
+}
+
+impl EventReadApiImpl {
+    pub fn new(state: Arc<AuthorityState>, event_handler: Arc<EventHandler>) -> Self {
+        Self {
+            state,
+            event_handler,
+        }
+    }
+}
+
+#[allow(unused)]
+#[async_trait]
+impl EventReadApiServer for EventReadApiImpl {
+    async fn get_events_by_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> RpcResult<Vec<SuiEventEnvelope>> {
+        Ok(vec![])
+    }
+
+    async fn get_events_by_module(
+        &self,
+        package: ObjectID,
+        module: String,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>> {
+        Ok(vec![])
+    }
+
+    async fn get_events_by_event_type(
+        &self,
+        event_type: String,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>> {
+        Ok(vec![])
+    }
+
+    async fn get_events_by_sender(
+        &self,
+        sender: SuiAddress,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>> {
+        Ok(vec![])
+    }
+
+    async fn get_events_by_object(
+        &self,
+        object: ObjectID,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>> {
+        Ok(vec![])
+    }
+
+    async fn get_events_by_owner(
+        &self,
+        owner: SuiAddress,
+        count: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>> {
+        Ok(vec![])
+    }
+}
+
+impl SuiRpcModule for EventReadApiImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::EventReadApiOpenRpc::module_doc()
+    }
 }

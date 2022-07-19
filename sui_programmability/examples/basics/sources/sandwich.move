@@ -6,31 +6,31 @@
 module basics::sandwich {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct Ham has key {
-        id: VersionedID
+        info: Info
     }
 
     struct Bread has key {
-        id: VersionedID
+        info: Info
     }
 
     struct Sandwich has key {
-        id: VersionedID,
+        info: Info,
     }
 
     // This Capability allows the owner to withdraw profits
     struct GroceryOwnerCapability has key {
-        id: VersionedID
+        info: Info
     }
 
     // Grocery is created on module init
     struct Grocery has key {
-        id: VersionedID,
+        info: Info,
         profits: Balance<SUI>
     }
 
@@ -47,12 +47,12 @@ module basics::sandwich {
     /// On module init, create a grocery
     fun init(ctx: &mut TxContext) {
         transfer::share_object(Grocery {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             profits: balance::zero<SUI>()
         });
 
         transfer::transfer(GroceryOwnerCapability {
-            id: tx_context::new_id(ctx)
+            info: object::new(ctx)
         }, tx_context::sender(ctx));
     }
 
@@ -65,7 +65,7 @@ module basics::sandwich {
         let b = coin::into_balance(c);
         assert!(balance::value(&b) == HAM_PRICE, EInsufficientFunds);
         balance::join(&mut grocery.profits, b);
-        transfer::transfer(Ham { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
+        transfer::transfer(Ham { info: object::new(ctx) }, tx_context::sender(ctx))
     }
 
     /// Exchange `c` for some bread
@@ -77,18 +77,18 @@ module basics::sandwich {
         let b = coin::into_balance(c);
         assert!(balance::value(&b) == BREAD_PRICE, EInsufficientFunds);
         balance::join(&mut grocery.profits, b);
-        transfer::transfer(Bread { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
+        transfer::transfer(Bread { info: object::new(ctx) }, tx_context::sender(ctx))
     }
 
     /// Combine the `ham` and `bread` into a delicious sandwich
     public entry fun make_sandwich(
         ham: Ham, bread: Bread, ctx: &mut TxContext
     ) {
-        let Ham { id: ham_id } = ham;
-        let Bread { id: bread_id } = bread;
-        id::delete(ham_id);
-        id::delete(bread_id);
-        transfer::transfer(Sandwich { id: tx_context::new_id(ctx) }, tx_context::sender(ctx))
+        let Ham { info: ham_id } = ham;
+        let Bread { info: bread_id } = bread;
+        object::delete(ham_id);
+        object::delete(bread_id);
+        transfer::transfer(Sandwich { info: object::new(ctx) }, tx_context::sender(ctx))
     }
 
     /// See the profits of a grocery
@@ -103,7 +103,7 @@ module basics::sandwich {
         assert!(amount > 0, ENoProfits);
 
         // Take a transferable `Coin` from a `Balance`
-        let coin = coin::withdraw(&mut grocery.profits, amount, ctx);
+        let coin = coin::take(&mut grocery.profits, amount, ctx);
 
         transfer::transfer(coin, tx_context::sender(ctx));
     }

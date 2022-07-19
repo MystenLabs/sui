@@ -65,7 +65,7 @@ stage is considered closure for an exchange or other blockchain transaction.
 
 Genesis is the initial act of creating accounts and gas objects. Sui provides a `genesis` command that allows users to create and inspect the genesis object setting up the network for operation.
 
-For more information, see [Genesis](../build/wallet.md#genesis).
+For more information, see [Genesis](../build/cli-client.md#genesis).
 
 
 ### Gateway service
@@ -105,9 +105,9 @@ For more information, see [Sui Objects](../build/objects.md).
 A [smart contract](https://en.wikipedia.org/wiki/Smart_contract) is an agreement based upon the protocol for conducting transactions in a blockchain. In Sui, smart contracts are written in the [Move](https://github.com/MystenLabs/awesome-move) programming language.
 
 
-### Single-writer objects
+### Single-owner objects
 
-Single-writer objects are owned by one account. In Sui, transactions affecting only single-writer objects owned by the same account may proceed with only a check of the sender’s account, greatly speeding transaction times.
+Single-owner objects are owned by one account. In Sui, transactions affecting only single-owner objects owned by the same address may proceed with only a verification of the sender’s address, greatly speeding transaction times. We refer to these as *simple transactions*.
 
 ### Sui/SUI
 
@@ -121,13 +121,19 @@ Sui refers to the Sui blockchain, the SUI currency, and the [Sui open source pro
 For more information, see [Causal order vs total order](sui-compared#causal-order-vs-total-order). 
 
 
+### Transaction
+
+A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-owner, single-address objects, such as minting an NFT or transferring it or another token. These transactions may bypass the consensus protocol in Sui.
+
+More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
+
 ### Transfer
 
 A transfer is switching the owner address of a token to a new one via command in Sui. This is accomplished via the
-[Sui Wallet](../build/wallet.md) command line interface. It is one of the more common of many commands
-available in the wallet.
+[Sui CLI client](../build/cli-client.md) command line interface. It is one of the more common of many commands
+available in the CLI client.
 
-For more information, see [Transferring objects](../build/wallet.md#transferring-objects).
+For more information, see [Transferring objects](../build/cli-client.md#transferring-objects).
 
 
 ### Validator

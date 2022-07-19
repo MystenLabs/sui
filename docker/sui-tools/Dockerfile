@@ -1,5 +1,7 @@
-FROM rust:1.60.0 AS chef
+FROM rust:1.62.0 AS chef
 WORKDIR sui
+ARG GIT_REVISION
+ENV GIT_REVISION=$GIT_REVISION
 RUN apt-get update && apt-get install -y cmake clang
 
 # Plan out the 3rd-party dependencies that need to be built.
@@ -11,7 +13,7 @@ RUN apt-get update && apt-get install -y cmake clang
 #   3. Update the lockfile in order to reflect the changes to the
 #      root Cargo.toml file.
 FROM chef AS planner
-COPY Cargo.toml Cargo.lock .
+COPY Cargo.toml Cargo.lock ./
 COPY crates/workspace-hack crates/workspace-hack
 RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
     && cargo metadata -q >/dev/null
@@ -32,23 +34,22 @@ RUN cargo build --release
 # Copy in the rest of the crates (and an unmodified Cargo.toml and Cargo.lock)
 # and build the application. At this point no dependencies should need to be
 # built as they were built and cached by the previous layer.
-COPY Cargo.toml Cargo.lock .
+COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
-    --bin wallet \
-    --bin sui-move
+    --bin rpc-server \
+    --bin sui-faucet
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
 WORKDIR sui
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
-COPY --from=builder /sui/target/release/wallet /usr/local/bin
-COPY --from=builder /sui/target/release/sui-move /usr/local/bin
+COPY --from=builder /sui/target/release/rpc-server /usr/local/bin
+COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 
 ARG BUILD_DATE
-ARG GIT_REVISION
 LABEL build-date=$BUILD_DATE
 LABEL git-revision=$GIT_REVISION

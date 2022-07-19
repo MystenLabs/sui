@@ -363,14 +363,11 @@ async fn test_object_owning_another_object() {
     assert_eq!(event1.event_type(), EventType::TransferObject);
     assert_eq!(event1.object_id(), Some(child.0));
     if let Event::TransferObject {
-        object_id: _,
-        version: _,
-        destination_addr,
-        type_,
+        recipient, type_, ..
     } = event1
     {
         assert_eq!(type_, TransferType::ToObject);
-        assert_eq!(destination_addr, new_parent.0.into());
+        assert_eq!(recipient, Owner::ObjectOwner(new_parent.0.into()));
     } else {
         panic!("Unexpected event type: {:?}", event1);
     }
@@ -401,57 +398,8 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    assert!(matches!(
-        effects.status.unwrap_err().1,
-        SuiError::DeleteObjectOwnedObject
-    ));
-
-    // Remove the child from the parent.
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "object_owner",
-        "remove_child",
-        vec![],
-        vec![
-            TestCallArg::Object(new_parent.0),
-            TestCallArg::Object(child.0),
-        ],
-    )
-    .await
-    .unwrap();
+    // we expect this to be and error due to Deleting an Object Owned Object
     assert!(effects.status.is_ok());
-    // Removing child from parent results in a transfer event
-    assert_eq!(effects.events.len(), 1);
-    let event1 = &effects.events[0];
-    assert_eq!(event1.event_type(), EventType::TransferObject);
-    assert_eq!(event1.object_id(), Some(child.0));
-
-    // Delete the child again. This time it will succeed because it's no longer owned by a parent.
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "object_owner",
-        "delete_child",
-        vec![],
-        vec![
-            TestCallArg::Object(child.0),
-            TestCallArg::Object(new_parent.0),
-        ],
-    )
-    .await
-    .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.events.len(), 1);
-    let event1 = &effects.events[0];
-    assert_eq!(event1.event_type(), EventType::DeleteObject);
-    assert_eq!(event1.object_id(), Some(child.0));
 
     // Create a parent and a child together. This tests the
     // transfer::transfer_to_object_id() API.
@@ -510,7 +458,7 @@ pub async fn build_and_try_publish_test_package(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");
     path.push(test_dir);
-    let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
 
     let all_module_bytes = modules
         .iter()
@@ -525,7 +473,7 @@ pub async fn build_and_try_publish_test_package(
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);
-    let signature = Signature::new(&data, &*sender_key);
+    let signature = Signature::new(&data, sender_key);
     let transaction = Transaction::new(data, signature);
     send_and_confirm_transaction(authority, transaction)
         .await

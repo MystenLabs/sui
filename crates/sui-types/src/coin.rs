@@ -9,10 +9,10 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::balance::Balance;
+use crate::balance::{Balance, Supply};
 use crate::{
     base_types::{ObjectID, SequenceNumber},
-    id::VersionedID,
+    id::Info,
     SUI_FRAMEWORK_ADDRESS,
 };
 use schemars::JsonSchema;
@@ -25,14 +25,14 @@ pub const COIN_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 // Rust version of the Move sui::coin::Coin type
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Eq, PartialEq)]
 pub struct Coin {
-    pub id: VersionedID,
+    pub info: Info,
     pub balance: Balance,
 }
 
 impl Coin {
-    pub fn new(id: VersionedID, value: u64) -> Self {
+    pub fn new(info: Info, value: u64) -> Self {
         Self {
-            id,
+            info,
             balance: Balance::new(value),
         }
     }
@@ -47,11 +47,11 @@ impl Coin {
     }
 
     pub fn id(&self) -> &ObjectID {
-        self.id.object_id()
+        self.info.object_id()
     }
 
     pub fn version(&self) -> SequenceNumber {
-        self.id.version()
+        self.info.version()
     }
 
     pub fn value(&self) -> u64 {
@@ -67,8 +67,8 @@ impl Coin {
             type_: Self::type_(type_param.clone()),
             fields: vec![
                 MoveFieldLayout::new(
-                    ident_str!("id").to_owned(),
-                    MoveTypeLayout::Struct(VersionedID::layout()),
+                    ident_str!("info").to_owned(),
+                    MoveTypeLayout::Struct(Info::layout()),
                 ),
                 MoveFieldLayout::new(
                     ident_str!("balance").to_owned(),
@@ -82,6 +82,6 @@ impl Coin {
 // Rust version of the Move sui::coin::TreasuryCap type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TreasuryCap {
-    pub id: VersionedID,
-    pub total_supply: u64,
+    pub info: Info,
+    pub total_supply: Supply,
 }

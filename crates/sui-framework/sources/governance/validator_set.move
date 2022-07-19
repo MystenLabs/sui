@@ -10,6 +10,8 @@ module sui::validator_set {
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator, ValidatorMetadata};
+    use sui::stake::Stake;
+    use sui::epoch_time_lock::EpochTimeLock;
 
     friend sui::sui_system;
 
@@ -19,10 +21,10 @@ module sui::validator_set {
     struct ValidatorSet has store {
         /// Total amount of stake from all active validators (not including delegation),
         /// at the beginning of the epoch.
-        validator_stake: u64,
+        total_validator_stake: u64,
 
         /// Total amount of stake from delegation, at the beginning of the epoch.
-        delegation_stake: u64,
+        total_delegation_stake: u64,
 
         /// The amount of accumulated stake to reach a quorum among all active validators.
         /// This is always 2/3 of total stake. Keep it here to reduce potential inconsistencies
@@ -46,10 +48,10 @@ module sui::validator_set {
     }
 
     public(friend) fun new(init_active_validators: vector<Validator>): ValidatorSet {
-        let (validator_stake, delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&init_active_validators);
+        let (total_validator_stake, total_delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&init_active_validators);
         let validators = ValidatorSet {
-            validator_stake,
-            delegation_stake,
+            total_validator_stake,
+            total_delegation_stake,
             quorum_stake_threshold,
             active_validators: init_active_validators,
             pending_validators: vector::empty(),
@@ -76,6 +78,7 @@ module sui::validator_set {
             0
         );
         vector::push_back(&mut self.pending_validators, validator);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     /// Called by `SuiSystem`, to remove a validator.
@@ -95,6 +98,7 @@ module sui::validator_set {
             0
         );
         vector::push_back(&mut self.pending_removals, validator_index);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     /// Called by `SuiSystem`, to add more stake to a validator.
@@ -104,11 +108,13 @@ module sui::validator_set {
     public(friend) fun request_add_stake(
         self: &mut ValidatorSet,
         new_stake: Balance<SUI>,
-        ctx: &TxContext,
+        coin_locked_until_epoch: Option<EpochTimeLock>,
+        ctx: &mut TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        validator::request_add_stake(validator, new_stake);
+        validator::request_add_stake(validator, new_stake, coin_locked_until_epoch, ctx);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     /// Called by `SuiSystem`, to withdraw stake from a validator.
@@ -116,13 +122,15 @@ module sui::validator_set {
     /// The remaining stake of the validator cannot be lower than `min_validator_stake`.
     public(friend) fun request_withdraw_stake(
         self: &mut ValidatorSet,
+        stake: &mut Stake,
         withdraw_amount: u64,
         min_validator_stake: u64,
-        ctx: &TxContext,
+        ctx: &mut TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
-        validator::request_withdraw_stake(validator, withdraw_amount, min_validator_stake);
+        validator::request_withdraw_stake(validator, stake, withdraw_amount, min_validator_stake, ctx);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     public(friend) fun is_active_validator(
@@ -139,6 +147,7 @@ module sui::validator_set {
     ) {
         let validator = get_validator_mut(&mut self.active_validators, validator_address);
         validator::request_add_delegation(validator, delegate_amount);
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     public(friend) fun request_remove_delegation(
@@ -153,7 +162,12 @@ module sui::validator_set {
             let validator_index = option::extract(&mut validator_index_opt);
             let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
             validator::request_remove_delegation(validator, delegate_amount);
-        }
+        } else {
+            // TODO: How do we deal with undelegating from inactive validators?
+            // https://github.com/MystenLabs/sui/issues/2837
+            abort 0
+        };
+        self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
     public(friend) fun create_epoch_records(
@@ -194,34 +208,49 @@ module sui::validator_set {
         // epoch's stake information to compute reward distribution.
         let rewards = compute_reward_distribution(
             &self.active_validators,
-            self.validator_stake,
+            self.total_validator_stake,
             balance::value(computation_reward),
         );
 
         // `adjust_stake` must be called before `distribute_reward`, because reward distribution goes to
         // each validator's pending stake, and that shouldn't be available in the next epoch.
-        adjust_stake(&mut self.active_validators, ctx);
+        adjust_stake(&mut self.active_validators);
 
-        distribute_reward(&mut self.active_validators, &rewards, computation_reward);
+        distribute_reward(&mut self.active_validators, &rewards, computation_reward, ctx);
 
         process_pending_validators(&mut self.active_validators, &mut self.pending_validators);
 
-        process_pending_removals(&mut self.active_validators, &mut self.pending_removals, ctx);
+        process_pending_removals(&mut self.active_validators, &mut self.pending_removals);
 
         self.next_epoch_validators = derive_next_epoch_validators(self);
 
         let (validator_stake, delegation_stake, quorum_stake_threshold) = calculate_total_stake_and_quorum_threshold(&self.active_validators);
-        self.validator_stake = validator_stake;
-        self.delegation_stake = delegation_stake;
+        self.total_validator_stake = validator_stake;
+        self.total_delegation_stake = delegation_stake;
         self.quorum_stake_threshold = quorum_stake_threshold;
     }
 
-    public fun validator_stake(self: &ValidatorSet): u64 {
-        self.validator_stake
+    public fun total_validator_stake(self: &ValidatorSet): u64 {
+        self.total_validator_stake
     }
 
-    public fun delegation_stake(self: &ValidatorSet): u64 {
-        self.delegation_stake
+    public fun total_delegation_stake(self: &ValidatorSet): u64 {
+        self.total_delegation_stake
+    }
+
+    public fun validator_stake_amount(self: &ValidatorSet, validator_address: address): u64 {
+        let validator = get_validator_ref(&self.active_validators, validator_address);
+        validator::stake_amount(validator)
+    }
+
+    public fun validator_delegate_amount(self: &ValidatorSet, validator_address: address): u64 {
+        let validator = get_validator_ref(&self.active_validators, validator_address);
+        validator::delegate_amount(validator)
+    }
+
+    public fun validator_delegator_count(self: &ValidatorSet, validator_address: address): u64 {
+        let validator = get_validator_ref(&self.active_validators, validator_address);
+        validator::delegator_count(validator)
     }
 
     /// Checks whether a duplicate of `new_validator` is already in `validators`.
@@ -265,16 +294,26 @@ module sui::validator_set {
         vector::borrow_mut(validators, validator_index)
     }
 
+    fun get_validator_ref(
+        validators: &vector<Validator>,
+        validator_address: address,
+    ): &Validator {
+        let validator_index_opt = find_validator(validators, validator_address);
+        assert!(option::is_some(&validator_index_opt), 0);
+        let validator_index = option::extract(&mut validator_index_opt);
+        vector::borrow(validators, validator_index)
+    }
+
     /// Process the pending withdraw requests. For each pending request, the validator
     /// is removed from `validators` and sent back to the address of the validator.
     fun process_pending_removals(
-        validators: &mut vector<Validator>, withdraw_list: &mut vector<u64>, ctx: &mut TxContext
+        validators: &mut vector<Validator>, withdraw_list: &mut vector<u64>
     ) {
         sort_removal_list(withdraw_list);
         while (!vector::is_empty(withdraw_list)) {
             let index = vector::pop_back(withdraw_list);
             let validator = vector::remove(validators, index);
-            validator::destroy(validator, ctx);
+            validator::destroy(validator);
         }
     }
 
@@ -333,12 +372,12 @@ module sui::validator_set {
     }
 
     /// Process the pending stake changes for each validator.
-    fun adjust_stake(validators: &mut vector<Validator>, ctx: &mut TxContext) {
+    fun adjust_stake(validators: &mut vector<Validator>) {
         let length = vector::length(validators);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            validator::adjust_stake(validator, ctx);
+            validator::adjust_stake(validator);
             i = i + 1;
         }
     }
@@ -369,7 +408,12 @@ module sui::validator_set {
     }
 
     // TODO: Allow reward compunding for delegators.
-    fun distribute_reward(validators: &mut vector<Validator>, rewards: &vector<u64>, reward: &mut Balance<SUI>) {
+    fun distribute_reward(
+        validators: &mut vector<Validator>,
+        rewards: &vector<u64>,
+        reward: &mut Balance<SUI>,
+        ctx: &mut TxContext
+    ) {
         let length = vector::length(validators);
         let i = 0;
         while (i < length) {
@@ -377,7 +421,7 @@ module sui::validator_set {
             let reward_amount = *vector::borrow(rewards, i);
             let reward = balance::split(reward, reward_amount);
             // Because reward goes to pending stake, it's the same as calling `request_add_stake`.
-            validator::request_add_stake(validator, reward);
+            validator::request_add_stake(validator, reward, option::none(), ctx);
             i = i + 1;
         }
     }
@@ -410,11 +454,10 @@ module sui::validator_set {
     #[test_only]
     public fun destroy_for_testing(
         self: ValidatorSet,
-        ctx: &mut TxContext
     ) {
         let ValidatorSet {
-            validator_stake: _,
-            delegation_stake: _,
+            total_validator_stake: _,
+            total_delegation_stake: _,
             quorum_stake_threshold: _,
             active_validators,
             pending_validators,
@@ -423,7 +466,7 @@ module sui::validator_set {
         } = self;
         while (!vector::is_empty(&active_validators)) {
             let v = vector::pop_back(&mut active_validators);
-            validator::destroy(v, ctx);
+            validator::destroy(v);
         };
         vector::destroy_empty(active_validators);
         vector::destroy_empty(pending_validators);

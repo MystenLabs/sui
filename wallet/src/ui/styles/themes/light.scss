@@ -1,0 +1,24 @@
+@use '_variables/colors' as c-var;
+@use '_variables/shadows';
+@use '_values/colors' as c-val;
+
+$values: (
+    c-var.$background: c-val.$gray-40,
+    c-var.$background-color: c-val.$gray-40,
+    c-var.$text-on-background: c-val.$gray-95,
+    c-var.$main-content-background: c-val.$white,
+    c-var.$text-on-main-content-background: c-val.$gray-100,
+    shadows.$main-content: (
+        0 0 29px rgb(0 0 0 / 10%),
+        0 0 44px rgb(0 0 0 / 5%),
+        0 0 6px rgb(0 0 0 / 2%),
+    ),
+    c-var.$nav-background-color: #dde3eb33,
+    c-var.$nav-background-filter: blur(25px),
+    c-var.$nav-item-color: c-val.$gray-60,
+    c-var.$nav-item-highlighted-color: c-val.$gray-95,
+    c-var.$nav-item-icon-highlighted-color: transparent,
+    c-var.$nav-item-icon-highlighted-gradient-color:
+        linear-gradient(135deg, #589aea 0%, #4c75a6 100%),
+    c-var.$menu-btn-color: c-val.$gray-70,
+);

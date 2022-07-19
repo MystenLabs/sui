@@ -1,22 +1,43 @@
 .pagination {
-    @apply flex flex-row items-center justify-center list-none;
+    @apply flex flex-row items-center justify-start list-none w-full;
 }
 
 .pagination ul {
-    @apply flex flex-row items-center justify-center list-none pl-0;
+    @apply flex flex-row items-center justify-center list-none  p-0 m-0;
+}
+
+.arrow {
+    @apply block opacity-50 cursor-default !important;
+}
+
+.arrow button {
+    @apply border-transparent cursor-default;
 }
 
 .pagination ul li {
-    @apply mr-2;
+    @apply mr-2 hidden md:block;
 }
 
 .pagination ul li button {
-    @apply bg-gray-200 hover:bg-gray-300 focus:bg-gray-300 text-gray-800 hover:text-gray-800 focus:text-gray-800 font-medium py-2 px-4 rounded-none border-0 cursor-pointer 
-     md:pr-3  md:pl-3  pr-1.5  pl-1.5;
+    @apply text-gray-600 hover:text-gray-800 focus:text-gray-800 font-medium py-2 px-4 cursor-pointer 
+     md:pr-3  md:pl-3  pr-3  pl-3 border-[1px] rounded-[6px] border-white bg-[#FFFFFF] hover:bg-[#F4FBFF];
 
+    border: 1px solid #e9eaeb;
     transition: all 0.4s ease;
 }
 
-.activepag {
-    @apply bg-sui text-white !important;
+button.activepag {
+    @apply bg-[#F4FBFF] text-sui-dark border-sui-dark !important;
+}
+
+.activearrow {
+    @apply block opacity-100 cursor-pointer !important;
+}
+
+.paginationleft svg {
+    transform: rotate(180deg);
+}
+
+.paginationdot:hover {
+    @apply bg-[#FFFFFF] hover:bg-[#FFFFFF];
 }

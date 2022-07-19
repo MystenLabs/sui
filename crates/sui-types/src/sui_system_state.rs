@@ -6,7 +6,11 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{balance::Balance, coin::TreasuryCap, id::VersionedID, SUI_FRAMEWORK_ADDRESS};
+use crate::{
+    balance::{Balance, Supply},
+    id::Info,
+    SUI_FRAMEWORK_ADDRESS,
+};
 
 const SUI_SYSTEM_STATE_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
@@ -17,6 +21,7 @@ pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
+    pub storage_gas_price: u64,
 }
 
 /// Rust version of the Move Std::Option::Option type.
@@ -33,15 +38,16 @@ pub struct ValidatorMetadata {
     pub name: Vec<u8>,
     pub net_address: Vec<u8>,
     pub next_epoch_stake: u64,
+    pub next_epoch_delegation: u64,
 }
 
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
-    pub stake: Balance,
+    pub stake_amount: u64,
     pub delegation: u64,
-    pub pending_stake: MoveOption<Balance>,
+    pub pending_stake: u64,
     pub pending_withdraw: u64,
     pub pending_delegation: u64,
     pub pending_delegation_withdraw: u64,
@@ -65,10 +71,10 @@ pub struct ValidatorSet {
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemState {
-    pub id: VersionedID,
+    pub info: Info,
     pub epoch: u64,
     pub validators: ValidatorSet,
-    pub treasury_cap: TreasuryCap,
+    pub treasury_cap: Supply,
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
     pub delegation_reward: Balance,

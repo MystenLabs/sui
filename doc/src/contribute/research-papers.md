@@ -101,8 +101,7 @@ our latest design, inspired from previous works below.
 
 * **Link:** https://arxiv.org/abs/1906.12237
 * **Publication:** Not published
-* **Relevance:** Less related to Sui than the other papers, and the paper is in its early stages. It presents an algorithm to strengthen proof-of-Stake
-systems (like Sui). The paper is, however, theoretical and not on our roadmap.
+* **Relevance:** Less related to Sui than the other papers, and the paper is in its early stages. It presents an algorithm to strengthen proof-of-Stake systems (like Sui). The paper is, however, theoretical and not on our roadmap.
 * **Summary:** The Sybil attack plagues all peer-to-peer systems, and modern open distributed ledgers employ a number of tactics to prevent it from proof
 of work, or other resources such as space, stake or memory, to traditional admission control in permissioned settings. With SybilQuorum we propose an
 alternative approach to securing an open distributed ledger against Sybil attacks, and ensuring consensus amongst honest participants, leveraging social

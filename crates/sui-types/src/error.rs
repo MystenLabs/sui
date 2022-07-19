@@ -2,8 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::EpochId};
-use move_binary_format::errors::{PartialVMError, VMError};
+use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
+use move_binary_format::errors::{Location, PartialVMError, VMError};
+use move_core_types::vm_status::{StatusCode, StatusType};
 use narwhal_executor::{ExecutionStateError, SubscriberError};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -49,8 +50,8 @@ pub enum SuiError {
     LockErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
-    #[error("Attempt to transfer an object that's not a coin. Object transfer must be done using a distinct Move function call.")]
-    TransferNonCoinError,
+    #[error("Attempt to transfer an object that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
+    TransferObjectWithoutPublicTransferError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
     #[error("The SUI coin to be transferred has balance {balance}, which is not enough to cover the transfer amount {required}")]
@@ -95,6 +96,8 @@ pub enum SuiError {
         expected_sequence: SequenceNumber,
         given_sequence: SequenceNumber,
     },
+    #[error("Invalid Authority Bitmap: {}", error)]
+    InvalidAuthorityBitmap { error: String },
     #[error("Conflicting transaction already received: {pending_transaction:?}")]
     ConflictingTransaction {
         pending_transaction: TransactionDigest,
@@ -289,6 +292,8 @@ pub enum SuiError {
     },
     #[error("Storage error")]
     StorageError(#[from] TypedStoreError),
+    #[error("Non-RocksDB Storage error: {0}")]
+    GenericStorageError(String),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
@@ -306,6 +311,8 @@ pub enum SuiError {
     // Errors returned by authority and client read API's
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
+    #[error("Event store component is not active on this node")]
+    NoEventStore,
 
     // Client side error
     #[error("Client state has a different pending transaction.")]
@@ -361,6 +368,15 @@ pub enum SuiError {
 
     #[error("Unable to communicate with the Quorum Driver channel: {:?}", error)]
     QuorumDriverCommunicationError { error: String },
+
+    #[error("Operation timed out")]
+    TimeoutError,
+
+    #[error("Error executing {0}")]
+    ExecutionError(String),
+
+    #[error("Invalid committee composition")]
+    InvalidCommittee(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
@@ -371,6 +387,12 @@ impl std::convert::From<PartialVMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
+    }
+}
+
+impl std::convert::From<ExecutionError> for SuiError {
+    fn from(error: ExecutionError) -> Self {
+        SuiError::ExecutionError(error.to_string())
     }
 }
 
@@ -391,6 +413,12 @@ impl std::convert::From<SubscriberError> for SuiError {
 impl From<tonic::Status> for SuiError {
     fn from(status: tonic::Status) -> Self {
         Self::RpcError(status.message().to_owned())
+    }
+}
+
+impl From<ExecutionErrorKind> for SuiError {
+    fn from(kind: ExecutionErrorKind) -> Self {
+        ExecutionError::from_kind(kind).into()
     }
 }
 
@@ -415,5 +443,100 @@ impl ExecutionStateError for SuiError {
 
     fn to_string(&self) -> String {
         ToString::to_string(&self)
+    }
+}
+
+type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+pub type ExecutionErrorKind = ExecutionFailureStatus;
+
+#[derive(Debug)]
+pub struct ExecutionError {
+    inner: Box<ExecutionErrorInner>,
+}
+
+#[derive(Debug)]
+struct ExecutionErrorInner {
+    kind: ExecutionErrorKind,
+    source: Option<BoxError>,
+}
+
+impl ExecutionError {
+    pub fn new(kind: ExecutionErrorKind, source: Option<BoxError>) -> Self {
+        Self {
+            inner: Box::new(ExecutionErrorInner { kind, source }),
+        }
+    }
+
+    pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
+        Self::new(kind, Some(source.into()))
+    }
+
+    pub fn from_kind(kind: ExecutionErrorKind) -> Self {
+        Self::new(kind, None)
+    }
+
+    pub fn kind(&self) -> &ExecutionErrorKind {
+        &self.inner.kind
+    }
+
+    pub fn to_execution_status(&self) -> ExecutionFailureStatus {
+        self.kind().clone()
+    }
+}
+
+impl std::fmt::Display for ExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExecutionError: {:?}", self)
+    }
+}
+
+impl std::error::Error for ExecutionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.inner.source.as_ref().map(|e| &**e as _)
+    }
+}
+
+impl From<ExecutionErrorKind> for ExecutionError {
+    fn from(kind: ExecutionErrorKind) -> Self {
+        Self::from_kind(kind)
+    }
+}
+
+impl From<VMError> for ExecutionError {
+    fn from(error: VMError) -> Self {
+        let kind = match (error.major_status(), error.sub_status(), error.location()) {
+            (StatusCode::EXECUTED, _, _) => {
+                // If we have an error the status probably shouldn't ever be Executed
+                debug_assert!(false, "VmError shouldn't ever report successful execution");
+                ExecutionFailureStatus::VMInvariantViolation
+            }
+            (StatusCode::ABORTED, None, _) => {
+                debug_assert!(false, "No abort code");
+                // this is a Move VM invariant violation, the code should always be there
+                ExecutionFailureStatus::VMInvariantViolation
+            }
+            (StatusCode::ABORTED, _, Location::Script) => {
+                debug_assert!(false, "Scripts are not used in Sui");
+                // this is a Move VM invariant violation, in the sense that the location
+                // is malformed
+                ExecutionFailureStatus::VMInvariantViolation
+            }
+            (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
+                ExecutionFailureStatus::MoveAbort(id.to_owned(), code)
+            }
+            (StatusCode::OUT_OF_GAS, _, _) => ExecutionFailureStatus::InsufficientGas,
+            _ => match error.major_status().status_type() {
+                StatusType::Execution => ExecutionFailureStatus::MovePrimitiveRuntimeError,
+                StatusType::Validation
+                | StatusType::Verification
+                | StatusType::Deserialization
+                | StatusType::Unknown => {
+                    ExecutionFailureStatus::VMVerificationOrDeserializationError
+                }
+                StatusType::InvariantViolation => ExecutionFailureStatus::VMInvariantViolation,
+            },
+        };
+        Self::new_with_source(kind, error)
     }
 }

@@ -7,7 +7,8 @@ import {
     getTransactions,
     getTransactionDigest,
     getTransactionKindName,
-    getTransferCoinTransaction,
+    getTransferObjectTransaction,
+    getTransferSuiTransaction,
     JsonRpcProvider,
 } from '@mysten/sui.js';
 
@@ -15,17 +16,10 @@ import { deduplicate } from '../searchUtil';
 import { getEndpoint, Network } from './rpcSetting';
 
 import type {
-    CertifiedTransaction,
-    TransactionEffectsResponse,
     GetTxnDigestsResponse,
+    TransactionEffectsResponse,
+    CertifiedTransaction,
 } from '@mysten/sui.js';
-
-// TODO: Remove these types with SDK types
-export type AddressBytes = number[];
-export type AddressOwner = { AddressOwner: AddressBytes };
-
-export type AnyVec = { vec: any[] };
-export type JsonBytes = { bytes: number[] };
 
 export { Network, getEndpoint };
 
@@ -41,7 +35,7 @@ export const getDataOnTxDigests = (
         .then((txEffs: TransactionEffectsResponse[]) => {
             return (
                 txEffs
-                    .map((txEff, i) => {
+                    .map((txEff) => {
                         const [seq, digest] = transactions.filter(
                             (transactionId) =>
                                 transactionId[1] ===
@@ -60,7 +54,8 @@ export const getDataOnTxDigests = (
                         const txn = txns[0];
                         const txKind = getTransactionKindName(txn);
                         const recipient =
-                            getTransferCoinTransaction(txn)?.recipient;
+                            getTransferObjectTransaction(txn)?.recipient ||
+                            getTransferSuiTransaction(txn)?.recipient;
 
                         return {
                             seq,
@@ -69,6 +64,7 @@ export const getDataOnTxDigests = (
                             txGas: getTotalGasUsed(txEff),
                             kind: txKind,
                             From: res.data.sender,
+                            timestamp_ms: txEff.timestamp_ms,
                             ...(recipient
                                 ? {
                                       To: recipient,

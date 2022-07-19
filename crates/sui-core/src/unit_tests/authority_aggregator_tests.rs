@@ -8,8 +8,9 @@ use signature::Signer;
 
 use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
-use sui_types::crypto::get_key_pair;
-use sui_types::crypto::Signature;
+use sui_config::ValidatorInfo;
+use sui_types::crypto::{get_key_pair, PublicKeyBytes};
+use sui_types::crypto::{KeyPair, Signature};
 
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
@@ -19,53 +20,55 @@ use crate::authority::AuthorityState;
 use crate::authority_client::LocalAuthorityClient;
 use crate::authority_client::LocalAuthorityClientFaultConfig;
 
-pub fn authority_genesis_objects(
-    authority_count: usize,
-    objects_per_authority: Vec<Object>,
-) -> Vec<Vec<Object>> {
-    let mut objects = vec![];
-    for _ in 0..authority_count {
-        objects.push(objects_per_authority.clone());
-    }
-    objects
-}
-
 pub async fn init_local_authorities(
-    genesis_objects: Vec<Vec<Object>>,
+    committee_size: usize,
+    genesis_objects: Vec<Object>,
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
 ) {
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
-    init_local_authorities_with_genesis(&genesis, genesis_objects).await
+    let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
+    let mut key_pairs = Vec::new();
+    for i in 0..committee_size {
+        let (_, key_pair) = get_key_pair();
+        let authority_name = *key_pair.public_key_bytes();
+        let validator_info = ValidatorInfo {
+            name: format!("validator-{i}"),
+            public_key: authority_name,
+            stake: 1,
+            delegation: 0,
+            network_address: sui_config::utils::new_network_address(),
+            narwhal_primary_to_primary: sui_config::utils::new_network_address(),
+            narwhal_worker_to_primary: sui_config::utils::new_network_address(),
+            narwhal_primary_to_worker: sui_config::utils::new_network_address(),
+            narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+            narwhal_consensus_address: sui_config::utils::new_network_address(),
+        };
+        builder = builder.add_validator(validator_info);
+        key_pairs.push((authority_name, key_pair));
+    }
+    let genesis = builder.build();
+    init_local_authorities_with_genesis(&genesis, key_pairs).await
 }
 
 pub async fn init_local_authorities_with_genesis(
     genesis: &Genesis,
-    genesis_objects: Vec<Vec<Object>>,
+    key_pairs: Vec<(PublicKeyBytes, KeyPair)>,
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
 ) {
     telemetry_subscribers::init_for_testing();
-    let mut key_pairs = Vec::new();
-    let mut voting_rights = BTreeMap::new();
-    for _ in 0..genesis_objects.len() {
-        let (_, key_pair) = get_key_pair();
-        let authority_name = *key_pair.public_key_bytes();
-        voting_rights.insert(authority_name, 1);
-        key_pairs.push((authority_name, key_pair));
-    }
-    let committee = Committee::new(0, voting_rights);
+    let committee = genesis.committee().unwrap();
 
     let mut clients = BTreeMap::new();
     let mut states = Vec::new();
-    for ((authority_name, secret), objects) in key_pairs.into_iter().zip(genesis_objects) {
+    for (authority_name, secret) in key_pairs {
         let client = LocalAuthorityClient::new_with_objects(
             committee.clone(),
             authority_name,
             secret,
-            objects,
+            genesis.objects().to_owned(),
             genesis,
         )
         .await;
@@ -76,9 +79,15 @@ pub async fn init_local_authorities_with_genesis(
         authority_request_timeout: Duration::from_secs(5),
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
+        serial_authority_request_timeout: Duration::from_secs(1),
     };
     (
-        AuthorityAggregator::new_with_timeouts(committee, clients, timeouts),
+        AuthorityAggregator::new_with_timeouts(
+            committee,
+            clients,
+            AuthAggMetrics::new_for_tests(),
+            timeouts,
+        ),
         states,
     )
 }
@@ -124,7 +133,7 @@ fn transfer_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     let args = vec![
-        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&AccountAddress::from(dest)).unwrap()),
     ];
 
@@ -168,7 +177,7 @@ pub fn crate_object_move_transaction(
             arguments,
             GAS_VALUE_FOR_TESTING / 2,
         ),
-        &*secret,
+        secret,
     )
 }
 
@@ -187,7 +196,7 @@ pub fn delete_object_move_transaction(
             ident_str!("delete").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![CallArg::ImmOrOwnedObject(object_ref)],
+            vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))],
             GAS_VALUE_FOR_TESTING / 2,
         ),
         secret,
@@ -203,7 +212,7 @@ pub fn set_object_move_transaction(
     gas_object_ref: ObjectRef,
 ) -> Transaction {
     let args = vec![
-        CallArg::ImmOrOwnedObject(object_ref),
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)),
         CallArg::Pure(bcs::to_bytes(&value).unwrap()),
     ];
 
@@ -274,7 +283,9 @@ where
         committee.epoch(),
         transaction.unwrap().to_transaction(),
         votes,
+        committee,
     )
+    .unwrap()
 }
 
 pub async fn do_cert<A>(
@@ -285,7 +296,7 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     authority
-        .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
+        .handle_certificate(cert.clone())
         .await
         .unwrap()
         .signed_effects
@@ -297,9 +308,7 @@ pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    let result = authority
-        .handle_confirmation_transaction(ConfirmationTransaction::new(cert.clone()))
-        .await;
+    let result = authority.handle_certificate(cert.clone()).await;
     if result.is_err() {
         println!("Error in do cert {:?}", result.err());
     }
@@ -324,7 +333,6 @@ where
 }
 
 async fn execute_transaction_with_fault_configs(
-    genesis: &Genesis,
     configs_before_process_transaction: &[(usize, LocalAuthorityClientFaultConfig)],
     configs_before_process_certificate: &[(usize, LocalAuthorityClientFaultConfig)],
 ) -> SuiResult {
@@ -332,9 +340,7 @@ async fn execute_transaction_with_fault_configs(
     let (addr2, _) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let genesis_objects =
-        authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let mut authorities = init_local_authorities_with_genesis(genesis, genesis_objects)
+    let mut authorities = init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()])
         .await
         .0;
 
@@ -364,7 +370,7 @@ async fn execute_transaction_with_fault_configs(
 
 #[tokio::test]
 async fn test_map_reducer() {
-    let (authorities, _) = init_local_authorities(authority_genesis_objects(4, vec![])).await;
+    let (authorities, _) = init_local_authorities(4, vec![]).await;
 
     // Test: reducer errors get propagated up
     let res = authorities
@@ -493,9 +499,8 @@ async fn test_get_all_owned_objects() {
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_ref_1 = gas_object1.compute_object_reference();
     let gas_object2 = Object::with_owner_for_testing(addr2);
-    let genesis_objects =
-        authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let (authorities, _) = init_local_authorities(genesis_objects).await;
+    let (authorities, _) =
+        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     // Make a schedule of transactions
@@ -581,9 +586,8 @@ async fn test_sync_all_owned_objects() {
     let (addr2, _) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let genesis_objects =
-        authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let (authorities, _) = init_local_authorities(genesis_objects).await;
+    let (authorities, _) =
+        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     let framework_obj_ref = genesis::get_framework_object_ref();
@@ -692,9 +696,8 @@ async fn test_process_transaction1() {
     let (addr1, key1) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let genesis_objects =
-        authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let (authorities, _) = init_local_authorities(genesis_objects).await;
+    let (authorities, _) =
+        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     let framework_obj_ref = genesis::get_framework_object_ref();
@@ -753,9 +756,8 @@ async fn test_process_certificate() {
     let (addr1, key1) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let genesis_objects =
-        authority_genesis_objects(4, vec![gas_object1.clone(), gas_object2.clone()]);
-    let (authorities, _) = init_local_authorities(genesis_objects).await;
+    let (authorities, _) =
+        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     let framework_obj_ref = genesis::get_framework_object_ref();
@@ -813,7 +815,6 @@ async fn test_process_transaction_fault_success() {
     // A transaction is sent to all authories, however one of them will error out either before or after processing the transaction.
     // A cert should still be created, and sent out to all authorities again. This time
     // a different authority errors out either before or after processing the cert.
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
     for i in 0..4 {
         let mut config_before_process_transaction = LocalAuthorityClientFaultConfig::default();
         if i % 2 == 0 {
@@ -828,7 +829,6 @@ async fn test_process_transaction_fault_success() {
             config_before_process_certificate.fail_after_handle_confirmation = true;
         }
         execute_transaction_with_fault_configs(
-            &genesis,
             &[(0, config_before_process_transaction)],
             &[(1, config_before_process_certificate)],
         )
@@ -846,9 +846,7 @@ async fn test_process_transaction_fault_fail() {
         fail_before_handle_transaction: true,
         ..Default::default()
     };
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
     assert!(execute_transaction_with_fault_configs(
-        &genesis,
         &[
             (0, fail_before_process_transaction_config),
             (1, fail_before_process_transaction_config),
@@ -863,7 +861,6 @@ async fn test_process_transaction_fault_fail() {
         ..Default::default()
     };
     assert!(execute_transaction_with_fault_configs(
-        &genesis,
         &[],
         &[
             (0, fail_before_process_certificate_config),

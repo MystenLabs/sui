@@ -1,31 +1,32 @@
-.txheader {
-    @apply hidden bg-offblack text-offwhite py-2;
+.txresults {
+    @apply font-mono mt-2 w-[100%];
 }
 
-.txheader,
+.txheader {
+    @apply hidden bg-offblack text-offwhite py-2 md:grid md:grid-cols-12;
+}
+
 .txrow {
-    @apply md:flex;
+    @apply mb-10 md:grid md:grid-cols-12 md:mb-2;
 }
 
 .txheader > div,
 .txrow > div {
-    @apply md:ml-[2vw];
+    @apply break-all mx-[0.5vw];
 }
 
 .txid {
-    @apply md:w-[35vw];
+    @apply col-span-3;
 }
 
-.txtype {
-    @apply md:w-[10vw];
+.txadd {
+    @apply col-span-3;
 }
 
-.txstatus {
-    @apply md:w-[5vw];
-}
-
-.txadd a {
-    @apply no-underline text-sky-600 hover:text-sky-900 cursor-pointer break-all;
+.txtype,
+.txstatus,
+.txage {
+    @apply col-span-2;
 }
 
 .failure {

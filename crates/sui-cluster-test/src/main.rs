@@ -4,16 +4,15 @@
 use clap::*;
 use serde_json::json;
 use std::collections::HashMap;
-use sui::config::{Config, GatewayType, WalletConfig};
-use sui::{
-    keystore::KeystoreType,
-    wallet_commands::{
-        call_move, WalletContext, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL,
-    },
+use sui::client_commands::{
+    call_move, WalletContext, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL,
 };
+use sui::config::{Config, GatewayType, SuiClientConfig};
+use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_faucet::FaucetResponse;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
+use sui_json_rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
+use sui_sdk::crypto::KeystoreType;
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
     crypto::get_key_pair,
@@ -67,7 +66,7 @@ impl ClusterTest {
         let obj_to_transfer = coins.remove(0);
         let data = wallet_context
             .gateway
-            .transfer_coin(
+            .public_transfer_object(
                 signer,
                 *obj_to_transfer.id(),
                 Some(gas_obj_id),
@@ -368,11 +367,11 @@ impl ClusterTest {
         };
 
         info!("Use gateway: {}", &gateway_addr);
-        info!("Use facuet: {}", &faucet_addr);
-        let keystore_path = temp_dir.path().join("wallet.key");
+        info!("Use facet: {}", &faucet_addr);
+        let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
         let keystore = KeystoreType::File(keystore_path);
         let new_address = keystore.init().unwrap().add_random_key().unwrap();
-        WalletConfig {
+        SuiClientConfig {
             accounts: vec![new_address],
             keystore,
             gateway: GatewayType::RPC(gateway_addr),

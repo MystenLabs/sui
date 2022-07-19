@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/generate-json-rpc-spec",
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
+    "crates/sui-benchmark",
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",
@@ -14,14 +14,16 @@ members = [
     "crates/sui-gateway",
     "crates/sui-json",
     "crates/sui-json-rpc",
-    "crates/sui-json-rpc-api",
+    "crates/sui-json-rpc-types",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
     "crates/sui-open-rpc-macros",
     "crates/sui-quorum-driver",
+    "crates/sui-sdk",
     "crates/sui-storage",
     "crates/sui-swarm",
+    "crates/sui-tool",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-verifier",
@@ -31,9 +33,10 @@ members = [
     "crates/x",
 ]
 
-[profile.release]
-debug = false
-strip = "debuginfo"
+# Debug symbols are really important for profiling
+# [profile.release]
+# debug = true
+# strip = "debuginfo"
 
 [profile.bench]
 debug = true

@@ -6,7 +6,10 @@ use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::PublicKeyBytes;
-use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::messages_checkpoint::{
+    AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointRequest, CheckpointRequestType,
+    CheckpointResponse, CheckpointSequenceNumber,
+};
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
@@ -43,6 +46,7 @@ impl<C> SafeClient<C> {
     fn check_transaction_response(
         &self,
         digest: TransactionDigest,
+        effects_digest: Option<TransactionEffectsDigest>,
         response: &TransactionInfoResponse,
     ) -> SuiResult {
         if let Some(signed_transaction) = &response.signed_transaction {
@@ -89,6 +93,15 @@ impl<C> SafeClient<C> {
                     authority: self.address
                 }
             );
+            // check that the effects digest is correct.
+            if let Some(effects_digest) = effects_digest {
+                fp_ensure!(
+                    signed_effects.digest() == effects_digest.0,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address
+                    }
+                );
+            }
             // Check it has the right signer
             fp_ensure!(
                 signed_effects.auth_signature.authority == self.address,
@@ -289,39 +302,29 @@ where
             .authority_client
             .handle_transaction(transaction)
             .await?;
-        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
         Ok(transaction_info)
     }
 
-    /// Confirm a transfer to a Sui or Primary account.
-    pub async fn handle_confirmation_transaction(
+    /// Execute a certificate.
+    pub async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let digest = *transaction.certificate.digest();
+        let digest = *certificate.digest();
         let transaction_info = self
             .authority_client
-            .handle_confirmation_transaction(transaction)
+            .handle_certificate(certificate)
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
         Ok(transaction_info)
-    }
-
-    pub async fn handle_consensus_transaction(
-        &self,
-        transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        // TODO: Add safety checks on the response.
-        self.authority_client
-            .handle_consensus_transaction(transaction)
-            .await
     }
 
     pub async fn handle_account_info_request(
@@ -348,7 +351,7 @@ where
         Ok(response)
     }
 
-    /// Handle Object information requests for this account.
+    /// Handle Transaction information requests for this account.
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
@@ -359,20 +362,107 @@ where
             .handle_transaction_info_request(request)
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
         Ok(transaction_info)
     }
 
+    /// Handle Transaction + Effects information requests for this account.
+    pub async fn handle_transaction_and_effects_info_request(
+        &self,
+        digests: &ExecutionDigests,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let digest = digests.transaction;
+        let effects_digest = digests.effects;
+
+        let transaction_info = self
+            .authority_client
+            .handle_transaction_info_request(digest.into())
+            .await?;
+
+        if let Err(err) =
+            self.check_transaction_response(digest, Some(effects_digest), &transaction_info)
+        {
+            self.report_client_error(err.clone());
+            return Err(err);
+        }
+        Ok(transaction_info)
+    }
+
+    fn verify_checkpoint_sequence(
+        &self,
+        expected_seq: Option<CheckpointSequenceNumber>,
+        checkpoint: &AuthenticatedCheckpoint,
+    ) -> SuiResult {
+        let observed_seq = match checkpoint {
+            AuthenticatedCheckpoint::None => None,
+            AuthenticatedCheckpoint::Signed(s) => Some(*s.summary.sequence_number()),
+            AuthenticatedCheckpoint::Certified(c) => Some(*c.summary.sequence_number()),
+        };
+
+        if let (Some(e), Some(o)) = (expected_seq, observed_seq) {
+            fp_ensure!(
+                e == o,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                }
+            );
+        }
+        Ok(())
+    }
+
     pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        // SECURITY TODO: Implement all checks!
+        let detail = request.detail;
+        let req_type = request.request_type.clone();
 
-        self.authority_client.handle_checkpoint(request).await
+        let resp = self.authority_client.handle_checkpoint(request).await?;
+
+        // Verify signatures
+        resp.verify(&self.committee)?;
+
+        // Verify response data was correct for request
+        match &req_type {
+            CheckpointRequestType::LatestCheckpointProposal => {
+                if let AuthorityCheckpointInfo::Proposal { previous, .. } = &resp.info {
+                    self.verify_checkpoint_sequence(None, previous)?;
+                    Ok(resp)
+                } else {
+                    Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    })
+                }
+            }
+            CheckpointRequestType::PastCheckpoint(seq) => {
+                if let AuthorityCheckpointInfo::Past(past) = &resp.info {
+                    match past {
+                        AuthenticatedCheckpoint::Signed(_)
+                        | AuthenticatedCheckpoint::Certified(_) => {
+                            if detail && resp.detail.is_none() {
+                                // peer has the checkpoint, but refused to give us the contents.
+                                // (For AuthorityCheckpointInfo::Proposal, contents are not
+                                // guaranteed to exist yet).
+                                return Err(SuiError::ByzantineAuthoritySuspicion {
+                                    authority: self.address,
+                                });
+                            }
+                        }
+                        // Checkpoint wasn't found, so detail is obviously not required.
+                        AuthenticatedCheckpoint::None => (),
+                    }
+                    self.verify_checkpoint_sequence(Some(*seq), past)?;
+                    Ok(resp)
+                } else {
+                    Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    })
+                }
+            }
+        }
     }
 
     /// Handle Batch information requests for this authority.

@@ -7,18 +7,21 @@ use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use sui::{
-    config::{GatewayConfig, GatewayType, WalletConfig},
-    keystore::{KeystoreType, SuiKeystore},
-    wallet_commands::{WalletCommands, WalletContext},
+    client_commands::{SuiClientCommands, WalletContext},
+    config::{GatewayConfig, GatewayType, SuiClientConfig},
 };
 use sui_config::genesis_config::GenesisConfig;
-use sui_config::PersistedConfig;
-use sui_config::{Config, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG, SUI_WALLET_CONFIG};
+use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
+use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_gateway::create_client;
-use sui_json_rpc::gateway_api::{GatewayReadApiImpl, RpcGatewayImpl, TransactionBuilderImpl};
-use sui_json_rpc_api::QuorumDriverApiServer;
-use sui_json_rpc_api::RpcReadApiServer;
-use sui_json_rpc_api::RpcTransactionBuilderServer;
+use sui_json_rpc::api::RpcGatewayApiServer;
+use sui_json_rpc::api::RpcReadApiServer;
+use sui_json_rpc::api::RpcTransactionBuilderServer;
+use sui_json_rpc::api::WalletSyncApiServer;
+use sui_json_rpc::gateway_api::{
+    GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
+};
+use sui_sdk::crypto::{KeystoreType, SuiKeystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 const NUM_VALIDAOTR: usize = 4;
@@ -44,8 +47,8 @@ pub async fn start_test_network(
     let dir = swarm.dir();
 
     let network_path = dir.join(SUI_NETWORK_CONFIG);
-    let wallet_path = dir.join(SUI_WALLET_CONFIG);
-    let keystore_path = dir.join("wallet.key");
+    let wallet_path = dir.join(SUI_CLIENT_CONFIG);
+    let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
     let db_folder_path = dir.join("client_db");
     let gateway_path = dir.join(SUI_GATEWAY_CONFIG);
 
@@ -68,7 +71,7 @@ pub async fn start_test_network(
     .save(gateway_path)?;
 
     // Create wallet config with stated authorities port
-    WalletConfig {
+    SuiClientConfig {
         accounts,
         keystore: KeystoreType::File(keystore_path),
         gateway: GatewayType::Embedded(GatewayConfig {
@@ -89,12 +92,12 @@ pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddr
     let swarm = start_test_network(None).await?;
 
     // Create Wallet context.
-    let wallet_conf = swarm.dir().join(SUI_WALLET_CONFIG);
+    let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context.config.accounts.first().cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
+    SuiClientCommands::SyncClientState {
         address: Some(address),
     }
     .execute(&mut context)
@@ -107,11 +110,13 @@ async fn start_rpc_gateway(
 ) -> Result<(SocketAddr, HttpServerHandle), anyhow::Error> {
     let server = HttpServerBuilder::default().build("127.0.0.1:0").await?;
     let addr = server.local_addr()?;
-    let client = create_client(config_path)?;
+    let registry = prometheus::Registry::new();
+    let client = create_client(config_path, &registry)?;
     let mut module = RpcModule::new(());
     module.merge(RpcGatewayImpl::new(client.clone()).into_rpc())?;
     module.merge(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
     module.merge(TransactionBuilderImpl::new(client.clone()).into_rpc())?;
+    module.merge(GatewayWalletSyncApiImpl::new(client.clone()).into_rpc())?;
 
     let handle = server.start(module)?;
     Ok((addr, handle))
@@ -124,13 +129,13 @@ pub async fn start_rpc_test_network(
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
-    let mut wallet_conf: WalletConfig =
-        PersistedConfig::read(&working_dir.join(SUI_WALLET_CONFIG))?;
+    let mut wallet_conf: SuiClientConfig =
+        PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", server_addr);
     let accounts = wallet_conf.accounts.clone();
     wallet_conf.gateway = GatewayType::RPC(rpc_url.clone());
     wallet_conf
-        .persisted(&working_dir.join(SUI_WALLET_CONFIG))
+        .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
         .save()?;
 
     let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;

@@ -9,17 +9,19 @@ use axum::{
     BoxError, Extension, Json, Router,
 };
 use clap::Parser;
+use http::Method;
 use std::{
     borrow::Cow,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
-use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_config::{sui_config_dir, SUI_WALLET_CONFIG};
+use sui::client_commands::{SuiClientCommands, WalletContext};
+use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
-use tracing::info;
+use tower_http::cors::{Any, CorsLayer};
+use tracing::{info, warn};
 
 // TODO: Increase this once we use multiple gas objects
 const CONCURRENCY_LIMIT: usize = 1;
@@ -59,7 +61,9 @@ struct AppState<F = SimpleFaucet> {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // initialize tracing
-    tracing_subscriber::fmt::init();
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_env()
+        .init();
 
     let context = create_wallet_context().await?;
 
@@ -78,12 +82,19 @@ async fn main() -> Result<(), anyhow::Error> {
         config,
     });
 
+    // TODO: restrict access if needed
+    let cors = CorsLayer::new()
+        .allow_methods(vec![Method::GET, Method::POST])
+        .allow_headers(Any)
+        .allow_origin(Any);
+
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(request_gas))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_error))
+                .layer(cors)
                 .buffer(request_buffer_size)
                 .concurrency_limit(CONCURRENCY_LIMIT)
                 .timeout(Duration::from_secs(timeout_in_seconds))
@@ -122,16 +133,19 @@ async fn request_gas(
     };
     match result {
         Ok(v) => (StatusCode::CREATED, Json(FaucetResponse::from(v))),
-        Err(v) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(FaucetResponse::from(v)),
-        ),
+        Err(v) => {
+            warn!("Failed to request gas: {:?}", v);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(FaucetResponse::from(v)),
+            )
+        }
     }
 }
 
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     // Create Wallet context.
-    let wallet_conf = sui_config_dir()?.join(SUI_WALLET_CONFIG);
+    let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
     let mut context = WalletContext::new(&wallet_conf)?;
     let address = context
@@ -142,7 +156,7 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
         .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
 
     // Sync client to retrieve objects from the network.
-    WalletCommands::SyncClientState {
+    SuiClientCommands::SyncClientState {
         address: Some(address),
     }
     .execute(&mut context)

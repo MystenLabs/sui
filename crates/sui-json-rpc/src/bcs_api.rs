@@ -3,19 +3,17 @@
 
 use std::sync::Arc;
 
+use crate::api::RpcBcsApiServer;
+use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayClient;
+use sui_json_rpc_types::GetRawObjectDataResponse;
 use sui_open_rpc::Module;
 use sui_types::base_types::ObjectID;
-
-use crate::SuiRpcModule;
-use sui_json_rpc_api::rpc_types::GetRawObjectDataResponse;
-use sui_json_rpc_api::RpcBcsApiServer;
 
 pub struct BcsApiImpl {
     client: ClientStateAdaptor,
@@ -69,6 +67,6 @@ impl SuiRpcModule for BcsApiImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc_api::RpcBcsApiOpenRpc::module_doc()
+        crate::api::RpcBcsApiOpenRpc::module_doc()
     }
 }

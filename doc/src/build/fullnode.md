@@ -77,10 +77,11 @@ We recommend the following minimum hardware requirements for running a fullnode:
 
 * CPUs: 2
 * RAM: 8GB
+* Storage: 50GB
 
 Storage requirements will vary based on various factors (age of the chain,
 transaction rate, etc) although we don't anticipate running a fullnode on
-devnet will require more than a handful of GBs given it is reset upon each
+Devnet will require more than 50 GBs today given it is reset upon each
 release roughly every two weeks.
 
 ### Software requirements
@@ -93,7 +94,7 @@ That said, you are welcome to run a Sui fullnode on the operating system of your
 choosing and submit changes to accommodate that environment.
 
 Before building, ensure the required tools are installed in your environment as
-outlined in the [Prerequisites](../build/install#prerequisites) section. Note,
+outlined in the [Prerequisites](../build/install.md#prerequisites) section. Note,
 you will fork the Sui repository here rather than clone it as described in
 *Prerequisites*. So you can skip that step.
 
@@ -114,11 +115,20 @@ If you are using Linux, install these extra dependencies. For example, in Ubuntu
 
 ## Configuring your fullnode
 
-Currently, the only supported way of running a fullnode requires building from
-source. In the future, we will provide Docker images for more flexibility
-in how a fullnode is run.
+You may run a fullnode either by employing Docker or by building from
+source.
+
+### Using Docker Compose
+
+Follow the instructions in the
+[Fullnode Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme)
+to run a Sui fullnode using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
 ### Building from source
+
+Remember to install the required tools in your environment as
+outlined in the [Prerequisites](../build/install.md#prerequisites) section if you
+haven't already. Then:
 
 1. Set up your fork of the Sui repository:
     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
@@ -144,18 +154,20 @@ in how a fullnode is run.
     ```shell
     $ git checkout --track upstream/devnet
     ```
-1. Make a copy of the fullnode configuration template:
+1. Make a copy of the [fullnode configuration template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
    ```
 1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet by clicking that link or by running the following in your
+   state for Devnet by clicking that link or by running the following in your
    terminal:
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
     ```
-1. Optionally, edit your `fullnode.yaml` file to reflect any custom paths you employ:
+1. Optional: You can skip this set of steps if you are willing to accept the default paths to
+    resources. If you need custom paths, edit your `fullnode.yaml` file to reflect the paths
+    you employ:
     1. Update the `db-path` field with the path to where the fullnode's database
        will be located. By default this will create the database in a directory
        `./suidb` relative to your current directory:
@@ -174,6 +186,7 @@ in how a fullnode is run.
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
 1. Post build, receive the success confirmation message, `SuiNode started!`
+1. Optional: [Publish / subscribe](pubsub.md) to notifications using JSON-RPC via websocket.
 
 Your fullnode will now be serving the read endpoints of the [Sui JSON-RPC
 API](../build/json-rpc.md#sui-json-rpc-api) at:
@@ -187,8 +200,9 @@ point the Explorer at your locally running fullnode and see the
 transactions it has synced from the network. To make this change:
 
 1. Open a browser and go to: https://explorer.devnet.sui.io/
-2. Click the **Devnet** button in the top right-hand corner of the Explorer and select
+1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
    the *Local* network from the drop-down menu.
+1. Close the *Choose a Network* menu to see the latest transactions. 
 
 The Explorer will now use your local fullnode to explore the state of the chain.
 
@@ -197,12 +211,22 @@ The Explorer will now use your local fullnode to explore the state of the chain.
 Monitor your fullnode using the instructions at [Logging, Tracing, Metrics, and
 Observability](https://docs.sui.io/contribute/observability).
 
+Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` file.
+
 ## Updating your fullnode with new releases
 
 Whenever a new release is deployed to `devnet`, the blockchain state is
 typically wiped clean. In order to have your fullnode continue to properly
-synchronize with the new state of devnet, you'll need to follow a few steps
+synchronize with the new state of Devnet, you'll need to follow a few steps
 based on how you originally set up your node. See below.
+
+## With Docker Compose
+
+Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment),
+namely by running the command:
+```shell
+$ docker-compose down --volumes
+```
 
 ### Built from source
 
@@ -228,7 +252,7 @@ Source](#building-from-source), update your fullnode as follows:
     ```
 1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet as described above.
+   state for Devnet as described above.
 1. Update your `fullnode.yaml` configuration file if needed.
 1. Restart your Sui fullnode:
     ```shell

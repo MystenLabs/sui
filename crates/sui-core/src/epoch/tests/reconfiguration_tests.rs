@@ -15,14 +15,13 @@ use sui_types::{
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
     gas::SuiGasStatus,
-    messages::{ConfirmationTransaction, SignatureAggregator, Transaction, TransactionData},
+    messages::{InputObjects, SignatureAggregator, Transaction, TransactionData},
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
-use crate::transaction_input_checker::InputObjects;
 use crate::{
-    authority::AuthorityTemporaryStore, authority_active::ActiveAuthority,
+    authority::TemporaryStore, authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
     checkpoints::CheckpointLocals, epoch::reconfiguration::CHECKPOINT_COUNT_PER_EPOCH,
     execution_engine,
@@ -36,13 +35,7 @@ async fn test_start_epoch_change() {
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let genesis_objects = vec![object.clone(), gas_object.clone()];
     // Create authority_aggregator and authority states.
-    let (net, states) = init_local_authorities(vec![
-        genesis_objects.clone(),
-        genesis_objects.clone(),
-        genesis_objects.clone(),
-        genesis_objects.clone(),
-    ])
-    .await;
+    let (net, states) = init_local_authorities(4, genesis_objects.clone()).await;
     let state = states[0].clone();
     // Set the checkpoint number to be near the end of epoch.
     state
@@ -59,11 +52,7 @@ async fn test_start_epoch_change() {
         })
         .unwrap();
     // Create an active authority for the first authority state.
-    let active = ActiveAuthority::new_with_ephemeral_follower_store(
-        state.clone(),
-        net.clone_inner_clients(),
-    )
-    .unwrap();
+    let active = ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap();
     // Make the high watermark differ from low watermark.
     let ticket = state.batch_notifier.ticket().unwrap();
 
@@ -118,9 +107,7 @@ async fn test_start_epoch_change() {
     let certificate = cert.unwrap();
     assert_eq!(
         state
-            .handle_confirmation_transaction(ConfirmationTransaction {
-                certificate: certificate.clone()
-            })
+            .handle_certificate(certificate.clone())
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd
@@ -129,7 +116,7 @@ async fn test_start_epoch_change() {
     // Test that for certificates that have finished execution and is about to write effects,
     // they will also fail to get a ticket for the commit.
     let tx_digest = *transaction.digest();
-    let mut temporary_store = AuthorityTemporaryStore::new(
+    let mut temporary_store = TemporaryStore::new(
         state.database.clone(),
         InputObjects::new(
             transaction
@@ -142,7 +129,7 @@ async fn test_start_epoch_change() {
         ),
         tx_digest,
     );
-    let effects = execution_engine::execute_transaction_to_effects(
+    let (effects, _) = execution_engine::execute_transaction_to_effects(
         vec![],
         &mut temporary_store,
         transaction.data.clone(),
@@ -152,12 +139,11 @@ async fn test_start_epoch_change() {
         &state._native_functions,
         SuiGasStatus::new_with_budget(1000, 1, 1),
         state.committee.load().epoch,
-    )
-    .unwrap();
+    );
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state
-            .update_state(temporary_store, &certificate, &signed_effects)
+            .commit_certificate(temporary_store, &certificate, &signed_effects)
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd
@@ -168,21 +154,11 @@ async fn test_start_epoch_change() {
 async fn test_finish_epoch_change() {
     // Create authority_aggregator and authority states.
     let genesis_objects = vec![];
-    let (net, states) = init_local_authorities(vec![
-        genesis_objects.clone(),
-        genesis_objects.clone(),
-        genesis_objects.clone(),
-        genesis_objects.clone(),
-    ])
-    .await;
+    let (net, states) = init_local_authorities(4, genesis_objects.clone()).await;
     let actives: Vec<_> = states
         .iter()
         .map(|state| {
-            ActiveAuthority::new_with_ephemeral_follower_store(
-                state.clone(),
-                net.clone_inner_clients(),
-            )
-            .unwrap()
+            ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap()
         })
         .collect();
     let results: Vec<_> = states

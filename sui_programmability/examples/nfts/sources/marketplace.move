@@ -4,8 +4,9 @@
 module nfts::marketplace {
     use sui::bag::{Self, Bag};
     use sui::tx_context::{Self, TxContext};
-    use sui::id::{Self, ID, VersionedID};
-    use sui::transfer::{Self, ChildRef};
+    use sui::object::{Self, ID, Info};
+    use sui::typed_id::{Self, TypedID};
+    use sui::transfer;
     use sui::coin::{Self, Coin};
 
     // For when amount paid does not match the expected.
@@ -15,13 +16,12 @@ module nfts::marketplace {
     const ENotOwner: u64 = 1;
 
     struct Marketplace has key {
-        id: VersionedID,
-        objects: ChildRef<Bag>,
+        info: Info,
+        bag_id: TypedID<Bag>,
     }
 
     /// A single listing which contains the listed item and its price in [`Coin<C>`].
-    struct Listing<T: key + store, phantom C> has key, store {
-        id: VersionedID,
+    struct Listing<T: key + store, phantom C> has store {
         item: T,
         ask: u64, // Coin<C>
         owner: address,
@@ -29,12 +29,13 @@ module nfts::marketplace {
 
     /// Create a new shared Marketplace.
     public entry fun create(ctx: &mut TxContext) {
-        let id = tx_context::new_id(ctx);
-        let objects = bag::new(ctx);
-        let (id, objects) = bag::transfer_to_object_id(objects, id);
+        let info = object::new(ctx);
+        let bag = bag::new(ctx);
+        let bag_id = typed_id::new(&bag);
+        bag::transfer_to_object_id(bag, &info);
         let market_place = Marketplace {
-            id,
-            objects,
+            info,
+            bag_id,
         };
         transfer::share_object(market_place);
     }
@@ -50,25 +51,23 @@ module nfts::marketplace {
         let listing = Listing<T, C> {
             item,
             ask,
-            id: tx_context::new_id(ctx),
             owner: tx_context::sender(ctx),
         };
-        bag::add(objects, listing)
+        bag::add(objects, listing, ctx);
     }
 
     /// Remove listing and get an item back. Only owner can do that.
     public fun delist<T: key + store, C>(
         _marketplace: &Marketplace,
         objects: &mut Bag,
-        listing: Listing<T, C>,
+        listing: bag::Item<Listing<T, C>>,
         ctx: &mut TxContext
     ): T {
         let listing = bag::remove(objects, listing);
-        let Listing { id, item, ask: _, owner } = listing;
+        let Listing { item, ask: _, owner } = listing;
 
         assert!(tx_context::sender(ctx) == owner, ENotOwner);
 
-        id::delete(id);
         item
     }
 
@@ -76,10 +75,11 @@ module nfts::marketplace {
     public entry fun delist_and_take<T: key + store, C>(
         _marketplace: &Marketplace,
         objects: &mut Bag,
-        listing: Listing<T, C>,
+        listing: bag::Item<Listing<T, C>>,
         ctx: &mut TxContext
     ) {
-        bag::remove_and_take(objects, listing, ctx)
+        let item = delist(_marketplace, objects, listing, ctx);
+        transfer::transfer(item, tx_context::sender(ctx));
     }
 
     /// Purchase an item using a known Listing. Payment is done in Coin<C>.
@@ -87,23 +87,22 @@ module nfts::marketplace {
     /// owner of the item gets the payment and buyer receives their item.
     public fun buy<T: key + store, C>(
         objects: &mut Bag,
-        listing: Listing<T, C>,
+        listing: bag::Item<Listing<T, C>>,
         paid: Coin<C>,
     ): T {
         let listing = bag::remove(objects, listing);
-        let Listing { id, item, ask, owner } = listing;
+        let Listing { item, ask, owner } = listing;
 
         assert!(ask == coin::value(&paid), EAmountIncorrect);
 
         transfer::transfer(paid, owner);
-        id::delete(id);
         item
     }
 
     /// Call [`buy`] and transfer item to the sender.
     public entry fun buy_and_take<T: key + store, C>(
         _marketplace: &Marketplace,
-        listing: Listing<T, C>,
+        listing: bag::Item<Listing<T, C>>,
         objects: &mut Bag,
         paid: Coin<C>,
         ctx: &mut TxContext
@@ -124,18 +123,17 @@ module nfts::marketplace {
 
 #[test_only]
 module nfts::marketplaceTests {
-    use sui::id::{Self, VersionedID};
-    use sui::bag::Bag;
+    use sui::object::{Self, Info};
+    use sui::bag::{Self, Bag};
     use sui::transfer;
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::tx_context;
     use sui::test_scenario::{Self, Scenario};
     use nfts::marketplace::{Self, Marketplace, Listing};
 
     // Simple Kitty-NFT data structure.
     struct Kitty has key, store {
-        id: VersionedID,
+        info: Info,
         kitty_id: u8
     }
 
@@ -159,7 +157,7 @@ module nfts::marketplaceTests {
     /// Mint Kitty NFT and send it to SELLER.
     fun mint_kitty(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, &ADMIN);
-        let nft = Kitty { id: tx_context::new_id(test_scenario::ctx(scenario)), kitty_id: 1 };
+        let nft = Kitty { info: object::new(test_scenario::ctx(scenario)), kitty_id: 1 };
         transfer::transfer(nft, SELLER);
     }
 
@@ -189,7 +187,7 @@ module nfts::marketplaceTests {
             let mkp_wrapper = test_scenario::take_shared<Marketplace>(scenario);
             let mkp = test_scenario::borrow_mut(&mut mkp_wrapper);
             let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
-            let listing = test_scenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
+            let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);
 
             // Do the delist operation on a Marketplace.
             let nft = marketplace::delist<Kitty, SUI>(mkp, &mut bag, listing, test_scenario::ctx(scenario));
@@ -218,7 +216,7 @@ module nfts::marketplaceTests {
             let mkp_wrapper = test_scenario::take_shared<Marketplace>(scenario);
             let mkp = test_scenario::borrow_mut(&mut mkp_wrapper);
             let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
-            let listing = test_scenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
+            let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);
 
             // Do the delist operation on a Marketplace.
             let nft = marketplace::delist<Kitty, SUI>(mkp, &mut bag, listing, test_scenario::ctx(scenario));
@@ -245,8 +243,8 @@ module nfts::marketplaceTests {
             let mkp_wrapper = test_scenario::take_shared<Marketplace>(scenario);
             let mkp = test_scenario::borrow_mut(&mut mkp_wrapper);
             let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
-            let listing = test_scenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
-            let payment = coin::withdraw(coin::balance_mut(&mut coin), 100, test_scenario::ctx(scenario));
+            let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);
+            let payment = coin::take(coin::balance_mut(&mut coin), 100, test_scenario::ctx(scenario));
 
             // Do the buy call and expect successful purchase.
             let nft = marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);
@@ -277,10 +275,10 @@ module nfts::marketplaceTests {
             let mkp_wrapper = test_scenario::take_shared<Marketplace>(scenario);
             let mkp = test_scenario::borrow_mut(&mut mkp_wrapper);
             let bag = test_scenario::take_child_object<Marketplace, Bag>(scenario, mkp);
-            let listing = test_scenario::take_child_object<Bag, Listing<Kitty, SUI>>(scenario, &bag);
+            let listing = test_scenario::take_child_object<Bag, bag::Item<Listing<Kitty, SUI>>>(scenario, &bag);
 
             // AMOUNT here is 10 while expected is 100.
-            let payment = coin::withdraw(coin::balance_mut(&mut coin), 10, test_scenario::ctx(scenario));
+            let payment = coin::take(coin::balance_mut(&mut coin), 10, test_scenario::ctx(scenario));
 
             // Attempt to buy and expect failure purchase.
             let nft = marketplace::buy<Kitty, SUI>(&mut bag, listing, payment);
@@ -293,8 +291,8 @@ module nfts::marketplaceTests {
     }
 
     fun burn_kitty(kitty: Kitty): u8 {
-        let Kitty{ id, kitty_id } = kitty;
-        id::delete(id);
+        let Kitty{ info, kitty_id } = kitty;
+        object::delete(info);
         kitty_id
     }
 }

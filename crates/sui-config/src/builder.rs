@@ -7,10 +7,6 @@ use crate::{
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
     CONSENSUS_DB_NAME, DEFAULT_STAKE,
 };
-use debug_ignore::DebugIgnore;
-use narwhal_config::{
-    Authority, Committee as ConsensusCommittee, PrimaryAddresses, Stake, WorkerAddresses,
-};
 use rand::rngs::OsRng;
 use std::{
     num::NonZeroUsize,
@@ -89,15 +85,24 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
         let validator_set = validators
             .iter()
-            .map(|validator| {
+            .enumerate()
+            .map(|(i, validator)| {
+                let name = format!("validator-{i}");
                 let public_key = *validator.key_pair.public_key_bytes();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
 
                 ValidatorInfo {
+                    name,
                     public_key,
                     stake,
+                    delegation: 0, // no delegation yet at genesis
                     network_address,
+                    narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                    narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
+                    narwhal_primary_to_worker: validator.narwhal_primary_to_worker.clone(),
+                    narwhal_worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                    narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                 }
             })
             .collect::<Vec<_>>();
@@ -108,17 +113,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let (account_keys, objects) = initial_accounts_config
             .generate_accounts(&mut self.rng)
             .unwrap();
-        // It is important that we create a single genesis ctx, and use it to generate
-        // modules and objects from now on. This ensures all object IDs created are unique.
-        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
-        let custom_modules = initial_accounts_config
-            .generate_custom_move_modules(&mut genesis_ctx)
-            .unwrap();
 
         let genesis = {
-            let mut builder = genesis::Builder::new(genesis_ctx)
-                .add_move_modules(custom_modules)
-                .add_objects(objects);
+            let mut builder = genesis::Builder::new().add_objects(objects);
 
             for validator in validator_set {
                 builder = builder.add_validator(validator);
@@ -126,41 +123,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
             builder.build()
         };
-
-        let narwhal_committee = validators
-            .iter()
-            .map(|validator| {
-                let name = validator
-                    .key_pair
-                    .public_key_bytes()
-                    .make_narwhal_public_key()
-                    .expect("Can't get narwhal public key");
-                let primary = PrimaryAddresses {
-                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
-                    worker_to_primary: validator.narwhal_worker_to_primary.clone(),
-                };
-                let workers = [(
-                    0, // worker_id
-                    WorkerAddresses {
-                        primary_to_worker: validator.narwhal_primary_to_worker.clone(),
-                        transactions: validator.narwhal_consensus_address.clone(),
-                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
-                    },
-                )]
-                .into_iter()
-                .collect();
-                let authority = Authority {
-                    stake: validator.stake as Stake, //TODO this should at least be the same size integer
-                    primary,
-                    workers,
-                };
-
-                (name, authority)
-            })
-            .collect();
-        let narwhal_committee = DebugIgnore(ConsensusCommittee {
-            authorities: narwhal_committee,
-        });
 
         let validator_configs = validators
             .into_iter()
@@ -180,7 +142,6 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     consensus_address,
                     consensus_db_path,
                     narwhal_config: Default::default(),
-                    narwhal_committee: narwhal_committee.clone(),
                 };
 
                 NodeConfig {
@@ -188,10 +149,13 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
+                    admin_interface_port: utils::get_available_port(),
                     json_rpc_address: utils::available_local_socket_address(),
+                    websocket_address: None,
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_gossip: true,
+                    enable_reconfig: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })

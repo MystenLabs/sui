@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_package::BuildConfig;
 use serde_json::json;
 use std::{collections::HashSet, path::Path};
 
@@ -16,31 +17,30 @@ use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 use sui_types::{crypto::get_key_pair, object::Owner};
 
 use crate::authority_aggregator::authority_aggregator_tests::{
-    authority_genesis_objects, crate_object_move_transaction, get_local_client,
-    init_local_authorities,
+    crate_object_move_transaction, get_local_client, init_local_authorities,
 };
 use crate::authority_client::LocalAuthorityClient;
 use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
 
-async fn create_gateway_state(
-    genesis_objects: Vec<Vec<Object>>,
-) -> GatewayState<LocalAuthorityClient> {
+async fn create_gateway_state(genesis_objects: Vec<Object>) -> GatewayState<LocalAuthorityClient> {
     let all_owners: HashSet<_> = genesis_objects
         .iter()
-        .flat_map(|v| v.iter().map(|o| o.get_single_owner().unwrap()))
+        .map(|o| o.get_single_owner().unwrap())
         .collect();
-    let (authorities, _) = init_local_authorities(genesis_objects).await;
+    let (authorities, _) = init_local_authorities(4, genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway = GatewayState::new_with_authorities(path, authorities).unwrap();
+    let gateway =
+        GatewayState::new_with_authorities(path, authorities, GatewayMetrics::new_for_tests())
+            .unwrap();
     for owner in all_owners {
         gateway.sync_account_state(owner).await.unwrap();
     }
     gateway
 }
 
-async fn transfer_coin(
+async fn public_transfer_object(
     gateway: &GatewayState<LocalAuthorityClient>,
     signer: SuiAddress,
     key: &KeyPair,
@@ -49,7 +49,7 @@ async fn transfer_coin(
     recipient: SuiAddress,
 ) -> Result<TransactionEffectsResponse, anyhow::Error> {
     let data = gateway
-        .transfer_coin(
+        .public_transfer_object(
             signer,
             coin_object_id,
             Some(gas_object_id),
@@ -67,18 +67,17 @@ async fn transfer_coin(
 }
 
 #[tokio::test]
-async fn test_transfer_coin() {
+async fn test_public_transfer_object() {
     let (addr1, key1) = get_key_pair();
     let (addr2, _key2) = get_key_pair();
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
 
-    let genesis_objects =
-        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let genesis_objects = vec![coin_object.clone(), gas_object.clone()];
     let gateway = create_gateway_state(genesis_objects).await;
 
-    let effects = transfer_coin(
+    let effects = public_transfer_object(
         &gateway,
         addr1,
         &key1,
@@ -101,7 +100,7 @@ async fn test_transfer_coin() {
 async fn test_move_call() {
     let (addr1, key1) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
+    let genesis_objects = vec![gas_object.clone()];
     let gateway = create_gateway_state(genesis_objects).await;
 
     let framework_obj_ref = gateway.get_framework_object_ref().await.unwrap();
@@ -131,14 +130,15 @@ async fn test_move_call() {
 async fn test_publish() {
     let (addr1, key1) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
+    let genesis_objects = vec![gas_object.clone()];
     let gateway = create_gateway_state(genesis_objects).await;
 
     // Provide path to well formed package sources
     let mut path = env!("CARGO_MANIFEST_DIR").to_owned();
     path.push_str("/src/unit_tests/data/object_owner/");
 
-    let compiled_modules = build_move_package_to_bytes(Path::new(&path), false).unwrap();
+    let compiled_modules =
+        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
     let data = gateway
         .publish(
             addr1,
@@ -165,8 +165,7 @@ async fn test_coin_split() {
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
 
-    let genesis_objects =
-        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let genesis_objects = vec![coin_object.clone(), gas_object.clone()];
     let gateway = create_gateway_state(genesis_objects).await;
 
     let split_amounts = vec![100, 200, 300, 400, 500];
@@ -219,8 +218,7 @@ async fn test_coin_split_insufficient_gas() {
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
 
-    let genesis_objects =
-        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let genesis_objects = vec![coin_object.clone(), gas_object.clone()];
     let gateway = create_gateway_state(genesis_objects).await;
 
     let split_amounts = vec![100, 200, 300, 400, 500];
@@ -261,14 +259,11 @@ async fn test_coin_merge() {
     let coin_object1 = Object::with_owner_for_testing(addr1);
     let coin_object2 = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects = authority_genesis_objects(
-        4,
-        vec![
-            coin_object1.clone(),
-            coin_object2.clone(),
-            gas_object.clone(),
-        ],
-    );
+    let genesis_objects = vec![
+        coin_object1.clone(),
+        coin_object2.clone(),
+        gas_object.clone(),
+    ];
     let gateway = create_gateway_state(genesis_objects).await;
 
     let data = gateway
@@ -311,15 +306,12 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
     let object2 = Object::with_owner_for_testing(addr1);
     let object3 = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects = authority_genesis_objects(
-        4,
-        vec![
-            object1.clone(),
-            object2.clone(),
-            object3.clone(),
-            gas_object.clone(),
-        ],
-    );
+    let genesis_objects = vec![
+        object1.clone(),
+        object2.clone(),
+        object3.clone(),
+        gas_object.clone(),
+    ];
     let gateway = create_gateway_state(genesis_objects).await;
 
     assert_eq!(gateway.get_total_transaction_number()?, 0);
@@ -327,7 +319,7 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
     let mut digests = vec![];
     for obj_id in [object1.id(), object2.id(), object3.id()] {
         let data = gateway
-            .transfer_coin(addr1, obj_id, Some(gas_object.id()), 50000, addr2)
+            .public_transfer_object(addr1, obj_id, Some(gas_object.id()), 50000, addr2)
             .await
             .unwrap();
         let signature = key1.sign(&data.to_bytes());
@@ -364,8 +356,7 @@ async fn test_equivocation_resilient() {
     let (addr1, key1) = get_key_pair();
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects =
-        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let genesis_objects = vec![coin_object.clone(), gas_object.clone()];
     let gateway = Arc::new(Box::new(create_gateway_state(genesis_objects).await));
 
     let mut handles = vec![];
@@ -374,7 +365,7 @@ async fn test_equivocation_resilient() {
     for _ in 0..20 {
         let (recipient, _) = get_key_pair();
         let data = gateway
-            .transfer_coin(
+            .public_transfer_object(
                 addr1,
                 coin_object.id(),
                 Some(gas_object.id()),
@@ -406,15 +397,14 @@ async fn test_equivocation_resilient() {
 }
 
 #[tokio::test]
-async fn test_transfer_coin_with_retry() {
+async fn test_public_transfer_object_with_retry() {
     let (addr1, key1) = get_key_pair();
     let (addr2, _key2) = get_key_pair();
 
     let coin_object = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
 
-    let genesis_objects =
-        authority_genesis_objects(4, vec![coin_object.clone(), gas_object.clone()]);
+    let genesis_objects = vec![coin_object.clone(), gas_object.clone()];
     let mut gateway = create_gateway_state(genesis_objects).await;
     // Make two authorities fail at the end of certificate processing.
     get_local_client(&mut gateway.authorities, 0)
@@ -425,7 +415,7 @@ async fn test_transfer_coin_with_retry() {
         .fail_after_handle_confirmation = true;
 
     // Transfer will fail because we would not be able to reach quorum on cert processing.
-    assert!(transfer_coin(
+    assert!(public_transfer_object(
         &gateway,
         addr1,
         &key1,
@@ -523,7 +513,7 @@ async fn test_transfer_coin_with_retry() {
 async fn test_get_owner_object() {
     let (addr1, key1) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects = authority_genesis_objects(4, vec![gas_object.clone()]);
+    let genesis_objects = vec![gas_object.clone()];
     let gateway = create_gateway_state(genesis_objects).await;
 
     // Provide path to well formed package sources
@@ -531,7 +521,8 @@ async fn test_get_owner_object() {
     path.push_str("/src/unit_tests/data/object_owner/");
 
     // Publish object_owner package
-    let compiled_modules = build_move_package_to_bytes(Path::new(&path), false).unwrap();
+    let compiled_modules =
+        build_move_package_to_bytes(Path::new(&path), BuildConfig::default()).unwrap();
     let data = gateway
         .publish(
             addr1,
@@ -646,20 +637,22 @@ async fn test_multiple_gateways() {
     let coin_object3 = Object::with_owner_for_testing(addr1);
     let gas_object = Object::with_owner_for_testing(addr1);
 
-    let genesis_objects = authority_genesis_objects(
-        4,
-        vec![
-            coin_object1.clone(),
-            coin_object2.clone(),
-            coin_object3.clone(),
-            gas_object.clone(),
-        ],
-    );
+    let genesis_objects = vec![
+        coin_object1.clone(),
+        coin_object2.clone(),
+        coin_object3.clone(),
+        gas_object.clone(),
+    ];
     let gateway1 = create_gateway_state(genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
     // gateway2 shares the same set of authorities as gateway1.
-    let gateway2 = GatewayState::new_with_authorities(path, gateway1.authorities.clone()).unwrap();
-    let response = transfer_coin(
+    let gateway2 = GatewayState::new_with_authorities(
+        path,
+        gateway1.authorities.clone(),
+        GatewayMetrics::new_for_tests(),
+    )
+    .unwrap();
+    let response = public_transfer_object(
         &gateway1,
         addr1,
         &key1,
@@ -673,7 +666,7 @@ async fn test_multiple_gateways() {
 
     // gas_object on gateway2 should be out-of-dated.
     // Show that we can still handle the transaction successfully if we use it on gateway2.
-    let response = transfer_coin(
+    let response = public_transfer_object(
         &gateway2,
         addr1,
         &key1,
@@ -686,7 +679,7 @@ async fn test_multiple_gateways() {
     assert!(response.effects.status.is_ok());
 
     // Now we try to use the same gas object on gateway1, and it will still work.
-    let response = transfer_coin(
+    let response = public_transfer_object(
         &gateway1,
         addr1,
         &key1,
@@ -697,4 +690,53 @@ async fn test_multiple_gateways() {
     .await
     .unwrap();
     assert!(response.effects.status.is_ok());
+}
+
+#[tokio::test]
+async fn test_batch_transaction() {
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _key2) = get_key_pair();
+
+    let coin_object1 = Object::with_owner_for_testing(addr1);
+    let coin_object2 = Object::with_owner_for_testing(addr1);
+    let gas_object = Object::with_owner_for_testing(addr1);
+
+    let genesis_objects = vec![
+        coin_object1.clone(),
+        coin_object2.clone(),
+        gas_object.clone(),
+    ];
+    let gateway = create_gateway_state(genesis_objects).await;
+    let params = vec![
+        RPCTransactionRequestParams::TransferObjectRequestParams(TransferObjectParams {
+            object_id: coin_object1.id(),
+            recipient: addr2,
+        }),
+        RPCTransactionRequestParams::TransferObjectRequestParams(TransferObjectParams {
+            object_id: coin_object2.id(),
+            recipient: addr2,
+        }),
+        RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
+            package_object_id: gateway.get_framework_object_ref().await.unwrap().0,
+            module: "bag".to_string(),
+            function: "create".to_string(),
+            type_arguments: vec![],
+            arguments: vec![],
+        }),
+    ];
+    // Gateway should be able to figure out the only usable gas object.
+    let data = gateway
+        .batch_transaction(addr1, params, None, 5000)
+        .await
+        .unwrap();
+    let signature = key1.sign(&data.to_bytes());
+    let effects = gateway
+        .execute_transaction(Transaction::new(data, signature))
+        .await
+        .unwrap()
+        .to_effect_response()
+        .unwrap()
+        .effects;
+    assert_eq!(effects.created.len(), 1);
+    assert_eq!(effects.mutated.len(), 3);
 }

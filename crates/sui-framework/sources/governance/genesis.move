@@ -4,11 +4,12 @@
 module sui::genesis {
     use std::vector;
 
-    use sui::coin;
+    use sui::balance;
     use sui::sui;
     use sui::sui_system;
     use sui::tx_context::TxContext;
     use sui::validator;
+    use std::option;
 
     /// The initial amount of SUI locked in the storage fund.
     /// 10^14, an arbitrary number.
@@ -19,6 +20,9 @@ module sui::genesis {
 
     /// Initial value of the upper-bound on the number of validators.
     const INIT_MAX_VALIDATOR_COUNT: u64 = 100;
+
+    /// Initial storage gas price
+    const INIT_STORAGE_GAS_PRICE: u64 = 1;
 
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
@@ -31,8 +35,8 @@ module sui::genesis {
         validator_stakes: vector<u64>,
         ctx: &mut TxContext,
     ) {
-        let treasury_cap = sui::new(ctx);
-        let storage_fund = coin::mint_balance(INIT_STORAGE_FUND, &mut treasury_cap);
+        let sui_supply = sui::new();
+        let storage_fund = balance::increase_supply(&mut sui_supply, INIT_STORAGE_FUND);
         let validators = vector::empty();
         let count = vector::length(&validator_pubkeys);
         assert!(
@@ -54,16 +58,19 @@ module sui::genesis {
                 pubkey,
                 name,
                 net_address,
-                coin::mint_balance(stake, &mut treasury_cap),
+                balance::increase_supply(&mut sui_supply, stake),
+                option::none(),
+                ctx
             ));
             i = i + 1;
         };
         sui_system::create(
             validators,
-            treasury_cap,
+            sui_supply,
             storage_fund,
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
+            INIT_STORAGE_GAS_PRICE,
         );
     }
 }

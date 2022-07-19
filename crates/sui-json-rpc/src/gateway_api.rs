@@ -8,15 +8,15 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use tracing::debug;
 
+use crate::api::{
+    RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, WalletSyncApiServer,
+};
 use crate::SuiRpcModule;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::rpc_types::SuiTypeTag;
-use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
-};
-use sui_json_rpc_api::{
-    QuorumDriverApiServer, RpcReadApiServer, RpcTransactionBuilderServer, TransactionBytes,
+use sui_json_rpc_types::{
+    GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTypeTag,
+    TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_open_rpc::Module;
 use sui_types::sui_serde::Base64;
@@ -28,6 +28,10 @@ use sui_types::{
 };
 
 pub struct RpcGatewayImpl {
+    client: GatewayClient,
+}
+
+pub struct GatewayWalletSyncApiImpl {
     client: GatewayClient,
 }
 
@@ -44,6 +48,13 @@ impl RpcGatewayImpl {
         Self { client }
     }
 }
+
+impl GatewayWalletSyncApiImpl {
+    pub fn new(client: GatewayClient) -> Self {
+        Self { client }
+    }
+}
+
 impl GatewayReadApiImpl {
     pub fn new(client: GatewayClient) -> Self {
         Self { client }
@@ -56,7 +67,7 @@ impl TransactionBuilderImpl {
 }
 
 #[async_trait]
-impl QuorumDriverApiServer for RpcGatewayImpl {
+impl RpcGatewayApiServer for RpcGatewayImpl {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
@@ -73,12 +84,6 @@ impl QuorumDriverApiServer for RpcGatewayImpl {
             .await;
         Ok(result?)
     }
-
-    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
-        debug!("sync_account_state : {}", address);
-        self.client.sync_account_state(address).await?;
-        Ok(())
-    }
 }
 
 impl SuiRpcModule for RpcGatewayImpl {
@@ -87,7 +92,26 @@ impl SuiRpcModule for RpcGatewayImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc_api::QuorumDriverApiOpenRpc::module_doc()
+        crate::api::RpcGatewayApiOpenRpc::module_doc()
+    }
+}
+
+#[async_trait]
+impl WalletSyncApiServer for GatewayWalletSyncApiImpl {
+    async fn sync_account_state(&self, address: SuiAddress) -> RpcResult<()> {
+        debug!("sync_account_state : {}", address);
+        self.client.sync_account_state(address).await?;
+        Ok(())
+    }
+}
+
+impl SuiRpcModule for GatewayWalletSyncApiImpl {
+    fn rpc(self) -> RpcModule<Self> {
+        self.into_rpc()
+    }
+
+    fn rpc_doc_module() -> Module {
+        crate::api::WalletSyncApiOpenRpc::module_doc()
     }
 }
 
@@ -146,13 +170,13 @@ impl SuiRpcModule for GatewayReadApiImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc_api::RpcReadApiOpenRpc::module_doc()
+        crate::api::RpcReadApiOpenRpc::module_doc()
     }
 }
 
 #[async_trait]
 impl RpcTransactionBuilderServer for TransactionBuilderImpl {
-    async fn transfer_coin(
+    async fn transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -162,7 +186,7 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
     ) -> RpcResult<TransactionBytes> {
         let data = self
             .client
-            .transfer_coin(signer, object_id, gas, gas_budget, recipient)
+            .public_transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }
@@ -249,14 +273,27 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
                     package_object_id,
                     module,
                     function,
-                    type_arguments
-                        .into_iter()
-                        .map(|tag| tag.try_into())
-                        .collect::<Result<Vec<_>, _>>()?,
+                    type_arguments,
                     rpc_arguments,
                     gas,
                     gas_budget,
                 )
+                .await
+        }
+        .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        params: Vec<RPCTransactionRequestParams>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = async {
+            self.client
+                .batch_transaction(signer, params, gas, gas_budget)
                 .await
         }
         .await?;
@@ -270,6 +307,6 @@ impl SuiRpcModule for TransactionBuilderImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc_api::RpcTransactionBuilderOpenRpc::module_doc()
+        crate::api::RpcTransactionBuilderOpenRpc::module_doc()
     }
 }

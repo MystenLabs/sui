@@ -10,6 +10,7 @@ pub use indexes::IndexStore;
 pub mod event_store;
 pub mod follower_store;
 pub mod mutex_table;
+pub mod node_sync_store;
 pub mod write_ahead_log;
 
 use rocksdb::Options;
@@ -24,11 +25,13 @@ pub fn default_db_options(
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
-    options.set_max_open_files((fdlimit::raise_fd_limit().unwrap() / 8) as i32);
+    if let Some(limit) = fdlimit::raise_fd_limit() {
+        // on windows raise_fd_limit return None
+        options.set_max_open_files((limit / 8) as i32);
+    }
 
-    /* The table cache is locked for updates and this determines the number
-        of shareds, ie 2^10. Increase in case of lock contentions.
-    */
+    // The table cache is locked for updates and this determines the number
+    // of shareds, ie 2^10. Increase in case of lock contentions.
     let row_cache =
         rocksdb::Cache::new_lru_cache(cache_capacity.unwrap_or(300_000)).expect("Cache is ok");
     options.set_row_cache(&row_cache);

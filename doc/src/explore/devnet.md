@@ -1,20 +1,20 @@
 ---
-title: Experiment with Sui DevNet
+title: Experiment with Sui Devnet
 ---
 
-Welcome to the beginnings of the Sui DevNet. It exists now to gain operational experience with the Sui software in a public setting. The Sui DevNet currently consists of:
+Welcome to the beginnings of the Sui Devnet. It exists now to gain operational experience with the Sui software in a public setting. The Sui Devnet currently consists of:
 
 * A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: https://gateway.devnet.sui.io:443/ using [JSON-RPC](../build/json-rpc.md)
-* A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing the TestNet transaction history: https://explorer.devnet.sui.io
+* A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing transaction history: https://explorer.devnet.sui.io
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
-Many improvements to the Sui DevNet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui DevNet blog post](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b) announcement for full details on upcoming features. All DevNet usage is subject to our [terms of service](https://sui.io/terms/).
+Many improvements to the Sui Devnet are underway, such as the ability to run full nodes and use a browser-based wallet. See the [Sui Devnet blog post](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b) announcement for full details on upcoming features. All Devnet usage is subject to our [terms of service](https://sui.io/terms/).
 
 ## Tools
 
 We provide the following tools for users to interact with the Sui Devnet:
 
-* The [Sui Wallet command line interface (CLI)](../build/wallet.md)
+* The [Sui Wallet command line interface (CLI)](../build/cli-client.md)
     * create and manage your private keys
     * submit transactions for creating example NFTs
     * call and publish Move modules
@@ -24,26 +24,26 @@ We provide the following tools for users to interact with the Sui Devnet:
 
 ### Set up environment
 
-You may simply [install Sui](../build/install.md) and then request test tokens as described below. To use the Sui DevNet, you will need:
+You may simply [install Sui](../build/install.md) and then request test tokens as described in the install docs. To use the Sui Devnet, you will need:
 
 1. Sui [test coins (tokens)](#request-gas-tokens) requested through [Discord](https://discordapp.com/channels/916379725201563759/971488439931392130).
 1. the [`git` command line interface](https://git-scm.com/download/).
-1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `wallet`.
+1. [Sui binaries](../build/install.md#binaries) in your PATH environment variable, particularly `sui`.
 
 Remember, you can confirm the existence of a command in your PATH by running `which` followed by the command, for example:
 
 ```shell
-$ which wallet
+$ which sui
 ```
 You should see the path to the command. Otherwise, reinstall.
 
-> **Tip:** To reliably test DevNet with the latest Sui binaries, re-install them at least weekly.
+> **Tip:** To reliably test Devnet with the latest Sui binaries, re-install them at least weekly.
 
 In addition, to conduct advanced work such as publishing a Move module or making a Move call, also obtain the [Sui source code](../build/install.md#source-code); for simplicity, we recommend installing in `~/sui` or using an environment variable.
 
-### Set up wallet, connect to gateway
+### Set up Sui CLI client, connect to gateway
 
-Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/wallet.md#manually-change-the-gateway-url) if you have already configured a Sui wallet.
+Now [set up your Sui CLI client and connect to Devnet](../build/cli-client.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/cli-client.md#manually-change-the-rpc-server-url) if you have already configured a Sui CLI client.
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
 
@@ -51,18 +51,19 @@ Now [set up your wallet and connect to DevNet](../build/wallet.md#connect-to-dev
 
 ### Request gas tokens
 
-Request gas tokens by posting your wallet address in the [#devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) Discord channel if you haven't already and wait for them to be issued.
-
-You can find your wallet address by running:
-```shell
-$ wallet active-address
-```
+1. Join [Discord](https://discord.gg/sui) If you haven’t already.
+1. Find your address by running:
+   ```shell
+   $ sui client active-address
+   ```
+1. Request tokens in the [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130)
+   channel per the [SUI tokens](../build/install.md#sui-tokens) install documentation.
 
 ### Mint an example NFT
 
 To create a Non-Fungible Token (NFT), run:
 ```shell
-$ wallet create-example-nft
+$ sui client create-example-nft
 ```
 
 You will see output resembling:
@@ -75,18 +76,16 @@ Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
 Type: 0x2::devnet_nft::DevNetNFT
 ```
 
-The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `wallet` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
+The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `Sui CLI client` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
 
-Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) at:
-https://explorer.devnet.sui.io/objects/ED883F6812AF447B9B0CE220DA5EA9E0F58012FE
-
-Replace the object ID in the link above with the object ID of the Example NFT you observed in your own command output to see it in Sui Explorer:
+Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) by appending the object ID to:
+https://explorer.devnet.sui.io/objects/
 
 ![Example NFT](../../static/example-nft.png "Example NFT")
 
 Note you may easily customize the name, description, or image of the NFT upon creation, like so:
 ```shell
-$ wallet create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
+$ sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
 ```
 
 Which results in a new object ID:
@@ -124,7 +123,7 @@ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explor
 
 Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
-$ wallet publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
+$ sui client publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
 
 You will see this output:
@@ -156,9 +155,9 @@ Specific object IDs displayed above may differ from one Sui installation to the 
 
 In the previous section, we learned how to publish a Move package; and in this section, we will learn how to call into functions defined in this package. As a result of publishing a package, we obtained the new package object ID (<PACKAGE_ID>) and ID of the `Forge` object (<FORGE_ID>) that can be used to create swords and transfer them to other players.
 
-Let’s assume that the placeholder for the address of the player to receive a sword is <PLAYER_ADDRESS>. If you don’t know any address other than your own, you can create one using the following `wallet` command and use it whenever you see the <PLAYER_ADDRESS> placeholder:
+Let’s assume that the placeholder for the address of the player to receive a sword is <PLAYER_ADDRESS>. If you don’t know any address other than your own, you can create one using the following `client` command and use it whenever you see the <PLAYER_ADDRESS> placeholder:
 ```shell
-$ wallet new-address
+$ sui client new-address
 ```
 
 Which yields output resembling:
@@ -166,13 +165,13 @@ Which yields output resembling:
 Created new keypair for address : 2D32ED71381BEF7F3D8C57B48DF82123593672AA
 ```
 
-In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/M1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/M1.move#L4) of the package we previously published.
+In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/m1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/m1.move#L4) of the package we previously published.
 
 > **Important:** Note placeholders on the command line and formatting of function parameters as it is important to follow the same pattern.
 
 Now run:
 ```shell
-$ wallet call --function sword_create --module M1 --package 0x<PACKAGE_ID> --args \"0x<FORGE_ID>\" 42 7 \"0x<PLAYER_ADDRESS>\" --gas-budget 30000
+$ sui client call --function sword_create --module M1 --package 0x<PACKAGE_ID> --args \"0x<FORGE_ID>\" 42 7 \"0x<PLAYER_ADDRESS>\" --gas-budget 30000
 ```
 
 And receive output like:
@@ -197,9 +196,9 @@ Mutated Objects:
 
 Go to the Sui Explorer to observe a newly created object (ID `2E34983D59E9FC5310CFBAA953D2188E6A84FD21`, in this example). You should see a sword object created with `Magic` property of `42` and `Strength` property of `7` and transferred to the new owner.
 
-As above, replace object ID in the Explorer link with the object ID of the created object you observed in your own command output:
-https://explorer.devnet.sui.io/objects/OBJECT-ID
+As above, replace the object ID in the Explorer link with the object ID of the created object you observed in your own command output, appended to:
+https://explorer.devnet.sui.io/objects/
 
 ![Magic sword](../../static/magic-sword.png "Magic sword")
 
-This concludes the Sui DevNet setup and testing instructions. Revisit this page and re-install the binaries regularly to witness and help Sui grow!
+This concludes the Sui Devnet setup and testing instructions. Revisit this page and re-install the binaries regularly to witness and help Sui grow!

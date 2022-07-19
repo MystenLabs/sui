@@ -13,7 +13,7 @@ use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
-    gas::{MAX_GAS_BUDGET, MIN_GAS_BUDGET},
+    gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
     messages::Transaction,
 };
 
@@ -81,7 +81,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // It's expected to succeed. We check that gas was charged properly.
     let result = execute_transfer(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, true).await;
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
-    let gas_cost = effects.status.gas_cost_summary();
+    let gas_cost = effects.gas_used;
     assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
     assert!(gas_cost.storage_cost > 0);
     // Removing genesis object does not have rebate.
@@ -113,7 +113,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     gas_status.charge_storage_read(obj_size + gas_size)?;
     gas_status.charge_storage_mutation(obj_size, obj_size, 0)?;
     gas_status.charge_storage_mutation(gas_size, gas_size, 0)?;
-    assert_eq!(gas_cost, &gas_status.summary(true));
+    assert_eq!(&gas_cost, &gas_status.summary(true));
     Ok(())
 }
 
@@ -124,12 +124,12 @@ async fn test_native_transfer_gas_price_is_used() {
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, gas_price_1, true).await;
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
-    let gas_summary_1 = effects.status.gas_cost_summary();
+    let gas_summary_1 = effects.gas_cost_summary();
 
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET / 2, gas_price_2, true).await;
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
-    let gas_summary_2 = effects.status.gas_cost_summary();
+    let gas_summary_2 = effects.gas_cost_summary();
 
     assert_eq!(
         gas_summary_1.computation_cost * 2,
@@ -165,10 +165,8 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     // The transaction should still execute to effects, but with execution status as failure.
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
     assert_eq!(
-        effects.status.unwrap_err().1,
-        SuiError::InsufficientGas {
-            error: "Ran out of gas while deducting computation cost".to_owned()
-        }
+        effects.status.unwrap_err(),
+        ExecutionFailureStatus::InsufficientGas
     );
 }
 
@@ -185,14 +183,13 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .signed_effects
         .unwrap()
         .effects
-        .status
-        .gas_cost_summary()
+        .gas_used
         .gas_used();
     let budget = total_gas - 1;
     let result = execute_transfer(budget, budget, true).await;
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
     // We won't drain the entire budget because we don't charge for storage if tx failed.
-    assert!(effects.status.gas_cost_summary().gas_used() < budget);
+    assert!(effects.gas_used.gas_used() < budget);
     let gas_object = result
         .authority_state
         .get_object(&result.gas_object_id)
@@ -200,10 +197,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
         .unwrap()
         .unwrap();
     let gas_coin = GasCoin::try_from(&gas_object).unwrap();
-    assert_eq!(
-        gas_coin.value(),
-        budget - effects.status.gas_cost_summary().gas_used()
-    );
+    assert_eq!(gas_coin.value(), budget - effects.gas_used.gas_used());
     // After a failed transfer, the version should have been incremented,
     // but the owner of the object should remain the same, unchanged.
     let ((_, version, _), owner) = effects.mutated_excluding_gas().next().unwrap();
@@ -211,15 +205,13 @@ async fn test_native_transfer_insufficient_gas_execution() {
     assert_eq!(owner, &gas_object.owner);
 
     assert_eq!(
-        effects.status.unwrap_err().1,
-        SuiError::InsufficientGas {
-            error: "Ran out of gas while deducting storage cost".to_owned()
-        }
+        effects.status.unwrap_err(),
+        ExecutionFailureStatus::InsufficientGas,
     );
 }
 
 #[tokio::test]
-async fn test_publish_gas() -> SuiResult {
+async fn test_publish_gas() -> anyhow::Result<()> {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
@@ -235,7 +227,7 @@ async fn test_publish_gas() -> SuiResult {
     )
     .await;
     let effects = response.signed_effects.unwrap().effects;
-    let gas_cost = effects.status.gas_cost_summary();
+    let gas_cost = effects.gas_used;
     assert!(gas_cost.storage_cost > 0);
 
     let ((package_id, _, _), _) = effects.created[0];
@@ -282,7 +274,7 @@ async fn test_publish_gas() -> SuiResult {
         gas_object.object_size_for_gas_metering(),
         0,
     )?;
-    assert_eq!(gas_cost, &gas_status.summary(true));
+    assert_eq!(&gas_cost, &gas_status.summary(true));
 
     // Create a transaction with budget DELTA less than the gas cost required.
     let total_gas_used = gas_cost.gas_used();
@@ -300,14 +292,10 @@ async fn test_publish_gas() -> SuiResult {
     )
     .await;
     let effects = response.signed_effects.unwrap().effects;
-    let (gas_cost, err) = effects.status.unwrap_err();
+    let gas_cost = effects.gas_used;
+    let err = effects.status.unwrap_err();
 
-    assert_eq!(
-        err,
-        SuiError::InsufficientGas {
-            error: "Ran out of gas while deducting storage cost".to_owned()
-        }
-    );
+    assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
 
     // Make sure that we are not charging storage cost at failure.
     assert_eq!(gas_cost.storage_cost, 0);
@@ -335,13 +323,9 @@ async fn test_publish_gas() -> SuiResult {
     )
     .await;
     let effects = response.signed_effects.unwrap().effects;
-    let (gas_cost, err) = effects.status.unwrap_err();
-    assert_eq!(
-        err,
-        SuiError::InsufficientGas {
-            error: "Ran out of gas while deducting storage cost".to_owned()
-        }
-    );
+    let gas_cost = effects.gas_used;
+    let err = effects.status.unwrap_err();
+    assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
     assert_eq!(gas_cost.storage_cost, 0);
     assert_eq!(gas_cost.storage_rebate, 0);
     Ok(())
@@ -377,7 +361,7 @@ async fn test_move_call_gas() -> SuiResult {
     let effects = response.signed_effects.unwrap().effects;
     let created_object_ref = effects.created[0].0;
     assert!(effects.status.is_ok());
-    let gas_cost = effects.status.gas_cost_summary();
+    let gas_cost = effects.gas_used;
     assert!(gas_cost.storage_cost > 0);
     assert_eq!(gas_cost.storage_rebate, 0);
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
@@ -428,7 +412,9 @@ async fn test_move_call_gas() -> SuiResult {
         ident_str!("delete").to_owned(),
         vec![],
         gas_object.compute_object_reference(),
-        vec![CallArg::ImmOrOwnedObject(created_object_ref)],
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+            created_object_ref,
+        ))],
         expected_gas_balance,
     );
     let signature = Signature::new(&data, &sender_key);
@@ -436,7 +422,7 @@ async fn test_move_call_gas() -> SuiResult {
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_ok());
-    let gas_cost = effects.status.gas_cost_summary();
+    let gas_cost = effects.gas_used;
     // storage_cost should be less than rebate because for object deletion, we only
     // rebate without charging.
     assert!(gas_cost.storage_cost > 0 && gas_cost.storage_cost < gas_cost.storage_rebate);
@@ -461,11 +447,10 @@ async fn test_move_call_gas() -> SuiResult {
     let transaction = Transaction::new(data, signature);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
-    let (gas_cost, err) = effects.status.unwrap_err();
+    let gas_cost = effects.gas_used;
+    let err = effects.status.unwrap_err();
     // We will run out of gas during VM execution.
-    assert!(matches!(err, SuiError::AbortedExecution { .. }));
-    assert!(std::string::ToString::to_string(&err)
-        .contains("VMError with status OUT_OF_GAS at location Module ModuleId"));
+    assert!(matches!(err, ExecutionFailureStatus::InsufficientGas));
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
     let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;
     assert_eq!(
@@ -523,7 +508,7 @@ async fn execute_transfer_with_price(
         .unwrap()
         .unwrap();
 
-    let kind = TransactionKind::Single(SingleTransactionKind::TransferCoin(TransferCoin {
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferObject(TransferObject {
         recipient,
         object_ref: object.compute_object_reference(),
     }));

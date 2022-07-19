@@ -13,11 +13,11 @@ use async_trait::async_trait;
 use futures::future;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::TypeTag;
-use once_cell::sync::Lazy;
-use prometheus_exporter::prometheus::{
-    register_histogram, register_int_counter, Histogram, IntCounter,
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
 };
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
@@ -35,21 +35,19 @@ use sui_types::{
 };
 
 use crate::authority::ResolverWrapper;
+use crate::authority_aggregator::AuthAggMetrics;
 use crate::transaction_input_checker;
 use crate::{
-    authority::{GatewayStore, UpdateType},
-    authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
-    query_helpers::QueryHelpers,
+    authority::GatewayStore, authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI, query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui_json_rpc_api::rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, PublishResponse,
-    SplitCoinResponse, SuiMoveObject, SuiObject, SuiObjectInfo, SuiTransactionEffects,
-    TransactionEffectsResponse, TransactionResponse,
+use sui_json_rpc_types::{
+    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
+    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
+    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
+    TransactionResponse, TransferObjectParams,
 };
-
-use crate::transaction_input_checker::InputObjects;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
@@ -65,6 +63,7 @@ pub type GatewayTxSeqNumber = u64;
 const MAX_NUM_TX_RETRIES: usize = 5;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+#[derive(Clone)]
 pub struct GatewayMetrics {
     total_tx_processed: IntCounter,
     total_tx_errored: IntCounter,
@@ -75,104 +74,81 @@ pub struct GatewayMetrics {
     total_tx_retries: IntCounter,
     shared_obj_tx: IntCounter,
     pub total_tx_certificates: IntCounter,
-    pub num_signatures: Histogram,
-    pub num_good_stake: Histogram,
-    pub num_bad_stake: Histogram,
     pub transaction_latency: Histogram,
 }
 
-// Override default Prom buckets for positive numbers in 0-50k range
-const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
-];
-
 impl GatewayMetrics {
-    pub fn new() -> GatewayMetrics {
+    pub fn new(registry: &Registry) -> Self {
         Self {
-            total_tx_processed: register_int_counter!(
+            total_tx_processed: register_int_counter_with_registry!(
                 "total_tx_processed",
-                "Total number of transaction certificates processed in Gateway"
+                "Total number of transaction certificates processed in Gateway",
+                registry,
             )
             .unwrap(),
-            total_tx_errored: register_int_counter!(
+            total_tx_errored: register_int_counter_with_registry!(
                 "total_tx_errored",
-                "Total number of transactions which errored out"
+                "Total number of transactions which errored out",
+                registry,
             )
             .unwrap(),
             // total_effects == total transactions finished
-            num_tx_publish: register_int_counter!(
+            num_tx_publish: register_int_counter_with_registry!(
                 "num_tx_publish",
                 "Number of publish transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_movecall: register_int_counter!(
+            num_tx_movecall: register_int_counter_with_registry!(
                 "num_tx_movecall",
                 "Number of MOVE call transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_splitcoin: register_int_counter!(
+            num_tx_splitcoin: register_int_counter_with_registry!(
                 "num_tx_splitcoin",
                 "Number of split coin transactions",
+                registry,
             )
             .unwrap(),
-            num_tx_mergecoin: register_int_counter!(
+            num_tx_mergecoin: register_int_counter_with_registry!(
                 "num_tx_mergecoin",
                 "Number of merge coin transactions",
+                registry,
             )
             .unwrap(),
-            total_tx_certificates: register_int_counter!(
+            total_tx_certificates: register_int_counter_with_registry!(
                 "total_tx_certificates",
                 "Total number of certificates made from validators",
+                registry,
             )
             .unwrap(),
-            total_tx_retries: register_int_counter!(
+            total_tx_retries: register_int_counter_with_registry!(
                 "total_tx_retries",
                 "Total number of retries for transactions",
+                registry,
             )
             .unwrap(),
-            shared_obj_tx: register_int_counter!(
+            shared_obj_tx: register_int_counter_with_registry!(
                 "gateway_shared_obj_tx",
-                "Number of transactions involving shared objects"
+                "Number of transactions involving shared objects",
+                registry,
             )
             .unwrap(),
-            // It's really important to use the right histogram buckets for accurate histogram collection.
-            // Otherwise values get clipped
-            num_signatures: register_histogram!(
-                "num_signatures_per_tx",
-                "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
-            )
-            .unwrap(),
-            num_good_stake: register_histogram!(
-                "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
-            )
-            .unwrap(),
-            num_bad_stake: register_histogram!(
-                "num_bad_stake_per_tx",
-                "Amount of bad stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec()
-            )
-            .unwrap(),
-            transaction_latency: register_histogram!(
+            transaction_latency: register_histogram_with_registry!(
                 "transaction_latency",
-                "Latency of execute_transaction_impl"
+                "Latency of execute_transaction_impl",
+                registry,
             )
             .unwrap(),
         }
     }
-}
 
-impl Default for GatewayMetrics {
-    fn default() -> Self {
-        Self::new()
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
     }
 }
-
-// One cannot register a metric multiple times.  We protect initialization with lazy_static
-// for cases such as local tests or "sui start" which starts multiple authorities in one process.
-pub static METRICS: Lazy<GatewayMetrics> = Lazy::new(GatewayMetrics::new);
 
 pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
@@ -183,7 +159,7 @@ pub struct GatewayState<A> {
     /// It's useful if we need some kind of ordering for transactions
     /// from a gateway.
     next_tx_seq_number: AtomicU64,
-    metrics: &'static GatewayMetrics,
+    metrics: GatewayMetrics,
     module_cache: SyncModuleCache<ResolverWrapper<GatewayStore>>,
 }
 
@@ -193,13 +169,21 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
+        prometheus_registry: &Registry,
     ) -> SuiResult<Self> {
-        Self::new_with_authorities(path, AuthorityAggregator::new(committee, authority_clients))
+        let gateway_metrics = GatewayMetrics::new(prometheus_registry);
+        let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
+        Self::new_with_authorities(
+            path,
+            AuthorityAggregator::new(committee, authority_clients, auth_agg_metrics),
+            gateway_metrics,
+        )
     }
 
     pub fn new_with_authorities(
         path: PathBuf,
         authorities: AuthorityAggregator<A>,
+        metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
         let store = Arc::new(GatewayStore::open(path, None));
         let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
@@ -207,7 +191,7 @@ impl<A> GatewayState<A> {
             store: store.clone(),
             authorities,
             next_tx_seq_number,
-            metrics: &METRICS,
+            metrics,
             module_cache: SyncModuleCache::new(ResolverWrapper(store)),
         })
     }
@@ -242,8 +226,8 @@ pub trait GatewayAPI {
         tx: Transaction,
     ) -> Result<TransactionResponse, anyhow::Error>;
 
-    /// Send coin object to a Sui address.
-    async fn transfer_coin(
+    /// Send an object to a Sui address. The object's type must allow public transfers
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -274,7 +258,7 @@ pub trait GatewayAPI {
         package_object_id: ObjectID,
         module: String,
         function: String,
-        type_arguments: Vec<TypeTag>,
+        type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
@@ -317,6 +301,17 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error>;
+
+    /// Create a Batch Transaction that contains a vector of parameters needed to construct
+    /// all the single transactions in it.
+    /// Supported single transactions are TransferObject and MoveCall.
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        single_transaction_params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
@@ -387,7 +382,8 @@ where
             .download_object_from_authorities(*object_id)
             .await?
             .into_object()?;
-        debug!(?object_id, ?object, "Fetched object from validators");
+        let obj_ref = object.compute_object_reference();
+        debug!(?object_id, ?obj_ref, "Fetched object from validators");
         Ok(object)
     }
 
@@ -467,7 +463,7 @@ where
         let tx_digest = transaction.digest();
         let span = tracing::debug_span!(
             "execute_transaction",
-            ?tx_digest,
+            digest = ?tx_digest,
             tx_kind = transaction.data.kind_as_str()
         );
         let exec_result = self
@@ -484,8 +480,7 @@ where
         let (new_certificate, effects) = exec_result?;
 
         debug!(
-            ?new_certificate,
-            ?effects,
+            digest = ?tx_digest,
             "Transaction completed successfully"
         );
 
@@ -498,18 +493,17 @@ where
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
-        let update_type = UpdateType::Transaction(
-            self.next_tx_seq_number
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-            effects.effects.digest(),
-        );
+        let seq = self
+            .next_tx_seq_number
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.store
             .update_gateway_state(
                 input_objects,
                 mutated_objects,
                 new_certificate.clone(),
+                seq,
                 effects.clone().to_unsigned_effects(),
-                update_type,
+                &effects.effects.digest(),
             )
             .await?;
 
@@ -526,6 +520,12 @@ where
         transaction.verify()?;
 
         self.sync_input_objects_with_authorities(&transaction)
+            .await?;
+
+        // Getting the latest system state for gas information
+        // TODO: once we figure out a better way to sync system state and epoch information (like pubsub or epoch change callback)
+        // we don't need to download every time to get latest information like gas_price
+        self.download_object_from_authorities(SUI_SYSTEM_STATE_OBJECT_ID)
             .await?;
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
@@ -598,7 +598,7 @@ where
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
     ) -> Result<TransactionResponse, anyhow::Error> {
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(
@@ -665,7 +665,7 @@ where
             ?package,
             ?created_objects,
             ?updated_gas,
-            ?certificate,
+            digest = ?certificate.digest(),
             "Created Publish response"
         );
 
@@ -686,7 +686,9 @@ where
         let signer = certificate.data.signer();
         let (gas_payment, _, _) = certificate.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
-            [CallArg::ImmOrOwnedObject((id, _, _)), CallArg::Pure(arg)] => (id, arg),
+            [CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))), CallArg::Pure(arg)] => {
+                (id, arg)
+            }
             _ => {
                 return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
@@ -696,7 +698,7 @@ where
         };
         let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
 
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         let created = &effects.created;
@@ -739,7 +741,7 @@ where
     ) -> Result<TransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
         let primary_coin = match call.arguments.first() {
-            Some(CallArg::ImmOrOwnedObject((id, _, _))) => id,
+            Some(CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))) => id,
             _ => {
                 return Err(SuiError::InconsistentGatewayResult {
                     error: "Malformed transaction data".to_string(),
@@ -749,7 +751,7 @@ where
         };
         let (gas_payment, _, _) = certificate.data.gas();
 
-        if let ExecutionStatus::Failure { gas_cost: _, error } = effects.status {
+        if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         fp_ensure!(
@@ -794,7 +796,7 @@ where
         address: SuiAddress,
         budget: u64,
         gas: Option<ObjectID>,
-        used_coins: Vec<ObjectID>,
+        used_object_ids: BTreeSet<ObjectID>,
     ) -> Result<ObjectRef, anyhow::Error> {
         if let Some(id) = gas {
             Ok(self
@@ -802,16 +804,14 @@ where
                 .await?
                 .compute_object_reference())
         } else {
-            let used_coins = used_coins.into_iter().collect::<BTreeSet<_>>();
             for (id, balance) in self.get_owned_coins(address).await.unwrap() {
-                if balance >= budget && !used_coins.contains(&id.0) {
+                if balance >= budget && !used_object_ids.contains(&id.0) {
                     return Ok(id);
                 }
             }
-            return Err(anyhow!(
-                "No non-argument gas objects found with value >= budget {}",
-                budget
-            ));
+            Err(anyhow!(
+                "No non-argument gas objects found with value >= budget {budget}"
+            ))
         }
     }
 
@@ -828,6 +828,93 @@ where
             }
         }
         Ok(coins)
+    }
+
+    async fn create_public_transfer_object_transaction_kind(
+        &self,
+        params: TransferObjectParams,
+        used_object_ids: &mut BTreeSet<ObjectID>,
+    ) -> Result<SingleTransactionKind, anyhow::Error> {
+        used_object_ids.insert(params.object_id);
+        let object = self.get_object_internal(&params.object_id).await?;
+        let object_ref = object.compute_object_reference();
+        Ok(SingleTransactionKind::TransferObject(TransferObject {
+            recipient: params.recipient,
+            object_ref,
+        }))
+    }
+
+    async fn create_move_call_transaction_kind(
+        &self,
+        params: MoveCallParams,
+        used_object_ids: &mut BTreeSet<ObjectID>,
+    ) -> Result<SingleTransactionKind, anyhow::Error> {
+        let MoveCallParams {
+            module,
+            function,
+            package_object_id,
+            type_arguments,
+            arguments,
+        } = params;
+        let module = Identifier::new(module)?;
+        let function = Identifier::new(function)?;
+        let package_obj = self.get_object_internal(&package_object_id).await?;
+        let package_obj_ref = package_obj.compute_object_reference();
+        let json_args = resolve_move_function_args(
+            package_obj.data.try_as_package().unwrap(),
+            module.clone(),
+            function.clone(),
+            arguments,
+        )?;
+
+        // Fetch all the objects needed for this call
+        let mut objects = BTreeMap::new();
+        let mut args = Vec::with_capacity(json_args.len());
+
+        for json_arg in json_args {
+            args.push(match json_arg {
+                SuiJsonCallArg::Object(id) => {
+                    let obj = self.get_object_internal(&id).await?;
+                    let arg = if obj.is_shared() {
+                        CallArg::Object(ObjectArg::SharedObject(id))
+                    } else {
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj.compute_object_reference()))
+                    };
+                    objects.insert(id, obj);
+                    arg
+                }
+                SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
+            })
+        }
+
+        // Pass in the objects for a deeper check
+        let is_genesis = false;
+        let type_arguments = type_arguments
+            .into_iter()
+            .map(|arg| arg.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+        let compiled_module = package_obj
+            .data
+            .try_as_package()
+            .ok_or_else(|| anyhow!("Cannot get package from object"))?
+            .deserialize_module(&module)?;
+        resolve_and_type_check(
+            &objects,
+            &compiled_module,
+            &function,
+            &type_arguments,
+            args.clone(),
+            is_genesis,
+        )?;
+        used_object_ids.extend(objects.keys());
+
+        Ok(SingleTransactionKind::Call(MoveCall {
+            package: package_obj_ref,
+            module,
+            function,
+            type_arguments,
+            arguments: args,
+        }))
     }
 
     #[cfg(test)]
@@ -859,7 +946,7 @@ where
         let tx_kind = tx.data.kind.clone();
         let tx_digest = tx.digest();
 
-        debug!(?tx_digest, ?tx, "Received execute_transaction request");
+        debug!(digest = ?tx_digest, "Received execute_transaction request");
 
         let span = tracing::debug_span!(
             "gateway_execute_transaction",
@@ -907,7 +994,7 @@ where
         let (certificate, effects) = res.unwrap();
         let effects = effects.effects;
 
-        debug!(?tx, ?certificate, ?effects, "Transaction succeeded");
+        debug!(digest = ?tx_digest, "Transaction succeeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
@@ -942,7 +1029,7 @@ where
         ));
     }
 
-    async fn transfer_coin(
+    async fn public_transfer_object(
         &self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -950,14 +1037,19 @@ where
         gas_budget: u64,
         recipient: SuiAddress,
     ) -> Result<TransactionData, anyhow::Error> {
+        let mut used_object_ids = BTreeSet::new();
+        let params = TransferObjectParams {
+            recipient,
+            object_id,
+        };
+        let kind = TransactionKind::Single(
+            self.create_public_transfer_object_transaction_kind(params, &mut used_object_ids)
+                .await?,
+        );
         let gas_payment = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![object_id])
+            .choose_gas_for_address(signer, gas_budget, gas, used_object_ids)
             .await?;
-        let object = self.get_object_internal(&object_id).await?;
-        let object_ref = object.compute_object_reference();
-        let data =
-            TransactionData::new_transfer(recipient, object_ref, signer, gas_payment, gas_budget);
-        Ok(data)
+        Ok(TransactionData::new(kind, signer, gas_payment, gas_budget))
     }
 
     async fn transfer_sui(
@@ -973,6 +1065,46 @@ where
         let data =
             TransactionData::new_transfer_sui(recipient, signer, amount, object_ref, gas_budget);
         Ok(data)
+    }
+
+    async fn batch_transaction(
+        &self,
+        signer: SuiAddress,
+        single_transaction_params: Vec<RPCTransactionRequestParams>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        fp_ensure!(
+            !single_transaction_params.is_empty(),
+            SuiError::InvalidBatchTransaction {
+                error: "Batch Transaction cannot be empty".to_owned(),
+            }
+            .into()
+        );
+        let mut all_tx_kind = vec![];
+        let mut used_object_ids = BTreeSet::new();
+        for param in single_transaction_params {
+            let kind = match param {
+                RPCTransactionRequestParams::TransferObjectRequestParams(t) => {
+                    self.create_public_transfer_object_transaction_kind(t, &mut used_object_ids)
+                        .await?
+                }
+                RPCTransactionRequestParams::MoveCallRequestParams(m) => {
+                    self.create_move_call_transaction_kind(m, &mut used_object_ids)
+                        .await?
+                }
+            };
+            all_tx_kind.push(kind);
+        }
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, used_object_ids)
+            .await?;
+        Ok(TransactionData::new(
+            TransactionKind::Batch(all_tx_kind),
+            signer,
+            gas,
+            gas_budget,
+        ))
     }
 
     // TODO: Get rid of the sync API.
@@ -1005,74 +1137,27 @@ where
         package_object_id: ObjectID,
         module: String,
         function: String,
-        type_arguments: Vec<TypeTag>,
+        type_arguments: Vec<SuiTypeTag>,
         arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
-        let module = Identifier::new(module)?;
-        let function = Identifier::new(function)?;
-        let package_obj = self.get_object_internal(&package_object_id).await?;
-        let package_obj_ref = package_obj.compute_object_reference();
-        let json_args = resolve_move_function_args(
-            package_obj.data.try_as_package().unwrap(),
-            module.clone(),
-            function.clone(),
-            arguments,
-        )?;
-
-        // Fetch all the objects needed for this call
-        let mut objects = BTreeMap::new();
-        let mut args = Vec::with_capacity(json_args.len());
-
-        for json_arg in json_args {
-            args.push(match json_arg {
-                SuiJsonCallArg::Object(id) => {
-                    let obj = self.get_object_internal(&id).await?;
-                    let arg = if obj.is_shared() {
-                        CallArg::SharedObject(id)
-                    } else {
-                        CallArg::ImmOrOwnedObject(obj.compute_object_reference())
-                    };
-                    objects.insert(id, obj);
-                    arg
-                }
-                SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
-            })
-        }
-
-        let forbidden_gas_objects = objects.keys().copied().collect();
-        let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, forbidden_gas_objects)
-            .await?;
-
-        // Pass in the objects for a deeper check
-        let is_genesis = false;
-        let compiled_module = package_obj
-            .data
-            .try_as_package()
-            .ok_or_else(|| anyhow!("Cannot get package from object"))?
-            .deserialize_module(&module)?;
-        resolve_and_type_check(
-            &objects,
-            &compiled_module,
-            &function,
-            &type_arguments,
-            args.clone(),
-            is_genesis,
-        )?;
-
-        let data = TransactionData::new_move_call(
-            signer,
-            package_obj_ref,
+        let params = MoveCallParams {
+            package_object_id,
             module,
             function,
             type_arguments,
-            gas,
-            args,
-            gas_budget,
+            arguments,
+        };
+        let mut used_object_ids = BTreeSet::new();
+        let kind = TransactionKind::Single(
+            self.create_move_call_transaction_kind(params, &mut used_object_ids)
+                .await?,
         );
-
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, used_object_ids)
+            .await?;
+        let data = TransactionData::new(kind, signer, gas, gas_budget);
         debug!(?data, "Created Move Call transaction data");
         Ok(data)
     }
@@ -1085,7 +1170,7 @@ where
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![])
+            .choose_gas_for_address(signer, gas_budget, gas, BTreeSet::new())
             .await?;
         let data = TransactionData::new_module(signer, gas, package_bytes, gas_budget);
         Ok(data)
@@ -1100,7 +1185,7 @@ where
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_object_id])
+            .choose_gas_for_address(signer, gas_budget, gas, BTreeSet::from([coin_object_id]))
             .await?;
         let coin_object = self.get_object_internal(&coin_object_id).await?;
         let coin_object_ref = coin_object.compute_object_reference();
@@ -1113,7 +1198,7 @@ where
             vec![coin_type],
             gas,
             vec![
-                CallArg::ImmOrOwnedObject(coin_object_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_object_ref)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts)?),
             ],
             gas_budget,
@@ -1131,7 +1216,12 @@ where
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         let gas = self
-            .choose_gas_for_address(signer, gas_budget, gas, vec![coin_to_merge, primary_coin])
+            .choose_gas_for_address(
+                signer,
+                gas_budget,
+                gas,
+                BTreeSet::from([coin_to_merge, primary_coin]),
+            )
             .await?;
         let primary_coin_ref = self.get_object_ref(&primary_coin).await?;
         let coin_to_merge = self.get_object_internal(&coin_to_merge).await?;
@@ -1146,8 +1236,8 @@ where
             vec![coin_type],
             gas,
             vec![
-                CallArg::ImmOrOwnedObject(primary_coin_ref),
-                CallArg::ImmOrOwnedObject(coin_to_merge_ref),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(primary_coin_ref)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_to_merge_ref)),
             ],
             gas_budget,
         );
