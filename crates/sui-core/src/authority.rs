@@ -22,7 +22,8 @@ use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use std::ops::Deref;
 use std::{
@@ -109,6 +110,7 @@ pub struct AuthorityMetrics {
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
     pub follower_connections: IntCounter,
+    pub follower_connections_concurrent: IntGauge,
 
     pub gossip_queued_count: IntCounter,
     pub gossip_sync_count: IntCounter,
@@ -203,6 +205,12 @@ impl AuthorityMetrics {
             follower_connections: register_int_counter_with_registry!(
                 "follower_connections",
                 "Number of follower connections initiated",
+                registry,
+            )
+            .unwrap(),
+            follower_connections_concurrent: register_int_gauge_with_registry!(
+                "follower_connections_concurrent",
+                "Current number of concurrent follower connections",
                 registry,
             )
             .unwrap(),

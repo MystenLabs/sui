@@ -237,6 +237,12 @@ impl crate::authority::AuthorityState {
         let metrics = self.metrics.clone();
         metrics.follower_connections.inc();
 
+        metrics.follower_connections_concurrent.inc();
+
+        let follower_connections_concurrent_guard = scopeguard::guard(metrics.clone(), |metrics| {
+            metrics.follower_connections_concurrent.dec();
+        });
+
         // Register a subscriber to not miss any updates
         let subscriber = self.subscribe_batch();
 
@@ -244,10 +250,13 @@ impl crate::authority::AuthorityState {
         let (items, (should_subscribe, _start, end)) =
             self.handle_batch_info_request(request).await?;
 
-        metrics.follower_items_loaded.inc_by(items.len());
+        // unwrap safe - converting usize -> u64
+        metrics
+            .follower_items_loaded
+            .inc_by(items.len().try_into().unwrap());
 
         // Define a local structure to support the stream construction.
-        struct BatchStreamingLocals {
+        struct BatchStreamingLocals<GuardT> {
             items: VecDeque<UpdateItem>,
             next_expected_seq: TxSequenceNumber,
             next_expected_batch: TxSequenceNumber,
@@ -255,6 +264,7 @@ impl crate::authority::AuthorityState {
             exit: bool,
             should_subscribe: bool,
             metrics: Arc<AuthorityMetrics>,
+            _guard: GuardT,
         }
 
         let local_state = BatchStreamingLocals {
@@ -270,6 +280,7 @@ impl crate::authority::AuthorityState {
             // A flag indicating if real-time subscrition is needed.
             should_subscribe,
             metrics,
+            _guard: follower_connections_concurrent_guard,
         };
 
         // Construct the stream

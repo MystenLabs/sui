@@ -28,6 +28,7 @@ multiaddr = "0.14.0"
 prometheus = "0.13.1"
 arc-swap = "1.5.0"
 tokio-retry = "0.3"
+scopeguard = "1.1"
 
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }

@@ -6526,6 +6526,7 @@ dependencies = [
  "prometheus",
  "rand 0.7.3",
  "rocksdb",
+ "scopeguard",
  "serde 1.0.139",
  "serde-reflection",
  "serde_json",
