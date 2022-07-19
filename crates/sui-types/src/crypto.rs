@@ -505,17 +505,36 @@ impl PartialEq for AuthoritySignInfo {
 }
 
 impl AuthoritySignInfo {
-    pub fn add_to_verification_obligation(
+    pub fn add_to_verification_obligation<T>(
         &self,
+        data: &T,
         committee: &Committee,
         obligation: &mut VerificationObligation,
-        message_index: usize,
-    ) -> SuiResult<()> {
+    ) -> SuiResult<()>
+    where
+        T: Signable<Vec<u8>>,
+    {
+        let weight = committee.weight(&self.authority);
+        fp_ensure!(weight > 0, SuiError::UnknownSigner);
+
         obligation
             .public_keys
             .push(committee.public_key(&self.authority)?);
         obligation.signatures.push(self.signature.0);
+        let mut message = Vec::new();
+        data.write(&mut message);
+        let message_index = obligation.add_message(message);
         obligation.message_index.push(message_index);
+        Ok(())
+    }
+
+    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
+    where
+        T: Signable<Vec<u8>>,
+    {
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(data, committee, &mut obligation)?;
+        obligation.verify_all()?;
         Ok(())
     }
 }
