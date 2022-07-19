@@ -16,10 +16,7 @@ use sui_types::messages::{
     TransactionData,
 };
 use sui_types::object::Object;
-use sui_types::{
-    base_types::{SuiAddress, ToAddress},
-    crypto::Signature,
-};
+use sui_types::{base_types::SuiAddress, crypto::Signature};
 use sui_types::{crypto::KeyPair, messages::CallArg};
 
 /// The maximum gas per transaction.
@@ -38,7 +35,7 @@ where
     let mut addresses_two_by_two = Vec::new();
     let mut keypairs = Vec::new(); // Keys are not copiable, move them here.
     for keypair in keys {
-        let address = keypair.public().to_address();
+        let address = keypair.public().into();
         addresses_two_by_two.push(address);
         addresses_two_by_two.push(address);
         keypairs.push(keypair);

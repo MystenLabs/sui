@@ -23,7 +23,7 @@ use sui_json_rpc::gateway_api::{
 };
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
 use sui_swarm::memory::Swarm;
-use sui_types::base_types::{SuiAddress, ToAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 const NUM_VALIDAOTR: usize = 4;
 
@@ -42,7 +42,7 @@ pub async fn start_test_network(
         .config()
         .account_keys
         .iter()
-        .map(|key| key.public().to_address())
+        .map(|key| key.public().into())
         .collect::<Vec<_>>();
     let dir = swarm.dir();
 
@@ -55,7 +55,7 @@ pub async fn start_test_network(
     swarm.config().save(&network_path)?;
     let mut keystore = SuiKeystore::default();
     for key in &swarm.config().account_keys {
-        keystore.add_key(key.public().to_address(), key.copy())?;
+        keystore.add_key(key.public().into(), key.copy())?;
     }
     keystore.set_path(&keystore_path);
     keystore.save()?;
