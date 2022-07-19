@@ -9,7 +9,7 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_types::{base_types::*, messages::*};
+use sui_types::{base_types::*, messages::*, object::Owner};
 
 use clap::*;
 
@@ -119,13 +119,35 @@ where
     }
 }
 
+struct OwnerOutput(Owner);
+
+// grep/awk-friendly output for Owner
+impl std::fmt::Display for OwnerOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Owner::AddressOwner(address) => {
+                write!(f, "address({})", address)
+            }
+            Owner::ObjectOwner(address) => {
+                write!(f, "object({})", address)
+            }
+            Owner::Immutable => {
+                write!(f, "immutable")
+            }
+            Owner::Shared => {
+                write!(f, "shared")
+            }
+        }
+    }
+}
+
 struct ConciseObjectOutput(ObjectData);
 
 impl ConciseObjectOutput {
     fn header() -> String {
         format!(
-            "{:<66} {:<8} {:<66} {:<45}",
-            "validator", "version", "digest", "parent_cert"
+            "{:<66} {:<8} {:<66} {:<45} {}",
+            "validator", "version", "digest", "parent_cert", "owner"
         )
     }
 }
@@ -143,8 +165,8 @@ impl std::fmt::Display for ConciseObjectOutput {
                 match resp {
                     Err(_) => writeln!(
                         f,
-                        "{:<66} {:<45}",
-                        "object-fetch-failed", "no-cert-available"
+                        "{:<66} {:<45} {:<51}",
+                        "object-fetch-failed", "no-cert-available", "no-owner-available"
                     )?,
                     Ok(resp) => {
                         let objref = resp
@@ -156,7 +178,12 @@ impl std::fmt::Display for ConciseObjectOutput {
                             .as_ref()
                             .map(|c| *c.digest())
                             .opt_debug("<genesis>");
-                        write!(f, " {:<66} {:<45}", objref, cert)?;
+                        let owner = resp
+                            .object_and_lock
+                            .as_ref()
+                            .map(|o| OwnerOutput(o.object.owner))
+                            .opt_display("no-owner-available");
+                        write!(f, " {:<66} {:<45} {:<51}", objref, cert, owner)?;
                     }
                 }
                 writeln!(f)?;
@@ -198,9 +225,10 @@ impl std::fmt::Display for VerboseObjectOutput {
                             }
                         }
 
-                        if let Some(ObjectResponse { lock, .. }) = &resp.object_and_lock {
+                        if let Some(ObjectResponse { lock, object, .. }) = &resp.object_and_lock {
                             // TODO maybe show object contents if we can do so meaningfully.
                             writeln!(f, "  -- object: <data>")?;
+                            writeln!(f, "  -- owner: {}", object.owner)?;
                             writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
                         }
                     }
