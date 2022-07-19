@@ -1,4 +1,8 @@
-## Building the package
+---
+title: Build and Test the SUi Move Package
+---
+
+## Building a package
 
 Ensure you are in the `my_move_package` directory containing your package and build it:
 
