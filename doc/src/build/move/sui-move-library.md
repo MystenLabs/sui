@@ -1,5 +1,5 @@
 ---
-title: Sui Move library
+title: Use Sui Move Library
 ---
 
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
