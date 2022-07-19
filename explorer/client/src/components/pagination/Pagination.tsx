@@ -81,7 +81,7 @@ function Pagination({
                             <ContentForwardArrowDark />
                         </button>
                     </li>
-                    <li>
+                    <li className={styles.pagilink}>
                         <button
                             className={pageIndex === 1 ? styles.activepag : ''}
                             onClick={changePage}
@@ -93,16 +93,17 @@ function Pagination({
 
                     {pageIndex > pagiData.range &&
                         pageIndex > pagiData.range + 1 && (
-                            <li className="page-item">
-                                <button className={styles.paginationdot}>
-                                    ...
-                                </button>
-                            </li>
+                            <li className={styles.paginationdot}>...</li>
                         )}
                     {pagiData.listItems
                         .filter((itm) => itm !== pagiData.max && itm !== 1)
                         .map((itm: any, index: number) => (
-                            <li className="page-item" key={index}>
+                            <li
+                                className={
+                                    pageIndex === itm ? styles.pagilink : ''
+                                }
+                                key={index}
+                            >
                                 <button
                                     className={
                                         pageIndex === itm
@@ -117,24 +118,13 @@ function Pagination({
                             </li>
                         ))}
 
-                    {pageIndex < pagiData.max - 1 && (
+                    {pageIndex < pagiData.max - (pagiData.range + 1) && (
                         <>
-                            <li className="page-item">
-                                <button
-                                    className={cl(
-                                        pageIndex === pagiData.max
-                                            ? styles.activepag
-                                            : '',
-                                        styles.paginationdot
-                                    )}
-                                >
-                                    ...
-                                </button>
-                            </li>
+                            <li className={styles.paginationdot}>...</li>
                         </>
                     )}
 
-                    <li className="page-item">
+                    <li className={styles.pagilink}>
                         <button
                             className={
                                 pageIndex === pagiData.max
