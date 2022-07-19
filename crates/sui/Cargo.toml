@@ -31,7 +31,7 @@ sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }
 
 rustyline = "9.1.2"
-rustyline-derive = "0.6.0"
+rustyline-derive = "0.7.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
