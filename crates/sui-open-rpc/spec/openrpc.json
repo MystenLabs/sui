@@ -1389,7 +1389,6 @@
                 "type": "object",
                 "required": [
                   "bcs",
-                  "fields",
                   "packageId",
                   "sender",
                   "transactionModule",
@@ -1400,7 +1399,14 @@
                     "$ref": "#/components/schemas/Base64"
                   },
                   "fields": {
-                    "$ref": "#/components/schemas/MoveStruct"
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/MoveStruct"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
