@@ -12,7 +12,6 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::ToAddress;
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
@@ -90,7 +89,7 @@ impl NodeConfig {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        self.public_key().to_address()
+        (&self.public_key()).into()
     }
 
     pub fn db_path(&self) -> &Path {
@@ -158,7 +157,7 @@ impl ValidatorInfo {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        self.public_key().to_address()
+        (&self.public_key()).into()
     }
 
     pub fn public_key(&self) -> PublicKeyBytes {
