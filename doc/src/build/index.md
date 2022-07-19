@@ -9,7 +9,7 @@ Now that you've [learned about Sui](../learn/index.md), it's time to start build
 Here is our recommended workflow to interact with Sui:
 
 1. [Install](../build/install.md) all of the *required tools*.
-1. [Quickstart](../build/move.md) Move *smart contract*s:
+1. [Create](../build/move.md) *smart contracts* in Move:
    1. [Write](../build/move.md#writing-a-package) a package.
    1. [Test](../build/move.md#testing-a-package) a package.
    1. [Debug](../build/move.md#debugging-a-package) a package.
