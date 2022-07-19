@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::base_types::{AuthorityName, SuiAddress, ToAddress};
+use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
@@ -10,7 +10,8 @@ use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
 use narwhal_crypto::ed25519::{
-    Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519PublicKeyBytes,
+    Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
+    Ed25519PublicKeyBytes, Ed25519Signature,
 };
 pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
 pub use narwhal_crypto::traits::{
@@ -34,14 +35,12 @@ pub type PublicKey = Ed25519PublicKey;
 pub type PublicKeyBytes = Ed25519PublicKeyBytes;
 
 // Signatures for Authorities
-pub type AuthoritySignature = <<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig;
-pub type AggregateAuthoritySignature =
-    <<<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig as Authenticator>::AggregateSig;
+pub type AuthoritySignature = Ed25519Signature;
+pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
 
 // Signatures for Users
-pub type AccountSignature = <<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig;
-pub type AggregateAccountSignature =
-    <<<KeyPair as KeypairTraits>::PubKey as VerifyingKey>::Sig as Authenticator>::AggregateSig;
+pub type AccountSignature = Ed25519Signature;
+pub type AggregateAccountSignature = Ed25519AggregateSignature;
 
 pub trait SuiAuthoritySignature {
     fn new<T>(value: &T, secret: &dyn signature::Signer<Self>) -> Self
@@ -139,19 +138,18 @@ where
     R: rand::CryptoRng + rand::RngCore,
 {
     let kp = KeyPair::generate(csprng);
-    (kp.public().to_address(), kp)
+    (kp.public().into(), kp)
 }
 
 // TODO: C-GETTER
 pub fn get_key_pair_from_bytes(bytes: &[u8]) -> SuiResult<(SuiAddress, KeyPair)> {
-    let sk = PrivateKey::from_bytes(&bytes[..<KeyPair as KeypairTraits>::PrivKey::LENGTH]).map_err(
-        |_| SuiError::InvalidPrivateKey
-    )?;
+    let sk = PrivateKey::from_bytes(&bytes[..<KeyPair as KeypairTraits>::PrivKey::LENGTH])
+        .map_err(|_| SuiError::InvalidPrivateKey)?;
     let kp: KeyPair = sk.into();
     if kp.public().as_ref() != &bytes[<KeyPair as KeypairTraits>::PrivKey::LENGTH..] {
         return Err(SuiError::InvalidAddress);
     }
-    Ok((kp.public().to_address(), kp))
+    Ok((kp.public().into(), kp))
 }
 
 // TODO: replace this with a byte interpretation based on multicodec
@@ -242,7 +240,7 @@ impl Signature {
         // Is this signature emitted by the expected author?
         let public_key_bytes: PublicKeyBytes =
             PublicKeyBytes::from_bytes(self.public_key_bytes()).expect("byte lengths match");
-        let received_addr = public_key_bytes.to_address();
+        let received_addr: SuiAddress = (&public_key_bytes).into();
         if received_addr != author {
             return Err(SuiError::IncorrectSigner {
                 error: format!("Signature get_verification_inputs() failure. Author is {author}, received address is {received_addr}")

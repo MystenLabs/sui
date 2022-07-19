@@ -13,7 +13,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use sui_types::base_types::{SuiAddress, ToAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{get_key_pair, KeyPair, KeypairTraits, Signature};
 
 #[derive(Serialize, Deserialize)]
@@ -85,7 +85,7 @@ impl SuiKeystore {
 
         let keys = keys
             .into_iter()
-            .map(|key| (key.public().to_address(), key))
+            .map(|key| (key.public().into(), key))
             .collect();
 
         Ok(Self {

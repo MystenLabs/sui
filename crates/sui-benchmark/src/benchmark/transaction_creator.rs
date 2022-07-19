@@ -158,7 +158,7 @@ impl TransactionCreator {
         validator_preparer: &mut ValidatorPreparer,
     ) -> Vec<(Transaction, CertifiedTransaction)> {
         let (address, keypair) = if let Some(a) = sender {
-            (a.public().to_address(), a.copy())
+            (a.public().into(), a.copy())
         } else {
             get_key_pair()
         };
