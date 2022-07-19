@@ -183,14 +183,10 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-pub trait ToAddress {
-    fn to_address(&self) -> SuiAddress;
-}
-
-impl ToAddress for PublicKeyBytes {
-    fn to_address(&self) -> SuiAddress {
+impl From<&PublicKeyBytes> for SuiAddress {
+    fn from(pkb: &PublicKeyBytes) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(self);
+        hasher.update(pkb.as_ref());
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
@@ -199,10 +195,15 @@ impl ToAddress for PublicKeyBytes {
     }
 }
 
-impl ToAddress for PublicKey {
-    fn to_address(&self) -> SuiAddress {
-        let pk_bytes: PublicKeyBytes = self.into();
-        pk_bytes.to_address()
+impl From<&PublicKey> for SuiAddress {
+    fn from(pkb: &PublicKey) -> Self {
+        let mut hasher = Sha3_256::default();
+        hasher.update(pkb.as_ref());
+        let g_arr = hasher.finalize();
+
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
+        SuiAddress(res)
     }
 }
 
