@@ -7,7 +7,7 @@ import AccountAddress from '_components/account-address';
 import Alert from '_components/alert';
 import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useAppSelector } from '_hooks';
+import { useObjectsState } from '_hooks';
 
 import type { ReactNode } from 'react';
 
@@ -20,19 +20,9 @@ export type ObjectsLayoutProps = {
 };
 
 function ObjectsLayout({ children, emptyMsg, totalItems }: ObjectsLayoutProps) {
-    const objectsLoading = useAppSelector(
-        ({ suiObjects }) => suiObjects.loading
-    );
-    const objectsLastSync = useAppSelector(
-        ({ suiObjects }) => suiObjects.lastSync
-    );
-    const objectsError = useAppSelector(({ suiObjects }) => suiObjects.error);
-    const showError =
-        !!objectsError &&
-        (!objectsLastSync || Date.now() - objectsLastSync > 30 * 1000);
-    const showEmptyNotice = !!(objectsLastSync && !totalItems);
-    const showItems = !!(objectsLastSync && totalItems);
-    const showLoading = objectsLoading && !objectsLastSync;
+    const { loading, error, showError, syncedOnce } = useObjectsState();
+    const showEmptyNotice = syncedOnce && !totalItems;
+    const showItems = syncedOnce && totalItems;
     return (
         <div className={st.container}>
             <div>
@@ -40,10 +30,10 @@ function ObjectsLayout({ children, emptyMsg, totalItems }: ObjectsLayoutProps) {
                 <AccountAddress />
             </div>
             <div className={st.items}>
-                {showError ? (
+                {showError && error ? (
                     <Alert className={st.alert}>
                         <strong>Sync error (data might be outdated).</strong>{' '}
-                        <small>{objectsError.message}</small>
+                        <small>{error.message}</small>
                     </Alert>
                 ) : null}
                 {showItems ? children : null}
@@ -53,7 +43,7 @@ function ObjectsLayout({ children, emptyMsg, totalItems }: ObjectsLayoutProps) {
                         <div className={st['empty-text']}>{emptyMsg}</div>
                     </div>
                 ) : null}
-                {showLoading ? (
+                {loading ? (
                     <div className={st.loader}>
                         <LoadingIndicator />
                     </div>
