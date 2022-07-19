@@ -30,7 +30,7 @@ use crate::epoch::reconfiguration::Reconfigurable;
 use crate::{
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
     authority_client::AuthorityAPI,
-    checkpoints::{proposal::CheckpointProposal, CheckpointStore},
+    checkpoints::CheckpointStore,
     node_sync::NodeSyncState,
 };
 

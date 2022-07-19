@@ -1625,7 +1625,8 @@ where
 
     pub async fn handle_transaction_and_effects_info_request(
         &self,
-        digests: &ExecutionDigests,
+        digest: &TransactionDigest,
+        effects_digest: Option<&TransactionEffectsDigest>,
         // authorities known to have the effects we are requesting.
         authorities: Option<&BTreeSet<AuthorityName>>,
         timeout_total: Option<Duration>,
@@ -1636,7 +1637,7 @@ where
             |authority, client| {
                 Box::pin(async move {
                     let resp = client
-                        .handle_transaction_and_effects_info_request(digests)
+                        .handle_transaction_and_effects_info_request(digest, effects_digest)
                         .await?;
 
                     match (resp.certified_transaction, resp.signed_effects) {
@@ -1647,9 +1648,7 @@ where
                                 // cert and effects, so if they now say they don't, they're byzantine.
                                 Err(SuiError::ByzantineAuthoritySuspicion { authority })
                             } else {
-                                Err(SuiError::TransactionNotFound {
-                                    digest: digests.transaction,
-                                })
+                                Err(SuiError::TransactionNotFound { digest: *digest })
                             }
                         }
                     }

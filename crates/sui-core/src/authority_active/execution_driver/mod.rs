@@ -78,7 +78,7 @@ where
     let net = active_authority.net.load().clone();
 
     // Get the pending transactions
-    let pending_transactions = active_authority.state.database.get_pending_certificates()?;
+    let pending_transactions = active_authority.state.database.get_pending_digests()?;
 
     // Get all the actual certificates mapping to these pending transactions
     let certs = active_authority
