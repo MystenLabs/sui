@@ -141,6 +141,9 @@ module defi::pool {
 
         // Calculate the output amount - fee
         let (sui_reserve, token_reserve, _) = get_amounts(pool);
+
+        assert!(sui_reserve > 0 && token_reserve > 0, EReservesEmpty);
+
         let output_amount = get_input_price(
             balance::value(&sui_balance),
             sui_reserve,
@@ -172,14 +175,15 @@ module defi::pool {
 
         let tok_balance = coin::into_balance(token);
         let (sui_reserve, token_reserve, _) = get_amounts(pool);
+
+        assert!(sui_reserve > 0 && token_reserve > 0, EReservesEmpty);
+
         let output_amount = get_input_price(
             balance::value(&tok_balance),
             token_reserve,
             sui_reserve,
             pool.fee_percent
         );
-
-        assert!(sui_reserve > 0 && token_reserve > 0, EReservesEmpty);
 
         balance::join(&mut pool.token, tok_balance);
         coin::take(&mut pool.sui, output_amount, ctx)
@@ -308,7 +312,7 @@ module defi::pool {
             (fee_percent as u128)
         );
 
-        let input_amount_with_fee = input_amount * (FEE_SCALING - fee_percent); // 0.3% fee
+        let input_amount_with_fee = input_amount * (FEE_SCALING - fee_percent);
         let numerator = input_amount_with_fee * output_reserve;
         let denominator = (input_reserve * FEE_SCALING) + input_amount_with_fee;
 
