@@ -4,7 +4,7 @@
 export function fromHEX(hexStr: string): Uint8Array {
   // @ts-ignore
   let intArr = hexStr
-    .replace("0x", "")
+    .replace('0x', '')
     .match(/.{1,2}/g)
     .map(byte => parseInt(byte, 16));
 
@@ -17,7 +17,7 @@ export function fromHEX(hexStr: string): Uint8Array {
 
 export function toHEX(bytes: Uint8Array): string {
   return bytes.reduce(
-    (str, byte) => str + byte.toString(16).padStart(2, "0"),
-    ""
+    (str, byte) => str + byte.toString(16).padStart(2, '0'),
+    ''
   );
 }

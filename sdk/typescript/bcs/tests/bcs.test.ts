@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS as bcs, fromB64, toB64 } from './../src/index';
+import { bcs, fromB64 } from './../src/index';
 import { BN } from 'bn.js';
 
 describe('Move bcs', () => {
@@ -13,10 +13,10 @@ describe('Move bcs', () => {
   it('should ser/de u64', () => {
     const exp = 'AO/Nq3hWNBI=';
     const num = BigInt('1311768467750121216');
-    const set = bcs.ser('u64', num).toBytes();
+    const set = bcs.ser('u64', num).toString('base64');
 
-    expect(toB64(set)).toEqual(exp);
-    expect(bcs.de('u64', fromB64(exp))).toEqual(
+    expect(set).toEqual(exp);
+    expect(bcs.de('u64', exp, 'base64')).toEqual(
       new BN('1311768467750121216')
     );
   });
@@ -25,7 +25,7 @@ describe('Move bcs', () => {
     const sample = 'AO9ld3CFjD48AAAAAAAAAA==';
     const num = BigInt('1111311768467750121216');
 
-    expect(bcs.de('u128', fromB64(sample)).toString(10)).toEqual(
+    expect(bcs.de('u128', sample, 'base64').toString(10)).toEqual(
       '1111311768467750121216'
     );
     expect(bcs.ser('u128', num).toString('base64')).toEqual(sample);

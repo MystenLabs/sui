@@ -23,7 +23,7 @@ function b64ToUint6(nChr: number) {
 }
 
 export function fromB64(sBase64: string, nBlocksSize?: number): Uint8Array {
-  var sB64Enc = sBase64.replace(/[^A-Za-z0-9+/]/g, ""),
+  var sB64Enc = sBase64.replace(/[^A-Za-z0-9+/]/g, ''),
     nInLen = sB64Enc.length,
     nOutLen = nBlocksSize
       ? Math.ceil(((nInLen * 3 + 1) >> 2) / nBlocksSize) * nBlocksSize
@@ -66,12 +66,12 @@ function uint6ToB64(nUint6: number) {
 
 export function toB64(aBytes: Uint8Array): string {
   var nMod3 = 2,
-    sB64Enc = "";
+    sB64Enc = '';
 
   for (var nLen = aBytes.length, nUint24 = 0, nIdx = 0; nIdx < nLen; nIdx++) {
     nMod3 = nIdx % 3;
     if (nIdx > 0 && ((nIdx * 4) / 3) % 76 === 0) {
-      sB64Enc += "";
+      sB64Enc += '';
     }
     nUint24 |= aBytes[nIdx] << ((16 >>> nMod3) & 24);
     if (nMod3 === 2 || aBytes.length - nIdx === 1) {
@@ -87,6 +87,6 @@ export function toB64(aBytes: Uint8Array): string {
 
   return (
     sB64Enc.slice(0, sB64Enc.length - 2 + nMod3) +
-    (nMod3 === 2 ? "" : nMod3 === 1 ? "=" : "==")
+    (nMod3 === 2 ? '' : nMod3 === 1 ? '=' : '==')
   );
 }
