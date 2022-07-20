@@ -85,11 +85,9 @@ where
         // map to extract digest
         .handle_execution_request(pending_transactions.iter().map(|(_, digest)| *digest))
         // zip results back together with seq
-        .zip(stream::iter(
-            pending_transactions.iter().map(|(seq, _)| *seq),
-        ))
+        .zip(stream::iter(pending_transactions.iter()))
         // filter out errors
-        .filter_map(|(result, seq)| async move { result.ok().map(|_| seq) })
+        .filter_map(|(result, (seq, _))| async move { result.ok().map(|_| seq) })
         .collect()
         .await;
 
