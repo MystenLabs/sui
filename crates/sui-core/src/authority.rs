@@ -80,6 +80,7 @@ mod authority_store;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
+use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse,
 };
@@ -312,6 +313,10 @@ impl AuthorityState {
         self.batch_channels.subscribe()
     }
 
+    pub fn epoch(&self) -> EpochId {
+        self.committee.load().epoch
+    }
+
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
@@ -344,12 +349,8 @@ impl AuthorityState {
 
         let owned_objects = input_objects.filter_owned_objects();
 
-        let signed_transaction = SignedTransaction::new(
-            self.committee.load().epoch,
-            transaction,
-            self.name,
-            &*self.secret,
-        );
+        let signed_transaction =
+            SignedTransaction::new(self.epoch(), transaction, self.name, &*self.secret);
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
@@ -642,7 +643,7 @@ impl AuthorityState {
             &self.move_vm,
             &self._native_functions,
             gas_status,
-            self.committee.load().epoch,
+            self.epoch(),
         );
 
         self.metrics.total_effects.inc();
@@ -651,8 +652,7 @@ impl AuthorityState {
             .inc_by(effects.events.len() as u64);
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
-        let signed_effects =
-            effects.to_sign_effects(self.committee.load().epoch, &self.name, &*self.secret);
+        let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
 
         Ok((temporary_store, signed_effects))
     }

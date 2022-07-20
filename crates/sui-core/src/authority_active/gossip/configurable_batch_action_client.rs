@@ -149,7 +149,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         let name = self.state.name;
         let mut items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
         let mut seq = 0;
-        let zero_batch = SignedBatch::new(AuthorityBatch::initial(), &*secret, name);
+        let zero_batch = SignedBatch::new(
+            self.state.epoch(),
+            AuthorityBatch::initial(),
+            &*secret,
+            name,
+        );
         items.push(Ok(BatchInfoResponseItem(UpdateItem::Batch(zero_batch))));
         let _ = actions.iter().for_each(|action| {
             match action {
@@ -167,7 +172,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
                     let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
                     last_batch = new_batch;
                     items.push({
-                        let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                        let item = SignedBatch::new(
+                            self.state.epoch(),
+                            last_batch.clone(),
+                            &*secret,
+                            name,
+                        );
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(item)))
                     });
                 }

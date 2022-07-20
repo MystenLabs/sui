@@ -139,7 +139,7 @@ async fn test_start_epoch_change() {
         &state.move_vm,
         &state._native_functions,
         SuiGasStatus::new_with_budget(1000, 1, 1),
-        state.committee.load().epoch,
+        state.epoch(),
     );
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
@@ -202,7 +202,7 @@ async fn test_finish_epoch_change() {
 
     // Verify that epoch changed in every authority state.
     for active in actives {
-        assert_eq!(active.state.committee.load().epoch, 1);
+        assert_eq!(active.state.epoch(), 1);
         assert_eq!(active.net.load().committee.epoch, 1);
         assert_eq!(
             active
