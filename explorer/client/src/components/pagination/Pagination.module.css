@@ -31,21 +31,25 @@ button.gone {
 }
 
 .footer {
-    @apply sm:grid sm:grid-cols-12;
+    @apply sm:grid sm:grid-cols-12 text-center;
 }
 
 .footer > div:first-child {
-    @apply col-span-8 self-center;
+    @apply inline-block sm:block sm:col-span-8 sm:self-center;
 }
 
 .footer > div:nth-child(2) {
-    @apply col-span-4 justify-self-end items-center;
+    @apply sm:col-span-4 sm:justify-self-end sm:items-center;
 }
 
 .rhs {
     @apply flex;
 }
 
+.rhs > section {
+    @apply mx-auto;
+}
+
 .rhs > select {
-    @apply ml-[1vw] cursor-pointer rounded-[6px];
+    @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block;
 }
