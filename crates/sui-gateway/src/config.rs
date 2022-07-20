@@ -12,7 +12,6 @@ use std::{
 };
 use sui_config::Config;
 use sui_config::ValidatorInfo;
-use sui_core::gateway_state::GatewayMetrics;
 use sui_core::{
     authority_client::NetworkAuthorityClient,
     gateway_state::{GatewayClient, GatewayState},
@@ -68,12 +67,12 @@ impl GatewayType {
                 let path = config.db_folder_path.clone();
                 let committee = config.make_committee()?;
                 let authority_clients = config.make_authority_clients();
-                let metrics = GatewayMetrics::new(&prometheus::Registry::new());
+                let registry = prometheus::Registry::new();
                 Arc::new(GatewayState::new(
                     path,
                     committee,
                     authority_clients,
-                    metrics,
+                    &registry,
                 )?)
             }
             GatewayType::RPC(url) => Arc::new(RpcGatewayClient::new(url.clone())?),
@@ -95,12 +94,10 @@ impl Config for GatewayConfig {}
 
 impl GatewayConfig {
     pub fn make_committee(&self) -> SuiResult<Committee> {
-        let voting_rights = self
-            .validator_set
-            .iter()
-            .map(|validator| (validator.public_key(), validator.stake()))
-            .collect();
-        Committee::new(self.epoch, voting_rights)
+        Committee::new(
+            self.epoch,
+            ValidatorInfo::voting_rights(&self.validator_set),
+        )
     }
 
     pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {

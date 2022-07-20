@@ -15,8 +15,9 @@ use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
+use move_binary_format::file_format::LocalIndex;
 use move_binary_format::CompiledModule;
-use move_core_types::vm_status::AbortLocation;
+use move_core_types::language_storage::ModuleId;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
@@ -30,9 +31,10 @@ use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+use tracing::debug;
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -732,19 +734,17 @@ impl SignedTransaction {
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn verify(&self, committee: &Committee) -> Result<u64, SuiError> {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
         let mut obligation = VerificationObligation::default();
         self.add_sender_sig_to_verification_obligation(&mut obligation)?;
-        let weight = committee.weight(&self.auth_sign_info.authority);
-        fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        let mut message = Vec::new();
-        self.data.write(&mut message);
-        let idx = obligation.add_message(message);
-        self.auth_sign_info
-            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+        self.auth_sign_info.add_to_verification_obligation(
+            &self.data,
+            committee,
+            &mut obligation,
+        )?;
 
         obligation.verify_all()?;
-        Ok(weight)
+        Ok(())
     }
 
     // Turn a SignedTransaction into a Transaction. This is needed when we are
@@ -771,11 +771,6 @@ impl PartialEq for SignedTransaction {
 }
 
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ConfirmationTransaction {
-    pub certificate: CertifiedTransaction,
-}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
@@ -941,16 +936,282 @@ pub enum ExecutionStatus {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionFailureStatus {
+    //
+    // General transaction errors
+    //
     InsufficientGas,
+    InvalidGasObject,
+    InvalidTransactionUpdate,
+    ModuleNotFound,
+    FunctionNotFound,
+    InvariantViolation,
+
+    //
+    // Transfer errors
+    //
+    InvalidTransferObject,
+    InvalidTransferSui,
+    InvalidTransferSuiInsufficientBalance,
+
+    //
+    // MoveCall errors
+    //
+    NonEntryFunctionInvoked,
+    EntryTypeArityMismatch,
+    EntryArgumentError(EntryArgumentError),
+    CircularObjectOwnership(CircularObjectOwnership),
+    MissingObjectOwner(MissingObjectOwner),
+    InvalidSharedChildUse(InvalidSharedChildUse),
+    InvalidSharedByValue(InvalidSharedByValue),
+
+    //
+    // MovePublish errors
+    //
+    PublishErrorEmptyPackage,
+    PublishErrorNonZeroAddress,
+    PublishErrorDuplicateModule,
+    SuiMoveVerificationError,
+
+    //
+    // Errors from the Move VM
+    //
+    // TODO module id + func def + offset?
+    MovePrimitiveRuntimeError,
     /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
     /// abort code
-    MoveAbort(AbortLocation, u64),
-    MiscellaneousError,
+    MoveAbort(ModuleId, u64), // TODO func def + offset?
+    VMVerificationOrDeserializationError,
+    VMInvariantViolation,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct EntryArgumentError {
+    pub argument_idx: LocalIndex,
+    pub kind: EntryArgumentErrorKind,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub enum EntryArgumentErrorKind {
+    TypeMismatch,
+    InvalidObjectByValue,
+    InvalidObjectByMuteRef,
+    ObjectKindMismatch,
+    UnsupportedPureArg,
+    ArityMismatch,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct CircularObjectOwnership {
+    pub object: ObjectID,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct MissingObjectOwner {
+    pub child: ObjectID,
+    pub parent: SuiAddress,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct InvalidSharedChildUse {
+    pub child: ObjectID,
+    pub ancestor: ObjectID,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub struct InvalidSharedByValue {
+    pub object: ObjectID,
+}
+
+impl ExecutionFailureStatus {
+    pub fn entry_argument_error(argument_idx: LocalIndex, kind: EntryArgumentErrorKind) -> Self {
+        EntryArgumentError { argument_idx, kind }.into()
+    }
+
+    pub fn circular_object_ownership(object: ObjectID) -> Self {
+        CircularObjectOwnership { object }.into()
+    }
+
+    pub fn missing_object_owner(child: ObjectID, parent: SuiAddress) -> Self {
+        MissingObjectOwner { child, parent }.into()
+    }
+
+    pub fn invalid_shared_child_use(child: ObjectID, ancestor: ObjectID) -> Self {
+        InvalidSharedChildUse { child, ancestor }.into()
+    }
+
+    pub fn invalid_shared_by_value(object: ObjectID) -> Self {
+        InvalidSharedByValue { object }.into()
+    }
 }
 
 impl std::fmt::Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            ExecutionFailureStatus::InsufficientGas => write!(f, "Insufficient Gas."),
+            ExecutionFailureStatus::InvalidGasObject => {
+                write!(
+                    f,
+                    "Invalid Gas Object. Possibly not address-owned or possibly not a SUI coin."
+                )
+            }
+            ExecutionFailureStatus::InvalidTransactionUpdate => {
+                write!(f, "Invalid Transaction Update.")
+            }
+            ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
+            ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
+            ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
+            ExecutionFailureStatus::InvalidTransferObject => write!(
+                f,
+                "Invalid Transfer Object Transaction. \
+                Possibly not address-owned or possibly does not have public transfer."
+            ),
+            ExecutionFailureStatus::InvalidTransferSui => write!(
+                f,
+                "Invalid Transfer SUI. \
+                Possibly not address-owned or possibly not a SUI coin."
+            ),
+            ExecutionFailureStatus::InvalidTransferSuiInsufficientBalance => {
+                write!(f, "Invalid Transfer SUI, Insufficient Balance.")
+            }
+            ExecutionFailureStatus::NonEntryFunctionInvoked => write!(
+                f,
+                "Non Entry Function Invoked. Move Call must start with an entry function"
+            ),
+            ExecutionFailureStatus::EntryTypeArityMismatch => write!(
+                f,
+                "Number of type arguments does not match the expected value",
+            ),
+            ExecutionFailureStatus::EntryArgumentError(data) => {
+                write!(f, "Entry Argument Type Error. {data}")
+            }
+            ExecutionFailureStatus::CircularObjectOwnership(data) => {
+                write!(f, "Circular  Object Ownership. {data}")
+            }
+            ExecutionFailureStatus::MissingObjectOwner(data) => {
+                write!(f, "Missing Object Owner. {data}")
+            }
+            ExecutionFailureStatus::InvalidSharedChildUse(data) => {
+                write!(f, "Invalid Shared Child Object Usage. {data}.")
+            }
+            ExecutionFailureStatus::InvalidSharedByValue(data) => {
+                write!(f, "Invalid Shared Object By-Value Usage. {data}.")
+            }
+            ExecutionFailureStatus::PublishErrorEmptyPackage => write!(
+                f,
+                "Publish Error, Empty Package. A package must have at least one module."
+            ),
+            ExecutionFailureStatus::PublishErrorNonZeroAddress => write!(
+                f,
+                "Publish Error, Non-zero Address. \
+                The modules in the package must have their address set to zero."
+            ),
+            ExecutionFailureStatus::PublishErrorDuplicateModule => write!(
+                f,
+                "Publish Error, Duplicate Module. More than one module with a given name."
+            ),
+            ExecutionFailureStatus::SuiMoveVerificationError => write!(
+                f,
+                "Sui Move Bytecode Verification Error. \
+                Please run the Sui Move Verifier for more information."
+            ),
+            ExecutionFailureStatus::MovePrimitiveRuntimeError => write!(
+                f,
+                "Move Primitive Runtime Error. \
+                Arithmetic error, stack overflow, max value depth, etc."
+            ),
+            ExecutionFailureStatus::MoveAbort(m, c) => {
+                write!(f, "Move Runtime Abort. Module: {}, Status Code: {}", m, c)
+            }
+            ExecutionFailureStatus::VMVerificationOrDeserializationError => write!(
+                f,
+                "Move Bytecode Verification Error. \
+                Please run the Bytecode Verifier for more information."
+            ),
+            ExecutionFailureStatus::VMInvariantViolation => {
+                write!(f, "MOVE VM INVARIANT VIOLATION.")
+            }
+        }
+    }
+}
+
+impl Display for EntryArgumentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let EntryArgumentError { argument_idx, kind } = self;
+        write!(f, "Error for argument at index {argument_idx}: {kind}",)
+    }
+}
+
+impl Display for EntryArgumentErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntryArgumentErrorKind::TypeMismatch => write!(f, "Type mismatch."),
+            EntryArgumentErrorKind::InvalidObjectByValue => {
+                write!(f, "Immutable and shared objects cannot be passed by-value.")
+            }
+            EntryArgumentErrorKind::InvalidObjectByMuteRef => {
+                write!(
+                    f,
+                    "Immutable objects cannot be passed by mutable reference, &mut."
+                )
+            }
+            EntryArgumentErrorKind::ObjectKindMismatch => {
+                write!(f, "Mismtach with object argument kind and its actual kind.")
+            }
+            EntryArgumentErrorKind::UnsupportedPureArg => write!(
+                f,
+                "Unsupported non-object argument; if it is an object, it must be \
+                populated by an object ID."
+            ),
+            EntryArgumentErrorKind::ArityMismatch => {
+                write!(
+                    f,
+                    "Mismatch between the number of actual versus expected argument."
+                )
+            }
+        }
+    }
+}
+
+impl Display for CircularObjectOwnership {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let CircularObjectOwnership { object } = self;
+        write!(f, "Circular object ownership, including object {object}.")
+    }
+}
+
+impl Display for MissingObjectOwner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let MissingObjectOwner { child, parent } = self;
+        write!(
+            f,
+            "Missing object owner, the parent object {parent} for child object {child}.",
+        )
+    }
+}
+
+impl Display for InvalidSharedChildUse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let InvalidSharedChildUse { child, ancestor } = self;
+        write!(
+            f,
+            "When a child object (either direct or indirect) of a shared object is passed by-value \
+            to an entry function, either the child object's type or the shared object's type must \
+            be defined in the same module as the called function. This is violated by object \
+            {child}, whose ancestor {ancestor} is a shared object, and neither are defined in \
+            this module.",
+        )
+    }
+}
+
+impl Display for InvalidSharedByValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let InvalidSharedByValue { object } = self;
+        write!(
+            f,
+        "When a shared object is passed as an owned Move value in an entry function, either the \
+        the shared object's type must be defined in the same module as the called function. The \
+        shared object {object} is not defined in this module",
+        )
     }
 }
 
@@ -985,6 +1246,36 @@ impl ExecutionStatus {
             }
             ExecutionStatus::Failure { error } => error,
         }
+    }
+}
+
+impl From<EntryArgumentError> for ExecutionFailureStatus {
+    fn from(error: EntryArgumentError) -> Self {
+        Self::EntryArgumentError(error)
+    }
+}
+
+impl From<CircularObjectOwnership> for ExecutionFailureStatus {
+    fn from(error: CircularObjectOwnership) -> Self {
+        Self::CircularObjectOwnership(error)
+    }
+}
+
+impl From<MissingObjectOwner> for ExecutionFailureStatus {
+    fn from(error: MissingObjectOwner) -> Self {
+        Self::MissingObjectOwner(error)
+    }
+}
+
+impl From<InvalidSharedChildUse> for ExecutionFailureStatus {
+    fn from(error: InvalidSharedChildUse) -> Self {
+        Self::InvalidSharedChildUse(error)
+    }
+}
+
+impl From<InvalidSharedByValue> for ExecutionFailureStatus {
+    fn from(error: InvalidSharedByValue) -> Self {
+        Self::InvalidSharedByValue(error)
     }
 }
 
@@ -1140,6 +1431,10 @@ impl SignedTransactionEffects {
     pub fn digest(&self) -> [u8; 32] {
         sha3_hash(&self.effects)
     }
+
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.auth_signature.verify(&self.effects, committee)
+    }
 }
 
 impl PartialEq for SignedTransactionEffects {
@@ -1155,11 +1450,14 @@ impl CertifiedTransactionEffects {
         epoch: EpochId,
         effects: TransactionEffects,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-    ) -> Self {
-        Self {
+        committee: &Committee,
+    ) -> SuiResult<Self> {
+        Ok(Self {
             effects,
-            auth_signature: AuthorityStrongQuorumSignInfo { epoch, signatures },
-        }
+            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                epoch, signatures, committee,
+            )?,
+        })
     }
 
     pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
@@ -1205,6 +1503,89 @@ impl InputObjectKind {
         }
     }
 }
+
+pub struct InputObjects {
+    objects: Vec<(InputObjectKind, Object)>,
+}
+
+impl InputObjects {
+    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
+        Self { objects }
+    }
+
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.objects.is_empty()
+    }
+
+    pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
+        let owned_objects: Vec<_> = self
+            .objects
+            .iter()
+            .filter_map(|(object_kind, object)| match object_kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some(*object_ref)
+                    }
+                }
+                InputObjectKind::SharedMoveObject(_) => None,
+            })
+            .collect();
+
+        debug!(
+            num_mutable_objects = owned_objects.len(),
+            "Checked locks and found mutable objects"
+        );
+
+        owned_objects
+    }
+
+    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
+        self.objects
+            .iter()
+            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .map(|(_, obj)| obj.compute_object_reference())
+            .collect()
+    }
+
+    pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
+        self.objects
+            .iter()
+            .map(|(_, obj)| obj.previous_transaction)
+            .collect()
+    }
+
+    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
+        self.objects
+            .iter()
+            .filter_map(|(kind, object)| match kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    if object.is_immutable() {
+                        None
+                    } else {
+                        Some(*object_ref)
+                    }
+                }
+                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+            })
+            .collect()
+    }
+
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
+        self.objects
+            .into_iter()
+            .map(|(_, object)| (object.id(), object))
+            .collect()
+    }
+}
+
 pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
     weight: StakeUnit,
@@ -1251,8 +1632,7 @@ impl<'a> SignatureAggregator<'a> {
         // Update certificate.
         self.partial
             .auth_sign_info
-            .signatures
-            .push((authority, signature));
+            .add_signature(signature, authority, self.committee)?;
 
         if self.weight >= self.committee.quorum_threshold() {
             Ok(Some(self.partial.clone()))
@@ -1264,21 +1644,30 @@ impl<'a> SignatureAggregator<'a> {
 
 impl CertifiedTransaction {
     pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
-        Self::new_with_signatures(epoch, transaction, vec![])
+        CertifiedTransaction {
+            transaction_digest: transaction.transaction_digest,
+            is_verified: false,
+            data: transaction.data,
+            tx_signature: transaction.tx_signature,
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
+        }
     }
 
     pub fn new_with_signatures(
         epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-    ) -> CertifiedTransaction {
-        CertifiedTransaction {
+        committee: &Committee,
+    ) -> SuiResult<CertifiedTransaction> {
+        Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
             data: transaction.data,
             tx_signature: transaction.tx_signature,
-            auth_sign_info: AuthorityStrongQuorumSignInfo { epoch, signatures },
-        }
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                epoch, signatures, committee,
+            )?,
+        })
     }
 
     pub fn to_transaction(self) -> Transaction {
@@ -1324,21 +1713,11 @@ impl Display for CertifiedTransaction {
         writeln!(writer, "Transaction Hash: {:?}", self.digest())?;
         writeln!(
             writer,
-            "Signed Authorities : {:?}",
-            self.auth_sign_info
-                .signatures
-                .iter()
-                .map(|(name, _)| name)
-                .collect::<Vec<_>>()
+            "Signed Authorities Bitmap : {:?}",
+            self.auth_sign_info.signers_map
         )?;
         write!(writer, "{}", &self.data.kind)?;
         write!(f, "{}", writer)
-    }
-}
-
-impl ConfirmationTransaction {
-    pub fn new(certificate: CertifiedTransaction) -> Self {
-        Self { certificate }
     }
 }
 

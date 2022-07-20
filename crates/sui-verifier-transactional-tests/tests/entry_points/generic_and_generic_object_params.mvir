@@ -3,10 +3,10 @@
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
+    import 0x2.object;
     import 0x2.tx_context;
     struct Obj<T> has key {
-        id: id.VersionedID,
+        info: object.Info,
     }
     public entry foo<T0: key, T1: store>(l0: T0, l1: Self.Obj<T1>, c: &mut tx_context.TxContext) {
         label l0:

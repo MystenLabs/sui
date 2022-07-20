@@ -11,8 +11,8 @@ task 2 'view-object'. lines 13-13:
 105::m
 
 task 3 'transfer-object'. lines 15-15:
-Error: Transaction Effects Status: MiscellaneousError
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TransferUnowned, source: None } }
+Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None } }
 
 task 4 'view-object'. lines 17-17:
 105::m

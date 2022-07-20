@@ -15,5 +15,12 @@ export type DataType = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
-    timestamp_ms: number;
+    timestamp_ms: number | null;
 };
+
+export type Category =
+    | 'objects'
+    | 'transactions'
+    | 'addresses'
+    | 'ethAddress'
+    | 'unknown';

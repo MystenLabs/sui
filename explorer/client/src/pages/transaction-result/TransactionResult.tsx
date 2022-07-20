@@ -6,7 +6,7 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
 } from '@mysten/sui.js';
-import cl from 'classnames';
+import * as Sentry from '@sentry/react';
 import { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -30,8 +30,6 @@ import type {
     SuiObjectRef,
 } from '@mysten/sui.js';
 
-import styles from './TransactionResult.module.css';
-
 type TxnState = CertifiedTransaction & {
     loadState: string;
     txId: string;
@@ -40,7 +38,7 @@ type TxnState = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
-    timestamp_ms: number;
+    timestamp_ms: number | null;
 };
 // TODO: update state to include Call types
 // TODO: clean up duplicate fields
@@ -167,19 +165,13 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
         );
     } catch (error) {
         console.error(error);
+        Sentry.captureException(error);
         return <FailedToGetTxResults id={id} />;
     }
 };
 
 const TransactionResultLoaded = ({ txData }: { txData: DataType }) => {
-    return (
-        <div className={cl(theme.textresults, styles.txdetailsbg)}>
-            <div className={theme.txdetailstitle}>
-                <h3>Transaction Details</h3>
-            </div>
-            <TransactionView txdata={txData} />
-        </div>
-    );
+    return <TransactionView txdata={txData} />;
 };
 
 function TransactionResult() {

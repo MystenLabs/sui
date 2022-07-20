@@ -1,12 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use serde_json::Value;
-use sui_json_rpc_api::rpc_types::{SuiMoveStruct, SuiMoveValue};
+use sui_json_rpc_types::SuiMoveStruct;
 use tokio_stream::Stream;
 use tracing::{debug, error, trace};
 
@@ -93,8 +91,8 @@ impl EventHandler {
                 let move_struct =
                     Event::move_event_to_move_struct(type_, contents, &self.module_cache)?;
                 // Convert into `SuiMoveStruct` which is a mirror of MoveStruct but with additional type supports, (e.g. ascii::String).
-                let sui_move_struct = move_struct.into();
-                Some(to_json_value(sui_move_struct).map_err(|e| {
+                let sui_move_struct = SuiMoveStruct::from(move_struct);
+                Some(sui_move_struct.to_json_value().map_err(|e| {
                     SuiError::ObjectSerializationError {
                         error: e.to_string(),
                     }
@@ -115,39 +113,4 @@ impl EventHandler {
     pub fn subscribe(&self, filter: EventFilter) -> impl Stream<Item = EventEnvelope> {
         self.event_streamer.subscribe(filter)
     }
-}
-
-fn to_json_value(move_struct: SuiMoveStruct) -> Result<Value, serde_json::Error> {
-    // Unwrap MoveStructs
-    let unwrapped = match move_struct {
-        SuiMoveStruct::Runtime(values) => {
-            let values = values
-                .into_iter()
-                .map(|value| match value {
-                    SuiMoveValue::Struct(move_struct) => to_json_value(move_struct),
-                    SuiMoveValue::Vector(values) => to_json_value(SuiMoveStruct::Runtime(values)),
-                    _ => serde_json::to_value(&value),
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            serde_json::to_value(&values)
-        }
-        // We only care about values here, assuming struct type information is known at the client side.
-        SuiMoveStruct::WithTypes { type_: _, fields } | SuiMoveStruct::WithFields(fields) => {
-            let fields = fields
-                .into_iter()
-                .map(|(key, value)| {
-                    let value = match value {
-                        SuiMoveValue::Struct(move_struct) => to_json_value(move_struct),
-                        SuiMoveValue::Vector(values) => {
-                            to_json_value(SuiMoveStruct::Runtime(values))
-                        }
-                        _ => serde_json::to_value(&value),
-                    };
-                    value.map(|value| (key, value))
-                })
-                .collect::<Result<BTreeMap<_, _>, _>>()?;
-            serde_json::to_value(&fields)
-        }
-    }?;
-    serde_json::to_value(&unwrapped)
 }

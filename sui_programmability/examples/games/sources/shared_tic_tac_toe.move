@@ -17,7 +17,7 @@
 module games::shared_tic_tac_toe {
     use std::vector;
 
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, Info};
     use sui::event;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -44,7 +44,7 @@ module games::shared_tic_tac_toe {
     const ECellOccupied: u64 = 3;
 
     struct TicTacToe has key {
-        id: VersionedID,
+        info: Info,
         gameboard: vector<vector<u8>>,
         cur_turn: u8,
         game_status: u8,
@@ -53,7 +53,7 @@ module games::shared_tic_tac_toe {
     }
 
     struct Trophy has key {
-        id: VersionedID,
+        info: Info,
     }
 
     struct GameEndEvent has copy, drop {
@@ -65,14 +65,14 @@ module games::shared_tic_tac_toe {
     public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
-        let id = tx_context::new_id(ctx);
+        let info = object::new(ctx);
         let gameboard = vector[
             vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
             vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
             vector[MARK_EMPTY, MARK_EMPTY, MARK_EMPTY],
         ];
         let game = TicTacToe {
-            id,
+            info,
             gameboard,
             cur_turn: 0,
             game_status: IN_PROGRESS,
@@ -98,23 +98,23 @@ module games::shared_tic_tac_toe {
 
         if (game.game_status != IN_PROGRESS) {
             // Notify the server that the game ended so that it can delete the game.
-            event::emit(GameEndEvent { game_id: *id::inner(&game.id) });
+            event::emit(GameEndEvent { game_id: *object::info_id(&game.info) });
             if (game.game_status == X_WIN) {
-                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
+                transfer::transfer( Trophy { info: object::new(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
+                transfer::transfer( Trophy { info: object::new(ctx) }, *&game.o_address);
             }
         }
     }
 
     public entry fun delete_game(game: TicTacToe) {
-        let TicTacToe { id, gameboard: _, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
-        id::delete(id);
+        let TicTacToe { info, gameboard: _, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
+        object::delete(info);
     }
 
     public entry fun delete_trophy(trophy: Trophy) {
-        let Trophy { id } = trophy;
-        id::delete(id);
+        let Trophy { info } = trophy;
+        object::delete(info);
     }
 
     public fun get_status(game: &TicTacToe): u8 {

@@ -30,18 +30,9 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("confirmation_transaction")
-                .route_name("ConfirmationTransaction")
+                .name("handle_certificate")
+                .route_name("CertifiedTransaction")
                 .input_type("sui_types::messages::CertifiedTransaction")
-                .output_type("sui_types::messages::TransactionInfoResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
-                .name("consensus_transaction")
-                .route_name("ConsensusTransaction")
-                .input_type("sui_types::messages::ConsensusTransaction")
                 .output_type("sui_types::messages::TransactionInfoResponse")
                 .codec_path(codec_path)
                 .build(),

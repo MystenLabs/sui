@@ -8,7 +8,6 @@ use std::{
 };
 use sui_config::sui_config_dir;
 use sui_config::SUI_GATEWAY_CONFIG;
-use sui_core::gateway_state::GatewayMetrics;
 use sui_gateway::create_client;
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::gateway_api::{GatewayReadApiImpl, TransactionBuilderImpl};
@@ -57,8 +56,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
     let prometheus_registry = sui_node::metrics::start_prometheus_server(prom_binding);
 
-    let metrics = GatewayMetrics::new(&prometheus_registry);
-    let client = create_client(&config_path, metrics)?;
+    let client = create_client(&config_path, &prometheus_registry)?;
 
     let address = SocketAddr::new(IpAddr::V4(options.host), options.port);
     let mut server = JsonRpcServerBuilder::new(false, &prometheus_registry)?;

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     balance::{Balance, Supply},
-    id::VersionedID,
+    id::Info,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -38,15 +38,16 @@ pub struct ValidatorMetadata {
     pub name: Vec<u8>,
     pub net_address: Vec<u8>,
     pub next_epoch_stake: u64,
+    pub next_epoch_delegation: u64,
 }
 
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Validator {
     pub metadata: ValidatorMetadata,
-    pub stake: Balance,
+    pub stake_amount: u64,
     pub delegation: u64,
-    pub pending_stake: MoveOption<Balance>,
+    pub pending_stake: u64,
     pub pending_withdraw: u64,
     pub pending_delegation: u64,
     pub pending_delegation_withdraw: u64,
@@ -70,7 +71,7 @@ pub struct ValidatorSet {
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemState {
-    pub id: VersionedID,
+    pub info: Info,
     pub epoch: u64,
     pub validators: ValidatorSet,
     pub treasury_cap: Supply,

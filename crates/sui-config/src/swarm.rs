@@ -67,6 +67,7 @@ impl NetworkConfig {
             db_path: db_path.join(FULL_NODE_DB_PATH),
             network_address: utils::new_network_address(),
             metrics_address: utils::available_local_socket_address(),
+            admin_interface_port: utils::get_available_port(),
             json_rpc_address: utils::available_local_socket_address(),
             websocket_address: Some(utils::available_local_socket_address()),
             consensus_config: None,

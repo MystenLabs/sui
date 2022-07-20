@@ -61,7 +61,7 @@ pub async fn send_tx_chunks(
                     .await
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
                 let resp2 = client
-                    .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+                    .handle_certificate(certificate)
                     .await
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
                 resps.push(resp1);
@@ -138,7 +138,7 @@ pub async fn send_confs(
             let mut resps = Vec::new();
             for certificate in txns {
                 let resp = client
-                    .handle_confirmation_transaction(ConfirmationTransaction { certificate })
+                    .handle_certificate(certificate)
                     .await
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
                 resps.push(resp);

@@ -1,4 +1,4 @@
-FROM rust:1.60.0 AS chef
+FROM rust:1.62.0 AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -39,7 +39,8 @@ COPY crates crates
 RUN cargo build --release \
     --bin sui-node \
     --bin sui \
-    --bin rpc-server
+    --bin rpc-server \
+    --bin sui-faucet
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -47,6 +48,7 @@ WORKDIR sui
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/rpc-server /usr/local/bin
+COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
 
 ARG BUILD_DATE
 LABEL build-date=$BUILD_DATE

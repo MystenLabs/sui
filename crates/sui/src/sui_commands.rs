@@ -4,11 +4,12 @@
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
+use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
+use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
-use crate::sui_move::execute_move_command;
+use crate::sui_move::{self, execute_move_command};
 use anyhow::{anyhow, bail};
 use clap::*;
-use move_cli::package::cli::PackageCommand;
 use move_package::BuildConfig;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
@@ -20,8 +21,8 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
-use sui_json_rpc_api::client::SuiRpcClient;
-use sui_json_rpc_api::keystore::{KeystoreType, SuiKeystore};
+use sui_sdk::crypto::{KeystoreType, SuiKeystore};
+use sui_sdk::SuiClient;
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
@@ -63,6 +64,7 @@ pub enum SuiCommand {
         #[clap(short, long, help = "Forces overwriting existing configuration")]
         force: bool,
     },
+    GenesisCeremony(Ceremony),
     /// Sui keystore tool.
     #[clap(name = "keytool")]
     KeyTool {
@@ -96,24 +98,24 @@ pub enum SuiCommand {
     #[clap(name = "move")]
     Move {
         /// Path to a package which the command should be run with respect to.
-        #[clap(
-            long = "path",
-            short = 'p',
-            global = true,
-            parse(from_os_str),
-            default_value = "."
-        )]
-        package_path: PathBuf,
-        /// Whether we are printing in base64.
-        // TODO add this as a custom command to Package Command
-        #[clap(long, global = true)]
-        dump_bytecode_as_base64: bool,
+        #[clap(long = "path", short = 'p', global = true, parse(from_os_str))]
+        package_path: Option<PathBuf>,
         /// Package build options
         #[clap(flatten)]
         build_config: BuildConfig,
         /// Subcommands.
         #[clap(subcommand)]
-        cmd: PackageCommand,
+        cmd: sui_move::Command,
+    },
+
+    /// Tool to read validator & gateway db.
+    #[clap(name = "db-tool")]
+    DbTool {
+        /// Path of the DB to read
+        #[clap(long = "db_path")]
+        db_path: String,
+        #[clap(subcommand)]
+        cmd: Option<DbToolCommand>,
     },
 }
 
@@ -318,6 +320,7 @@ impl SuiCommand {
 
                 Ok(())
             }
+            SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool { keystore_path, cmd } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
@@ -358,10 +361,16 @@ impl SuiCommand {
             }
             SuiCommand::Move {
                 package_path,
-                dump_bytecode_as_base64,
                 build_config,
                 cmd,
-            } => execute_move_command(package_path, dump_bytecode_as_base64, build_config, cmd),
+            } => execute_move_command(package_path, build_config, cmd),
+            SuiCommand::DbTool { db_path, cmd } => {
+                let path = PathBuf::from(db_path);
+                match cmd {
+                    Some(c) => execute_db_tool_command(path, c),
+                    None => print_db_all_tables(path),
+                }
+            }
         }
     }
 }
@@ -395,7 +404,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
             };
 
             // Check url is valid
-            SuiRpcClient::new(url)?;
+            SuiClient::new_http_client(url)?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)

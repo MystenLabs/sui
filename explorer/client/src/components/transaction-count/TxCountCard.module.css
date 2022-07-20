@@ -1,7 +1,0 @@
-div.txcount {
-    @apply font-normal leading-3 font-mono text-center w-11/12 md:w-10/12 mx-auto mb-28 mt-10;
-}
-
-div.txcount > div {
-    margin-top: 1rem;
-}

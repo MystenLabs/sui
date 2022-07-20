@@ -11,7 +11,7 @@ module nfts::auction_lib {
     use sui::coin;
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, Info};
     use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
@@ -29,7 +29,7 @@ module nfts::auction_lib {
     /// Maintains the state of the auction owned by a trusted
     /// auctioneer.
     struct Auction<T:  key + store> has key {
-        id: VersionedID,
+        info: Info,
         /// Item to be sold. It only really needs to be wrapped in
         /// Option if Auction represents a shared object but we do it
         /// for single-owner Auctions for better code re-use.
@@ -41,7 +41,7 @@ module nfts::auction_lib {
     }
 
     public(friend) fun auction_id<T: key + store>(auction: &Auction<T>): &ID {
-        id::inner(&auction.id)
+        object::info_id(&auction.info)
     }
 
     public(friend) fun auction_owner<T: key + store>(auction: &Auction<T>): address {
@@ -51,13 +51,13 @@ module nfts::auction_lib {
     /// Creates an auction. This is executed by the owner of the asset to be
     /// auctioned.
     public(friend) fun create_auction<T: key + store>(
-        id: VersionedID, to_sell: T, ctx: &mut TxContext
+        info: Info, to_sell: T, ctx: &mut TxContext
     ): Auction<T> {
         // A question one might asked is how do we know that to_sell
         // is owned by the caller of this entry function and the
         // answer is that it's checked by the runtime.
         Auction<T> {
-            id,
+            info,
             to_sell: option::some(to_sell),
             owner: tx_context::sender(ctx),
             bid_data: option::none(),
@@ -136,8 +136,8 @@ module nfts::auction_lib {
     public fun end_and_destroy_auction<T: key + store>(
         auction: Auction<T>, ctx: &mut TxContext
     ) {
-        let Auction { id, to_sell, owner, bid_data } = auction;
-        id::delete(id);
+        let Auction { info, to_sell, owner, bid_data } = auction;
+        object::delete(info);
 
         end_auction(&mut to_sell, owner, &mut bid_data, ctx);
 
@@ -167,8 +167,8 @@ module nfts::auction_lib {
     /// exposes transfer::transfer_to_object_id
     public fun transfer_to_object_id<T: key + store>(
         obj: Auction<T>,
-        owner_id: VersionedID,
-    ): (VersionedID, transfer::ChildRef<Auction<T>>) {
+        owner_id: &Info,
+    ) {
         transfer::transfer_to_object_id(obj, owner_id)
     }
 

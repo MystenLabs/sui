@@ -26,7 +26,7 @@ This is the most common case for Move objects. A Move object upon creation in th
 An object can be owned by another object. It's important to distinguish this direct ownership from *object wrapping*. An object can be wrapped/embedded in another object when you have a field of one object's struct definition to be another object type. For example:
 ```
 struct A {
-    id: VersionedID,
+    info: Info,
     b: B,
 }
 ```

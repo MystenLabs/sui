@@ -3,8 +3,8 @@
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
+    import 0x2.object;
     struct S has key {
-        id: bool
+        info: bool
     }
 }

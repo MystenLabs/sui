@@ -29,7 +29,8 @@ pub struct QuorumDriverHandler<A> {
     quorum_driver: Arc<QuorumDriver<A>>,
     _processor_handle: JoinHandle<()>,
     // TODO: Change to CertifiedTransactionEffects eventually.
-    effects_subscriber: Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
+    effects_subscriber:
+        tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>,
 }
 
 /// The core data structure of the QuorumDriver.
@@ -40,14 +41,18 @@ pub struct QuorumDriverHandler<A> {
 pub struct QuorumDriver<A> {
     validators: ArcSwap<AuthorityAggregator<A>>,
     task_sender: Sender<QuorumTask<A>>,
-    effects_subscribe_sender: Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
+    effects_subscribe_sender:
+        tokio::sync::broadcast::Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
 }
 
 impl<A> QuorumDriver<A> {
     pub fn new(
         validators: AuthorityAggregator<A>,
         task_sender: Sender<QuorumTask<A>>,
-        effects_subscribe_sender: Sender<(CertifiedTransaction, CertifiedTransactionEffects)>,
+        effects_subscribe_sender: tokio::sync::broadcast::Sender<(
+            CertifiedTransaction,
+            CertifiedTransactionEffects,
+        )>,
     ) -> Self {
         Self {
             validators: ArcSwap::from(Arc::new(validators)),
@@ -129,7 +134,7 @@ where
             .await?;
         let response = (certificate, effects);
         // An error to send the result to subscribers should not block returning the result.
-        if let Err(err) = self.effects_subscribe_sender.send(response.clone()).await {
+        if let Err(err) = self.effects_subscribe_sender.send(response.clone()) {
             // TODO: We could potentially retry sending if we want.
             error!("{}", err);
         }
@@ -143,7 +148,7 @@ where
 {
     pub fn new(validators: AuthorityAggregator<A>) -> Self {
         let (task_tx, task_rx) = mpsc::channel::<QuorumTask<A>>(5000);
-        let (subscriber_tx, subscriber_rx) = mpsc::channel::<_>(5000);
+        let (subscriber_tx, subscriber_rx) = tokio::sync::broadcast::channel::<_>(100);
         let quorum_driver = Arc::new(QuorumDriver::new(validators, task_tx, subscriber_tx));
         let handle = {
             let quorum_driver_copy = quorum_driver.clone();
@@ -163,9 +168,9 @@ where
     }
 
     pub fn subscribe(
-        &mut self,
-    ) -> &mut Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
-        &mut self.effects_subscriber
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
+        self.effects_subscriber.resubscribe()
     }
 
     pub async fn update_validators(&self, new_validators: AuthorityAggregator<A>) -> SuiResult {
@@ -193,15 +198,8 @@ where
                         // of a transaction latter.
                         match quorum_driver.process_transaction(transaction).await {
                             Ok(cert) => {
-                                if let Err(err) = quorum_driver
-                                    .task_sender
-                                    .send(QuorumTask::ProcessCertificate(cert))
-                                    .await
-                                {
-                                    error!(
-                                        "Sending task to quorum driver queue failed: {}",
-                                        err.to_string()
-                                    );
+                                if let Err(err) = quorum_driver.process_certificate(cert).await {
+                                    warn!("Certificate processing failed: {:?}", err);
                                 }
                             }
                             Err(err) => {

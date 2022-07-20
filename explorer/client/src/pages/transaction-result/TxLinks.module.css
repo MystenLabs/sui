@@ -1,0 +1,42 @@
+.mutatedcreatedlist ul {
+    @apply list-none p-0 m-0 !important;
+}
+
+.mutatedcreatedlist ul li {
+    @apply pt-1.5 pb-1.5 font-mono;
+}
+
+.mutatedcreatedlist ul li a,
+.objectidlists span {
+    @apply text-sui-dark;
+}
+
+.label {
+    border-bottom: 1px solid #f0f1f2;
+    @apply text-sui-grey-100 font-[500] text-lg mb-2 mt-1 border-b-[1px] border-[#f0f1f2] md:border-0;
+}
+
+.moretxbtn {
+    @apply text-left bg-transparent cursor-pointer border-0 pl-0 pr-0 text-[#636870] hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm;
+}
+
+.moretxbtn::after {
+    margin: 5px;
+    content: '';
+    background-image: url('../../assets/SVGIcons/chevron-down.svg');
+    @apply text-sm;
+
+    width: 12px;
+    height: 12px;
+    position: absolute;
+    margin-top: 4px;
+    transform: rotate(0deg);
+}
+
+.viewless::after {
+    transform: rotate(180deg);
+}
+
+.objectidlists {
+    @apply text-sm;
+}

@@ -21,11 +21,9 @@ use tracing::info;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_api::rpc_types::{
-    SplitCoinResponse, SuiEventEnvelope, SuiEventFilter, TransactionResponse,
-};
-use sui_json_rpc_api::rpc_types::{
-    SuiEvent, SuiMoveStruct, SuiMoveValue, SuiObjectInfo, SuiObjectRead,
+use sui_json_rpc_types::{
+    SplitCoinResponse, SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue,
+    SuiObjectInfo, SuiObjectRead, TransactionResponse,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
@@ -641,7 +639,7 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
             assert_eq!(type_, "0x2::devnet_nft::MintNFTEvent");
             assert_eq!(
                 fields,
-                SuiMoveStruct::WithFields(BTreeMap::from([
+                Some(SuiMoveStruct::WithFields(BTreeMap::from([
                     ("creator".into(), SuiMoveValue::Address(sender)),
                     (
                         "name".into(),
@@ -651,7 +649,7 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
                         "object_id".into(),
                         SuiMoveValue::Address(SuiAddress::from(object_id))
                     ),
-                ]))
+                ])))
             );
             // TODO: verify bcs contents
         }

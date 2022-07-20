@@ -1,0 +1,67 @@
+@use '_values/colors';
+@use '_utils';
+
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    max-width: 100%;
+    align-items: center;
+    height: 100%;
+}
+
+.balance-container {
+    margin-top: 16px;
+    margin-bottom: 20px;
+    min-height: 59px;
+    font-size: 28px;
+}
+
+.actions {
+    display: flex;
+    flex-flow: row nowrap;
+    max-width: 100%;
+    margin-bottom: 25px;
+}
+
+.title {
+    font-style: normal;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: colors.$gray-75;
+    align-self: flex-start;
+    margin-bottom: 2px;
+}
+
+.alert {
+    margin-bottom: 16px;
+}
+
+.other-coins {
+    display: flex;
+    flex-flow: column nowrap;
+    max-height: 100%;
+    overflow-y: auto;
+    flex-grow: 1;
+    align-self: stretch;
+    @include utils.override-main-padding;
+}
+
+.others-loader {
+    font-size: 28px;
+}
+
+.empty {
+    font-style: italic;
+    font-weight: 400;
+    font-size: 12px;
+    text-align: center;
+    color: colors.$gray-70;
+    padding: 0 16px;
+}
+
+.others-loader,
+.empty {
+    margin-top: 47px;
+    align-self: center;
+}

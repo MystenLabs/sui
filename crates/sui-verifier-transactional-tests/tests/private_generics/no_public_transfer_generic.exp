@@ -1,0 +1,29 @@
+processed 8 tasks
+
+task 1 'publish'. lines 10-15:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer' on an object of type 'T0'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
+
+task 2 'publish'. lines 17-26:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer_to_object_id' on an object of type 'T0'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
+
+task 3 'publish'. lines 28-33:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::freeze_object' on an object of type 'T0'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
+
+task 4 'publish'. lines 35-40:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::share_object' on an object of type 'T0'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
+
+task 5 'publish'. lines 42-48:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer_to_object' on an object of type 'T0'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
+
+task 6 'publish'. lines 50-56:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer_to_object' on an object of type 'T0'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }
+
+task 7 'publish'. lines 58-63:
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::t. Invalid call to 'sui::transfer::transfer_to_object_id' on an object of type 'T0'. The transferred object's type must be defined in the current module, or must have the 'store' type ability") } }

@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::authority::AuthorityState;
-use crate::checkpoints::CheckpointLocals;
+
+use crate::checkpoints::CheckpointStore;
 use crate::checkpoints::ConsensusSender;
 use bytes::Bytes;
 use futures::stream::FuturesUnordered;
@@ -10,19 +10,19 @@ use multiaddr::Multiaddr;
 use narwhal_executor::SubscriberResult;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
+use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
 };
-use sui_types::messages::ConfirmationTransaction;
 use sui_types::messages_checkpoint::CheckpointFragment;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
-    messages::{ConsensusTransaction, TransactionInfoResponse},
+    messages::ConsensusTransaction,
 };
 use tokio::{
     sync::{
@@ -49,13 +49,53 @@ type SerializedTransactionInfoResponse = Vec<u8>;
 
 /// Channel to notify the caller when the Sui certificate has been sequenced.
 type TxSequencedNotifier = oneshot::Sender<SuiResult<SerializedTransactionInfoResponse>>;
+type TxSequencedNotifierClose = oneshot::Sender<()>;
 
 /// Message to notify the consensus listener that a new transaction has been sent to consensus
 /// or that the caller timed out on a specific transaction.
 #[derive(Debug)]
 pub enum ConsensusListenerMessage {
-    New(SerializedConsensusTransaction, TxSequencedNotifier),
-    Cleanup(SerializedConsensusTransaction),
+    New(
+        SerializedConsensusTransaction,
+        (TxSequencedNotifier, TxSequencedNotifierClose),
+    ),
+}
+
+pub struct ConsensusWaiter {
+    // This channel is used to signal the result if the transaction gets
+    // sequenced and observed at the output of consensus.
+    signal_back: oneshot::Receiver<SuiResult<SerializedTransactionInfoResponse>>,
+    // We use this channel as a signalling mechanism, to detect if the ConsensusWaiter
+    // struct is dropped, and to clean up the ConsensusListener structures to prevent
+    // memory leaks.
+    signal_close: oneshot::Receiver<()>,
+}
+
+impl ConsensusWaiter {
+    pub fn new() -> (
+        ConsensusWaiter,
+        (TxSequencedNotifier, TxSequencedNotifierClose),
+    ) {
+        let (notif, signal_back) = oneshot::channel();
+        let (close, signal_close) = oneshot::channel();
+        (
+            ConsensusWaiter {
+                signal_back,
+                signal_close,
+            },
+            (notif, close),
+        )
+    }
+
+    pub fn close(&mut self) {
+        self.signal_close.close();
+    }
+
+    pub async fn wait_for_result(self) -> SuiResult<SerializedTransactionInfoResponse> {
+        self.signal_back
+            .await
+            .map_err(|e| SuiError::FailedToHearBackFromConsensus(e.to_string()))?
+    }
 }
 
 /// The message returned by the consensus to notify that a Sui certificate has been sequenced
@@ -67,8 +107,6 @@ type ConsensusOutput = (
 
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
-    /// The authority's state.
-    state: Arc<AuthorityState>,
     /// The network client connecting to the consensus node of this authority.
     consensus_client: TransactionsClient<sui_network::tonic::transport::Channel>,
     /// The Sui committee information.
@@ -84,7 +122,6 @@ pub struct ConsensusAdapter {
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
@@ -95,7 +132,6 @@ impl ConsensusAdapter {
                 .expect("Failed to connect to consensus"),
         );
         Self {
-            state,
             consensus_client,
             committee,
             tx_consensus_listener,
@@ -110,10 +146,7 @@ impl ConsensusAdapter {
     }
 
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
-    pub async fn submit(
-        &self,
-        certificate: &ConsensusTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
+    pub async fn submit(&self, certificate: &ConsensusTransaction) -> SuiResult {
         // Check the Sui certificate (submitted by the user).
         certificate.verify(&self.committee)?;
 
@@ -123,8 +156,9 @@ impl ConsensusAdapter {
         let bytes = Bytes::from(serialized.clone());
 
         // Notify the consensus listener that we are expecting to process this certificate.
-        let (sender, receiver) = oneshot::channel();
-        let consensus_input = ConsensusListenerMessage::New(serialized.clone(), sender);
+        let (waiter, signals) = ConsensusWaiter::new();
+
+        let consensus_input = ConsensusListenerMessage::New(serialized.clone(), signals);
         self.tx_consensus_listener
             .send(consensus_input)
             .await
@@ -144,38 +178,13 @@ impl ConsensusAdapter {
         // certificate will be sequenced. So the best we can do is to set a timer and notify the
         // client to retry if we timeout without hearing back from consensus (this module does not
         // handle retries). The best timeout value depends on the consensus protocol.
-        let info = match timeout(self.max_delay, receiver).await {
-            Ok(reply) => reply.expect("Failed to read back from consensus listener"),
+        match timeout(self.max_delay, waiter.wait_for_result()).await {
+            Ok(_) => Ok(()),
             Err(e) => {
-                let message = ConsensusListenerMessage::Cleanup(serialized);
-                self.tx_consensus_listener
-                    .send(message)
-                    .await
-                    .expect("Cleanup channel with consensus listener dropped");
+                // We drop the waiter which will signal to the conensus listener task to clean up
+                // the channels.
                 Err(SuiError::FailedToHearBackFromConsensus(e.to_string()))
             }
-        }?;
-
-        if info.is_empty() {
-            // Consensus successfully assigned shared-locks to this certificate.
-            match certificate {
-                ConsensusTransaction::UserTransaction(certificate) => {
-                    let confirmation = ConfirmationTransaction {
-                        certificate: *certificate.clone(),
-                    };
-                    self.state
-                        .handle_confirmation_transaction(confirmation)
-                        .await
-                }
-                message => {
-                    tracing::error!("Unexpected message {message:?}");
-                    Err(SuiError::UnexpectedMessage)
-                }
-            }
-        } else {
-            // This certificate has already been executed.
-            bincode::deserialize(&info)
-                .map_err(|e| SuiError::ConsensusSuiSerializationError(e.to_string()))
         }
     }
 }
@@ -194,7 +203,7 @@ pub struct ConsensusListener {
     /// `pending` has a maximum size.
     max_pending_transactions: usize,
     /// Keep a map of all consensus inputs that are currently being sequenced.
-    pending: HashMap<ConsensusTransactionDigest, Vec<TxSequencedNotifier>>,
+    pending: HashMap<ConsensusTransactionDigest, Vec<(u64, TxSequencedNotifier)>>,
 }
 
 impl ConsensusListener {
@@ -227,31 +236,38 @@ impl ConsensusListener {
     }
 
     /// Main loop receiving messages input to consensus and notifying the caller once the inputs
-    /// are sequenced (of if an error happened).
+    /// are sequenced (or if an error happened).
     async fn run(&mut self) {
+        let mut closed_notifications = FuturesUnordered::new();
+        let mut id_counter: u64 = 0;
+
         loop {
             tokio::select! {
                 // A new transaction has been sent to consensus or is no longer needed.
                 Some(message) = self.rx_consensus_input.recv() => {
                     match message {
                         // Keep track of this certificates so we can notify the user later.
-                        ConsensusListenerMessage::New(transaction, replier) => {
+                        ConsensusListenerMessage::New(transaction, (replier, mut _closer)) => {
                             let digest = Self::hash_serialized_transaction(&transaction);
                             if self.pending.len() < self.max_pending_transactions {
-                                self.pending.entry(digest).or_insert_with(Vec::new).push(replier);
+                                let id = id_counter;
+                                id_counter += 1;
+
+                                let list = self.pending.entry(digest).or_insert_with(Vec::new);
+                                list.push((id, replier));
+
+                                // Register with the close notification.
+                                closed_notifications.push(async move {
+                                    // Wait for the channel to close
+                                    _closer.closed().await;
+                                    // Return he digest concerned
+                                    (digest, id)
+                                });
+
                             } else if replier.send(Err(SuiError::ListenerCapacityExceeded)).is_err() {
                                 debug!("No replier to listen to consensus output {digest}");
                             }
                         },
-
-                        // Stop waiting for a consensus transaction.
-                        ConsensusListenerMessage::Cleanup(transaction) => {
-                            let digest = Self::hash_serialized_transaction(&transaction);
-                            let _ = self.pending.get_mut(&digest).and_then(|x| x.pop());
-                            if self.pending.get(&digest).map_or_else(|| false, |x| x.is_empty()) {
-                                self.pending.remove(&digest);
-                            }
-                        }
                     }
                 },
 
@@ -260,13 +276,29 @@ impl ConsensusListener {
                     let outcome = result.map_err(SuiError::from);
                     let digest = Self::hash_serialized_transaction(&serialized);
                     if let Some(repliers) = self.pending.remove(&digest) {
-                        for replier in repliers {
+                        for (_, replier) in repliers {
                             if replier.send(outcome.clone()).is_err() {
                                 debug!("No replier to listen to consensus output {digest}");
                             }
                         }
                     }
                 }
+
+                Some((digest, id)) = closed_notifications.next() => {
+                    let should_delete = if let Some(list) = self.pending.get_mut(&digest) {
+                        // First clean up the list
+                        list.retain(|(item_id, _)| *item_id != id);
+                        // if the resuting list is empty we should delete the entry.
+                        list.is_empty()
+                    } else { false };
+
+                    // Secondly we determine if we need to delete the entry
+                    if should_delete {
+                        self.pending.remove(&digest);
+                    }
+
+                }
+
             }
         }
     }
@@ -302,7 +334,7 @@ pub struct CheckpointConsensusAdapter {
     /// Receive new checkpoint fragments to sequence.
     rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
     /// A pointer to the checkpoints local store.
-    checkpoint_locals: Arc<CheckpointLocals>,
+    checkpoint_db: Arc<Mutex<CheckpointStore>>,
     /// The initial delay to wait before re-attempting a connection with consensus (in ms).
     retry_delay: Duration,
     /// The maximum number of checkpoint fragment pending sequencing.
@@ -317,7 +349,7 @@ impl CheckpointConsensusAdapter {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
         rx_checkpoint_consensus_adapter: Receiver<CheckpointFragment>,
-        checkpoint_locals: Arc<CheckpointLocals>,
+        checkpoint_db: Arc<Mutex<CheckpointStore>>,
         retry_delay: Duration,
         max_pending_transactions: usize,
     ) -> Self {
@@ -331,7 +363,7 @@ impl CheckpointConsensusAdapter {
             consensus_client,
             tx_consensus_listener,
             rx_checkpoint_consensus_adapter,
-            checkpoint_locals,
+            checkpoint_db,
             retry_delay,
             max_pending_transactions,
             buffer: VecDeque::with_capacity(max_pending_transactions),
@@ -357,12 +389,12 @@ impl CheckpointConsensusAdapter {
 
     /// Wait for a transaction to be sequenced by consensus (or to timeout).
     async fn waiter<T>(
-        receiver: oneshot::Receiver<SuiResult<SerializedTransactionInfoResponse>>,
+        receiver: ConsensusWaiter,
         retry_delay: Duration,
         deliver: T,
     ) -> (SuiResult<SerializedTransactionInfoResponse>, T) {
-        let outcome = match timeout(retry_delay, receiver).await {
-            Ok(reply) => reply.expect("Failed to read back from consensus listener"),
+        let outcome = match timeout(retry_delay, receiver.wait_for_result()).await {
+            Ok(reply) => reply,
             Err(e) => Err(SuiError::FailedToHearBackFromConsensus(e.to_string())),
         };
         (outcome, deliver)
@@ -380,9 +412,10 @@ impl CheckpointConsensusAdapter {
                     Ok(_) => {
                         // Notify the consensus listener that we wish to be notified once our
                         // consensus transaction is sequenced.
-                        let (sender, receiver) = oneshot::channel();
+                        let (waiter, signals) = ConsensusWaiter::new();
+
                         let consensus_input =
-                            ConsensusListenerMessage::New(serialized.clone(), sender);
+                            ConsensusListenerMessage::New(serialized.clone(), signals);
                         self.tx_consensus_listener
                             .send(consensus_input)
                             .await
@@ -391,7 +424,7 @@ impl CheckpointConsensusAdapter {
                         // Add the receiver to the waiter. So we can retransmit if the
                         // connection fails.
                         let deliver = (serialized, sequence_number);
-                        let future = Self::waiter(receiver, self.retry_delay, deliver);
+                        let future = Self::waiter(waiter, self.retry_delay, deliver);
                         waiting.push(future);
                     }
                     Err(_) => {
@@ -410,7 +443,7 @@ impl CheckpointConsensusAdapter {
                     // Cleanup the buffer.
                     if self.buffer.len() >= self.max_pending_transactions {
                         // Drop the earliest fragments. They are not needed for liveness.
-                        if let Some(proposal) = &self.checkpoint_locals.current_proposal {
+                        if let Some(proposal) = &self.checkpoint_db.lock().get_locals().current_proposal {
                             let current_sequence_number = proposal.sequence_number();
                             self.buffer.retain(|(_, s)| s >= current_sequence_number);
                         }
@@ -423,7 +456,7 @@ impl CheckpointConsensusAdapter {
                     self.buffer.push_front((serialized, sequence_number));
                 },
 
-                // Listen to checkpoint fragments who failed to be sequenced and need reties.
+                // Listen to checkpoint fragments who failed to be sequenced and need retries.
                 Some((outcome, identifier)) = waiting.next() => {
                    if let Err(error) = outcome {
                        tracing::debug!("Failed to sequence transaction: {error}");

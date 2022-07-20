@@ -6,15 +6,20 @@ module sui::sui_system {
     use sui::coin::{Self, Coin};
     use sui::delegation::{Self, Delegation};
     use sui::epoch_reward_record::{Self, EpochRewardRecord};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator};
     use sui::validator_set::{Self, ValidatorSet};
+    use sui::stake::Stake;
+    use std::option;
 
     friend sui::genesis;
+
+    #[test_only]
+    friend sui::governance_test_utils;
 
     /// A list of system config parameters.
     // TDOO: We will likely add more, a few potential ones:
@@ -34,7 +39,7 @@ module sui::sui_system {
 
     /// The top-level object containing all information of the Sui system.
     struct SuiSystemState has key {
-        id: VersionedID,
+        info: Info,
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// Contains all information about the validators.
@@ -64,7 +69,7 @@ module sui::sui_system {
     ) {
         let state = SuiSystemState {
             // Use a hardcoded ID.
-            id: id::get_sui_system_state_object_id(),
+            info: object::sui_system_state(),
             epoch: 0,
             validators: validator_set::new(validators),
             sui_supply,
@@ -108,7 +113,9 @@ module sui::sui_system {
             pubkey_bytes,
             name,
             net_address,
-            coin::into_balance(stake)
+            coin::into_balance(stake),
+            option::none(),
+            ctx
         );
 
         validator_set::request_add_validator(&mut self.validators, validator);
@@ -138,6 +145,22 @@ module sui::sui_system {
         validator_set::request_add_stake(
             &mut self.validators,
             coin::into_balance(new_stake),
+            option::none(),
+            ctx,
+        )
+    }
+
+    /// A validator can request adding more stake using a locked coin. This will be processed at the end of epoch.
+    public entry fun request_add_stake_with_locked_coin(
+        self: &mut SuiSystemState,
+        new_stake: LockedCoin<SUI>,
+        ctx: &mut TxContext,
+    ) {
+        let (balance, epoch_time_lock) = locked_coin::into_balance(new_stake);
+        validator_set::request_add_stake(
+            &mut self.validators,
+            balance,
+            option::some(epoch_time_lock),
             ctx,
         )
     }
@@ -149,11 +172,13 @@ module sui::sui_system {
     /// If the sender represents an active validator, the request will be processed at the end of epoch.
     public entry fun request_withdraw_stake(
         self: &mut SuiSystemState,
+        stake: &mut Stake,
         withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
         validator_set::request_withdraw_stake(
             &mut self.validators,
+            stake,
             withdraw_amount,
             self.parameters.min_validator_stake,
             ctx,
@@ -201,6 +226,20 @@ module sui::sui_system {
         delegation::undelegate(delegation, self.epoch, ctx)
     }
 
+    // Switch delegation from the current validator to a new one. 
+    public entry fun request_switch_delegation(
+        self: &mut SuiSystemState,
+        delegation: &mut Delegation,
+        new_validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let old_validator_address = delegation::validator(delegation);
+        let amount = delegation::delegate_amount(delegation);
+        validator_set::request_remove_delegation(&mut self.validators, old_validator_address, amount);
+        validator_set::request_add_delegation(&mut self.validators, new_validator_address, amount);
+        delegation::switch_delegation(delegation, new_validator_address, ctx);
+    }
+
     // TODO: Once we support passing vector of object references as arguments,
     // we should support passing a vector of &mut EpochRewardRecord,
     // which will allow delegators to claim all their reward in one transaction.
@@ -240,8 +279,8 @@ module sui::sui_system {
         let storage_reward = balance::increase_supply(&mut self.sui_supply, storage_charge);
         let computation_reward = balance::increase_supply(&mut self.sui_supply, computation_charge);
 
-        let delegation_stake = validator_set::delegation_stake(&self.validators);
-        let validator_stake = validator_set::validator_stake(&self.validators);
+        let delegation_stake = validator_set::total_delegation_stake(&self.validators);
+        let validator_stake = validator_set::total_validator_stake(&self.validators);
         let storage_fund = balance::value(&self.storage_fund);
         let total_stake = delegation_stake + validator_stake + storage_fund;
 
@@ -276,6 +315,18 @@ module sui::sui_system {
     public fun epoch(self: &SuiSystemState): u64 {
         self.epoch
     }
+
+    /// Returns the amount of stake delegated to `validator_addr`. 
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_delegate_amount(self: &SuiSystemState, validator_addr: address): u64 {
+        validator_set::validator_delegate_amount(&self.validators, validator_addr)
+    } 
+
+    /// Returns the amount of delegators who have delegated to `validator_addr`. 
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_delegator_count(self: &SuiSystemState, validator_addr: address): u64 {
+        validator_set::validator_delegator_count(&self.validators, validator_addr)
+    } 
 
     #[test_only]
     public fun set_epoch_for_testing(self: &mut SuiSystemState, epoch_num: u64) {

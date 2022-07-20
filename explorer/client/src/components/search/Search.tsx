@@ -4,6 +4,7 @@
 import React, { useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ReactComponent as SearchIcon } from '../../assets/search.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 
@@ -47,23 +48,37 @@ function Search() {
             aria-label="search form"
         >
             <input
-                className={styles.searchtext}
+                className={styles.searchtextdesktop}
                 id="searchText"
-                placeholder="Search by ID"
+                placeholder="Search by Addresses / Objects / Transactions"
                 value={input}
                 onChange={handleTextChange}
+                autoFocus
                 type="text"
             />
-
             <input
-                type="submit"
+                className={styles.searchtextmobile}
+                id="searchText"
+                placeholder="Search Anything"
+                value={input}
+                onChange={handleTextChange}
+                autoFocus
+                type="text"
+            />
+            <button
                 id="searchBtn"
-                value={pleaseWaitMode ? 'Please Wait' : 'Search'}
+                type="submit"
                 disabled={pleaseWaitMode}
                 className={`${styles.searchbtn} ${
                     pleaseWaitMode && styles.disabled
                 }`}
-            />
+            >
+                {pleaseWaitMode ? (
+                    'Please Wait'
+                ) : (
+                    <SearchIcon className={styles.searchicon} />
+                )}
+            </button>
         </form>
     );
 }

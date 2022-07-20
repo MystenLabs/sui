@@ -19,7 +19,7 @@ const coinGroup = (num: number) => {
     };
 };
 
-const mainBodyCSS = 'main > div:nth-child(2)';
+const mainBodyCSS = 'main > section > div';
 
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
 
@@ -155,7 +155,9 @@ describe('End-to-end Tests', () => {
         });
     });
 
+    /*
     describe('Transaction Results', () => {
+        // disabled because we are not do not display the Word Transaction ID
         const successID = 'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=';
         it('can be searched', async () => {
             await page.goto(BASE_URL);
@@ -200,7 +202,7 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(value.trim()).toBe('< 1 sec ago (01 Jan 2025 01:13:09 UTC)');
         });
-    });
+    });*/
 
     describe('Owned Objects have links that enable', () => {
         const navigationTemplate = async (
@@ -223,7 +225,7 @@ describe('End-to-end Tests', () => {
 
             //Click on Owner text:
             await cssInteract(page)
-                .with('div#owner > span:first-child')
+                .with('div#owner > div >span:first-child')
                 .click();
 
             //Looking for object or address?
@@ -272,7 +274,7 @@ describe('End-to-end Tests', () => {
             ).toBe('noImage');
 
             //Parent Object contains an image:
-            await page.click('div#owner > span:first-child');
+            await page.click('div#owner > div > span:first-child');
             await page.waitForFunction(
                 () => !document.querySelector('#pleaseWaitImage')
             );
@@ -289,7 +291,7 @@ describe('End-to-end Tests', () => {
                     () => {}
                 )
             ).rejects.toThrow(
-                'Error: failed to find element matching selector "main > div:nth-child(2) > div:first-child > div > div"'
+                `Error: failed to find element matching selector "${mainBodyCSS} > div:first-child > div > div"`
             );
         });
     });

@@ -1,0 +1,56 @@
+@use '_variables' as v;
+@use '_values' as values;
+
+.container {
+    display: flex;
+    flex-flow: row nowrap;
+    background-color: v.use(v.$colors-nav-background-color);
+    backdrop-filter: v.use(v.$colors-nav-background-filter);
+    height: values.$sizing-nav-height;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    align-items: center;
+    justify-content: stretch;
+    padding: 5px 10px;
+    overflow: hidden;
+}
+
+.link {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    padding: 6px 6px 14px;
+    text-decoration: none;
+    color: v.use(v.$colors-nav-item-color);
+    user-select: none;
+    flex-grow: 1;
+    flex-basis: 80px;
+
+    &.active {
+        color: v.use(v.$colors-nav-item-highlighted-color);
+    }
+}
+
+.icon {
+    font-size: 32px;
+    margin-bottom: 2px;
+
+    .active > & {
+        color: v.use(v.$colors-nav-item-icon-highlighted-color);
+        background-clip: text;
+        background-image: v.use(
+            v.$colors-nav-item-icon-highlighted-gradient-color
+        );
+    }
+}
+
+.title {
+    font-size: 13px;
+    line-height: 12px;
+    font-weight: 600;
+
+    .active > & {
+        font-weight: 700;
+    }
+}

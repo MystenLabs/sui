@@ -3,16 +3,26 @@
 
 import { Link } from 'react-router-dom';
 
+import { ReactComponent as SuiLogo } from '../../assets/Sui Logo.svg';
+import NetworkSelect from '../network/Network';
+import Search from '../search/Search';
+
 import styles from './Header.module.css';
 
 const Header = () => {
     return (
         <header>
-            <nav className={styles.nav}>
-                <Link to="/" aria-label="logo" className={styles.logo}>
-                    Mysten Labs
-                </Link>
-            </nav>
+            <Link id="homeBtn" className={styles.suititle} to="/">
+                <SuiLogo />
+            </Link>
+
+            <div className={styles.search}>
+                <Search />
+            </div>
+
+            <div className={styles.networkselect}>
+                <NetworkSelect />
+            </div>
         </header>
     );
 };

@@ -1,5 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::api::EventReadApiServer;
+use crate::api::EventStreamingApiServer;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use futures::{StreamExt, TryStream};
@@ -12,9 +14,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::event_handler::EventHandler;
-use sui_json_rpc_api::rpc_types::{SuiEvent, SuiEventEnvelope, SuiEventFilter};
-use sui_json_rpc_api::EventReadApiServer;
-use sui_json_rpc_api::EventStreamingApiServer;
+use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope, SuiEventFilter};
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use tracing::warn;
@@ -89,7 +89,7 @@ impl SuiRpcModule for EventStreamingApiImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc_api::EventStreamingApiOpenRpc::module_doc()
+        crate::api::EventStreamingApiOpenRpc::module_doc()
     }
 }
 
@@ -176,6 +176,6 @@ impl SuiRpcModule for EventReadApiImpl {
     }
 
     fn rpc_doc_module() -> Module {
-        sui_json_rpc_api::EventReadApiOpenRpc::module_doc()
+        crate::api::EventReadApiOpenRpc::module_doc()
     }
 }

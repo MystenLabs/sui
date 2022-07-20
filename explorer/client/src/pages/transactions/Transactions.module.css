@@ -1,0 +1,11 @@
+div.container {
+    @apply mx-auto;
+}
+
+.title {
+    @apply text-2xl font-[700];
+}
+
+.container td a {
+    @apply text-sui-grey-85;
+}
