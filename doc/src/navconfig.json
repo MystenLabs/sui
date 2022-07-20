@@ -28,10 +28,6 @@
             "fileName": "learn/sui-glossary"
           },
           {
-            "label": "Sui Compared to Other Blockchains",
-            "fileName": "learn/sui-compared"
-          },
-          {
             "label": "Why Move?",
             "fileName": "learn/why-move"
           },
@@ -55,6 +51,10 @@
         "fileName": "learn/how-sui-works",
         "title": "How Sui Works",
         "items": [
+          {
+            "label": "Sui Compared to Other Blockchains",
+            "fileName": "learn/sui-compared"
+          },
           {
             "label": "Manage Objects",
             "fileName": "build/objects"
