@@ -26,7 +26,7 @@ function Pagination({
     };
 }) {
     const [pageIndex, setPageIndex] = useState(currentPage);
-    const NUMBER_OF_TX_PER_PAGE_OPTIONS = [10, 20, 40, 60];
+    const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
 
     useEffect(() => {
         if (onPagiChangeFn) {

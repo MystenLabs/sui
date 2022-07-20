@@ -22,6 +22,8 @@ export default function PaginationLogic({
 }) {
     const count = results.length;
 
+    const MAX_ITEMS_PER_PAGE = 60;
+
     const [pageIndex, setPageIndex] = useState(0);
 
     const [pageLength, setPageLength] = useState(itemsPerPage);
@@ -31,6 +33,10 @@ export default function PaginationLogic({
         (pageIndex + 1) * itemsPerPage
     );
 
+    // If the total number of items is at most the max items per page, the ability to vary items per page number is removed:
+    const allowVaryItemsPerPage =
+        count <= MAX_ITEMS_PER_PAGE ? false : canVaryItemsPerPage;
+
     return (
         <>
             {viewComponentFn(objectSample)}
@@ -38,7 +44,7 @@ export default function PaginationLogic({
                 totalItems={count}
                 itemsPerPage={pageLength}
                 updateItemsPerPage={
-                    canVaryItemsPerPage ? setPageLength : undefined
+                    allowVaryItemsPerPage ? setPageLength : undefined
                 }
                 currentPage={pageIndex}
                 onPagiChangeFn={setPageIndex}
