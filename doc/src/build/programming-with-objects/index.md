@@ -2,7 +2,7 @@
 title: Programming Objects Tutorial Series
 ---
 
-Sui is a blockchain centered on [objects](../../build/objects.md). Once you start programming non-trivial [smart contracts](../../build/move.md) on Sui, you will start dealing with Sui objects in the code. Sui includes a rich, comprehensive library and testing framework to allow you interact with objects in a safe and yet flexible way.
+Sui is a blockchain centered on [objects](../../build/objects.md). Once you start programming non-trivial [smart contracts](../../build/move/index.md) on Sui, you will start dealing with Sui objects in the code. Sui includes a rich, comprehensive library and testing framework to allow you interact with objects in a safe and yet flexible way.
 
 In this tutorial series, we will walk through all the powerful ways to interact with objects in [Sui Move](../../learn/sui-move-diffs.md). At the end, we will also explore the designs of a few (close-to-)real-world examples to demonstrate the tradeoffs of using different object types and ownership relationships.
 
@@ -10,7 +10,7 @@ In this tutorial series, we will walk through all the powerful ways to interact 
 
 Understand:
 - [Learn about Sui](../../learn/about-sui.md)
-- [Smart Contracts with Move](../../build/move.md)
+- [Smart Contracts with Move](../../build/move/index.md)
 - [Sui Objects](../../build/objects.md)
 
 Install:

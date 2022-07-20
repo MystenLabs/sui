@@ -37,7 +37,7 @@ See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/d
 ## Kickstart development
 
 ### Write Smart Contracts with Move
-Go to the [Move Quick Start](../build/move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
+Go to the [Move Quick Start](../build/move/index.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
 ### Start the Sui network with Sui CLI client
 See the [Sui CLI client Quick Start](../build/cli-client.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
