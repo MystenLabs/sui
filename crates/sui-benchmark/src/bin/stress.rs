@@ -522,8 +522,11 @@ async fn main() {
     // This is the maximum number of increment counter ops in flight
     let max_in_flight_ops = opts.target_qps as usize * opts.in_flight_ratio as usize;
 
-    let configs = test_and_configure_authority_configs(opts.committee_size as usize);
-
+    let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
+    configs.validator_configs.iter_mut().for_each(|config| {
+        let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
+        parameters.batch_size = 6400;
+    });
     // initialize the right kind of benchmark
     let (payload, addresses, clients) = match opts.transaction_type {
         TransactionType::SharedCounter => {
