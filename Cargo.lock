@@ -752,6 +752,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cast"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
+
+[[package]]
 name = "cc"
 version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1098,7 +1104,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1604dafd25fba2fe2d5895a9da139f8dc9b319a5fe5354ca137cbbce4e178d10"
 dependencies = [
  "atty",
- "cast",
+ "cast 0.2.7",
  "clap 2.34.0",
  "criterion-plot",
  "csv",
@@ -1119,11 +1125,11 @@ dependencies = [
 
 [[package]]
 name = "criterion-plot"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d00996de9f2f7559f7f4dc286073197f83e92256a59ed395f9aac01fe717da57"
+checksum = "2673cc8207403546f45f5fd319a974b1e6983ad1a3ee7e6041650013be041876"
 dependencies = [
- "cast",
+ "cast 0.3.0",
  "itertools",
 ]
 
@@ -1718,9 +1724,9 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "dyn-clone"
-version = "1.0.6"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "140206b78fb2bc3edbcfc9b5ccbd0b30699cfe8d348b8b31b330e47df5291a5a"
+checksum = "9d07a982d1fb29db01e5a59b1918e03da4df7297eaeee7686ac45542fd4e59c8"
 
 [[package]]
 name = "ed25519"
@@ -1982,7 +1988,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "pin-project",
- "spin 0.9.3",
+ "spin 0.9.4",
 ]
 
 [[package]]
@@ -6126,9 +6132,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spin"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c530c2b0d0bf8b69304b39fe2001993e267461948b890cd037d8ad4293fa1a0d"
+checksum = "7f6002a767bff9e83f8eeecf883ecb8011875a21ae8da43bffb817a57e78cc09"
 dependencies = [
  "lock_api 0.4.7",
 ]
@@ -8496,7 +8502,8 @@ dependencies = [
  "cargo-platform",
  "cargo_metadata",
  "cassowary",
- "cast",
+ "cast 0.2.7",
+ "cast 0.3.0",
  "cc",
  "cexpr",
  "cfg-expr",
@@ -8922,7 +8929,7 @@ dependencies = [
  "smallvec",
  "socket2",
  "soketto",
- "spin 0.9.3",
+ "spin 0.9.4",
  "sqlformat",
  "sqlx",
  "sqlx-core",
@@ -9116,7 +9123,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "bzip2-sys",
- "cast",
+ "cast 0.2.7",
  "cc",
  "cexpr",
  "cfg-if 1.0.0",

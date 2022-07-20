@@ -28,10 +28,6 @@
             "fileName": "learn/sui-glossary"
           },
           {
-            "label": "Sui Compared to Other Blockchains",
-            "fileName": "learn/sui-compared"
-          },
-          {
             "label": "Why Move?",
             "fileName": "learn/why-move"
           },
@@ -56,6 +52,10 @@
         "title": "How Sui Works",
         "items": [
           {
+            "label": "Sui Compared to Other Blockchains",
+            "fileName": "learn/sui-compared"
+          },
+          {
             "label": "Manage Objects",
             "fileName": "build/objects"
           },
@@ -64,11 +64,15 @@
             "fileName": "build/transactions"
           },
           {
+            "label": "Create Single-Writer Apps",
+            "fileName": "learn/single-writer-apps"
+          },
+          {
             "label": "Understand Validators",
             "fileName": "learn/architecture/validators"
           },
           {
-            "label": "Sui Consensus Engine",
+            "label": "Employ Consensus Engine",
             "fileName": "learn/architecture/consensus"
           }
         ]
