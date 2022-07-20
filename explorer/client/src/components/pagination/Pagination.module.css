@@ -9,17 +9,16 @@
 
         box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
     }
+
+    .btncontainer {
+        @apply basecontainer hover:bg-sui hover:text-white hover:stroke-white hover:border-sui cursor-pointer;
+    }
 }
 
-button.btncontainer,
 button.pagenumber,
 button.nointeract,
 .rhs > select {
     @apply basecontainer;
-}
-
-button.btncontainer {
-    @apply hover:bg-sui hover:text-white hover:stroke-white hover:border-sui cursor-pointer;
 }
 
 button.secondbtn {
@@ -28,6 +27,10 @@ button.secondbtn {
 
 button.nointeractsecond {
     @apply basecontainer sm:hidden inline-block;
+}
+
+button.nextbtnnumber {
+    @apply btncontainer hidden sm:inline-block;
 }
 
 button.pagenumber {

@@ -194,6 +194,15 @@ function Pagination({
                             </button>
                         )}
 
+                        {pageIndex > 2 && pageIndex < finalPageNo - 3 && (
+                            <button
+                                className={styles.nextbtnnumber}
+                                onClick={handleBtnClick(pageIndex + 1)}
+                            >
+                                {pageIndex + 2}
+                            </button>
+                        )}
+
                         {pageIndex < finalPageNo - 3 && (
                             <button
                                 className={
