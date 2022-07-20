@@ -134,7 +134,6 @@ pub trait Authenticator:
 {
     type PubKey: VerifyingKey<Sig = Self>;
     type PrivKey: SigningKey<Sig = Self>;
-    type AggregateSig: AggregateAuthenticator<Sig = Self>;
     const LENGTH: usize;
 }
 

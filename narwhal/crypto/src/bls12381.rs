@@ -293,7 +293,6 @@ impl Display for BLS12381Signature {
 impl Authenticator for BLS12381Signature {
     type PubKey = BLS12381PublicKey;
     type PrivKey = BLS12381PrivateKey;
-    type AggregateSig = BLS12381AggregateSignature;
     const LENGTH: usize = BLS_SIGNATURE_LENGTH;
 }
 

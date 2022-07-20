@@ -7,6 +7,7 @@ material (keys). For signatures, we rely on `signature::Signature`, which may be
 cryptographic agility. The following schemes are implemented (wrappers over existing popular crates):
     - ed25519 (EdDSA), backed by the [dalek-ed25519](https://github.com/dalek-cryptography/ed25519-dalek) crate (soon 
 to be replaced by the [ed25519-consensus](https://github.com/penumbra-zone/ed25519-consensus) crate).
+    - Secp256k1, backed by the [k256](https://docs.rs/k256/latest/k256/) crate. 
     - BLS12-381, backed by the [blst](https://github.com/supranational/blst) crate.
     - BLS12-377, backed by the [ark_bls12_377](https://docs.rs/ark-bls12-377/0.3.0/ark_bls12_377/) crate. *Note that this
 implementation is under the non-default conditional compilation feature `celo`, and is not compiled or linked without 

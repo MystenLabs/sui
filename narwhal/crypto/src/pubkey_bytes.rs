@@ -72,13 +72,17 @@ impl<T, const N: usize> Default for PublicKeyBytes<T, N> {
 mod sealed {
     #[cfg(feature = "celo")]
     use crate::bls12377::BLS12377PublicKey;
-    use crate::{bls12381::BLS12381PublicKey, ed25519::Ed25519PublicKey, traits::VerifyingKey};
+    use crate::{
+        bls12381::BLS12381PublicKey, ed25519::Ed25519PublicKey, secp256k1::Secp256k1PublicKey,
+        traits::VerifyingKey,
+    };
 
     use super::PublicKeyBytes;
 
     pub trait SealedPublicKeyLength {}
     impl SealedPublicKeyLength for PublicKeyBytes<Ed25519PublicKey, { Ed25519PublicKey::LENGTH }> {}
     impl SealedPublicKeyLength for PublicKeyBytes<BLS12381PublicKey, { BLS12381PublicKey::LENGTH }> {}
+    impl SealedPublicKeyLength for PublicKeyBytes<Secp256k1PublicKey, { Secp256k1PublicKey::LENGTH }> {}
     #[cfg(feature = "celo")]
     impl SealedPublicKeyLength for PublicKeyBytes<BLS12377PublicKey, { BLS12377PublicKey::LENGTH }> {}
 }

@@ -30,6 +30,10 @@ pub mod pubkey_bytes_tests;
 #[path = "tests/ed25519_tests.rs"]
 pub mod ed25519_tests;
 
+#[cfg(test)]
+#[path = "tests/secp256k1_tests.rs"]
+pub mod secp256k1_tests;
+
 #[cfg(all(test, feature = "celo"))]
 #[path = "tests/bls12377_tests.rs"]
 pub mod bls12377_tests;
@@ -45,6 +49,9 @@ pub mod ed25519;
 pub mod hkdf;
 pub mod pubkey_bytes;
 pub mod serde_helpers;
+
+pub mod secp256k1;
+
 pub mod traits;
 
 pub type CryptoError = ed25519_dalek::ed25519::Error;

@@ -135,7 +135,6 @@ impl Eq for BLS12377Signature {}
 impl Authenticator for BLS12377Signature {
     type PubKey = BLS12377PublicKey;
     type PrivKey = BLS12377PrivateKey;
-    type AggregateSig = BLS12377AggregateSignature;
     const LENGTH: usize = CELO_BLS_SIGNATURE_LENGTH;
 }
 

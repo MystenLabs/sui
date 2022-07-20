@@ -18,7 +18,6 @@ use crate::{
         ToFromBytes, VerifyingKey,
     },
 };
-
 ///
 /// Define Structs
 ///
@@ -195,7 +194,6 @@ impl<'de> Deserialize<'de> for Ed25519PrivateKey {
 impl Authenticator for Ed25519Signature {
     type PubKey = Ed25519PublicKey;
     type PrivKey = Ed25519PrivateKey;
-    type AggregateSig = Ed25519AggregateSignature;
     const LENGTH: usize = ed25519_dalek::SIGNATURE_LENGTH;
 }
 
@@ -207,7 +205,7 @@ impl AsRef<[u8]> for Ed25519PrivateKey {
 
 impl Signature for Ed25519Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        ed25519_dalek::Signature::from_bytes(bytes).map(Ed25519Signature)
+        <ed25519_dalek::Signature as Signature>::from_bytes(bytes).map(Ed25519Signature)
     }
 }
 
@@ -225,7 +223,7 @@ impl Display for Ed25519Signature {
 
 impl Default for Ed25519Signature {
     fn default() -> Self {
-        let sig = ed25519_dalek::Signature::from_bytes(&[0u8; 64]).unwrap();
+        let sig = <ed25519_dalek::Signature as Signature>::from_bytes(&[0u8; 64]).unwrap();
         Ed25519Signature(sig)
     }
 }

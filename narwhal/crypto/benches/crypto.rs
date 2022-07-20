@@ -13,6 +13,7 @@ mod ed25519_benches {
         bls12377::{BLS12377KeyPair, BLS12377Signature},
         bls12381::{BLS12381KeyPair, BLS12381Signature},
         ed25519::*,
+        secp256k1::{Secp256k1KeyPair, Secp256k1Signature},
         traits::{KeyPair, VerifyingKey},
         Verifier,
     };
@@ -24,6 +25,7 @@ mod ed25519_benches {
         let ed_keypair = Ed25519KeyPair::generate(&mut csprng);
         let bls_keypair = BLS12377KeyPair::generate(&mut csprng);
         let blst_keypair = BLS12381KeyPair::generate(&mut csprng);
+        let secp256k1_keypair = Secp256k1KeyPair::generate(&mut csprng);
         let msg: &[u8] = b"";
 
         c.bench_function("Ed25519 signing", move |b| b.iter(|| ed_keypair.sign(msg)));
@@ -33,6 +35,9 @@ mod ed25519_benches {
         c.bench_function("BLS12381 signing", move |b| {
             b.iter(|| blst_keypair.sign(msg))
         });
+        c.bench_function("Secp256k1 signing", move |b| {
+            b.iter(|| secp256k1_keypair.sign(msg))
+        });
     }
 
     fn verify(c: &mut Criterion) {
@@ -40,15 +45,18 @@ mod ed25519_benches {
         let ed_keypair = Ed25519KeyPair::generate(&mut csprng);
         let bls_keypair = BLS12377KeyPair::generate(&mut csprng);
         let blst_keypair = BLS12381KeyPair::generate(&mut csprng);
+        let secp256k1_keypair = Secp256k1KeyPair::generate(&mut csprng);
 
         let ed_public = ed_keypair.public();
         let bls_public = bls_keypair.public();
         let blst_public = blst_keypair.public();
+        let secp256k1_public = secp256k1_keypair.public();
 
         let msg: &[u8] = b"";
         let ed_sig: Ed25519Signature = ed_keypair.sign(msg);
         let bls_sig: BLS12377Signature = bls_keypair.sign(msg);
         let blst_sig: BLS12381Signature = blst_keypair.sign(msg);
+        let secp256k1_sig: Secp256k1Signature = secp256k1_keypair.sign(msg);
 
         c.bench_function("Ed25519 signature verification", move |b| {
             b.iter(|| ed_public.verify(msg, &ed_sig))
@@ -58,6 +66,9 @@ mod ed25519_benches {
         });
         c.bench_function("BLS12381 signature verification", move |b| {
             b.iter(|| blst_public.verify(msg, &blst_sig))
+        });
+        c.bench_function("Secp256k1 signature verification", move |b| {
+            b.iter(|| secp256k1_public.verify(msg, &secp256k1_sig))
         });
     }
 
@@ -133,6 +144,9 @@ mod ed25519_benches {
         });
         c.bench_function("BLS12381 keypair generation", move |b| {
             b.iter(|| BLS12381KeyPair::generate(&mut csprng))
+        });
+        c.bench_function("Secp256k1 keypair generation", move |b| {
+            b.iter(|| Secp256k1KeyPair::generate(&mut csprng))
         });
     }
 

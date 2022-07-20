@@ -9,6 +9,7 @@ use serde::{
     Deserialize, Serialize,
 };
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
+use signature::Signature;
 use std::fmt::Debug;
 
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -78,6 +79,7 @@ impl<'de> DeserializeAs<'de, ed25519_dalek::Signature> for Ed25519Signature {
         } else {
             Bytes::deserialize_as(deserializer)?
         };
-        ed25519_dalek::Signature::from_bytes(&bytes).map_err(to_custom_error::<'de, D, _>)
+        <ed25519_dalek::Signature as Signature>::from_bytes(&bytes)
+            .map_err(to_custom_error::<'de, D, _>)
     }
 }
