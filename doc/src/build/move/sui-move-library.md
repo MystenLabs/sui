@@ -101,5 +101,5 @@ to develop and test Move code, you are ready to start looking at and
 playing with some larger
 [examples](../../explore/examples.md) of Move
 programs, such as implementation of the tic-tac-toe game or a more
-fleshed out variant of a fantasy game similar to the one we have been
+developed variant of a fantasy game similar to the one we have been
 developing during this tutorial.
