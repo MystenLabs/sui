@@ -1,6 +1,6 @@
 {
-  "name": "bcs",
-  "version": "0.1.0",
+  "name": "@mysten/bcs",
+  "version": "0.2.0",
   "description": "BCS - Canonical Binary Serialization implementation for JavaScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,9 +9,9 @@
     "test": "tests"
   },
   "scripts": {
-    "prepublish": "tsdx build",
+    "prepublish": "tsdx lint && tsdx build",
     "build": "tsdx build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsdx test"
   },
   "repository": {
     "type": "git",
