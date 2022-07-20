@@ -1,32 +1,34 @@
-.gone {
-    @apply invisible;
-}
-
-.btncontainer,
-.pagenumber {
-    @apply inline-block w-[20%] font-mono;
+button.btncontainer,
+button.pagenumber,
+button.nointeract {
+    @apply w-[7vw] sm:w-[32px] h-[32px] px-0 py-2 mx-[1vw] sm:mx-[4px] inline-block
+    rounded border-[1px] border-solid border-sui-grey-50
+    font-sans items-center 
+    text-sui-grey-75 stroke-sui-grey-75 bg-inherit;
 }
 
 button.btncontainer {
-    @apply inline-block px-0 cursor-pointer border-none bg-inherit hover:bg-sui
-  py-2
-  text-offblack stroke-offblack
-  hover:text-white hover:stroke-white
-  items-center;
+    @apply hover:bg-sui hover:text-white hover:stroke-white hover:border-sui cursor-pointer;
 }
 
-.pagenumber {
-    @apply select-none text-center break-normal text-sm;
+button.pagenumber {
+    @apply select-none border-solid border-sui-dark text-sui-dark;
+
+    background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
 }
 
-.paginationheading {
-    @apply block;
+button.gone {
+    @apply opacity-30;
 }
 
-.paginationheading > button {
-    @apply block lg:inline mb-2 bg-sui hover:bg-sui-dark hover:text-white rounded-r-md border-none cursor-pointer p-2;
+.footer {
+    @apply sm:grid sm:grid-cols-12;
 }
 
-.paginationheading > h2 {
-    @apply inline lg:ml-5;
+.footer > div:first-child {
+    @apply col-span-8 self-center;
+}
+
+.footer > div:nth-child(2) {
+    @apply col-span-4;
 }

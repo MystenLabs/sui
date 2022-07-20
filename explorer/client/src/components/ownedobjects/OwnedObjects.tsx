@@ -12,6 +12,8 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ReactComponent as BackArrow } from '../../assets/SVGIcons/back-arrow-dark.svg';
+import tablestyle from '../../components/table/TableCard.module.css';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -25,8 +27,10 @@ import {
     handleCoinType,
     transformURL,
     trimStdLibPrefix,
+    truncate,
 } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
+import Longtext from '../longtext/Longtext';
 import PaginationWrapper from '../pagination/PaginationWrapper';
 
 import styles from './OwnedObjects.module.css';
@@ -47,6 +51,10 @@ const DATATYPE_DEFAULT: resultType = [
         _isCoin: false,
     },
 ];
+
+const ITEMS_PER_PAGE: number = 6;
+const alttextgen = (value: number | string | boolean | BN): string =>
+    truncate(String(value), 19);
 
 const lastRowHas2Elements = (itemList: any[]): boolean =>
     itemList.length % 3 === 2;
@@ -177,20 +185,33 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
             return 0;
         });
 
+    const nftFooter = {
+        stats: {
+            count: other_results.length,
+            stats_text: 'Total NFTs',
+        },
+    };
+
     return (
-        <div>
+        <div className={styles.layout}>
             {coin_results.length > 0 && (
                 <div>
-                    <h2>Coins</h2>
+                    <div className={styles.ownedobjectheader}>
+                        <h2>Coins</h2>
+                    </div>
                     <GroupView results={coin_results} />
                 </div>
             )}
             {other_results.length > 0 && (
                 <div id="NFTSection">
-                    <h2>NFTs</h2>
+                    <div className={styles.ownedobjectheader}>
+                        <h2>NFTs</h2>
+                    </div>
                     <PaginationWrapper
                         results={other_results}
                         viewComponentFn={viewFn}
+                        itemsPerPage={ITEMS_PER_PAGE}
+                        stats={nftFooter.stats}
                     />
                 </div>
             )}
@@ -217,41 +238,36 @@ function GroupView({ results }: { results: resultType }) {
 
     if (isGroup) {
         return (
-            <div id="groupCollection" className={styles.ownedobjects}>
+            <table
+                id="groupCollection"
+                className={`${styles.groupview} ${tablestyle.table}`}
+            >
+                <tr>
+                    <th>Type</th>
+                    <th>Balance</th>
+                </tr>
                 {uniqueTypes.map((typeV) => {
                     const subObjList = results.filter(
                         ({ Type }) => Type === typeV
                     );
                     return (
-                        <div
-                            key={typeV}
-                            onClick={shrinkObjList(subObjList)}
-                            className={styles.objectbox}
-                        >
-                            <div>
-                                <div>
-                                    <span>Type</span>
-                                    <span>{handleCoinType(typeV)}</span>
-                                </div>
-                                <div>
-                                    <span>Balance</span>
-                                    <span>
-                                        {subObjList[0]._isCoin &&
-                                        subObjList.every(
-                                            (el) => el.balance !== undefined
-                                        )
-                                            ? `${subObjList.reduce(
-                                                  (prev, current) =>
-                                                      prev.add(
-                                                          current.balance!
-                                                      ),
-                                                  Coin.getZero()
-                                              )}`
-                                            : ''}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                        <tr key={typeV} onClick={shrinkObjList(subObjList)}>
+                            <td className={styles.tablespacing}>
+                                {handleCoinType(typeV)}
+                            </td>
+                            <td className={styles.tablespacing}>
+                                {subObjList[0]._isCoin &&
+                                subObjList.every(
+                                    (el) => el.balance !== undefined
+                                )
+                                    ? `${subObjList.reduce(
+                                          (prev, current) =>
+                                              prev.add(current.balance!),
+                                          Coin.getZero()
+                                      )}`
+                                    : ''}
+                            </td>
+                        </tr>
                     );
                 })}
                 {lastRowHas2Elements(uniqueTypes) && (
@@ -259,76 +275,121 @@ function GroupView({ results }: { results: resultType }) {
                         className={`${styles.objectbox} ${styles.fillerbox}`}
                     />
                 )}
-            </div>
+            </table>
         );
     } else {
         return (
             <div>
-                <div className={styles.paginationheading}>
-                    <button onClick={goBack}>&#60; Back</button>
+                <div className={styles.coinheading}>
+                    <button onClick={goBack}>
+                        <BackArrow /> Go Back
+                    </button>
                     <h2>{handleCoinType(subObjs[0].Type)}</h2>
                 </div>
-                <PaginationWrapper results={subObjs} viewComponentFn={viewFn} />
+                <PaginationWrapper
+                    results={subObjs}
+                    viewComponentFn={viewFn}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                />
             </div>
         );
     }
 }
 
 function OwnedObjectView({ results }: { results: resultType }) {
-    const navigateWithUnknown = useContext(NavigateFunctionContext);
     return (
         <div id="ownedObjects" className={styles.ownedobjects}>
             {results.map((entryObj, index1) => (
-                <div
-                    className={styles.objectbox}
-                    key={`object-${index1}`}
-                    onClick={navigateWithUnknown(entryObj.id)}
-                >
+                <div className={styles.objectbox} key={`object-${index1}`}>
                     {entryObj.display !== undefined && (
                         <div className={styles.previewimage}>
                             <DisplayBox display={entryObj.display} />
                         </div>
                     )}
-                    {Object.entries(entryObj).map(([key, value], index2) => (
-                        <div key={`object-${index1}-${index2}`}>
-                            {(() => {
-                                switch (key) {
-                                    case 'display':
-                                        break;
-                                    case 'Type':
-                                        if (entryObj._isCoin) {
-                                            break;
-                                        } else {
-                                            return (
-                                                <div>
-                                                    <span>{key}</span>
-                                                    <span>
-                                                        {trimStdLibPrefix(
-                                                            value as string
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            );
+                    <div className={styles.textitem}>
+                        {Object.entries(entryObj).map(
+                            ([key, value], index2) => (
+                                <div key={`object-${index1}-${index2}`}>
+                                    {(() => {
+                                        switch (key) {
+                                            case 'Type':
+                                                if (entryObj._isCoin) {
+                                                    break;
+                                                } else {
+                                                    return (
+                                                        <span
+                                                            className={
+                                                                styles.typevalue
+                                                            }
+                                                        >
+                                                            {trimStdLibPrefix(
+                                                                value as string
+                                                            )}
+                                                        </span>
+                                                    );
+                                                }
+                                            case 'balance':
+                                                if (!entryObj._isCoin) {
+                                                    break;
+                                                } else {
+                                                    return (
+                                                        <div
+                                                            className={
+                                                                styles.coinfield
+                                                            }
+                                                        >
+                                                            <div>Balance</div>
+                                                            <div>
+                                                                {String(value)}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                            case 'id':
+                                                if (entryObj._isCoin) {
+                                                    return (
+                                                        <div
+                                                            className={
+                                                                styles.coinfield
+                                                            }
+                                                        >
+                                                            <div>Object ID</div>
+                                                            <div>
+                                                                <Longtext
+                                                                    text={String(
+                                                                        value
+                                                                    )}
+                                                                    category="objects"
+                                                                    isCopyButton={
+                                                                        false
+                                                                    }
+                                                                    alttext={alttextgen(
+                                                                        value
+                                                                    )}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <Longtext
+                                                            text={String(value)}
+                                                            category="objects"
+                                                            isCopyButton={false}
+                                                            alttext={alttextgen(
+                                                                value
+                                                            )}
+                                                        />
+                                                    );
+                                                }
+                                            default:
+                                                break;
                                         }
-                                    default:
-                                        if (
-                                            key === 'balance' &&
-                                            !entryObj._isCoin
-                                        )
-                                            break;
-                                        if (key.startsWith('_')) {
-                                            break;
-                                        }
-                                        return (
-                                            <div>
-                                                <span>{key}</span>
-                                                <span>{String(value)}</span>
-                                            </div>
-                                        );
-                                }
-                            })()}
-                        </div>
-                    ))}
+                                    })()}
+                                </div>
+                            )
+                        )}
+                    </div>
                 </div>
             ))}
             {lastRowHas2Elements(results) && (

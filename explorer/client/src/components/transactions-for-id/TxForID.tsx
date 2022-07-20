@@ -26,6 +26,7 @@ import PaginationWrapper from '../pagination/PaginationWrapper';
 import styles from './TxForID.module.css';
 
 const TRUNCATE_LENGTH = 14;
+const ITEMS_PER_PAGE = 10;
 
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
@@ -136,7 +137,13 @@ function TxForIDStatic({
         .map((id) => findTxDatafromID(id))
         .filter((x) => x !== undefined) as TxnData[];
     if (!data) return <></>;
-    return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
+    return (
+        <PaginationWrapper
+            results={data}
+            viewComponentFn={viewFn}
+            itemsPerPage={ITEMS_PER_PAGE}
+        />
+    );
 }
 
 function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
@@ -182,7 +189,13 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
     if (showData.loadState === 'loaded') {
         const data = showData.data;
         if (!data) return <></>;
-        return <PaginationWrapper results={data} viewComponentFn={viewFn} />;
+        return (
+            <PaginationWrapper
+                results={data}
+                viewComponentFn={viewFn}
+                itemsPerPage={ITEMS_PER_PAGE}
+            />
+        );
     }
 
     return (
