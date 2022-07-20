@@ -96,7 +96,7 @@ function Pagination({
     );
 
     const RHSInfo = (
-        <>
+        <div className={styles.rhs}>
             {stats && <TabFooter stats={stats} />}
             {updateItemsPerPage && (
                 <select value={itemsPerPage} onChange={pageLengthChange}>
@@ -107,7 +107,7 @@ function Pagination({
                     ))}
                 </select>
             )}
-        </>
+        </div>
     );
 
     // When Total Number of Pages at most 5, list all always:
