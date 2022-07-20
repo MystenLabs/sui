@@ -36,7 +36,7 @@ testing framework. Instead, one can use a Sui CLI client to
 [publish](cli-client.md#publish-packages) Move code and to
 [call](cli-client.md#calling-move-code) it. See the
 [Sui CLI client documentation](cli-client.md) for a description of how
-to publish the package we have [written](#writing-a-package) as as
+to publish the package we have [written](write-package.md) as as
 part of this tutorial.
 
 ### Module initializers
