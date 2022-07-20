@@ -105,9 +105,9 @@ For more information, see [Sui Objects](../build/objects.md).
 A [smart contract](https://en.wikipedia.org/wiki/Smart_contract) is an agreement based upon the protocol for conducting transactions in a blockchain. In Sui, smart contracts are written in the [Move](https://github.com/MystenLabs/awesome-move) programming language.
 
 
-### Single-owner objects
+### Single-writer objects
 
-Single-owner objects are owned by one account. In Sui, transactions affecting only single-owner objects owned by the same address may proceed with only a verification of the sender’s address, greatly speeding transaction times. We refer to these as *simple transactions*.
+Single-writer objects are owned by one account. In Sui, transactions affecting only single-writer objects owned by the same address may proceed with only a verification of the sender’s address, greatly speeding transaction times. We refer to these as *simple transactions*. See [Single-Writer Apps](single-writer-apps.md) for example applications of this simple transaction model.
 
 ### Sui/SUI
 
@@ -123,7 +123,7 @@ For more information, see [Causal order vs total order](sui-compared#causal-orde
 
 ### Transaction
 
-A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-owner, single-address objects, such as minting an NFT or transferring it or another token. These transactions may bypass the consensus protocol in Sui.
+A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-writer, single-address objects, such as minting an NFT or transferring it or another token. These transactions may bypass the consensus protocol in Sui.
 
 More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
 
