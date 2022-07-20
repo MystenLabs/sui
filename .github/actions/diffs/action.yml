@@ -13,6 +13,9 @@ outputs:
   isTypescriptSDK:
     description: True when there are changes to files related to TypeScript SDK
     value: "${{ steps.diff.outputs.isTypescriptSDK }}"
+  isWalletExt:
+    description: True when there are changes to files related to Wallet Extension
+    value: "${{ steps.diff.outputs.isWalletExt }}"
 runs:
   using: composite
   steps:
@@ -38,3 +41,6 @@ runs:
           - 'doc/**'
           - '*.md'
           - '.github/workflows/docs.yml'
+        isWalletExt:
+          - 'wallet/**'
+          - '.github/workflows/wallet-ext-prs.yml'

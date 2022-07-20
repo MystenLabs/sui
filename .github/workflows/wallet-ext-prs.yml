@@ -1,0 +1,43 @@
+name: Wallet Extension PR checks
+on: pull_request
+jobs:
+  diff:
+    runs-on: [self-hosted, self-hosted-ubuntu]
+    outputs:
+      isWalletExt: ${{ steps.diff.outputs.isWalletExt }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+  run_checks:
+    name: Lint, Test & Build
+    needs: diff
+    if: needs.diff.outputs.isWalletExt == 'true'
+    runs-on: [self-hosted, self-hosted-ubuntu]
+    env:
+      working-directory: ./wallet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: 'npm'
+          cache-dependency-path: ./wallet/package-lock.json
+      - name: Build sdk
+        working-directory: ./sdk/typescript
+        run: yarn
+      - name: Install dependencies
+        working-directory: ${{env.working-directory}}
+        run: npm ci
+      - name: Lint
+        working-directory: ${{env.working-directory}}
+        run: npm run lint
+      - name: Test
+        working-directory: ${{env.working-directory}}
+        run: npm test
+      - name: Build
+        working-directory: ${{env.working-directory}}
+        run: npm run build:prod
