@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useState } from 'react';
+import { useState, memo } from 'react';
 
 import Pagination from '../../components/pagination/Pagination';
 
-export default function PaginationLogic({
+function PaginationLogic({
     results,
     viewComponentFn,
     itemsPerPage,
@@ -29,8 +29,8 @@ export default function PaginationLogic({
     const [pageLength, setPageLength] = useState(itemsPerPage);
 
     const objectSample = results.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
+        (currentPage - 1) * pageLength,
+        currentPage * pageLength
     );
 
     // If the total number of items is at most the max items per page, the ability to vary items per page number is removed:
@@ -53,3 +53,5 @@ export default function PaginationLogic({
         </>
     );
 }
+
+export default memo(PaginationLogic);
