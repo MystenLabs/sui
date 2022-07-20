@@ -164,7 +164,7 @@ function Pagination({
                             className={
                                 pageIndex === 1
                                     ? styles.pagenumber
-                                    : styles.btncontainer
+                                    : styles.secondbtn
                             }
                             id="secondBtn"
                             onClick={handleBtnClick(1)}
@@ -172,8 +172,16 @@ function Pagination({
                         >
                             2
                         </button>
-                        {pageIndex > 2 && (
-                            <button className={styles.nointeract}>...</button>
+                        {pageIndex > 1 && (
+                            <button
+                                className={
+                                    pageIndex > 2
+                                        ? styles.nointeract
+                                        : styles.nointeractsecond
+                                }
+                            >
+                                ...
+                            </button>
                         )}
 
                         {pageIndex > 1 && pageIndex < finalPageNo - 2 && (
@@ -182,15 +190,23 @@ function Pagination({
                             </button>
                         )}
 
-                        {pageIndex < finalPageNo - 3 && (
-                            <button className={styles.nointeract}>...</button>
+                        {pageIndex < finalPageNo - 2 && (
+                            <button
+                                className={
+                                    pageIndex < finalPageNo - 3
+                                        ? styles.nointeract
+                                        : styles.nointeractsecond
+                                }
+                            >
+                                ...
+                            </button>
                         )}
 
                         <button
                             className={
                                 pageIndex === finalPageNo - 2
                                     ? styles.pagenumber
-                                    : styles.btncontainer
+                                    : styles.secondbtn
                             }
                             id="secondLastBtn"
                             onClick={handleBtnClick(finalPageNo - 2)}
