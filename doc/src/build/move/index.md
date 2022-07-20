@@ -38,7 +38,7 @@ to following the Sui tutorial, which we strived to make self-contained.
 Further, Sui does differ in some ways from Move, which we explore here.
 
 In Sui, Move is used to define, create and manage programmable Sui
-[objects](objects.md) representing user-level assets.  Sui
+[objects](../objects.md) representing user-level assets.  Sui
 imposes additional restrictions on the code that can be written in
 Move, effectively using a subset of Move (a.k.a. *Sui Move*), which
 makes certain parts of the original Move documentation not applicable
@@ -78,7 +78,7 @@ for more information on package layout.
 
 We are now ready to look at some Move code! You can either keep
 reading for an introductory description of the main
-Move language constructs or you can jump straight into the code by [writing a simple Move package](write-package.md), and checking out additional code [examples](../explore/examples.md).
+Move language constructs or you can jump straight into the code by [writing a simple Move package](write-package.md), and checking out additional code [examples](../../explore/examples.md).
 
 ## First look at Move source code
 
