@@ -306,8 +306,8 @@ function LatestTxCard({ ...data }: RecentTx) {
                         {paginationtype !== 'none' ? (
                             paginationtype === 'pagination' ? (
                                 <Pagination
-                                    totalTxCount={count}
-                                    txNum={txPerPage}
+                                    totalItems={count}
+                                    itemsPerPage={txPerPage}
                                     onPagiChangeFn={setpageIndex}
                                     currentPage={pageIndex}
                                 />

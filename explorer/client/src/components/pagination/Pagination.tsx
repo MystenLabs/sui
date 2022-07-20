@@ -15,7 +15,7 @@ const generatePaginationArr = (
 ) => {
     // number of list items to show before truncating
     const range: number = 2;
-    const max = Math.ceil((totalItems - 1) / itemsPerPage);
+    const max = Math.ceil(totalItems / itemsPerPage);
     const maxRange = (Math.floor(startAt / range) + 1) * range;
     // set the min range to be the max range minus the range if it is less than the max - range
     const minRange = startAt <= max - range ? maxRange - range : max - range;
@@ -39,30 +39,30 @@ const generatePaginationArr = (
 };
 
 function Pagination({
-    totalTxCount,
-    txNum,
+    totalItems,
+    itemsPerPage,
     currentPage = 0,
     onPagiChangeFn,
 }: {
-    totalTxCount: number;
-    txNum: number;
+    totalItems: number;
+    itemsPerPage: number;
     currentPage: number;
     onPagiChangeFn: Function;
 }) {
-    const [txNumPerPage, setTxNumPerPage] = useState(txNum);
+    const [txNumPerPage, setTxNumPerPage] = useState(itemsPerPage);
     const initData = generatePaginationArr(
         currentPage,
         txNumPerPage,
-        totalTxCount
+        totalItems
     );
     const [pagiData, setPagiData] = useState(initData);
 
     useEffect(() => {
         setPagiData(
-            generatePaginationArr(currentPage, txNumPerPage, totalTxCount)
+            generatePaginationArr(currentPage, txNumPerPage, totalItems)
         );
-        setTxNumPerPage(txNum);
-    }, [currentPage, totalTxCount, txNum, txNumPerPage]);
+        setTxNumPerPage(itemsPerPage);
+    }, [currentPage, totalItems, itemsPerPage, txNumPerPage]);
 
     const changePage = useCallback(
         (e: React.MouseEvent<HTMLElement>) => {
