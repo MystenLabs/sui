@@ -145,13 +145,10 @@ function LatestTxCard({ ...data }: RecentTx) {
         paginationtype = DEFAULT_PAGI_TYPE,
     } = data;
 
-    const txPerPage = 20;
-
-    /*
     const [txPerPage, setTxPerPage] = useState(
         data.txPerPage || NUMBER_OF_TX_PER_PAGE
     );
-    */
+
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
@@ -306,6 +303,7 @@ function LatestTxCard({ ...data }: RecentTx) {
                             <Pagination
                                 totalItems={count}
                                 itemsPerPage={txPerPage}
+                                updateItemsPerPage={setTxPerPage}
                                 onPagiChangeFn={setpageIndex}
                                 currentPage={pageIndex}
                                 stats={tabsFooter.stats}
