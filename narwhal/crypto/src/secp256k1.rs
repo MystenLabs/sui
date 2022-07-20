@@ -7,6 +7,7 @@ use crate::traits::{
 use base64ct::{Base64, Encoding};
 use once_cell::sync::OnceCell;
 use serde::{de, Deserialize, Serialize};
+use signature::rand_core::OsRng;
 use signature::{Signature, Signer, Verifier};
 use std::fmt::{self, Debug, Display};
 
@@ -78,7 +79,14 @@ impl Verifier<Secp256k1Signature> for Secp256k1PublicKey {
 impl AsRef<[u8]> for Secp256k1PublicKey {
     fn as_ref(&self) -> &[u8] {
         self.bytes
-            .get_or_try_init::<_, eyre::Report>(|| Ok(self.pubkey.to_bytes()))
+            .get_or_try_init::<_, eyre::Report>(|| {
+                Ok(self
+                    .pubkey
+                    .to_bytes()
+                    .as_slice()
+                    .try_into()
+                    .expect("wrong length"))
+            })
             .expect("OnceCell invariant violated")
     }
 }
@@ -129,7 +137,7 @@ impl<'de> Deserialize<'de> for Secp256k1PublicKey {
 
 impl<'a> From<&'a Secp256k1PrivateKey> for Secp256k1PublicKey {
     fn from(secret: &'a Secp256k1PrivateKey) -> Self {
-        let pubkey = secret.privkey.verify_key();
+        let pubkey = secret.privkey.verifying_key();
         Secp256k1PublicKey {
             pubkey,
             bytes: OnceCell::new(),
@@ -279,8 +287,8 @@ impl KeyPair for Secp256k1KeyPair {
         self.secret
     }
 
-    fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
-        let privkey = k256::ecdsa::SigningKey::random(rng);
+    fn generate<R: rand::CryptoRng + rand::RngCore>(_rng: &mut R) -> Self {
+        let privkey = k256::ecdsa::SigningKey::random(&mut OsRng);
         let pubkey = k256::ecdsa::VerifyingKey::from(&privkey);
 
         Secp256k1KeyPair {
@@ -327,7 +335,7 @@ impl TryInto<Secp256k1PublicKey> for Secp256k1PublicKeyBytes {
 
 impl From<Secp256k1PublicKey> for Secp256k1PublicKeyBytes {
     fn from(pk: Secp256k1PublicKey) -> Secp256k1PublicKeyBytes {
-        Secp256k1PublicKeyBytes::new(pk.pubkey.to_bytes())
+        Secp256k1PublicKeyBytes::new((*pk.as_ref()).try_into().expect("wrong length"))
     }
 }
 

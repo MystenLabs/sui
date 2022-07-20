@@ -15,14 +15,14 @@ hex = "0.4.3"
 rand = { version = "0.7.3", features = ["std"] }
 serde = { version = "1.0.139", features = ["derive"] }
 zeroize = "1.5.6"
-signature = "1.2.2"
+signature = "1.5.0"
 tokio = { version = "1.20.0", features = ["sync", "rt", "macros"] }
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
 hkdf = { version = "0.12.3", features = ["std"] }
 serde_with = "1.14.0"
 serde_json = "1.0.80"
 schemars ="0.8.10"
-k256 = { version = "0.7.2", features = ["ecdsa", "sha256"] }
+k256 = { version = "0.11.3", features = ["ecdsa"] }
 
 # TODO: switch to https://github.com/celo-org/celo-bls-snark-rs 
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
