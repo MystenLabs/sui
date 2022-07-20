@@ -1,4 +1,3 @@
-
 ---
 title: Sui Single-Writer-Friendly (SWF) apps
 ---
