@@ -3,6 +3,8 @@
 
 import { memo, useState, useCallback, useEffect } from 'react';
 
+import TabFooter from '../../components/tabs/TabFooter';
+
 import styles from './Pagination.module.css';
 
 function Pagination({
@@ -10,11 +12,16 @@ function Pagination({
     itemsPerPage,
     currentPage = 0,
     onPagiChangeFn,
+    stats,
 }: {
     totalItems: number;
     itemsPerPage: number;
     currentPage: number;
     onPagiChangeFn?: (index: number) => void;
+    stats?: {
+        stats_text: string;
+        count: number;
+    };
 }) {
     const [pageIndex, setPageIndex] = useState(currentPage);
 
@@ -100,6 +107,11 @@ function Pagination({
                         ))}
                     {LastButton}
                 </div>
+                {stats && (
+                    <div>
+                        <TabFooter stats={stats} />
+                    </div>
+                )}
             </div>
         );
     }
@@ -178,6 +190,11 @@ function Pagination({
                     </>
                 )}
             </div>
+            {stats && (
+                <div>
+                    <TabFooter stats={stats} />
+                </div>
+            )}
         </div>
     );
 }

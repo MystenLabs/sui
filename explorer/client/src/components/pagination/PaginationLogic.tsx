@@ -35,6 +35,7 @@ export default function PaginationLogic({
                 itemsPerPage={itemsPerPage}
                 currentPage={pageIndex}
                 onPagiChangeFn={setPageIndex}
+                stats={stats}
             />
         </>
     );
