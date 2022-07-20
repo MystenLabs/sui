@@ -44,7 +44,7 @@ button.gone {
 }
 
 .footer {
-    @apply sm:grid sm:grid-cols-12 text-center;
+    @apply sm:grid sm:grid-cols-12 text-center sm:text-left;
 }
 
 .footer > div:first-child {
