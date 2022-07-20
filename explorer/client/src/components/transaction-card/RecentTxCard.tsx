@@ -81,6 +81,21 @@ function generateStartEndRange(
     };
 }
 
+// Static data for development and testing
+const getRecentTransactionsStatic = (): Promise<TxnData[]> => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const latestTx = getAllMockTransaction().map((tx) => ({
+                ...tx,
+                status: tx.status as ExecutionStatusType,
+                kind: tx.kind as TransactionKindName,
+            }));
+            resolve(latestTx as TxnData[]);
+        }, 500);
+    });
+};
+
+// TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
     network: Network | string,
     totalTx: number,
@@ -88,8 +103,11 @@ async function getRecentTransactions(
     pageNum?: number
 ): Promise<TxnData[]> {
     try {
+        // If static env, use static data
+        if (IS_STATIC_ENV) {
+            return getRecentTransactionsStatic();
+        }
         // Get the latest transactions
-
         // Instead of getRecentTransactions, use getTransactionCount
         // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
         // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
@@ -114,24 +132,94 @@ async function getRecentTransactions(
     }
 }
 
-// Pass Props txPerPage, truncateLength, paginationtype to the component so that this component can be used for both the Home Page and trnasaction page
-// TODO - rework this - gets confusing
-function LatestTxView({
-    results,
-}: {
-    results: {
-        loadState: string;
-        latestTx: TxnData[];
-        totalTxcount?: number;
-        txPerPage?: number;
-        truncateLength?: number;
-        paginationtype?: PaginationType;
-    };
-}) {
-    const totalCount = results.totalTxcount || 1;
-    const txPerPage = results.txPerPage || NUMBER_OF_TX_PER_PAGE;
-    const truncateLength = results.truncateLength || TRUNCATE_LENGTH;
-    const paginationtype = results.paginationtype || DEFAULT_PAGI_TYPE;
+type RecentTx = {
+    count?: number;
+    paginationtype?: PaginationType;
+    txPerPage?: number;
+    truncateLength?: number;
+};
+
+function LatestTxCard({ ...data }: RecentTx) {
+    const {
+        count = 0,
+        truncateLength = TRUNCATE_LENGTH,
+        paginationtype = DEFAULT_PAGI_TYPE,
+    } = data;
+
+    const [txPerPage, setTxPerPage] = useState(
+        data.txPerPage || NUMBER_OF_TX_PER_PAGE
+    );
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [results, setResults] = useState(initState);
+    const [network] = useContext(NetworkContext);
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const [pageIndex, setpageIndex] = useState(
+        parseInt(searchParams.get('p') || '1', 10) || 1
+    );
+
+    useEffect(() => {
+        let isMounted = true;
+
+        // If pageIndex is greater than maxTxPage, set to maxTxPage
+        const maxTxPage = Math.ceil(count / txPerPage);
+        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
+        setpageIndex(pg);
+
+        pageIndex > 1
+            ? setSearchParams({ p: pg.toString() })
+            : setSearchParams({});
+
+        getRecentTransactions(network, count, txPerPage, pg)
+            .then(async (resp: any) => {
+                if (isMounted) {
+                    setIsLoaded(true);
+                }
+                setResults({
+                    loadState: 'loaded',
+                    latestTx: resp,
+                    totalTxcount: count,
+                });
+            })
+            .catch((err) => {
+                setResults({
+                    ...initState,
+                    loadState: 'fail',
+                });
+                setIsLoaded(false);
+                console.error(
+                    'Encountered error when fetching recent transactions',
+                    err
+                );
+                Sentry.captureException(err);
+            });
+        return () => {
+            isMounted = false;
+        };
+    }, [count, network, pageIndex, paginationtype, setSearchParams, txPerPage]);
+
+    // update the page index when the user clicks on the pagination buttons
+
+    if (results.loadState === 'pending') {
+        return (
+            <div className={theme.textresults}>
+                <div className={styles.content}>Loading...</div>
+            </div>
+        );
+    }
+
+    if (!isLoaded && results.loadState === 'fail') {
+        return (
+            <ErrorResult
+                id=""
+                errorMsg="There was an issue getting the latest transactions"
+            />
+        );
+    }
+
+    if (results.loadState === 'loaded' && !results.latestTx.length) {
+        return <ErrorResult id="" errorMsg="No Transactions Found" />;
+    }
 
     //TODO update initial state and match the latestTx table data
     const defaultActiveTab = 0;
@@ -199,9 +287,10 @@ function LatestTxView({
     };
     const tabsFooter = {
         stats: {
-            count: totalCount || 0,
+            count,
             stats_text: 'Total transactions',
         },
+        pagingElement: txPerPage,
     };
 
     return (
@@ -209,12 +298,18 @@ function LatestTxView({
             <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
                     <TableCard tabledata={recentTx} />
-                    <TabFooter stats={tabsFooter.stats}>
+                    <TabFooter
+                        stats={tabsFooter.stats}
+                        paging={tabsFooter.pagingElement}
+                        itemsPerPageChange={setTxPerPage}
+                    >
                         {paginationtype !== 'none' ? (
                             paginationtype === 'pagination' ? (
                                 <Pagination
-                                    totalTxCount={totalCount}
-                                    txNum={txPerPage}
+                                    totalItems={count}
+                                    itemsPerPage={txPerPage}
+                                    onPagiChangeFn={setpageIndex}
+                                    currentPage={pageIndex}
                                 />
                             ) : (
                                 <Link className={styles.moretxbtn} to={`/`}>
@@ -231,116 +326,5 @@ function LatestTxView({
         </div>
     );
 }
-
-function LatestTxCardStatic() {
-    const latestTx = getAllMockTransaction().map((tx) => ({
-        ...tx,
-        status: tx.status as ExecutionStatusType,
-        kind: tx.kind as TransactionKindName,
-    }));
-
-    const results = {
-        loadState: 'loaded',
-        latestTx: latestTx,
-    };
-    return (
-        <>
-            <LatestTxView results={results} />
-        </>
-    );
-}
-
-type RecentTx = {
-    count?: number;
-    paginationtype?: PaginationType;
-    txPerPage?: number;
-    truncateLength?: number;
-};
-
-function LatestTxCardAPI({ ...data }: RecentTx) {
-    const {
-        count = 0,
-        txPerPage = NUMBER_OF_TX_PER_PAGE,
-        truncateLength = TRUNCATE_LENGTH,
-        paginationtype = DEFAULT_PAGI_TYPE,
-    } = data;
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [results, setResults] = useState(initState);
-    const [network] = useContext(NetworkContext);
-    const [searchParams] = useSearchParams();
-
-    useEffect(() => {
-        let isMounted = true;
-        const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
-        getRecentTransactions(network, count, txPerPage, pagedNum)
-            .then(async (resp: any) => {
-                if (isMounted) {
-                    setIsLoaded(true);
-                }
-                setResults({
-                    loadState: 'loaded',
-                    latestTx: resp,
-                    totalTxcount: count,
-                    txPerPage: txPerPage,
-                    truncateLength: truncateLength,
-                    paginationtype,
-                });
-            })
-            .catch((err) => {
-                setResults({
-                    ...initState,
-                    loadState: 'fail',
-                });
-                setIsLoaded(false);
-                console.error(
-                    'Encountered error when fetching recent transactions',
-                    err
-                );
-                Sentry.captureException(err);
-            });
-
-        return () => {
-            isMounted = false;
-        };
-    }, [
-        count,
-        network,
-        paginationtype,
-        searchParams,
-        truncateLength,
-        txPerPage,
-    ]);
-
-    if (results.loadState === 'pending') {
-        return (
-            <div className={theme.textresults}>
-                <div className={styles.content}>Loading...</div>
-            </div>
-        );
-    }
-
-    if (!isLoaded && results.loadState === 'fail') {
-        return (
-            <ErrorResult
-                id=""
-                errorMsg="There was an issue getting the latest transactions"
-            />
-        );
-    }
-
-    if (results.loadState === 'loaded' && !results.latestTx.length) {
-        return <ErrorResult id="" errorMsg="No Transactions Found" />;
-    }
-
-    return (
-        <>
-            <LatestTxView results={results} />
-        </>
-    );
-}
-
-// Provide option to show pagination or not, so we can reuse this component for both homepage and the transactions page
-const LatestTxCard = ({ ...data }: RecentTx) =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI {...data} />;
 
 export default LatestTxCard;

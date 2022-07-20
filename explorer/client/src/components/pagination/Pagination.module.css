@@ -3,7 +3,7 @@
 }
 
 .pagination ul {
-    @apply flex flex-row items-center justify-center list-none  p-0 m-0;
+    @apply flex flex-row items-center justify-center list-none  p-0 m-0 w-full md:w-min;
 }
 
 .arrow {
@@ -15,12 +15,12 @@
 }
 
 .pagination ul li {
-    @apply mr-2 hidden md:block;
+    @apply mr-1 hidden md:block;
 }
 
 .pagination ul li button {
     @apply text-gray-600 hover:text-gray-800 focus:text-gray-800 font-medium py-2 px-4 cursor-pointer 
-     md:pr-3  md:pl-3  pr-3  pl-3 border-[1px] rounded-[6px] border-white bg-[#FFFFFF] hover:bg-[#F4FBFF];
+     pr-3  pl-3  border-[1px] rounded-[6px] border-white bg-[#FFFFFF] hover:bg-[#F4FBFF];
 
     border: 1px solid #e9eaeb;
     transition: all 0.4s ease;
@@ -36,6 +36,15 @@ button.activepag {
 
 .paginationleft svg {
     transform: rotate(180deg);
+}
+
+.paginationdot {
+    @apply px-1;
+}
+
+.pagilink,
+.paginationdot {
+    @apply block !important;
 }
 
 .paginationdot:hover {

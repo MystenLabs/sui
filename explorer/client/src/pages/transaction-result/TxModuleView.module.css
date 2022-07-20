@@ -7,7 +7,7 @@ pre {
 
 section .codeview {
     border-color: transparent !important;
-    height: 450px !important;
+    max-height: 450px !important;
     @apply font-mono text-sm pl-0 pr-0;
 }
 
@@ -62,7 +62,7 @@ section .codeview pre {
 }
 
 .viewmore {
-    @apply flex justify-end;
+    @apply flex justify-end w-full font-normal text-sm;
 }
 
 .modulewrapper {
@@ -89,4 +89,12 @@ section .codeview pre {
     padding-right: 1em;
     user-select: none;
     opacity: 0.5;
+}
+
+.modulewraper nav ul {
+    @apply mt-3 md:mt-1 mx-0 px-0 justify-start;
+}
+
+.modulesfooter {
+    @apply flex justify-items-start md:justify-between text-[#636870] text-sm items-center;
 }
