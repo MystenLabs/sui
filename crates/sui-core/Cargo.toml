@@ -22,7 +22,8 @@ parking_lot = "0.12.1"
 async-trait = "0.1.53"
 tempfile = "3.3.0"
 tracing = "0.1.35"
-signature = "1.5.0"
+signature = "1.2.2"
+
 bincode = "1.3.3"
 multiaddr = "0.14.0"
 prometheus = "0.13.1"
@@ -47,10 +48,10 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "773365
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b"}
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
 
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "ae032178da474f74d5ec49f775a5a675460906aa", package = "crypto" }
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "ae032178da474f74d5ec49f775a5a675460906aa", package = "executor" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "ae032178da474f74d5ec49f775a5a675460906aa", package = "types" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "ae032178da474f74d5ec49f775a5a675460906aa", package = "node" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "dbcec9adee5676ce5cf176613c5763399a51b5ee", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "dbcec9adee5676ce5cf176613c5763399a51b5ee", package = "executor" }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "dbcec9adee5676ce5cf176613c5763399a51b5ee", package = "types" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "dbcec9adee5676ce5cf176613c5763399a51b5ee", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
