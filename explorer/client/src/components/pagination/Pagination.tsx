@@ -1,42 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { memo, useState, useCallback, useEffect } from 'react';
 
-import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
-
-import styles from './Pagination.module.css';
-
-const generatePaginationArr = (
-    startAt: number,
-    itemsPerPage: number,
-    totalItems: number
-) => {
-    // number of list items to show before truncating
-    const range: number = 2;
-    const max = Math.ceil(totalItems / itemsPerPage);
-    const maxRange = (Math.floor(startAt / range) + 1) * range;
-    // set the min range to be the max range minus the range if it is less than the max - range
-    const minRange = startAt <= max - range ? maxRange - range : max - range;
-
-    // generate array of numbers to show in the pagination where the total number of pages is the total tx value / items per page
-    // show only the range eg if startAt is 5 and range is 5 then show 5, 6, 7, 8, 9, 10
-    // generate an array of numbers of length range, starting at startAt and ending at max,
-    const rangelength = maxRange <= range + 1 ? range + 3 : range;
-
-    const listItems = Array.from({ length: max }, (_, i) => i + 1).filter(
-        (x: number, i) =>
-            (x >= minRange && x <= maxRange) || (i + 1 < rangelength && i > 0)
-    );
-
-    return {
-        max,
-        maxRange,
-        listItems,
-        range,
-    };
-};
+import styles from './PaginationWrapper.module.css';
 
 function Pagination({
     totalItems,
@@ -47,132 +14,171 @@ function Pagination({
     totalItems: number;
     itemsPerPage: number;
     currentPage: number;
-    onPagiChangeFn: Function;
+    onPagiChangeFn?: (index: number) => void;
 }) {
-    const [txNumPerPage, setTxNumPerPage] = useState(itemsPerPage);
-    const initData = generatePaginationArr(
-        currentPage,
-        txNumPerPage,
-        totalItems
-    );
-    const [pagiData, setPagiData] = useState(initData);
+    const [pageIndex, setPageIndex] = useState(currentPage);
 
     useEffect(() => {
-        setPagiData(
-            generatePaginationArr(currentPage, txNumPerPage, totalItems)
-        );
-        setTxNumPerPage(itemsPerPage);
-    }, [currentPage, totalItems, itemsPerPage, txNumPerPage]);
+        if (onPagiChangeFn) {
+            onPagiChangeFn(pageIndex);
+        }
+    }, [pageIndex, onPagiChangeFn]);
 
-    const changePage = useCallback(
-        (e: React.MouseEvent<HTMLElement>) => {
-            const pageNum = parseInt(e.currentTarget.dataset.pagidata || '0');
-            // don't allow page to be less than 1 or equal to current page index
-            if (
-                pageNum < 1 ||
-                pageNum === currentPage ||
-                pageNum > pagiData.max
-            )
-                return;
-            // call parent function to change page
-            onPagiChangeFn(pageNum);
-        },
-        [currentPage, pagiData.max, onPagiChangeFn]
+    const finalPageNo =
+        Math.floor(totalItems / itemsPerPage) +
+        (totalItems % itemsPerPage !== 0 ? 1 : 0);
+
+    const handleBtnClick = useCallback(
+        (pageIndex: number) => () => setPageIndex(pageIndex),
+        []
     );
 
+    const handleBackClick = useCallback(
+        () => pageIndex - 1 >= 0 && setPageIndex(pageIndex - 1),
+        [pageIndex]
+    );
+
+    const handleNextClick = useCallback(
+        () =>
+            (pageIndex + 1) * itemsPerPage < totalItems &&
+            setPageIndex(pageIndex + 1),
+        [pageIndex, itemsPerPage, totalItems]
+    );
+
+    const FirstButton = (
+        <button
+            className={
+                pageIndex === 0
+                    ? `${styles.nointeract} ${styles.gone}`
+                    : styles.btncontainer
+            }
+            id="backBtn"
+            onClick={handleBackClick}
+            disabled={pageIndex === 0}
+        >
+            &larr;
+        </button>
+    );
+
+    const LastButton = (
+        <button
+            id="nextBtn"
+            className={
+                pageIndex === finalPageNo - 1
+                    ? `${styles.nointeract} ${styles.gone}`
+                    : styles.btncontainer
+            }
+            disabled={pageIndex === finalPageNo - 1}
+            onClick={handleNextClick}
+        >
+            &rarr;
+        </button>
+    );
+    // When Total Number of Pages at most 5, list all always:
+
+    if (finalPageNo > 1 && finalPageNo <= 5) {
+        return (
+            <div className={styles.footer}>
+                <div>
+                    {FirstButton}
+                    {Array(finalPageNo)
+                        .fill(0)
+                        .map((_: number, arrayIndex: number) => (
+                            <button
+                                key={`page-${arrayIndex}`}
+                                className={
+                                    pageIndex === arrayIndex
+                                        ? styles.pagenumber
+                                        : styles.btncontainer
+                                }
+                                id="firstBtn"
+                                onClick={handleBtnClick(arrayIndex)}
+                                disabled={pageIndex === arrayIndex}
+                            >
+                                {arrayIndex + 1}
+                            </button>
+                        ))}
+                    {LastButton}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <>
-            <nav className={styles.pagination}>
-                <ul>
-                    <li
-                        className={cl(
-                            styles.arrow,
-                            currentPage > 1 ? styles.activearrow : ''
-                        )}
-                    >
-                        <button
-                            className={styles.paginationleft}
-                            data-pagidata={Math.max(0, currentPage - 1)}
-                            onClick={changePage}
-                        >
-                            <ContentForwardArrowDark />
-                        </button>
-                    </li>
-                    <li className={styles.pagilink}>
+        <div className={styles.footer}>
+            <div>
+                {finalPageNo > 1 && (
+                    <>
+                        {FirstButton}
                         <button
                             className={
-                                currentPage === 1 ? styles.activepag : ''
+                                pageIndex === 0
+                                    ? styles.pagenumber
+                                    : styles.btncontainer
                             }
-                            onClick={changePage}
-                            data-pagidata={1}
+                            id="firstBtn"
+                            onClick={handleBtnClick(0)}
+                            disabled={pageIndex === 0}
                         >
                             1
                         </button>
-                    </li>
 
-                    {currentPage > pagiData.range &&
-                        currentPage > pagiData.range + 1 && (
-                            <li className={styles.paginationdot}>...</li>
-                        )}
-                    {pagiData.listItems
-                        .filter((itm) => itm !== pagiData.max && itm !== 1)
-                        .map((itm: any, index: number) => (
-                            <li
-                                className={
-                                    currentPage === itm ? styles.pagilink : ''
-                                }
-                                key={index}
-                            >
-                                <button
-                                    className={
-                                        currentPage === itm
-                                            ? styles.activepag
-                                            : ''
-                                    }
-                                    data-pagidata={itm}
-                                    onClick={changePage}
-                                >
-                                    {itm}
-                                </button>
-                            </li>
-                        ))}
-
-                    {currentPage < pagiData.max - (pagiData.range + 1) && (
-                        <>
-                            <li className={styles.paginationdot}>...</li>
-                        </>
-                    )}
-
-                    <li className={styles.pagilink}>
                         <button
                             className={
-                                currentPage === pagiData.max
-                                    ? styles.activepag
-                                    : ''
+                                pageIndex === 1
+                                    ? styles.pagenumber
+                                    : styles.btncontainer
                             }
-                            data-pagidata={pagiData.max}
-                            onClick={changePage}
+                            id="secondBtn"
+                            onClick={handleBtnClick(1)}
+                            disabled={pageIndex === 1}
                         >
-                            {pagiData.max}
+                            2
                         </button>
-                    </li>
-                    <li
-                        className={cl(
-                            styles.arrow,
-                            currentPage < pagiData.max ? styles.activearrow : ''
+                        {pageIndex > 2 && (
+                            <button className={styles.nointeract}>...</button>
                         )}
-                    >
+
+                        {pageIndex > 1 && pageIndex < finalPageNo - 2 && (
+                            <button className={styles.pagenumber}>
+                                {pageIndex + 1}
+                            </button>
+                        )}
+
+                        {pageIndex < finalPageNo - 3 && (
+                            <button className={styles.nointeract}>...</button>
+                        )}
+
                         <button
-                            className="page-link"
-                            data-pagidata={currentPage + 1}
-                            onClick={changePage}
+                            className={
+                                pageIndex === finalPageNo - 2
+                                    ? styles.pagenumber
+                                    : styles.btncontainer
+                            }
+                            id="secondLastBtn"
+                            onClick={handleBtnClick(finalPageNo - 2)}
+                            disabled={pageIndex === finalPageNo - 2}
                         >
-                            <ContentForwardArrowDark />
+                            {finalPageNo - 1}
                         </button>
-                    </li>
-                </ul>
-            </nav>
-        </>
+                        <button
+                            id="lastBtn"
+                            disabled={pageIndex === finalPageNo - 1}
+                            onClick={handleBtnClick(finalPageNo - 1)}
+                            className={
+                                pageIndex === finalPageNo - 1
+                                    ? styles.pagenumber
+                                    : styles.btncontainer
+                            }
+                        >
+                            {finalPageNo}
+                        </button>
+
+                        {LastButton}
+                    </>
+                )}
+            </div>
+        </div>
     );
 }
 
