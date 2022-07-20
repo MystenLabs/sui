@@ -36,7 +36,7 @@ async fn checkpoint_active_flow_happy_path() {
                 .unwrap(),
         );
         let _active_handle = active_state
-            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests())
+            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
             .await;
     }
 
@@ -122,6 +122,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
                 .spawn_checkpoint_process_with_config(
                     Default::default(),
                     CheckpointMetrics::new_for_tests(),
+                    false,
                 )
                 .await;
         });
@@ -218,6 +219,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
                 .spawn_checkpoint_process_with_config(
                     CheckpointProcessControl::default(),
                     CheckpointMetrics::new_for_tests(),
+                    false,
                 )
                 .await;
         });
@@ -313,6 +315,7 @@ async fn test_empty_checkpoint() {
                 .spawn_checkpoint_process_with_config(
                     CheckpointProcessControl::default(),
                     CheckpointMetrics::new_for_tests(),
+                    false,
                 )
                 .await;
         });

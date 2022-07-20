@@ -51,6 +51,7 @@ use gossip::{gossip_process, node_sync_process};
 
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
+use crate::epoch::reconfiguration::Reconfigurable;
 use checkpoint_driver::{
     checkpoint_process, get_latest_proposal_and_checkpoint_from_all, sync_to_checkpoint,
 };
@@ -217,26 +218,6 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub async fn spawn_checkpoint_process(
-        self: Arc<Self>,
-        metrics: CheckpointMetrics,
-    ) -> JoinHandle<()> {
-        self.spawn_checkpoint_process_with_config(CheckpointProcessControl::default(), metrics)
-            .await
-    }
-
-    /// Spawn all active tasks.
-    pub async fn spawn_checkpoint_process_with_config(
-        self: Arc<Self>,
-        checkpoint_process_control: CheckpointProcessControl,
-        metrics: CheckpointMetrics,
-    ) -> JoinHandle<()> {
-        // Spawn task to take care of checkpointing
-        tokio::task::spawn(async move {
-            checkpoint_process(&self, &checkpoint_process_control, metrics).await;
-        })
-    }
-
     pub async fn sync_to_latest_checkpoint(&self, metrics: &CheckpointMetrics) -> SuiResult {
         self.sync_to_latest_checkpoint_with_config(metrics, Default::default())
             .await
@@ -304,6 +285,36 @@ where
     pub async fn spawn_execute_process(self: Arc<Self>) -> JoinHandle<()> {
         tokio::task::spawn(async move {
             execution_process(&self).await;
+        })
+    }
+}
+
+impl<A> ActiveAuthority<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
+{
+    pub async fn spawn_checkpoint_process(
+        self: Arc<Self>,
+        metrics: CheckpointMetrics,
+        enable_reconfig: bool,
+    ) -> JoinHandle<()> {
+        self.spawn_checkpoint_process_with_config(
+            CheckpointProcessControl::default(),
+            metrics,
+            enable_reconfig,
+        )
+        .await
+    }
+
+    pub async fn spawn_checkpoint_process_with_config(
+        self: Arc<Self>,
+        checkpoint_process_control: CheckpointProcessControl,
+        metrics: CheckpointMetrics,
+        enable_reconfig: bool,
+    ) -> JoinHandle<()> {
+        // Spawn task to take care of checkpointing
+        tokio::task::spawn(async move {
+            checkpoint_process(&self, &checkpoint_process_control, metrics, enable_reconfig).await;
         })
     }
 }
