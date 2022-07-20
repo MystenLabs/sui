@@ -29,5 +29,4 @@ final step and not for every action, such as voting and lotteries and DeFi Oracl
 1. Timed-release encrypted messages, including decrypting gift cards in the future.
 1. Posting price quotes (i.e., from Oracles, Pyth, etc.) can be *single-writer*, and a DEX trade can utilize shared objects. So Oracles can 100% work on the single-writer model.
 1. Job listing and related applications (i.e., a decentralized Workable).
-1. Real estate contract repository: for tracking purposes only - payment is offline, otherwise it would be an atomic 
-swap.
+1. Real estate contract repository: for tracking purposes only - payment is offline, otherwise it would be an atomic swap.
