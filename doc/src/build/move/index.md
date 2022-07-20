@@ -78,7 +78,7 @@ for more information on package layout.
 
 We are now ready to look at some Move code! You can either keep
 reading for an introductory description of the main
-Move language constructs or you can jump straight into the code by [writing a simple Move package](#writing-a-package), and checking out additional code [examples](../explore/examples.md).
+Move language constructs or you can jump straight into the code by [writing a simple Move package](write-package.md), and checking out additional code [examples](../explore/examples.md).
 
 ## First look at Move source code
 
@@ -199,7 +199,7 @@ struct SUI has drop {}
 
 We will show how to define and instantiate custom structs in the
 section describing how to
-[write a simple Move package](#writing-a-package).
+[write a simple Move package](write-package.md).
 
 ### Move functions
 
@@ -233,7 +233,7 @@ You can read more about Move
 
 We will show how to call Move functions from other functions and how
 to define the new ones in the section describing how to
-[write a simple Move package](#writing-a-package).
+[write a simple Move package](write-package.md).
 
 
 In addition to functions callable from other functions, however, the
@@ -282,4 +282,4 @@ value, and has three parameters:
   - Note that since it is unused, the parameter could be removed. The mutable reference to the `TxContext` is optional for entry functions.
 
 You can see how the `transfer` function is called from a Sui
-CLI client in [Calling Move code](cli-client.md#calling-move-code).
+CLI client in [Calling Move code](../cli-client.md#calling-move-code).
