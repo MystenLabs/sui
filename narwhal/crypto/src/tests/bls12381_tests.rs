@@ -378,7 +378,7 @@ fn test_hkdf_generate_from_ikm() {
 #[test]
 fn test_public_key_bytes_conversion() {
     let kp = keys().pop().unwrap();
-    let pk_bytes: BLS12381PublicKeyBytes = kp.public().clone().into();
+    let pk_bytes: BLS12381PublicKeyBytes = kp.public().into();
     let rebuilded_pk: BLS12381PublicKey = pk_bytes.try_into().unwrap();
     assert_eq!(kp.public().as_bytes(), rebuilded_pk.as_bytes());
 }

@@ -345,7 +345,7 @@ fn test_add_signatures_to_aggregate() {
 #[test]
 fn test_public_key_bytes_conversion() {
     let kp = keys().pop().unwrap();
-    let pk_bytes: BLS12377PublicKeyBytes = kp.public().clone().into();
+    let pk_bytes: BLS12377PublicKeyBytes = kp.public().into();
     let rebuilded_pk: BLS12377PublicKey = pk_bytes.try_into().unwrap();
     assert_eq!(kp.public().as_bytes(), rebuilded_pk.as_bytes());
 }

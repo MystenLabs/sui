@@ -385,18 +385,19 @@ impl Signer<Ed25519Signature> for Ed25519KeyPair {
 ///
 /// Implement VerifyingKeyBytes
 ///
-impl TryInto<Ed25519PublicKey> for Ed25519PublicKeyBytes {
+
+impl TryFrom<Ed25519PublicKeyBytes> for Ed25519PublicKey {
     type Error = signature::Error;
 
-    fn try_into(self) -> Result<Ed25519PublicKey, Self::Error> {
+    fn try_from(bytes: Ed25519PublicKeyBytes) -> Result<Ed25519PublicKey, Self::Error> {
         // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
         // to ensure the bytes represent a poin on the curve.
-        Ed25519PublicKey::from_bytes(self.as_ref()).map_err(|_| Self::Error::new())
+        Ed25519PublicKey::from_bytes(bytes.as_ref()).map_err(|_| Self::Error::new())
     }
 }
 
-impl From<Ed25519PublicKey> for Ed25519PublicKeyBytes {
-    fn from(pk: Ed25519PublicKey) -> Ed25519PublicKeyBytes {
+impl From<&Ed25519PublicKey> for Ed25519PublicKeyBytes {
+    fn from(pk: &Ed25519PublicKey) -> Self {
         Ed25519PublicKeyBytes::new(pk.0.to_bytes())
     }
 }

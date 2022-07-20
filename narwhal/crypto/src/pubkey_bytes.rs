@@ -5,11 +5,11 @@ use self::sealed::SealedPublicKeyLength;
 use crate::traits::{ToFromBytes, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
-use std::{fmt::Display, marker::PhantomData};
+use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 /// A generic construction representing bytes who claim to be the instance of a public key.
 #[serde_as]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PublicKeyBytes<T, const N: usize> {
     #[serde_as(as = "Bytes")]
     bytes: [u8; N],
@@ -67,22 +67,33 @@ impl<T, const N: usize> Default for PublicKeyBytes<T, N> {
     }
 }
 
+impl<T: VerifyingKey, const N: usize> FromStr for PublicKeyBytes<T, N> {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.strip_prefix("0x").unwrap_or(s);
+        let value = hex::decode(s)?;
+        Self::from_bytes(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
+    }
+}
+
+impl<T: VerifyingKey, const N: usize> Copy for PublicKeyBytes<T, N> {}
+
 // This guarantees the security of the constructor of a `PublicKeyBytes` instance
 // TODO: replace this clunky sealed marker trait once feature(associated_const_equality) stabilizes
 mod sealed {
     #[cfg(feature = "celo")]
-    use crate::bls12377::BLS12377PublicKey;
+    use crate::bls12377::BLS12377PublicKeyBytes;
+
     use crate::{
-        bls12381::BLS12381PublicKey, ed25519::Ed25519PublicKey, secp256k1::Secp256k1PublicKey,
-        traits::VerifyingKey,
+        bls12381::BLS12381PublicKeyBytes, ed25519::Ed25519PublicKeyBytes,
+        secp256k1::Secp256k1PublicKeyBytes,
     };
 
-    use super::PublicKeyBytes;
-
     pub trait SealedPublicKeyLength {}
-    impl SealedPublicKeyLength for PublicKeyBytes<Ed25519PublicKey, { Ed25519PublicKey::LENGTH }> {}
-    impl SealedPublicKeyLength for PublicKeyBytes<BLS12381PublicKey, { BLS12381PublicKey::LENGTH }> {}
-    impl SealedPublicKeyLength for PublicKeyBytes<Secp256k1PublicKey, { Secp256k1PublicKey::LENGTH }> {}
+    impl SealedPublicKeyLength for Ed25519PublicKeyBytes {}
+    impl SealedPublicKeyLength for BLS12381PublicKeyBytes {}
+    impl SealedPublicKeyLength for Secp256k1PublicKeyBytes {}
     #[cfg(feature = "celo")]
-    impl SealedPublicKeyLength for PublicKeyBytes<BLS12377PublicKey, { BLS12377PublicKey::LENGTH }> {}
+    impl SealedPublicKeyLength for BLS12377PublicKeyBytes {}
 }

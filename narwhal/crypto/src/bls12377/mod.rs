@@ -538,20 +538,16 @@ impl AggregateAuthenticator for BLS12377AggregateSignature {
 /// Implement VerifyingKeyBytes
 ///
 
-impl TryInto<BLS12377PublicKey> for BLS12377PublicKeyBytes {
+impl TryFrom<BLS12377PublicKeyBytes> for BLS12377PublicKey {
     type Error = signature::Error;
 
-    fn try_into(self) -> Result<BLS12377PublicKey, Self::Error> {
-        // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
-        // to ensure the bytes represent a poin on the curve.
-        BLS12377PublicKey::from_bytes(self.as_ref()).map_err(|_| Self::Error::new())
+    fn try_from(bytes: BLS12377PublicKeyBytes) -> Result<BLS12377PublicKey, Self::Error> {
+        BLS12377PublicKey::from_bytes(bytes.as_ref()).map_err(|_| Self::Error::new())
     }
 }
 
-impl From<BLS12377PublicKey> for BLS12377PublicKeyBytes {
-    fn from(pk: BLS12377PublicKey) -> BLS12377PublicKeyBytes {
-        let mut bytes = [0u8; CELO_BLS_PUBLIC_KEY_LENGTH];
-        pk.pubkey.serialize(&mut bytes[..]).unwrap();
-        BLS12377PublicKeyBytes::new(bytes)
+impl From<&BLS12377PublicKey> for BLS12377PublicKeyBytes {
+    fn from(pk: &BLS12377PublicKey) -> Self {
+        BLS12377PublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
     }
 }

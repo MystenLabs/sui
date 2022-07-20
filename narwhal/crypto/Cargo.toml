@@ -56,3 +56,4 @@ copy_key = []
 bincode = "1.3.3"
 criterion = "0.3.5"
 sha3 = "0.10.1"
+hex-literal = "0.3.4"
