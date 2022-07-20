@@ -39,8 +39,8 @@ directory as per our running example):
 $ sui move test
 ```
 
-If you execute this command for the package created in the
-[writing a simple package](#writing-a-package) section, you
+If you execute this command for the package created in
+[write a package](write-package.md), you
 will see the following output indicating, unsurprisingly,
 that no tests have ran because we have not written any yet!
 
@@ -217,7 +217,7 @@ a (new) user as arguments.
 Let us extend our running example with a multi-transaction test that
 uses the `test_scenario` to test sword creation and transfer from the
 point of view of a Sui developer. First, let us create
-[entry functions](#entry-functions) callable from Sui that implement
+[entry functions](index.md#entry-functions) callable from Sui that implement
 sword creation and transfer and put them into the `m1.move` file:
 
 ``` rust
@@ -245,7 +245,7 @@ The code of the new functions is self-explanatory and uses struct
 creation and Sui-internal modules (`TxContext` and `Transfer`) in a
 way similar to what we have seen in the previous sections. The
 important part is for the entry functions to have correct signatures
-as described [earlier](#entry-functions). In order for this code to
+as described [earlier](index.md#entry-functions). In order for this code to
 build, we need to add an additional import line at the module level
 (as the first line in the module's main code block right before the
 existing module-wide `ID` module import) to make the `TxContext`
@@ -318,7 +318,7 @@ from storage is transferred to another address.
 The final transaction is executed by the final owner - it retrieves
 the sword object from storage and checks if it has the expected
 properties. Remember, as described in
-[testing a package](#testing-a-package), in the *pure Move* testing
+[testing a package](build-test.md#testing-a-package), in the *pure Move* testing
 scenario, once an object is available in Move code (e.g., after its
 created or, in this case, retrieved from emulated storage), it cannot simply
 disappear.
