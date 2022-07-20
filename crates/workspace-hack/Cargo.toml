@@ -73,7 +73,8 @@ camino = { version = "1", default-features = false, features = ["serde", "serde1
 cargo-platform = { version = "0.1", default-features = false }
 cargo_metadata = { version = "0.14" }
 cassowary = { version = "0.3", default-features = false }
-cast = { version = "0.2", features = ["std"] }
+cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
+cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
 cfg-expr = { version = "0.10", features = ["target-lexicon", "targets"] }
 cfg-if-c65f7effa3be6d31 = { package = "cfg-if", version = "0.1", default-features = false }
 cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features = false }
@@ -618,7 +619,8 @@ camino = { version = "1", default-features = false, features = ["serde", "serde1
 cargo-platform = { version = "0.1", default-features = false }
 cargo_metadata = { version = "0.14" }
 cassowary = { version = "0.3", default-features = false }
-cast = { version = "0.2", features = ["std"] }
+cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
+cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
 cc = { version = "1", default-features = false, features = ["jobserver", "parallel"] }
 cexpr = { version = "0.6", default-features = false }
 cfg-expr = { version = "0.10", features = ["target-lexicon", "targets"] }
