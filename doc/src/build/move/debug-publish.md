@@ -25,7 +25,7 @@ Alternatively, any call to `abort` or assertion failure will also print the stac
 
 For functions in a Move package to actually be callable from Sui
 (rather than for Sui execution scenario to be emulated), the package
-has to be _published_ to Sui's [distributed ledger](../learn/how-sui-works.md)
+has to be _published_ to Sui's [distributed ledger](../../learn/how-sui-works.md)
 where it is represented as a Sui object.
 
 At this point, however, the
@@ -33,9 +33,9 @@ At this point, however, the
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
 testing framework. Instead, one can use a Sui CLI client to
-[publish](cli-client.md#publish-packages) Move code and to
-[call](cli-client.md#calling-move-code) it. See the
-[Sui CLI client documentation](cli-client.md) for a description of how
+[publish](../cli-client.md#publish-packages) Move code and to
+[call](../cli-client.md#calling-move-code) it. See the
+[Sui CLI client documentation](../cli-client.md) for a description of how
 to publish the package we have [written](write-package.md) as as
 part of this tutorial.
 
