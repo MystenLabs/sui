@@ -26,7 +26,7 @@ import PaginationLogic from '../pagination/PaginationLogic';
 import styles from './TxForID.module.css';
 
 const TRUNCATE_LENGTH = 14;
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 const DATATYPE_DEFAULT = {
     loadState: 'pending',
