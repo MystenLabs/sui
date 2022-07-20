@@ -5,7 +5,6 @@ use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthorityAggregator, CertificateHandler},
     authority_client::AuthorityAPI,
-    node_sync::NodeSyncDigestHandler,
     safe_client::SafeClient,
 };
 use async_trait::async_trait;
@@ -83,7 +82,7 @@ where
     follower_process(
         active_authority,
         degree,
-        NodeSyncDigestHandler::new(active_authority.node_sync_state.clone()),
+        active_authority.node_sync_handle(),
         GossipType::Full,
     )
     .await;

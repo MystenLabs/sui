@@ -41,9 +41,12 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 use crate::{
-    authority::AuthorityState, authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI, node_sync::NodeSyncState,
+    authority::AuthorityState,
+    authority_aggregator::AuthorityAggregator,
+    authority_client::AuthorityAPI,
+    node_sync::{NodeSyncHandle, NodeSyncState},
 };
+use once_cell::sync::OnceCell;
 use tokio::time::Instant;
 
 pub mod gossip;
@@ -108,6 +111,7 @@ pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
     pub node_sync_state: Arc<NodeSyncState<A>>,
+    node_sync_handle: OnceCell<NodeSyncHandle>,
 
     pub follower_store: Arc<FollowerStore>,
     // The network interfaces to other authorities
@@ -142,6 +146,7 @@ impl<A> ActiveAuthority<A> {
             )),
             state: authority,
             node_sync_state,
+            node_sync_handle: OnceCell::new(),
             follower_store,
             net: ArcSwap::from(net),
         })
@@ -216,6 +221,7 @@ impl<A> Clone for ActiveAuthority<A> {
         ActiveAuthority {
             state: self.state.clone(),
             node_sync_state: self.node_sync_state.clone(),
+            node_sync_handle: self.node_sync_handle.clone(),
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
@@ -227,6 +233,13 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    fn node_sync_handle(&self) -> NodeSyncHandle {
+        let node_sync_state = self.node_sync_state.clone();
+        self.node_sync_handle
+            .get_or_init(|| NodeSyncHandle::new(node_sync_state))
+            .clone()
+    }
+
     pub async fn sync_to_latest_checkpoint(&self, metrics: &CheckpointMetrics) -> SuiResult {
         self.sync_to_latest_checkpoint_with_config(metrics, Default::default())
             .await
