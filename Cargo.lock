@@ -6883,6 +6883,7 @@ dependencies = [
  "anyhow",
  "clap 3.1.18",
  "colored",
+ "futures",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
  "rustyline",
  "rustyline-derive",
