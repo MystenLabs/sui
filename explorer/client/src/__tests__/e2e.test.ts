@@ -11,17 +11,16 @@ const BASE_URL = 'http://localhost:8080';
 //Standardized CSS Selectors
 
 const coinGroup = (num: number) => {
-    const trunk = `#groupCollection > div:nth-child(${num})`;
+    const trunk = `#groupCollection > tr:nth-child(${num + 1})`;
     return {
         base: () => trunk,
-        field: (numField: number) =>
-            `${trunk} > div > div:nth-child(${numField})`,
+        field: (numField: number) => `${trunk} > td:nth-child(${numField})`,
     };
 };
 
 const mainBodyCSS = 'main > section > div';
 
-const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;
 
 //Standardized Expectations
 const cssInteract = (page: Page) => ({
@@ -254,45 +253,31 @@ describe('End-to-end Tests', () => {
             const parentValue = 'ObjectWBrokenChild';
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
-            //Click on child in Owned Objects List:
+            // 1) Click on child in Owned Objects List:
             await cssInteract(page).with(nftObject(1)).click();
 
-            const noImageCSS = `${mainBodyCSS} > div:first-child > div > div`;
-
-            // First see Please Wait Message:
-            expect(
-                await cssInteract(page).with(noImageCSS).get.attribute('id')
-            ).toBe('pleaseWaitImage');
-
-            await page.waitForFunction(
-                () => !document.querySelector('#pleaseWaitImage')
+            await page.waitForFunction(() =>
+                document.querySelector('#noImage')
             );
 
-            //Then see No Image Warning:
+            // 2) This leads to a no image warning:
             expect(
-                await cssInteract(page).with(noImageCSS).get.attribute('id')
-            ).toBe('noImage');
+                await cssInteract(page).with('#noImage').get.textContent()
+            ).toBe('No Image was Found');
 
-            //Parent Object contains an image:
-            await page.click('div#owner > div > span:first-child');
-            await page.waitForFunction(
-                () => !document.querySelector('#pleaseWaitImage')
+            // 3) Click on owner:
+            await page.click('div#owner span:first-child');
+
+            await page.waitForFunction(() =>
+                document.querySelector('#loadedImage')
             );
+
+            // 4) This leads to an image:
             expect(
                 await cssInteract(page)
-                    .with(`${mainBodyCSS} > div:first-child > div > img`)
+                    .with('div#displayContainer > img')
                     .get.attribute('id')
             ).toBe('loadedImage');
-
-            //And no No Image / Please Wait message:
-            await expect(
-                page.$eval(
-                    `${mainBodyCSS} > div:first-child > div > div`,
-                    () => {}
-                )
-            ).rejects.toThrow(
-                `Error: failed to find element matching selector "${mainBodyCSS} > div:first-child > div > div"`
-            );
         });
     });
     describe('PaginationWrapper has buttons', () => {
@@ -304,7 +289,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe('player0');
+            expect(value.trim()).toBe('Image2');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
@@ -314,9 +299,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe(
-                '7bc832ec31709638cd8d9323e90edf332gff4389'
-            );
+            expect(value.trim()).toBe('CollectionObject');
         });
 
         it('where last and next disappear in final page', async () => {
@@ -348,7 +331,7 @@ describe('End-to-end Tests', () => {
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe('player0');
+            expect(value.trim()).toBe('player5');
         });
 
         it('to go to first page', async () => {
@@ -390,32 +373,32 @@ describe('End-to-end Tests', () => {
                 await cssInteract(page)
                     .with(coinGroup(1).field(1))
                     .get.textContent()
-            ).toBe('Type0x2::USD::USD');
+            ).toBe('0x2::USD::USD');
 
             expect(
                 await cssInteract(page)
                     .with(coinGroup(1).field(2))
                     .get.textContent()
-            ).toBe('Balance9007199254740993');
+            ).toBe('9007199254740993');
 
             expect(
                 await cssInteract(page)
                     .with(coinGroup(2).field(1))
                     .get.textContent()
-            ).toBe('TypeSUI');
+            ).toBe('SUI');
 
             expect(
                 await cssInteract(page)
                     .with(coinGroup(2).field(2))
                     .get.textContent()
-            ).toBe('Balance200');
+            ).toBe('200');
         });
     });
     describe('Transactions for ID', () => {
         const txResults =
-            'TxIdTimeTxTypeStatusAddressesXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZPTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressGHTP9gcFmF5K...KFhdqfpdK8=1min3secsagoTransfer✖From:senderAddressTo:receiv...dress';
+            'TxIdTimeTxTypeStatusAddressesXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dress';
 
-        it('are displayed deduplicated from and to address', async () => {
+        it('are displayed from and to address', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
@@ -423,7 +406,7 @@ describe('End-to-end Tests', () => {
                 .get.textContent();
             expect(fromResults.replace(/\s/g, '')).toBe(txResults);
         });
-        it('are displayed deduplicated for input and mutated object', async () => {
+        it('are displayed for input and mutated object', async () => {
             const address = 'CollectionObject';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
