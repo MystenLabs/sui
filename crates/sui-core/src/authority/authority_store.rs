@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::epoch::EpochInfoLocals;
 use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
@@ -40,6 +39,28 @@ const NUM_SHARDS: usize = 4096;
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum AuthenticatedEpoch {
+    Signed(SignedEpoch),
+    Certified(CertifiedEpoch),
+}
+
+impl AuthenticatedEpoch {
+    pub fn epoch(&self) -> EpochId {
+        match self {
+            Self::Signed(s) => s.epoch_info.epoch,
+            Self::Certified(c) => c.epoch_info.epoch,
+        }
+    }
+
+    pub fn next_epoch_committee(&self) -> Committee {
+        match self {
+            Self::Signed(s) => s.epoch_info.next_epoch_committee.clone(),
+            Self::Certified(c) => c.epoch_info.next_epoch_committee.clone(),
+        }
+    }
+}
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -137,8 +158,7 @@ pub struct SuiDataStore<S> {
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndices>,
 
-    /// Map from each epoch ID to the epoch information.
-    epochs: DBMap<EpochId, EpochInfoLocals>,
+    epochs: DBMap<EpochId, AuthenticatedEpoch>,
 }
 
 impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
@@ -163,7 +183,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 ("executed_sequence", &options),
                 ("batches", &options),
                 ("last_consensus_index", &options),
-                ("epochs", &options),
+                ("epochs", &point_lookup),
             ];
             typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
         }
@@ -200,7 +220,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             "consensus_message_processed";<TransactionDigest, bool>,
             "batches";<TxSequenceNumber, SignedBatch>,
             "last_consensus_index";<u64, ExecutionIndices>,
-            "epochs";<EpochId, EpochInfoLocals>
+            "epochs";<EpochId, AuthenticatedEpoch>
         );
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
@@ -1413,17 +1433,6 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(self.certificates.multi_get(transaction_digests)?)
     }
 
-    pub fn insert_new_epoch_info(&self, epoch_info: EpochInfoLocals) -> SuiResult {
-        self.epochs
-            .insert(&epoch_info.committee.epoch(), &epoch_info)?;
-        Ok(())
-    }
-
-    pub fn get_last_epoch_info(&self) -> SuiResult<EpochInfoLocals> {
-        // unwrap safe since we guarantee to insert an epoch entry at genesis.
-        Ok(self.epochs.iter().skip_to_last().next().unwrap().1)
-    }
-
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState>
     where
         S: Eq + Serialize + for<'de> Deserialize<'de>,
@@ -1438,6 +1447,45 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
             .expect("Sui System State object deserialization cannot fail");
         Ok(result)
+    }
+
+    // Epoch related functions
+
+    /// This function should be called at the end of the epoch identified by `epoch`,
+    /// and after this call, we expect that the node's committee has changed
+    /// to `next_epoch_committee`.
+    pub fn sign_new_epoch(
+        &self,
+        epoch: EpochId,
+        next_epoch_committee: Committee,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> SuiResult {
+        fp_ensure!(
+            epoch < EpochId::MAX && epoch + 1 == next_epoch_committee.epoch,
+            SuiError::from("Current epoch number and next epoch number are inconsistent")
+        );
+        let latest_epoch = self.get_latest_authenticated_epoch();
+        if let Some(latest_epoch) = latest_epoch {
+            fp_ensure!(
+                latest_epoch.epoch() <= epoch,
+                SuiError::from("Overriding an existing authenticated epoch")
+            );
+        }
+
+        let signed_epoch = SignedEpoch::new(next_epoch_committee, authority, secret);
+
+        let mut writer = self.epochs.batch();
+        writer = writer.insert_batch(
+            &self.epochs,
+            iter::once((epoch, AuthenticatedEpoch::Signed(signed_epoch))),
+        )?;
+        writer.write()?;
+        Ok(())
+    }
+
+    pub fn get_latest_authenticated_epoch(&self) -> Option<AuthenticatedEpoch> {
+        self.epochs.iter().skip_to_last().next().map(|(_, a)| a)
     }
 }
 

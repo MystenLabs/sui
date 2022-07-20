@@ -5,8 +5,9 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable,
-    EmptySignInfo, Signable, Signature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
+    AuthorityWeakQuorumSignInfo, BcsSignable, EmptySignInfo, Signable, Signature,
+    VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::CheckpointFragment;
@@ -1769,4 +1770,76 @@ pub enum ExecuteTransactionResponse {
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
+}
+
+// Epoch related data structures.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochInfo {
+    /// The epoch number of this epoch info.
+    /// Although we could derive it from the epoch number of `next_epoch_committee`, a potential
+    /// byzantine node may set next_epoch_committee.epoch as 0, which will make it very
+    /// inconvenient to obtain the epoch number.
+    pub epoch: EpochId,
+    pub next_epoch_committee: Committee,
+    // TODO: Add more fields.
+}
+
+impl BcsSignable for EpochInfo {}
+
+impl EpochInfo {
+    pub fn verify(&self) -> SuiResult {
+        let next_epoch = self.next_epoch_committee.epoch;
+        fp_ensure!(
+            next_epoch > 0 && next_epoch - 1 == self.epoch,
+            SuiError::from("Epoch number mismatch in epoch info")
+        );
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochEnvelop<S> {
+    pub epoch_info: EpochInfo,
+    pub auth_sign_info: S,
+}
+
+pub type SignedEpoch = EpochEnvelop<AuthoritySignInfo>;
+pub type CertifiedEpoch = EpochEnvelop<AuthorityWeakQuorumSignInfo>;
+
+impl SignedEpoch {
+    pub fn new(
+        next_epoch_committee: Committee,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> Self {
+        let epoch = next_epoch_committee.epoch - 1;
+        let epoch_info = EpochInfo {
+            epoch,
+            next_epoch_committee,
+        };
+        let signature = AuthoritySignature::new(&epoch_info, secret);
+        Self {
+            epoch_info,
+            auth_sign_info: AuthoritySignInfo {
+                epoch,
+                authority,
+                signature,
+            },
+        }
+    }
+
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.epoch_info.verify()?;
+        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+        Ok(())
+    }
+}
+
+impl CertifiedEpoch {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.epoch_info.verify()?;
+        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+        Ok(())
+    }
 }
