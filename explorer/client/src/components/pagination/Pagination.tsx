@@ -25,12 +25,12 @@ function Pagination({
         count: number;
     };
 }) {
-    const [pageIndex, setPageIndex] = useState(currentPage);
+    const [pageIndex, setPageIndex] = useState(currentPage - 1);
     const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
 
     useEffect(() => {
         if (onPagiChangeFn) {
-            onPagiChangeFn(pageIndex);
+            onPagiChangeFn(pageIndex + 1);
         }
     }, [pageIndex, onPagiChangeFn]);
 
