@@ -24,13 +24,13 @@ export default function PaginationLogic({
 
     const MAX_ITEMS_PER_PAGE = 60;
 
-    const [pageIndex, setPageIndex] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [pageLength, setPageLength] = useState(itemsPerPage);
 
     const objectSample = results.slice(
-        pageIndex * itemsPerPage,
-        (pageIndex + 1) * itemsPerPage
+        (currentPage - 1) * itemsPerPage,
+        (currentPage) * itemsPerPage
     );
 
     // If the total number of items is at most the max items per page, the ability to vary items per page number is removed:
@@ -46,8 +46,8 @@ export default function PaginationLogic({
                 updateItemsPerPage={
                     allowVaryItemsPerPage ? setPageLength : undefined
                 }
-                currentPage={pageIndex}
-                onPagiChangeFn={setPageIndex}
+                currentPage={currentPage}
+                onPagiChangeFn={setCurrentPage}
                 stats={stats}
             />
         </>
