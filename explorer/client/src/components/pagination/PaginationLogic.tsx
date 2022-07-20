@@ -30,7 +30,7 @@ export default function PaginationLogic({
 
     const objectSample = results.slice(
         (currentPage - 1) * itemsPerPage,
-        (currentPage) * itemsPerPage
+        currentPage * itemsPerPage
     );
 
     // If the total number of items is at most the max items per page, the ability to vary items per page number is removed:
