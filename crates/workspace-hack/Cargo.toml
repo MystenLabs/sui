@@ -46,7 +46,7 @@ backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project
 backtrace = { version = "0.3", features = ["std"] }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64 = { version = "0.13", features = ["alloc", "std"] }
-base64ct = { version = "1", default-features = false, features = ["alloc"] }
+base64ct = { version = "1", default-features = false, features = ["alloc", "std"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde", "serde"] }
 better_any = { version = "0.1", default-features = false }
@@ -602,7 +602,7 @@ backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project
 backtrace = { version = "0.3", features = ["std"] }
 base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64 = { version = "0.13", features = ["alloc", "std"] }
-base64ct = { version = "1", default-features = false, features = ["alloc"] }
+base64ct = { version = "1", default-features = false, features = ["alloc", "std"] }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde", "serde"] }
 better_any = { version = "0.1", default-features = false }
