@@ -194,7 +194,7 @@ function Pagination({
                             </button>
                         )}
 
-                        {pageIndex > 2 && pageIndex < finalPageNo - 3 && (
+                        {pageIndex >= 1 && pageIndex < finalPageNo - 3 && (
                             <button
                                 className={styles.nextbtnnumber}
                                 onClick={handleBtnClick(pageIndex + 1)}
@@ -206,7 +206,7 @@ function Pagination({
                         {pageIndex < finalPageNo - 3 && (
                             <button
                                 className={
-                                    pageIndex < finalPageNo - 3
+                                    pageIndex < finalPageNo - 4
                                         ? styles.nointeract
                                         : styles.nointeractsecond
                                 }
