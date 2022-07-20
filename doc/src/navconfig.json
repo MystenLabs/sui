@@ -114,7 +114,7 @@
       {
         "label": "Create Smart Contracts with Move",
         "fileName": "build/move/index",
-        "title": "Write Smart Contracts with Move",
+        "title": "Create Smart Contracts with Move",
         "items": [
           {
             "label": "Write Move Packages",
