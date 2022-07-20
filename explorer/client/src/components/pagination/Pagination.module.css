@@ -2,7 +2,7 @@ button.btncontainer,
 button.pagenumber,
 button.nointeract,
 .rhs > select {
-    @apply h-[5vh] px-0 py-2 mx-[1vw] sm:mx-[4px] inline-block
+    @apply h-[2.3rem] px-0 py-2 mx-[1vw] sm:mx-[4px] inline-block
     rounded border-[1px] border-solid border-sui-grey-50
     font-sans items-center 
     text-sui-grey-75 stroke-sui-grey-75 bg-inherit;
@@ -13,7 +13,7 @@ button.nointeract,
 button.btncontainer,
 button.pagenumber,
 button.nointeract {
-    @apply w-[7vw] sm:w-[32px];
+    @apply px-2;
 }
 
 button.btncontainer {
