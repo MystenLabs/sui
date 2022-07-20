@@ -16,6 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
+* Find a list of [single-writer apps](../learn/single-writer-apps.md) that would benefit from Sui's advantages in handling [simple transactions](../learn/how-sui-works.md#simple-transactions).
 * Install the [Sui Wallet Browser Extension](../explore/wallet-browser.md) to create NFTs, transfer coins, and carry out common transactions in a Chrome tab.
 * [Sui Move is feature complete](https://sui.io/resources-move/why-we-created-sui-move/) and ready for you to write safe and efficient smart contracts. See https://examples.sui.io/ to learn Sui Move by example.
 * Sui [version 0.6.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.0-rc) released to DevNet. See [RELEASES](https://github.com/MystenLabs/sui/blob/main/RELEASES.md) for details on other releases.
@@ -23,8 +24,6 @@ Find the latest updates to these contents in this section:
 * Employ the enhanced [Move Visual Studio Code (VSCode) plugin](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) as described in the [related announcement](https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin).
 * Get ready to participate in [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/)!
 * The former `wallet` binary has been replaced with the [Sui CLI client](../build/cli-client.md) and combined with related functions.
-* [JSON-RPC PubSub](../build/pubsub.md) is supported by Sui [fullnode](../build/fullnode.md) to publish / subscribe using notifications via websocket.
-* [Docker Compose](../build/fullnode.md#using-docker-compose) enables simple creation of Sui Fullnodes using [Docker](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme).
 
 For a complete view of all changes in the Sui `devnet` branch, see:
 https://github.com/MystenLabs/sui/commits/devnet
