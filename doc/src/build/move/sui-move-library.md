@@ -100,6 +100,6 @@ Now that you are familiar with the Move language, as well as with how
 to develop and test Move code, you are ready to start looking at and
 playing with some larger
 [examples](../../explore/examples.md) of Move
-programs, such as implementation of the tic-tac-toe game or a more
+programs. The examples include implementation of the tic-tac-toe game, and a more
 developed variant of a fantasy game similar to the one we have been
 developing during this tutorial.
