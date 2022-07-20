@@ -22,7 +22,7 @@
 }
 
 .tabsfooter {
-    @apply block md:flex justify-between text-gray-500 capitalize items-center p-0 mt-2  text-sm;
+    @apply block md:flex justify-between text-gray-500 capitalize items-center p-0 text-sm;
 }
 
 .tabsfooter a {
