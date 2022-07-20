@@ -13,10 +13,11 @@ use sui_config::{
 };
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
-    crypto::KeyPair,
     crypto::{KeypairTraits, PublicKeyBytes, Signature, ToFromBytes},
     object::Object,
 };
+
+use crate::keytool::read_keypair_from_file;
 
 const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
 
@@ -40,26 +41,38 @@ pub enum CeremonyCommand {
     Init,
 
     AddValidator {
+        #[clap(long)]
         name: String,
-        public_key: PublicKeyBytes,
+        #[clap(long)]
+        key_file: PathBuf,
+        #[clap(long)]
         network_address: Multiaddr,
+        #[clap(long)]
         narwhal_primary_to_primary: Multiaddr,
+        #[clap(long)]
         narwhal_worker_to_primary: Multiaddr,
+        #[clap(long)]
         narwhal_primary_to_worker: Multiaddr,
+        #[clap(long)]
         narwhal_worker_to_worker: Multiaddr,
+        #[clap(long)]
         narwhal_consensus_address: Multiaddr,
     },
 
     AddGasObject {
+        #[clap(long)]
         address: SuiAddress,
+        #[clap(long)]
         object_id: Option<ObjectID>,
+        #[clap(long)]
         value: u64,
     },
 
     Build,
 
     VerifyAndSign {
-        keypair: KeyPair,
+        #[clap(long)]
+        key_file: PathBuf,
     },
 
     Finalize,
@@ -81,7 +94,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
         CeremonyCommand::AddValidator {
             name,
-            public_key,
+            key_file,
             network_address,
             narwhal_primary_to_primary,
             narwhal_worker_to_primary,
@@ -90,9 +103,10 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
+            let keypair = read_keypair_from_file(key_file)?;
             builder = builder.add_validator(sui_config::ValidatorInfo {
                 name,
-                public_key,
+                public_key: keypair.public().into(),
                 stake: 1,
                 delegation: 0,
                 network_address,
@@ -127,7 +141,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             genesis.save(dir.join(SUI_GENESIS_FILENAME))?;
         }
 
-        CeremonyCommand::VerifyAndSign { keypair } => {
+        CeremonyCommand::VerifyAndSign { key_file } => {
+            let keypair = read_keypair_from_file(key_file)?;
             let loaded_genesis = Genesis::load(dir.join(SUI_GENESIS_FILENAME))?;
             let loaded_genesis_bytes = loaded_genesis.to_bytes();
 
@@ -210,6 +225,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::keytool::write_keypair_to_file;
     use anyhow::Result;
     use sui_config::{utils, ValidatorInfo};
     use sui_types::crypto::get_key_pair_from_rng;
@@ -233,7 +249,9 @@ mod test {
                     narwhal_worker_to_worker: utils::new_network_address(),
                     narwhal_consensus_address: utils::new_network_address(),
                 };
-                (keypair, info)
+                let key_file = dir.path().join(format!("{}.key", info.name));
+                write_keypair_to_file(&keypair, &key_file).unwrap();
+                (key_file, info)
             })
             .collect::<Vec<_>>();
 
@@ -245,12 +263,12 @@ mod test {
         command.run()?;
 
         // Add the validators
-        for (_key, validator) in &validators {
+        for (key_file, validator) in &validators {
             let command = Ceremony {
                 path: Some(dir.path().into()),
                 command: CeremonyCommand::AddValidator {
                     name: validator.name().to_owned(),
-                    public_key: validator.public_key(),
+                    key_file: key_file.into(),
                     network_address: validator.network_address().to_owned(),
                     narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
@@ -274,7 +292,7 @@ mod test {
             let command = Ceremony {
                 path: Some(dir.path().into()),
                 command: CeremonyCommand::VerifyAndSign {
-                    keypair: key.copy(),
+                    key_file: key.into(),
                 },
             };
             command.run()?;
