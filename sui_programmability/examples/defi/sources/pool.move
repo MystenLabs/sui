@@ -5,6 +5,7 @@
 ///
 /// - Only module publisher can create new Pools.
 /// - For simplicity's sake all swaps are done with SUI coin.
+/// Generalizing to swaps between non-SUI coin types requires a few more generics, but is otherwise straightforward
 /// - Fees are customizable per Pool.
 /// - Max stored value for both tokens is: U64_MAX / 10_000
 ///
