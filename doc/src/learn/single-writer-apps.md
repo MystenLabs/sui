@@ -1,5 +1,5 @@
 ---
-title: Sui Single-Writer-Friendly (SWF) apps
+title: Use Sui Single-Writer-Friendly (SWF) Apps
 ---
 
 This page lists applications that can work in the single-writer model defined as [simple transactions](how-sui-works.md#simple-transactions) in Sui. 
