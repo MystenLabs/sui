@@ -64,11 +64,15 @@
             "fileName": "build/transactions"
           },
           {
+            "label": "Create Single-Writer Apps",
+            "fileName": "learn/single-writer-apps"
+          },
+          {
             "label": "Understand Validators",
             "fileName": "learn/architecture/validators"
           },
           {
-            "label": "Sui Consensus Engine",
+            "label": "Employ Consensus Engine",
             "fileName": "learn/architecture/consensus"
           }
         ]
