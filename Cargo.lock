@@ -6338,7 +6338,7 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "sui"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6729,7 +6729,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -6877,7 +6877,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "clap 3.1.18",
