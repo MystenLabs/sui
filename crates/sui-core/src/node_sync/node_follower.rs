@@ -24,6 +24,8 @@ use sui_types::{
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
+use futures::stream::FuturesOrdered;
+
 use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 
@@ -167,19 +169,19 @@ struct DigestsMessage {
 }
 
 impl DigestsMessage {
-    fn new_for_ckpt(digests: &ExecutionDigests) -> Self {
+    fn new_for_ckpt(digests: &ExecutionDigests, tx: oneshot::Sender<SuiResult>) -> Self {
         Self {
             sync_arg: SyncArg::Checkpoint(*digests),
             peer: None,
-            tx: None,
+            tx: Some(tx),
         }
     }
 
-    fn new_for_exec_driver(digest: &TransactionDigest) -> Self {
+    fn new_for_exec_driver(digest: &TransactionDigest, tx: oneshot::Sender<SuiResult>) -> Self {
         Self {
             sync_arg: SyncArg::ExecDriver(*digest),
             peer: None,
-            tx: None,
+            tx: Some(tx),
         }
     }
 
@@ -226,7 +228,7 @@ impl SyncArg {
     }
 }
 
-/// NodeSyncState is shared by any number of NodeSyncDigestHandler's, and receives DigestsMessage
+/// NodeSyncState is shared by any number of NodeSyncHandle's, and receives DigestsMessage
 /// messages from those handlers, waits for finality of TXes, and then downloads and applies those
 /// TXes locally.
 pub struct NodeSyncState<A> {
@@ -269,20 +271,6 @@ where
     fn start(self: Arc<Self>, receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
         let state = self;
         tokio::spawn(async move { state.handle_stream(ReceiverStream::new(receiver)).await })
-    }
-
-    pub async fn sync_checkpoint(
-        self: Arc<Self>,
-        checkpoint_contents: &CheckpointContents,
-    ) -> SuiResult {
-        let stream = tokio_stream::iter(
-            checkpoint_contents
-                .transactions
-                .iter()
-                .map(DigestsMessage::new_for_ckpt),
-        );
-        self.handle_stream(stream).await;
-        Ok(())
     }
 
     async fn handle_stream(self: Arc<Self>, stream: impl Stream<Item = DigestsMessage>) {
@@ -423,9 +411,9 @@ where
             }
         };
 
+        // TODO: perhaps we should start storing these things in Box<>s.
+        #[allow(clippy::large_enum_variant)]
         enum CertAndEffects {
-            // TODO: perhaps we should start storing these things in Box<>s.
-            #[allow(clippy::large_enum_variant)]
             Fullnode(CertifiedTransaction, SignedTransactionEffects),
             Validator(CertifiedTransaction),
         }
@@ -573,13 +561,14 @@ where
     }
 }
 
+/// A cloneable handle that can send messages to a NodeSyncState
 #[derive(Clone)]
-pub struct NodeSyncDigestHandler {
+pub struct NodeSyncHandle {
     _sync_join_handle: Arc<JoinHandle<()>>,
     sender: mpsc::Sender<DigestsMessage>,
 }
 
-impl NodeSyncDigestHandler {
+impl NodeSyncHandle {
     pub fn new<A>(sync_state: Arc<NodeSyncState<A>>) -> Self
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -592,17 +581,14 @@ impl NodeSyncDigestHandler {
             sender,
         }
     }
-}
 
-#[async_trait]
-impl<A> DigestHandler<A> for NodeSyncDigestHandler
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    async fn handle_digest(&self, follower: &Follower<A>, digests: ExecutionDigests) -> SuiResult {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(DigestsMessage::new(&digests, follower.peer_name, tx))
+    async fn send_msg_with_tx(
+        sender: mpsc::Sender<DigestsMessage>,
+        msg: DigestsMessage,
+        rx: oneshot::Receiver<SuiResult>,
+    ) -> SuiResult {
+        sender
+            .send(msg)
             .await
             .map_err(|e| SuiError::GenericAuthorityError {
                 error: e.to_string(),
@@ -610,6 +596,52 @@ where
         rx.await.map_err(|e| SuiError::GenericAuthorityError {
             error: e.to_string(),
         })?
+    }
+
+    pub fn sync_checkpoint(
+        &self,
+        checkpoint_contents: &CheckpointContents,
+    ) -> impl Stream<Item = SuiResult> {
+        let futures: FuturesOrdered<_> = checkpoint_contents
+            .iter()
+            .map(|digests| {
+                let (tx, rx) = oneshot::channel();
+                let msg = DigestsMessage::new_for_ckpt(digests, tx);
+                Self::send_msg_with_tx(self.sender.clone(), msg, rx)
+            })
+            .collect();
+        futures
+    }
+
+    pub fn handle_execution_request(
+        &self,
+        digests: impl Iterator<Item = TransactionDigest>,
+    ) -> impl Stream<Item = SuiResult> {
+        let futures: FuturesOrdered<_> = digests
+            .map(|digest| {
+                let (tx, rx) = oneshot::channel();
+                let msg = DigestsMessage::new_for_exec_driver(&digest, tx);
+                Self::send_msg_with_tx(self.sender.clone(), msg, rx)
+            })
+            .collect();
+        futures
+    }
+}
+
+#[async_trait]
+impl<A> DigestHandler<A> for NodeSyncHandle
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    async fn handle_digest(&self, follower: &Follower<A>, digests: ExecutionDigests) -> SuiResult {
+        let (tx, rx) = oneshot::channel();
+        let sender = self.sender.clone();
+        Self::send_msg_with_tx(
+            sender,
+            DigestsMessage::new(&digests, follower.peer_name, tx),
+            rx,
+        )
+        .await
     }
 }
 

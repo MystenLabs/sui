@@ -85,7 +85,7 @@ async fn pending_exec_storage_notify() {
     // get back the certificates
     let certs_back = authority_state
         .database
-        .get_pending_certificates()
+        .get_pending_digests()
         .expect("DB should be there");
     assert_eq!(num_certs, certs_back.len());
 }
@@ -166,7 +166,7 @@ async fn pending_exec_full() {
         .expect("Storage is ok");
     let certs_back = authority_state
         .database
-        .get_pending_certificates()
+        .get_pending_digests()
         .expect("DB should be there");
     assert_eq!(num_certs, certs_back.len());
 
@@ -177,7 +177,7 @@ async fn pending_exec_full() {
     // get back the certificates
     let certs_back = authority_state
         .database
-        .get_pending_certificates()
+        .get_pending_digests()
         .expect("DB should be there");
     assert_eq!(0, certs_back.len());
 }

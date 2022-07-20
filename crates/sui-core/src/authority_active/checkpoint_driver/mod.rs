@@ -26,12 +26,13 @@ use sui_types::{
 };
 use tokio::time::Instant;
 
-use crate::epoch::reconfiguration::Reconfigurable;
+use futures::stream::StreamExt;
+
 use crate::{
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
     authority_client::AuthorityAPI,
     checkpoints::CheckpointStore,
-    node_sync::NodeSyncState,
+    epoch::reconfiguration::Reconfigurable,
 };
 
 use sui_types::committee::{Committee, StakeUnit};
@@ -647,11 +648,25 @@ where
         let (past, contents) =
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
 
-        active_authority
-            .node_sync_state
-            .clone()
+        let errors = active_authority
+            .node_sync_handle()
             .sync_checkpoint(&contents)
-            .await?;
+            .zip(futures::stream::iter(contents.iter()))
+            .filter_map(|(r, digests)| async move {
+                r.map_err(|e| {
+                    info!(?digests, "failed to execute digest from checkpoint: {}", e);
+                    e
+                })
+                .err()
+            })
+            .collect::<Vec<SuiError>>()
+            .await;
+
+        if !errors.is_empty() {
+            let error = "Failed to sync transactions in checkpoint".to_string();
+            error!(?seq, "{}", error);
+            return Err(SuiError::CheckpointingError { error });
+        }
 
         checkpoint_db.lock().process_new_checkpoint_certificate(
             &past,

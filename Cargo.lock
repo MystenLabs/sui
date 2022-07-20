@@ -6533,6 +6533,7 @@ dependencies = [
  "multiaddr",
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
  "node",
+ "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
  "prometheus",
