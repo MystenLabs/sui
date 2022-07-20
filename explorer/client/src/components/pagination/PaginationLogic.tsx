@@ -8,11 +8,13 @@ export default function PaginationLogic({
     results,
     viewComponentFn,
     itemsPerPage,
+    canVaryItemsPerPage = false,
     stats,
 }: {
     results: any;
     viewComponentFn: Function;
     itemsPerPage: number;
+    canVaryItemsPerPage?: boolean;
     stats?: {
         stats_text: string;
         count: number;
@@ -21,6 +23,8 @@ export default function PaginationLogic({
     const count = results.length;
 
     const [pageIndex, setPageIndex] = useState(0);
+
+    const [pageLength, setPageLength] = useState(itemsPerPage);
 
     const objectSample = results.slice(
         pageIndex * itemsPerPage,
@@ -32,7 +36,10 @@ export default function PaginationLogic({
             {viewComponentFn(objectSample)}
             <Pagination
                 totalItems={count}
-                itemsPerPage={itemsPerPage}
+                itemsPerPage={pageLength}
+                updateItemsPerPage={
+                    canVaryItemsPerPage ? setPageLength : undefined
+                }
                 currentPage={pageIndex}
                 onPagiChangeFn={setPageIndex}
                 stats={stats}

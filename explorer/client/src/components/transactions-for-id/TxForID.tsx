@@ -142,6 +142,7 @@ function TxForIDStatic({
             results={data}
             viewComponentFn={viewFn}
             itemsPerPage={ITEMS_PER_PAGE}
+            canVaryItemsPerPage
         />
     );
 }
@@ -194,6 +195,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
                 results={data}
                 viewComponentFn={viewFn}
                 itemsPerPage={ITEMS_PER_PAGE}
+                canVaryItemsPerPage
             />
         );
     }

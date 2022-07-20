@@ -10,12 +10,14 @@ import styles from './Pagination.module.css';
 function Pagination({
     totalItems,
     itemsPerPage,
+    updateItemsPerPage,
     currentPage = 0,
     onPagiChangeFn,
     stats,
 }: {
     totalItems: number;
     itemsPerPage: number;
+    updateItemsPerPage?: (index: number) => void;
     currentPage: number;
     onPagiChangeFn?: (index: number) => void;
     stats?: {
@@ -24,6 +26,7 @@ function Pagination({
     };
 }) {
     const [pageIndex, setPageIndex] = useState(currentPage);
+    const NUMBER_OF_TX_PER_PAGE_OPTIONS = [10, 20, 40, 60];
 
     useEffect(() => {
         if (onPagiChangeFn) {
@@ -50,6 +53,16 @@ function Pagination({
             (pageIndex + 1) * itemsPerPage < totalItems &&
             setPageIndex(pageIndex + 1),
         [pageIndex, itemsPerPage, totalItems]
+    );
+
+    const pageLengthChange = useCallback(
+        (event: React.ChangeEvent<HTMLSelectElement>) => {
+            if (updateItemsPerPage) {
+                const selectedNum = parseInt(event.target.value);
+                updateItemsPerPage(selectedNum);
+            }
+        },
+        [updateItemsPerPage]
     );
 
     const FirstButton = (
@@ -81,6 +94,22 @@ function Pagination({
             &rarr;
         </button>
     );
+
+    const RHSInfo = (
+        <>
+            {stats && <TabFooter stats={stats} />}
+            {updateItemsPerPage && (
+                <select value={itemsPerPage} onChange={pageLengthChange}>
+                    {NUMBER_OF_TX_PER_PAGE_OPTIONS.map((item) => (
+                        <option value={item} key={item}>
+                            {item} Per Page
+                        </option>
+                    ))}
+                </select>
+            )}
+        </>
+    );
+
     // When Total Number of Pages at most 5, list all always:
 
     if (finalPageNo > 1 && finalPageNo <= 5) {
@@ -107,11 +136,7 @@ function Pagination({
                         ))}
                     {LastButton}
                 </div>
-                {stats && (
-                    <div>
-                        <TabFooter stats={stats} />
-                    </div>
-                )}
+                {RHSInfo}
             </div>
         );
     }
@@ -190,11 +215,7 @@ function Pagination({
                     </>
                 )}
             </div>
-            {stats && (
-                <div>
-                    <TabFooter stats={stats} />
-                </div>
-            )}
+            {RHSInfo}
         </div>
     );
 }
