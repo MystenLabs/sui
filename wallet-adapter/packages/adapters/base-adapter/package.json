@@ -1,0 +1,15 @@
+{
+  "name": "sui-base-wallet-adapter",
+  "version": "1.0.0",
+  "description": "Base wallet adapter for Sui",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@mysten/sui.js": "^0.8.0"
+  }
+}
