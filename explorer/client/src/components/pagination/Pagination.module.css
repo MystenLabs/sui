@@ -46,7 +46,7 @@ button.gone {
 }
 
 .footer {
-    @apply sm:grid sm:grid-cols-12 text-center sm:text-left;
+    @apply mt-2 sm:grid sm:grid-cols-12 text-center sm:text-left;
 }
 
 .footer > div:first-child {
