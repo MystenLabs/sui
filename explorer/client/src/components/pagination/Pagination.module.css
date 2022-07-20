@@ -11,7 +11,9 @@
     }
 
     .btncontainer {
-        @apply basecontainer hover:bg-sui hover:text-white hover:stroke-white hover:border-sui cursor-pointer;
+        @apply basecontainer hover:bg-sui-light hover:text-sui-grey-100 hover:stroke-sui-grey-100 cursor-pointer;
+
+        transition: all 0.4s ease;
     }
 }
 
