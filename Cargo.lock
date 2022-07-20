@@ -8503,6 +8503,7 @@ dependencies = [
  "cargo_metadata",
  "cassowary",
  "cast 0.2.7",
+ "cast 0.3.0",
  "cc",
  "cexpr",
  "cfg-expr",
