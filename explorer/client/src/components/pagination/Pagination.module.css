@@ -22,7 +22,7 @@ button.nointeract,
 }
 
 button.secondbtn {
-    @apply basecontainer hidden sm:inline-block;
+    @apply btncontainer hidden sm:inline-block cursor-pointer;
 }
 
 button.nointeractsecond {
