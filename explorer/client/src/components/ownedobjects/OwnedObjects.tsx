@@ -31,7 +31,7 @@ import {
 } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 import Longtext from '../longtext/Longtext';
-import PaginationWrapper from '../pagination/PaginationWrapper';
+import PaginationLogic from '../pagination/PaginationLogic';
 
 import styles from './OwnedObjects.module.css';
 
@@ -207,7 +207,7 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
                     <div className={styles.ownedobjectheader}>
                         <h2>NFTs</h2>
                     </div>
-                    <PaginationWrapper
+                    <PaginationLogic
                         results={other_results}
                         viewComponentFn={viewFn}
                         itemsPerPage={ITEMS_PER_PAGE}
@@ -286,7 +286,7 @@ function GroupView({ results }: { results: resultType }) {
                     </button>
                     <h2>{handleCoinType(subObjs[0].Type)}</h2>
                 </div>
-                <PaginationWrapper
+                <PaginationLogic
                     results={subObjs}
                     viewComponentFn={viewFn}
                     itemsPerPage={ITEMS_PER_PAGE}

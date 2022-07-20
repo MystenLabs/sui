@@ -3,7 +3,7 @@
 
 import { memo, useState, useCallback, useEffect } from 'react';
 
-import styles from './PaginationWrapper.module.css';
+import styles from './Pagination.module.css';
 
 function Pagination({
     totalItems,

@@ -21,7 +21,7 @@ import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Longtext from '../longtext/Longtext';
-import PaginationWrapper from '../pagination/PaginationWrapper';
+import PaginationLogic from '../pagination/PaginationLogic';
 
 import styles from './TxForID.module.css';
 
@@ -138,7 +138,7 @@ function TxForIDStatic({
         .filter((x) => x !== undefined) as TxnData[];
     if (!data) return <></>;
     return (
-        <PaginationWrapper
+        <PaginationLogic
             results={data}
             viewComponentFn={viewFn}
             itemsPerPage={ITEMS_PER_PAGE}
@@ -190,7 +190,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
         const data = showData.data;
         if (!data) return <></>;
         return (
-            <PaginationWrapper
+            <PaginationLogic
                 results={data}
                 viewComponentFn={viewFn}
                 itemsPerPage={ITEMS_PER_PAGE}
