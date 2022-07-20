@@ -60,6 +60,7 @@ module defi::pool {
         sui: Balance<SUI>,
         token: Balance<T>,
         lsp_treasury: TreasuryCap<LSP<P, T>>,
+        /// Fee Percent is denominated in basis points.
         fee_percent: u64
     }
 
