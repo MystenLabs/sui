@@ -514,7 +514,7 @@ async fn run(
 #[tokio::main]
 async fn main() {
     let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
-    config.log_level = Some("warn".to_string());
+    config.log_string = Some("warn".to_string());
     config.log_file = Some("stress.log".to_string());
     let _guard = config.with_env().init();
     let opts: Opts = Opts::parse();
