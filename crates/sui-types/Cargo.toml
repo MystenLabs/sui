@@ -26,7 +26,7 @@ serde_with = "1.14.0"
 signature = "1.5.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-base64ct = { version = "1.5.1", features = ["alloc"] }
+base64ct = { version = "1.5.1", features = ["std", "alloc"] }
 zeroize = "1.5.4"
 hkdf = "0.12.3"
 digest = "0.10.3"

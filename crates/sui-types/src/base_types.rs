@@ -485,7 +485,7 @@ pub fn get_new_address() -> SuiAddress {
     crate::crypto::get_key_pair().0
 }
 
-pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>
+pub fn bytes_as_hex<B, S>(bytes: B, serializer: S) -> Result<S::Ok, S::Error>
 where
     B: AsRef<[u8]>,
     S: serde::ser::Serializer,
@@ -503,7 +503,7 @@ where
     Ok(value)
 }
 
-pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
+pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: B) -> String {
     hex::encode(bytes.as_ref())
 }
 
