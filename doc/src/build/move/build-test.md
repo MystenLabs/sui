@@ -4,13 +4,13 @@ title: Build and Test the Sui Move Package
 
 ## Building a package
 
-Ensure you are in the `my_move_package` directory containing your package and build it:
+Ensure you are in the `my_move_package` directory that contains your package, and then use the following command to build it:
 
 ``` shell
 $ sui move build
 ```
 
-A successful build yields results resembling:
+A successful build returns a response similar to the following:
 
 ```shell
 Build Successful
