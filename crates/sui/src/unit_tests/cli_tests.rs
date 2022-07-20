@@ -212,7 +212,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         gas_object_ranges: None,
     });
 
-    let network = start_test_network(Some(config)).await?;
+    let network = start_test_network(Some(config), None).await?;
 
     // Wallet config
     let mut context = WalletContext::new(&network.dir().join(SUI_CLIENT_CONFIG))?;
@@ -663,7 +663,7 @@ fn test_bug_1078() {
 #[allow(clippy::assertions_on_constants)]
 #[tokio::test]
 async fn test_switch_command() -> Result<(), anyhow::Error> {
-    let network = start_test_network(None).await?;
+    let network = start_test_network(None, None).await?;
 
     // Create Wallet context.
     let wallet_conf = network.dir().join(SUI_CLIENT_CONFIG);
@@ -761,7 +761,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 #[allow(clippy::assertions_on_constants)]
 #[tokio::test]
 async fn test_active_address_command() -> Result<(), anyhow::Error> {
-    let network = start_test_network(None).await?;
+    let network = start_test_network(None, None).await?;
 
     // Create Wallet context.
     let wallet_conf = network.dir().join(SUI_CLIENT_CONFIG);
