@@ -164,6 +164,9 @@ function Pagination({
                             className={
                                 pageIndex === 1
                                     ? styles.pagenumber
+                                    : pageIndex <= 2 ||
+                                      pageIndex >= finalPageNo - 3
+                                    ? styles.btncontainer
                                     : styles.secondbtn
                             }
                             id="secondBtn"
@@ -172,7 +175,8 @@ function Pagination({
                         >
                             2
                         </button>
-                        {pageIndex > 1 && (
+
+                        {pageIndex > 2 && (
                             <button
                                 className={
                                     pageIndex > 2
@@ -190,7 +194,7 @@ function Pagination({
                             </button>
                         )}
 
-                        {pageIndex < finalPageNo - 2 && (
+                        {pageIndex < finalPageNo - 3 && (
                             <button
                                 className={
                                     pageIndex < finalPageNo - 3
@@ -206,6 +210,9 @@ function Pagination({
                             className={
                                 pageIndex === finalPageNo - 2
                                     ? styles.pagenumber
+                                    : pageIndex <= 2 ||
+                                      pageIndex >= finalPageNo - 3
+                                    ? styles.btncontainer
                                     : styles.secondbtn
                             }
                             id="secondLastBtn"
