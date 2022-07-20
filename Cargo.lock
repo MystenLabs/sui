@@ -7043,6 +7043,7 @@ dependencies = [
  "anyhow",
  "clap 3.1.18",
  "colored",
+ "futures",
  "mysten-network",
  "rustyline",
  "rustyline-derive",

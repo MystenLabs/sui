@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use futures::future::join_all;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -267,23 +268,27 @@ impl ToolCommand {
             } => {
                 let clients = make_clients(genesis)?;
 
-                let clients = clients.iter().filter(|(name, _)| {
-                    if let Some(v) = validator {
-                        v == **name
-                    } else {
-                        true
-                    }
-                });
+                let responses = join_all(
+                    clients
+                        .iter()
+                        .filter(|(name, _)| {
+                            if let Some(v) = validator {
+                                v == **name
+                            } else {
+                                true
+                            }
+                        })
+                        .map(|(name, client)| async {
+                            let object_versions = get_object(client, id, version, history).await;
+                            (*name, object_versions)
+                        }),
+                )
+                .await;
 
-                let mut output = ObjectData {
+                let output = ObjectData {
                     requested_id: id,
-                    responses: Vec::new(),
+                    responses,
                 };
-
-                for (name, client) in clients {
-                    let object_versions = get_object(client, id, version, history).await;
-                    output.responses.push((*name, object_versions));
-                }
 
                 if concise {
                     if !no_header {
