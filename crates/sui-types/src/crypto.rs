@@ -558,9 +558,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         T: Signable<Vec<u8>>,
     {
         let mut obligation = VerificationObligation::default();
-        let mut message = Vec::new();
-        data.write(&mut message);
-        let message_index = obligation.add_message(message);
+        let message_index = obligation.add_message(data);
         self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
         obligation.verify_all()?;
         Ok(())

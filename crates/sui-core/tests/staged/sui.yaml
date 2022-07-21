@@ -32,12 +32,7 @@ AuthoritySignInfo:
     - authority:
         TYPENAME: PublicKeyBytes
     - signature:
-        TYPENAME: AuthoritySignature
-AuthoritySignature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
+        TYPENAME: Ed25519Signature
 CallArg:
   ENUM:
     0:
@@ -97,6 +92,12 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
+ExecutionDigests:
+  STRUCT:
+    - transaction:
+        TYPENAME: TransactionDigest
+    - effects:
+        TYPENAME: TransactionEffectsDigest
 ExecutionFailureStatus:
   ENUM:
     0:
@@ -437,4 +438,16 @@ TypedStoreError:
         NEWTYPE: STR
     3:
       CrossDBBatch: UNIT
+UpdateItem:
+  ENUM:
+    0:
+      Transaction:
+        NEWTYPE:
+          TUPLE:
+            - U64
+            - TYPENAME: ExecutionDigests
+    1:
+      Batch:
+        NEWTYPE:
+          TYPENAME: SignedBatch
 

@@ -1869,7 +1869,7 @@ pub struct EpochEnvelop<S> {
 }
 
 pub type SignedEpoch = EpochEnvelop<AuthoritySignInfo>;
-pub type CertifiedEpoch = EpochEnvelop<AuthorityWeakQuorumSignInfo>;
+pub type CertifiedEpoch = EpochEnvelop<AuthorityStrongQuorumSignInfo>;
 
 impl SignedEpoch {
     pub fn new(
