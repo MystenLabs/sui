@@ -34,8 +34,8 @@ crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 prometheus = "0.13.1"
 once_cell = "1.13.0"
@@ -54,7 +54,7 @@ async-trait = "0.1.56"
 executor = { path = "../executor" }
 thiserror = "1.0.31"
 tracing = "0.1.35"
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
 [features]
 benchmark = []

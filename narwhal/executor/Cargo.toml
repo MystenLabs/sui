@@ -27,8 +27,8 @@ multiaddr = "0.14.0"
 types = { path = "../types" }
 worker = { path = "../worker" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
