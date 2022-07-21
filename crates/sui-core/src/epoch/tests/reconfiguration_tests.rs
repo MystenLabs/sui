@@ -66,7 +66,7 @@ async fn test_start_epoch_change() {
     });
     tokio::time::sleep(Duration::from_millis(100)).await;
     // Validator should now be halted, but epoch change hasn't finished.
-    assert!(state.halted.load(Ordering::SeqCst));
+    assert!(state.is_halted());
     assert!(!epoch_change_started.load(Ordering::SeqCst));
 
     // Drain ticket.
@@ -204,18 +204,11 @@ async fn test_finish_epoch_change() {
     for active in actives {
         assert_eq!(active.state.epoch(), 1);
         assert_eq!(active.net.load().committee.epoch, 1);
-        assert_eq!(
-            active
-                .state
-                .db()
-                .get_last_epoch_info()
-                .unwrap()
-                .committee
-                .epoch,
-            1
-        );
+        let latest_epoch = active.state.db().get_latest_authenticated_epoch().unwrap();
+        assert_eq!(latest_epoch.epoch(), 0);
+        assert_eq!(latest_epoch.epoch_info().next_epoch_committee().epoch, 1);
         // Verify that validator is no longer halted.
-        assert!(!active.state.halted.load(Ordering::SeqCst));
+        assert!(!active.state.is_halted());
         let system_state = active.state.get_sui_system_state_object().await.unwrap();
         assert_eq!(system_state.epoch, 1);
         let (_, tx_digest) = active

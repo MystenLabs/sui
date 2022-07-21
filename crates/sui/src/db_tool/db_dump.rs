@@ -8,7 +8,6 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-use sui_core::epoch::EpochInfoLocals;
 use sui_storage::default_db_options;
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, TransactionDigest,
@@ -18,6 +17,7 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::messages::{CertifiedTransaction, TransactionEffectsEnvelope, TransactionEnvelope};
+use sui_types::messages_checkpoint::AuthenticatedCheckpoint;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 use typed_store::rocks::DBMap;
@@ -72,7 +72,7 @@ pub struct SuiDataStoreReadonly<S> {
 
     last_consensus_index: DBMap<u64, ExecutionIndices>,
 
-    epochs: DBMap<EpochId, EpochInfoLocals>,
+    epochs: DBMap<EpochId, AuthenticatedCheckpoint>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStoreReadonly<S> {
@@ -137,7 +137,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStoreReadonly
             SCHEDULE_TABLE_NAME;<ObjectID, SequenceNumber>,
             BATCHES_TABLE_NAME;<TxSequenceNumber, SignedBatch>,
             LAST_CONSENSUS_TABLE_NAME;<u64, ExecutionIndices>,
-            EPOCH_TABLE_NAME;<EpochId, EpochInfoLocals>
+            EPOCH_TABLE_NAME;<EpochId, AuthenticatedCheckpoint>
         );
         Self {
             objects,

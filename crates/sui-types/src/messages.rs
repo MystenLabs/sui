@@ -5,11 +5,12 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable,
-    EmptySignInfo, Signable, Signature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
+    AuthorityWeakQuorumSignInfo, BcsSignable, EmptySignInfo, Signable, Signature,
+    VerificationObligation,
 };
 use crate::gas::GasCostSummary;
-use crate::messages_checkpoint::CheckpointFragment;
+use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
@@ -1769,4 +1770,110 @@ pub enum ExecuteTransactionResponse {
     TxCert(Box<CertifiedTransaction>),
     // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
+}
+
+// Epoch related data structures.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochInfo {
+    /// The epoch number of this epoch info.
+    /// Although we could derive it from the epoch number of `next_epoch_committee`, a potential
+    /// byzantine node may set next_epoch_committee.epoch as 0, which will make it very
+    /// inconvenient to obtain the epoch number.
+    epoch: EpochId,
+    /// The committee of the NEXT epoch. The committee of the epoch identified by the `epoch`
+    /// field is not part of this data structure. Instead, it will always be in the previous epoch
+    /// data structure. The committee for the very first epoch would be the genesis committee, which
+    /// is not in any epoch data structure, but in the genesis blob.
+    /// It's important that we commit to the next epoch committee in the current epoch, so that we
+    /// know what committee to use when verifying the next epoch data structure.
+    next_epoch_committee: Committee,
+    /// The last checkpoint included in this epoch. The first checkpoint can always be derived
+    /// from the previous epoch. The first checkpoint of the first epoch would be 0.
+    last_checkpoint: CheckpointSequenceNumber,
+}
+
+impl BcsSignable for EpochInfo {}
+
+impl EpochInfo {
+    pub fn new(
+        epoch: EpochId,
+        next_epoch_committee: Committee,
+        last_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult<Self> {
+        fp_ensure!(
+            epoch < EpochId::MAX && epoch + 1 == next_epoch_committee.epoch,
+            SuiError::from("Current epoch number and next epoch number are inconsistent")
+        );
+        Ok(Self {
+            epoch,
+            next_epoch_committee,
+            last_checkpoint,
+        })
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.epoch
+    }
+
+    pub fn next_epoch_committee(&self) -> &Committee {
+        &self.next_epoch_committee
+    }
+
+    pub fn last_checkpoint(&self) -> &CheckpointSequenceNumber {
+        &self.last_checkpoint
+    }
+
+    pub fn verify(&self) -> SuiResult {
+        let next_epoch = self.next_epoch_committee.epoch;
+        fp_ensure!(
+            next_epoch > 0 && next_epoch - 1 == self.epoch,
+            SuiError::from("Epoch number mismatch in epoch info")
+        );
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochEnvelop<S> {
+    pub epoch_info: EpochInfo,
+    pub auth_sign_info: S,
+}
+
+pub type SignedEpoch = EpochEnvelop<AuthoritySignInfo>;
+pub type CertifiedEpoch = EpochEnvelop<AuthorityWeakQuorumSignInfo>;
+
+impl SignedEpoch {
+    pub fn new(
+        epoch: EpochId,
+        next_epoch_committee: Committee,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+        last_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult<Self> {
+        let epoch_info = EpochInfo::new(epoch, next_epoch_committee, last_checkpoint)?;
+        let signature = AuthoritySignature::new(&epoch_info, secret);
+        Ok(Self {
+            epoch_info,
+            auth_sign_info: AuthoritySignInfo {
+                epoch,
+                authority,
+                signature,
+            },
+        })
+    }
+
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.epoch_info.verify()?;
+        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+        Ok(())
+    }
+}
+
+impl CertifiedEpoch {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.epoch_info.verify()?;
+        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+        Ok(())
+    }
 }
