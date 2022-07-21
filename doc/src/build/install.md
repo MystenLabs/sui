@@ -85,16 +85,14 @@ Then update the packages with:
 $ rustup update stable
 ```
 
-If you run into issues, re-install Rust and Cargo:
-
-```shell
-$ sudo apt remove cargo
-sudo apt autoremove
-```
-
-And then start the Rust install over.
-For more details, see:
-https://www.rust-lang.org/tools/install
+> **Warning:** If you run into issues, you may un-install Rust and Cargo with:
+> ```shell
+> $ sudo apt remove cargo
+> sudo apt autoremove
+> ```
+> And then start the Rust install over.
+> For more details, see:
+> https://www.rust-lang.org/tools/install
 
 ### Git CLI
 
