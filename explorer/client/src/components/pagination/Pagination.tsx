@@ -25,13 +25,15 @@ function Pagination({
         count: number;
     };
 }) {
+    const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
+
+    // Connects pageIndex to input page value
+
     const [pageIndex, setPageIndex] = useState(currentPage - 1);
 
     useEffect(() => {
         setPageIndex(currentPage - 1);
     }, [currentPage]);
-
-    const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
 
     useEffect(() => {
         if (onPagiChangeFn) {
@@ -42,6 +44,20 @@ function Pagination({
     const finalPageNo =
         Math.floor(totalItems / itemsPerPage) +
         (totalItems % itemsPerPage !== 0 ? 1 : 0);
+
+    // Connects inputted items per page to selected page length
+
+    const pageLengthChange = useCallback(
+        (event: React.ChangeEvent<HTMLSelectElement>) => {
+            if (updateItemsPerPage) {
+                const selectedNum = parseInt(event.target.value);
+                updateItemsPerPage(selectedNum);
+            }
+        },
+        [updateItemsPerPage]
+    );
+
+    // Handle Button clicks
 
     const handleBtnClick = useCallback(
         (pageIndex: number) => () => setPageIndex(pageIndex),
@@ -60,17 +76,9 @@ function Pagination({
         [pageIndex, itemsPerPage, totalItems]
     );
 
-    const pageLengthChange = useCallback(
-        (event: React.ChangeEvent<HTMLSelectElement>) => {
-            if (updateItemsPerPage) {
-                const selectedNum = parseInt(event.target.value);
-                updateItemsPerPage(selectedNum);
-            }
-        },
-        [updateItemsPerPage]
-    );
+    // Mini-components shared across the different views
 
-    const FirstButton = (
+    const BackButton = (
         <button
             className={
                 pageIndex === 0
@@ -85,7 +93,7 @@ function Pagination({
         </button>
     );
 
-    const LastButton = (
+    const NextButton = (
         <button
             id="nextBtn"
             className={
@@ -100,35 +108,71 @@ function Pagination({
         </button>
     );
 
-    const RHSInfo = (
-        <div className={styles.rhs}>
-            {stats && (
-                <div>
-                    {typeof stats.count === 'number'
-                        ? numberSuffix(stats.count)
-                        : stats.count}{' '}
-                    {stats.stats_text}
-                </div>
-            )}
-            {updateItemsPerPage && (
-                <select value={itemsPerPage} onChange={pageLengthChange}>
-                    {NUMBER_OF_TX_PER_PAGE_OPTIONS.map((item) => (
-                        <option value={item} key={item}>
-                            {item} Per Page
-                        </option>
-                    ))}
-                </select>
-            )}
+    const Stats = stats ? (
+        <div>
+            {typeof stats.count === 'number'
+                ? numberSuffix(stats.count)
+                : stats.count}{' '}
+            {stats.stats_text}
         </div>
+    ) : (
+        <></>
     );
 
-    // When Total Number of Pages at most 5, list all always:
+    const PageLengthSelect = updateItemsPerPage ? (
+        <select value={itemsPerPage} onChange={pageLengthChange}>
+            {NUMBER_OF_TX_PER_PAGE_OPTIONS.map((item) => (
+                <option value={item} key={item}>
+                    {item} Per Page
+                </option>
+            ))}
+        </select>
+    ) : (
+        <></>
+    );
 
-    if (finalPageNo > 1 && finalPageNo <= 5) {
+    const IndexZeroButton = (label: string) => (
+        <button
+            className={
+                pageIndex === 0 ? styles.pagenumber : styles.btncontainer
+            }
+            id="firstBtn"
+            onClick={handleBtnClick(0)}
+            disabled={pageIndex === 0}
+        >
+            {label}
+        </button>
+    );
+
+    const FinalPageButton = (
+        finalPageNo: number,
+        label: string = String(finalPageNo)
+    ) => (
+        <button
+            id="lastBtn"
+            disabled={pageIndex === finalPageNo - 1}
+            onClick={handleBtnClick(finalPageNo - 1)}
+            className={
+                pageIndex === finalPageNo - 1
+                    ? styles.pagenumber
+                    : styles.btncontainer
+            }
+        >
+            {label}
+        </button>
+    );
+
+    // View when Total Number of Pages is one, which is an empty div:
+
+    if (finalPageNo === 1) return <div />;
+
+    // View when Total Number of Pages is at most 5, all values are listed:
+
+    if (finalPageNo <= 5) {
         return (
             <div className={styles.footer}>
                 <div>
-                    {FirstButton}
+                    {BackButton}
                     {Array(finalPageNo)
                         .fill(0)
                         .map((_: number, arrayIndex: number) => (
@@ -146,121 +190,103 @@ function Pagination({
                                 {arrayIndex + 1}
                             </button>
                         ))}
-                    {LastButton}
+                    {NextButton}
                 </div>
-                {RHSInfo}
+                <div className={styles.rhs}>
+                    {Stats}
+                    {PageLengthSelect}
+                </div>
             </div>
         );
     }
 
-    return (
-        <div className={styles.footer}>
-            <div>
-                {finalPageNo > 1 && (
-                    <>
-                        {FirstButton}
-                        <button
-                            className={
-                                pageIndex === 0
-                                    ? styles.pagenumber
-                                    : styles.btncontainer
-                            }
-                            id="firstBtn"
-                            onClick={handleBtnClick(0)}
-                            disabled={pageIndex === 0}
-                        >
-                            1
-                        </button>
+    // View when more than 5 pages in Desktop:
 
-                        <button
-                            className={
-                                pageIndex === 1
-                                    ? styles.pagenumber
-                                    : pageIndex <= 2 ||
-                                      pageIndex >= finalPageNo - 3
-                                    ? styles.btncontainer
-                                    : styles.secondbtn
-                            }
-                            id="secondBtn"
-                            onClick={handleBtnClick(1)}
-                            disabled={pageIndex === 1}
-                        >
-                            2
-                        </button>
+    const desktopPagination = (
+        <div>
+            {BackButton}
+            {IndexZeroButton('1')}
 
-                        {pageIndex > 2 && (
-                            <button
-                                className={
-                                    pageIndex > 2
-                                        ? styles.nointeract
-                                        : styles.nointeractsecond
-                                }
-                            >
-                                ...
-                            </button>
-                        )}
+            <button
+                className={
+                    pageIndex === 1 ? styles.pagenumber : styles.btncontainer
+                }
+                id="secondBtn"
+                onClick={handleBtnClick(1)}
+                disabled={pageIndex === 1}
+            >
+                2
+            </button>
 
-                        {pageIndex > 1 && pageIndex < finalPageNo - 2 && (
-                            <button className={styles.pagenumber}>
-                                {pageIndex + 1}
-                            </button>
-                        )}
+            {pageIndex > 2 && (
+                <button className={styles.nointeract}>...</button>
+            )}
 
-                        {pageIndex >= 1 && pageIndex < finalPageNo - 3 && (
-                            <button
-                                className={styles.nextbtnnumber}
-                                onClick={handleBtnClick(pageIndex + 1)}
-                            >
-                                {pageIndex + 2}
-                            </button>
-                        )}
+            {pageIndex > 1 && pageIndex < finalPageNo - 2 && (
+                <button className={styles.pagenumber}>{pageIndex + 1}</button>
+            )}
 
-                        {pageIndex < finalPageNo - 3 && (
-                            <button
-                                className={
-                                    pageIndex < finalPageNo - 4
-                                        ? styles.nointeract
-                                        : styles.nointeractsecond
-                                }
-                            >
-                                ...
-                            </button>
-                        )}
+            {pageIndex >= 1 && pageIndex < finalPageNo - 3 && (
+                <button
+                    className={styles.btncontainer}
+                    onClick={handleBtnClick(pageIndex + 1)}
+                >
+                    {pageIndex + 2}
+                </button>
+            )}
 
-                        <button
-                            className={
-                                pageIndex === finalPageNo - 2
-                                    ? styles.pagenumber
-                                    : pageIndex <= 2 ||
-                                      pageIndex >= finalPageNo - 3
-                                    ? styles.btncontainer
-                                    : styles.secondbtn
-                            }
-                            id="secondLastBtn"
-                            onClick={handleBtnClick(finalPageNo - 2)}
-                            disabled={pageIndex === finalPageNo - 2}
-                        >
-                            {finalPageNo - 1}
-                        </button>
-                        <button
-                            id="lastBtn"
-                            disabled={pageIndex === finalPageNo - 1}
-                            onClick={handleBtnClick(finalPageNo - 1)}
-                            className={
-                                pageIndex === finalPageNo - 1
-                                    ? styles.pagenumber
-                                    : styles.btncontainer
-                            }
-                        >
-                            {finalPageNo}
-                        </button>
+            {pageIndex < finalPageNo - 4 && (
+                <button className={styles.nointeract}>...</button>
+            )}
 
-                        {LastButton}
-                    </>
-                )}
-            </div>
-            {RHSInfo}
+            <button
+                className={
+                    pageIndex === finalPageNo - 2
+                        ? styles.pagenumber
+                        : styles.btncontainer
+                }
+                id="secondLastBtn"
+                onClick={handleBtnClick(finalPageNo - 2)}
+                disabled={pageIndex === finalPageNo - 2}
+            >
+                {finalPageNo - 1}
+            </button>
+
+            {FinalPageButton(finalPageNo)}
+
+            {NextButton}
         </div>
+    );
+
+    // View when more than 5 pages in mobile:
+
+    const mobilePagination = (
+        <div>
+            <div>
+                {IndexZeroButton('First')}
+                <button className={styles.basecontainer}>
+                    {pageIndex + 1} of {finalPageNo}
+                </button>
+                {FinalPageButton(finalPageNo, 'Last')}
+            </div>
+            <div>
+                {BackButton}
+                {NextButton}
+            </div>
+        </div>
+    );
+
+    return (
+        <>
+            <div className={styles.mobilefooter}>{mobilePagination}</div>
+            <div className={styles.desktopfooter}>
+                {desktopPagination}
+                <div className={styles.rhs}>
+                    {Stats}
+                    {PageLengthSelect}
+                </div>
+            </div>
+        </>
     );
 }
 
