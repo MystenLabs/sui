@@ -17,7 +17,10 @@
 //! - `json` - Bunyan formatter - JSON log output, optional
 //! - `tokio-console` - [Tokio-console](https://github.com/tokio-rs/console) subscriber, optional
 
-use std::{env, io::stderr};
+use std::{
+    env,
+    io::{stderr, Write},
+};
 use tracing::metadata::LevelFilter;
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
@@ -57,6 +60,8 @@ pub struct TelemetryConfig {
     pub log_string: Option<String>,
     /// Set a panic hook
     pub panic_hook: bool,
+    /// Crash on panic
+    pub crash_on_panic: bool,
 }
 
 #[must_use]
@@ -95,14 +100,16 @@ fn get_output(log_file: Option<String>) -> (NonBlocking, WorkerGuard) {
 }
 
 // NOTE: this function is copied from tracing's panic_hook example
-fn set_panic_hook() {
+fn set_panic_hook(crash_on_panic: bool) {
+    let default_panic_handler = std::panic::take_hook();
+
     // Set a panic hook that records the panic as a `tracing` event at the
     // `ERROR` verbosity level.
     //
     // If we are currently in a span when the panic occurred, the logged event
     // will include the current span, allowing the context in which the panic
     // occurred to be recorded.
-    std::panic::set_hook(Box::new(|panic| {
+    std::panic::set_hook(Box::new(move |panic| {
         // If the panic has a source location, record it as structured fields.
         if let Some(location) = panic.location() {
             // On nightly Rust, where the `PanicInfo` type also exposes a
@@ -118,6 +125,17 @@ fn set_panic_hook() {
         } else {
             tracing::error!(message = %panic);
         }
+
+        default_panic_handler(panic);
+
+        // We're panicking so we can't do anything about the flush failing
+        let _ = std::io::stderr().flush();
+        let _ = std::io::stdout().flush();
+
+        if crash_on_panic {
+            // Kill the process
+            std::process::exit(12);
+        }
     }));
 }
 
@@ -132,6 +150,7 @@ impl TelemetryConfig {
             log_file: None,
             log_string: None,
             panic_hook: true,
+            crash_on_panic: false,
         }
     }
 
@@ -146,6 +165,10 @@ impl TelemetryConfig {
     }
 
     pub fn with_env(mut self) -> Self {
+        if env::var("CRASH_ON_PANIC").is_ok() {
+            self.crash_on_panic = true
+        }
+
         if env::var("MYSTEN_TRACING").is_ok() {
             self.enable_tracing = true
         }
@@ -241,7 +264,7 @@ impl TelemetryConfig {
             .init();
 
         if config.panic_hook {
-            set_panic_hook();
+            set_panic_hook(config.crash_on_panic);
         }
 
         // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
