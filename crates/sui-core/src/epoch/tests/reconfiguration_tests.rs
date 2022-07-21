@@ -206,7 +206,7 @@ async fn test_finish_epoch_change() {
         assert_eq!(active.net.load().committee.epoch, 1);
         let latest_epoch = active.state.db().get_latest_authenticated_epoch().unwrap();
         assert_eq!(latest_epoch.epoch(), 0);
-        assert_eq!(latest_epoch.next_epoch_committee().epoch, 1);
+        assert_eq!(latest_epoch.epoch_info().next_epoch_committee().epoch, 1);
         // Verify that validator is no longer halted.
         assert!(!active.state.is_halted());
         let system_state = active.state.get_sui_system_state_object().await.unwrap();

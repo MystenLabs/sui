@@ -81,7 +81,7 @@ pub use authority_store::{
 };
 use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
@@ -994,7 +994,7 @@ impl AuthorityState {
                 .expect("Cannot bulk insert genesis objects");
             genesis_committee
         } else if let Some(latest_epoch) = store.get_latest_authenticated_epoch() {
-            latest_epoch.next_epoch_committee()
+            latest_epoch.epoch_info().next_epoch_committee().clone()
         } else {
             genesis_committee
         };
@@ -1112,12 +1112,17 @@ impl AuthorityState {
         self.checkpoints.clone()
     }
 
-    pub(crate) fn sign_new_epoch(&self, next_epoch_committee: Committee) -> SuiResult {
+    pub(crate) fn sign_new_epoch_and_update_committee(
+        &self,
+        next_epoch_committee: Committee,
+        last_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult {
         self.database.sign_new_epoch(
-            self.committee.load().epoch,
+            self.epoch(),
             next_epoch_committee.clone(),
             self.name,
             &*self.secret,
+            last_checkpoint,
         )?;
         self.committee.swap(Arc::new(next_epoch_committee));
         Ok(())
@@ -1125,15 +1130,15 @@ impl AuthorityState {
 
     #[cfg(test)]
     pub(crate) fn is_halted(&self) -> bool {
-        self.halted.load(Ordering::SeqCst)
+        self.halted.load(Ordering::Relaxed)
     }
 
     pub(crate) fn halt_validator(&self) {
-        self.halted.store(true, Ordering::SeqCst);
+        self.halted.store(true, Ordering::Relaxed);
     }
 
     pub(crate) fn unhalt_validator(&self) {
-        self.halted.store(false, Ordering::SeqCst);
+        self.halted.store(false, Ordering::Relaxed);
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {

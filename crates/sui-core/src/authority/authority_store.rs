@@ -20,6 +20,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::{Owner, OBJECT_START_VERSION};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -49,15 +50,15 @@ pub enum AuthenticatedEpoch {
 impl AuthenticatedEpoch {
     pub fn epoch(&self) -> EpochId {
         match self {
-            Self::Signed(s) => s.epoch_info.epoch,
-            Self::Certified(c) => c.epoch_info.epoch,
+            Self::Signed(s) => s.epoch_info.epoch(),
+            Self::Certified(c) => c.epoch_info.epoch(),
         }
     }
 
-    pub fn next_epoch_committee(&self) -> Committee {
+    pub fn epoch_info(&self) -> &EpochInfo {
         match self {
-            Self::Signed(s) => s.epoch_info.next_epoch_committee.clone(),
-            Self::Certified(c) => c.epoch_info.next_epoch_committee.clone(),
+            Self::Signed(s) => &s.epoch_info,
+            Self::Certified(c) => &c.epoch_info,
         }
     }
 }
@@ -158,6 +159,8 @@ pub struct SuiDataStore<S> {
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndices>,
 
+    /// Map from each epoch ID to the epoch information. The epoch is either signed by this node,
+    /// or is certified (signed by a quorum).
     epochs: DBMap<EpochId, AuthenticatedEpoch>,
 }
 
@@ -1460,20 +1463,31 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         next_epoch_committee: Committee,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
+        last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult {
-        fp_ensure!(
-            epoch < EpochId::MAX && epoch + 1 == next_epoch_committee.epoch,
-            SuiError::from("Current epoch number and next epoch number are inconsistent")
-        );
         let latest_epoch = self.get_latest_authenticated_epoch();
-        if let Some(latest_epoch) = latest_epoch {
-            fp_ensure!(
-                latest_epoch.epoch() <= epoch,
-                SuiError::from("Overriding an existing authenticated epoch")
-            );
+        match latest_epoch {
+            Some(a) => {
+                fp_ensure!(
+                    a.epoch() + 1 == epoch,
+                    SuiError::from("Unexpected new epoch number")
+                );
+            }
+            None => {
+                fp_ensure!(
+                    epoch == 0,
+                    SuiError::from("Could not find previous epoch information")
+                );
+            }
         }
 
-        let signed_epoch = SignedEpoch::new(next_epoch_committee, authority, secret);
+        let signed_epoch = SignedEpoch::new(
+            epoch,
+            next_epoch_committee,
+            authority,
+            secret,
+            last_checkpoint,
+        )?;
 
         let mut writer = self.epochs.batch();
         writer = writer.insert_batch(
