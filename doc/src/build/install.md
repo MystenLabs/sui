@@ -53,9 +53,9 @@ For simplicity, we recommend installing in `~/sui` or using an environment varia
 Install the Sui [binaries](#binaries) as described below.
 
 ### Curl
-Confirm you have the `curl` command to download dependencies.
+Confirm that you can run the `curl` command to download dependencies.
 
-See if you already have it by running:
+See whether you already have curl installed by running:
 
 ```shell
 $ which curl
