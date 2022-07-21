@@ -11,6 +11,7 @@ Run a Sui DevNet [fullnode](../../doc/src/build/fullnode.md) locally for testing
 Install Docker / Docker Compose:
 - https://docs.docker.com/get-docker/
 - https://docs.docker.com/compose/install/
+- https://github.com/MystenLabs/sui/blob/main/docker/fullnode/docker-compose.yaml
 
 ## Running
 
