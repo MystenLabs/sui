@@ -441,6 +441,7 @@ fn process_successful_execution<
     let newly_generated_ids = ctx.recreate_all_ids();
     state_view.set_create_object_ids(newly_generated_ids.clone());
     let mut frozen_object_ids = BTreeSet::new();
+    let mut child_count_decrements = BTreeMap::new();
     // process events to identify transfers, freezes
     for e in events {
         let (recipient, event_type, type_, abilities, event_bytes) = e;
@@ -475,6 +476,7 @@ fn process_successful_execution<
                     &mut object_owner_map,
                     &newly_generated_ids,
                     &mut frozen_object_ids,
+                    &mut child_count_decrements,
                 )
             }
             EventType::DeleteObjectID => {
@@ -494,7 +496,9 @@ fn process_successful_execution<
                                 *obj_id,
                             ));
                             if let Owner::ObjectOwner(parent_id) = owner {
-                                state_view.decrement_parents_child_count(parent_id.into());
+                                let count =
+                                    child_count_decrements.entry(parent_id.into()).or_insert(0);
+                                *count += 1
                             }
                             state_view.delete_object(
                                 obj_id,
@@ -559,11 +563,13 @@ fn process_successful_execution<
     // (2) wrapped inside another object that is in the Sui object pool
     for (id, (owner, version)) in by_value_objects {
         if let Owner::ObjectOwner(parent_id) = owner {
-            state_view.decrement_parents_child_count(parent_id.into());
+            let count = child_count_decrements.entry(parent_id.into()).or_insert(0);
+            *count += 1
         }
         state_view.delete_object(&id, version, DeleteEvent::Wrap);
     }
 
+    state_view.decrement_child_counts(child_count_decrements);
     for (deleted_parent_id, child_count) in state_view.deleted_objects_child_count() {
         if child_count != 0 {
             return Err(ExecutionErrorKind::invalid_parent_deletion(deleted_parent_id).into());
@@ -602,6 +608,7 @@ fn handle_transfer<
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
     frozen_object_ids: &mut BTreeSet<ObjectID>,
+    child_count_decrements: &mut BTreeMap<ObjectID, u64>,
 ) -> Result<(), ExecutionError> {
     let s_type = match type_ {
         TypeTag::Struct(s_type) => s_type,
@@ -654,7 +661,8 @@ fn handle_transfer<
         }
         Some((old_owner, old_obj_ver)) => {
             if let Owner::ObjectOwner(parent_id) = old_owner {
-                state_view.decrement_parents_child_count(parent_id.into());
+                let count = child_count_decrements.entry(parent_id.into()).or_insert(0);
+                *count += 1
             }
             // Some kind of transfer since there's an old object
             // Add an event for the transfer
