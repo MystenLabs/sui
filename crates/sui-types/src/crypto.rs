@@ -1,11 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::base_types::{AuthorityName, SuiAddress};
-use crate::committee::{Committee, EpochId};
-use crate::error::{SuiError, SuiResult};
-use crate::sui_serde::Base64;
-use crate::sui_serde::Readable;
-use crate::sui_serde::SuiBitmap;
+use std::fmt::Display;
+use std::hash::{Hash, Hasher};
+use std::str::FromStr;
+
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
@@ -22,12 +20,13 @@ use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::Bytes;
+use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
-use std::fmt::Display;
-use std::hash::{Hash, Hasher};
-use std::str::FromStr;
+
+use crate::base_types::{AuthorityName, SuiAddress};
+use crate::committee::{Committee, EpochId};
+use crate::error::{SuiError, SuiResult};
+use crate::sui_serde::{Base64, Readable, SuiBitmap};
 
 // Comment the one you want to use
 pub type KeyPair = Ed25519KeyPair; // Associated Types don't work here yet for some reason.
