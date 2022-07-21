@@ -20,6 +20,9 @@ pub use crate::{
     worker::WorkerNetwork,
 };
 
+// the result of our network messages
+pub type MessageResult = Result<tonic::Response<types::Empty>, anyhow::Error>;
+
 #[derive(Debug)]
 #[must_use]
 pub struct CancelHandler<T>(tokio::task::JoinHandle<T>);

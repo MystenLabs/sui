@@ -62,12 +62,12 @@ impl BoundedExecutor {
 
     // Acquires a permit with the semaphore, first gracefully,
     // then queuing after logging that we're out of capacity.
-    async fn acquire_permit(&self) -> OwnedSemaphorePermit {
-        match self.semaphore.clone().try_acquire_owned() {
+    async fn acquire_permit(semaphore: Arc<Semaphore>) -> OwnedSemaphorePermit {
+        match semaphore.clone().try_acquire_owned() {
             Ok(p) => p,
             Err(_) => {
                 info!("concurrent task limit reached, waiting...");
-                self.semaphore.clone().acquire_owned().await.unwrap()
+                semaphore.acquire_owned().await.unwrap()
             }
         }
     }
@@ -81,7 +81,7 @@ impl BoundedExecutor {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let permit = self.acquire_permit().await;
+        let permit = Self::acquire_permit(self.semaphore.clone()).await;
 
         self.spawn_with_permit(f, permit)
     }
@@ -116,16 +116,47 @@ impl BoundedExecutor {
         self.executor.spawn(f)
     }
 
-    /// Returns a [`Future`] that complies with the `BoundedExecutor`. This function is async and
-    /// will block if the executor is at capacity, until one of the other spawned
-    /// futures completes.
-    pub async fn run<F>(&self, f: F) -> F::Output
+    // Returns a [`Future`] that complies with the `BoundedExecutor`. Once launched,
+    // will block if the executor is at capacity, until one of the other spawned
+    // futures completes.
+    async fn run_on_semaphore<F>(semaphore: Arc<Semaphore>, f: F) -> F::Output
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let permit = self.acquire_permit().await;
+        let permit = Self::acquire_permit(semaphore.clone()).await;
         Self::with_permit(f, permit).await
+    }
+
+    /// Spawn a [`Future`] on the `BoundedExecutor`. This function is async and
+    /// will block if the executor is at capacity until one of the other spawned
+    /// futures completes.
+    /// In case the future completes with an error, it retries, queueing attempts
+    /// on the semaphore according to the provided [`crate::RetryConfig`].
+    /// This function returns a [`JoinHandle`] that the caller can `.await` on for
+    /// the results of the overall set of attempts to execute the [`Future`].
+    pub async fn spawn_with_retries<F, Fut, T, E>(
+        &self,
+        retry_config: crate::RetryConfig,
+        mut f: F,
+    ) -> JoinHandle<Result<T, E>>
+    where
+        F: FnMut() -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T, backoff::Error<E>>> + Send + 'static,
+        T: Send + 'static,
+        E: Send + 'static,
+    {
+        let retrier = || {
+            let semaphore = self.semaphore.clone();
+
+            let executor = move || {
+                let semaphore = semaphore.clone();
+                BoundedExecutor::run_on_semaphore(semaphore, f())
+            };
+
+            retry_config.retry(executor)
+        };
+        self.executor.spawn(retrier())
     }
 
     // Equips a future with a final step that drops the held semaphore permit
@@ -144,10 +175,16 @@ impl BoundedExecutor {
 
 #[cfg(test)]
 mod test {
+    use crate::RetryConfig;
+
     use super::*;
     use futures::{channel::oneshot, executor::block_on, future::Future, FutureExt};
     use std::{
-        sync::atomic::{AtomicU32, Ordering},
+        sync::{
+            atomic::{AtomicU32, Ordering},
+            mpsc,
+        },
+        thread,
         time::Duration,
     };
     use tokio::{runtime::Runtime, time::sleep};
@@ -207,8 +244,60 @@ mod test {
         block_on(f2).unwrap().unwrap();
     }
 
-    fn yield_task() -> impl Future<Output = ()> {
-        sleep(Duration::from_millis(1)).map(|_| ())
+    // ensure tasks spawned with retries do not hog the semaphore
+    #[test]
+    fn test_spawn_with_semaphore() {
+        // beware: the timeout is here to witness a failure rather than a hung test in case the
+        // executor does not work correctly.
+        panic_after(Duration::from_secs(10), || {
+            let rt = Runtime::new().unwrap();
+            let executor = rt.handle().clone();
+            let executor = BoundedExecutor::new(1, executor);
+
+            let infinite_retry_config = RetryConfig {
+                // Retry for forever
+                retrying_max_elapsed_time: None,
+                ..Default::default()
+            };
+
+            // we can queue this future with infinite retries
+            let handle_infinite_fails =
+                block_on(executor.spawn_with_retries(infinite_retry_config, always_failing));
+
+            // check we can still enqueue another successful task
+            let (tx1, rx1) = oneshot::channel();
+            let f1 = block_on(executor.spawn(rx1));
+
+            // complete f1 future, should open a free slot in executor
+            tx1.send(()).unwrap();
+            block_on(f1).unwrap().unwrap();
+
+            // cleanup
+            handle_infinite_fails.abort();
+        })
+    }
+
+    async fn always_failing() -> Result<(), backoff::Error<anyhow::Error>> {
+        Err(Into::into(anyhow::anyhow!("oops")))
+    }
+
+    fn panic_after<T, F>(d: Duration, f: F) -> T
+    where
+        T: Send + 'static,
+        F: FnOnce() -> T,
+        F: Send + 'static,
+    {
+        let (done_tx, done_rx) = mpsc::channel();
+        let handle = thread::spawn(move || {
+            let val = f();
+            done_tx.send(()).expect("Unable to send completion signal");
+            val
+        });
+
+        match done_rx.recv_timeout(d) {
+            Ok(_) => handle.join().expect("Thread panicked"),
+            Err(_) => panic!("Thread took too long"),
+        }
     }
 
     // spawn NUM_TASKS futures on a BoundedExecutor, ensuring that no more than
@@ -251,5 +340,9 @@ mod test {
                 std::hint::spin_loop()
             }
         }
+    }
+
+    fn yield_task() -> impl Future<Output = ()> {
+        sleep(Duration::from_millis(1)).map(|_| ())
     }
 }
