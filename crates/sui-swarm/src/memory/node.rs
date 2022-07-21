@@ -43,6 +43,10 @@ impl Node {
         self.config.sui_address()
     }
 
+    pub fn json_rpc_address(&self) -> std::net::SocketAddr {
+        self.config.json_rpc_address
+    }
+
     /// Start this Node, returning a handle that will resolve when the node has completed starting
     /// up.
     pub fn spawn(&mut self) -> Result<tokio::sync::oneshot::Receiver<()>> {
@@ -221,7 +225,7 @@ mod test {
     #[tokio::test]
     async fn start_and_stop() {
         telemetry_subscribers::init_for_testing();
-        let mut swarm = Swarm::builder().build();
+        let mut swarm = Swarm::builder().build(None);
 
         let validator = swarm.validators_mut().next().unwrap();
 

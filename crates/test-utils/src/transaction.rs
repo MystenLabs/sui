@@ -1,16 +1,22 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::authority::get_client;
 use crate::messages::{create_publish_move_package_transaction, make_certificates};
+use move_package::BuildConfig;
+use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use sui::client_commands::WalletContext;
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
+use sui_json::SuiJsonValue;
+use sui_json_rpc_types::{TransactionEffectsResponse, TransactionResponse};
 use sui_types::base_types::ObjectRef;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::error::SuiResult;
 use sui_types::messages::{Transaction, TransactionEffects, TransactionInfoResponse};
 use sui_types::object::{Object, Owner};
+use tracing::debug;
 
 pub async fn publish_package(
     gas_object: Object,
@@ -27,6 +33,133 @@ pub async fn publish_counter_package(gas_object: Object, configs: &[ValidatorInf
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
     publish_package(gas_object, path, configs).await
+}
+
+/// A helper function to publish basic package using gateway API
+pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
+    let transaction = {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("../../sui_programmability/examples/basics");
+
+        let build_config = BuildConfig::default();
+        let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+
+        let all_module_bytes = modules
+            .iter()
+            .map(|m| {
+                let mut module_bytes = Vec::new();
+                m.serialize(&mut module_bytes).unwrap();
+                module_bytes
+            })
+            .collect();
+
+        let data = context
+            .gateway
+            .publish(sender, all_module_bytes, None, 50000)
+            .await
+            .unwrap();
+
+        let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+        Transaction::new(data, signature)
+    };
+
+    let resp = context
+        .gateway
+        .execute_transaction(transaction)
+        .await
+        .unwrap();
+
+    if let TransactionResponse::PublishResponse(resp) = resp {
+        resp.package.to_object_ref()
+    } else {
+        panic!()
+    }
+}
+
+/// A helper function to submit a move transaction using gateway API
+pub async fn submit_move_transaction(
+    context: &WalletContext,
+    module: &'static str,
+    function: &'static str,
+    package_ref: ObjectRef,
+    arguments: Vec<SuiJsonValue>,
+    sender: SuiAddress,
+    gas_object: Option<ObjectID>,
+) -> TransactionResponse {
+    debug!(?package_ref, ?arguments, "move_transaction");
+
+    let data = context
+        .gateway
+        .move_call(
+            sender,
+            package_ref.0,
+            module.into(),
+            function.into(),
+            vec![], // type_args
+            arguments,
+            gas_object,
+            50000,
+        )
+        .await
+        .unwrap();
+
+    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    let tx = Transaction::new(data, signature);
+
+    context.gateway.execute_transaction(tx).await.unwrap()
+}
+
+/// A helper function to publish the basics package and make counter objects
+pub async fn publish_basics_package_and_make_counter(
+    context: &WalletContext,
+    sender: SuiAddress,
+) -> (ObjectRef, ObjectID) {
+    let package_ref = publish_basics_package(context, sender).await;
+
+    debug!(?package_ref);
+
+    let create_shared_obj_resp = submit_move_transaction(
+        context,
+        "counter",
+        "create",
+        package_ref,
+        vec![],
+        sender,
+        None,
+    )
+    .await;
+
+    let counter_id = if let TransactionResponse::EffectResponse(effects) = create_shared_obj_resp {
+        effects.effects.created[0].clone().reference.object_id
+    } else {
+        panic!()
+    };
+    debug!(?counter_id);
+    (package_ref, counter_id)
+}
+
+pub async fn increment_counter(
+    context: &WalletContext,
+    sender: SuiAddress,
+    gas_object: Option<ObjectID>,
+    package_ref: ObjectRef,
+    counter_id: ObjectID,
+) -> TransactionEffectsResponse {
+    let resp = submit_move_transaction(
+        context,
+        "counter",
+        "increment",
+        package_ref,
+        vec![SuiJsonValue::new(json!(counter_id.to_hex_literal())).unwrap()],
+        sender,
+        gas_object,
+    )
+    .await;
+    if let TransactionResponse::EffectResponse(effects) = resp {
+        effects
+    } else {
+        panic!()
+    }
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.

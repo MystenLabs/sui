@@ -6,6 +6,7 @@ use jsonrpsee_http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::Path;
+use std::sync::Arc;
 use sui::{
     client_commands::{SuiClientCommands, WalletContext},
     config::{GatewayConfig, GatewayType, SuiClientConfig},
@@ -13,7 +14,9 @@ use sui::{
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_core::gateway_state::GatewayClient;
 use sui_gateway::create_client;
+use sui_gateway::rpc_gateway_client::RpcGatewayClient;
 use sui_json_rpc::api::RpcGatewayApiServer;
 use sui_json_rpc::api::RpcReadApiServer;
 use sui_json_rpc::api::RpcTransactionBuilderServer;
@@ -22,19 +25,22 @@ use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
-use sui_swarm::memory::Swarm;
+use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
+
 const NUM_VALIDAOTR: usize = 4;
 
 pub async fn start_test_network(
     genesis_config: Option<GenesisConfig>,
+    fullnode_count: Option<usize>,
 ) -> Result<Swarm, anyhow::Error> {
-    let mut builder = Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
+    let mut builder: SwarmBuilder =
+        Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
     if let Some(genesis_config) = genesis_config {
         builder = builder.initial_accounts_config(genesis_config);
     }
 
-    let mut swarm = builder.build();
+    let mut swarm = builder.build(fullnode_count);
     swarm.launch().await?;
 
     let accounts = swarm
@@ -89,7 +95,7 @@ pub async fn start_test_network(
 
 pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddress), anyhow::Error>
 {
-    let swarm = start_test_network(None).await?;
+    let swarm = start_test_network(None, None).await?;
 
     // Create Wallet context.
     let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
@@ -124,8 +130,9 @@ async fn start_rpc_gateway(
 
 pub async fn start_rpc_test_network(
     genesis_config: Option<GenesisConfig>,
+    fullnode_count: Option<usize>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    let network = start_test_network(genesis_config).await?;
+    let network = start_test_network(genesis_config, fullnode_count).await?;
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
@@ -139,11 +146,13 @@ pub async fn start_rpc_test_network(
         .save()?;
 
     let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
+    let gateway_client = RpcGatewayClient::new(rpc_url.clone())?;
     Ok(TestNetwork {
         network,
         _rpc_server: rpc_server_handle,
         accounts,
         http_client,
+        gateway_client: Arc::new(gateway_client),
         rpc_url,
     })
 }
@@ -153,5 +162,6 @@ pub struct TestNetwork {
     _rpc_server: HttpServerHandle,
     pub accounts: Vec<SuiAddress>,
     pub http_client: HttpClient,
+    pub gateway_client: GatewayClient,
     pub rpc_url: String,
 }

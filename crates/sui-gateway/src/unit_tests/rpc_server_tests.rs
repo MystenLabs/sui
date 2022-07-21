@@ -24,7 +24,7 @@ use test_utils::network::start_rpc_test_network;
 
 #[tokio::test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
+    let test_network = start_rpc_test_network(None, None).await?;
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
 
@@ -36,7 +36,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
+    let test_network = start_rpc_test_network(None, None).await?;
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
@@ -73,7 +73,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_publish() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
+    let test_network = start_rpc_test_network(None, None).await?;
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
@@ -112,7 +112,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_move_call() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
+    let test_network = start_rpc_test_network(None, None).await?;
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
@@ -161,7 +161,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_get_object_info() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
+    let test_network = start_rpc_test_network(None, None).await?;
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
     http_client.sync_account_state(*address).await?;
@@ -178,7 +178,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
-    let test_network = start_rpc_test_network(None).await?;
+    let test_network = start_rpc_test_network(None, None).await?;
     let http_client = test_network.http_client;
     let address = test_network.accounts.first().unwrap();
 
