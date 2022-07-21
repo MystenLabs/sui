@@ -6,6 +6,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
 use multiaddr::Multiaddr;
+use narwhal_crypto::traits::ToFromBytes;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -98,7 +99,7 @@ where
             .iter()
             .map(|metadata| {
                 (
-                    PublicKeyBytes::try_from(metadata.pubkey_bytes.as_ref())
+                    PublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
                         .expect("Validity of public key bytes should be verified on-chain"),
                     metadata.next_epoch_stake + metadata.next_epoch_delegation,
                 )
@@ -212,7 +213,8 @@ where
                 .unwrap();
             let client: A = A::recreate(channel);
             let name: &[u8] = &validator.name;
-            let public_key_bytes = PublicKeyBytes::try_from(name)?;
+            let public_key_bytes = PublicKeyBytes::from_bytes(name)
+                .map_err(|e| SuiError::KeyConversionError(e.to_string()))?;
             new_clients.insert(public_key_bytes, client);
         }
 

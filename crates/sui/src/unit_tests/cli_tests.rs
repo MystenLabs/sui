@@ -21,6 +21,7 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
+use sui_types::crypto::KeypairTraits;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 
 use test_utils::network::{setup_network_and_wallet, start_test_network};
@@ -109,7 +110,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             db_folder_path: working_dir.join("client_db"),
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
-                public_key: *get_key_pair().1.public_key_bytes(),
+                public_key: get_key_pair().1.public().into(),
                 stake: 1,
                 delegation: 1,
                 network_address: sui_config::utils::new_network_address(),

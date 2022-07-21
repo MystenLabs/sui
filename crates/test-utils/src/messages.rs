@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use sui_adapter::genesis;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
+use sui_types::crypto::KeypairTraits;
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
     TransactionData,
@@ -34,7 +35,7 @@ where
     let mut addresses_two_by_two = Vec::new();
     let mut keypairs = Vec::new(); // Keys are not copiable, move them here.
     for keypair in keys {
-        let address = SuiAddress::from(keypair.public_key_bytes());
+        let address = keypair.public().into();
         addresses_two_by_two.push(address);
         addresses_two_by_two.push(address);
         keypairs.push(keypair);
@@ -251,12 +252,8 @@ pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransac
     for tx in transactions {
         let mut aggregator = SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
         for (_, key) in test_keys() {
-            let vote = SignedTransaction::new(
-                /* epoch */ 0,
-                tx.clone(),
-                *key.public_key_bytes(),
-                &key,
-            );
+            let vote =
+                SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
             if let Some(certificate) = aggregator
                 .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
                 .unwrap()

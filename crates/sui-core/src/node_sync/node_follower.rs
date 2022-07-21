@@ -540,6 +540,7 @@ where
 mod tests {
     // Note: this code is tested end-to-end in full_node_tests.rs
 
+    use narwhal_crypto::traits::KeyPair;
     use sui_types::{
         base_types::{AuthorityName, TransactionEffectsDigest},
         crypto::get_key_pair,
@@ -549,7 +550,7 @@ mod tests {
 
     fn random_authority_name() -> AuthorityName {
         let key = get_key_pair();
-        *key.1.public_key_bytes()
+        key.1.public().into()
     }
 
     #[test]

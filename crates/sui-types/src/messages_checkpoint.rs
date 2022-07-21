@@ -6,14 +6,16 @@ use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
-use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo, Signable};
+use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{sha3_hash, AuthoritySignature, BcsSignable, VerificationObligation},
+    crypto::{
+        sha3_hash, AuthoritySignature, BcsSignable, SuiAuthoritySignature, VerificationObligation,
+    },
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
@@ -362,11 +364,10 @@ impl CertifiedCheckpointSummary {
             SuiError::from("Epoch in the summary doesn't match with the committee")
         );
         let mut obligation = VerificationObligation::default();
-        let mut message = Vec::new();
-        self.summary.write(&mut message);
-        let idx = obligation.add_message(message);
+        let idx = obligation.add_message(&self.summary);
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
+
         obligation.verify_all()?;
 
         if let Some(contents) = contents {
@@ -610,6 +611,7 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
+    use narwhal_crypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
     use std::collections::BTreeSet;
@@ -627,13 +629,13 @@ mod tests {
     fn test_signed_proposal() {
         let mut rng = StdRng::from_seed(RNG_SEED);
         let (authority_key, committee) = make_committee_key(&mut rng);
-        let name = authority_key[0].public_key_bytes();
+        let name: AuthorityName = authority_key[0].public().into();
 
         let set = [ExecutionDigests::random()];
         let set = CheckpointContents::new(set.iter().cloned());
 
         let mut proposal =
-            SignedCheckpointSummary::new(committee.epoch, 1, *name, &authority_key[0], &set, None);
+            SignedCheckpointSummary::new(committee.epoch, 1, name, &authority_key[0], &set, None);
 
         // Signature is correct on proposal, and with same transactions
         assert!(proposal.verify(&committee, Some(&set)).is_ok());
@@ -661,9 +663,9 @@ mod tests {
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
-                let name = k.public_key_bytes();
+                let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 
@@ -688,9 +690,9 @@ mod tests {
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
-                let name = k.public_key_bytes();
+                let name = k.public().into();
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 
@@ -704,11 +706,11 @@ mod tests {
         let signed_checkpoints: Vec<_> = keys
             .iter()
             .map(|k| {
-                let name = k.public_key_bytes();
+                let name = k.public().into();
                 let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
                 let set = CheckpointContents::new(set.iter().cloned());
 
-                SignedCheckpointSummary::new(committee.epoch, 1, *name, k, &set, None)
+                SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
             .collect();
 

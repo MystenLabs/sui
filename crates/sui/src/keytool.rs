@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_types::base_types::decode_bytes_hex;
+use sui_types::crypto::KeypairTraits;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::SuiAddress,
@@ -41,7 +42,7 @@ impl KeyToolCommand {
                 store_and_print_keypair(address, keypair)
             }
             KeyToolCommand::Unpack { keypair } => {
-                store_and_print_keypair(SuiAddress::from(keypair.public_key_bytes()), keypair)
+                store_and_print_keypair(keypair.public().into(), keypair)
             }
             KeyToolCommand::List => {
                 println!(
@@ -52,8 +53,8 @@ impl KeyToolCommand {
                 for keypair in keystore.key_pairs() {
                     println!(
                         " {0: ^42} | {1: ^45} ",
-                        SuiAddress::from(keypair.public_key_bytes()),
-                        Base64::encode(keypair.public_key_bytes().to_vec()),
+                        Into::<SuiAddress>::into(keypair.public()),
+                        Base64::encode(keypair.public().as_ref()),
                     );
                 }
             }

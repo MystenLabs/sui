@@ -21,16 +21,16 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
-use sui_types::object::Data;
 use sui_types::{
     base_types::dbg_addr,
-    crypto::KeyPair,
     crypto::{get_key_pair, Signature},
+    crypto::{KeyPair, KeypairTraits},
     messages::Transaction,
     object::{Owner, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use sui_types::{crypto::PublicKeyBytes, object::Data};
 
 pub enum TestCallArg {
     Object(ObjectID),
@@ -65,7 +65,7 @@ const MAX_GAS: u64 = 10000;
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
     assert_eq!(o1.digest(), o2.digest());
     // in this ser/de context it's relevant to compare signatures
-    assert_eq!(o1.auth_sign_info.signatures, o2.auth_sign_info.signatures);
+    assert_eq!(o1.auth_sign_info.signature, o2.auth_sign_info.signature);
 }
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -79,8 +79,8 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
         (Some(cert1), Some(cert2)) => {
             assert_eq!(cert1.digest(), cert2.digest());
             assert_eq!(
-                cert1.auth_sign_info.signatures,
-                cert2.auth_sign_info.signatures
+                cert1.auth_sign_info.signature,
+                cert2.auth_sign_info.signature
             );
         }
         (None, None) => (),
@@ -1600,9 +1600,9 @@ pub async fn init_state_with_committee(committee: Option<(Committee, KeyPair)>) 
         Some(c) => c,
         None => {
             let (_authority_address, authority_key) = get_key_pair();
-            let mut authorities = BTreeMap::new();
+            let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
             authorities.insert(
-                /* address */ *authority_key.public_key_bytes(),
+                /* address */ authority_key.public().into(),
                 /* voting right */ 1,
             );
             (Committee::new(0, authorities).unwrap(), authority_key)
@@ -1613,7 +1613,7 @@ pub async fn init_state_with_committee(committee: Option<(Committee, KeyPair)>) 
 
     AuthorityState::new(
         committee,
-        *authority_key.public_key_bytes(),
+        authority_key.public().into(),
         Arc::pin(authority_key),
         store,
         None,
@@ -1940,11 +1940,11 @@ async fn test_consensus_message_processed() {
 
     let (sender, keypair) = get_key_pair();
 
-    let mut authorities = BTreeMap::new();
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
     let (_a1, sec1) = get_key_pair();
     let (_a2, sec2) = get_key_pair();
-    authorities.insert(*sec1.public_key_bytes(), 1);
-    authorities.insert(*sec2.public_key_bytes(), 1);
+    authorities.insert(sec1.public().into(), 1);
+    authorities.insert(sec2.public().into(), 1);
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
 
