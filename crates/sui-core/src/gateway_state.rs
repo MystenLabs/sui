@@ -481,13 +481,14 @@ where
 
         debug!(
             digest = ?tx_digest,
+            ?effects.effects,
             "Transaction completed successfully"
         );
 
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
             .effects
-            .mutated_and_created()
+            .all_mutated()
             .map(|(obj_ref, _)| *obj_ref)
             .collect();
         let mutated_objects = self
@@ -561,7 +562,7 @@ where
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }
-        debug!(?result, "Downloaded object from authorities");
+        debug!("Downloaded object from authorities: {}", result);
 
         Ok(result)
     }
@@ -615,14 +616,14 @@ where
         // latest objects.
         let mutated_objects = self.store.get_objects(
             &effects
-                .mutated_and_created()
+                .all_mutated()
                 .map(|((object_id, _, _), _)| *object_id)
                 .collect::<Vec<_>>(),
         )?;
         let mut updated_gas = None;
         let mut package = None;
         let mut created_objects = vec![];
-        for ((obj_ref, _), object) in effects.mutated_and_created().zip(mutated_objects) {
+        for ((obj_ref, _), object) in effects.all_mutated().zip(mutated_objects) {
             let object = object.ok_or(SuiError::InconsistentGatewayResult {
                 error: format!(
                     "Crated/Updated object doesn't exist in the store: {:?}",
