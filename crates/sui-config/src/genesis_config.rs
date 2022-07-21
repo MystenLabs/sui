@@ -9,7 +9,9 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
 use sui_types::object::Object;
+use sui_types::sui_serde::KeyPairBase64;
 use tracing::info;
+use serde_with::serde_as;
 
 use crate::Config;
 
@@ -79,8 +81,10 @@ impl GenesisConfig {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ValidatorGenesisInfo {
+    #[serde_as(as = "KeyPairBase64")]
     pub key_pair: KeyPair,
     pub network_address: Multiaddr,
     pub stake: StakeUnit,
