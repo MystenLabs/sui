@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use typed_store::Map;
 
 use crate::authority::AuthorityStore;
@@ -110,17 +110,26 @@ where
         debug!(digest=?d, "Pending execution for certificate.");
 
         // Sync and Execute with local authority state
-        net.sync_certificate_to_authority_with_timeout_inner(
-            c.clone(),
-            active_authority.state.name,
-            &local_handler,
-            tokio::time::Duration::from_secs(10),
-            10,
-        )
-        .await?;
-
-        // Remove from the execution list
-        executed.push(*i);
+        match net
+            .sync_certificate_to_authority_with_timeout_inner(
+                c.clone(),
+                active_authority.state.name,
+                &local_handler,
+                tokio::time::Duration::from_secs(10),
+                10,
+            )
+            .await
+        {
+            Err(err) => {
+                error!(digest=?d, "Executing pending certificate failed: {:?}", err);
+                // We continue trying to execute more certificates speculatively.
+                // Do not return error here so that we could remove executed certs in the end.
+            }
+            Ok(()) => {
+                // Remove from the execution list
+                executed.push(*i);
+            }
+        }
     }
 
     // Now update the pending store.
