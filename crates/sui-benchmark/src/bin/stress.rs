@@ -113,7 +113,7 @@ impl Payload {
                     *object_ref,
                     *gas_obj,
                     *from,
-                    keypairs.get(&*from).unwrap(),
+                    keypairs.get(from).unwrap(),
                     *to,
                 )
             }
