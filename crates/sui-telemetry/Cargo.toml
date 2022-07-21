@@ -1,0 +1,14 @@
+[package]
+name = "sui-telemetry"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.139", features = ["derive"] }
+reqwest = { version = "0.11.10", features = ["json"] }
+tokio = { version = "1.17.0", features = ["full", "tracing"] }
+tracing = "0.1.35"
+workspace-hack = { path = "../workspace-hack"}
