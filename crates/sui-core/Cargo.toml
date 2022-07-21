@@ -44,8 +44,8 @@ move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "77
 move-core-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f", features = ["address20"] }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b"}
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "ae032178da474f74d5ec49f775a5a675460906aa", package = "crypto" }
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "ae032178da474f74d5ec49f775a5a675460906aa", package = "executor" }
@@ -61,7 +61,7 @@ move-package = { git = "https://github.com/move-language/move", rev = "773365804
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
 test-fuzz = "3.0.2"
 test-utils = { path = "../test-utils" }

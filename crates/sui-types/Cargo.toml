@@ -39,8 +39,8 @@ roaring = "0.9.0"
 # This version is incompatible with ed25519-dalek
 rand_latest = { version = "0.8.5", package = "rand" }
 
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }

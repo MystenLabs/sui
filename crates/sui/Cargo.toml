@@ -17,7 +17,7 @@ async-trait = "0.1.53"
 serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.35"
 clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
@@ -36,7 +36,7 @@ colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
 rocksdb = "0.18.0"
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 tempfile = "3.3.0"
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "ae032178da474f74d5ec49f775a5a675460906aa", package = "executor" }
 
@@ -59,7 +59,7 @@ jemalloc-ctl = "^0.5"
 tempfile = "3.3.0"
 futures = "0.3.21"
 jsonrpsee = { version = "0.14.0", features = ["full"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "49613b62072eba3f3b2316f54fbe6a9e1926697b"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 rand = "0.7.3"
