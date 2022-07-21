@@ -404,7 +404,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Get all stored certificate digests
-    pub fn get_pending_certificates(
+    pub fn get_pending_digests(
         &self,
     ) -> SuiResult<Vec<(InternalSequenceNumber, TransactionDigest)>> {
         Ok(self.pending_execution.iter().collect())
@@ -420,7 +420,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     // Empty the pending_execution table, and remove the certs from the certificates table.
     pub fn remove_all_pending_certificates(&self) -> SuiResult {
-        let all_pending_tx = self.get_pending_certificates()?;
+        let all_pending_tx = self.get_pending_digests()?;
         let mut batch = self.pending_execution.batch();
         batch = batch.delete_batch(
             &self.certificates,

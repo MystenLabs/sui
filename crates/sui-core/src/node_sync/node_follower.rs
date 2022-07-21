@@ -24,6 +24,8 @@ use sui_types::{
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
+use futures::stream::FuturesOrdered;
+
 use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 
@@ -161,17 +163,25 @@ where
 }
 
 struct DigestsMessage {
-    digests: ExecutionDigests,
+    sync_arg: SyncArg,
     peer: Option<AuthorityName>,
     tx: Option<oneshot::Sender<SuiResult>>,
 }
 
 impl DigestsMessage {
-    fn new_for_ckpt(digests: &ExecutionDigests) -> Self {
+    fn new_for_ckpt(digests: &ExecutionDigests, tx: oneshot::Sender<SuiResult>) -> Self {
         Self {
-            digests: *digests,
+            sync_arg: SyncArg::Checkpoint(*digests),
             peer: None,
-            tx: None,
+            tx: Some(tx),
+        }
+    }
+
+    fn new_for_exec_driver(digest: &TransactionDigest, tx: oneshot::Sender<SuiResult>) -> Self {
+        Self {
+            sync_arg: SyncArg::ExecDriver(*digest),
+            peer: None,
+            tx: Some(tx),
         }
     }
 
@@ -181,22 +191,44 @@ impl DigestsMessage {
         tx: oneshot::Sender<SuiResult>,
     ) -> Self {
         Self {
-            digests: *digests,
+            sync_arg: SyncArg::Follow(*digests),
             peer: Some(peer),
             tx: Some(tx),
         }
     }
 }
 
-#[derive(Copy, Clone)]
-pub enum SyncMode {
+#[derive(Copy, Clone, Debug)]
+pub enum SyncArg {
     /// In follow mode, wait for 2f+1 votes for a tx before executing
-    Follow,
+    Follow(ExecutionDigests),
     /// In checkpoint mode, all txes are known to be final.
-    Checkpoint,
+    Checkpoint(ExecutionDigests),
+
+    /// Used by the execution driver to execute pending certs. No effects digest is provided,
+    /// because this mode is used on validators only, who must compute the effects digest
+    /// themselves - they cannot trust some other validator's version of the effects because that
+    /// validator may be byzantine.
+    ExecDriver(TransactionDigest),
 }
 
-/// NodeSyncState is shared by any number of NodeSyncDigestHandler's, and receives DigestsMessage
+impl SyncArg {
+    fn digests(&self) -> (&TransactionDigest, Option<&TransactionEffectsDigest>) {
+        match self {
+            SyncArg::Checkpoint(ExecutionDigests {
+                transaction,
+                effects,
+            })
+            | SyncArg::Follow(ExecutionDigests {
+                transaction,
+                effects,
+            }) => (transaction, Some(effects)),
+            SyncArg::ExecDriver(digest) => (digest, None),
+        }
+    }
+}
+
+/// NodeSyncState is shared by any number of NodeSyncHandle's, and receives DigestsMessage
 /// messages from those handlers, waits for finality of TXes, and then downloads and applies those
 /// TXes locally.
 pub struct NodeSyncState<A> {
@@ -213,10 +245,7 @@ pub struct NodeSyncState<A> {
     pending_txes: Waiter<TransactionDigest, ()>,
 }
 
-impl<A> NodeSyncState<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
+impl<A> NodeSyncState<A> {
     pub fn new(
         state: Arc<AuthorityState>,
         aggregator: Arc<AuthorityAggregator<A>>,
@@ -233,39 +262,24 @@ where
             pending_txes: Waiter::new(),
         }
     }
+}
 
-    fn start(self, receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
-        let state = Arc::new(self);
-        tokio::spawn(async move {
-            state
-                .handle_stream(SyncMode::Follow, ReceiverStream::new(receiver))
-                .await
-        })
+impl<A> NodeSyncState<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    fn start(self: Arc<Self>, receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
+        let state = self;
+        tokio::spawn(async move { state.handle_stream(ReceiverStream::new(receiver)).await })
     }
 
-    pub async fn sync_checkpoint(self, checkpoint_contents: &CheckpointContents) -> SuiResult {
-        let stream = tokio_stream::iter(
-            checkpoint_contents
-                .transactions
-                .iter()
-                .map(DigestsMessage::new_for_ckpt),
-        );
-        let state = Arc::new(self);
-        state.handle_stream(SyncMode::Checkpoint, stream).await;
-        Ok(())
-    }
-
-    async fn handle_stream(
-        self: Arc<Self>,
-        mode: SyncMode,
-        stream: impl Stream<Item = DigestsMessage>,
-    ) {
+    async fn handle_stream(self: Arc<Self>, stream: impl Stream<Item = DigestsMessage>) {
         // this pattern for limiting concurrency is from
         // https://github.com/tokio-rs/tokio/discussions/2648
         let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
         let mut stream = Box::pin(stream);
 
-        while let Some(DigestsMessage { digests, peer, tx }) = stream.next().await {
+        while let Some(DigestsMessage { sync_arg, peer, tx }) = stream.next().await {
             let state = self.clone();
             let limit = limit.clone();
             tokio::spawn(async move {
@@ -273,11 +287,16 @@ where
                 // the semaphore in this context.
                 let permit = limit.acquire_owned().await.unwrap();
 
-                let res = state
-                    .process_digest(mode, peer.as_ref(), digests, permit)
-                    .await;
+                let res = state.process_digest(peer.as_ref(), sync_arg, permit).await;
                 if let Err(error) = &res {
-                    error!(?digests, ?peer, "process_digest failed: {}", error);
+                    let (digest, effects_digest) = sync_arg.digests();
+                    error!(
+                        ?digest,
+                        ?effects_digest,
+                        ?peer,
+                        "process_digest failed: {}",
+                        error
+                    );
                 }
 
                 if let Some(tx) = tx {
@@ -287,8 +306,10 @@ where
                         // This will happen any time the follower times out and restarts, but
                         // that's ok - the follower won't have marked this digest as processed so it
                         // will be retried.
+                        let (digest, effects_digest) = sync_arg.digests();
                         debug!(
-                            ?digests,
+                            ?digest,
+                            ?effects_digest,
                             ?peer,
                             "could not send process_digest response to caller",
                         );
@@ -300,15 +321,16 @@ where
 
     async fn process_digest(
         &self,
-        mode: SyncMode,
         peer: Option<&AuthorityName>,
-        digests: ExecutionDigests,
+        arg: SyncArg,
         permit: OwnedSemaphorePermit,
     ) -> SuiResult {
-        trace!(?digests, ?peer, "process_digest");
+        trace!(?arg, ?peer, "process_digest");
+
+        let (digest, effects_digest) = arg.digests();
 
         // check if we the tx is already locally final
-        if self.state.database.effects_exists(&digests.transaction)? {
+        if self.state.database.effects_exists(digest)? {
             return Ok(());
         }
 
@@ -324,9 +346,8 @@ where
         //
         // These optimizations may well be worth it at some point if we are trying to get latency
         // down.
-
-        let authorities_with_cert = match mode {
-            SyncMode::Follow => {
+        let (cert, authorities_with_cert) = match arg {
+            SyncArg::Follow(digests) => {
                 let peer = peer.ok_or_else(|| SuiError::GenericAuthorityError {
                     error: "peer should be provided in SyncMode::Follow".into(),
                 })?;
@@ -358,66 +379,111 @@ where
 
                 trace!(?digests, ?peer, "digests are now final");
 
-                Some(self.effects_stake.lock().unwrap().voters(&digests.effects))
+                (
+                    None,
+                    Some(self.effects_stake.lock().unwrap().voters(&digests.effects)),
+                )
             }
-            SyncMode::Checkpoint => {
+            SyncArg::Checkpoint(digests) => {
                 trace!(
                     ?digests,
                     ?peer,
                     "skipping finality check, syncing from checkpoint."
                 );
-                None
+                (None, None)
+            }
+            SyncArg::ExecDriver(digest) => {
+                trace!(?digest, "validator pending execution requested");
+
+                // Check if we already have the cert locally.
+                match self.state.database.read_certificate(&digest)? {
+                    Some(cert) => (Some(cert), None),
+                    None => {
+                        let authorities: BTreeSet<_> = self
+                            .committee
+                            .names()
+                            .filter(|n| **n != self.state.name)
+                            .cloned()
+                            .collect();
+                        (None, Some(authorities))
+                    }
+                }
             }
         };
 
-        // Download the cert and effects now that we have established finality and we know that the
-        // effects digest is correct.
-        let (cert, effects) = self
-            .download_cert_and_effects(authorities_with_cert, &digests)
-            .await?;
+        // TODO: perhaps we should start storing these things in Box<>s.
+        #[allow(clippy::large_enum_variant)]
+        enum CertAndEffects {
+            Fullnode(CertifiedTransaction, SignedTransactionEffects),
+            Validator(CertifiedTransaction),
+        }
+
+        let cert_and_effects = match (self.state.is_fullnode(), cert) {
+            (false, Some(cert)) => CertAndEffects::Validator(cert),
+            (is_fullnode, _) => {
+                // Download the cert and effects - either finality has been establish (above), or
+                // we are a validator.
+                let (cert, effects) = self
+                    .download_cert_and_effects(authorities_with_cert, digest, effects_digest)
+                    .await?;
+
+                if is_fullnode {
+                    CertAndEffects::Fullnode(cert, effects)
+                } else {
+                    CertAndEffects::Validator(cert)
+                }
+            }
+        };
 
         // we're done downloading at this point, so we no longer need to prevent other tasks from
         // starting.
         std::mem::drop(permit);
 
-        for parent in effects.effects.dependencies.iter() {
-            let (_, mut rx) = self.pending_txes.wait(parent).await;
+        match cert_and_effects {
+            CertAndEffects::Fullnode(cert, effects) => {
+                for parent in effects.effects.dependencies.iter() {
+                    let (_, mut rx) = self.pending_txes.wait(parent).await;
 
-            if self.state.database.effects_exists(parent)? {
-                continue;
+                    if self.state.database.effects_exists(parent)? {
+                        continue;
+                    }
+
+                    trace!(?parent, ?digest, "waiting for parent");
+                    // Since we no longer hold the semaphore permit, can be sure that our parent will be
+                    // able to start.
+                    rx.recv()
+                        .await
+                        .map_err(|e| SuiError::GenericAuthorityError {
+                            error: format!("{:?}", e),
+                        })?;
+                }
+
+                if cfg!(debug_assertions) {
+                    for parent in effects.effects.dependencies.iter() {
+                        debug_assert!(self.state.database.effects_exists(parent).unwrap());
+                    }
+                }
+
+                self.state
+                    .handle_node_sync_certificate(cert, effects.clone())
+                    .await?;
+
+                self.effects_stake
+                    .lock()
+                    .unwrap()
+                    .forget_effects(&effects.effects.digest());
             }
-
-            trace!(?parent, digest = ?digests.transaction, "waiting for parent");
-            // Since we no longer hold the semaphore permit, can be sure that our parent will be
-            // able to start.
-            rx.recv()
-                .await
-                .map_err(|e| SuiError::GenericAuthorityError {
-                    error: format!("{:?}", e),
-                })?;
-        }
-
-        if cfg!(debug_assertions) {
-            for parent in effects.effects.dependencies.iter() {
-                debug_assert!(self.state.database.effects_exists(parent).unwrap());
+            CertAndEffects::Validator(cert) => {
+                self.state.handle_certificate(cert).await?;
             }
         }
-
-        self.state
-            .handle_node_sync_certificate(cert, effects)
-            .await?;
 
         // Garbage collect data for this tx.
-        self.node_sync_store
-            .delete_cert_and_effects(&digests.transaction)?;
-        self.effects_stake
-            .lock()
-            .unwrap()
-            .forget_effects(&digests.effects);
+        self.node_sync_store.delete_cert_and_effects(digest)?;
 
         // Notify waiting child transactions.
-        trace!(digest = ?digests.transaction, "notifying parent");
-        self.pending_txes.notify(&digests.transaction, ()).await?;
+        trace!(?digest, "notifying parent");
+        self.pending_txes.notify(digest, ()).await?;
         Ok(())
     }
 
@@ -427,25 +493,27 @@ where
     async fn download_cert_and_effects(
         &self,
         authorities_with_cert: Option<BTreeSet<AuthorityName>>,
-        digests: &ExecutionDigests,
+        digest: &TransactionDigest,
+        effects_digest: Option<&TransactionEffectsDigest>,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
-        let digest = digests.transaction;
-        if let Some(c) = self.node_sync_store.get_cert_and_effects(&digest)? {
+        if let Some(c) = self.node_sync_store.get_cert_and_effects(digest)? {
             return Ok(c);
         }
 
-        let (tx, mut rx) = self.pending_downloads.wait(&digest).await;
+        let (tx, mut rx) = self.pending_downloads.wait(digest).await;
         // Only start the download if there are no other concurrent downloads.
         if let Some(tx) = tx {
             let aggregator = self.aggregator.clone();
-            let digests = *digests;
             let node_sync_store = self.node_sync_store.clone();
+            let digest = *digest;
+            let effects_digest = effects_digest.cloned();
             tokio::task::spawn(async move {
                 if let Err(error) = tx.send(
                     Self::download_impl(
                         authorities_with_cert,
                         aggregator,
-                        &digests,
+                        digest,
+                        effects_digest,
                         node_sync_store,
                     )
                     .await,
@@ -462,7 +530,7 @@ where
             })??;
 
         self.node_sync_store
-            .get_cert_and_effects(&digest)?
+            .get_cert_and_effects(digest)?
             .ok_or_else(|| SuiError::GenericAuthorityError {
                 error: format!(
                     "cert/effects for {:?} should have been in the node_sync_store",
@@ -474,13 +542,17 @@ where
     async fn download_impl(
         authorities: Option<BTreeSet<AuthorityName>>,
         aggregator: Arc<AuthorityAggregator<A>>,
-        digests: &ExecutionDigests,
+        digest: TransactionDigest,
+        effects_digest: Option<TransactionEffectsDigest>,
         node_sync_store: Arc<NodeSyncStore>,
     ) -> SuiResult {
-        let digest = digests.transaction;
-
         let (cert, effects) = aggregator
-            .handle_transaction_and_effects_info_request(digests, authorities.as_ref(), None)
+            .handle_transaction_and_effects_info_request(
+                &digest,
+                effects_digest.as_ref(),
+                authorities.as_ref(),
+                None,
+            )
             .await?;
 
         node_sync_store.store_cert_and_effects(&digest, &(cert, effects))?;
@@ -489,25 +561,19 @@ where
     }
 }
 
+/// A cloneable handle that can send messages to a NodeSyncState
 #[derive(Clone)]
-pub struct NodeSyncDigestHandler {
+pub struct NodeSyncHandle {
     _sync_join_handle: Arc<JoinHandle<()>>,
     sender: mpsc::Sender<DigestsMessage>,
 }
 
-impl NodeSyncDigestHandler {
-    pub fn new<A>(
-        state: Arc<AuthorityState>,
-        aggregator: Arc<AuthorityAggregator<A>>,
-        node_sync_store: Arc<NodeSyncStore>,
-    ) -> Self
+impl NodeSyncHandle {
+    pub fn new<A>(sync_state: Arc<NodeSyncState<A>>) -> Self
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
-
-        let sync_state = NodeSyncState::new(state, aggregator, node_sync_store);
-
         let _sync_join_handle = Arc::new(sync_state.start(receiver));
 
         Self {
@@ -515,17 +581,14 @@ impl NodeSyncDigestHandler {
             sender,
         }
     }
-}
 
-#[async_trait]
-impl<A> DigestHandler<A> for NodeSyncDigestHandler
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    async fn handle_digest(&self, follower: &Follower<A>, digests: ExecutionDigests) -> SuiResult {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(DigestsMessage::new(&digests, follower.peer_name, tx))
+    async fn send_msg_with_tx(
+        sender: mpsc::Sender<DigestsMessage>,
+        msg: DigestsMessage,
+        rx: oneshot::Receiver<SuiResult>,
+    ) -> SuiResult {
+        sender
+            .send(msg)
             .await
             .map_err(|e| SuiError::GenericAuthorityError {
                 error: e.to_string(),
@@ -533,6 +596,52 @@ where
         rx.await.map_err(|e| SuiError::GenericAuthorityError {
             error: e.to_string(),
         })?
+    }
+
+    pub fn sync_checkpoint(
+        &self,
+        checkpoint_contents: &CheckpointContents,
+    ) -> impl Stream<Item = SuiResult> {
+        let futures: FuturesOrdered<_> = checkpoint_contents
+            .iter()
+            .map(|digests| {
+                let (tx, rx) = oneshot::channel();
+                let msg = DigestsMessage::new_for_ckpt(digests, tx);
+                Self::send_msg_with_tx(self.sender.clone(), msg, rx)
+            })
+            .collect();
+        futures
+    }
+
+    pub fn handle_execution_request(
+        &self,
+        digests: impl Iterator<Item = TransactionDigest>,
+    ) -> impl Stream<Item = SuiResult> {
+        let futures: FuturesOrdered<_> = digests
+            .map(|digest| {
+                let (tx, rx) = oneshot::channel();
+                let msg = DigestsMessage::new_for_exec_driver(&digest, tx);
+                Self::send_msg_with_tx(self.sender.clone(), msg, rx)
+            })
+            .collect();
+        futures
+    }
+}
+
+#[async_trait]
+impl<A> DigestHandler<A> for NodeSyncHandle
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    async fn handle_digest(&self, follower: &Follower<A>, digests: ExecutionDigests) -> SuiResult {
+        let (tx, rx) = oneshot::channel();
+        let sender = self.sender.clone();
+        Self::send_msg_with_tx(
+            sender,
+            DigestsMessage::new(&digests, follower.peer_name, tx),
+            rx,
+        )
+        .await
     }
 }
 
