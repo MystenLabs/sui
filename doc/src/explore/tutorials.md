@@ -4,7 +4,7 @@ title: End-to-End Tutorial to Set Up and Play TicTacToe on Sui
 
 In this tutorial, we demonstrate the end-to-end process for starting a
 Sui network locally, connecting to it through our [CLI client](../build/cli-client.md)
-app, publishing a TicTacToe game written in [Move](../build/move.md) on Sui,
+app, publishing a TicTacToe game written in [Move](../build/move/index.md) on Sui,
 and playing it to the end.
 
 ## Set up
@@ -89,7 +89,7 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 To keep this tutorial simple, use the TicTacToe game we implemented in [tic_tac_toe.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move).
 
 Find even more [examples](examples.md) in the Sui repository. Of course, you are welcome to
-[write your own package](../build/move.md#writing-a-package).
+[write your own package](../build/move/write-package.md).
 
 To publish the game, we run the publish command and specify the path to the source code of the game package:
 ```shell
