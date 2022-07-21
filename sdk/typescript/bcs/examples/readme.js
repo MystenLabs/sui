@@ -21,7 +21,7 @@ const { bcs } = require('./../dist');
     let str = bcs.de(bcs.STRING, '0a68656c6c6f5f6d6f7665', 'hex'); // hello_move
 
     console.log(str);
-};
+}
 
 
 {
@@ -30,7 +30,7 @@ const { bcs } = require('./../dist');
 
     let bcs_ascii = bcs.ser('string', 'hello_move').toString('hex');
     console.assert(bcs_ascii === '0a68656c6c6f5f6d6f7665');
-};
+}
 
 {
     // Move / Rust struct
