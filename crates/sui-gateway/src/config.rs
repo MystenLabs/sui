@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rpc_gateway_client::RpcGatewayClient;
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::{
@@ -16,6 +16,7 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
     gateway_state::{GatewayClient, GatewayState},
 };
+use sui_sdk::SuiClient;
 use sui_types::{
     base_types::AuthorityName,
     committee::{Committee, EpochId},
@@ -61,21 +62,16 @@ impl Display for GatewayType {
 }
 
 impl GatewayType {
-    pub fn init(&self) -> Result<GatewayClient, anyhow::Error> {
+    pub async fn init(&self) -> Result<SuiClient, anyhow::Error> {
         Ok(match self {
             GatewayType::Embedded(config) => {
                 let path = config.db_folder_path.clone();
                 let committee = config.make_committee()?;
                 let authority_clients = config.make_authority_clients();
                 let registry = prometheus::Registry::new();
-                Arc::new(GatewayState::new(
-                    path,
-                    committee,
-                    authority_clients,
-                    &registry,
-                )?)
+                SuiClient::new_embedded_client(path, committee, authority_clients, &registry)?
             }
-            GatewayType::RPC(url) => Arc::new(RpcGatewayClient::new(url.clone())?),
+            GatewayType::RPC(url) => SuiClient::new_http_client(url)?,
         })
     }
 }
@@ -93,14 +89,28 @@ pub struct GatewayConfig {
 impl Config for GatewayConfig {}
 
 impl GatewayConfig {
-    pub fn make_committee(&self) -> SuiResult<Committee> {
+    pub fn create_client(
+        &self,
+        prometheus_registry: &Registry,
+    ) -> Result<GatewayClient, anyhow::Error> {
+        let committee = self.make_committee()?;
+        let authority_clients = self.make_authority_clients();
+        Ok(Arc::new(GatewayState::new(
+            self.db_folder_path.clone(),
+            committee,
+            authority_clients,
+            prometheus_registry,
+        )?))
+    }
+
+    fn make_committee(&self) -> SuiResult<Committee> {
         Committee::new(
             self.epoch,
             ValidatorInfo::voting_rights(&self.validator_set),
         )
     }
 
-    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
+    fn make_authority_clients(&self) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
         let mut authority_clients = BTreeMap::new();
         let mut config = mysten_network::config::Config::new();
         config.connect_timeout = Some(self.send_timeout);

@@ -12,8 +12,7 @@ pub use sui_config::Config;
 pub use sui_config::PersistedConfig;
 
 pub use sui_config::utils;
-
-pub use sui_gateway::config::{GatewayConfig, GatewayType};
+pub use sui_gateway::config::GatewayType;
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]

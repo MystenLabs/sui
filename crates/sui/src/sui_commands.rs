@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
+use crate::config::SuiClientConfig;
 use crate::console::start_console;
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -20,6 +20,7 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
+use sui_gateway::config::{GatewayConfig, GatewayType};
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
 use sui_sdk::SuiClient;
 use sui_swarm::memory::Swarm;
@@ -319,14 +320,14 @@ impl SuiCommand {
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config)?;
-                let mut context = WalletContext::new(&config)?;
+                let mut context = WalletContext::new(&config).await?;
                 sync_accounts(&mut context).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client { config, cmd, json } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config)?;
-                let mut context = WalletContext::new(&config)?;
+                let mut context = WalletContext::new(&config).await?;
 
                 if let Some(cmd) = cmd {
                     // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.

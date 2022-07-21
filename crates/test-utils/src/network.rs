@@ -8,13 +8,13 @@ use std::path::Path;
 use std::sync::Arc;
 use sui::{
     client_commands::{SuiClientCommands, WalletContext},
-    config::{GatewayConfig, GatewayType, SuiClientConfig},
+    config::SuiClientConfig,
 };
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::gateway_state::GatewayClient;
-use sui_gateway::create_client;
+use sui_gateway::config::{GatewayConfig, GatewayType};
 use sui_gateway::rpc_gateway_client::RpcGatewayClient;
 use sui_json_rpc::api::RpcGatewayApiServer;
 use sui_json_rpc::api::RpcReadApiServer;
@@ -105,7 +105,7 @@ pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddr
 
     // Create Wallet context.
     let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-    let mut context = WalletContext::new(&wallet_conf)?;
+    let mut context = WalletContext::new(&wallet_conf).await?;
     let address = context.config.accounts.first().cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
@@ -123,7 +123,9 @@ async fn start_rpc_gateway(
     let server = HttpServerBuilder::default().build("127.0.0.1:0").await?;
     let addr = server.local_addr()?;
     let registry = prometheus::Registry::new();
-    let client = create_client(config_path, &registry)?;
+
+    let config: GatewayConfig = PersistedConfig::read(config_path)?;
+    let client = config.create_client(&registry)?;
     let mut module = RpcModule::new(());
     module.merge(RpcGatewayImpl::new(client.clone()).into_rpc())?;
     module.merge(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
