@@ -13,9 +13,9 @@ itertools = "0.10.3"
 once_cell = "1.11.0"
 rand = "0.7.3"
 serde = { version = "1.0.139", features = ["derive"] }
-ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde"] }
 serde-name = "0.2.1"
+sha2 = "0.9.9"
 sha3 = "0.10.1"
 thiserror = "1.0.31"
 tracing = "0.1"

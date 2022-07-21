@@ -12,7 +12,6 @@ use anyhow::anyhow;
 use base64ct::Encoding;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use digest::Digest;
-use ed25519_dalek::Sha512;
 use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -23,6 +22,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use sha2::Sha512;
 use sha3::Sha3_256;
 
 use crate::committee::EpochId;

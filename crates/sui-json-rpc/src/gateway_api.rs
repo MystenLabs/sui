@@ -3,9 +3,9 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use ed25519_dalek::ed25519::signature::Signature;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
+use signature::Signature;
 use tracing::debug;
 
 use crate::api::{
