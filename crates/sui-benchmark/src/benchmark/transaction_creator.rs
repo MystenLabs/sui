@@ -7,7 +7,10 @@ use rayon::prelude::*;
 use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
-    crypto::{get_key_pair, AuthoritySignature, KeyPair, Signature},
+    crypto::{
+        get_key_pair, AuthoritySignature, KeyPair, KeypairTraits, PublicKeyBytes, Signature,
+        SuiAuthoritySignature,
+    },
     messages::*,
     object::Object,
     SUI_FRAMEWORK_ADDRESS,
@@ -57,8 +60,7 @@ fn create_gas_object(object_id: ObjectID, owner: SuiAddress) -> Object {
 fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTransaction {
     // Make certificate
     let committee = network_config.committee();
-    let mut certificate = CertifiedTransaction::new(committee.epoch(), tx.clone());
-    certificate.auth_sign_info.epoch = committee.epoch();
+    let mut sigs: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     // TODO: Why iterating from 0 to quorum_threshold??
     for i in 0..committee.quorum_threshold() {
         let secx = network_config
@@ -66,13 +68,14 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             .get(i as usize)
             .unwrap()
             .key_pair();
-        let pubx = secx.public_key_bytes();
-        let sig = AuthoritySignature::new(&certificate.data, secx);
-        certificate
-            .auth_sign_info
-            .add_signature(sig, *pubx, &committee)
-            .unwrap();
+        let pubx: PublicKeyBytes = secx.public().into();
+        let sig = AuthoritySignature::new(&tx.data, secx);
+        sigs.push((pubx, sig));
     }
+    let mut certificate =
+        CertifiedTransaction::new_with_signatures(committee.epoch(), tx.clone(), sigs, &committee)
+            .unwrap();
+    certificate.auth_sign_info.epoch = committee.epoch();
     certificate
 }
 
@@ -155,7 +158,7 @@ impl TransactionCreator {
         validator_preparer: &mut ValidatorPreparer,
     ) -> Vec<(Transaction, CertifiedTransaction)> {
         let (address, keypair) = if let Some(a) = sender {
-            (SuiAddress::from(a.public_key_bytes()), a.copy())
+            (a.public().into(), a.copy())
         } else {
             get_key_pair()
         };

@@ -17,7 +17,7 @@ use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duratio
 use sui_types::{
     base_types::{AuthorityName, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    crypto::get_key_pair_from_rng,
+    crypto::{get_key_pair_from_rng, KeypairTraits},
     messages::{CertifiedTransaction, ExecutionStatus},
     object::Object,
     utils::{make_committee_key, make_committee_key_num},
@@ -70,7 +70,7 @@ fn random_ckpoint_store_num(
                 path.clone(),
                 None,
                 committee.epoch,
-                *k.public_key_bytes(),
+                k.public().into(),
                 Arc::pin(k.copy()),
             )
             .unwrap();
@@ -99,7 +99,7 @@ fn crash_recovery() {
         path.clone(),
         None,
         committee.epoch,
-        *k.public_key_bytes(),
+        k.public().into(),
         Arc::pin(k.copy()),
     )
     .unwrap();
@@ -143,7 +143,7 @@ fn crash_recovery() {
         path,
         None,
         committee.epoch,
-        *k.public_key_bytes(),
+        k.public().into(),
         Arc::pin(k.copy()),
     )
     .unwrap();
@@ -779,7 +779,7 @@ fn checkpoint_integration() {
         path,
         None,
         committee.epoch,
-        *k.public_key_bytes(),
+        k.public().into(),
         Arc::pin(k.copy()),
     )
     .unwrap();
@@ -907,7 +907,7 @@ async fn test_batch_to_checkpointing() {
             &checkpoints_path,
             None,
             committee.epoch,
-            *secret.public_key_bytes(),
+            secret.public().into(),
             secret.clone(),
         )
         .unwrap(),
@@ -915,7 +915,7 @@ async fn test_batch_to_checkpointing() {
 
     let state = AuthorityState::new(
         committee,
-        *secret.public_key_bytes(),
+        secret.public().into(),
         secret,
         store.clone(),
         None,
@@ -1005,7 +1005,7 @@ async fn test_batch_to_checkpointing_init_crash() {
 
         let state = AuthorityState::new(
             committee.clone(),
-            *secret.public_key_bytes(),
+            secret.public().into(),
             secret.clone(),
             store.clone(),
             None,
@@ -1077,7 +1077,7 @@ async fn test_batch_to_checkpointing_init_crash() {
                 &checkpoints_path,
                 None,
                 committee.epoch,
-                *secret.public_key_bytes(),
+                secret.public().into(),
                 secret.clone(),
             )
             .unwrap(),
@@ -1088,7 +1088,7 @@ async fn test_batch_to_checkpointing_init_crash() {
 
         let state = AuthorityState::new(
             committee,
-            *secret.public_key_bytes(),
+            secret.public().into(),
             secret,
             store.clone(),
             None,
@@ -1597,7 +1597,7 @@ pub async fn checkpoint_tests_setup(
             &checkpoints_path,
             None,
             committee.epoch,
-            *secret.public_key_bytes(),
+            secret.public().into(),
             secret.clone(),
         )
         .unwrap();
@@ -1608,7 +1608,7 @@ pub async fn checkpoint_tests_setup(
         let checkpoint = Arc::new(Mutex::new(checkpoint));
         let authority = AuthorityState::new(
             committee.clone(),
-            *secret.public_key_bytes(),
+            secret.public().into(),
             secret,
             store.clone(),
             None,

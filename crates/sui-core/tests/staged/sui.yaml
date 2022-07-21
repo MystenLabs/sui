@@ -32,12 +32,7 @@ AuthoritySignInfo:
     - authority:
         TYPENAME: PublicKeyBytes
     - signature:
-        TYPENAME: AuthoritySignature
-AuthoritySignature:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 64
+        TYPENAME: Ed25519Signature
 CallArg:
   ENUM:
     0:
@@ -67,6 +62,17 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
+Ed25519KeyPair:
+  STRUCT:
+    - type: STR
+    - name:
+        TYPENAME: Ed25519PublicKey
+    - secret:
+        TYPENAME: Ed25519PublicKey
+Ed25519PublicKey:
+  NEWTYPESTRUCT: STR
+Ed25519Signature:
+  NEWTYPESTRUCT: BYTES
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8

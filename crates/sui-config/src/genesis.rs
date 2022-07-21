@@ -17,6 +17,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
+use sui_types::crypto::PublicKey;
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
@@ -60,16 +61,14 @@ impl Genesis {
         )
     }
 
-    pub fn narwhal_committee(
-        &self,
-    ) -> narwhal_config::SharedCommittee<narwhal_crypto::ed25519::Ed25519PublicKey> {
+    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee<PublicKey> {
         let narwhal_committee = self
             .validator_set
             .iter()
             .map(|validator| {
                 let name = validator
                     .public_key()
-                    .make_narwhal_public_key()
+                    .try_into()
                     .expect("Can't get narwhal public key");
                 let primary = narwhal_config::PrimaryAddresses {
                     primary_to_primary: validator.narwhal_primary_to_primary.clone(),
@@ -274,7 +273,7 @@ impl Builder {
                 onchain_validator.metadata.sui_address.to_vec(),
             );
             assert_eq!(
-                validator.public_key().to_vec(),
+                validator.public_key().as_ref().to_vec(),
                 onchain_validator.metadata.pubkey_bytes,
             );
             assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
@@ -514,6 +513,7 @@ const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
+    use narwhal_crypto::traits::KeyPair;
     use sui_types::crypto::get_key_pair_from_rng;
 
     #[test]
@@ -539,7 +539,7 @@ mod test {
         let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
-            public_key: *key.public_key_bytes(),
+            public_key: key.public().into(),
             stake: 1,
             delegation: 0,
             network_address: utils::new_network_address(),
