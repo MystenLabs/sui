@@ -100,7 +100,7 @@ impl<C> SafeClient<C> {
             // check that the effects digest is correct.
             if let Some(effects_digest) = effects_digest {
                 fp_ensure!(
-                    signed_effects.digest() == effects_digest.0,
+                    signed_effects.digest() == effects_digest,
                     SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }

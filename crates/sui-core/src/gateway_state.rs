@@ -504,7 +504,7 @@ where
                 new_certificate.clone(),
                 seq,
                 effects.clone().to_unsigned_effects(),
-                &effects.effects.digest(),
+                effects.digest(),
             )
             .await?;
 
