@@ -88,17 +88,13 @@ export class Ed25519Keypair implements Keypair {
    */
   static isValidPath = (path: string): boolean => {
     if (
-      !new RegExp("^m\\/44+'\\/784+'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(
+      !new RegExp("^m\\/44'\\/784'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(
         path
       )
     ) {
       return false;
     }
-    return !path
-      .split('/')
-      .slice(1)
-      .map((val: string): string => val.replace("'", ''))
-      .some(isNaN as any);
+    return true;
   };
 
   /**
