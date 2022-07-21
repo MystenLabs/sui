@@ -5,11 +5,16 @@
 Reference this directory in your Markdown file, like so:
 
 ```
-
 ![Table Of Content image](../../static/tableOfcontent.jpg "Table Of Content image")]
 ```
 
-## Best practice for frequently changed assets
- - upon each release, create a sub-directory, for example `wallet_0.0.3`, upload updated assets following the same naming conventions
- - search and replace references of previous version with new asset path, like `wallet_0.0.2/<name>` to `wallet_0.0.3/name`
- - in case of new assets, contact Clay Murphy to add to corresponding markdown files accordingly.
+Going forward, we will start to group images by topic in subdirectories, for example:
+
+```
+static/wallet
+static/explorer
+```
+
+For frequently changed assets where multiple versions of the product are supported at once, you may create version-specific sub-directories, for example `wallet_0.0.3`. Then search and replace references to the previous version with new asset path, such as from `wallet_0.0.2/image.png` to `wallet_0.0.3/image.png`
+
+For new assets, work with Clay-Mysten and Randall-Mysten to include them in corresponding Markdown files.
