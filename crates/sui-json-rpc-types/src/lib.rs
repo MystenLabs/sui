@@ -23,6 +23,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use tracing::warn;
 
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
@@ -435,9 +436,9 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let SuiMoveValue::Number(balance) = fields["balance"].clone() {
-                    if let SuiMoveValue::Info { id, version } = fields["info"].clone() {
-                        return Ok(GasCoin::new(id, SequenceNumber::from(version), balance));
+                if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
+                    if let Some(SuiMoveValue::Info { id, version }) = fields.get("info") {
+                        return Ok(GasCoin::new(*id, SequenceNumber::from(*version), *balance));
                     }
                 }
             }
@@ -755,7 +756,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
         "0x2::utf8::String" | "0x1::ascii::String" => {
-            if let SuiMoveValue::Bytearray(bytes) = fields["bytes"].clone() {
+            if let Some(SuiMoveValue::Bytearray(bytes)) = fields.get("bytes") {
                 if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
                         return Some(SuiMoveValue::String(s));
@@ -763,34 +764,42 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 }
             }
         }
-        "0x2::url::Url" => return Some(fields["url"].clone()),
+        "0x2::url::Url" => {
+            if let Some(url) = fields.get("url") {
+                return Some(url.clone());
+            }
+        }
         "0x2::object::ID" => {
-            if let SuiMoveValue::Address(id) = fields["bytes"] {
-                return Some(SuiMoveValue::Address(id));
+            if let Some(SuiMoveValue::Address(id)) = fields.get("bytes") {
+                return Some(SuiMoveValue::Address(*id));
             }
         }
         "0x2::object::Info" => {
-            if let SuiMoveValue::Address(address) = fields["id"].clone() {
-                if let SuiMoveValue::Number(version) = fields["version"].clone() {
+            if let Some(SuiMoveValue::Address(address)) = fields.get("id") {
+                if let Some(SuiMoveValue::Number(version)) = fields.get("version") {
                     return Some(SuiMoveValue::Info {
-                        id: address.into(),
-                        version,
+                        id: ObjectID::from(*address),
+                        version: *version,
                     });
                 }
             }
         }
         "0x2::balance::Balance" => {
-            if let SuiMoveValue::Number(value) = fields["value"].clone() {
-                return Some(SuiMoveValue::Number(value));
+            if let Some(SuiMoveValue::Number(value)) = fields.get("value") {
+                return Some(SuiMoveValue::Number(*value));
             }
         }
         "0x1::option::Option" => {
-            if let SuiMoveValue::Vector(values) = fields["vec"].clone() {
+            if let Some(SuiMoveValue::Vector(values)) = fields.get("vec") {
                 return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
             }
         }
-        _ => {}
+        _ => return None,
     }
+    warn!(
+        fields =? fields,
+        "Failed to convert {struct_name} to SuiMoveValue"
+    );
     None
 }
 
