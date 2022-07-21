@@ -183,7 +183,6 @@ function Pagination({
                                         ? styles.pagenumber
                                         : styles.btncontainer
                                 }
-                                id="firstBtn"
                                 onClick={handleBtnClick(arrayIndex)}
                                 disabled={pageIndex === arrayIndex}
                             >
