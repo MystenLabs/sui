@@ -8,6 +8,7 @@ use narwhal_crypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
 use crate::crypto::{get_key_pair, PublicKeyBytes};
+use crate::object::Owner;
 
 use super::*;
 
@@ -339,4 +340,82 @@ fn test_empty_bitmap() {
     assert!(quorum
         .add_to_verification_obligation(&committee, &mut obligation, idx)
         .is_err());
+}
+
+#[test]
+fn test_digest_caching() {
+    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    // TODO: refactor this test to not reuse the same keys for user and authority signing
+    let (a1, sec1) = get_key_pair();
+    let (a2, sec2) = get_key_pair();
+
+    authorities.insert(sec1.public().into(), 1);
+    authorities.insert(sec2.public().into(), 0);
+    let committee = Committee::new(0, authorities).unwrap();
+
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
+        &sec1,
+    );
+
+    let mut signed_tx = SignedTransaction::new(
+        committee.epoch(),
+        transaction,
+        PublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+    assert!(signed_tx.verify(&committee).is_ok());
+
+    let initial_digest = *signed_tx.digest();
+
+    signed_tx.data.gas_budget += 1;
+
+    // digest is cached
+    assert_eq!(initial_digest, *signed_tx.digest());
+
+    let serialized_tx = bincode::serialize(&signed_tx).unwrap();
+
+    let deserialized_tx: SignedTransaction = bincode::deserialize(&serialized_tx).unwrap();
+
+    // cached digest was not serialized/deserialized
+    assert_ne!(initial_digest, *deserialized_tx.digest());
+
+    let effects = TransactionEffects {
+        status: ExecutionStatus::Success,
+        gas_used: GasCostSummary {
+            computation_cost: 0,
+            storage_cost: 0,
+            storage_rebate: 0,
+        },
+        shared_objects: Vec::new(),
+        transaction_digest: initial_digest,
+        created: Vec::new(),
+        mutated: Vec::new(),
+        unwrapped: Vec::new(),
+        deleted: Vec::new(),
+        wrapped: Vec::new(),
+        gas_object: (random_object_ref(), Owner::AddressOwner(a1)),
+        events: Vec::new(),
+        dependencies: Vec::new(),
+    };
+
+    let mut signed_effects = effects.to_sign_effects(
+        committee.epoch(),
+        &PublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+
+    let initial_effects_digest = *signed_effects.digest();
+    signed_effects.effects.gas_used.computation_cost += 1;
+
+    // digest is cached
+    assert_eq!(initial_effects_digest, *signed_effects.digest());
+
+    let serialized_effects = bincode::serialize(&signed_effects).unwrap();
+
+    let deserialized_effects: SignedTransactionEffects =
+        bincode::deserialize(&serialized_effects).unwrap();
+
+    // cached digest was not serialized/deserialized
+    assert_ne!(initial_effects_digest, *deserialized_effects.digest());
 }

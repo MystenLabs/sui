@@ -1270,7 +1270,7 @@ where
             // Different authorities could return different effects.  We want at least one effect to come
             // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
             // The map here allows us to count the stake for each unique effect.
-            effects_map: HashMap<[u8; 32], EffectsStakeInfo>,
+            effects_map: HashMap<TransactionEffectsDigest, EffectsStakeInfo>,
             bad_stake: StakeUnit,
             errors: Vec<SuiError>,
         }
@@ -1355,7 +1355,7 @@ where
                                 // Note: here we aggregate votes by the hash of the effects structure
                                 let entry = state
                                     .effects_map
-                                    .entry(inner_effects.digest())
+                                    .entry(*inner_effects.digest())
                                     .or_insert(EffectsStakeInfo {
                                         stake: 0,
                                         effects: inner_effects.effects,

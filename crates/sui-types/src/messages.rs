@@ -1387,8 +1387,10 @@ impl TransactionEffects {
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> SignedTransactionEffects {
         let signature = AuthoritySignature::new(&self, secret);
+        let transaction_effects_digest = OnceCell::from(self.digest());
 
         SignedTransactionEffects {
+            transaction_effects_digest,
             effects: self,
             auth_signature: AuthoritySignInfo {
                 epoch,
@@ -1445,18 +1447,26 @@ impl Display for TransactionEffects {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffectsEnvelope<S> {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    #[serde(skip)]
+    transaction_effects_digest: OnceCell<TransactionEffectsDigest>,
+
     pub effects: TransactionEffects,
     pub auth_signature: S,
+}
+
+impl<S> TransactionEffectsEnvelope<S> {
+    pub fn digest(&self) -> &TransactionEffectsDigest {
+        self.transaction_effects_digest
+            .get_or_init(|| self.effects.digest())
+    }
 }
 
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
 
 impl SignedTransactionEffects {
-    pub fn digest(&self) -> [u8; 32] {
-        sha3_hash(&self.effects)
-    }
-
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         self.auth_signature.verify(&self.effects, committee)
     }
@@ -1478,6 +1488,7 @@ impl CertifiedTransactionEffects {
         committee: &Committee,
     ) -> SuiResult<Self> {
         Ok(Self {
+            transaction_effects_digest: OnceCell::from(effects.digest()),
             effects,
             auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
                 epoch, signatures, committee,
@@ -1487,6 +1498,7 @@ impl CertifiedTransactionEffects {
 
     pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
         UnsignedTransactionEffects {
+            transaction_effects_digest: self.transaction_effects_digest,
             effects: self.effects,
             auth_signature: EmptySignInfo {},
         }

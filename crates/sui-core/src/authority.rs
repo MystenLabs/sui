@@ -428,8 +428,8 @@ impl AuthorityState {
 
         let resp = self.process_certificate(tx_guard, &certificate).await?;
 
-        let expected_effects_digest = signed_effects.effects.digest();
-        let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.effects.digest());
+        let expected_effects_digest = signed_effects.digest();
+        let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
         if observed_effects_digest != Some(expected_effects_digest) {
             error!(
                 ?expected_effects_digest,
@@ -1381,7 +1381,7 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
-        let effects_digest = &signed_effects.effects.digest();
+        let effects_digest = &signed_effects.digest();
         let res = self
             .database
             .update_state(
