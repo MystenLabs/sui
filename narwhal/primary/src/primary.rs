@@ -488,11 +488,11 @@ impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<Public
                 })
                 .await
                 .expect("Failed to send primary message"),
-            _ => self
-                .tx_primary_messages
-                .send(message)
-                .await
-                .expect("Failed to send certificate"),
+            _ => {
+                let res = self.tx_primary_messages.send(message).await;
+
+                res.expect("Failed to send certificate");
+            }
         }
 
         Ok(Response::new(Empty {}))

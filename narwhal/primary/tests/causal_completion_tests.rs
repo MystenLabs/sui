@@ -1,8 +1,106 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use bytes::Bytes;
 use std::time::Duration;
 use test_utils::cluster::Cluster;
 use tracing::info;
+use types::{TransactionProto, TransactionsClient};
+
+type StringTransaction = String;
+
+#[ignore]
+#[tokio::test]
+async fn test_restore_from_disk() {
+    // Enabled debug tracing so we can easily observe the
+    // nodes logs.
+    setup_tracing();
+
+    let mut cluster = Cluster::new(None, None);
+
+    // start the cluster
+    cluster.start(Some(4), Some(1)).await;
+
+    let id = 0;
+    let name = cluster.authority(0).name;
+
+    let committee = &cluster.committee_shared;
+    let address = committee.load().worker(&name, &id).unwrap().transactions;
+    let config = mysten_network::config::Config::new();
+    let channel = config.connect_lazy(&address).unwrap();
+    let mut client = TransactionsClient::new(channel);
+
+    // Subscribe to the transaction confirmation channel
+    let mut receiver = cluster
+        .authority(0)
+        .primary
+        .tx_transaction_confirmation
+        .subscribe();
+
+    // Create arbitrary transactions
+    let mut batch_len = 3;
+    for tx in [
+        string_transaction(),
+        string_transaction(),
+        string_transaction(),
+    ] {
+        let tr = bincode::serialize(&tx).unwrap();
+        let txn = TransactionProto {
+            transaction: Bytes::from(tr),
+        };
+        client.submit_transaction(txn).await.unwrap();
+    }
+
+    // wait for transactions to complete
+    loop {
+        if let Ok(result) = receiver.recv().await {
+            assert!(result.0.is_ok());
+            batch_len -= 1;
+            if batch_len < 1 {
+                break;
+            }
+        }
+    }
+
+    // Now stop node 0
+    cluster.stop_node(0);
+
+    // Let other primaries advance
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Now start the node 0 again
+    cluster.start_node(0, true, Some(1)).await;
+
+    // Let the node recover
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let node = cluster.authority(0);
+
+    // Check the metrics to ensure the node was recovered from disk
+    let mut node_recovered_state = false;
+    let metric_family = node.primary.registry.gather();
+
+    for metric in metric_family {
+        if metric.get_name() == "narwhal_primary_recovered_consensus_state" {
+            let value = metric
+                .get_metric()
+                .first()
+                .unwrap()
+                .get_counter()
+                .get_value();
+            info!("Found metric for recovered consensus state.");
+            if value > 0.0 {
+                node_recovered_state = true;
+                break;
+            }
+        }
+    }
+
+    assert!(node_recovered_state, "Node did not recover state from disk");
+}
+
+fn string_transaction() -> StringTransaction {
+    StringTransaction::from("test transaction")
+}
 
 #[ignore]
 #[tokio::test]

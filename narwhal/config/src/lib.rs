@@ -418,7 +418,6 @@ impl<PublicKey: VerifyingKey> Committee<PublicKey> {
             .map(|(_, worker)| worker.clone())
             .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
     }
-
     /// Returns the addresses of all our workers.
     pub fn our_workers(&self, myself: &PublicKey) -> Result<Vec<WorkerAddresses>, ConfigError> {
         let res = self

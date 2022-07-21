@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use prometheus::{default_registry, register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
+use prometheus::{
+    default_registry, register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    IntCounter, IntGaugeVec, Registry,
+};
 
 #[derive(Clone, Debug)]
 pub struct ConsensusMetrics {
@@ -14,7 +17,7 @@ pub struct ConsensusMetrics {
     pub external_consensus_dag_size: IntGaugeVec,
     /// The number of times the consensus state was restored from the consensus store
     /// following a node restart
-    pub recovered_consensus_state: IntGaugeVec,
+    pub recovered_consensus_state: IntCounter,
 }
 
 impl ConsensusMetrics {
@@ -44,10 +47,9 @@ impl ConsensusMetrics {
                 &[],
                 registry
             ).unwrap(),
-            recovered_consensus_state: register_int_gauge_vec_with_registry!(
+            recovered_consensus_state: register_int_counter_with_registry!(
                 "recovered_consensus_state",
                 "The number of times the consensus state was restored from the consensus store following a node restart",
-                &[],
                 registry
             ).unwrap(),
         }
