@@ -6,7 +6,6 @@ use crate::checkpoints::FragmentInternalError;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
-    epoch::EpochInfoLocals,
     event_handler::EventHandler,
     execution_engine,
     query_helpers::QueryHelpers,
@@ -82,7 +81,7 @@ pub use authority_store::{
 };
 use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{
-    CheckpointRequest, CheckpointRequestType, CheckpointResponse,
+    CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SuiSystemState;
@@ -261,11 +260,11 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: StableSyncAuthoritySigner,
 
+    // Epoch related information.
     /// Committee of this Sui instance.
     pub committee: ArcSwap<Committee>,
     /// A global lock to halt all transaction/cert processing.
-    #[allow(dead_code)]
-    pub(crate) halted: AtomicBool,
+    halted: AtomicBool,
 
     /// Move native functions that are available to invoke
     pub(crate) _native_functions: NativeFunctionTable,
@@ -966,7 +965,7 @@ impl AuthorityState {
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
-        committee: Committee,
+        genesis_committee: Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
@@ -985,7 +984,7 @@ impl AuthorityState {
         );
         // TODO: update this function to not take genesis, committee if store already exists
         // Only initialize an empty database.
-        if store
+        let committee = if store
             .database_is_empty()
             .expect("Database read should not fail.")
         {
@@ -993,25 +992,20 @@ impl AuthorityState {
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
-
-            store
-                .insert_new_epoch_info(EpochInfoLocals {
-                    committee,
-                    validator_halted: false,
-                })
-                .expect("Cannot initialize the first epoch entry");
-        }
-        let current_epoch_info = store
-            .get_last_epoch_info()
-            .expect("Fail to load the current epoch info");
+            genesis_committee
+        } else if let Some(latest_epoch) = store.get_latest_authenticated_epoch() {
+            latest_epoch.epoch_info().next_epoch_committee().clone()
+        } else {
+            genesis_committee
+        };
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
 
         let mut state = AuthorityState {
             name,
             secret,
-            committee: ArcSwap::from(Arc::new(current_epoch_info.committee)),
-            halted: AtomicBool::new(current_epoch_info.validator_halted),
+            committee: ArcSwap::from(Arc::new(committee)),
+            halted: AtomicBool::new(false),
             _native_functions: native_functions,
             move_vm,
             database: store.clone(),
@@ -1118,35 +1112,33 @@ impl AuthorityState {
         self.checkpoints.clone()
     }
 
-    pub(crate) fn insert_new_epoch_info(&self, new_committee: &Committee) -> SuiResult {
-        let current_epoch_info = self.database.get_last_epoch_info()?;
-        fp_ensure!(
-            current_epoch_info.committee.epoch <= new_committee.epoch,
-            SuiError::InconsistentEpochState {
-                error: "Trying to insert an old epoch entry".to_owned()
-            }
-        );
-        self.database.insert_new_epoch_info(EpochInfoLocals {
-            committee: new_committee.clone(),
-            validator_halted: true,
-        })?;
-        self.committee.store(Arc::new(new_committee.clone()));
+    pub(crate) fn sign_new_epoch_and_update_committee(
+        &self,
+        next_epoch_committee: Committee,
+        last_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        self.database.sign_new_epoch(
+            self.epoch(),
+            next_epoch_committee.clone(),
+            self.name,
+            &*self.secret,
+            last_checkpoint,
+        )?;
+        self.committee.swap(Arc::new(next_epoch_committee));
         Ok(())
     }
 
-    pub(crate) fn unhalt_validator(&self) -> SuiResult {
-        let epoch_info = self.database.get_last_epoch_info()?;
-        assert_eq!(
-            &epoch_info.committee,
-            self.committee.load().clone().deref(),
-            "About to being new epoch, however current committee differs from epoch store"
-        );
-        self.database.insert_new_epoch_info(EpochInfoLocals {
-            committee: self.clone_committee(),
-            validator_halted: false,
-        })?;
-        self.halted.store(false, Ordering::SeqCst);
-        Ok(())
+    #[cfg(test)]
+    pub(crate) fn is_halted(&self) -> bool {
+        self.halted.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn halt_validator(&self) {
+        self.halted.store(true, Ordering::Relaxed);
+    }
+
+    pub(crate) fn unhalt_validator(&self) {
+        self.halted.store(false, Ordering::Relaxed);
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {

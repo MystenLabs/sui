@@ -7,7 +7,6 @@ use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_network::tonic;
@@ -37,7 +36,7 @@ where
     /// validator that belongs to the committee of the current epoch.
     pub async fn start_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
-        info!(epoch=?epoch, "Starting epoch change");
+        info!(?epoch, "Starting epoch change");
         if let Some(checkpoints) = &self.state.checkpoints {
             assert!(
                 checkpoints.lock().is_ready_to_start_epoch_change(),
@@ -47,12 +46,16 @@ where
             unreachable!();
         }
 
-        self.state.halted.store(true, Ordering::SeqCst);
-        info!(epoch=?epoch, "Validator halted for epoch change");
+        self.state.halt_validator();
+        info!(?epoch, "Validator halted for epoch change");
+        // TODO: The following doesn't work: we also need to make sure that the transactions
+        // all have been included in a batch (and hence will be included in the next checkpoint
+        // proposal).
+        // TODO: Use a conditional variable pattern instead of while + sleep.
         while !self.state.batch_notifier.ticket_drained() {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        info!(epoch=?epoch, "Epoch change started");
+        info!(?epoch, "Epoch change started");
         Ok(())
     }
 
@@ -60,13 +63,9 @@ where
     /// all transactions from the last checkpoint of the epoch. This function needs to be called by
     /// a validator that belongs to the committee of the next epoch.
     pub async fn finish_epoch_change(&self) -> SuiResult {
-        let epoch = self.state.committee.load().epoch();
-        info!(epoch=?epoch, "Finishing epoch change");
-        assert!(
-            self.state.halted.load(Ordering::SeqCst),
-            "finish_epoch_change called when validator is not halted",
-        );
-        if let Some(checkpoints) = &self.state.checkpoints {
+        let epoch = self.state.committee.load().epoch;
+        info!(?epoch, "Finishing epoch change");
+        let last_checkpoint = if let Some(checkpoints) = &self.state.checkpoints {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
@@ -74,7 +73,7 @@ where
             );
 
             for (tx_digest, _) in checkpoints.extra_transactions.iter() {
-                debug!(epoch=?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
+                debug!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
                 self.state
                     .database
                     .revert_state_update(&tx_digest.transaction)?;
@@ -85,10 +84,12 @@ where
 
             self.state.database.remove_all_pending_certificates()?;
 
+            checkpoints.next_checkpoint() - 1
+
             // drop checkpoints lock
         } else {
             unreachable!();
-        }
+        };
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
         let next_epoch = sui_system_state.epoch + 1;
@@ -104,8 +105,12 @@ where
             })
             .collect();
         let new_committee = Committee::new(next_epoch, votes)?;
-        debug!(epoch=?epoch, "New committee for the next epoch: {:?}", new_committee);
-        self.state.insert_new_epoch_info(&new_committee)?;
+        debug!(
+            ?epoch,
+            "New committee for the next epoch: {:?}", new_committee
+        );
+        self.state
+            .sign_new_epoch_and_update_committee(new_committee.clone(), last_checkpoint)?;
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
         if A::needs_network_recreation() {
@@ -131,7 +136,10 @@ where
             self.state.name,
             &*self.state.secret,
         );
-        debug!(epoch=?epoch, "System transaction to advance epoch: {:?}", advance_epoch_tx);
+        debug!(
+            ?epoch,
+            "System transaction to advance epoch: {:?}", advance_epoch_tx
+        );
         // Add the signed transaction to the store.
         self.state
             .set_transaction_lock(&[], advance_epoch_tx.clone())
@@ -154,13 +162,16 @@ where
                 },
                 Err(err) => err,
             };
-            warn!(epoch=?epoch, "Error when processing advance epoch transaction: {:?}", err);
+            warn!(
+                ?epoch,
+                "Error when processing advance epoch transaction: {:?}", err
+            );
             tokio::time::sleep(WAIT_BETWEEN_EPOCH_TX_QUERY_RETRY).await;
         }
 
         // Resume the validator to start accepting transactions for the new epoch.
-        self.state.unhalt_validator()?;
-        info!(epoch=?epoch, "Validator unhalted. Epoch change finished");
+        self.state.unhalt_validator();
+        info!(?epoch, "Validator unhalted. Epoch change finished");
         Ok(())
     }
 

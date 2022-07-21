@@ -686,6 +686,19 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 
         Ok(())
     }
+
+    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
+    where
+        T: Signable<Vec<u8>>,
+    {
+        let mut obligation = VerificationObligation::default();
+        let mut message = Vec::new();
+        data.write(&mut message);
+        let message_index = obligation.add_message(message);
+        self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
+        obligation.verify_all()?;
+        Ok(())
+    }
 }
 
 mod private {
