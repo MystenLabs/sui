@@ -14,6 +14,7 @@ import { thunkExtras } from '_store/thunk-extras';
 
 import './styles/global.scss';
 import '_font-icons/output/sui-icons.scss';
+import 'bootstrap-icons/font/bootstrap-icons.scss';
 
 async function init() {
     if (process.env.NODE_ENV === 'development') {
