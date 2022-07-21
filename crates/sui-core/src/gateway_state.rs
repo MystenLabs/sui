@@ -48,6 +48,7 @@ use sui_json_rpc_types::{
     SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
     TransactionResponse, TransferObjectParams,
 };
+use sui_types::error::SuiError::ConflictingTransaction;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
@@ -537,9 +538,32 @@ where
         .await?;
 
         let owned_objects = input_objects.filter_owned_objects();
-        self.set_transaction_lock(&owned_objects, transaction.clone())
+        if let Err(err) = self
+            .set_transaction_lock(&owned_objects, transaction.clone())
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
-            .await?;
+            .await
+        {
+            // This is a temporary solution to get objects out of locked state.
+            // When we failed to execute a transaction due to objects locked by a previous transaction,
+            // we should first try to finish executing the previous transaction. If that failed,
+            // we should just reset the locks.
+            match err {
+                ConflictingTransaction {
+                    pending_transaction,
+                } => {
+                    debug!(tx_digest=?pending_transaction, "Objects locked by a previous transaction, re-executing the previous transaction");
+                    if self.retry_pending_tx(pending_transaction).await.is_err() {
+                        self.store.reset_transaction_lock(&owned_objects).await?;
+                    }
+                    self.set_transaction_lock(&owned_objects, transaction.clone())
+                        .instrument(tracing::trace_span!("db_set_transaction_lock"))
+                        .await?;
+                }
+                _ => {
+                    return Err(err.into());
+                }
+            }
+        }
 
         let exec_result = self
             .execute_transaction_impl_inner(input_objects, transaction)
@@ -550,6 +574,15 @@ where
             self.store.reset_transaction_lock(&owned_objects).await?;
         }
         exec_result
+    }
+
+    async fn retry_pending_tx(&self, digest: TransactionDigest) -> Result<(), anyhow::Error> {
+        let tx = self
+            .store
+            .get_transaction(&digest)?
+            .ok_or(SuiError::TransactionNotFound { digest })?;
+        self.execute_transaction(tx).await?;
+        Ok(())
     }
 
     async fn download_object_from_authorities(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
