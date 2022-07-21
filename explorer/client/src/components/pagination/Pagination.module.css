@@ -49,6 +49,10 @@ button.gone {
     @apply mt-2 sm:grid sm:grid-cols-12 text-center sm:text-left;
 }
 
+.rhs > div {
+    @apply capitalize text-sui-grey-75 text-sm mx-auto mt-2 sm:mt-0;
+}
+
 .footer > div:first-child {
     @apply inline-block sm:block sm:col-span-8 sm:self-center;
 }

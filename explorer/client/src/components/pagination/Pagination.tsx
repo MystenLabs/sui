@@ -3,7 +3,7 @@
 
 import { memo, useState, useCallback, useEffect } from 'react';
 
-import TabFooter from '../../components/tabs/TabFooter';
+import { numberSuffix } from '../../utils/numberUtil';
 
 import styles from './Pagination.module.css';
 
@@ -97,7 +97,14 @@ function Pagination({
 
     const RHSInfo = (
         <div className={styles.rhs}>
-            {stats && <TabFooter stats={stats} />}
+            {stats && (
+                <div>
+                    {typeof stats.count === 'number'
+                        ? numberSuffix(stats.count)
+                        : stats.count}{' '}
+                    {stats.stats_text}
+                </div>
+            )}
             {updateItemsPerPage && (
                 <select value={itemsPerPage} onChange={pageLengthChange}>
                     {NUMBER_OF_TX_PER_PAGE_OPTIONS.map((item) => (
