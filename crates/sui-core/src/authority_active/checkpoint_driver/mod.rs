@@ -26,16 +26,15 @@ use sui_types::{
 };
 use tokio::time::Instant;
 
-use crate::epoch::reconfiguration::Reconfigurable;
+use futures::stream::StreamExt;
+
 use crate::{
-    authority::AuthorityState,
     authority_aggregator::{AuthorityAggregator, ReduceOutput},
     authority_client::AuthorityAPI,
     checkpoints::CheckpointStore,
-    node_sync::NodeSyncState,
+    epoch::reconfiguration::Reconfigurable,
 };
 
-use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::committee::{Committee, StakeUnit};
 use tracing::{debug, error, info, warn};
 
@@ -649,13 +648,25 @@ where
         let (past, contents) =
             get_one_checkpoint_with_contents(net.clone(), seq, &available_authorities).await?;
 
-        sync_checkpoint_certs(
-            state.clone(),
-            active_authority.node_sync_store.clone(),
-            net.clone(),
-            &contents,
-        )
-        .await?;
+        let errors = active_authority
+            .node_sync_handle()
+            .sync_checkpoint(&contents)
+            .zip(futures::stream::iter(contents.iter()))
+            .filter_map(|(r, digests)| async move {
+                r.map_err(|e| {
+                    info!(?digests, "failed to execute digest from checkpoint: {}", e);
+                    e
+                })
+                .err()
+            })
+            .collect::<Vec<SuiError>>()
+            .await;
+
+        if !errors.is_empty() {
+            let error = "Failed to sync transactions in checkpoint".to_string();
+            error!(?seq, "{}", error);
+            return Err(SuiError::CheckpointingError { error });
+        }
 
         checkpoint_db.lock().process_new_checkpoint_certificate(
             &past,
@@ -667,20 +678,6 @@ where
     }
 
     Ok(())
-}
-
-/// Fetch and execute all certificates in the checkpoint.
-async fn sync_checkpoint_certs<A>(
-    state: Arc<AuthorityState>,
-    node_sync_store: Arc<NodeSyncStore>,
-    net: Arc<AuthorityAggregator<A>>,
-    contents: &CheckpointContents,
-) -> SuiResult
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    let sync = NodeSyncState::new(state, net, node_sync_store);
-    sync.sync_checkpoint(contents).await
 }
 
 pub async fn get_one_checkpoint_with_contents<A>(

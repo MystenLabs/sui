@@ -4,12 +4,13 @@
 use std::sync::Arc;
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::{debug, info};
-use typed_store::Map;
 
 use crate::authority::AuthorityStore;
 use crate::authority_client::AuthorityAPI;
 
-use super::{gossip::LocalCertificateHandler, ActiveAuthority};
+use futures::{stream, StreamExt};
+
+use super::ActiveAuthority;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -74,54 +75,21 @@ async fn execute_pending<A>(active_authority: &ActiveAuthority<A>) -> SuiResult<
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let _committee = active_authority.state.committee.load().clone();
-    let net = active_authority.net.load().clone();
-
     // Get the pending transactions
-    let pending_transactions = active_authority.state.database.get_pending_certificates()?;
+    let pending_transactions = active_authority.state.database.get_pending_digests()?;
 
-    // Get all the actual certificates mapping to these pending transactions
-    let certs = active_authority
-        .state
-        .database
-        .certificates
-        .multi_get(pending_transactions.iter().map(|(_, d)| *d))?;
+    let sync_handle = active_authority.node_sync_handle();
 
-    // Zip seq, digest with certs. Note the cert must exist in the DB
-    let cert_seq: Vec<_> = pending_transactions
-        .iter()
-        .zip(certs.iter())
-        .map(|((i, d), c)| (i, d, c.as_ref().expect("certificate must exist")))
-        .collect();
-
-    let local_handler = LocalCertificateHandler {
-        state: active_authority.state.clone(),
-    };
-
-    // TODO: implement properly efficient execution for the block of transactions.
-    let mut executed = vec![];
-    for (i, d, c) in cert_seq {
-        // Only execute if not already executed.
-        if active_authority.state.database.effects_exists(d)? {
-            executed.push(*i);
-            continue;
-        }
-
-        debug!(digest=?d, "Pending execution for certificate.");
-
-        // Sync and Execute with local authority state
-        net.sync_certificate_to_authority_with_timeout_inner(
-            c.clone(),
-            active_authority.state.name,
-            &local_handler,
-            tokio::time::Duration::from_secs(10),
-            10,
-        )
-        .await?;
-
-        // Remove from the execution list
-        executed.push(*i);
-    }
+    // Send them for execution
+    let executed = sync_handle
+        // map to extract digest
+        .handle_execution_request(pending_transactions.iter().map(|(_, digest)| *digest))
+        // zip results back together with seq
+        .zip(stream::iter(pending_transactions.iter()))
+        // filter out errors
+        .filter_map(|(result, (seq, _))| async move { result.ok().map(|_| seq) })
+        .collect()
+        .await;
 
     // Now update the pending store.
     active_authority

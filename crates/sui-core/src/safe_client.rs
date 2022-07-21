@@ -45,8 +45,8 @@ impl<C> SafeClient<C> {
     // Here we centralize all checks for transaction info responses
     fn check_transaction_response(
         &self,
-        digest: TransactionDigest,
-        effects_digest: Option<TransactionEffectsDigest>,
+        digest: &TransactionDigest,
+        effects_digest: Option<&TransactionEffectsDigest>,
         response: &TransactionInfoResponse,
     ) -> SuiResult {
         if let Some(signed_transaction) = &response.signed_transaction {
@@ -61,7 +61,7 @@ impl<C> SafeClient<C> {
             );
             // Check it's the right transaction
             fp_ensure!(
-                signed_transaction.digest() == &digest,
+                signed_transaction.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -73,7 +73,7 @@ impl<C> SafeClient<C> {
             certificate.verify(&self.committee)?;
             // Check it's the right transaction
             fp_ensure!(
-                certificate.digest() == &digest,
+                certificate.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -92,7 +92,7 @@ impl<C> SafeClient<C> {
             );
             // Checks it concerns the right tx
             fp_ensure!(
-                signed_effects.effects.transaction_digest == digest,
+                signed_effects.effects.transaction_digest == *digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -297,7 +297,7 @@ where
             .authority_client
             .handle_transaction(transaction)
             .await?;
-        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
@@ -315,7 +315,7 @@ where
             .handle_certificate(certificate)
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
@@ -357,7 +357,7 @@ where
             .handle_transaction_info_request(request)
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, None, &transaction_info) {
+        if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
             self.report_client_error(err.clone());
             return Err(err);
         }
@@ -367,18 +367,15 @@ where
     /// Handle Transaction + Effects information requests for this account.
     pub async fn handle_transaction_and_effects_info_request(
         &self,
-        digests: &ExecutionDigests,
+        digest: &TransactionDigest,
+        effects_digest: Option<&TransactionEffectsDigest>,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let digest = digests.transaction;
-        let effects_digest = digests.effects;
-
         let transaction_info = self
             .authority_client
-            .handle_transaction_info_request(digest.into())
+            .handle_transaction_info_request((*digest).into())
             .await?;
 
-        if let Err(err) =
-            self.check_transaction_response(digest, Some(effects_digest), &transaction_info)
+        if let Err(err) = self.check_transaction_response(digest, effects_digest, &transaction_info)
         {
             self.report_client_error(err.clone());
             return Err(err);
