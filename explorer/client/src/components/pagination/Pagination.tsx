@@ -170,7 +170,7 @@ function Pagination({
 
     if (finalPageNo <= 5) {
         return (
-            <div className={styles.footer}>
+            <div className={styles.desktopfooter}>
                 <div>
                     {BackButton}
                     {Array(finalPageNo)
@@ -273,6 +273,7 @@ function Pagination({
                 {BackButton}
                 {NextButton}
             </div>
+            <div className={styles.rhs}>{Stats}</div>
         </div>
     );
 
