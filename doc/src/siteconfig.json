@@ -30,8 +30,9 @@
             "external": true
           },
           {
-            "title": "Prototypes",
-            "link": "/explore/prototypes"
+            "title": "Examples",
+            "link": "https://examples.sui.io/"
+            "external": true
           }
         ]
       },
