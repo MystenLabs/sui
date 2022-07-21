@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use ed25519_dalek::Sha512;
 use rand::Rng;
+use sha2::Sha512;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Item([u8; 8]);

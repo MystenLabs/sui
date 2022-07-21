@@ -114,24 +114,6 @@ where
         }
     }
 }
-/// DeserializeAs support for Signature
-impl<'de, R, E> DeserializeAs<'de, ed25519_dalek::Signature> for Readable<E, R>
-where
-    R: DeserializeAs<'de, ed25519_dalek::Signature>,
-    E: DeserializeAs<'de, Vec<u8>>,
-{
-    fn deserialize_as<D>(deserializer: D) -> Result<ed25519_dalek::Signature, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let value = E::deserialize_as(deserializer)?;
-            ed25519_dalek::Signature::from_bytes(&value).map_err(to_custom_error::<'de, D, _>)
-        } else {
-            R::deserialize_as(deserializer)
-        }
-    }
-}
 
 /// DeserializeAs support for AccountAddress
 impl<'de, R, E> DeserializeAs<'de, AccountAddress> for Readable<E, R>
