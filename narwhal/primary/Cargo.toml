@@ -48,7 +48,7 @@ mockall = "0.11.1"
 node = { path = "../node" }
 tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
-tracing-test = "0.2.2"
+tracing-test = "0.2.3"
 worker = { path = "../worker" }
 async-trait = "0.1.56"
 executor = { path = "../executor" }
