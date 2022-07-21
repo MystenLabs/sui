@@ -884,7 +884,7 @@ From the result, we can see three new coins were created in the transaction.
 
 The genesis state of the Sui platform includes Move code that is
 immediately ready to be called from Sui CLI. Please see our
-[Move developer documentation](move.md#first-look-at-move-source-code)
+[Move developer documentation](move/index.md#first-look-at-move-source-code)
 for the first look at Move source code and a description of the
 following function we will be calling in this tutorial:
 
@@ -1019,14 +1019,14 @@ id: 0x471c8e241d0473c34753461529b70f9c4ed3151b[1]
 
 In order for user-written code to be available in Sui, it must be
 *published* to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
-Please see the [Move developer documentation](move.md) for a
-description on how to [write a simple Move code package](move.md#writing-a-package),
+Please see the [Move developer documentation](move/index.md) for a
+description on how to [write a simple Move code package](move/write-package.md),
 which we can publish using Sui client's `publish` command.
 
 The publish command
 requires us to specify a directory where the user-defined package lives.
 It's the path to the `my_move_package` as per the
-[package creation description](move.md#writing-a-package), a gas
+[package creation description](move/write-package.md), a gas
 object that will be used to pay for publishing the package (we use the
 same gas object we used to pay for the function call in the
 [Calling Move code](#calling-move-code)) section, and gas budget to put
@@ -1093,7 +1093,7 @@ Another object created as a result of package publishing is a
 user-defined object (of type `Forge`) crated inside initializer
 function of the (only) module included in the published package - see
 the part of Move developer documentation concerning [module
-initializers](move.md#module-initializers) for more details on module
+initializers](move/debug-publish.md#module-initializers) for more details on module
 initializers.
 
 Finally, we see that the gas object that was used to pay for

@@ -67,7 +67,7 @@ For this reason, users are encouraged to operate on their assets using smart con
 they trust have audited, and understand the logic they define for operations on their assets. Sui smart contracts are 
 defined as immutable assets to allow third parties to audit them and also prevent their modification to increase assurance. 
 The Move smart contract language that Sui uses is designed with ease of audit and verification in mind. You may be 
-interested in our introduction to [Smart Contracts in Move](../build/move.md).
+interested in our introduction to [Smart Contracts in Move](../build/move/index.md).
 
 Shared assets allow multiple users to operate on them through transactions; that may include some of their owned assets
 as well as one or more shared assets. These shared assets represent data and logic used to implement protocols that mediate
