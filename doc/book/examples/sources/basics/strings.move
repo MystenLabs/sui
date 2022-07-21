@@ -5,7 +5,7 @@ module examples::strings {
     use sui::object::Info;
     use sui::tx_context::{Self, TxContext};
 
-    // Use this dependency to get a type wrapper for UTF8 Strings
+    // Use this dependency to get a type wrapper for UTF-8 strings
     use sui::utf8::{Self, String};
 
     /// A dummy Object that holds a String type

@@ -1,6 +1,6 @@
 [book]
 title = "Sui Move by Example"
-description = "Handy collection of Examples for Sui blockchain. Made with love by MystenLabs"
+description = "Handy collection of examples for Sui blockchain, made with love by Mysten Labs."
 authors = ["damirka"]
 language = "en"
 multilingual = false
