@@ -16,12 +16,12 @@ use sui_sdk::{
     json::SuiJsonValue,
     types::{
         base_types::{ObjectID, SuiAddress},
+        crypto::Signature,
         id::Info,
+        messages::Transaction,
     },
     SuiClient,
 };
-use sui_types::crypto::SuiSignature;
-use sui_types::messages::Transaction;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

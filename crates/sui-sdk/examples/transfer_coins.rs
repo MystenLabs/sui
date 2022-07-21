@@ -2,11 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
-use sui_sdk::crypto::SuiKeystore;
-use sui_sdk::types::base_types::{ObjectID, SuiAddress};
-use sui_sdk::SuiClient;
-use sui_types::crypto::SuiSignature;
-use sui_types::messages::Transaction;
+use sui_sdk::{
+    crypto::SuiKeystore,
+    types::{
+        base_types::{ObjectID, SuiAddress},
+        crypto::Signature,
+        messages::Transaction,
+    },
+    SuiClient,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
