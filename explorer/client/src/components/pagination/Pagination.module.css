@@ -67,6 +67,8 @@ button.gone {
     @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block;
 }
 
+/* Mobile */
+
 .mobiletoprow {
     @apply sm:hidden block grid grid-cols-6 my-2;
 }
