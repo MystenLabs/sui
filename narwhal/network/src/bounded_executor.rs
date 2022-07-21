@@ -8,7 +8,7 @@
 //! concurrently when spawned through this executor, defined by the initial
 //! `capacity`.
 
-use futures::future::{Future, FutureExt};
+use futures::{future::Future, FutureExt};
 use std::sync::Arc;
 use tokio::{
     runtime::Handle,
@@ -60,6 +60,18 @@ impl BoundedExecutor {
         }
     }
 
+    // Acquires a permit with the semaphore, first gracefully,
+    // then queuing after logging that we're out of capacity.
+    async fn acquire_permit(&self) -> OwnedSemaphorePermit {
+        match self.semaphore.clone().try_acquire_owned() {
+            Ok(p) => p,
+            Err(_) => {
+                info!("concurrent task limit reached, waiting...");
+                self.semaphore.clone().acquire_owned().await.unwrap()
+            }
+        }
+    }
+
     /// Spawn a [`Future`] on the `BoundedExecutor`. This function is async and
     /// will block if the executor is at capacity until one of the other spawned
     /// futures completes. This function returns a [`JoinHandle`] that the caller
@@ -69,13 +81,7 @@ impl BoundedExecutor {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let permit = match self.semaphore.clone().try_acquire_owned() {
-            Ok(p) => p,
-            Err(_) => {
-                info!("concurrent task limit reached, waiting...");
-                self.semaphore.clone().acquire_owned().await.unwrap()
-            }
-        };
+        let permit = self.acquire_permit().await;
 
         self.spawn_with_permit(f, permit)
     }
@@ -106,11 +112,33 @@ impl BoundedExecutor {
         F::Output: Send + 'static,
     {
         // Release the permit back to the semaphore when this task completes.
-        let f = f.map(move |ret| {
+        let f = Self::with_permit(f, spawn_permit);
+        self.executor.spawn(f)
+    }
+
+    /// Returns a [`Future`] that complies with the `BoundedExecutor`. This function is async and
+    /// will block if the executor is at capacity, until one of the other spawned
+    /// futures completes.
+    pub async fn run<F>(&self, f: F) -> F::Output
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let permit = self.acquire_permit().await;
+        Self::with_permit(f, permit).await
+    }
+
+    // Equips a future with a final step that drops the held semaphore permit
+    async fn with_permit<F>(f: F, spawn_permit: OwnedSemaphorePermit) -> F::Output
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        f.map(|ret| {
             drop(spawn_permit);
             ret
-        });
-        self.executor.spawn(f)
+        })
+        .await
     }
 }
 
