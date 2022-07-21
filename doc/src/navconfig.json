@@ -112,8 +112,27 @@
         "fileName": "build/install"
       },
       {
-        "label": "Write Smart Contracts with Move",
-        "fileName": "build/move"
+        "label": "Create Smart Contracts with Move",
+        "fileName": "build/move/index",
+        "title": "Create Smart Contracts with Move",
+        "items": [
+          {
+            "label": "Write Move Packages",
+            "fileName": "build/move/write-package"
+          },
+          {
+            "label": "Build and Test Move Packages",
+            "fileName": "build/move/build-test"
+          },
+          {
+            "label": "Debug and Publish Move Packages",
+            "fileName": "build/move/debug-publish"
+          },
+          {
+            "label": "Use Sui Move Library",
+            "fileName": "build/move/sui-move-library"
+          }
+        ]
       },
       {
         "label": "Use Sui CLI",
