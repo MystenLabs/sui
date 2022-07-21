@@ -94,7 +94,3 @@ section .codeview pre {
 .modulewraper nav ul {
     @apply mt-3 md:mt-1 mx-0 px-0 justify-start;
 }
-
-.modulesfooter {
-    @apply flex justify-items-start md:justify-between text-[#636870] text-sm items-center;
-}

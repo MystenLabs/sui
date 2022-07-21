@@ -25,6 +25,11 @@ function TxModuleViewWrapper({ data }: { data: TxModules }) {
         setModulesPageNumber(modulesPageNumber);
     }, [modulesPageNumber]);
 
+    const stats = {
+        stats_text: 'total modules',
+        count: totalModulesCount,
+    };
+
     return (
         <div className={styles.modulewraper}>
             <h3 className={styles.txtitle}>Modules </h3>
@@ -41,17 +46,13 @@ function TxModuleViewWrapper({ data }: { data: TxModules }) {
                     ))}
             </div>
             {totalModulesCount > numOfMudulesToShow && (
-                <div className={styles.modulesfooter}>
-                    <Pagination
-                        totalItems={totalModulesCount}
-                        itemsPerPage={numOfMudulesToShow}
-                        currentPage={modulesPageNumber}
-                        onPagiChangeFn={setModulesPageNumber}
-                    />
-                    <div className={styles.viewmore}>
-                        {totalModulesCount} Total Modules
-                    </div>
-                </div>
+                <Pagination
+                    totalItems={totalModulesCount}
+                    itemsPerPage={numOfMudulesToShow}
+                    currentPage={modulesPageNumber}
+                    onPagiChangeFn={setModulesPageNumber}
+                    stats={stats}
+                />
             )}
         </div>
     );
