@@ -19,5 +19,6 @@ Here is our recommended workflow to interact with Sui:
 1. Build dApps:
    1. [Use](../build/json-rpc.md) *Sui RPC Server and JSON-RPC API* to interact with a local Sui network.
    1. [Employ](../build/sui-json.md) *SuiJSON format* to align JSON inputs more closely with Move call arguments.
+1. [Run](../build/fullnode.md) a Sui Fullnode and [subscribe](../build/pubsub.md) to events.
 
 Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
