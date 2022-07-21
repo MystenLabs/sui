@@ -3,8 +3,8 @@
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
-    struct R has key { id: id.VersionedID }
+    import 0x2.object;
+    struct R has key { info: object.Info }
 
     no(addr: address) acquires R {
         label l0:
@@ -21,8 +21,8 @@ module 0x0.m {
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
-    struct R<phantom T> has key { id: id.VersionedID }
+    import 0x2.object;
+    struct R<phantom T> has key { info: object.Info }
 
     no<T>(addr: address) acquires R {
         label l0:

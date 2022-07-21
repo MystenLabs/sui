@@ -3,7 +3,7 @@
     "title": "QUICK LINKS",
     "items": [
       {
-        "label": "DevNet",
+        "label": "Devnet",
         "link": "explore/devnet"
       },
       {
@@ -26,10 +26,6 @@
           {
             "label": "Sui Glossary",
             "fileName": "learn/sui-glossary"
-          },
-          {
-            "label": "Sui Compared to Other Blockchains",
-            "fileName": "learn/sui-compared"
           },
           {
             "label": "Why Move?",
@@ -56,6 +52,10 @@
         "title": "How Sui Works",
         "items": [
           {
+            "label": "Sui Compared to Other Blockchains",
+            "fileName": "learn/sui-compared"
+          },
+          {
             "label": "Manage Objects",
             "fileName": "build/objects"
           },
@@ -64,11 +64,15 @@
             "fileName": "build/transactions"
           },
           {
+            "label": "Create Single-Writer Apps",
+            "fileName": "learn/single-writer-apps"
+          },
+          {
             "label": "Understand Validators",
             "fileName": "learn/architecture/validators"
           },
           {
-            "label": "Sui Consensus Engine",
+            "label": "Employ Consensus Engine",
             "fileName": "learn/architecture/consensus"
           }
         ]
@@ -160,6 +164,10 @@
       }
     ],
     "explore": [
+      {
+        "label": "Wallet in Browser",
+        "fileName": "explore/wallet-browser"
+      },
       {
         "label": "DevNet",
         "fileName": "explore/devnet"

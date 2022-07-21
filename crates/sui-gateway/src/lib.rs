@@ -3,17 +3,18 @@
 
 use crate::config::GatewayConfig;
 use anyhow::anyhow;
+use prometheus::Registry;
 use std::path::Path;
 use std::sync::Arc;
 use sui_config::PersistedConfig;
-use sui_core::gateway_state::{GatewayClient, GatewayMetrics, GatewayState};
+use sui_core::gateway_state::{GatewayClient, GatewayState};
 
 pub mod config;
 pub mod rpc_gateway_client;
 
 pub fn create_client(
     config_path: &Path,
-    gateway_metrics: GatewayMetrics,
+    prometheus_registry: &Registry,
 ) -> Result<GatewayClient, anyhow::Error> {
     let config: GatewayConfig = PersistedConfig::read(config_path).map_err(|e| {
         anyhow!(
@@ -28,6 +29,6 @@ pub fn create_client(
         config.db_folder_path,
         committee,
         authority_clients,
-        gateway_metrics,
+        prometheus_registry,
     )?))
 }

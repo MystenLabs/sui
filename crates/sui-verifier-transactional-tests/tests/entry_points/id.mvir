@@ -6,12 +6,12 @@
 //# publish
 module 0x0.m {
     import 0x2.tx_context;
-    import 0x2.id;
+    import 0x2.object;
 
     public entry yes<T>(
-        l0: id.ID,
-        l1: vector<id.ID>,
-        l2: vector<vector<id.ID>>,
+        l0: object.ID,
+        l1: vector<object.ID>,
+        l2: vector<vector<object.ID>>,
         ctx: &mut tx_context.TxContext,
     ) {
         label l0:

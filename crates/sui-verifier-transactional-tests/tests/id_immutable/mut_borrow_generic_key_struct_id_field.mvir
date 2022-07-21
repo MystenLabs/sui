@@ -3,15 +3,15 @@
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
+    import 0x2.object;
 
     struct Foo<T> has key {
-        id: id.VersionedID,
+        info: object.Info,
     }
 
     foo(f: Self.Foo<u64>) {
         label l0:
-        _ = &mut (&mut f).Foo<u64>::id;
+        _ = &mut (&mut f).Foo<u64>::info;
         abort 0;
     }
 

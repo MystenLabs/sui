@@ -24,17 +24,17 @@ module.exports = {
                 ],
                 pathGroups: [
                     {
+                        pattern: '{.,..,_*}/**/*.?(s)css',
+                        group: 'type',
+                        position: 'after',
+                    },
+                    {
                         pattern: '_*',
                         group: 'internal',
                     },
                     {
                         pattern: '_*/**',
                         group: 'internal',
-                    },
-                    {
-                        pattern: '{.,..}/**/*.?(s)css',
-                        group: 'type',
-                        position: 'after',
                     },
                 ],
                 pathGroupsExcludedImportTypes: ['builtin', 'object', 'type'],

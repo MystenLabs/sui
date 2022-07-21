@@ -81,7 +81,7 @@ We recommend the following minimum hardware requirements for running a fullnode:
 
 Storage requirements will vary based on various factors (age of the chain,
 transaction rate, etc) although we don't anticipate running a fullnode on
-devnet will require more than 50 GBs today given it is reset upon each
+Devnet will require more than 50 GBs today given it is reset upon each
 release roughly every two weeks.
 
 ### Software requirements
@@ -122,9 +122,13 @@ source.
 
 Follow the instructions in the
 [Fullnode Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme)
-to run a Sui fullnode using Docker.
+to run a Sui fullnode using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
 ### Building from source
+
+Remember to install the required tools in your environment as
+outlined in the [Prerequisites](../build/install.md#prerequisites) section if you
+haven't already. Then:
 
 1. Set up your fork of the Sui repository:
     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
@@ -156,7 +160,7 @@ to run a Sui fullnode using Docker.
    ```
 1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet by clicking that link or by running the following in your
+   state for Devnet by clicking that link or by running the following in your
    terminal:
     ```shell
     $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
@@ -213,8 +217,16 @@ Note the default metrics port is 9184 yet configurable in your `fullnode.yaml` f
 
 Whenever a new release is deployed to `devnet`, the blockchain state is
 typically wiped clean. In order to have your fullnode continue to properly
-synchronize with the new state of devnet, you'll need to follow a few steps
+synchronize with the new state of Devnet, you'll need to follow a few steps
 based on how you originally set up your node. See below.
+
+## With Docker Compose
+
+Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment),
+namely by running the command:
+```shell
+$ docker-compose down --volumes
+```
 
 ### Built from source
 
@@ -240,7 +252,7 @@ Source](#building-from-source), update your fullnode as follows:
     ```
 1. Download the latest
    [`genesis`](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob)
-   state for devnet as described above.
+   state for Devnet as described above.
 1. Update your `fullnode.yaml` configuration file if needed.
 1. Restart your Sui fullnode:
     ```shell

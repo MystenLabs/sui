@@ -13,18 +13,24 @@ import st from './AccountAddress.module.scss';
 type AccountAddressProps = {
     className?: string;
     showLink?: boolean;
+    shorten?: boolean;
+    mode?: 'normal' | 'faded';
 };
 
-function AccountAddress({ className, showLink = true }: AccountAddressProps) {
-    const address = useAppSelector(
-        ({ account: { address } }) => address && `0x${address}`
-    );
-    const shortenAddress = useMiddleEllipsis(address || '', 20);
+function AccountAddress({
+    className,
+    showLink = true,
+    shorten = true,
+    mode = 'normal',
+}: AccountAddressProps) {
+    const address = useAppSelector(({ account: { address } }) => address);
+    const shortenAddress = useMiddleEllipsis(address, 10, 7);
+    const cpIconMode = mode === 'normal' ? 'normal' : 'highlighted';
     return address ? (
         <span className={cl(st.addressContainer, className)}>
-            <CopyToClipboard txt={address}>
-                <span className={st.address} title={address}>
-                    {shortenAddress}
+            <CopyToClipboard txt={address} mode={cpIconMode}>
+                <span className={cl(st.address, st[mode])} title={address}>
+                    {shorten ? shortenAddress : address}
                 </span>
             </CopyToClipboard>
             {showLink ? (

@@ -5,6 +5,7 @@
 use crate::authority::AuthorityState;
 use crate::authority::AuthorityStore;
 use crate::authority_aggregator::authority_aggregator_tests::*;
+use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
@@ -21,8 +22,8 @@ use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
-    Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -103,23 +104,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         state.handle_transaction(transaction).await
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        state.handle_confirmation_transaction(transaction).await
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        })
+        state.handle_certificate(certificate).await
     }
 
     async fn handle_account_info_request(
@@ -159,7 +149,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         let name = self.state.name;
         let mut items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
         let mut seq = 0;
-        let zero_batch = SignedBatch::new(AuthorityBatch::initial(), &*secret, name);
+        let zero_batch = SignedBatch::new(
+            self.state.epoch(),
+            AuthorityBatch::initial(),
+            &*secret,
+            name,
+        );
         items.push(Ok(BatchInfoResponseItem(UpdateItem::Batch(zero_batch))));
         let _ = actions.iter().for_each(|action| {
             match action {
@@ -177,7 +172,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
                     let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
                     last_batch = new_batch;
                     items.push({
-                        let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                        let item = SignedBatch::new(
+                            self.state.epoch(),
+                            last_batch.clone(),
+                            &*secret,
+                            name,
+                        );
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(item)))
                     });
                 }
@@ -207,7 +207,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
 pub async fn init_configurable_authorities(
     authority_action: Vec<BatchAction>,
 ) -> (
-    BTreeMap<AuthorityName, ConfigurableBatchActionClient>,
+    AuthorityAggregator<ConfigurableBatchActionClient>,
     Vec<Arc<AuthorityState>>,
     Vec<ExecutionDigests>,
 ) {
@@ -217,7 +217,12 @@ pub async fn init_configurable_authorities(
     for _i in 0..authority_action.len() {
         gas_objects.push(Object::with_owner_for_testing(addr1));
     }
-    let genesis_objects = authority_genesis_objects(authority_count, gas_objects.clone());
+    let genesis_objects = vec![
+        gas_objects.clone(),
+        gas_objects.clone(),
+        gas_objects.clone(),
+        gas_objects.clone(),
+    ];
 
     // Create committee.
     let mut key_pairs = Vec::new();
@@ -318,5 +323,10 @@ pub async fn init_configurable_authorities(
         .into_iter()
         .map(|(name, client)| (name, client.authority_client().clone()))
         .collect();
-    (authority_clients, states, executed_digests)
+    let net = AuthorityAggregator::new(
+        committee,
+        authority_clients,
+        AuthAggMetrics::new_for_tests(),
+    );
+    (net, states, executed_digests)
 }

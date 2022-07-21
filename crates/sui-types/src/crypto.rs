@@ -1,26 +1,28 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::base_types::{AuthorityName, SuiAddress};
+use crate::base_types::{decode_bytes_hex, AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::Base64;
 use crate::sui_serde::Readable;
+use crate::sui_serde::SuiBitmap;
 use anyhow::anyhow;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Keypair as DalekKeypair, Verifier};
-use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
+use narwhal_crypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
+use roaring::RoaringBitmap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use sha3::Sha3_256;
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
@@ -55,10 +57,7 @@ impl KeyPair {
     /// Make a Narwhal-compatible key pair from a Sui keypair.
     pub fn make_narwhal_keypair(&self) -> Ed25519KeyPair {
         let key = self.copy();
-        Ed25519KeyPair {
-            name: Ed25519PublicKey(key.key_pair.public),
-            secret: Ed25519PrivateKey(key.key_pair.secret),
-        }
+        key.key_pair.into()
     }
 }
 
@@ -155,13 +154,13 @@ impl AsRef<[u8]> for PublicKeyBytes {
     }
 }
 
-impl TryInto<dalek::PublicKey> for PublicKeyBytes {
+impl TryFrom<PublicKeyBytes> for dalek::PublicKey {
     type Error = SuiError;
 
-    fn try_into(self) -> Result<dalek::PublicKey, Self::Error> {
+    fn try_from(value: PublicKeyBytes) -> Result<Self, Self::Error> {
         // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
-        dalek::PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
+        dalek::PublicKey::from_bytes(value.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
     }
 }
 
@@ -182,6 +181,30 @@ impl std::fmt::Debug for PublicKeyBytes {
         let s = hex::encode(&self.0);
         write!(f, "k#{}", s)?;
         Ok(())
+    }
+}
+
+impl FromStr for PublicKeyBytes {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        decode_bytes_hex(s).map_err(Into::into)
+    }
+}
+
+impl signature::Verifier<Signature> for PublicKeyBytes {
+    fn verify(&self, message: &[u8], signature: &Signature) -> Result<(), signature::Error> {
+        // deserialize the signature
+        let signature = ed25519_dalek::Signature::from_bytes(signature.signature_bytes())
+            .map_err(|_| signature::Error::new())?;
+
+        let public_key =
+            dalek::PublicKey::from_bytes(self.as_ref()).map_err(|_| signature::Error::new())?;
+
+        // perform cryptographic signature check
+        public_key
+            .verify(message, &signature)
+            .map_err(|_| signature::Error::new())
     }
 }
 
@@ -482,17 +505,36 @@ impl PartialEq for AuthoritySignInfo {
 }
 
 impl AuthoritySignInfo {
-    pub fn add_to_verification_obligation(
+    pub fn add_to_verification_obligation<T>(
         &self,
+        data: &T,
         committee: &Committee,
         obligation: &mut VerificationObligation,
-        message_index: usize,
-    ) -> SuiResult<()> {
+    ) -> SuiResult<()>
+    where
+        T: Signable<Vec<u8>>,
+    {
+        let weight = committee.weight(&self.authority);
+        fp_ensure!(weight > 0, SuiError::UnknownSigner);
+
         obligation
             .public_keys
             .push(committee.public_key(&self.authority)?);
         obligation.signatures.push(self.signature.0);
+        let mut message = Vec::new();
+        data.write(&mut message);
+        let message_index = obligation.add_message(message);
         obligation.message_index.push(message_index);
+        Ok(())
+    }
+
+    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
+    where
+        T: Signable<Vec<u8>>,
+    {
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(data, committee, &mut obligation)?;
+        obligation.verify_all()?;
         Ok(())
     }
 }
@@ -503,10 +545,14 @@ impl AuthoritySignInfo {
 /// at least the quorum threshold (2f+1) of the committee; when STRONG_THRESHOLD is false,
 /// the quorum is valid when the total stake is at least the validity threshold (f+1) of
 /// the committee.
+#[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
-    pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    pub signatures: Vec<AuthoritySignature>,
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "SuiBitmap")]
+    pub signers_map: RoaringBitmap,
 }
 
 pub type AuthorityStrongQuorumSignInfo = AuthorityQuorumSignInfo<true>;
@@ -528,6 +574,66 @@ static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, P
 impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
 
 impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
+    pub fn new(epoch: EpochId) -> Self {
+        AuthorityQuorumSignInfo {
+            epoch,
+            signatures: vec![],
+            signers_map: RoaringBitmap::new(),
+        }
+    }
+
+    pub fn new_with_signatures(
+        epoch: EpochId,
+        mut signatures: Vec<(PublicKeyBytes, AuthoritySignature)>,
+        committee: &Committee,
+    ) -> SuiResult<Self> {
+        let mut map = RoaringBitmap::new();
+
+        signatures.sort_by_key(|(public_key, _)| *public_key);
+
+        for (pk, _) in &signatures {
+            map.insert(
+                committee
+                    .authority_index(pk)
+                    .ok_or(SuiError::UnknownSigner)? as u32,
+            );
+        }
+        let sigs: Vec<AuthoritySignature> = signatures.into_iter().map(|(_, sig)| sig).collect();
+
+        Ok(AuthorityQuorumSignInfo {
+            epoch,
+            signatures: sigs,
+            signers_map: map,
+        })
+    }
+
+    // This takes log(sig) time, do not use if not necessary
+    pub fn add_signature(
+        &mut self,
+        sig: AuthoritySignature,
+        pk: PublicKeyBytes,
+        committee: &Committee,
+    ) -> SuiResult<()> {
+        let index = committee
+            .authority_index(&pk)
+            .ok_or(SuiError::UnknownSigner)? as u32;
+        self.signers_map.insert(index);
+        self.signatures
+            .insert((self.signers_map.rank(index) - 1) as usize, sig);
+        Ok(())
+    }
+
+    pub fn authorities<'a>(
+        &'a self,
+        committee: &'a Committee,
+    ) -> impl Iterator<Item = SuiResult<&AuthorityName>> {
+        self.signers_map.iter().map(|i| {
+            committee
+                .authority_by_index(i)
+                .ok_or(SuiError::InvalidAuthenticator)
+        })
+    }
+
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
@@ -541,18 +647,26 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                 expected_epoch: committee.epoch()
             }
         );
+        fp_ensure!(
+            self.signatures.len() as u64 == self.signers_map.len(),
+            SuiError::InvalidAuthorityBitmap {
+                error: "Authority bitmap and signatures have different lengths".to_string()
+            }
+        );
 
         let mut weight = 0;
-        let mut used_authorities = HashSet::new();
 
         // Create obligations for the committee signatures
-        for (authority, signature) in self.signatures.iter() {
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
+        for signature in self.signatures.iter() {
+            obligation.signatures.push(signature.0);
+            obligation.message_index.push(message_index);
+        }
+
+        for authority_index in self.signers_map.iter() {
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or(SuiError::UnknownSigner)?;
+
             // Update weight.
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
@@ -561,8 +675,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
             obligation
                 .public_keys
                 .push(committee.public_key(authority)?);
-            obligation.signatures.push(signature.0);
-            obligation.message_index.push(message_index);
         }
 
         let threshold = if STRONG_THRESHOLD {
@@ -572,6 +684,19 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         };
         fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
 
+        Ok(())
+    }
+
+    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
+    where
+        T: Signable<Vec<u8>>,
+    {
+        let mut obligation = VerificationObligation::default();
+        let mut message = Vec::new();
+        data.write(&mut message);
+        let message_index = obligation.add_message(message);
+        self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
+        obligation.verify_all()?;
         Ok(())
     }
 }

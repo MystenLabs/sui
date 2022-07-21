@@ -8,6 +8,7 @@ import {
     getTransactionDigest,
     getTransactionKindName,
     getTransferObjectTransaction,
+    getTransferSuiTransaction,
     JsonRpcProvider,
 } from '@mysten/sui.js';
 
@@ -53,7 +54,8 @@ export const getDataOnTxDigests = (
                         const txn = txns[0];
                         const txKind = getTransactionKindName(txn);
                         const recipient =
-                            getTransferObjectTransaction(txn)?.recipient;
+                            getTransferObjectTransaction(txn)?.recipient ||
+                            getTransferSuiTransaction(txn)?.recipient;
 
                         return {
                             seq,
@@ -62,6 +64,7 @@ export const getDataOnTxDigests = (
                             txGas: getTotalGasUsed(txEff),
                             kind: txKind,
                             From: res.data.sender,
+                            timestamp_ms: txEff.timestamp_ms,
                             ...(recipient
                                 ? {
                                       To: recipient,

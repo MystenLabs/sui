@@ -15,7 +15,9 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
+    Registry,
 };
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
@@ -33,20 +35,19 @@ use sui_types::{
 };
 
 use crate::authority::ResolverWrapper;
+use crate::authority_aggregator::AuthAggMetrics;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI, query_helpers::QueryHelpers,
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
-use sui_json_rpc_api::rpc_types::{
+use sui_json_rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
     PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
     SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
     TransactionResponse, TransferObjectParams,
 };
-
-use crate::transaction_input_checker::InputObjects;
 
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
@@ -73,19 +74,11 @@ pub struct GatewayMetrics {
     total_tx_retries: IntCounter,
     shared_obj_tx: IntCounter,
     pub total_tx_certificates: IntCounter,
-    pub num_signatures: Histogram,
-    pub num_good_stake: Histogram,
-    pub num_bad_stake: Histogram,
     pub transaction_latency: Histogram,
 }
 
-// Override default Prom buckets for positive numbers in 0-50k range
-const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
-];
-
 impl GatewayMetrics {
-    pub fn new(registry: &prometheus::Registry) -> Self {
+    pub fn new(registry: &Registry) -> Self {
         Self {
             total_tx_processed: register_int_counter_with_registry!(
                 "total_tx_processed",
@@ -142,29 +135,6 @@ impl GatewayMetrics {
                 registry,
             )
             .unwrap(),
-            // It's really important to use the right histogram buckets for accurate histogram collection.
-            // Otherwise values get clipped
-            num_signatures: register_histogram_with_registry!(
-                "num_signatures_per_tx",
-                "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_good_stake: register_histogram_with_registry!(
-                "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_bad_stake: register_histogram_with_registry!(
-                "num_bad_stake_per_tx",
-                "Amount of bad stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
             transaction_latency: register_histogram_with_registry!(
                 "transaction_latency",
                 "Latency of execute_transaction_impl",
@@ -199,12 +169,14 @@ impl<A> GatewayState<A> {
         path: PathBuf,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        metrics: GatewayMetrics,
+        prometheus_registry: &Registry,
     ) -> SuiResult<Self> {
+        let gateway_metrics = GatewayMetrics::new(prometheus_registry);
+        let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         Self::new_with_authorities(
             path,
-            AuthorityAggregator::new(committee, authority_clients, metrics.clone()),
-            metrics,
+            AuthorityAggregator::new(committee, authority_clients, auth_agg_metrics),
+            gateway_metrics,
         )
     }
 
@@ -410,7 +382,8 @@ where
             .download_object_from_authorities(*object_id)
             .await?
             .into_object()?;
-        debug!(?object_id, ?object, "Fetched object from validators");
+        let obj_ref = object.compute_object_reference();
+        debug!(?object_id, ?obj_ref, "Fetched object from validators");
         Ok(object)
     }
 
@@ -508,13 +481,14 @@ where
 
         debug!(
             digest = ?tx_digest,
+            ?effects.effects,
             "Transaction completed successfully"
         );
 
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
             .effects
-            .mutated_and_created()
+            .all_mutated()
             .map(|(obj_ref, _)| *obj_ref)
             .collect();
         let mutated_objects = self
@@ -547,6 +521,12 @@ where
         transaction.verify()?;
 
         self.sync_input_objects_with_authorities(&transaction)
+            .await?;
+
+        // Getting the latest system state for gas information
+        // TODO: once we figure out a better way to sync system state and epoch information (like pubsub or epoch change callback)
+        // we don't need to download every time to get latest information like gas_price
+        self.download_object_from_authorities(SUI_SYSTEM_STATE_OBJECT_ID)
             .await?;
 
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
@@ -582,7 +562,7 @@ where
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }
-        debug!(?result, "Downloaded object from authorities");
+        debug!("Downloaded object from authorities: {}", result);
 
         Ok(result)
     }
@@ -636,14 +616,14 @@ where
         // latest objects.
         let mutated_objects = self.store.get_objects(
             &effects
-                .mutated_and_created()
+                .all_mutated()
                 .map(|((object_id, _, _), _)| *object_id)
                 .collect::<Vec<_>>(),
         )?;
         let mut updated_gas = None;
         let mut package = None;
         let mut created_objects = vec![];
-        for ((obj_ref, _), object) in effects.mutated_and_created().zip(mutated_objects) {
+        for ((obj_ref, _), object) in effects.all_mutated().zip(mutated_objects) {
             let object = object.ok_or(SuiError::InconsistentGatewayResult {
                 error: format!(
                     "Crated/Updated object doesn't exist in the store: {:?}",

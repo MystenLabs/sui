@@ -1,0 +1,41 @@
+{
+  "name": "@mysten/bcs",
+  "version": "0.2.0",
+  "description": "BCS - Canonical Binary Serialization implementation for JavaScript",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "prepublish": "tsdx lint && tsdx build",
+    "build": "tsdx build",
+    "test": "tsdx test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mystenlabs/sui.git"
+  },
+  "keywords": [
+    "bcs",
+    "libra",
+    "diem",
+    "move",
+    "serialization",
+    "serde"
+  ],
+  "author": "Damir Shamanaev <damirka.ru@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mystenlabs/sui/issues"
+  },
+  "homepage": "https://github.com/mystenlabs/sui#readme",
+  "dependencies": {
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.0",
+    "tsdx": "^0.14.1"
+  }
+}

@@ -1,16 +1,33 @@
+@use '_values/colors';
+
 .address-container {
     display: inline-flex;
     flex-direction: row;
     align-items: center;
+    max-width: 100%;
 }
 
 .address {
-    font-size: 15px;
-    font-weight: 700;
-    color: #404040;
+    font-weight: 500;
+    overflow-wrap: break-word;
+    flex: 1;
+    min-width: 0;
+
+    &.normal {
+        color: colors.$gray-100;
+        opacity: 0.8;
+        font-size: 14px;
+    }
+
+    &.faded {
+        color: colors.$gray-70;
+        opacity: 1;
+        font-size: 13px;
+    }
 }
 
 .explorer-link {
-    color: inherit;
+    color: colors.$gray-60;
     margin-left: 5px;
+    font-size: 9px;
 }

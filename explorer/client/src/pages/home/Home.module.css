@@ -1,3 +1,7 @@
 div.home {
-    @apply bg-[#f8f8f8] min-h-screen;
+    @apply bg-white;
+}
+
+div.container {
+    @apply mx-auto grid md:grid-cols-2 grid-cols-1;
 }

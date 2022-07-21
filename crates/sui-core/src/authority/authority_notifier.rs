@@ -51,7 +51,6 @@ impl TransactionNotifier {
         self.low_watermark.load(Ordering::SeqCst)
     }
 
-    // TODO: Return a future instead so that the caller can await for.
     pub fn ticket_drained(&self) -> bool {
         self.inner.lock().high_watermark == self.low_watermark.load(Ordering::SeqCst)
     }

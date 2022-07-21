@@ -1,11 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
-import TxCountCard from '../../components/transaction-count/TxCountCard';
 import { NetworkContext } from '../../context';
 import {
     DefaultRpcClient as rpc,
@@ -27,7 +26,6 @@ function HomeStatic() {
     return (
         <div data-testid="home-page" id="home" className={styles.home}>
             <LastestTxCard count={count} />
-            <TxCountCard count={count} />
         </div>
     );
 }
@@ -74,9 +72,15 @@ function HomeAPI() {
         );
     }
     return (
-        <div data-testid="home-page" id="home" className={styles.home}>
-            <LastestTxCard count={results.count} />
-            <TxCountCard count={results.count} />
+        <div
+            data-testid="home-page"
+            id="home"
+            className={cl([styles.home, styles.container])}
+        >
+            <section className="left-item">
+                <LastestTxCard count={results.count} />
+            </section>
+            <section className="right-item"></section>
         </div>
     );
 }

@@ -1,9 +1,9 @@
 processed 2 tasks
 
 task 0 'run'. lines 7-9:
-Error: Transaction Effects Status: MiscellaneousError
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VmError, source: Some(VMError { major_status: LINKER_ERROR, sub_status: None, message: Some("Cannot find ModuleId { address: _, name: Identifier(\"object_basics\") } in data cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }) } }
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: LINKER_ERROR, sub_status: None, message: Some("Cannot find ModuleId { address: _, name: Identifier(\"object_basics\") } in data cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }) } }
 
 task 1 'run'. lines 10-10:
-Error: Transaction Effects Status: MiscellaneousError
+Error: Transaction Effects Status: Function Not Found.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'foo' in module sui::object_basics") } }

@@ -1,24 +1,30 @@
 .form {
-    @apply flex;
-}
-
-.searchbtn,
-.categorydropdown,
-select.categorydropdown > option {
-    @apply flex-initial font-sans text-xs border-none;
+    @apply flex bg-search-fill border-[1px] border-solid border-sui rounded-[6px] h-[2rem] px-[0.2vw] max-w-[500px];
 }
 
 .searchbtn {
-    @apply bg-sui hover:bg-suidark hover:text-white rounded-r-md cursor-pointer leading-8 mr-[1vw] sm:mr-[5vw] ml-0;
+    @apply flex-initial font-sans text-xs border-none bg-transparent cursor-pointer;
+}
+
+.searchicon {
+    @apply fill-sui-grey-65 hover:fill-offwhite leading-8 stroke-1 hover:stroke-2;
 }
 
 .disabled {
-    @apply bg-offblack hover:bg-offblack text-white cursor-text;
+    @apply bg-transparent text-offwhite cursor-text;
 }
 
-.searchtext {
-    @apply border-r-2 border-y-0 border-l-0 rounded-l-md
-    font-mono leading-8
-    flex-1 ml-[1vw] sm:ml-[5vw] w-[5rem]
-    text-xs mr-0 bg-offwhite pl-[1vw];
+.searchtextdesktop,
+.searchtextmobile {
+    @apply bg-transparent border-none font-mono leading-8
+    flex-1 w-[85%]
+    text-xs text-white;
+}
+
+.searchtextdesktop {
+    @apply hidden sm:block;
+}
+
+.searchtextmobile {
+    @apply sm:hidden block;
 }

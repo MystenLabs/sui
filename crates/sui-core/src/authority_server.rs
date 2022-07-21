@@ -14,6 +14,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use narwhal_crypto::traits::KeyPair;
+use prometheus::Registry;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_network::{
@@ -83,11 +85,10 @@ impl AuthorityServer {
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
         let consensus_adapter = ConsensusAdapter::new(
-            state.clone(),
             consensus_address,
             state.clone_committee(),
             tx_consensus_listener,
-            /* max_delay */ Duration::from_millis(5_000),
+            /* max_delay */ Duration::from_millis(20_000),
         );
 
         Self {
@@ -160,7 +161,11 @@ pub struct ValidatorService {
 impl ValidatorService {
     /// Spawn all the subsystems run by a Sui authority: a consensus node, a sui authority server,
     /// and a consensus listener bridging the consensus node and the sui authority.
-    pub async fn new(config: &NodeConfig, state: Arc<AuthorityState>) -> Result<Self> {
+    pub async fn new(
+        config: &NodeConfig,
+        state: Arc<AuthorityState>,
+        prometheus_registry: &Registry,
+    ) -> Result<Self> {
         let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
         let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
 
@@ -169,24 +174,26 @@ impl ValidatorService {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.key_pair().make_narwhal_keypair();
-        let consensus_name = consensus_keypair.name.clone();
+        let consensus_name = consensus_keypair.public().clone();
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
             consensus_keypair,
-            consensus_config.narwhal_committee().to_owned(),
+            config.genesis()?.narwhal_committee(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
             /* consensus */ true, // Indicate that we want to run consensus.
             /* execution_state */ state.clone(),
             /* tx_confirmation */ tx_consensus_to_sui,
+            prometheus_registry,
         )
         .await?;
         narwhal_node::Node::spawn_workers(
             consensus_name,
             /* ids */ vec![0], // We run a single worker with id '0'.
-            consensus_config.narwhal_committee().to_owned(),
+            config.genesis()?.narwhal_committee(),
             &consensus_store,
             consensus_config.narwhal_config().to_owned(),
+            prometheus_registry,
         );
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
@@ -199,7 +206,6 @@ impl ValidatorService {
 
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
-            state.clone(),
             consensus_config.address().to_owned(),
             state.clone_committee(),
             tx_sui_to_consensus.clone(),
@@ -218,7 +224,7 @@ impl ValidatorService {
                 /* consensus_address */ consensus_config.address().to_owned(),
                 /* tx_consensus_listener */ tx_sui_to_consensus,
                 rx_checkpoint_consensus_adapter,
-                /* checkpoint_locals */ checkpoint_store.lock().get_locals(),
+                /* checkpoint_locals */ checkpoint_store,
                 /* retry_delay */ Duration::from_millis(5_000),
                 /* max_pending_transactions */ 10_000,
             )
@@ -269,70 +275,62 @@ impl Validator for ValidatorService {
         Ok(tonic::Response::new(info))
     }
 
-    async fn confirmation_transaction(
+    async fn handle_certificate(
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut transaction = request.into_inner();
-
-        transaction
+        let mut certificate = request.into_inner();
+        // 1) Verify certificate
+        certificate
             .verify(&self.state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         //TODO This is really really bad, we should have different types for signature verified transactions
-        transaction.is_verified = true;
+        certificate.is_verified = true;
 
-        let tx_digest = transaction.digest();
+        // 2) Check idempotency
+        let digest = certificate.digest();
+        if let Some(response) = self
+            .state
+            .check_tx_already_executed(digest)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?
+        {
+            return Ok(tonic::Response::new(response));
+        }
+
+        // 3) If it's a shared object transaction and requires consensus, we need to do so.
+        // This will wait until either timeout or we have heard back from consensus.
+        if certificate.contains_shared_object()
+            && !self
+                .state
+                .transaction_shared_locks_exist(&certificate)
+                .await
+                .map_err(|e| tonic::Status::internal(e.to_string()))?
+        {
+            self.consensus_adapter
+                .submit(&ConsensusTransaction::UserTransaction(Box::new(
+                    certificate.clone(),
+                )))
+                .await
+                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        }
+
+        // 4) Execute the certificate.
+        let tx_digest = certificate.digest();
         let span = tracing::debug_span!(
-            "process_cert",
+            "execute_transaction",
             ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
+            tx_kind = certificate.data.kind_as_str()
         );
 
-        let confirmation_transaction = ConfirmationTransaction {
-            certificate: transaction,
-        };
-
-        let info = self
+        let response = self
             .state
-            .handle_confirmation_transaction(confirmation_transaction)
+            .handle_certificate(certificate)
             .instrument(span)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(info))
-    }
-
-    async fn consensus_transaction(
-        &self,
-        request: tonic::Request<ConsensusTransaction>,
-    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let transaction = request.into_inner();
-        let certificate = match transaction.clone() {
-            ConsensusTransaction::UserTransaction(certificate) => certificate,
-            _ => {
-                let error = SuiError::UnexpectedMessage;
-                return Err(tonic::Status::internal(error.to_string()));
-            }
-        };
-
-        // In some cases we can skip consensus for shared-object transactions: (i) we already executed
-        // the transaction, (ii) we already assigned locks to the transaction but failed to execute it.
-        // The later scenario happens when the authority missed some of the transaction's dependencies;
-        // we can thus try to re-execute it now.
-        let info = match self
-            .state
-            .try_skip_consensus(*certificate)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?
-        {
-            Some(info) => info,
-            None => self
-                .consensus_adapter
-                .submit(&transaction)
-                .await
-                .map_err(|e| tonic::Status::internal(e.to_string()))?,
-        };
-        Ok(tonic::Response::new(info))
+        Ok(tonic::Response::new(response))
     }
 
     async fn account_info(

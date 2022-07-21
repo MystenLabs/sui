@@ -81,6 +81,7 @@ export default class ApiProvider {
         this._apiFullNodeProvider = new JsonRpcProvider(
             getDefaultAPI(apiEnv).fullNode
         );
+        this._signer = null;
     }
 
     public get instance() {

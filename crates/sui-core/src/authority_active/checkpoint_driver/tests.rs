@@ -5,12 +5,12 @@ use crate::{
     authority_active::{checkpoint_driver::CheckpointProcessControl, ActiveAuthority},
     authority_client::LocalAuthorityClient,
     checkpoints::checkpoint_tests::TestSetup,
-    gateway_state::GatewayMetrics,
     safe_client::SafeClient,
 };
 
+use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
-use sui_types::messages::{ConfirmationTransaction, ExecutionStatus};
+use sui_types::messages::ExecutionStatus;
 
 use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 
@@ -30,18 +30,14 @@ async fn checkpoint_active_flow_happy_path() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
-        let _active_handle = tokio::task::spawn(async move {
-            let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
-                    inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
-                )
+        let inner_agg = aggregator.clone();
+        let active_state = Arc::new(
+            ActiveAuthority::new_with_ephemeral_storage(inner_state.authority.clone(), inner_agg)
                 .unwrap(),
-            );
-            active_state.spawn_checkpoint_process().await
-        });
+        );
+        let _active_handle = active_state
+            .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
+            .await;
     }
 
     let sender_aggregator = aggregator.clone();
@@ -108,13 +104,12 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
+                ActiveAuthority::new_with_ephemeral_storage(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );
@@ -124,7 +119,11 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
             // Spin the checkpoint service.
             active_state
-                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process_with_config(
+                    Default::default(),
+                    CheckpointMetrics::new_for_tests(),
+                    false,
+                )
                 .await;
         });
     }
@@ -143,7 +142,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
-                .handle_confirmation_transaction(ConfirmationTransaction::new(new_certificate))
+                .handle_certificate(new_certificate)
                 .await
                 .expect("Problem processing certificate");
 
@@ -202,13 +201,12 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
+                ActiveAuthority::new_with_ephemeral_storage(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );
@@ -218,7 +216,11 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
             // Spin the gossip service.
             active_state
-                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process_with_config(
+                    CheckpointProcessControl::default(),
+                    CheckpointMetrics::new_for_tests(),
+                    false,
+                )
                 .await;
         });
     }
@@ -237,7 +239,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
             let client: SafeClient<LocalAuthorityClient> =
                 sender_aggregator.authority_clients[sample_authority].clone();
             let _response = client
-                .handle_confirmation_transaction(ConfirmationTransaction::new(new_certificate))
+                .handle_certificate(new_certificate)
                 .await
                 .expect("Problem processing certificate");
 
@@ -296,22 +298,25 @@ async fn test_empty_checkpoint() {
 
     // Start active part of authority.
     for inner_state in authorities.clone() {
-        let clients = aggregator.clone_inner_clients();
+        let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_follower_store(
+                ActiveAuthority::new_with_ephemeral_storage(
                     inner_state.authority.clone(),
-                    clients,
-                    GatewayMetrics::new_for_tests(),
+                    inner_agg,
                 )
                 .unwrap(),
             );
 
             active_state.clone().spawn_execute_process().await;
 
-            // Spin the gossip service.
+            // Spawn the checkpointing service.
             active_state
-                .spawn_checkpoint_process_with_config(Some(CheckpointProcessControl::default()))
+                .spawn_checkpoint_process_with_config(
+                    CheckpointProcessControl::default(),
+                    CheckpointMetrics::new_for_tests(),
+                    false,
+                )
                 .await;
         });
     }

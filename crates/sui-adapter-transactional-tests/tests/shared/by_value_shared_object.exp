@@ -1,0 +1,25 @@
+processed 7 tasks
+
+task 1 'publish'. lines 8-28:
+created: object(103)
+written: object(102)
+
+task 2 'publish'. lines 30-38:
+created: object(105)
+written: object(104)
+
+task 3 'run'. lines 41-41:
+created: object(107)
+written: object(106)
+
+task 4 'view-object'. lines 43-43:
+Owner: Shared
+Contents: t2::o2::O2 {info: sui::object::Info {id: sui::object::ID {bytes: fake(107)}, version: 1u64}}
+
+task 5 'run'. lines 45-45:
+Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }
+
+task 6 'run'. lines 47-47:
+Error: Transaction Effects Status: Entry Argument Type Error. Error for argument at index 0: Immutable and shared objects cannot be passed by-value.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: EntryArgumentError(EntryArgumentError { argument_idx: 0, kind: InvalidObjectByValue }), source: Some("Immutable and shared objects cannot be passed by-value, violation found in argument 0") } }

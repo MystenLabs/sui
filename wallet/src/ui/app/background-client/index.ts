@@ -6,14 +6,18 @@ import { lastValueFrom, take } from 'rxjs';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { isPermissionRequests } from '_payloads/permissions';
+import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import { setPermissions } from '_redux/slices/permissions';
+import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type { SuiAddress } from '@mysten/sui.js';
+import type { SuiAddress, TransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type {
     GetPermissionRequests,
     PermissionResponse,
 } from '_payloads/permissions';
+import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
+import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { AppDispatch } from '_store';
 
 export class BackgroundClient {
@@ -28,7 +32,10 @@ export class BackgroundClient {
         this._initialized = true;
         this._dispatch = dispatch;
         this.createPortStream();
-        return this.sendGetPermissionRequests().then(() => undefined);
+        return Promise.all([
+            this.sendGetPermissionRequests(),
+            this.sendGetTransactionRequests(),
+        ]).then(() => undefined);
     }
 
     public sendPermissionResponse(
@@ -49,15 +56,40 @@ export class BackgroundClient {
     }
 
     public async sendGetPermissionRequests() {
-        const responseStream = this.sendMessage(
-            createMessage<GetPermissionRequests>({
-                type: 'get-permission-requests',
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<GetPermissionRequests>({
+                    type: 'get-permission-requests',
+                })
+            ).pipe(take(1))
+        );
+    }
+
+    public async sendTransactionRequestResponse(
+        txID: string,
+        approved: boolean,
+        txResult: TransactionResponse | undefined,
+        tsResultError: string | undefined
+    ) {
+        this.sendMessage(
+            createMessage<TransactionRequestResponse>({
+                type: 'transaction-request-response',
+                approved,
+                txID,
+                txResult,
+                tsResultError,
             })
         );
-        if (!responseStream) {
-            throw new Error('Failed to send get permissions request');
-        }
-        return lastValueFrom(responseStream.pipe(take(1)));
+    }
+
+    public async sendGetTransactionRequests() {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<GetTransactionRequests>({
+                    type: 'get-transaction-requests',
+                })
+            ).pipe(take(1))
+        );
     }
 
     private handleIncomingMessage(msg: Message) {
@@ -69,6 +101,8 @@ export class BackgroundClient {
         const { payload } = msg;
         if (isPermissionRequests(payload)) {
             this._dispatch(setPermissions(payload.permissions));
+        } else if (isGetTransactionRequestsResponse(payload)) {
+            this._dispatch(setTransactionRequests(payload.txRequests));
         }
     }
 
@@ -87,6 +121,10 @@ export class BackgroundClient {
     private sendMessage(msg: Message) {
         if (this._portStream?.connected) {
             return this._portStream.sendMessage(msg);
+        } else {
+            throw new Error(
+                'Failed to send message to background service. Port not connected.'
+            );
         }
     }
 }

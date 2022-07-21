@@ -3,11 +3,11 @@
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
+    import 0x2.object;
 
     struct Foo has key {
-        id: id.VersionedID,
-        other: id.VersionedID,
+        info: object.Info,
+        other: object.Info,
     }
 
     foo(f: Self.Foo) {

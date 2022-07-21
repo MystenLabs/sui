@@ -1,0 +1,19 @@
+@use '_values' as val;
+@use '_variables' as v;
+
+.container {
+    display: flex;
+    align-items: center;
+    flex-flow: column nowrap;
+    @include v.set(v.$sizing-nav-height-placeholder, val.$sizing-nav-height);
+
+    &.nav-hidden {
+        @include v.set(v.$sizing-nav-height-placeholder, 0);
+    }
+
+    &.forced-popup-size,
+    :global(.is-popup) & {
+        width: val.$sizing-popup-width;
+        height: val.$sizing-popup-height;
+    }
+}

@@ -63,11 +63,21 @@ module sui::balance {
         Balance { value: 0 }
     }
 
+    spec zero {
+        aborts_if false;
+        ensures result.value == 0;
+    }
+
     /// Join two balances together.
     public fun join<T>(self: &mut Balance<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
         self.value = self.value + value;
         value
+    }
+
+    spec join {
+        ensures self.value == old(self.value) + balance.value;
+        ensures result == balance.value;
     }
 
     /// Split a `Balance` and take a sub balance from it.
@@ -77,10 +87,20 @@ module sui::balance {
         Balance { value }
     }
 
+    spec split {
+        aborts_if self.value < value with ENotEnough;
+        ensures self.value == old(self.value) - value;
+        ensures result.value == value;
+    }
+
     /// Destroy a zero `Balance`.
     public fun destroy_zero<T>(balance: Balance<T>) {
         assert!(balance.value == 0, ENonZero);
         let Balance { value: _ } = balance;
+    }
+
+    spec destroy_zero {
+        aborts_if balance.value != 0 with ENonZero;
     }
 
     #[test_only]
@@ -94,6 +114,12 @@ module sui::balance {
     public fun destroy_for_testing<T>(self: Balance<T>): u64 {
         let Balance { value } = self;
         value
+    }
+
+    #[test_only]
+    /// Create a `Supply` of any coin for testing purposes.
+    public fun create_supply_for_testing<T>(value: u64): Supply<T> {
+        Supply { value }
     }
 }
 

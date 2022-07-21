@@ -16,6 +16,7 @@ use std::time::Instant;
 use sui_open_rpc::{Module, Project};
 use tracing::info;
 
+pub mod api;
 pub mod bcs_api;
 pub mod event_api;
 pub mod gateway_api;
@@ -76,32 +77,27 @@ impl JsonRpcServerBuilder {
         use_websocket: bool,
         prometheus_registry: &prometheus::Registry,
     ) -> anyhow::Result<Self> {
-        let (ac_builder, allow_list) = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
+        let acl = match env::var("ACCESS_CONTROL_ALLOW_ORIGIN") {
             Ok(value) => {
                 let owned_list: Vec<String> = value
                     .split(',')
                     .into_iter()
                     .map(|s| s.into())
                     .collect::<Vec<_>>();
-                (
-                    AccessControlBuilder::default().set_allowed_origins(&owned_list)?,
-                    owned_list,
-                )
+                AccessControlBuilder::default().set_allowed_origins(&owned_list)?
             }
-            _ => (AccessControlBuilder::default(), vec![]),
-        };
+            _ => AccessControlBuilder::default(),
+        }
+        .build();
+        info!(?acl);
 
         let server_builder = if use_websocket {
-            let mut builder = WsServerBuilder::default()
-                .set_middleware(ApiMetrics::WebsocketMetrics(WebsocketMetrics {}));
-            if !allow_list.is_empty() {
-                info!("Setting ACCESS_CONTROL_ALLOW_ORIGIN to : {:?}", allow_list);
-                builder = builder.set_allowed_origins(allow_list)?;
-            }
-            ServerBuilder::WsBuilder(builder)
+            ServerBuilder::WsBuilder(
+                WsServerBuilder::default()
+                    .set_access_control(acl)
+                    .set_middleware(ApiMetrics::WebsocketMetrics(WebsocketMetrics {})),
+            )
         } else {
-            let acl = ac_builder.build();
-            info!(?acl);
             ServerBuilder::HttpBuilder(
                 HttpServerBuilder::default()
                     .set_access_control(acl)

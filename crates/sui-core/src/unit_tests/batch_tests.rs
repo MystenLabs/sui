@@ -24,8 +24,8 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    ConfirmationTransaction, ConsensusTransaction, ObjectInfoRequest, ObjectInfoResponse,
-    Transaction, TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::object::Object;
 
@@ -505,20 +505,9 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         })
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        _transaction: ConfirmationTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        })
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
+        _certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         Ok(TransactionInfoResponse {
             signed_transaction: None,
@@ -579,7 +568,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         let mut items = Vec::new();
         let mut last_batch = AuthorityBatch::initial();
         items.push({
-            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+            let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
@@ -595,7 +584,7 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
             let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
             last_batch = new_batch;
             items.push({
-                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
                 BatchInfoResponseItem(UpdateItem::Batch(item))
             });
         }
@@ -631,20 +620,9 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         })
     }
 
-    async fn handle_confirmation_transaction(
+    async fn handle_certificate(
         &self,
-        _transaction: ConfirmationTransaction,
-    ) -> Result<TransactionInfoResponse, SuiError> {
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: None,
-            signed_effects: None,
-        })
-    }
-
-    async fn handle_consensus_transaction(
-        &self,
-        _transaction: ConsensusTransaction,
+        _certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         Ok(TransactionInfoResponse {
             signed_transaction: None,
@@ -706,7 +684,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         let mut items = Vec::new();
         let mut last_batch = AuthorityBatch::initial();
         items.push({
-            let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+            let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
             BatchInfoResponseItem(UpdateItem::Batch(item))
         });
         let mut seq = 0;
@@ -728,7 +706,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
             let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
             last_batch = new_batch;
             items.push({
-                let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                let item = SignedBatch::new_with_zero_epoch(last_batch.clone(), &*secret, name);
                 BatchInfoResponseItem(UpdateItem::Batch(item))
             });
         }

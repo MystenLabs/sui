@@ -107,7 +107,7 @@ A [smart contract](https://en.wikipedia.org/wiki/Smart_contract) is an agreement
 
 ### Single-writer objects
 
-Single-writer objects are owned by one account. In Sui, transactions affecting only single-writer objects owned by the same account may proceed with only a check of the sender’s account, greatly speeding transaction times.
+Single-writer objects are owned by one account. In Sui, transactions affecting only single-writer objects owned by the same address may proceed with only a verification of the sender’s address, greatly speeding transaction times. We refer to these as *simple transactions*. See [Single-Writer Apps](single-writer-apps.md) for example applications of this simple transaction model.
 
 ### Sui/SUI
 
@@ -120,6 +120,12 @@ Sui refers to the Sui blockchain, the SUI currency, and the [Sui open source pro
 
 For more information, see [Causal order vs total order](sui-compared#causal-order-vs-total-order). 
 
+
+### Transaction
+
+A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-writer, single-address objects, such as minting an NFT or transferring it or another token. These transactions may bypass the consensus protocol in Sui.
+
+More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
 
 ### Transfer
 

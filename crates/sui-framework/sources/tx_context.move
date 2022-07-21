@@ -3,14 +3,11 @@
 
 module sui::tx_context {
     use std::signer;
-    use sui::id::{Self, VersionedID};
+
+    friend sui::object;
 
     #[test_only]
-    use std::errors;
-    #[test_only]
     use std::vector;
-    #[test_only]
-    use sui::id::ID;
 
     /// Number of bytes in an tx hash (which will be the transaction digest)
     const TX_HASH_LENGTH: u64 = 32;
@@ -53,9 +50,9 @@ module sui::tx_context {
     }
 
     /// Generate a new, globally unique object ID with version 0
-    public fun new_id(ctx: &mut TxContext): VersionedID {
+    public(friend) fun new_object(ctx: &mut TxContext): address {
         let ids_created = ctx.ids_created;
-        let id = id::new_versioned_id(derive_id(*&ctx.tx_hash, ids_created));
+        let id = derive_id(*&ctx.tx_hash, ids_created);
         ctx.ids_created = ids_created + 1;
         id
     }
@@ -74,10 +71,7 @@ module sui::tx_context {
     #[test_only]
     /// Create a `TxContext` for testing
     public fun new(addr: address, tx_hash: vector<u8>, epoch: u64, ids_created: u64): TxContext {
-        assert!(
-            vector::length(&tx_hash) == TX_HASH_LENGTH,
-            errors::invalid_argument(EBadTxHashLength)
-        );
+        assert!(vector::length(&tx_hash) == TX_HASH_LENGTH, EBadTxHashLength);
         TxContext { signer: new_signer_from_address(addr), tx_hash, epoch, ids_created }
     }
 
@@ -114,10 +108,10 @@ module sui::tx_context {
 
     #[test_only]
     /// Return the most recent created object ID.
-    public fun last_created_object_id(self: &TxContext): ID {
+    public fun last_created_object_id(self: &TxContext): address {
         let ids_created = self.ids_created;
         assert!(ids_created > 0, ENoIDsCreated);
-        id::new(derive_id(*&self.tx_hash, ids_created - 1))
+        derive_id(*&self.tx_hash, ids_created - 1)
     }
 
     #[test_only]
@@ -128,4 +122,12 @@ module sui::tx_context {
     #[test_only]
     /// Test-only function for creating a new signer from `signer_address`.
     native fun new_signer_from_address(signer_address: address): signer;
-}
+
+    // Cost calibration functions
+    #[test_only]
+    public fun calibrate_derive_id(tx_hash: vector<u8>, ids_created: u64) {
+        derive_id(tx_hash, ids_created);
+    }
+    #[test_only]
+    public fun calibrate_derive_id_nop(_tx_hash: vector<u8>, _ids_created: u64) {
+    }}

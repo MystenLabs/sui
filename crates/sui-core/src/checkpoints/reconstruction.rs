@@ -5,12 +5,13 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use sui_types::base_types::ExecutionDigests;
 use sui_types::committee::StakeUnit;
+use sui_types::messages_checkpoint::CheckpointProposalSummary;
 use sui_types::{
     base_types::AuthorityName,
     committee::Committee,
     error::SuiError,
     messages::CertifiedTransaction,
-    messages_checkpoint::{CheckpointFragment, CheckpointSummary},
+    messages_checkpoint::CheckpointFragment,
     waypoint::{GlobalCheckpoint, WaypointError},
 };
 
@@ -38,15 +39,15 @@ impl FragmentReconstruction {
         seq: u64,
         committee: Committee,
         fragments: &[CheckpointFragment],
-    ) -> Result<Option<FragmentReconstruction>, SuiError> {
+    ) -> Result<FragmentReconstruction, SuiError> {
         let mut span = SpanGraph::new(&committee);
         let mut fragments_used = Vec::new();
-        let mut proposals: HashMap<AuthorityName, CheckpointSummary> = HashMap::new();
+        let mut proposals: HashMap<AuthorityName, CheckpointProposalSummary> = HashMap::new();
         let mut extra_transactions = BTreeMap::new();
 
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
-            debug_assert!(*frag.proposer.summary.sequence_number() == seq);
+            debug_assert!(frag.proposer.summary.sequence_number == seq);
 
             // Check the checkpoint summary of the proposal is the same as the previous one.
             // Otherwise ignore the link.
@@ -102,17 +103,19 @@ impl FragmentReconstruction {
                     }
                 }
 
-                return Ok(Some(FragmentReconstruction {
+                return Ok(FragmentReconstruction {
                     global,
                     committee,
                     extra_transactions,
-                }));
+                });
             }
         }
 
         // If we run out of candidates with no checkpoint, there is no
         // checkpoint yet.
-        Ok(None)
+        Err(SuiError::from(
+            "Failed to construct checkpoint after using all fragments",
+        ))
     }
 }
 

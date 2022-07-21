@@ -4,6 +4,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 
 import { KeypairVaultMiddleware } from './middlewares/KeypairVaultMiddleware';
+import { NetworkSwitchMiddleware } from './middlewares/NetworkSwitchMiddleware';
 import { thunkExtras } from './thunk-extras';
 import rootReducer from '_redux/RootReducer';
 
@@ -14,7 +15,7 @@ const store = configureStore({
             thunk: {
                 extraArgument: thunkExtras,
             },
-        }).concat(KeypairVaultMiddleware),
+        }).concat(KeypairVaultMiddleware, NetworkSwitchMiddleware),
 });
 
 export default store;

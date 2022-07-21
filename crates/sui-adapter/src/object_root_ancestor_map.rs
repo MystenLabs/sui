@@ -35,14 +35,13 @@ impl ObjectRootAncestorMap {
                 match cur_owner {
                     Owner::ObjectOwner(parent_id) => {
                         cur_owner = *direct_owner_map.get(&parent_id.into()).ok_or_else(|| {
-                            ExecutionError::new_with_source(
-                                ExecutionErrorKind::MissingObjectOwner,
-                                format!("child_id: {}, parent_id: {}", cur_id, parent_id),
-                            )
+                            ExecutionErrorKind::missing_object_owner(cur_id, parent_id)
                         })?;
                         cur_id = parent_id.into();
                         if cur_id == stack[0] {
-                            return Err(ExecutionErrorKind::CircularObjectOwnership.into());
+                            return Err(
+                                ExecutionErrorKind::circular_object_ownership(cur_id).into()
+                            );
                         }
                     }
                     Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared => {
@@ -57,15 +56,7 @@ impl ObjectRootAncestorMap {
         Ok(Self { root_ancestor_map })
     }
 
-    pub fn get_root_ancestor(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<(ObjectID, Owner), ExecutionError> {
-        Ok(*self.root_ancestor_map.get(object_id).ok_or_else(|| {
-            ExecutionError::new_with_source(
-                ExecutionErrorKind::ObjectNotFound,
-                format!("could not find object {}", object_id),
-            )
-        })?)
+    pub fn get_root_ancestor(&self, object_id: &ObjectID) -> Option<(ObjectID, Owner)> {
+        self.root_ancestor_map.get(object_id).copied()
     }
 }
