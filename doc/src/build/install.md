@@ -87,8 +87,7 @@ $ rustup update stable
 
 > **Warning:** If you run into issues, you may un-install Rust and Cargo with:
 > ```shell
-> $ sudo apt remove cargo
-> sudo apt autoremove
+> $ rustup self uninstall
 > ```
 > And then start the Rust install over.
 > For more details, see:
