@@ -24,7 +24,7 @@ module.exports = {
                 ],
                 pathGroups: [
                     {
-                        pattern: '{.,..,_*}/**/*.?(s)css',
+                        pattern: '{.,..,_*,*}/**/*.?(s)css',
                         group: 'type',
                         position: 'after',
                     },
