@@ -18,6 +18,31 @@ use tokio::{
 
 use tracing::info;
 
+use thiserror::Error;
+
+#[derive(Error)]
+pub enum BoundedExecutionError<F>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    #[error("Concurrent execution limit reached")]
+    Full(F),
+}
+
+impl<F> std::fmt::Debug for BoundedExecutionError<F>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    // Elide the future to let this be unwrapped
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Full(_f) => f.debug_tuple("Full").finish(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BoundedExecutor {
     semaphore: Arc<Semaphore>,
@@ -60,14 +85,14 @@ impl BoundedExecutor {
     /// caller attempted to spawn. Otherwise, this will spawn the future on the
     /// executor and send back a [`JoinHandle`] that the caller can `.await` on
     /// for the results of the [`Future`].
-    pub fn try_spawn<F>(&self, f: F) -> Result<JoinHandle<F::Output>, F>
+    pub fn try_spawn<F>(&self, f: F) -> Result<JoinHandle<F::Output>, BoundedExecutionError<F>>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        match self.semaphore.clone().try_acquire_owned().ok() {
-            Some(permit) => Ok(self.spawn_with_permit(f, permit)),
-            None => Err(f),
+        match self.semaphore.clone().try_acquire_owned() {
+            Ok(permit) => Ok(self.spawn_with_permit(f, permit)),
+            Err(_) => Err(BoundedExecutionError::Full(f)),
         }
     }
 
@@ -92,12 +117,36 @@ impl BoundedExecutor {
 #[cfg(test)]
 mod test {
     use super::*;
-    use futures::{channel::oneshot, executor::block_on, future::Future};
+    use futures::{channel::oneshot, executor::block_on, future::Future, FutureExt};
     use std::{
         sync::atomic::{AtomicU32, Ordering},
         time::Duration,
     };
     use tokio::{runtime::Runtime, time::sleep};
+
+    #[test]
+    fn try_spawn_panicking() {
+        let rt = Runtime::new().unwrap();
+        let executor = rt.handle().clone();
+        let executor = BoundedExecutor::new(1, executor);
+
+        // executor has a free slot, spawn should succeed
+        let fpanic = executor.try_spawn(panicking()).unwrap();
+        // this would return a JoinError::panic
+        block_on(fpanic).unwrap_err();
+
+        let (tx1, rx1) = oneshot::channel();
+        // the executor should not be full, because the permit for the panicking task should drop at unwinding
+        let f1 = executor.try_spawn(rx1).unwrap();
+
+        // cleanup
+        tx1.send(()).unwrap();
+        block_on(f1).unwrap().unwrap();
+    }
+
+    async fn panicking() {
+        panic!();
+    }
 
     #[test]
     fn try_spawn() {
@@ -114,8 +163,7 @@ mod test {
 
         // executor is full, try_spawn should return err and give back the task
         // we attempted to spawn
-
-        let rx2 = executor.try_spawn(rx2).unwrap_err();
+        let BoundedExecutionError::Full(rx2) = executor.try_spawn(rx2).unwrap_err();
 
         // complete f1 future, should open a free slot in executor
 
@@ -123,7 +171,6 @@ mod test {
         block_on(f1).unwrap().unwrap();
 
         // should successfully spawn a new task now that the first is complete
-
         let f2 = executor.try_spawn(rx2).unwrap();
 
         // cleanup
