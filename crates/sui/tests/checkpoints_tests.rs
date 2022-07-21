@@ -53,6 +53,8 @@ async fn execute_transactions(
             .await
             .unwrap();
 
+        println!("{:?}", effects);
+
         // If this check fails the transactions will not be included in the checkpoint.
         assert!(matches!(
             effects.effects.status,
@@ -75,7 +77,8 @@ async fn wait_for_advance_to_next_checkpoint(
         let ok = handles
             .iter()
             .map(|authority| transactions_in_checkpoint(&authority.state()))
-            .all(|digests| digests.is_superset(transaction_digests));
+            .all(|digests| {println!("{:?}", digests); digests.is_superset(transaction_digests)});
+        println!("{:?}", transaction_digests);
 
         match ok {
             true => break,
