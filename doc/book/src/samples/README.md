@@ -1,3 +1,3 @@
 # Samples
 
-A collection of ready to go samples for common blockchain usecases.
+This section contains a growing collection of ready-to-go samples for common blockchain use cases.
