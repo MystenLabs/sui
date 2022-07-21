@@ -1312,11 +1312,15 @@ pub struct TransactionEffects {
 }
 
 impl TransactionEffects {
-    /// Return an iterator that iterates through both mutated and
-    /// created objects.
-    /// It doesn't include deleted objects.
-    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> + Clone {
-        self.mutated.iter().chain(self.created.iter())
+    /// Return an iterator that iterates through all mutated objects, including mutated,
+    /// created and unwrapped objects. In other words, all objects that still exist
+    /// in the object state after this transaction.
+    /// It doesn't include deleted/wrapped objects.
+    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> + Clone {
+        self.mutated
+            .iter()
+            .chain(self.created.iter())
+            .chain(self.unwrapped.iter())
     }
 
     /// Return an iterator of mutated objects, but excluding the gas object.
@@ -1330,7 +1334,7 @@ impl TransactionEffects {
 
     pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
         // The mutated or created case
-        if self.mutated_and_created().any(|(oref, _)| *oref == obj_ref) {
+        if self.all_mutated().any(|(oref, _)| *oref == obj_ref) {
             return true;
         }
 

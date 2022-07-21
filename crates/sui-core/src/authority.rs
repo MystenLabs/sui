@@ -680,7 +680,7 @@ impl AuthorityState {
         indexes.index_tx(
             cert.sender_address(),
             cert.data.input_objects()?.iter().map(|o| o.object_id()),
-            effects.effects.mutated_and_created(),
+            effects.effects.all_mutated(),
             cert.data
                 .move_calls()?
                 .iter()
