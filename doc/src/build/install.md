@@ -53,35 +53,48 @@ For simplicity, we recommend installing in `~/sui` or using an environment varia
 Install the Sui [binaries](#binaries) as described below.
 
 ### Curl
-Install the `curl` command to download dependencies:
+Confirm that you can run the `curl` command to download dependencies.
+
+See whether you already have curl installed by running:
+
+```shell
+$ which curl
+```
+
+And if you see no output path, install it with:
 
 ```shell
 $ sudo apt install curl
 ```
 
 ### Rust
-Sui is written in Rust, and we are using
+Sui is written in Rust, and we are using the latest version of the
 [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain
-version 1.60.0 or higher to build and manage the dependencies. You will need Cargo to
-build and install Sui on your machine.
+to build and manage the dependencies. You will need Cargo to build and install Sui on your machine.
 
-See if you already have it by running:
-
-```shell
-$ which curl
-```
-
-And if not, get it with:
+Get [rustup](https://rust-lang.github.io/rustup/)
+to install Rust and Cargo:
 
 ```shell
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Then update it with:
+Then update the packages with:
 
 ```shell
 $ rustup update stable
 ```
+
+If you run into issues, re-install Rust and Cargo:
+
+```shell
+$ sudo apt remove cargo
+sudo apt autoremove
+```
+
+And then start the Rust install over.
+For more details, see:
+https://www.rust-lang.org/tools/install
 
 ### Git CLI
 
