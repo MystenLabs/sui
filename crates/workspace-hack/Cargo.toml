@@ -234,7 +234,7 @@ jsonrpsee-client-transport = { version = "0.14", default-features = false, featu
 jsonrpsee-core = { version = "0.14", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing", "unicase", "wasm-bindgen-futures"] }
 jsonrpsee-http-client = { version = "0.14", features = ["hyper-rustls", "tls"] }
 jsonrpsee-http-server = { version = "0.14", default-features = false }
-jsonrpsee-types = { version = "0.14", default-features = false }
+jsonrpsee-types = { version = "0.15", default-features = false }
 jsonrpsee-wasm-client = { version = "0.14", default-features = false }
 jsonrpsee-ws-client = { version = "0.14", features = ["tls"] }
 jsonrpsee-ws-server = { version = "0.14", default-features = false }
@@ -819,7 +819,7 @@ jsonrpsee-core = { version = "0.14", features = ["arrayvec", "async-client", "as
 jsonrpsee-http-client = { version = "0.14", features = ["hyper-rustls", "tls"] }
 jsonrpsee-http-server = { version = "0.14", default-features = false }
 jsonrpsee-proc-macros = { version = "0.14", default-features = false }
-jsonrpsee-types = { version = "0.14", default-features = false }
+jsonrpsee-types = { version = "0.15", default-features = false }
 jsonrpsee-wasm-client = { version = "0.14", default-features = false }
 jsonrpsee-ws-client = { version = "0.14", features = ["tls"] }
 jsonrpsee-ws-server = { version = "0.14", default-features = false }

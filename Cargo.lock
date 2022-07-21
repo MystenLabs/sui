@@ -2904,7 +2904,7 @@ dependencies = [
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "jsonrpsee-ws-server",
@@ -2924,7 +2924,7 @@ dependencies = [
  "gloo-net",
  "http",
  "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
  "pin-project",
  "rustls-native-certs",
  "soketto",
@@ -2952,7 +2952,7 @@ dependencies = [
  "futures-util",
  "globset",
  "hyper",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
  "lazy_static 1.4.0",
  "parking_lot 0.12.1",
  "rand 0.8.5",
@@ -2977,7 +2977,7 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
  "rustc-hash",
  "serde 1.0.139",
  "serde_json",
@@ -2996,7 +2996,7 @@ dependencies = [
  "futures-util",
  "hyper",
  "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
  "serde 1.0.139",
  "serde_json",
  "tokio",
@@ -3030,6 +3030,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-types"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1e88f208ac5004389f0063e87bd7463f5e864ff1ac40484f80e8432976ffa0a"
+dependencies = [
+ "anyhow",
+ "beef",
+ "serde 1.0.139",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "jsonrpsee-wasm-client"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3037,7 +3051,7 @@ checksum = "d1fcb257e9b60de22ec3c151106ad1e089ab1c0691d25e3282f1cc7a0c7ba651"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
 ]
 
 [[package]]
@@ -3048,7 +3062,7 @@ checksum = "ee043cb5dd0d51d3eb93432e998d5bae797691a7b10ec4a325e036bcdb48c48a"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
 ]
 
 [[package]]
@@ -3060,7 +3074,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.14.0",
  "serde_json",
  "soketto",
  "tokio",
@@ -4274,7 +4288,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-log",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "typed-store",
  "types",
  "url",
@@ -5674,9 +5688,9 @@ dependencies = [
 
 [[package]]
 name = "rustversion"
-version = "1.0.7"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0a5f7c728f5d284929a1cccb5bc19884422bfe6ef4d6c409da2c41838983fcf"
+checksum = "24c8ad4f0c00e1eb5bc7614d236a7f1300e3dbd76b68cac8e06fb00b015ad8d8"
 
 [[package]]
 name = "rusty-fork"
@@ -6599,7 +6613,7 @@ dependencies = [
  "test-utils",
  "tokio",
  "tracing",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "workspace-hack 0.1.0",
 ]
 
@@ -7228,7 +7242,7 @@ dependencies = [
  "tracing-bunyan-formatter",
  "tracing-chrome",
  "tracing-opentelemetry",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7784,7 +7798,7 @@ checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
  "time 0.3.9",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7812,7 +7826,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7824,7 +7838,7 @@ dependencies = [
  "crossbeam",
  "json",
  "tracing",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7869,7 +7883,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7883,9 +7897,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.14"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a713421342a5a666b7577783721d3117f1b69a393df803ee17bb73b1e122a59"
+checksum = "60db860322da191b40952ad9affe65ea23e7dd6a5c442c2c42865810c6ab8e6b"
 dependencies = [
  "ansi_term",
  "matchers",
@@ -7908,7 +7922,7 @@ checksum = "f6992d8a98f570be1c729fe8b6f464fb18c4117054c10f1f952c22d533b48a74"
 dependencies = [
  "lazy_static 1.4.0",
  "tracing-core",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "tracing-test-macro",
 ]
 
@@ -8832,7 +8846,7 @@ dependencies = [
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.15.0",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "jsonrpsee-ws-server",
@@ -9163,7 +9177,7 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "tracing-test",
  "tracing-test-macro",
  "try-lock",
@@ -9575,7 +9589,7 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "tracing-test",
  "tracing-test-macro",
  "try-lock",
