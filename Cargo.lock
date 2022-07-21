@@ -2903,7 +2903,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
- "jsonrpsee-proc-macros",
+ "jsonrpsee-proc-macros 0.14.0",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
@@ -3008,6 +3008,18 @@ name = "jsonrpsee-proc-macros"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "874cf3f6a027cebf36cae767feca9aa2e8a8f799880e49eb5540819fcbd8eada"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2 1.0.40",
+ "quote 1.0.20",
+ "syn 1.0.98",
+]
+
+[[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15a29584096bd0d78576f5649deac29701257cabee28cb5fa68b0afb3459ba7c"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2 1.0.40",
@@ -6830,7 +6842,7 @@ dependencies = [
  "futures",
  "jsonrpsee",
  "jsonrpsee-core",
- "jsonrpsee-proc-macros",
+ "jsonrpsee-proc-macros 0.15.0",
  "prometheus",
  "serde 1.0.139",
  "signature",
@@ -6855,7 +6867,7 @@ dependencies = [
  "either",
  "itertools",
  "jsonrpsee",
- "jsonrpsee-proc-macros",
+ "jsonrpsee-proc-macros 0.15.0",
  "move-bytecode-utils",
  "move-core-types",
  "schemars",
@@ -6866,6 +6878,7 @@ dependencies = [
  "sui-open-rpc",
  "sui-open-rpc-macros",
  "sui-types",
+ "tracing",
  "workspace-hack 0.1.0",
 ]
 
@@ -8833,7 +8846,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-client",
  "jsonrpsee-http-server",
- "jsonrpsee-proc-macros",
+ "jsonrpsee-proc-macros 0.15.0",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
