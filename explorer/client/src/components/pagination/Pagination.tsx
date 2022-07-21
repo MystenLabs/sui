@@ -262,14 +262,14 @@ function Pagination({
 
     const mobilePagination = (
         <div>
-            <div>
+            <div className={styles.mobiletoprow}>
                 {IndexZeroButton('First')}
                 <button className={styles.basecontainer}>
-                    {pageIndex + 1} of {finalPageNo}
+                    Page {pageIndex + 1} of {finalPageNo}
                 </button>
                 {FinalPageButton(finalPageNo, 'Last')}
             </div>
-            <div>
+            <div className={styles.mobilebottomrow}>
                 {BackButton}
                 {NextButton}
             </div>

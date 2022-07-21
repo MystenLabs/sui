@@ -67,6 +67,18 @@ button.gone {
     @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block;
 }
 
-.mobilefooter {
-    @apply sm:hidden block;
+.mobiletoprow {
+    @apply sm:hidden block grid grid-cols-6 my-2;
+}
+
+.mobiletoprow > button:nth-child(1) {
+    @apply col-span-1;
+}
+
+.mobiletoprow > button:nth-child(2) {
+    @apply col-span-4 border-none shadow-none;
+}
+
+.mobilebottomrow {
+    @apply grid grid-cols-2 gap-2;
 }
