@@ -26,6 +26,11 @@ function Pagination({
     };
 }) {
     const [pageIndex, setPageIndex] = useState(currentPage - 1);
+
+    useEffect(() => {
+        setPageIndex(currentPage - 1);
+    }, [currentPage]);
+
     const NUMBER_OF_TX_PER_PAGE_OPTIONS = [20, 40, 60];
 
     useEffect(() => {

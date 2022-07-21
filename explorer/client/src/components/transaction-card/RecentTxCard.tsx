@@ -33,7 +33,7 @@ import type {
 import styles from './RecentTxCard.module.css';
 
 const TRUNCATE_LENGTH = 10;
-const NUMBER_OF_TX_PER_PAGE = 15;
+const NUMBER_OF_TX_PER_PAGE = 20;
 const DEFAULT_PAGI_TYPE = 'more button';
 
 type PaginationType = 'more button' | 'pagination' | 'none';
