@@ -7,8 +7,9 @@
         "link": "explore/devnet"
       },
       {
-        "label": "Examples",
-        "link": "explore/examples"
+        "label": "examples.sui.io",
+        "link": "https://examples.sui.io/"
+        "external": true
       },
       {
         "label": "Prototypes",
