@@ -197,20 +197,18 @@ where
                 std::str::from_utf8(net_addr).map_err(|e| SuiError::GenericAuthorityError {
                     error: e.to_string(),
                 });
-            let address: Multiaddr = str_addr
-                .unwrap()
-                .parse()
-                .map_err(|e: multiaddr::Error| SuiError::GenericAuthorityError {
+            let address: Multiaddr = str_addr.unwrap().parse().map_err(|e: multiaddr::Error| {
+                SuiError::GenericAuthorityError {
                     error: e.to_string(),
-                })
-                .unwrap();
+                }
+            })?;
 
-            let channel = net_config
-                .connect_lazy(&address)
-                .map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
+            let channel =
+                net_config
+                    .connect_lazy(&address)
+                    .map_err(|e| SuiError::GenericAuthorityError {
+                        error: e.to_string(),
+                    })?;
             let client: A = A::recreate(channel);
             let name: &[u8] = &validator.name;
             let public_key_bytes = PublicKeyBytes::from_bytes(name)
