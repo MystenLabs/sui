@@ -1084,13 +1084,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
-<<<<<<< HEAD
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
- "types",
-=======
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7e9b7568fc7184b4938976330122f3c8064e3236)",
  "types 0.1.0 (git+https://github.com/punwai/narwhal-1)",
->>>>>>> 02f0649e (Fix error with tracing)
  "workspace-hack 0.1.0 (git+https://github.com/punwai/narwhal-1)",
 ]
 
@@ -2067,15 +2062,9 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tracing",
-<<<<<<< HEAD
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
- "types",
- "worker",
-=======
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7e9b7568fc7184b4938976330122f3c8064e3236)",
  "types 0.1.0 (git+https://github.com/punwai/narwhal-1)",
  "worker 0.1.0 (git+https://github.com/punwai/narwhal-1)",
->>>>>>> 02f0649e (Fix error with tracing)
  "workspace-hack 0.1.0 (git+https://github.com/punwai/narwhal-1)",
 ]
 
@@ -4230,9 +4219,6 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 [[package]]
 name = "mysten-network"
 version = "0.1.0"
-<<<<<<< HEAD
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c#123c9e40b529315e1c1d91a54fb717111c3e349c"
-=======
 source = "git+https://github.com/mystenlabs/mysten-infra.git?rev=123c9e40b529315e1c1d91a54fb717111c3e349c#123c9e40b529315e1c1d91a54fb717111c3e349c"
 dependencies = [
  "anyhow",
@@ -4255,7 +4241,6 @@ dependencies = [
 name = "mysten-network"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f#bdaf6ee818497e6772f3000f938f1e5710f6890f"
->>>>>>> 02f0649e (Fix error with tracing)
 dependencies = [
  "anyhow",
  "bincode",
@@ -4504,13 +4489,8 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber 0.3.14",
-<<<<<<< HEAD
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
- "types",
-=======
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7e9b7568fc7184b4938976330122f3c8064e3236)",
  "types 0.1.0 (git+https://github.com/punwai/narwhal-1)",
->>>>>>> 02f0649e (Fix error with tracing)
  "url",
  "worker 0.1.0 (git+https://github.com/punwai/narwhal-1)",
  "workspace-hack 0.1.0 (git+https://github.com/punwai/narwhal-1)",
@@ -5258,15 +5238,9 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
-<<<<<<< HEAD
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
- "types",
- "workspace-hack 0.1.0 (git+https://github.com/punwai/narwhal-1)",
-=======
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
  "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f50af9eb40130fb404a678e38d0671fc33f60318)",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f50af9eb40130fb404a678e38d0671fc33f60318)",
->>>>>>> 02f0649e (Fix error with tracing)
 ]
 
 [[package]]
@@ -6807,11 +6781,7 @@ dependencies = [
  "sui-storage",
  "sui-swarm",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tempfile",
  "test-utils",
  "tokio",
@@ -6900,11 +6870,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tempfile",
  "tokio",
  "tracing",
@@ -6960,13 +6926,8 @@ dependencies = [
  "move-package",
  "move-vm-runtime",
  "multiaddr",
-<<<<<<< HEAD
- "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
- "node",
-=======
  "mysten-network 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
  "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f50af9eb40130fb404a678e38d0671fc33f60318)",
->>>>>>> 02f0649e (Fix error with tracing)
  "parking_lot 0.12.1",
  "pretty_assertions",
  "prometheus",
@@ -6987,11 +6948,7 @@ dependencies = [
  "sui-network",
  "sui-storage",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tempfile",
  "test-fuzz",
  "test-utils",
@@ -6999,13 +6956,8 @@ dependencies = [
  "tokio-retry",
  "tokio-stream",
  "tracing",
-<<<<<<< HEAD
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
- "types",
-=======
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
  "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f50af9eb40130fb404a678e38d0671fc33f60318)",
->>>>>>> 02f0649e (Fix error with tracing)
  "workspace-hack 0.1.0",
 ]
 
@@ -7023,11 +6975,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-types",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "test-utils",
  "thiserror",
  "tokio",
@@ -7094,11 +7042,7 @@ dependencies = [
  "sui-node",
  "sui-sdk",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "test-utils",
  "tokio",
  "tracing",
@@ -7208,11 +7152,7 @@ dependencies = [
  "sui-network",
  "sui-storage",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tokio",
  "tracing",
  "workspace-hack 0.1.0",
@@ -7310,11 +7250,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -7335,11 +7271,7 @@ dependencies = [
  "sui-node",
  "sui-types",
  "tap",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tempfile",
  "tokio",
  "tonic-health",
@@ -7361,11 +7293,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-types",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tokio",
  "tracing",
  "unescape",
@@ -7540,11 +7468,7 @@ dependencies = [
 [[package]]
 name = "telemetry-subscribers"
 version = "0.1.0"
-<<<<<<< HEAD
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c#123c9e40b529315e1c1d91a54fb717111c3e349c"
-=======
 source = "git+https://github.com/mystenlabs/mysten-infra.git?rev=123c9e40b529315e1c1d91a54fb717111c3e349c#123c9e40b529315e1c1d91a54fb717111c3e349c"
->>>>>>> 02f0649e (Fix error with tracing)
 dependencies = [
  "crossterm 0.24.0",
  "once_cell",
@@ -7562,11 +7486,7 @@ dependencies = [
 [[package]]
 name = "telemetry-subscribers"
 version = "0.1.0"
-<<<<<<< HEAD
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b#49613b62072eba3f3b2316f54fbe6a9e1926697b"
-=======
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f#bdaf6ee818497e6772f3000f938f1e5710f6890f"
->>>>>>> 02f0649e (Fix error with tracing)
 dependencies = [
  "crossterm 0.24.0",
  "once_cell",
@@ -8311,9 +8231,6 @@ checksum = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
 [[package]]
 name = "typed-store"
 version = "0.1.0"
-<<<<<<< HEAD
-source = "git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c#123c9e40b529315e1c1d91a54fb717111c3e349c"
-=======
 source = "git+https://github.com/mystenlabs/mysten-infra.git?rev=123c9e40b529315e1c1d91a54fb717111c3e349c#123c9e40b529315e1c1d91a54fb717111c3e349c"
 dependencies = [
  "bincode",
@@ -8331,7 +8248,6 @@ dependencies = [
 name = "typed-store"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=7e9b7568fc7184b4938976330122f3c8064e3236#7e9b7568fc7184b4938976330122f3c8064e3236"
->>>>>>> 02f0649e (Fix error with tracing)
 dependencies = [
  "bincode",
  "collectable",
@@ -9011,13 +8927,8 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
-<<<<<<< HEAD
- "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
- "types",
-=======
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=7e9b7568fc7184b4938976330122f3c8064e3236)",
  "types 0.1.0 (git+https://github.com/punwai/narwhal-1)",
->>>>>>> 02f0649e (Fix error with tracing)
  "workspace-hack 0.1.0 (git+https://github.com/punwai/narwhal-1)",
 ]
 
@@ -9546,12 +9457,7 @@ dependencies = [
  "tap",
  "target-lexicon",
  "target-spec",
-<<<<<<< HEAD
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=123c9e40b529315e1c1d91a54fb717111c3e349c)",
- "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=49613b62072eba3f3b2316f54fbe6a9e1926697b)",
-=======
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=bdaf6ee818497e6772f3000f938f1e5710f6890f)",
->>>>>>> 02f0649e (Fix error with tracing)
  "tempfile",
  "tera",
  "termcolor",

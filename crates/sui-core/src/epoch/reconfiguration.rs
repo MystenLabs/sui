@@ -99,7 +99,7 @@ where
             .iter()
             .map(|metadata| {
                 (
-                    PublicKeyBytes::from_bytes(&metadata.pubkey_bytes[..])
+                    PublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
                         .expect("Validity of public key bytes should be verified on-chain"),
                     metadata.next_epoch_stake + metadata.next_epoch_delegation,
                 )
