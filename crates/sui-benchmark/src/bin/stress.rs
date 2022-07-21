@@ -2,36 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 use clap::*;
 use futures::future::try_join_all;
-use futures::future::{join_all, BoxFuture};
+use futures::future::BoxFuture;
 use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
-use rand::seq::IteratorRandom;
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::Arc;
+use std::collections::{BTreeMap, VecDeque};
+use std::sync::{Arc, Barrier};
 use std::time::Duration;
 use strum_macros::EnumString;
+use sui_benchmark::stress::context::Payload;
+use sui_benchmark::stress::context::StressTestCtx;
+use sui_benchmark::stress::shared_counter::SharedCounterTestCtx;
+use sui_benchmark::stress::transfer_object::TransferObjectTestCtx;
 use sui_config::NetworkConfig;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_node::SuiNode;
 use sui_quorum_driver::QuorumDriverHandler;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::{get_key_pair, EmptySignInfo, KeyPair};
+use sui_types::crypto::EmptySignInfo;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     Transaction, TransactionEnvelope,
 };
-use sui_types::object::{Object, Owner};
 use test_utils::authority::{
     spawn_test_authorities, test_and_configure_authority_configs, test_authority_aggregator,
 };
-use test_utils::messages::{
-    make_counter_create_transaction, make_counter_increment_transaction,
-    make_transfer_object_transaction,
-};
-use test_utils::objects::{
-    generate_gas_object, generate_gas_objects_for_testing, generate_gas_objects_with_owner,
-};
-use test_utils::transaction::publish_counter_package;
+use tokio::runtime::Builder;
 use tokio::time;
 use tokio::time::Instant;
 use tracing::{debug, error};
@@ -46,10 +41,10 @@ struct Opts {
     #[clap(long, default_value = "1000", global = true)]
     pub target_qps: u64,
     /// Number of workers
-    #[clap(long, default_value = "2", global = true)]
+    #[clap(long, default_value = "12", global = true)]
     pub num_workers: u64,
     /// Max in-flight ratio
-    #[clap(long, default_value = "5", global = true)]
+    #[clap(long, default_value = "10", global = true)]
     pub in_flight_ratio: u64,
     /// Num of accounts to use for transfer objects
     #[clap(long, default_value = "5", global = true)]
@@ -60,6 +55,13 @@ struct Opts {
     /// Shared counter or transfer object
     #[clap(arg_enum, default_value = "owned", global = true, ignore_case = true)]
     pub transaction_type: TransactionType,
+    /// Num server threads
+    #[clap(long, default_value = "24", global = true)]
+    pub num_server_threads: usize,
+    /// Num client threads
+    /// ideally same as number of workers
+    #[clap(long, default_value = "3", global = true)]
+    pub num_client_threads: usize,
 }
 
 struct Stats {
@@ -83,217 +85,20 @@ enum TransactionType {
     TransferObject,
 }
 
-type Gas = (ObjectRef, Owner);
-type PackageAndCounter = (ObjectRef, ObjectID);
-type CounterAndGas = (PackageAndCounter, Gas);
-type Transfer = (SuiAddress, SuiAddress);
-type TransferObjectAndGas = (ObjectRef, Transfer, Vec<Gas>);
-
-#[derive(Clone, Debug)]
-enum Payload {
-    SharedCounterTxPayload(CounterAndGas),
-    TransferObjectTxPayload(TransferObjectAndGas),
-}
-
-impl Payload {
-    fn make_transaction(
-        &self,
-        keypairs: &HashMap<SuiAddress, KeyPair>,
-    ) -> TransactionEnvelope<EmptySignInfo> {
-        match self {
-            Payload::SharedCounterTxPayload(((package_ref, counter_id), (gas, _))) => {
-                make_counter_increment_transaction(*gas, *package_ref, *counter_id)
-            }
-            Payload::TransferObjectTxPayload((object_ref, (from, to), gas)) => {
-                let (gas_obj, _) = gas
-                    .iter()
-                    .find(|x| x.1.get_owner_address().unwrap() == *from)
-                    .unwrap();
-                make_transfer_object_transaction(
-                    *object_ref,
-                    *gas_obj,
-                    *from,
-                    keypairs.get(from).unwrap(),
-                    *to,
-                )
-            }
-        }
-    }
-    fn make_new_payload(&self, new_object: ObjectRef, new_gas: ObjectRef) -> Payload {
-        match self {
-            Payload::SharedCounterTxPayload(((package_ref, counter_id), (_, owner))) => {
-                Payload::SharedCounterTxPayload(((*package_ref, *counter_id), (new_gas, *owner)))
-            }
-            Payload::TransferObjectTxPayload((_, (from, to), gas)) => {
-                let new_address_and_gas: Vec<Gas> = gas
-                    .iter()
-                    .map(|x| {
-                        if x.1.get_owner_address().unwrap() == *from {
-                            (new_gas, Owner::AddressOwner(*from))
-                        } else {
-                            *x
-                        }
-                    })
-                    .collect();
-                let (_, recipient) = gas
-                    .iter()
-                    .find(|x| x.1.get_owner_address().unwrap() != *to)
-                    .unwrap();
-                Payload::TransferObjectTxPayload((
-                    new_object,
-                    (*to, recipient.get_owner_address().unwrap()),
-                    new_address_and_gas,
-                ))
-            }
-        }
-    }
-    fn get_object_id(&self) -> ObjectID {
-        match self {
-            Payload::SharedCounterTxPayload(((_, counter_id), (_, _))) => *counter_id,
-            Payload::TransferObjectTxPayload((object_ref, _, _)) => object_ref.0,
-        }
-    }
-}
-
-#[derive(Debug)]
+type RetryType = Box<(TransactionEnvelope<EmptySignInfo>, Arc<dyn Payload>)>;
 enum NextOp {
-    Response(Option<(Instant, Payload)>),
-    Retry(Box<(Transaction, Payload)>),
-}
-
-async fn init_object_transfer_benchmark(
-    count: usize,
-    num_accounts: usize,
-    configs: NetworkConfig,
-) -> (
-    Vec<Payload>,
-    Arc<HashMap<SuiAddress, KeyPair>>,
-    AuthorityAggregator<NetworkAuthorityClient>,
-) {
-    // create several accounts to transfer object between
-    let accounts: Arc<HashMap<SuiAddress, KeyPair>> =
-        Arc::new((0..num_accounts).map(|_| get_key_pair()).collect());
-    // create enough gas to do those transfers
-    let gas: Vec<Vec<Object>> = (0..count)
-        .map(|_| {
-            accounts
-                .iter()
-                .map(|(owner, _)| generate_gas_objects_with_owner(1, *owner).pop().unwrap())
-                .collect()
-        })
-        .collect();
-    // choose a random owner to be the owner of transfer objects
-    let owner = *accounts.keys().choose(&mut rand::thread_rng()).unwrap();
-    // create transfer objects
-    let mut transfer_objects = generate_gas_objects_with_owner(count, owner);
-    // create a vector of gas for all accounts along with the transfer object
-    let refs: Vec<(Vec<Gas>, ObjectRef)> = gas
-        .iter()
-        .zip(transfer_objects.iter())
-        .map(|(g, t)| {
-            (
-                g.iter()
-                    .map(|x| (x.compute_object_reference(), x.owner))
-                    .collect(),
-                t.compute_object_reference(),
-            )
-        })
-        .collect();
-    let mut flattened: Vec<Object> = gas.into_iter().flatten().collect();
-    flattened.append(&mut transfer_objects);
-
-    // Setup the network
-    let _ = spawn_test_authorities(flattened.clone(), &configs).await;
-    let clients = test_authority_aggregator(&configs);
-
-    (
-        refs.iter()
-            .map(|(g, t)| {
-                let from = owner;
-                let (_, to) = *g
-                    .iter()
-                    .find(|x| x.1.get_owner_address().unwrap() != from)
-                    .unwrap();
-                Payload::TransferObjectTxPayload((
-                    *t,
-                    (from, to.get_owner_address().unwrap()),
-                    g.clone(),
-                ))
-            })
-            .collect(),
-        accounts,
-        clients,
-    )
-}
-
-async fn init_shared_counter_benchmark(
-    count: usize,
-    configs: NetworkConfig,
-) -> (
-    Vec<Payload>,
-    Arc<HashMap<SuiAddress, KeyPair>>,
-    AuthorityAggregator<NetworkAuthorityClient>,
-) {
-    // create enough gas
-    let mut gas = vec![];
-    let mut counters_gas = generate_gas_objects_for_testing(count);
-    let publish_module_gas = generate_gas_object();
-    gas.append(&mut counters_gas);
-    gas.push(publish_module_gas.clone());
-
-    // Setup the network
-    let _ = spawn_test_authorities(gas.clone(), &configs).await;
-    let clients = test_authority_aggregator(&configs);
-    let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
-
-    // Publish basics package
-    eprintln!("Publishing basics package");
-    let package_ref = publish_counter_package(publish_module_gas, configs.validator_set()).await;
-    gas.pop();
-
-    let qd_and_gas = gas
-        .into_iter()
-        .map(|g| (quorum_driver_handler.clone_quorum_driver(), g));
-
-    // create counters
-    let futures = qd_and_gas.map(|(qd, gas_object)| async move {
-        let tx =
-            make_counter_create_transaction(gas_object.compute_object_reference(), package_ref);
-        if let ExecuteTransactionResponse::EffectsCert(result) = qd
-            .execute_transaction(ExecuteTransactionRequest {
-                transaction: tx,
-                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-            })
-            .await
-            .unwrap()
-        {
-            let (_, effects) = *result;
-            Payload::SharedCounterTxPayload((
-                (package_ref, effects.effects.created[0].0 .0),
-                effects.effects.gas_object,
-            ))
-        } else {
-            panic!("Failed to create shared counter!");
-        }
-    });
-
-    eprintln!("Creating shared counters, this may take a while..");
-    (
-        join_all(futures).await.into_iter().collect(),
-        Arc::new(HashMap::new()),
-        clients,
-    )
+    Response(Option<(Instant, Box<dyn Payload>)>),
+    Retry(Box<(Transaction, Arc<dyn Payload>)>),
 }
 
 async fn run(
     clients: AuthorityAggregator<NetworkAuthorityClient>,
-    addresses: Arc<HashMap<SuiAddress, KeyPair>>,
-    payloads: Vec<Payload>,
+    payloads: Vec<Arc<dyn Payload>>,
     opts: Opts,
 ) {
     eprintln!("Starting benchmark!");
     let payload_per_worker = payloads.len() / opts.num_workers as usize;
-    let partitioned_payload: Vec<Vec<Payload>> = payloads
+    let partitioned_payload: Vec<Vec<Arc<dyn Payload>>> = payloads
         .chunks(payload_per_worker)
         .map(|s| s.into())
         .collect();
@@ -303,7 +108,6 @@ async fn run(
     let stat_delay_micros = 1_000_000 * opts.stat_collection_interval;
     (0..opts.num_workers).for_each(|i| {
             let mut free_pool = partitioned_payload[i as usize].clone();
-            let addresses_cloned = addresses.clone();
             // Make a per worker quorum driver, otherwise they all share the same task.
             let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
             let qd = quorum_driver_handler.clone_quorum_driver();
@@ -322,7 +126,7 @@ async fn run(
                 let mut num_submitted = 0;
                 let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
 
-                let mut retry_queue : VecDeque<Box<(TransactionEnvelope<EmptySignInfo>, Payload)>> = VecDeque::new();
+                let mut retry_queue : VecDeque<RetryType> = VecDeque::new();
 
                 loop {
                     tokio::select! {
@@ -398,7 +202,7 @@ async fn run(
                                 num_in_flight += 1;
                                 num_submitted += 1;
                                 let payload = free_pool.pop().unwrap();
-                                let tx = payload.make_transaction(&addresses_cloned);
+                                let tx = payload.make_transaction();
                                 let start = Instant::now();
                                 let res = qd
                                     .execute_transaction(ExecuteTransactionRequest {
@@ -436,7 +240,7 @@ async fn run(
                                     retry_queue.push_back(b);
                                 }
                                 NextOp::Response(Some((start, payload))) => {
-                                    free_pool.push(payload);
+                                    free_pool.push(Arc::from(payload));
                                     let latency = start.elapsed();
                                     num_success += 1;
                                     num_in_flight -= 1;
@@ -461,6 +265,7 @@ async fn run(
 
     tasks.push(tokio::spawn(async move {
             let mut stat_collection: BTreeMap<usize, Stats> = BTreeMap::new();
+            let mut counter = 0;
             while let Some(s @ Stats {
                 id,
                 num_success: _,
@@ -505,41 +310,96 @@ async fn run(
                 } else {
                     0.0
                 };
-                eprintln!("Throughput = {}, min_latency_ms = {}, max_latency_ms = {}, num_success = {}, num_error = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, min_latency.as_millis(), max_latency.as_millis(), num_success, num_error, num_no_gas, num_submitted, num_in_flight);
+                counter += 1;
+                if counter % opts.num_workers == 0 {
+                    eprintln!("Throughput = {}, min_latency_ms = {}, max_latency_ms = {}, num_success = {}, num_error = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, min_latency.as_millis(), max_latency.as_millis(), num_success, num_error, num_no_gas, num_submitted, num_in_flight);
+                }
             }
         }));
-    let _: Vec<_> = try_join_all(tasks).await.unwrap().into_iter().collect();
+    try_join_all(tasks).await.unwrap().into_iter().collect()
 }
 
-#[tokio::main]
-async fn main() {
+fn make_test_ctx(
+    max_in_flight_ops: usize,
+    configs: &NetworkConfig,
+    opts: &Opts,
+) -> Box<dyn StressTestCtx<dyn Payload>> {
+    match opts.transaction_type {
+        TransactionType::SharedCounter => {
+            SharedCounterTestCtx::make_ctx(max_in_flight_ops as u64, configs)
+        }
+        TransactionType::TransferObject => TransferObjectTestCtx::make_ctx(
+            max_in_flight_ops as u64,
+            opts.num_transfer_accounts,
+            configs,
+        ),
+    }
+}
+
+fn main() {
     let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
     config.log_string = Some("warn".to_string());
-    config.log_file = Some("stress.log".to_string());
+    config.log_file = Some("/tmp/stress.log".to_string());
     let _guard = config.with_env().init();
     let opts: Opts = Opts::parse();
 
     // This is the maximum number of increment counter ops in flight
     let max_in_flight_ops = opts.target_qps as usize * opts.in_flight_ratio as usize;
 
-    let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
-    configs.validator_configs.iter_mut().for_each(|config| {
-        let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
-        parameters.batch_size = 6400;
-    });
-    // initialize the right kind of benchmark
-    let (payload, addresses, clients) = match opts.transaction_type {
-        TransactionType::SharedCounter => {
-            init_shared_counter_benchmark(max_in_flight_ops, configs).await
-        }
-        TransactionType::TransferObject => {
-            init_object_transfer_benchmark(
-                max_in_flight_ops,
-                opts.num_transfer_accounts as usize,
-                configs,
-            )
-            .await
-        }
+    let configs = {
+        let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
+        configs.validator_configs.iter_mut().for_each(|config| {
+            let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
+            parameters.batch_size = 12800;
+        });
+        Arc::new(configs)
     };
-    run(clients, addresses, payload, opts).await
+
+    let mut ctx = make_test_ctx(max_in_flight_ops, &configs, &opts);
+
+    let genesis_objects = ctx.get_gas_objects();
+
+    // Make the client runtime wait until we are done creating genesis objects
+    let barrier = Arc::new(Barrier::new(2));
+    let cloned_barrier = barrier.clone();
+    let cloned_config = configs.clone();
+    // spawn a thread to spin up sui nodes on the multi-threaded server runtime
+    let _ = std::thread::spawn(move || {
+        // create server runtime
+        let server_runtime = Builder::new_multi_thread()
+            .thread_stack_size(32 * 1024 * 1024)
+            .worker_threads(opts.num_server_threads)
+            .enable_all()
+            .build()
+            .unwrap();
+        server_runtime.block_on(async move {
+            // Setup the network
+            let nodes: Vec<SuiNode> =
+                spawn_test_authorities(genesis_objects.clone(), &cloned_config).await;
+            let handles: Vec<_> = nodes.into_iter().map(move |node| node.wait()).collect();
+            cloned_barrier.wait();
+            if try_join_all(handles).await.is_err() {
+                error!("Failed while waiting for nodes");
+            }
+        });
+    });
+
+    barrier.wait();
+    // create client runtime
+    let client_runtime = Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(32 * 1024 * 1024)
+        .worker_threads(opts.num_client_threads)
+        .build()
+        .unwrap();
+    client_runtime.block_on(async move {
+        let mut payloads = ctx.make_test_payloads(&configs).await;
+        let clients = test_authority_aggregator(&configs);
+        let mut p: Vec<Arc<dyn Payload>> = vec![];
+        while !payloads.is_empty() {
+            let entry: Box<dyn Payload> = payloads.pop().unwrap();
+            p.push(Arc::from(entry));
+        }
+        run(clients, p, opts).await
+    });
 }
