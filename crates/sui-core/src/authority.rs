@@ -397,6 +397,7 @@ impl AuthorityState {
 
     /// We cannot use handle_certificate in fullnode to execute a certificate because there is no
     /// consensus engine to assign locks for shared objects. Hence we need special handling here.
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_node_sync_certificate(
         &self,
         certificate: CertifiedTransaction,
@@ -442,6 +443,7 @@ impl AuthorityState {
         Ok(())
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
         certificate: CertifiedTransaction,
@@ -527,7 +529,7 @@ impl AuthorityState {
         Ok(())
     }
 
-    #[instrument(level = "debug", name = "process_cert_inner", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn process_certificate(
         &self,
         tx_guard: CertTxGuard<'_>,
@@ -597,7 +599,7 @@ impl AuthorityState {
     /// non-transient error, e.g. the transaction input is somehow invalid, the correct
     /// locks are not held, etc. However, this is not entirely true, as a transient db read error
     /// may also cause this function to fail.
-    #[instrument(level = "debug", name = "prepare_certificate", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn prepare_certificate(
         &self,
         certificate: &CertifiedTransaction,
@@ -1088,6 +1090,7 @@ impl AuthorityState {
             limit -= 1;
             if let Some(tx_guard) = self.database.wal.read_one_recoverable_tx().await {
                 let digest = tx_guard.tx_id();
+                debug!(?digest, "replaying failed cert from log");
 
                 let (cert, retry_count) = self.database.wal.get_tx_data(&tx_guard)?;
 
@@ -1352,7 +1355,7 @@ impl AuthorityState {
     // Helper function to manage transaction_locks
 
     /// Set the transaction lock to a specific transaction
-    #[instrument(name = "db_set_transaction_lock", level = "trace", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
@@ -1365,7 +1368,7 @@ impl AuthorityState {
 
     /// Update state and signals that a new transactions has been processed
     /// to the batch maker service.
-    #[instrument(name = "commit_certificate", level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
         temporary_store: TemporaryStore<Arc<AuthorityStore>>,
@@ -1472,7 +1475,7 @@ impl ExecutionState for AuthorityState {
     type Error = SuiError;
 
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(name = "handle_consensus_transaction", level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_transaction(
         &self,
         consensus_index: ExecutionIndices,
@@ -1491,6 +1494,8 @@ impl ExecutionState for AuthorityState {
                 // consensus.
                 certificate.verify(&self.committee.load())?;
 
+                debug!(digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
+
                 self.database
                     .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
                     .await?;
@@ -1500,6 +1505,8 @@ impl ExecutionState for AuthorityState {
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
+                debug!(?seq, "handle_consensus_transaction Checkpoint");
+
                 if let Some(checkpoint) = &self.checkpoints {
                     let mut checkpoint = checkpoint.lock();
                     checkpoint
