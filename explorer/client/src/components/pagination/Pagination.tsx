@@ -164,7 +164,7 @@ function Pagination({
 
     // View when Total Number of Pages is one, which is an empty div:
 
-    if (finalPageNo === 1) return <div />;
+    if (finalPageNo <= 1) return <div />;
 
     // View when Total Number of Pages is at most 5, all values are listed:
 
