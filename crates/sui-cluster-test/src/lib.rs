@@ -92,9 +92,10 @@ impl TestContext {
     }
 
     // TODO: figure out a more efficient way to test a local cluster
-    // potentially by allowing retries with exponential back-off
+    // A potential way to do this is to subscribe to txns from fullnode
+    // when the feature is ready
     pub async fn let_fullnode_sync(&self) {
-        let duration = Duration::from_secs(if let Env::NewLocal = self.env { 8 } else { 3 });
+        let duration = Duration::from_secs(2);
         sleep(duration).await;
     }
 }
