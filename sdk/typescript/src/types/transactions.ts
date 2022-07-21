@@ -44,7 +44,7 @@ export type EpochId = number;
 
 export type AuthorityQuorumSignInfo = {
   epoch: EpochId;
-  signatures: AuthoritySignature[];
+  signature: AuthoritySignature[];
 };
 
 export type CertifiedTransaction = {
