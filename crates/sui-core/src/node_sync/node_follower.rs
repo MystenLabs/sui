@@ -471,7 +471,7 @@ where
                 self.effects_stake
                     .lock()
                     .unwrap()
-                    .forget_effects(&effects.effects.digest());
+                    .forget_effects(effects.digest());
             }
             CertAndEffects::Validator(cert) => {
                 self.state.handle_certificate(cert).await?;
