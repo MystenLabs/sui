@@ -51,9 +51,6 @@ pub struct TemporaryStore<S> {
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
     created_object_ids: HashSet<ObjectID>,
-    // temporary store of decrements to child counts, yet to be applied
-    // will be applied to either written or deleted objects
-    child_count_decrements: BTreeMap<ObjectID, u64>,
 }
 
 impl<S> TemporaryStore<S> {
@@ -75,7 +72,6 @@ impl<S> TemporaryStore<S> {
             deleted: BTreeMap::new(),
             events: Vec::new(),
             created_object_ids: HashSet::new(),
-            child_count_decrements: BTreeMap::new(),
         }
     }
 
@@ -103,10 +99,6 @@ impl<S> TemporaryStore<S> {
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
-        debug_assert!(
-            self.child_count_decrements.is_empty(),
-            "Either these have been applied, or there was an error and 'reset' has been called"
-        );
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
@@ -221,10 +213,6 @@ impl<S> TemporaryStore<S> {
         status: ExecutionStatus,
         gas_object_ref: ObjectRef,
     ) -> TransactionEffects {
-        debug_assert!(
-            self.child_count_decrements.is_empty(),
-            "Either these have been applied, or there was an error and 'reset' has been called"
-        );
         let written = self
             .written
             .iter()
@@ -323,7 +311,6 @@ impl<S> Storage for TemporaryStore<S> {
         self.deleted.clear();
         self.events.clear();
         self.created_object_ids.clear();
-        self.child_count_decrements.clear();
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -390,15 +377,9 @@ impl<S> Storage for TemporaryStore<S> {
         self.events.push(event)
     }
 
-    fn decrement_parents_child_count(&mut self, parent_id: ObjectID) {
-        let count = self.child_count_decrements.entry(parent_id).or_insert(0);
-        *count += 1
-    }
-
-    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, u64)> {
+    fn decrement_child_counts(&mut self, decrements: BTreeMap<ObjectID, u64>) {
         // write parents that have not yet been written (or weren't deleted)
-        let non_modified_parents = self
-            .child_count_decrements
+        let non_modified_parents = decrements
             .keys()
             .filter(|id| !self.written.contains_key(id) && !self.deleted.contains_key(id))
             .copied()
@@ -419,7 +400,7 @@ impl<S> Storage for TemporaryStore<S> {
         }
 
         // apply child decrements
-        for (id, count) in std::mem::take(&mut self.child_count_decrements) {
+        for (id, count) in decrements {
             match (self.written.get_mut(&id), self.deleted.get_mut(&id)) {
                 (None, None) => debug_assert!(false, "Invalid state, manually written above"),
                 (Some(_), Some(_)) => {
@@ -437,7 +418,9 @@ impl<S> Storage for TemporaryStore<S> {
                 (None, Some((_version, None, _kind))) => (),
             }
         }
+    }
 
+    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, u64)> {
         // gather deleted objects that are not wrapped
         // wrapped will have child_count set to None
         self.deleted
