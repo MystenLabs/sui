@@ -69,6 +69,10 @@ button.gone {
 
 /* Mobile */
 
+.mobilefooter {
+    @apply sm:hidden block;
+}
+
 .mobiletoprow {
     @apply sm:hidden block grid grid-cols-6 my-2;
 }
