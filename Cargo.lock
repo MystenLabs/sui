@@ -6578,6 +6578,7 @@ name = "sui-benchmark"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "clap 3.1.18",
  "crossterm 0.23.2",
