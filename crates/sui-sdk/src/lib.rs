@@ -11,7 +11,7 @@ use prometheus::Registry;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_core::authority_client::AuthorityAPI;
+use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_json::SuiJsonValue;
 use sui_json_rpc::api::EventStreamingApiClient;
@@ -27,16 +27,17 @@ use sui_json_rpc_types::{
     TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress, TransactionDigest};
+use sui_types::committee::Committee;
+use sui_types::crypto::SignableBytes;
+use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
+
 pub mod crypto;
 
 // re-export essential sui crates
 pub use sui_json as json;
 pub use sui_json_rpc_types as rpc_types;
 pub use sui_types as types;
-use sui_types::committee::Committee;
-use sui_types::crypto::SignableBytes;
-use sui_types::messages::{Transaction, TransactionData};
 
 #[allow(clippy::large_enum_variant)]
 pub enum SuiClient {
@@ -56,10 +57,10 @@ impl SuiClient {
         Ok(Self::Ws(client))
     }
 
-    pub fn new_embedded_client<A: AuthorityAPI + Send + Sync + Clone + 'static>(
+    pub fn new_embedded_client(
         path: PathBuf,
         committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, A>,
+        authority_clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         prometheus_registry: &Registry,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self::Embedded(Arc::new(GatewayState::new(

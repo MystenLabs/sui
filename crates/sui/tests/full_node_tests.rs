@@ -35,7 +35,7 @@ async fn transfer_coin(
     let sender = context.config.accounts.get(0).cloned().unwrap();
     let receiver = context.config.accounts.get(1).cloned().unwrap();
 
-    let object_refs = context.client.get_objects_owned_by_address(sender).await?;
+    let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
     let object_to_send = object_refs.get(1).unwrap().object_id;
 
     // Send an object
@@ -65,7 +65,7 @@ async fn get_account_and_objects(
     context: &mut WalletContext,
 ) -> Result<(SuiAddress, Vec<SuiObjectInfo>), anyhow::Error> {
     let sender = context.config.accounts.get(0).cloned().unwrap();
-    let object_refs = context.client.get_objects_owned_by_address(sender).await?;
+    let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
     Ok((sender, object_refs))
 }
 

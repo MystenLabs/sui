@@ -127,12 +127,15 @@ async fn create_response_sample() -> Result<
     let mut context = WalletContext::new(&config).await?;
     let address = context.config.accounts.first().cloned().unwrap();
 
-    context.client.sync_account_state(address).await?;
+    context.gateway.sync_account_state(address).await?;
 
     // Create coin response
-    let coins = context.client.get_objects_owned_by_address(address).await?;
+    let coins = context
+        .gateway
+        .get_objects_owned_by_address(address)
+        .await?;
     let coin = context
-        .client
+        .gateway
         .get_object(coins.first().unwrap().object_id)
         .await?;
 
@@ -192,7 +195,7 @@ async fn create_package_object_response(
     if let SuiClientCommandResult::Publish(response) = result {
         Ok((
             context
-                .client
+                .gateway
                 .get_object(response.package.object_id)
                 .await?,
             TransactionResponse::PublishResponse(response),
@@ -297,7 +300,7 @@ async fn create_hero_response(
             let hero = effect.created.first().unwrap();
             Ok((
                 package_id,
-                context.client.get_object(hero.reference.object_id).await?,
+                context.gateway.get_object(hero.reference.object_id).await?,
             ))
         } else {
             panic!()
@@ -404,7 +407,7 @@ async fn get_nft_response(
 
     if let SuiClientCommandResult::Call(certificate, effects) = result {
         let object = context
-            .client
+            .gateway
             .get_object(effects.created.first().unwrap().reference.object_id)
             .await?;
         let tx = TransactionResponse::EffectResponse(TransactionEffectsResponse {

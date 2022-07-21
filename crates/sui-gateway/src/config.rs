@@ -71,7 +71,13 @@ impl GatewayType {
                 let registry = prometheus::Registry::new();
                 SuiClient::new_embedded_client(path, committee, authority_clients, &registry)?
             }
-            GatewayType::RPC(url) => SuiClient::new_http_client(url)?,
+            GatewayType::RPC(url) => {
+                if url.starts_with("ws") {
+                    SuiClient::new_ws_client(url).await?
+                } else {
+                    SuiClient::new_http_client(url)?
+                }
+            }
         })
     }
 }

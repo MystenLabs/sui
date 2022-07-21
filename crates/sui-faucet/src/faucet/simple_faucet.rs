@@ -120,7 +120,7 @@ impl SimpleFaucet {
         info!(primary_coin_id = ?coin_id, ?amounts, ?gas_object_id, "Splitting coins");
         let context = &self.wallet;
         let data = context
-            .client
+            .gateway
             .split_coin(
                 signer,
                 coin_id,
@@ -134,7 +134,7 @@ impl SimpleFaucet {
 
         info!(tx_digest = ?tx.digest(), coin_id = ?coin_id, gas_object_id = ?gas_object_id, "Broadcasting split coin txn");
         let response = context
-            .client
+            .gateway
             .execute_transaction(tx)
             .await?
             .to_split_coin_response()?;
@@ -154,7 +154,7 @@ impl SimpleFaucet {
         let context = &self.wallet;
 
         let data = context
-            .client
+            .gateway
             .transfer_object(signer, coin_id, Some(gas_object_id), budget, recipient)
             .await?;
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
@@ -162,7 +162,7 @@ impl SimpleFaucet {
         let tx = Transaction::new(data, signature);
         info!(tx_digest = ?tx.digest(), recipient = ?recipient, coin_id = ?coin_id, gas_object_id = ?gas_object_id, "Broadcasting transfer obj txn");
         let response = context
-            .client
+            .gateway
             .execute_transaction(tx)
             .await?
             .to_effect_response()?;
