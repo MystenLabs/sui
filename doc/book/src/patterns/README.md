@@ -1,3 +1,3 @@
 # Patterns
 
-This part covers the programming patterns that are widely used in Move; some of which can only exist in Move.
+This part covers the programming patterns that are widely used in Move; some of which can exist only in Move.

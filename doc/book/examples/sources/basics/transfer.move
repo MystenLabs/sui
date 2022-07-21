@@ -45,7 +45,7 @@ module examples::profile {
     // using Wrapper functionality
     use 0x0::wrapper;
 
-    /// A profile information, not an object, can be wrapped
+    /// Profile information, not an object, can be wrapped
     /// into a transferable container
     struct ProfileInfo has store {
         name: String,
