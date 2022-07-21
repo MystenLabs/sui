@@ -13,7 +13,7 @@
 // TBD: Try objects of different sizes in natives
 
 #[test_only]
-module sui::NativesCalibrationTests {
+module sui::natives_calibration_tests {
     use sui::object::{Self, Info};
 
     use sui::test_scenario;
@@ -24,7 +24,7 @@ module sui::NativesCalibrationTests {
     // Number of times to run the inner loop of tests
     // We set this value to 1 to avoid long running tests
     // But normally we want something like 1000000
-    const NUM_TRIALS: u64 = 1;
+    const NUM_TRIALS: u64 = 100000;
 
     // A very basic object to be used in calls
     struct ObjectSimple has key, store, drop, copy {
