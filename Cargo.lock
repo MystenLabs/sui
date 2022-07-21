@@ -4274,7 +4274,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-log",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "typed-store",
  "types",
  "url",
@@ -6599,7 +6599,7 @@ dependencies = [
  "test-utils",
  "tokio",
  "tracing",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "workspace-hack 0.1.0",
 ]
 
@@ -7228,7 +7228,7 @@ dependencies = [
  "tracing-bunyan-formatter",
  "tracing-chrome",
  "tracing-opentelemetry",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7784,7 +7784,7 @@ checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
  "time 0.3.9",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7812,7 +7812,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7824,7 +7824,7 @@ dependencies = [
  "crossbeam",
  "json",
  "tracing",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7869,7 +7869,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
 ]
 
 [[package]]
@@ -7883,9 +7883,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.14"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a713421342a5a666b7577783721d3117f1b69a393df803ee17bb73b1e122a59"
+checksum = "60db860322da191b40952ad9affe65ea23e7dd6a5c442c2c42865810c6ab8e6b"
 dependencies = [
  "ansi_term",
  "matchers",
@@ -7908,7 +7908,7 @@ checksum = "f6992d8a98f570be1c729fe8b6f464fb18c4117054c10f1f952c22d533b48a74"
 dependencies = [
  "lazy_static 1.4.0",
  "tracing-core",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "tracing-test-macro",
 ]
 
@@ -9163,7 +9163,7 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "tracing-test",
  "tracing-test-macro",
  "try-lock",
@@ -9575,7 +9575,7 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.14",
+ "tracing-subscriber 0.3.15",
  "tracing-test",
  "tracing-test-macro",
  "try-lock",
