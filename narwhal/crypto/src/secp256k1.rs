@@ -7,41 +7,50 @@ use crate::traits::{
 };
 use base64ct::{Base64, Encoding};
 use once_cell::sync::OnceCell;
+use rust_secp256k1::{constants, rand::rngs::OsRng, Message, PublicKey, Secp256k1, SecretKey};
 use serde::{de, Deserialize, Serialize};
-use signature::rand_core::OsRng;
 use signature::{Signature, Signer, Verifier};
 use std::fmt::{self, Debug, Display};
-
-pub const SECP256K1_PRIVATE_KEY_LENGTH: usize = 32;
-pub const SECP256K1_PUBLIC_KEY_LENGTH: usize = 33;
-pub const SECP256K1_SIGNATURE_LENGTH: usize = 64;
 
 #[readonly::make]
 #[derive(Debug, Clone)]
 pub struct Secp256k1PublicKey {
-    pub pubkey: k256::ecdsa::VerifyingKey,
-    pub bytes: OnceCell<[u8; SECP256K1_PUBLIC_KEY_LENGTH]>,
+    pub pubkey: PublicKey,
+    pub bytes: OnceCell<[u8; constants::PUBLIC_KEY_SIZE]>,
 }
 
 pub type Secp256k1PublicKeyBytes =
     PublicKeyBytes<Secp256k1PublicKey, { Secp256k1PublicKey::LENGTH }>;
 
 #[readonly::make]
+#[derive(Debug)]
 pub struct Secp256k1PrivateKey {
-    pub privkey: k256::ecdsa::SigningKey,
-    pub bytes: OnceCell<[u8; SECP256K1_PRIVATE_KEY_LENGTH]>,
+    pub privkey: SecretKey,
+    pub bytes: OnceCell<[u8; constants::SECRET_KEY_SIZE]>,
 }
 
 #[readonly::make]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Secp256k1Signature {
-    pub sig: k256::ecdsa::Signature,
-    pub bytes: OnceCell<[u8; SECP256K1_SIGNATURE_LENGTH]>,
+    pub sig: rust_secp256k1::ecdsa::Signature,
+    pub bytes: OnceCell<[u8; constants::COMPACT_SIGNATURE_SIZE]>,
 }
 
 impl std::hash::Hash for Secp256k1PublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.as_ref().hash(state);
+    }
+}
+
+impl PartialOrd for Secp256k1PublicKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_ref().partial_cmp(other.as_ref())
+    }
+}
+
+impl Ord for Secp256k1PublicKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_ref().cmp(other.as_ref())
     }
 }
 
@@ -53,27 +62,18 @@ impl PartialEq for Secp256k1PublicKey {
 
 impl Eq for Secp256k1PublicKey {}
 
-impl PartialOrd for Secp256k1PublicKey {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.pubkey.to_bytes().partial_cmp(&other.pubkey.to_bytes())
-    }
-}
-
-impl Ord for Secp256k1PublicKey {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.pubkey.to_bytes().cmp(&other.pubkey.to_bytes())
-    }
-}
-
 impl VerifyingKey for Secp256k1PublicKey {
     type PrivKey = Secp256k1PrivateKey;
     type Sig = Secp256k1Signature;
-    const LENGTH: usize = SECP256K1_PUBLIC_KEY_LENGTH;
+    const LENGTH: usize = constants::PUBLIC_KEY_SIZE;
 }
 
 impl Verifier<Secp256k1Signature> for Secp256k1PublicKey {
     fn verify(&self, msg: &[u8], signature: &Secp256k1Signature) -> Result<(), signature::Error> {
-        self.pubkey.verify(msg, &signature.sig)
+        let message = Message::from_hashed_data::<rust_secp256k1::hashes::sha256::Hash>(msg);
+        let vrfy = Secp256k1::verification_only();
+        vrfy.verify_ecdsa(&message, &signature.sig, &self.pubkey)
+            .map_err(|_e| signature::Error::new())
     }
 }
 
@@ -83,7 +83,7 @@ impl AsRef<[u8]> for Secp256k1PublicKey {
             .get_or_try_init::<_, eyre::Report>(|| {
                 Ok(self
                     .pubkey
-                    .to_bytes()
+                    .serialize()
                     .as_slice()
                     .try_into()
                     .expect("wrong length"))
@@ -94,24 +94,25 @@ impl AsRef<[u8]> for Secp256k1PublicKey {
 
 impl ToFromBytes for Secp256k1PublicKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let pubkey = k256::ecdsa::VerifyingKey::from_sec1_bytes(bytes)
-            .map_err(|_e| signature::Error::new())?;
-        Ok(Secp256k1PublicKey {
-            pubkey,
-            bytes: OnceCell::new(),
-        })
+        match PublicKey::from_slice(bytes) {
+            Ok(pubkey) => Ok(Secp256k1PublicKey {
+                pubkey,
+                bytes: OnceCell::new(),
+            }),
+            Err(_) => Err(signature::Error::new()),
+        }
     }
 }
 
 impl Default for Secp256k1PublicKey {
     fn default() -> Self {
-        Secp256k1PublicKey::from_bytes(&[0u8; SECP256K1_PUBLIC_KEY_LENGTH]).unwrap()
+        Secp256k1PublicKey::from_bytes(&[0u8; constants::PUBLIC_KEY_SIZE]).unwrap()
     }
 }
 
 impl Display for Secp256k1PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.pubkey.fmt(f)
+        write!(f, "{}", Base64::encode_string(self.as_ref()))
     }
 }
 
@@ -138,9 +139,9 @@ impl<'de> Deserialize<'de> for Secp256k1PublicKey {
 
 impl<'a> From<&'a Secp256k1PrivateKey> for Secp256k1PublicKey {
     fn from(secret: &'a Secp256k1PrivateKey) -> Self {
-        let pubkey = secret.privkey.verifying_key();
+        let secp = Secp256k1::new();
         Secp256k1PublicKey {
-            pubkey,
+            pubkey: secret.privkey.public_key(&secp),
             bytes: OnceCell::new(),
         }
     }
@@ -149,23 +150,18 @@ impl<'a> From<&'a Secp256k1PrivateKey> for Secp256k1PublicKey {
 impl SigningKey for Secp256k1PrivateKey {
     type PubKey = Secp256k1PublicKey;
     type Sig = Secp256k1Signature;
-    const LENGTH: usize = SECP256K1_PRIVATE_KEY_LENGTH;
+    const LENGTH: usize = constants::SECRET_KEY_SIZE;
 }
 
 impl ToFromBytes for Secp256k1PrivateKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let privkey =
-            k256::ecdsa::SigningKey::from_bytes(bytes).map_err(|_e| signature::Error::new())?;
-        Ok(Secp256k1PrivateKey {
-            privkey,
-            bytes: OnceCell::new(),
-        })
-    }
-}
-
-impl Debug for Secp256k1PrivateKey {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-        write!(f, "{:?}", self.privkey.to_bytes())
+        match SecretKey::from_slice(bytes) {
+            Ok(privkey) => Ok(Secp256k1PrivateKey {
+                privkey,
+                bytes: OnceCell::new(),
+            }),
+            Err(_) => Err(signature::Error::new()),
+        }
     }
 }
 
@@ -193,11 +189,8 @@ impl<'de> Deserialize<'de> for Secp256k1PrivateKey {
 
 impl AsRef<[u8]> for Secp256k1PrivateKey {
     fn as_ref(&self) -> &[u8] {
-        let mut result = [0u8; 32];
-        result.copy_from_slice(self.privkey.to_bytes().as_slice());
-
         self.bytes
-            .get_or_try_init::<_, eyre::Report>(|| Ok(result))
+            .get_or_try_init::<_, eyre::Report>(|| Ok(self.privkey.secret_bytes()))
             .expect("OnceCell invariant violated")
     }
 }
@@ -224,30 +217,43 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
 
 impl Signature for Secp256k1Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let sig = <k256::ecdsa::Signature as signature::Signature>::from_bytes(bytes)
-            .map_err(|_e| signature::Error::new())?;
-        Ok(Secp256k1Signature {
-            sig,
-            bytes: OnceCell::new(),
-        })
+        match rust_secp256k1::ecdsa::Signature::from_compact(bytes) {
+            Ok(sig) => Ok(Secp256k1Signature {
+                sig,
+                bytes: OnceCell::new(),
+            }),
+            Err(_) => Err(signature::Error::new()),
+        }
     }
 }
 
 impl Authenticator for Secp256k1Signature {
     type PubKey = Secp256k1PublicKey;
     type PrivKey = Secp256k1PrivateKey;
-    const LENGTH: usize = SECP256K1_SIGNATURE_LENGTH;
+    const LENGTH: usize = constants::COMPACT_SIGNATURE_SIZE;
 }
 
 impl AsRef<[u8]> for Secp256k1Signature {
     fn as_ref(&self) -> &[u8] {
-        let mut result = [0u8; SECP256K1_SIGNATURE_LENGTH];
-        result.copy_from_slice(signature::Signature::as_bytes(&self.sig));
         self.bytes
-            .get_or_try_init::<_, eyre::Report>(|| Ok(result))
+            .get_or_try_init::<_, eyre::Report>(|| Ok(self.sig.serialize_compact()))
             .expect("OnceCell invariant violated")
     }
 }
+
+impl std::hash::Hash for Secp256k1Signature {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state);
+    }
+}
+
+impl PartialEq for Secp256k1Signature {
+    fn eq(&self, other: &Self) -> bool {
+        self.sig == other.sig
+    }
+}
+
+impl Eq for Secp256k1Signature {}
 
 impl Display for Secp256k1Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -257,13 +263,8 @@ impl Display for Secp256k1Signature {
 
 impl Default for Secp256k1Signature {
     fn default() -> Self {
-        let sig =
-            <k256::ecdsa::Signature as Signature>::from_bytes(&[1u8; SECP256K1_SIGNATURE_LENGTH])
-                .unwrap();
-        Secp256k1Signature {
-            sig,
-            bytes: OnceCell::new(),
-        }
+        <Secp256k1Signature as Signature>::from_bytes(&[0u8; constants::COMPACT_SIGNATURE_SIZE])
+            .unwrap()
     }
 }
 
@@ -302,8 +303,9 @@ impl KeyPair for Secp256k1KeyPair {
     }
 
     fn generate<R: rand::CryptoRng + rand::RngCore>(_rng: &mut R) -> Self {
-        let privkey = k256::ecdsa::SigningKey::random(&mut OsRng);
-        let pubkey = k256::ecdsa::VerifyingKey::from(&privkey);
+        let secp = Secp256k1::new();
+        // TODO: use param rng instead of generate a fresh OsRng when rand is upgraded to match. https://github.com/MystenLabs/narwhal/issues/544
+        let (privkey, pubkey) = secp.generate_keypair(&mut OsRng);
 
         Secp256k1KeyPair {
             name: Secp256k1PublicKey {
@@ -328,28 +330,26 @@ impl KeyPair for Secp256k1KeyPair {
 
 impl Signer<Secp256k1Signature> for Secp256k1KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Secp256k1Signature, signature::Error> {
-        let res = &self.secret.privkey.try_sign(msg);
-        match *res {
-            Ok(sig) => Ok(Secp256k1Signature {
-                sig,
-                bytes: OnceCell::new(),
-            }),
-            Err(_) => Err(signature::Error::new()),
-        }
+        let secp = Secp256k1::new();
+        let message = Message::from_hashed_data::<rust_secp256k1::hashes::sha256::Hash>(msg);
+        Ok(Secp256k1Signature {
+            sig: secp.sign_ecdsa(&message, &self.secret.privkey),
+            bytes: OnceCell::new(),
+        })
     }
 }
 
-impl TryInto<Secp256k1PublicKey> for Secp256k1PublicKeyBytes {
+impl TryFrom<Secp256k1PublicKeyBytes> for Secp256k1PublicKey {
     type Error = signature::Error;
 
-    fn try_into(self) -> Result<Secp256k1PublicKey, Self::Error> {
-        Secp256k1PublicKey::from_bytes(self.as_ref()).map_err(|_| Self::Error::new())
+    fn try_from(bytes: Secp256k1PublicKeyBytes) -> Result<Secp256k1PublicKey, Self::Error> {
+        Secp256k1PublicKey::from_bytes(bytes.as_ref()).map_err(|_| Self::Error::new())
     }
 }
 
-impl From<Secp256k1PublicKey> for Secp256k1PublicKeyBytes {
-    fn from(pk: Secp256k1PublicKey) -> Secp256k1PublicKeyBytes {
-        Secp256k1PublicKeyBytes::new((*pk.as_ref()).try_into().expect("wrong length"))
+impl From<&Secp256k1PublicKey> for Secp256k1PublicKeyBytes {
+    fn from(pk: &Secp256k1PublicKey) -> Self {
+        Secp256k1PublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
     }
 }
 

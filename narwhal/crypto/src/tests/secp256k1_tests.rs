@@ -28,7 +28,7 @@ fn serialize_deserialize() {
 
     let bytes = bincode::serialize(&public_key).unwrap();
     let pk2 = bincode::deserialize::<Secp256k1PublicKey>(&bytes).unwrap();
-    assert_eq!(*public_key, pk2);
+    assert_eq!(public_key.as_ref(), pk2.as_ref());
 
     let private_key = kpref.private();
     let bytes = bincode::serialize(&private_key).unwrap();
@@ -46,7 +46,7 @@ fn serialize_deserialize() {
     let serialized = serde_json::to_string(&signature).unwrap();
     println!("{:?}", serialized);
     let deserialized: Secp256k1Signature = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(deserialized.sig, signature.sig);
+    assert_eq!(deserialized.as_ref(), signature.as_ref());
 }
 
 #[test]
@@ -56,13 +56,13 @@ fn import_export_public_key() {
     let export = public_key.encode_base64();
     let import = Secp256k1PublicKey::decode_base64(&export);
     assert!(import.is_ok());
-    assert_eq!(&import.unwrap(), public_key);
+    assert_eq!(import.unwrap().as_ref(), public_key.as_ref());
 }
 
 #[test]
 fn test_public_key_bytes_conversion() {
     let kp = keys().pop().unwrap();
-    let pk_bytes: Secp256k1PublicKeyBytes = kp.public().clone().into();
+    let pk_bytes: Secp256k1PublicKeyBytes = kp.public().into();
     let rebuilded_pk: Secp256k1PublicKey = pk_bytes.try_into().unwrap();
     assert_eq!(kp.public().as_bytes(), rebuilded_pk.as_bytes());
 }
@@ -89,10 +89,10 @@ fn test_copy_key_pair() {
 #[test]
 fn to_from_bytes_signature() {
     let kpref = keys().pop().unwrap();
-    let signature = kpref.sign(b"Hello, world");
+    let signature = kpref.sign(b"Hello, world!");
     let sig_bytes = signature.as_ref();
-    let rebuilt_sig = <Secp256k1Signature as signature::Signature>::from_bytes(sig_bytes).unwrap();
-    assert_eq!(rebuilt_sig.sig, signature.sig);
+    let rebuilt_sig = <Secp256k1Signature as ToFromBytes>::from_bytes(sig_bytes).unwrap();
+    assert_eq!(rebuilt_sig.as_ref(), signature.as_ref())
 }
 
 #[test]

@@ -22,7 +22,7 @@ hkdf = { version = "0.12.3", features = ["std"] }
 serde_with = "1.14.0"
 serde_json = "1.0.80"
 schemars ="0.8.10"
-k256 = { version = "0.11.3", features = ["ecdsa"] }
+rust_secp256k1 = { version = "0.24.0", package = "secp256k1", features = ["rand", "bitcoin_hashes"] }
 
 # TODO: switch to https://github.com/celo-org/celo-bls-snark-rs 
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
