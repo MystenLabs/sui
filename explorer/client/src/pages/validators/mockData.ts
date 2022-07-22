@@ -102,7 +102,7 @@ export const mockState: ValidatorState = {
             pending_validators: '',
             quorum_stake_threshold:
                 (validatorsTotalStake * BigInt(3)) / BigInt(4),
-            validator_stake: validatorsTotalStake,
+            total_validator_stake: validatorsTotalStake,
         },
     },
 };

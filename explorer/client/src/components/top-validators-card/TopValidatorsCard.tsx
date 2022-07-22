@@ -47,7 +47,7 @@ export const STATE_DEFAULT: ValidatorState = {
             pending_removals: '',
             pending_validators: '',
             quorum_stake_threshold: BigInt(0),
-            validator_stake: BigInt(0),
+            total_validator_stake: BigInt(0),
         },
     },
 };
@@ -86,7 +86,7 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
 };
 
 function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
-    const totalStake = state.validators.fields.validator_stake;
+    const totalStake = state.validators.fields.total_validator_stake;
     // sort by order of descending stake
     sortValidatorsByStake(state.validators.fields.active_validators);
 

@@ -85,7 +85,7 @@ export type ValidatorState = {
             pending_removals: string;
             pending_validators: string;
             quorum_stake_threshold: bigint;
-            validator_stake: bigint;
+            total_validator_stake: bigint;
         };
     };
 };
@@ -191,7 +191,7 @@ export function getTabFooter(count: number) {
 }
 
 function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
-    const totalStake = state.validators.fields.validator_stake;
+    const totalStake = state.validators.fields.total_validator_stake;
     // sort by order of descending stake
     sortValidatorsByStake(state.validators.fields.active_validators);
 
