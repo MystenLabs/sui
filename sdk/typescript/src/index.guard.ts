@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 /*
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
@@ -439,8 +436,8 @@ export function isAuthorityQuorumSignInfo(obj: any, _argumentName?: string): obj
             typeof obj === "object" ||
             typeof obj === "function") &&
         isSequenceNumber(obj.epoch) as boolean &&
-        Array.isArray(obj.signature) &&
-        obj.signature.every((e: any) =>
+        Array.isArray(obj.signatures) &&
+        obj.signatures.every((e: any) =>
             isTransactionDigest(e) as boolean
         )
     )
