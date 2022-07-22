@@ -18,11 +18,17 @@ function DisplayBox({ display }: { display: string }) {
     const [hasImgBeenChecked, setHasImgBeenChecked] = useState(false);
     const [imgAllowState, setImgAllowState] = useState(false);
 
+    const [hasClickedImage, setHasClickedImage] = useState(false);
+
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(() => {
         setHasDisplayLoaded(true);
         setHasFailedToLoad(false);
     }, [setHasDisplayLoaded]);
+
+    const handleImageClick = useCallback(() => {
+        setHasClickedImage(!hasClickedImage);
+    }, [hasClickedImage]);
 
     useEffect(() => {
         setHasFailedToLoad(false);
@@ -75,29 +81,57 @@ function DisplayBox({ display }: { display: string }) {
         );
     } else {
         return (
-            <div className={styles['display-container']} id="displayContainer">
-                {!hasDisplayLoaded && (
-                    <div className={styles.imagebox} id="pleaseWaitImage">
-                        Image Loading...
-                    </div>
+            <>
+                {hasClickedImage && (
+                    <section
+                        className={styles.largeimagecontainer}
+                        onClick={handleImageClick}
+                    >
+                        <img
+                            id="loadedImage"
+                            className={
+                                hasClickedImage
+                                    ? styles.largeimage
+                                    : styles.smallimage
+                            }
+                            style={imageStyle}
+                            alt="NFT"
+                            src={transformURL(display)}
+                            onLoad={handleImageLoad}
+                            onError={handleImageFail}
+                        />
+                        <div className={styles.detailsbg} />
+                    </section>
                 )}
-                {hasFailedToLoad && (
-                    <div className={styles.imagebox} id="noImage">
-                        No Image was Found
-                    </div>
-                )}
-                {!hasFailedToLoad && (
-                    <img
-                        id="loadedImage"
-                        className={styles.imagebox}
-                        style={imageStyle}
-                        alt="NFT"
-                        src={transformURL(display)}
-                        onLoad={handleImageLoad}
-                        onError={handleImageFail}
-                    />
-                )}
-            </div>
+
+                <div
+                    className={styles['display-container']}
+                    id="displayContainer"
+                >
+                    {!hasDisplayLoaded && (
+                        <div className={styles.imagebox} id="pleaseWaitImage">
+                            Image Loading...
+                        </div>
+                    )}
+                    {hasFailedToLoad && (
+                        <div className={styles.imagebox} id="noImage">
+                            No Image was Found
+                        </div>
+                    )}
+                    {!hasFailedToLoad && (
+                        <img
+                            id="loadedImage"
+                            className={styles.smallimage}
+                            style={imageStyle}
+                            alt="NFT"
+                            src={transformURL(display)}
+                            onLoad={handleImageLoad}
+                            onError={handleImageFail}
+                            onClick={handleImageClick}
+                        />
+                    )}
+                </div>
+            </>
         );
     }
 }

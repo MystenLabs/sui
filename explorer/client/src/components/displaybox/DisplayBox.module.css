@@ -2,8 +2,18 @@ div.imagebox {
     @apply border-0 border-b-2 border-solid border-gray-300;
 }
 
-img.imagebox {
-    @apply object-scale-down w-[100%];
+img.smallimage {
+    @apply object-scale-down w-[100%] cursor-pointer;
+}
+
+img.largeimage {
+    @apply fixed left-[50%] top-[50%] max-w-[90vw] max-h-[80vh] z-50 rounded-[6px];
+
+    transform: translate(-50%, -50%);
+}
+
+div.detailsbg {
+    @apply fixed top-0 left-0 w-full h-full bg-sui-grey-100 z-20 opacity-[0.85];
 }
 
 .codebox {
