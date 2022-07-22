@@ -6506,6 +6506,7 @@ dependencies = [
  "ed25519-dalek",
  "executor",
  "futures",
+ "hex",
  "jemalloc-ctl",
  "jemallocator",
  "jsonrpsee",
