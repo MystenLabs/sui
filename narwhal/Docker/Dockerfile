@@ -87,6 +87,7 @@ WORKDIR "$WORKDIR/narwhal"
 
 # Copy the Narwhal node binary to bin folder
 COPY --from=builder narwhal/target/${BUILD_MODE}/node bin/
+COPY --from=builder narwhal/target/${BUILD_MODE}/benchmark_client bin/
 
 # Copy the entry point file
 COPY Docker/entry.sh ./
