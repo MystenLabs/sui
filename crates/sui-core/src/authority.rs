@@ -99,6 +99,7 @@ type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 pub struct AuthorityMetrics {
     tx_orders: IntCounter,
     total_certs: IntCounter,
+    total_cert_attempts: IntCounter,
     total_effects: IntCounter,
     total_events: IntCounter,
     signature_errors: IntCounter,
@@ -136,6 +137,12 @@ impl AuthorityMetrics {
             total_certs: register_int_counter_with_registry!(
                 "total_transaction_certificates",
                 "Total number of transaction certificates handled",
+                registry,
+            )
+            .unwrap(),
+            total_cert_attempts: register_int_counter_with_registry!(
+                "total_handle_certificate_attempts",
+                "Number of calls to handle_certificate",
                 registry,
             )
             .unwrap(),
@@ -344,12 +351,9 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
-            &self.database,
-            &transaction,
-            &self.metrics.shared_obj_tx,
-        )
-        .await?;
+        let (_gas_status, input_objects) =
+            transaction_input_checker::check_transaction_input(&self.database, &transaction)
+                .await?;
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -452,6 +456,7 @@ impl AuthorityState {
         &self,
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
+        self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
             return Err(SuiError::GenericStorageError(
                 "cannot execute cert without effects on fullnode".into(),
@@ -541,7 +546,6 @@ impl AuthorityState {
         tx_guard: CertTxGuard<'_>,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        self.metrics.total_certs.inc();
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
@@ -579,6 +583,9 @@ impl AuthorityState {
                 Ok(res) => res,
             };
 
+        let input_object_count = temporary_store.objects().len();
+        let shared_object_count = signed_effects.effects.shared_objects.len();
+
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
         self.commit_certificate(temporary_store, certificate, &signed_effects)
@@ -587,6 +594,24 @@ impl AuthorityState {
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
+
+        // Update metrics.
+        self.metrics.total_effects.inc();
+        self.metrics.total_certs.inc();
+
+        if shared_object_count > 0 {
+            self.metrics.shared_obj_tx.inc();
+        }
+
+        self.metrics
+            .num_input_objs
+            .observe(input_object_count as f64);
+        self.metrics
+            .num_shared_objects
+            .observe(shared_object_count as f64);
+        self.metrics
+            .batch_size
+            .observe(certificate.data.kind.batch_size() as f64);
 
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
@@ -613,12 +638,8 @@ impl AuthorityState {
         TemporaryStore<Arc<AuthorityStore>>,
         SignedTransactionEffects,
     )> {
-        let (gas_status, input_objects) = transaction_input_checker::check_transaction_input(
-            &self.database,
-            certificate,
-            &self.metrics.shared_obj_tx,
-        )
-        .await?;
+        let (gas_status, input_objects) =
+            transaction_input_checker::check_transaction_input(&self.database, certificate).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
@@ -633,15 +654,6 @@ impl AuthorityState {
                 .await?;
         }
 
-        self.metrics
-            .num_input_objs
-            .observe(input_objects.len() as f64);
-        self.metrics
-            .num_shared_objects
-            .observe(shared_object_refs.len() as f64);
-        self.metrics
-            .batch_size
-            .observe(certificate.data.kind.batch_size() as f64);
         debug!(
             num_inputs = input_objects.len(),
             "Read inputs for transaction from DB"
@@ -661,11 +673,6 @@ impl AuthorityState {
             gas_status,
             self.epoch(),
         );
-
-        self.metrics.total_effects.inc();
-        self.metrics
-            .total_events
-            .inc_by(effects.events.len() as u64);
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
@@ -738,9 +745,14 @@ impl AuthorityState {
         // Emit events
         if let Some(event_handler) = &self.event_handler {
             let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
+
             event_handler
                 .process_events(&effects.effects, timestamp_ms, seq, checkpoint_num)
                 .await?;
+
+            self.metrics
+                .total_events
+                .inc_by(effects.effects.events.len() as u64);
         }
 
         Ok(())
