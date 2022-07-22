@@ -6707,6 +6707,7 @@ dependencies = [
  "sui-network",
  "sui-storage",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tempfile",
  "test-fuzz",
