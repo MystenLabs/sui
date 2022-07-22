@@ -100,7 +100,7 @@ $ sudo brew install curl
 ```
 
 *Microsoft Windows*
-Download and install from: [https://curl.se/windows/](https://curl.se/windows/)
+Download and install from: https://curl.se/windows/
 
 #### Rust
 Sui is written in Rust, and we are using the latest version of the
@@ -147,7 +147,7 @@ $ sudo apt install cmake
 $ sudo brew install cmake
 ```
 *Microsoft Windows*
-Download and install from: [https://cmake.org/download/](https://cmake.org/download/)
+Download and install from: https://cmake.org/download/
 
 If you run into issues, follow this detailed [CMake Installation](https://riptutorial.com/cmake/example/4459/cmake-installation) tutorial.
 
@@ -236,7 +236,7 @@ To request SUI test tokens:
 ## Source code
 
 If you need to download and understand the Sui source code:
-[https://github.com/MystenLabs/sui](https://github.com/MystenLabs/sui)
+https://github.com/MystenLabs/sui
 
 Clone the Sui repository:
 
