@@ -77,12 +77,11 @@ impl SuiKeystore {
         let keys: Vec<KeyPair> = if path.exists() {
             let reader = BufReader::new(File::open(path)?);
             let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
-            let kp_vec: Result<Vec<KeyPair>, anyhow::Error> = kp_strings
+            kp_strings
                 .iter()
                 .map(|kpstr| KeyPair::decode_base64(kpstr))
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|_| anyhow::anyhow!("Invalid Keypair file"));
-            kp_vec?
+                .map_err(|_| anyhow::anyhow!("Invalid Keypair file"))?
         } else {
             Vec::new()
         };
