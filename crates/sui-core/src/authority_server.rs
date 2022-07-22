@@ -57,7 +57,9 @@ impl AuthorityServerHandle {
     }
 
     pub async fn kill(self) -> Result<(), std::io::Error> {
-        self.tx_cancellation.send(()).unwrap();
+        self.tx_cancellation.send(()).map_err(|_e| {
+            std::io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
+        })?;
         self.handle
             .await?
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
