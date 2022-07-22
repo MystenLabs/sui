@@ -37,6 +37,22 @@ running Sui:
 * macOS - macOS Monterey
 * Microsoft Windows - Windows 11
 
+## Software requirements
+
+Here are the packages required by operating system:
+
+|OS |Linux  | macOS| Windows 11|
+--- | --- | ---| ---|
+|Sui|X|X|X|
+|Curl|X|X|X|
+|Rust|X|X|X|
+|Git CLI|X|X|X|
+|CMake|X|X|X|
+|libssl-dev|X| | |
+|libclang-dev|X| | |
+|C++ build tools| | |X|
+|LLVM Compiler| | |X|
+
 ## Prerequisites
 
 At a minimum, you should have a machine capable of installing command line tools (namely, a terminal).
