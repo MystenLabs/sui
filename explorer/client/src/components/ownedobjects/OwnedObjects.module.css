@@ -2,7 +2,7 @@
     @apply border-collapse;
 }
 
-.groupview tr:not(:first-of-type) {
+.groupview tbody tr {
     @apply cursor-pointer hover:bg-[#6FBCF01A] h-[33px];
 }
 
