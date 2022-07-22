@@ -68,17 +68,34 @@ For simplicity, we recommend installing in `~/sui` or using an environment varia
 >**Important:** You will need to restart your command prompt after installing these prerequisites
 >for them to be available in your environment.
 
+
+
+## Linux
+
+If you are using Linux, install these dependencies. For example, in Ubuntu, run:
+```shell
+    $ apt-get update \
+    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y --no-install-recommends \
+    tzdata \
+    git \
+    ca-certificates \
+    curl \
+    build-essential \
+    libssl-dev \
+    pkg-config \
+    libclang-dev \
+    cmake
+```
+
+## macOS
+
 ### Brew
 In macOS, first install [Brew](https://brew.sh/) to install other packages:
 ```shell
 $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-### General packages
-
-Ensure each of the packages below exist on each OS:
-
-#### Curl
+### Curl
 Confirm that you can run the `curl` command to download dependencies.
 
 See whether you already have curl installed by running:
@@ -89,18 +106,16 @@ $ which curl
 
 And if you see no output path, install it with:
 
-*Linux*
-```shell
-$ sudo apt install curl
-```
-
-*macOS*
 ```shell
 $ brew install curl
 ```
 
-*Microsoft Windows*
-Download and install from: https://curl.se/windows/
+
+## Microsoft Windows
+
+### Curl
+
+Download the `curl` command to install other dependencies from: https://curl.se/windows/
 
 #### Rust
 Sui is written in Rust, and we are using the latest version of the
