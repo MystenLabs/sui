@@ -341,9 +341,9 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                 // whatever this is. Otherwise, we are sending back an error
                 // response.
                 if cleanup_successful.is_ok() {
-                    Self::broadcast(senders, result).await;
+                    Self::unreliable_broadcast(senders, result).await;
                 } else {
-                    Self::broadcast(
+                    Self::unreliable_broadcast(
                         senders,
                         Err(BlockRemoverError {
                             ids: block_ids,
@@ -357,7 +357,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
     }
 
     /// Helper method to broadcast the result_to_send to all the senders.
-    async fn broadcast(
+    async fn unreliable_broadcast(
         senders: Vec<Sender<BlockRemoverResult<RemoveBlocksResponse>>>,
         result_to_send: BlockRemoverResult<RemoveBlocksResponse>,
     ) {
@@ -543,7 +543,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
 
             // send the request
             self.worker_network
-                .send(worker_address.clone(), &message)
+                .unreliable_send(worker_address.clone(), &message)
                 .await;
 
             debug!(

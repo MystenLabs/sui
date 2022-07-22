@@ -683,7 +683,9 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
             let message =
                 PrimaryWorkerMessage::Synchronize(batch_ids.clone(), primary_peer_name.clone());
-            self.worker_network.send(worker_address, &message).await;
+            self.worker_network
+                .unreliable_send(worker_address, &message)
+                .await;
 
             debug!(
                 "Sent request for batch ids {:?} to worker id {}",

@@ -100,7 +100,9 @@ impl NodeRestarter {
             let message = PrimaryWorkerMessage::<Keys::PubKey>::Reconfigure(
                 ReconfigureNotification::Shutdown,
             );
-            let worker_cancel_handles = worker_network.broadcast(addresses, &message).await;
+            let worker_cancel_handles = worker_network
+                .unreliable_broadcast(addresses, &message)
+                .await;
 
             // Ensure the message has been received.
             primary_cancel_handle

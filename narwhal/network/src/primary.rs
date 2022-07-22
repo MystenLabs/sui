@@ -139,8 +139,8 @@ impl PrimaryNetwork {
             .await
     }
 
-    /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
-    /// message only to them. This is useful to pick nodes with whom to sync.
+    /// Broadcasts a message to all `addresses` passed as an argument.
+    /// The attempts to send individual messages are best effort and will not be retried.
     pub async fn unreliable_broadcast<T: VerifyingKey>(
         &mut self,
         addresses: Vec<Multiaddr>,
@@ -230,7 +230,9 @@ impl PrimaryToWorkerNetwork {
         PrimaryToWorkerClient::new(channel)
     }
 
-    pub async fn send<T: VerifyingKey>(
+    /// Sends a message to an `address` passed as an argument.
+    /// The attempt to send a message is best effort and will not be retried.
+    pub async fn unreliable_send<T: VerifyingKey>(
         &mut self,
         address: Multiaddr,
         message: &PrimaryWorkerMessage<T>,
@@ -245,7 +247,9 @@ impl PrimaryToWorkerNetwork {
             .await
     }
 
-    pub async fn broadcast<T: VerifyingKey>(
+    /// Broadcasts a message to all `addresses` passed as an argument.
+    /// The attempts to send individual messages are best effort and will not be retried.
+    pub async fn unreliable_broadcast<T: VerifyingKey>(
         &mut self,
         addresses: Vec<Multiaddr>,
         message: &PrimaryWorkerMessage<T>,

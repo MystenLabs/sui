@@ -80,7 +80,9 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
                 .map(|x| x.primary_to_worker)
                 .collect();
             let message = PrimaryWorkerMessage::<PublicKey>::Cleanup(round);
-            self.worker_network.broadcast(addresses, &message).await;
+            self.worker_network
+                .unreliable_broadcast(addresses, &message)
+                .await;
         }
     }
 

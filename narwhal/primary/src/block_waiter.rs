@@ -713,7 +713,9 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
 
             let message = PrimaryWorkerMessage::<PublicKey>::RequestBatch(digest);
 
-            self.worker_network.send(worker_address, &message).await;
+            self.worker_network
+                .unreliable_send(worker_address, &message)
+                .await;
 
             // mark it as pending batch. Since we assume that batches are unique
             // per block, a clean up on a block request will also clean

@@ -215,7 +215,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
                                 // TODO [issue #423]: This network transmission needs to be reliable. The worker may crash-recover
                                 // or a committee change may change the worker's IP address.
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
-                                self.worker_network.send(address, &message).await;
+                                self.worker_network.unreliable_send(address, &message).await;
                             }
                         }
 
