@@ -4,17 +4,21 @@
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
+use sui_types::sui_serde::KeyPairBase64;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
 /// all validators
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
     pub validator_configs: Vec<NodeConfig>,
+    #[serde_as(as = "Vec<KeyPairBase64>")]
     pub account_keys: Vec<KeyPair>,
     pub genesis: genesis::Genesis,
 }
