@@ -14,6 +14,10 @@
     justify-content: stretch;
     padding: 5px 10px;
     overflow: hidden;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    transition: transform 300ms ease-in-out;
+    opacity: 1;
 }
 
 .link {
@@ -53,4 +57,10 @@
     .active > & {
         font-weight: 700;
     }
+}
+
+.hidden {
+    transform: translateY(100%);
+    opacity: 0;
+    transition: transform 300ms ease-in-out, opacity 0ms ease-in 300ms;
 }
