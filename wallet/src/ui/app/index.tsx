@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppType } from './redux/slices/app/AppType';
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -24,6 +24,9 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
+import { setNavVisibility } from '_redux/slices/app';
+
+const HIDDEN_MENU_PATHS = ['/stake-new'];
 
 const App = () => {
     const dispatch = useAppDispatch();
@@ -36,6 +39,11 @@ const App = () => {
     useEffect(() => {
         document.body.classList[isPopup ? 'add' : 'remove']('is-popup');
     }, [isPopup]);
+    const location = useLocation();
+    useEffect(() => {
+        const menuVisible = !HIDDEN_MENU_PATHS.includes(location.pathname);
+        dispatch(setNavVisibility(menuVisible));
+    }, [location, dispatch]);
     return (
         <Routes>
             <Route path="/" element={<HomePage />}>
