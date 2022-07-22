@@ -7,11 +7,11 @@ use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-use prometheus::Registry;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use sui_core::authority_client::NetworkAuthorityClient;
+use serde::Deserialize;
+use serde::Serialize;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_json::SuiJsonValue;
 use sui_json_rpc::api::EventStreamingApiClient;
@@ -26,8 +26,7 @@ use sui_json_rpc_types::{
     RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
     TransactionEffectsResponse, TransactionResponse,
 };
-use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress, TransactionDigest};
-use sui_types::committee::Committee;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
@@ -35,6 +34,7 @@ use sui_types::sui_serde::Base64;
 pub mod crypto;
 
 // re-export essential sui crates
+pub use sui_config::gateway;
 pub use sui_json as json;
 pub use sui_json_rpc_types as rpc_types;
 pub use sui_types as types;
@@ -57,18 +57,8 @@ impl SuiClient {
         Ok(Self::Ws(client))
     }
 
-    pub fn new_embedded_client(
-        path: PathBuf,
-        committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
-        prometheus_registry: &Registry,
-    ) -> Result<Self, anyhow::Error> {
-        Ok(Self::Embedded(Arc::new(GatewayState::new(
-            path,
-            committee,
-            authority_clients,
-            prometheus_registry,
-        )?)))
+    pub fn new_embedded_client(config: &GatewayConfig) -> Result<Self, anyhow::Error> {
+        Ok(Self::Embedded(GatewayState::create_client(config, None)?))
     }
 }
 
@@ -497,5 +487,58 @@ impl SuiClient {
             }
             _ => Err(anyhow!("Subscription only supported by WebSocket client.")),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClientType {
+    Embedded(GatewayConfig),
+    RPC(String),
+}
+
+impl Display for ClientType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+
+        match self {
+            ClientType::Embedded(config) => {
+                writeln!(writer, "Client Type : Embedded Gateway")?;
+                writeln!(
+                    writer,
+                    "Gateway state DB folder path : {:?}",
+                    config.db_folder_path
+                )?;
+                let authorities = config
+                    .validator_set
+                    .iter()
+                    .map(|info| info.network_address());
+                writeln!(
+                    writer,
+                    "Authorities : {:?}",
+                    authorities.collect::<Vec<_>>()
+                )?;
+            }
+            ClientType::RPC(url) => {
+                writeln!(writer, "Client Type : JSON-RPC")?;
+                writeln!(writer, "RPC URL : {}", url)?;
+            }
+        }
+        write!(f, "{}", writer)
+    }
+}
+
+impl ClientType {
+    pub async fn init(&self) -> Result<SuiClient, anyhow::Error> {
+        Ok(match self {
+            ClientType::Embedded(config) => SuiClient::new_embedded_client(config)?,
+            ClientType::RPC(url) => {
+                if url.starts_with("ws") {
+                    SuiClient::new_ws_client(url).await?
+                } else {
+                    SuiClient::new_http_client(url)?
+                }
+            }
+        })
     }
 }

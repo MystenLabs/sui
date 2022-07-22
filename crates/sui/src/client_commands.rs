@@ -23,11 +23,10 @@ use sui_json_rpc_types::{
 use tracing::info;
 
 use sui_framework::build_move_package_to_bytes;
-use sui_gateway::config::GatewayType;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::Keystore;
-use sui_sdk::SuiClient;
+use sui_sdk::{ClientType, SuiClient};
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
@@ -468,7 +467,7 @@ impl SuiClientCommands {
 
                 if let Some(gateway) = &gateway {
                     // TODO: handle embedded gateway
-                    context.config.gateway = GatewayType::RPC(gateway.clone());
+                    context.config.gateway = ClientType::RPC(gateway.clone());
                     context.config.save()?;
                 }
 
