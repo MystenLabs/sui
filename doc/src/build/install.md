@@ -37,6 +37,8 @@ running Sui:
 * [macOS](#macOS-specific) - macOS Monterey
 * [Microsoft Windows](#microsoft-windows-specific) - Windows 11
 
+First install the [General packages](#general-packages) (plus [Brew](#brew) if on macOS), then install the OS-specific packages.
+
 ## Prerequisites
 
 At a minimum, you should have a machine capable of installing command line tools (namely, a terminal).
