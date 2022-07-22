@@ -147,7 +147,7 @@ $ sudo apt install cmake
 $ sudo brew install cmake
 ```
 *Microsoft Windows*
-Download and install from: https://cmake.org/download/
+Download and install from: [https://cmake.org/download/](https://cmake.org/download/)
 
 If you run into issues, follow this detailed [CMake Installation](https://riptutorial.com/cmake/example/4459/cmake-installation) tutorial.
 
