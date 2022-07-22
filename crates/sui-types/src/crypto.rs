@@ -47,8 +47,19 @@ pub type AggregateAccountSignature = Ed25519AggregateSignature;
 //
 
 #[serde_as]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PublicKeyBytes(#[serde_as(as = "Readable<Base64, Bytes>")] [u8; PublicKey::LENGTH]);
+
+impl PublicKeyBytes {
+    fn fmt_impl(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
+        let s = hex::encode(&self.0);
+        write!(f, "k#{}", s)?;
+        Ok(())
+    }
+}
 
 impl TryFrom<PublicKeyBytes> for PublicKey {
     type Error = signature::Error;
@@ -70,11 +81,15 @@ impl AsRef<[u8]> for PublicKeyBytes {
     }
 }
 
+impl std::fmt::Debug for PublicKeyBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        self.fmt_impl(f)
+    }
+}
+
 impl Display for PublicKeyBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = hex::encode(&self.0);
-        write!(f, "k#{}", s)?;
-        Ok(())
+        self.fmt_impl(f)
     }
 }
 
