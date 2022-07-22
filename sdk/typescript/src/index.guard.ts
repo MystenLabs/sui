@@ -436,8 +436,8 @@ export function isAuthorityQuorumSignInfo(obj: any, _argumentName?: string): obj
             typeof obj === "object" ||
             typeof obj === "function") &&
         isSequenceNumber(obj.epoch) as boolean &&
-        Array.isArray(obj.signatures) &&
-        obj.signatures.every((e: any) =>
+        Array.isArray(obj.signature) &&
+        obj.signature.every((e: any) =>
             isTransactionDigest(e) as boolean
         )
     )
