@@ -2105,6 +2105,14 @@
               "version"
             ],
             "properties": {
+              "child_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0.0
+              },
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
               },

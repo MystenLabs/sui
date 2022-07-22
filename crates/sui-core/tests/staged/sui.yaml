@@ -143,23 +143,31 @@ ExecutionFailureStatus:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
     16:
-      PublishErrorEmptyPackage: UNIT
+      InvalidParentDeletion:
+        NEWTYPE:
+          TYPENAME: InvalidParentDeletion
     17:
-      PublishErrorNonZeroAddress: UNIT
+      InvalidParentFreezing:
+        NEWTYPE:
+          TYPENAME: InvalidParentFreezing
     18:
-      PublishErrorDuplicateModule: UNIT
+      PublishErrorEmptyPackage: UNIT
     19:
-      SuiMoveVerificationError: UNIT
+      PublishErrorNonZeroAddress: UNIT
     20:
-      MovePrimitiveRuntimeError: UNIT
+      PublishErrorDuplicateModule: UNIT
     21:
+      SuiMoveVerificationError: UNIT
+    22:
+      MovePrimitiveRuntimeError: UNIT
+    23:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    22:
+    24:
       VMVerificationOrDeserializationError: UNIT
-    23:
+    25:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
@@ -172,6 +180,14 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
 Identifier:
   NEWTYPESTRUCT: STR
+InvalidParentDeletion:
+  STRUCT:
+    - object:
+        TYPENAME: ObjectID
+InvalidParentFreezing:
+  STRUCT:
+    - object:
+        TYPENAME: ObjectID
 InvalidSharedByValue:
   STRUCT:
     - object:

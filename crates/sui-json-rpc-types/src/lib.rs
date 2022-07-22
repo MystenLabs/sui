@@ -826,6 +826,11 @@ fn try_convert_type_impl(
                     Some(SuiMoveValue::Number(n)) => Some(*n),
                     _ => return None,
                 },
+                SuiMoveValue::Vector(inner) => match inner.as_slice() {
+                    [] => None,
+                    [SuiMoveValue::Number(n)] => Some(*n),
+                    _ => return None,
+                },
                 _ => return None,
             };
             SuiMoveValue::Info {
