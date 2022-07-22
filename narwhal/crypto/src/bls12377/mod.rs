@@ -5,6 +5,7 @@ use std::fmt::{self, Display};
 
 use crate::{
     pubkey_bytes::PublicKeyBytes,
+    serde_helpers::keypair_decode_base64,
     traits::{AggregateAuthenticator, EncodeDecodeBase64, ToFromBytes},
 };
 use ::ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -354,6 +355,19 @@ impl From<BLS12377PrivateKey> for BLS12377KeyPair {
     fn from(secret: BLS12377PrivateKey) -> Self {
         let name = BLS12377PublicKey::from(&secret);
         BLS12377KeyPair { name, secret }
+    }
+}
+
+impl EncodeDecodeBase64 for BLS12377KeyPair {
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+        keypair_decode_base64(value)
+    }
+
+    fn encode_base64(&self) -> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(self.secret.as_ref());
+        bytes.extend_from_slice(self.name.as_ref());
+        base64ct::Base64::encode_string(&bytes[..])
     }
 }
 

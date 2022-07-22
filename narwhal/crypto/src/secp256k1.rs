@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::pubkey_bytes::PublicKeyBytes;
+use crate::serde_helpers::keypair_decode_base64;
 use crate::traits::{
     Authenticator, EncodeDecodeBase64, KeyPair, SigningKey, ToFromBytes, VerifyingKey,
 };
@@ -272,6 +273,19 @@ impl Default for Secp256k1Signature {
 pub struct Secp256k1KeyPair {
     pub name: Secp256k1PublicKey,
     pub secret: Secp256k1PrivateKey,
+}
+
+impl EncodeDecodeBase64 for Secp256k1KeyPair {
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+        keypair_decode_base64(value)
+    }
+
+    fn encode_base64(&self) -> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(self.secret.as_ref());
+        bytes.extend_from_slice(self.name.as_ref());
+        base64ct::Base64::encode_string(&bytes[..])
+    }
 }
 
 impl KeyPair for Secp256k1KeyPair {

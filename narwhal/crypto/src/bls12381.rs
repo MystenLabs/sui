@@ -13,7 +13,10 @@ use blst::min_sig as blst;
 use once_cell::sync::OnceCell;
 use rand::{rngs::OsRng, RngCore};
 
-use crate::{pubkey_bytes::PublicKeyBytes, serde_helpers::BlsSignature};
+use crate::{
+    pubkey_bytes::PublicKeyBytes,
+    serde_helpers::{keypair_decode_base64, BlsSignature},
+};
 use serde::{
     de::{self},
     Deserialize, Serialize,
@@ -365,6 +368,19 @@ impl From<BLS12381PrivateKey> for BLS12381KeyPair {
     fn from(secret: BLS12381PrivateKey) -> Self {
         let name = BLS12381PublicKey::from(&secret);
         BLS12381KeyPair { name, secret }
+    }
+}
+
+impl EncodeDecodeBase64 for BLS12381KeyPair {
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+        keypair_decode_base64(value)
+    }
+
+    fn encode_base64(&self) -> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(self.secret.as_ref());
+        bytes.extend_from_slice(self.name.as_ref());
+        base64ct::Base64::encode_string(&bytes[..])
     }
 }
 

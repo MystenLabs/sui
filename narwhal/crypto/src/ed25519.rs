@@ -12,7 +12,7 @@ use std::{
 
 use crate::{
     pubkey_bytes::PublicKeyBytes,
-    serde_helpers::Ed25519Signature as Ed25519Sig,
+    serde_helpers::{keypair_decode_base64, Ed25519Signature as Ed25519Sig},
     traits::{
         AggregateAuthenticator, Authenticator, EncodeDecodeBase64, KeyPair, SigningKey,
         ToFromBytes, VerifyingKey,
@@ -317,6 +317,19 @@ impl From<Ed25519PrivateKey> for Ed25519KeyPair {
     fn from(secret: Ed25519PrivateKey) -> Self {
         let name = Ed25519PublicKey::from(&secret);
         Ed25519KeyPair { name, secret }
+    }
+}
+
+impl EncodeDecodeBase64 for Ed25519KeyPair {
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+        keypair_decode_base64(value)
+    }
+
+    fn encode_base64(&self) -> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(self.secret.as_ref());
+        bytes.extend_from_slice(self.name.as_ref());
+        base64ct::Base64::encode_string(&bytes[..])
     }
 }
 

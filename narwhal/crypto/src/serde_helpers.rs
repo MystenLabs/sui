@@ -12,6 +12,8 @@ use serde_with::{Bytes, DeserializeAs, SerializeAs};
 use signature::Signature;
 use std::fmt::Debug;
 
+use crate::traits::{KeyPair, SigningKey, ToFromBytes, VerifyingKey};
+
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
 where
     E: Debug,
@@ -82,4 +84,20 @@ impl<'de> DeserializeAs<'de, ed25519_dalek::Signature> for Ed25519Signature {
         <ed25519_dalek::Signature as Signature>::from_bytes(&bytes)
             .map_err(to_custom_error::<'de, D, _>)
     }
+}
+
+pub fn keypair_decode_base64<T: KeyPair>(value: &str) -> Result<T, eyre::Report> {
+    let bytes =
+        base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+    let sk_length = <<T as KeyPair>::PrivKey as SigningKey>::LENGTH;
+    let pk_length = <<T as KeyPair>::PubKey as VerifyingKey>::LENGTH;
+    if bytes.len() != pk_length + sk_length {
+        return Err(eyre::eyre!("Invalid keypair length"));
+    }
+    let secret = <T as KeyPair>::PrivKey::from_bytes(&bytes[..sk_length])?;
+    let kp: T = secret.into();
+    if kp.public().as_ref() != &bytes[sk_length..] {
+        return Err(eyre::eyre!("Invalid keypair"));
+    }
+    Ok(kp)
 }

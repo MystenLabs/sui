@@ -139,7 +139,7 @@ pub trait Authenticator:
 
 /// Trait impl'd by a public / private key pair in asymmetric cryptography.
 ///
-pub trait KeyPair: Sized + From<Self::PrivKey> + Signer<Self::Sig> {
+pub trait KeyPair: Sized + From<Self::PrivKey> + Signer<Self::Sig> + EncodeDecodeBase64 {
     type PubKey: VerifyingKey<PrivKey = Self::PrivKey>;
     type PrivKey: SigningKey<PubKey = Self::PubKey>;
     type Sig: Authenticator<PubKey = Self::PubKey>;
