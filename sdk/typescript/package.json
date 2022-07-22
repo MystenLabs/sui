@@ -65,9 +65,11 @@
     "typescript": "^4.6.3"
   },
   "dependencies": {
+    "bip39-light": "^1.0.7",
     "bn.js": "^5.2.0",
     "buffer": "^6.0.3",
     "cross-fetch": "^3.1.5",
+    "ed25519-hd-key": "^1.2.0",
     "jayson": "^3.6.6",
     "js-sha3": "^0.8.0",
     "lossless-json": "^1.0.5",
