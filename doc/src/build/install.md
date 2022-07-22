@@ -33,9 +33,9 @@ To immediately get started using Sui:
 The following operating systems (OSes) have been tested and are supported for
 running Sui:
 
-* [Linux](#linux) - Ubuntu version 18.04 (Bionic Beaver)
-* [macOS](#macOS) - macOS Monterey
-* [Microsoft Windows](#microsoft-windows) - Windows 11
+* [Linux](#linux-specific) - Ubuntu version 18.04 (Bionic Beaver)
+* [macOS](#macOS-specific) - macOS Monterey
+* [Microsoft Windows](#microsoft-windows-specific) - Windows 11
 
 ## Prerequisites
 
