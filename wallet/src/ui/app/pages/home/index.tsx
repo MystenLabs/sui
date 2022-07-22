@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
 import Loading from '_components/loading';
@@ -40,7 +40,9 @@ const HomePage = () => {
                 <div className={st.container}>
                     <div className={st.header}>
                         <span />
-                        <Logo className={st.logo} txt={true} />
+                        <Link to="/tokens" className={st.logoLink}>
+                            <Logo className={st.logo} txt={true} />
+                        </Link>
                         <MenuButton className={st.menuButton} />
                     </div>
                     <div className={st.content}>
@@ -64,3 +66,4 @@ export { default as TransactionDetailsPage } from './transaction-details';
 export { default as TransactionsPage } from './transactions';
 export { default as TransferCoinPage } from './transfer-coin';
 export { default as TransferNFTPage } from './transfer-nft';
+export { default as StakeNew } from './stake-new';
