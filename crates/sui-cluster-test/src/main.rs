@@ -7,12 +7,13 @@ use std::collections::HashMap;
 use sui::client_commands::{
     call_move, WalletContext, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL,
 };
-use sui::config::{Config, GatewayType, SuiClientConfig};
+use sui::config::{Config, SuiClientConfig};
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_faucet::FaucetResponse;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
 use sui_sdk::crypto::KeystoreType;
+use sui_sdk::ClientType;
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
     crypto::get_key_pair,
@@ -66,7 +67,7 @@ impl ClusterTest {
         let obj_to_transfer = coins.remove(0);
         let data = wallet_context
             .gateway
-            .public_transfer_object(
+            .transfer_object(
                 signer,
                 *obj_to_transfer.id(),
                 Some(gas_obj_id),
@@ -349,7 +350,7 @@ impl ClusterTest {
         }
     }
 
-    pub fn setup(options: ClusterTestOpt) -> Self {
+    pub async fn setup(options: ClusterTestOpt) -> Self {
         let temp_dir = tempfile::tempdir().unwrap();
         let wallet_config_path = temp_dir.path().join("wallet.yaml");
 
@@ -374,7 +375,7 @@ impl ClusterTest {
         SuiClientConfig {
             accounts: vec![new_address],
             keystore,
-            gateway: GatewayType::RPC(gateway_addr),
+            gateway: ClientType::RPC(gateway_addr),
             active_address: Some(new_address),
         }
         .persisted(&wallet_config_path)
@@ -386,7 +387,7 @@ impl ClusterTest {
             wallet_config_path
         );
 
-        let wallet_context = WalletContext::new(&wallet_config_path).unwrap();
+        let wallet_context = WalletContext::new(&wallet_config_path).await.unwrap();
 
         ClusterTest {
             context: TestContext {
@@ -409,7 +410,7 @@ async fn main() {
         .init();
 
     let options = ClusterTestOpt::parse();
-    let mut test = ClusterTest::setup(options);
+    let mut test = ClusterTest::setup(options).await;
 
     // Run tests
     let mut coins = test.test_get_gas().await;

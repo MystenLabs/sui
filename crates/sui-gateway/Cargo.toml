@@ -23,7 +23,6 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
-sui-sdk = { path = "../sui-sdk" }
 sui-node = { path = "../sui-node" }
 
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
@@ -33,6 +32,7 @@ workspace-hack = { path = "../workspace-hack"}
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 sui-framework = { path = "../sui-framework" }
+sui-sdk = { path = "../sui-sdk" }
 
 [[bin]]
 name = "rpc-server"

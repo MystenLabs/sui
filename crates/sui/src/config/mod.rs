@@ -12,8 +12,7 @@ pub use sui_config::Config;
 pub use sui_config::PersistedConfig;
 
 pub use sui_config::utils;
-
-pub use sui_gateway::config::{GatewayConfig, GatewayType};
+use sui_sdk::ClientType;
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
@@ -21,7 +20,7 @@ pub struct SuiClientConfig {
     #[serde_as(as = "Vec<Hex>")]
     pub accounts: Vec<SuiAddress>,
     pub keystore: KeystoreType,
-    pub gateway: GatewayType,
+    pub gateway: ClientType,
     pub active_address: Option<SuiAddress>,
 }
 
