@@ -33,8 +33,8 @@ module tutorial::trusted_swap {
         transfer::transfer(object, tx_context::sender(ctx))
     }
 
-    public entry fun transfer_object(object: Object, ctx: &mut TxContext) {
-        transfer::transfer(object, tx_context::sender(ctx))
+    public entry fun transfer_object(object: Object, recipient: address) {
+        transfer::transfer(object, recipient)
     }
 
     /// Anyone owns an `Object` can request swapping their object. This object
