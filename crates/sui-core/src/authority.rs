@@ -53,6 +53,7 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -427,7 +428,10 @@ impl AuthorityState {
             )?;
         }
 
-        let resp = self.process_certificate(tx_guard, &certificate).await?;
+        let resp = self
+            .process_certificate(tx_guard, &certificate)
+            .await
+            .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))?;
 
         let expected_effects_digest = signed_effects.digest();
         let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
@@ -469,7 +473,9 @@ impl AuthorityState {
         // for every tx.
         let tx_guard = self.database.acquire_tx_guard(&certificate).await?;
 
-        self.process_certificate(tx_guard, &certificate).await
+        self.process_certificate(tx_guard, &certificate)
+            .await
+            .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -536,10 +542,10 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         self.metrics.total_certs.inc();
-        let transaction_digest = *certificate.digest();
+        let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
-        if let Some(info) = self.check_tx_already_executed(&transaction_digest).await? {
+        if let Some(info) = self.check_tx_already_executed(&digest).await? {
             tx_guard.release();
             return Ok(info);
         }
@@ -563,28 +569,27 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (temporary_store, signed_effects) = match self
-            .prepare_certificate(certificate, transaction_digest)
-            .await
-        {
-            Err(e) => {
-                debug!(name = ?self.name, digest = ?transaction_digest, "Error preparing transaction: {}", e);
-                tx_guard.release();
-                return Err(e);
-            }
-            Ok(res) => res,
-        };
+        let (temporary_store, signed_effects) =
+            match self.prepare_certificate(certificate, digest).await {
+                Err(e) => {
+                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {}", e);
+                    tx_guard.release();
+                    return Err(e);
+                }
+                Ok(res) => res,
+            };
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
         self.commit_certificate(temporary_store, certificate, &signed_effects)
-            .await?;
+            .await
+            .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
 
         // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
 
         Ok(TransactionInfoResponse {
-            signed_transaction: self.database.get_transaction(&transaction_digest)?,
+            signed_transaction: self.database.get_transaction(&digest)?,
             certified_transaction: Some(certificate.clone()),
             signed_effects: Some(signed_effects),
         })

@@ -7,9 +7,9 @@ publish = false
 edition = "2021"
 
 [dependencies]
-jsonrpsee = { version = "0.14.0", features = ["full"] }
-jsonrpsee-core = "0.14.0"
-jsonrpsee-proc-macros = "0.14.0"
+jsonrpsee = { version = "0.15.0", features = ["full"] }
+jsonrpsee-core = "0.15.0"
+jsonrpsee-proc-macros = "0.15.0"
 prometheus = "0.13.1"
 anyhow = "1.0.58"
 tracing = "0.1.35"
