@@ -4,7 +4,7 @@ title: Learning Sui
 
 *Sui: pronounced "sweet" without the "T" - with Transactions (loads of them), things are SWEET indeed. :-)*
 
-Welcome to the documentation for the Sui platform. Since Sui is built upon the core [Move](https://github.com/MystenLabs/awesome-move) programming language, you should familiarize yourself with it and use this content to apply the differences. For a summary of these differences, see [Sui compared to other blockchains](../learn/sui-compared.md).
+Welcome to the documentation for the Sui platform. Since Sui is built upon the core [Move](https://github.com/MystenLabs/awesome-move) programming language, you should familiarize yourself with it and use this content to apply the differences. For a summary of these differences, see [How Sui Move differs from core Move](../learn/sui-move-diffs.md).
 
 For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
@@ -47,12 +47,12 @@ Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of set
 Finish with the detailed [Programming with objects](../build/programming-with-objects/index.md) tutorial series offering detailed guidance on manipulating Sui objects, from creation and storage through wrapping and using child objects.
 
 ## Navigate this site
-Navigate and search this site however you see fit. If you're new to Sui, we recommend that you review the following content in the order listed:
+Navigate and search this site however you see fit. If you're new to Sui, we recommend that you review the following content in this order:
 
 **Learn** - the Learn section includes information to help you learn:
   * [About Sui](../learn/about-sui.md)
   * [How Sui works](../learn/how-sui-works.md)
-  * How [Sui Move differs from Core Move](../learn/sui-move-diffs.md)
+  * [Sui compared to other blockchains](../learn/sui-compared.md)
 
 **Build** - the Build section includes information about how to:
   * [Build](../build/index.md) smart contracts, the Sui client, a Sui fullnode, and more
@@ -64,5 +64,5 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
    * [Contribute](../contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
 
 **Additional resources** - the following additional resources contain more information about Sui:
-  * The [Sui API Reference](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false) reference files for the [Sui JSON-RPC API](../build/json-rpc.md).
+  * Employ the [Sui API Reference](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json) files for the [Sui JSON-RPC API](../build/json-rpc.md).
   * View the [Mysten Labs](https://www.youtube.com/channel/UCI7pCUVxSLcndVhPpZOwZgg) YouTube channel for introductory videos on technology and partners.
