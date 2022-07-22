@@ -4,7 +4,7 @@
 use config::{Committee, Stake, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::{CancelHandler, MessageResult, WorkerNetwork};
+use network::{CancelOnDropHandler, MessageResult, WorkerNetwork};
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -64,7 +64,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
     }
 
     /// Helper function. It waits for a future to complete and then delivers a value.
-    async fn waiter(wait_for: CancelHandler<MessageResult>, deliver: Stake) -> Stake {
+    async fn waiter(wait_for: CancelOnDropHandler<MessageResult>, deliver: Stake) -> Stake {
         let _ = wait_for.await;
         deliver
     }

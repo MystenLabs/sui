@@ -292,7 +292,9 @@ async fn epoch_change() {
                 let message = PrimaryWorkerMessage::Reconfigure(
                     ReconfigureNotification::NewCommittee(committee.clone()),
                 );
-                let worker_cancel_handles = worker_network.broadcast(addresses, &message).await;
+                let worker_cancel_handles = worker_network
+                    .unreliable_broadcast(addresses, &message)
+                    .await;
 
                 // Ensure the message has been received.
                 primary_cancel_handle.await.unwrap();

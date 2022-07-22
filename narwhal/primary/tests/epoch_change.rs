@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use config::{Committee, Epoch, Parameters};
 use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use futures::future::join_all;
-use network::{CancelHandler, WorkerToPrimaryNetwork};
+use network::{CancelOnDropHandler, WorkerToPrimaryNetwork};
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
@@ -89,7 +89,7 @@ async fn test_simple_epoch_change() {
         let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewCommittee(
             new_committee.clone(),
         ));
-        let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+        let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
         for address in addresses {
             _do_not_drop.push(
                 WorkerToPrimaryNetwork::default()
@@ -251,7 +251,7 @@ async fn test_partial_committee_change() {
     let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewCommittee(
         committee_1.clone(),
     ));
-    let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+    let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
     for address in addresses {
         _do_not_drop.push(
             WorkerToPrimaryNetwork::default()
@@ -339,7 +339,7 @@ async fn test_restart_with_new_committee_change() {
         .collect();
     let message =
         WorkerPrimaryMessage::<Ed25519PublicKey>::Reconfigure(ReconfigureNotification::Shutdown);
-    let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+    let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
     for address in addresses {
         _do_not_drop.push(
             WorkerToPrimaryNetwork::default()
@@ -411,7 +411,7 @@ async fn test_restart_with_new_committee_change() {
         let message = WorkerPrimaryMessage::<Ed25519PublicKey>::Reconfigure(
             ReconfigureNotification::Shutdown,
         );
-        let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+        let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
         for address in addresses {
             _do_not_drop.push(
                 WorkerToPrimaryNetwork::default()

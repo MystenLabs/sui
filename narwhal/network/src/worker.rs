@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{BoundedExecutor, CancelHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY};
+use crate::{
+    BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
+};
 use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
@@ -64,7 +66,7 @@ impl WorkerNetwork {
         &mut self,
         address: Multiaddr,
         message: &WorkerMessage<T>,
-    ) -> CancelHandler<MessageResult> {
+    ) -> CancelOnDropHandler<MessageResult> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
         self.send_message(address, message).await
@@ -80,7 +82,7 @@ impl WorkerNetwork {
         &mut self,
         address: Multiaddr,
         message: BincodeEncodedPayload,
-    ) -> CancelHandler<MessageResult> {
+    ) -> CancelOnDropHandler<MessageResult> {
         let client = self.client(address.clone());
 
         let message_send = move || {
@@ -102,14 +104,14 @@ impl WorkerNetwork {
             .or_insert_with(default_executor)
             .spawn_with_retries(self.retry_config, message_send);
 
-        CancelHandler(handle)
+        CancelOnDropHandler(handle)
     }
 
     pub async fn broadcast<T: VerifyingKey>(
         &mut self,
         addresses: Vec<Multiaddr>,
         message: &WorkerMessage<T>,
-    ) -> Vec<CancelHandler<MessageResult>> {
+    ) -> Vec<CancelOnDropHandler<MessageResult>> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
         let mut handlers = Vec::new();
@@ -207,7 +209,7 @@ impl WorkerToPrimaryNetwork {
         &mut self,
         address: Multiaddr,
         message: &WorkerPrimaryMessage<PublicKey>,
-    ) -> CancelHandler<MessageResult> {
+    ) -> CancelOnDropHandler<MessageResult> {
         let new_client = match &self.address {
             None => true,
             Some(x) if x != &address => true,
@@ -239,6 +241,6 @@ impl WorkerToPrimaryNetwork {
             .executor
             .spawn_with_retries(self.retry_config, message_send);
 
-        CancelHandler(handle)
+        CancelOnDropHandler(handle)
     }
 }

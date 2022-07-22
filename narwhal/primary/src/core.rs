@@ -10,7 +10,7 @@ use crate::{
 use async_recursion::async_recursion;
 use config::{Committee, Epoch};
 use crypto::{traits::VerifyingKey, Hash as _, SignatureService};
-use network::{CancelHandler, MessageResult, PrimaryNetwork};
+use network::{CancelOnDropHandler, MessageResult, PrimaryNetwork};
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -86,7 +86,7 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// A network sender to send the batches to the other workers.
     network: PrimaryNetwork,
     /// Keeps the cancel handlers of the messages we sent.
-    cancel_handlers: HashMap<Round, Vec<CancelHandler<MessageResult>>>,
+    cancel_handlers: HashMap<Round, Vec<CancelOnDropHandler<MessageResult>>>,
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
