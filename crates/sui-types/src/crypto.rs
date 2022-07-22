@@ -47,7 +47,7 @@ pub type AggregateAccountSignature = Ed25519AggregateSignature;
 
 #[serde_as]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct PublicKeyBytes(#[serde_as(as = "Bytes")] [u8; PublicKey::LENGTH]);
+pub struct PublicKeyBytes(#[serde_as(as = "Readable<Base64, Bytes>")] [u8; PublicKey::LENGTH]);
 
 impl TryFrom<PublicKeyBytes> for PublicKey {
     type Error = signature::Error;
