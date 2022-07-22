@@ -12,9 +12,5 @@ declare module 'bip39-light' {
         wordlist?: string[]
     ): string;
     export function mnemonicToSeed(mnemonic: string, password?: string): Buffer;
-    export function mnemonicToSeedHex(
-        mnemonic: string,
-        password?: string
-    ): string;
     export function validateMnemonic(mnemonic: string): boolean;
 }
