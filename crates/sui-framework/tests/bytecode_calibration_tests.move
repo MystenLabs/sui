@@ -18,7 +18,7 @@ module sui::bytecode_calibration_tests {
     // Number of times to run the inner loop of tests
     // We set this value 1 to avoid long running tests
     // But normally we want something like 1000000
-    const NUM_TRIALS: u64 = 100000;
+    const NUM_TRIALS: u64 = 1;
     const U64_MAX: u64 = 18446744073709551615;
 
     struct ObjectWithU8Field has store, drop{

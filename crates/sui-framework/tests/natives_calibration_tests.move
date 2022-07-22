@@ -24,7 +24,7 @@ module sui::natives_calibration_tests {
     // Number of times to run the inner loop of tests
     // We set this value to 1 to avoid long running tests
     // But normally we want something like 1000000
-    const NUM_TRIALS: u64 = 100000;
+    const NUM_TRIALS: u64 = 1;
 
     // A very basic object to be used in calls
     struct ObjectSimple has key, store, drop, copy {
