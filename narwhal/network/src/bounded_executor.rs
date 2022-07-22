@@ -139,7 +139,11 @@ impl BoundedExecutor {
     ///
     /// This function returns a [`JoinHandle`] that the caller can `.await` on for
     /// the results of the overall retry driver.
-    pub fn spawn_with_retries<F, Fut, T, E>(
+    ///
+    /// TODO: this still spawns one task, unconditionally, per call.
+    /// We would instead like to have one central task that drives all retries
+    /// for the whole executor.
+    pub(crate) fn spawn_with_retries<F, Fut, T, E>(
         &self,
         retry_config: crate::RetryConfig,
         mut f: F,
