@@ -135,6 +135,9 @@ impl SuiKeystoreSigner {
 
 impl signature::Signer<Signature> for SuiKeystoreSigner {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        self.keystore.read().unwrap().sign(&self.address, msg)
+        self.keystore
+            .read()
+            .map_err(|e| signature::Error::from_source(e.to_string()))?
+            .sign(&self.address, msg)
     }
 }
