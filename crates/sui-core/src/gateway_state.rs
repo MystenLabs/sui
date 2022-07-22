@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -11,8 +11,10 @@ use std::time::Duration;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
+use move_binary_format::access::ModuleAccess;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
@@ -22,7 +24,7 @@ use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{ObjectFormatOptions, Owner};
+use sui_types::object::{Data, ObjectFormatOptions, Owner};
 use sui_types::{
     base_types::*,
     coin,
@@ -393,15 +395,94 @@ where
         object_id: &ObjectID,
     ) -> Result<SuiObject<T>, anyhow::Error> {
         let object = self.get_object_internal(object_id).await?;
-        self.to_sui_object(object)
+        self.to_sui_object(object).await
     }
 
-    fn to_sui_object<T: SuiMoveObject>(
+    async fn to_sui_object<T: SuiMoveObject>(
         &self,
         object: Object,
     ) -> Result<SuiObject<T>, anyhow::Error> {
+        // we must load the package the defines the object's type
+        // and the packages that are used in any interior fields
+        // These modules are needed for get_layout
+        if let Data::Move(move_object) = &object.data {
+            self.load_object_transitive_deps(&move_object.type_).await?;
+        }
         let layout = object.get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
         SuiObject::<T>::try_from(object, layout)
+    }
+
+    // this function over-approximates
+    // it loads all modules used in the type declaration
+    // and then all of their dependencies.
+    // To be exact, it would need to look at the field layout for each type used, but this will
+    // be complicated with generics. The extra loading here is hopefully insignificant
+    async fn load_object_transitive_deps(
+        &self,
+        struct_tag: &StructTag,
+    ) -> Result<(), anyhow::Error> {
+        fn used_packages(packages: &mut Vec<ObjectID>, type_: &TypeTag) {
+            match type_ {
+                TypeTag::Bool
+                | TypeTag::U8
+                | TypeTag::U64
+                | TypeTag::U128
+                | TypeTag::Address
+                | TypeTag::Signer => (),
+                TypeTag::Vector(inner) => used_packages(packages, &**inner),
+                TypeTag::Struct(StructTag {
+                    address,
+                    type_params,
+                    ..
+                }) => {
+                    packages.push((*address).into());
+                    for t in type_params {
+                        used_packages(packages, t)
+                    }
+                }
+            }
+        }
+        let StructTag {
+            address,
+            type_params,
+            ..
+        } = struct_tag;
+        let mut queue = vec![(*address).into()];
+        for t in type_params {
+            used_packages(&mut queue, t)
+        }
+
+        let mut seen: HashSet<ObjectID> = HashSet::new();
+        while let Some(cur) = queue.pop() {
+            if seen.contains(&cur) {
+                continue;
+            }
+            let obj = self.get_object_internal(&cur).await?;
+            let package = match &obj.data {
+                Data::Move(_) => {
+                    debug_assert!(false, "{cur} should be a package, not a move object");
+                    continue;
+                }
+                Data::Package(package) => package,
+            };
+            let modules = package
+                .serialized_module_map()
+                .keys()
+                .map(|name| package.deserialize_module(&Identifier::new(name.clone()).unwrap()))
+                .collect::<Result<Vec<_>, _>>()?;
+            for module in modules {
+                let self_package_idx = module
+                    .module_handle_at(module.self_module_handle_idx)
+                    .address;
+                let self_package = *module.address_identifier_at(self_package_idx);
+                seen.insert(self_package.into());
+                for handle in &module.module_handles {
+                    let dep_package = *module.address_identifier_at(handle.address);
+                    queue.push(dep_package.into());
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn get_object_ref(&self, object_id: &ObjectID) -> SuiResult<ObjectRef> {
@@ -680,9 +761,9 @@ where
                     }
                     .into()
                 );
-                updated_gas = Some(self.to_sui_object(object)?);
+                updated_gas = Some(self.to_sui_object(object).await?);
             } else {
-                created_objects.push(self.to_sui_object(object)?);
+                created_objects.push(self.to_sui_object(object).await?);
             }
         }
         let package = package
