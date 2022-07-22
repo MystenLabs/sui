@@ -237,7 +237,7 @@ jsonrpsee-http-server = { version = "0.14", default-features = false }
 jsonrpsee-types = { version = "0.14", default-features = false }
 jsonrpsee-wasm-client = { version = "0.14", default-features = false }
 jsonrpsee-ws-client = { version = "0.14", features = ["tls"] }
-jsonrpsee-ws-server = { version = "0.14", default-features = false }
+jsonrpsee-ws-server = { version = "0.15", default-features = false }
 k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "pkcs8", "schnorr", "sha2", "sha256", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
@@ -824,7 +824,7 @@ jsonrpsee-proc-macros = { version = "0.14", default-features = false }
 jsonrpsee-types = { version = "0.14", default-features = false }
 jsonrpsee-wasm-client = { version = "0.14", default-features = false }
 jsonrpsee-ws-client = { version = "0.14", features = ["tls"] }
-jsonrpsee-ws-server = { version = "0.14", default-features = false }
+jsonrpsee-ws-server = { version = "0.15", default-features = false }
 k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "pkcs8", "schnorr", "sha2", "sha256", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
