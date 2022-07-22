@@ -7,6 +7,7 @@ use anyhow::Result;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -16,7 +17,6 @@ use sui_types::committee::StakeUnit;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{KeyPair, PublicKeyBytes};
 use sui_types::sui_serde::KeyPairBase64;
-use serde_with::serde_as;
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]

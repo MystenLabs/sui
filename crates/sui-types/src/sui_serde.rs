@@ -7,7 +7,6 @@ use std::marker::PhantomData;
 use anyhow::anyhow;
 use base64ct::Encoding as _;
 use move_core_types::account_address::AccountAddress;
-use narwhal_crypto::traits::EncodeDecodeBase64;
 use schemars::JsonSchema;
 use serde;
 use serde::de::{Deserializer, Error};
@@ -16,8 +15,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
-use crate::crypto::{KeypairTraits};
 use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
+use crate::crypto::KeypairTraits;
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -270,7 +269,7 @@ pub struct KeyPairBase64 {}
 
 impl<T> SerializeAs<T> for KeyPairBase64
 where
-    T: KeypairTraits 
+    T: KeypairTraits,
 {
     fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -280,9 +279,9 @@ where
     }
 }
 
-impl<'de, T> DeserializeAs<'de, T> for KeyPairBase64 
+impl<'de, T> DeserializeAs<'de, T> for KeyPairBase64
 where
-    T: KeypairTraits 
+    T: KeypairTraits,
 {
     fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
     where
