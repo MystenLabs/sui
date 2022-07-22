@@ -128,14 +128,18 @@ impl BoundedExecutor {
         Self::with_permit(f, permit).await
     }
 
-    /// Spawn a [`Future`] on the `BoundedExecutor`. This function is async and
-    /// will block if the executor is at capacity until one of the other spawned
-    /// futures completes.
-    /// In case the future completes with an error, it retries, queueing attempts
-    /// on the semaphore according to the provided [`crate::RetryConfig`].
+    /// Unconditionally spawns a task driving retries of a [`Future`] on the `BoundedExecutor`.
+    /// This [`Future`] will be executed in the form of attempts, one after the other, run on
+    /// our bounded executor, each according to the provided [`crate::RetryConfig`].
+    ///
+    /// Each attempt is async and will block if the executor is at capacity until
+    /// one of the other attempts completes. In case the attempt completes with an error,
+    /// the driver completes a backoff (according to the retry configuration) without holding
+    /// a permit, before, queueing an attempt on the executor again.
+    ///
     /// This function returns a [`JoinHandle`] that the caller can `.await` on for
-    /// the results of the overall set of attempts to execute the [`Future`].
-    pub async fn spawn_with_retries<F, Fut, T, E>(
+    /// the results of the overall retry driver.
+    pub fn spawn_with_retries<F, Fut, T, E>(
         &self,
         retry_config: crate::RetryConfig,
         mut f: F,
@@ -146,7 +150,7 @@ impl BoundedExecutor {
         T: Send + 'static,
         E: Send + 'static,
     {
-        let retrier = || {
+        let retrier = {
             let semaphore = self.semaphore.clone();
 
             let executor = move || {
@@ -156,7 +160,7 @@ impl BoundedExecutor {
 
             retry_config.retry(executor)
         };
-        self.executor.spawn(retrier())
+        self.executor.spawn(retrier)
     }
 
     // Equips a future with a final step that drops the held semaphore permit
@@ -262,7 +266,7 @@ mod test {
 
             // we can queue this future with infinite retries
             let handle_infinite_fails =
-                block_on(executor.spawn_with_retries(infinite_retry_config, always_failing));
+                executor.spawn_with_retries(infinite_retry_config, always_failing);
 
             // check we can still enqueue another successful task
             let (tx1, rx1) = oneshot::channel();

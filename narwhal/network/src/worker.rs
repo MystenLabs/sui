@@ -86,8 +86,7 @@ impl WorkerNetwork {
 
         let handle = self
             .executor
-            .spawn_with_retries(self.retry_config, message_send)
-            .await;
+            .spawn_with_retries(self.retry_config, message_send);
 
         CancelHandler(handle)
     }
