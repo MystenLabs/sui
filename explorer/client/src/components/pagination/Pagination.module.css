@@ -1,52 +1,108 @@
-.pagination {
-    @apply flex flex-row items-center justify-start list-none w-full;
+@tailwind components;
+
+@layer components {
+    .basecontainer {
+        @apply h-[2.3rem] inline-block
+        rounded border-[1px] border-solid border-sui-grey-50
+        font-sans items-center 
+        text-sui-grey-75 stroke-sui-grey-75 bg-inherit;
+
+        box-shadow: 0 1px 2px rgba(16 24 40 / 5%);
+    }
+
+    .desktopfooter .basecontainer {
+        @apply px-2 py-2 mx-[4px];
+    }
+
+    .under6footer .basecontainer {
+        @apply px-2 py-2 mx-[1vw] sm:mx-[4px];
+    }
+
+    .btncontainer {
+        @apply basecontainer hover:bg-sui-light hover:text-sui-grey-100 hover:stroke-sui-grey-100 cursor-pointer inline-block;
+
+        transition: all 0.4s ease;
+    }
 }
 
-.pagination ul {
-    @apply flex flex-row items-center justify-center list-none  p-0 m-0 w-full md:w-min;
+button.pagenumber,
+button.nointeract,
+.rhs > select {
+    @apply basecontainer;
 }
 
-.arrow {
-    @apply block opacity-50 cursor-default !important;
+button.pagenumber {
+    @apply select-none border-solid border-sui-dark text-sui-dark;
+
+    background: linear-gradient(0deg, #f4fbff, #f4fbff), #fff;
 }
 
-.arrow button {
-    @apply border-transparent cursor-default;
+button.gone {
+    @apply opacity-30;
 }
 
-.pagination ul li {
-    @apply mr-1 hidden md:block;
+/* RHS stats styling */
+.rhs > div {
+    @apply capitalize text-sui-grey-75 text-sm mx-auto mt-2 sm:mt-0;
 }
 
-.pagination ul li button {
-    @apply text-gray-600 hover:text-gray-800 focus:text-gray-800 font-medium py-2 px-4 cursor-pointer 
-     pr-3  pl-3  border-[1px] rounded-[6px] border-white bg-[#FFFFFF] hover:bg-[#F4FBFF];
-
-    border: 1px solid #e9eaeb;
-    transition: all 0.4s ease;
+.rhs {
+    @apply flex;
 }
 
-button.activepag {
-    @apply bg-[#F4FBFF] text-sui-dark border-sui-dark !important;
+.rhs > section {
+    @apply mx-auto;
 }
 
-.activearrow {
-    @apply block opacity-100 cursor-pointer !important;
+.rhs > select {
+    @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block;
 }
 
-.paginationleft svg {
-    transform: rotate(180deg);
+/* Less than 6 case */
+.under6footer {
+    @apply mt-2 sm:grid sm:grid-cols-12 text-center text-left;
 }
 
-.paginationdot {
-    @apply px-1;
+.under6footer > div:first-child {
+    @apply block sm:col-span-8 self-center sm:justify-self-start;
 }
 
-.pagilink,
-.paginationdot {
-    @apply block !important;
+.under6footer > div:nth-child(2) {
+    @apply sm:col-span-4 justify-self-end items-center;
 }
 
-.paginationdot:hover {
-    @apply bg-[#FFFFFF] hover:bg-[#FFFFFF];
+/* Desktop */
+
+.desktopfooter {
+    @apply hidden sm:block sm:mt-2 sm:grid sm:grid-cols-12 text-center sm:text-left;
+}
+
+.desktopfooter > div:first-child {
+    @apply inline-block sm:block sm:col-span-8 sm:self-center;
+}
+
+.desktopfooter > div:nth-child(2) {
+    @apply sm:col-span-4 sm:justify-self-end sm:items-center;
+}
+
+/* Mobile */
+
+.mobilefooter {
+    @apply sm:hidden block;
+}
+
+.mobiletoprow {
+    @apply sm:hidden block grid grid-cols-6 my-2;
+}
+
+.mobiletoprow > button:nth-child(1) {
+    @apply col-span-1;
+}
+
+.mobiletoprow > button:nth-child(2) {
+    @apply col-span-4 border-none shadow-none;
+}
+
+.mobilebottomrow {
+    @apply grid grid-cols-2 gap-2;
 }
