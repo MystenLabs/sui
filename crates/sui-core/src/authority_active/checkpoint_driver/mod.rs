@@ -360,7 +360,7 @@ where
         responses: Vec<(
             AuthorityName,
             Option<SignedCheckpointProposalSummary>,
-            AuthenticatedCheckpoint,
+            Option<AuthenticatedCheckpoint>,
         )>,
         errors: Vec<(AuthorityName, SuiError)>,
     }
@@ -429,7 +429,7 @@ where
     // Extract the highest checkpoint cert returned.
     let mut highest_certificate_cert: Option<CertifiedCheckpointSummary> = None;
     for state in &final_state.responses {
-        if let AuthenticatedCheckpoint::Certified(cert) = &state.2 {
+        if let Some(AuthenticatedCheckpoint::Certified(cert)) = &state.2 {
             if let Some(old_cert) = &highest_certificate_cert {
                 if cert.summary.sequence_number > old_cert.summary.sequence_number {
                     highest_certificate_cert = Some(cert.clone());
@@ -450,7 +450,7 @@ where
         .responses
         .iter()
         .for_each(|(auth, _proposal, checkpoint)| {
-            if let AuthenticatedCheckpoint::Signed(signed) = checkpoint {
+            if let Some(AuthenticatedCheckpoint::Signed(signed)) = checkpoint {
                 // We are interested in this signed checkpoint only if it is
                 // newer than the highest known cert checkpoint.
                 if let Some(newest_checkpoint) = &highest_certificate_cert {
@@ -759,7 +759,7 @@ where
         {
             if let AuthorityCheckpointInfo::Proposal { current, previous } = &response.info {
                 // Check if there is a latest checkpoint
-                if let AuthenticatedCheckpoint::Certified(prev) = previous {
+                if let Some(AuthenticatedCheckpoint::Certified(prev)) = previous {
                     if prev.summary.sequence_number >= next_checkpoint_sequence_number {
                         // We are now behind, stop the process
                         break;
