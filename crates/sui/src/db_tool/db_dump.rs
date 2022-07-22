@@ -10,8 +10,8 @@ use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use sui_storage::default_db_options;
 use sui_types::base_types::{
-    ExecutionDigests, ObjectID, ObjectInfo, ObjectRef, SequenceNumber, TransactionDigest,
-    VersionNumber,
+    encode_bytes_hex, ExecutionDigests, ObjectID, ObjectInfo, ObjectRef, SequenceNumber,
+    TransactionDigest, VersionNumber,
 };
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::committee::EpochId;
@@ -178,7 +178,16 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStoreReadonly
                 self.transactions.try_catch_up_with_primary()?;
                 self.transactions
                     .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
+                    .map(|(k, v)| {
+                        (
+                            format!("{:?}", k),
+                            format!(
+                                "data: {} sig: {}",
+                                v.data.to_base64(),
+                                encode_bytes_hex(&v.tx_signature)
+                            ),
+                        )
+                    })
                     .collect::<BTreeMap<_, _>>()
             }
 

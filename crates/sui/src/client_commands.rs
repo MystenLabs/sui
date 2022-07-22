@@ -31,10 +31,13 @@ use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
+    crypto::{SignableBytes, Signature},
     gas_coin::GasCoin,
-    messages::Transaction,
+    messages::{Transaction, TransactionData},
     SUI_FRAMEWORK_ADDRESS,
 };
+
+use signature::Signature as OtherSig;
 
 use crate::config::{Config, GatewayType, PersistedConfig, SuiClientConfig};
 
@@ -130,6 +133,17 @@ pub enum SuiClientCommands {
         /// Gas budget for this call
         #[clap(long)]
         gas_budget: u64,
+    },
+
+    /// Replay a previously encoded and signed tx.
+    #[clap(name = "replay")]
+    Replay {
+        /// Base64 encoded tx
+        #[clap(long = "tx-base64")]
+        tx_base_64: String,
+
+        #[clap(long)]
+        sig: String,
     },
 
     /// Transfer coin object
@@ -518,6 +532,25 @@ impl SuiClientCommands {
                 let object_read = context.gateway.get_object(nft_id).await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
+            SuiClientCommands::Replay { tx_base_64, sig } => {
+                let tx_bcs = Base64::decode(&tx_base_64).unwrap();
+                let tx = TransactionData::from_signable_bytes(&tx_bcs).unwrap();
+
+                let sig = hex::decode(sig).unwrap();
+                let sig = Signature::from_bytes(&sig).unwrap();
+
+                let tx = Transaction::new(tx, sig);
+
+                let response = context
+                    .gateway
+                    .execute_transaction(tx)
+                    .await?
+                    .to_effect_response()?;
+                let cert = response.certificate;
+                let effects = response.effects;
+
+                SuiClientCommandResult::ReplayTx(cert, effects)
+            }
         });
         ret
     }
@@ -643,6 +676,9 @@ impl Display for SuiClientCommandResult {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
             SuiClientCommandResult::TransferSui(cert, effects) => {
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            }
+            SuiClientCommandResult::ReplayTx(cert, effects) => {
                 write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
             SuiClientCommandResult::Addresses(addresses) => {
@@ -853,6 +889,7 @@ pub enum SuiClientCommandResult {
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
     CreateExampleNFT(GetObjectDataResponse),
+    ReplayTx(SuiCertifiedTransaction, SuiTransactionEffects),
 }
 
 #[derive(Serialize, Clone, Debug)]
