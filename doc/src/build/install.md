@@ -100,7 +100,7 @@ $ sudo brew install curl
 ```
 
 *Microsoft Windows*
-Download and install from: https://curl.se/windows/
+Download and install from: [https://curl.se/windows/](https://curl.se/windows/)
 
 #### Rust
 Sui is written in Rust, and we are using the latest version of the
@@ -236,7 +236,7 @@ To request SUI test tokens:
 ## Source code
 
 If you need to download and understand the Sui source code:
-https://github.com/MystenLabs/sui
+[https://github.com/MystenLabs/sui](https://github.com/MystenLabs/sui)
 
 Clone the Sui repository:
 
