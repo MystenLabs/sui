@@ -129,5 +129,7 @@ module sui::tx_context {
         derive_id(tx_hash, ids_created);
     }
     #[test_only]
-    public fun calibrate_derive_id_nop(_tx_hash: vector<u8>, _ids_created: u64) {
+    public fun calibrate_derive_id_nop(tx_hash: vector<u8>, ids_created: u64) {
+        let _ = tx_hash;
+        let _ = ids_created;
     }}

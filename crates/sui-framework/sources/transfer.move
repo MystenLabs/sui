@@ -51,26 +51,31 @@ module sui::transfer {
     // Cost calibration functions
     #[test_only]
     public fun calibrate_freeze_object<T: key>(obj: T) {
-        freeze_object(obj)
+        freeze_object(obj);
     }
     #[test_only]
-    public fun calibrate_freeze_object_nop<T: key + drop>(_obj: T) {
+    public fun calibrate_freeze_object_nop<T: key + drop>(obj: T) {
+        let _ = obj;
     }
 
     #[test_only]
     public fun calibrate_share_object<T: key>(obj: T) {
-        share_object(obj)
+        share_object(obj);
     }
     #[test_only]
-    public fun calibrate_share_object_nop<T: key + drop>(_obj: T) {
+    public fun calibrate_share_object_nop<T: key + drop>(obj: T) {
+        let _ = obj;
     }
 
     #[test_only]
     public fun calibrate_transfer_internal<T: key>(obj: T, recipient: address, to_object: bool) {
-        transfer_internal(obj, recipient, to_object)
+        transfer_internal(obj, recipient, to_object);
     }
     #[test_only]
-    public fun calibrate_transfer_internal_nop<T: key + drop>(_obj: T, _recipient: address, _to_object: bool) {
+    public fun calibrate_transfer_internal_nop<T: key + drop>(obj: T, recipient: address, to_object: bool) {
+        let _ = obj;
+        let _ = recipient;
+        let _ = to_object;
     }
 
 }

@@ -13,7 +13,7 @@
 // TBD: Try objects of different sizes in natives
 
 #[test_only]
-module sui::NativesCalibrationTests {
+module sui::natives_calibration_tests {
     use sui::object::{Self, Info};
 
     use sui::test_scenario;

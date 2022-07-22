@@ -181,7 +181,8 @@ module sui::object {
         bytes_to_address(bytes);
     }
     #[test_only]
-    public fun calibrate_bytes_to_address_nop(_bytes: vector<u8>) {
+    public fun calibrate_bytes_to_address_nop(bytes: vector<u8>) {
+        let _ = bytes;
     }
 
     #[test_only]
@@ -189,7 +190,8 @@ module sui::object {
         get_info(obj);
     }
     #[test_only]
-    public fun calibrate_get_info_nop<T: key>(_obj: &T) {
+    public fun calibrate_get_info_nop<T: key>(obj: &T) {
+        let _ = obj;
     }
 
     // TBD
