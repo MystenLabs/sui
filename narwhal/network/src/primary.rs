@@ -72,6 +72,12 @@ impl PrimaryNetwork {
         self.send_message(address, message).await
     }
 
+    // Safety
+    // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
+    // Here the callers are [`PrimaryNetwork::broadcast`] and [`PrimaryNetwork::send`],
+    // at respectively N and K calls per round.
+    //  (where N is the number of primaries, K the number of workers for this primary)
+    // See the TODO on spawn_with_retries for lifting this restriction.
     async fn send_message(
         &mut self,
         address: Multiaddr,

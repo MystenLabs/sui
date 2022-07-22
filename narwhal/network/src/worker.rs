@@ -68,6 +68,12 @@ impl WorkerNetwork {
         self.send_message(address, message).await
     }
 
+    // Safety
+    // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
+    // Here the callers are [`WorkerNetwork::broadcast`] and [`WorkerNetwork::send`],
+    // at respectively N and K calls per round.
+    //  (where N is the number of validators, the K is for the number of batches to be reported to the primary)
+    // See the TODO on spawn_with_retries for lifting this restriction.
     async fn send_message(
         &mut self,
         address: Multiaddr,
