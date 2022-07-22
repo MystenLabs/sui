@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::SuiDataStore;
-use prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use sui_types::{
@@ -21,7 +20,6 @@ use tracing::instrument;
 pub async fn check_transaction_input<S, T>(
     store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
-    shared_obj_metric: &IntCounter,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
 where
     S: Eq + Serialize + for<'de> Deserialize<'de>,
@@ -38,8 +36,6 @@ where
     let input_objects = check_locks(store, &transaction.data).await?;
 
     if transaction.contains_shared_object() {
-        shared_obj_metric.inc();
-
         // It's important that we do this here to make sure there is enough
         // gas to cover shared objects, before we lock all objects.
         gas_status.charge_consensus()?;
