@@ -22,6 +22,7 @@ pub struct SystemParameters {
     pub min_validator_stake: u64,
     pub max_validator_candidate_count: u64,
     pub storage_gas_price: u64,
+    pub storage_fund_reinvest_bps: u64,
 }
 
 /// Rust version of the Move Std::Option::Option type.

@@ -35,6 +35,8 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         /// Storage gas price denominated in SUI
         storage_gas_price: u64,
+        /// the portion (represented as basis points) of rewards earned by storage fund that is reinvested
+        storage_fund_reinvest_bps: u64,
     }
 
     /// The top-level object containing all information of the Sui system.
@@ -66,6 +68,7 @@ module sui::sui_system {
         max_validator_candidate_count: u64,
         min_validator_stake: u64,
         storage_gas_price: u64,
+        storage_fund_reinvest_bps: u64,
     ) {
         let state = SuiSystemState {
             // Use a hardcoded ID.
@@ -77,7 +80,8 @@ module sui::sui_system {
             parameters: SystemParameters {
                 min_validator_stake,
                 max_validator_candidate_count,
-                storage_gas_price
+                storage_gas_price,
+                storage_fund_reinvest_bps
             },
             delegation_reward: balance::zero(),
         };
@@ -284,9 +288,14 @@ module sui::sui_system {
         let storage_fund = balance::value(&self.storage_fund);
         let total_stake = delegation_stake + validator_stake + storage_fund;
 
-        let delegator_reward_amount = delegation_stake * computation_charge / total_stake;
-        let delegator_reward = balance::split(&mut computation_reward, delegator_reward_amount);
+        let storage_fund_reward_amount = computation_charge * storage_fund / total_stake;
+        let storage_fund_reinvest_amount = storage_fund_reward_amount * self.parameters.storage_fund_reinvest_bps / 10000;
+        let storage_fund_reinvest = balance::split(&mut computation_reward, storage_fund_reinvest_amount);
         balance::join(&mut self.storage_fund, storage_reward);
+        balance::join(&mut self.storage_fund, storage_fund_reinvest);
+
+        let delegator_reward_amount = computation_charge * delegation_stake / total_stake;
+        let delegator_reward = balance::split(&mut computation_reward, delegator_reward_amount);
         balance::join(&mut self.delegation_reward, delegator_reward);
 
         validator_set::create_epoch_records(
