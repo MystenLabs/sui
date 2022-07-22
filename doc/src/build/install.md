@@ -96,7 +96,7 @@ $ sudo apt install curl
 
 *macOS*
 ```shell
-$ sudo brew install curl
+$ brew install curl
 ```
 
 *Microsoft Windows*
@@ -144,7 +144,7 @@ $ sudo apt install cmake
 
 *macOS*
 ```shell
-$ sudo brew install cmake
+$ brew install cmake
 ```
 *Microsoft Windows*
 Download and install from: https://cmake.org/download/
@@ -204,6 +204,8 @@ $ echo $PATH
 $ echo %PATH%
 ```
 And ensure the `.cargo/bin` directory appears. Access the help for any of these binaries by passing the `--help` argument to it.
+
+> **Important:** Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages above and re-install.
 
 ## Integrated Development Environment
 For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
