@@ -16,7 +16,11 @@ pub struct WorkerNetwork {
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
-    executor: BoundedExecutor,
+    executors: HashMap<Multiaddr, BoundedExecutor>,
+}
+
+fn default_executor() -> BoundedExecutor {
+    BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current())
 }
 
 impl Default for WorkerNetwork {
@@ -32,7 +36,7 @@ impl Default for WorkerNetwork {
             config: Default::default(),
             retry_config,
             rng: SmallRng::from_entropy(),
-            executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
+            executors: HashMap::new(),
         }
     }
 }
@@ -69,7 +73,7 @@ impl WorkerNetwork {
         address: Multiaddr,
         message: BincodeEncodedPayload,
     ) -> CancelHandler<MessageResult> {
-        let client = self.client(address);
+        let client = self.client(address.clone());
 
         let message_send = move || {
             let mut client = client.clone();
@@ -85,7 +89,9 @@ impl WorkerNetwork {
         };
 
         let handle = self
-            .executor
+            .executors
+            .entry(address)
+            .or_insert_with(default_executor)
             .spawn_with_retries(self.retry_config, message_send);
 
         CancelHandler(handle)
@@ -122,8 +128,10 @@ impl WorkerNetwork {
         message: T,
     ) -> JoinHandle<()> {
         let message = message.into();
-        let mut client = self.client(address);
-        self.executor
+        let mut client = self.client(address.clone());
+        self.executors
+            .entry(address)
+            .or_insert_with(default_executor)
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })

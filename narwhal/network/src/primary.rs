@@ -19,7 +19,12 @@ pub struct PrimaryNetwork {
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
-    executor: BoundedExecutor,
+    // One bounded executor per address
+    executors: HashMap<Multiaddr, BoundedExecutor>,
+}
+
+fn default_executor() -> BoundedExecutor {
+    BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current())
 }
 
 impl Default for PrimaryNetwork {
@@ -35,7 +40,7 @@ impl Default for PrimaryNetwork {
             config: Default::default(),
             retry_config,
             rng: SmallRng::from_entropy(),
-            executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
+            executors: HashMap::new(),
         }
     }
 }
@@ -72,7 +77,7 @@ impl PrimaryNetwork {
         address: Multiaddr,
         message: BincodeEncodedPayload,
     ) -> CancelHandler<MessageResult> {
-        let client = self.client(address);
+        let client = self.client(address.clone());
 
         let message_send = move || {
             let mut client = client.clone();
@@ -88,7 +93,9 @@ impl PrimaryNetwork {
         };
 
         let handle = self
-            .executor
+            .executors
+            .entry(address)
+            .or_insert_with(default_executor)
             .spawn_with_retries(self.retry_config, message_send);
 
         CancelHandler(handle)
@@ -116,8 +123,10 @@ impl PrimaryNetwork {
     ) -> JoinHandle<()> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut client = self.client(address);
-        self.executor
+        let mut client = self.client(address.clone());
+        self.executors
+            .entry(address)
+            .or_insert_with(default_executor)
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })
@@ -136,9 +145,11 @@ impl PrimaryNetwork {
         let mut handlers = Vec::new();
         for address in addresses {
             let handle = {
-                let mut client = self.client(address);
+                let mut client = self.client(address.clone());
                 let message = message.clone();
-                self.executor
+                self.executors
+                    .entry(address)
+                    .or_insert_with(default_executor)
                     .spawn(async move {
                         let _ = client.send_message(message).await;
                     })
@@ -164,9 +175,11 @@ impl PrimaryNetwork {
         let mut handlers = Vec::new();
         for address in addresses {
             let handle = {
-                let mut client = self.client(address);
+                let mut client = self.client(address.clone());
                 let message = message.clone();
-                self.executor
+                self.executors
+                    .entry(address)
+                    .or_insert_with(default_executor)
                     .spawn(async move {
                         let _ = client.send_message(message).await;
                     })
