@@ -8,7 +8,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::File;
-use std::io::{BufReader};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
