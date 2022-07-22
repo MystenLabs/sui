@@ -10,14 +10,14 @@ use rand::{rngs::StdRng, SeedableRng};
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
-    crypto::{get_key_pair_from_rng, KeyPair, KeypairTraits, PublicKeyBytes},
+    crypto::{get_key_pair_from_rng, KeypairTraits, AuthorityPublicKeyBytes, AuthorityKeyPair},
 };
 
 /// The size of the committee used for tests.
 pub const TEST_COMMITTEE_SIZE: usize = 4;
 
 /// Generate `COMMITTEE_SIZE` test cryptographic key pairs.
-pub fn test_keys() -> Vec<(SuiAddress, KeyPair)> {
+pub fn test_keys() -> Vec<(SuiAddress, AuthorityKeyPair)> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..TEST_COMMITTEE_SIZE)
         .map(|_| get_key_pair_from_rng(&mut rng))
@@ -30,7 +30,7 @@ pub fn test_committee() -> Committee {
         0,
         test_keys()
             .into_iter()
-            .map(|(_, x)| (PublicKeyBytes::from(x.public()), /* voting right */ 1))
+            .map(|(_, x)| (AuthorityPublicKeyBytes::from(x.public()), /* voting right */ 1))
             .collect(),
     )
     .unwrap()

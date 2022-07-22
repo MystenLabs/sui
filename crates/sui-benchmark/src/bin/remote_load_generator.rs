@@ -5,6 +5,7 @@ use clap::*;
 use futures::join;
 use sui_benchmark::benchmark::bench_types::{MicroBenchmarkResult, RemoteLoadGenConfig};
 use sui_benchmark::benchmark::load_generator::MultiFixedRateLoadGenerator;
+use sui_types::crypto::AccountKeyPair;
 
 use std::panic;
 use std::path::PathBuf;
@@ -12,7 +13,6 @@ use sui_benchmark::benchmark::transaction_creator::TransactionCreator;
 use sui_benchmark::benchmark::validator_preparer::ValidatorPreparer;
 use sui_config::{NetworkConfig, PersistedConfig};
 use sui_types::base_types::ObjectID;
-use sui_types::crypto::KeyPair;
 use tokio::runtime::Builder;
 
 #[derive(Debug, Parser)]
@@ -93,7 +93,7 @@ fn run_latency_microbench(
     period_us: u64,
 
     object_id_offset: ObjectID,
-    sender: &KeyPair,
+    sender: &AccountKeyPair,
 
     network_config: NetworkConfig,
 

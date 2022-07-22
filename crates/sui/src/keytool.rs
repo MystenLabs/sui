@@ -6,12 +6,12 @@ use clap::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 use sui_sdk::crypto::{Keystore, SuiKeystore};
-use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
-use sui_types::crypto::KeypairTraits;
+use sui_types::base_types::decode_bytes_hex;
+use sui_types::crypto::{KeypairTraits, AccountKeyPair};
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::SuiAddress,
-    crypto::{get_key_pair, EncodeDecodeBase64, KeyPair},
+    crypto::{get_key_pair},
 };
 use tracing::info;
 
@@ -43,7 +43,7 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate => {
-                let (_address, keypair) = get_key_pair();
+                let (_address, keypair): (_, AccountKeyPair) = get_key_pair();
 
                 let hex = encode_bytes_hex(keypair.public());
                 let file_name = format!("{hex}.key");
@@ -96,7 +96,7 @@ impl KeyToolCommand {
     }
 }
 
-fn store_and_print_keypair(address: SuiAddress, keypair: KeyPair) {
+fn store_and_print_keypair(address: SuiAddress, keypair: AccountKeyPair) {
     let path_str = format!("{}.key", address).to_lowercase();
     let path = Path::new(&path_str);
     let address = format!("{}", address);

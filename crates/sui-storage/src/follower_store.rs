@@ -52,7 +52,7 @@ impl FollowerStore {
 #[cfg(test)]
 mod test {
     use crate::follower_store::FollowerStore;
-    use sui_types::crypto::{get_key_pair, KeypairTraits};
+    use sui_types::crypto::{get_key_pair, KeypairTraits, AccountKeyPair};
 
     #[test]
     fn test_follower_store() {
@@ -60,7 +60,7 @@ mod test {
 
         let follower_store = FollowerStore::open(&working_dir).expect("cannot open db");
 
-        let (_, key_pair) = get_key_pair();
+        let (_, key_pair): (_, AccountKeyPair) = get_key_pair();
         let val_name = &key_pair.public().into();
 
         let seq = follower_store

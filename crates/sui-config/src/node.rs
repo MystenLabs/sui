@@ -53,7 +53,7 @@ pub struct NodeConfig {
     pub genesis: Genesis,
 }
 
-fn default_key_pair() -> Arc<KeyPair> {
+fn default_key_pair() -> Arc<AuthorityKeyPair> {
     Arc::new(sui_types::crypto::get_key_pair().1)
 }
 
@@ -84,11 +84,11 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 impl Config for NodeConfig {}
 
 impl NodeConfig {
-    pub fn key_pair(&self) -> &KeyPair {
+    pub fn key_pair(&self) -> &AuthorityKeyPair {
         &self.key_pair
     }
 
-    pub fn public_key(&self) -> PublicKeyBytes {
+    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
         self.key_pair.public().into()
     }
 
@@ -142,7 +142,7 @@ impl ConsensusConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
-    pub public_key: PublicKeyBytes,
+    pub public_key: AuthorityPublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub network_address: Multiaddr,
@@ -164,7 +164,7 @@ impl ValidatorInfo {
         (&self.public_key()).into()
     }
 
-    pub fn public_key(&self) -> PublicKeyBytes {
+    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
         self.public_key
     }
 
@@ -180,7 +180,7 @@ impl ValidatorInfo {
         &self.network_address
     }
 
-    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<PublicKeyBytes, u64> {
+    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {
         validator_set
             .iter()
             .map(|validator| {

@@ -3,6 +3,7 @@
 
 use clap::*;
 use serde_json::json;
+use sui_types::crypto::AccountKeyPair;
 use std::collections::HashMap;
 use sui::client_commands::{
     call_move, WalletContext, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL,
@@ -62,7 +63,7 @@ impl ClusterTest {
         assert!(!coins.is_empty(), "Not enough gas objects to run test.");
         let signer = self.context.address;
         let wallet_context = self.wallet_context();
-        let (receipent_addr, _) = get_key_pair();
+        let (receipent_addr, _): (_, AccountKeyPair) = get_key_pair();
         let obj_to_transfer = coins.remove(0);
         let data = wallet_context
             .gateway

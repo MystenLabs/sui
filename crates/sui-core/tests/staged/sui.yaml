@@ -30,7 +30,7 @@ AuthoritySignInfo:
   STRUCT:
     - epoch: U64
     - authority:
-        TYPENAME: PublicKeyBytes
+        TYPENAME: AuthorityPublicKeyBytes
     - signature:
         TYPENAME: Ed25519Signature
 CallArg:
@@ -323,7 +323,7 @@ Owner:
       Shared: UNIT
     3:
       Immutable: UNIT
-PublicKeyBytes:
+AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 SequenceNumber:
   NEWTYPESTRUCT: U64

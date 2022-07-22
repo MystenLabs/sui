@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::PublicKey;
+use crate::crypto::AuthorityPublicKey;
 use crate::error::{SuiError, SuiResult};
 use itertools::Itertools;
 use rand_latest::rngs::OsRng;
@@ -23,7 +23,7 @@ pub struct Committee {
     pub total_votes: StakeUnit,
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
-    expanded_keys: HashMap<AuthorityName, PublicKey>,
+    expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
     #[serde(skip)]
@@ -76,10 +76,10 @@ impl Committee {
     pub fn load_inner(
         voting_rights: &[(AuthorityName, StakeUnit)],
     ) -> (
-        HashMap<AuthorityName, PublicKey>,
+        HashMap<AuthorityName, AuthorityPublicKey>,
         HashMap<AuthorityName, usize>,
     ) {
-        let expanded_keys: HashMap<AuthorityName, PublicKey> = voting_rights
+        let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
             // TODO: Verify all code path to make sure we always have valid public keys.
             // e.g. when a new validator is registering themself on-chain.
@@ -120,7 +120,7 @@ impl Committee {
         self.epoch
     }
 
-    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<PublicKey> {
+    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
             Some(v) => Ok(v.clone()),

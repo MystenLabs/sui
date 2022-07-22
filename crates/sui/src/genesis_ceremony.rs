@@ -13,7 +13,7 @@ use sui_config::{
 };
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
-    crypto::{KeypairTraits, PublicKeyBytes, Signature, ToFromBytes},
+    crypto::{KeypairTraits, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature, ToFromBytes, AccountKeyPair},
     object::Object,
 };
 
@@ -160,7 +160,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             if !built_genesis
                 .validator_set()
                 .iter()
-                .any(|validator| validator.public_key() == PublicKeyBytes::from(keypair.public()))
+                .any(|validator| validator.public_key() == AuthorityPublicKeyBytes::from(keypair.public()))
             {
                 return Err(anyhow::anyhow!(
                     "provided keypair does not correspond to a validator in the validator set"
@@ -173,7 +173,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let signature_dir = dir.join(GENESIS_BUILDER_SIGNATURE_DIR);
             std::fs::create_dir_all(&signature_dir)?;
 
-            let hex_name = encode_bytes_hex(&PublicKeyBytes::from(keypair.public()));
+            let hex_name = encode_bytes_hex(&AuthorityPublicKeyBytes::from(keypair.public()));
             fs::write(signature_dir.join(hex_name), signature)?;
         }
 
@@ -191,7 +191,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 let path = entry.path();
                 let signature_bytes = fs::read(path)?;
                 let signature: Signature = Signature::from_bytes(&signature_bytes)?;
-                let public_key = PublicKeyBytes::from_bytes(signature.public_key_bytes())?;
+                let public_key = AuthorityPublicKeyBytes::from_bytes(signature.public_key_bytes())?;
                 signatures.insert(public_key, signature);
             }
 
@@ -228,7 +228,7 @@ mod test {
     use crate::keytool::write_keypair_to_file;
     use anyhow::Result;
     use sui_config::{utils, ValidatorInfo};
-    use sui_types::crypto::get_key_pair_from_rng;
+    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
 
     #[test]
     fn ceremony() -> Result<()> {
@@ -236,10 +236,10 @@ mod test {
 
         let validators = (0..10)
             .map(|i| {
-                let keypair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+                let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
                 let info = ValidatorInfo {
                     name: format!("validator-{i}"),
-                    public_key: PublicKeyBytes::from(keypair.public()),
+                    public_key: AuthorityPublicKeyBytes::from(keypair.public()),
                     stake: 1,
                     delegation: 0,
                     network_address: utils::new_network_address(),

@@ -10,14 +10,14 @@ use std::path::PathBuf;
 use sui_adapter::genesis;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::{KeypairTraits, AccountKeyPair};
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
     TransactionData,
 };
 use sui_types::object::Object;
 use sui_types::{base_types::SuiAddress, crypto::Signature};
-use sui_types::{crypto::KeyPair, messages::CallArg};
+use sui_types::{messages::CallArg};
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
@@ -25,7 +25,7 @@ pub const MAX_GAS: u64 = 10_000;
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn test_transactions<K>(keys: K) -> (Vec<Transaction>, Vec<Object>)
 where
-    K: Iterator<Item = KeyPair>,
+    K: Iterator<Item = AccountKeyPair>,
 {
     // The key pair of the recipient of the transaction.
     let (recipient, _) = test_keys().pop().unwrap();
@@ -153,7 +153,7 @@ pub fn make_transfer_object_transaction(
     object_ref: ObjectRef,
     gas_object: ObjectRef,
     sender: SuiAddress,
-    keypair: &KeyPair,
+    keypair: &AccountKeyPair,
     recipient: SuiAddress,
 ) -> Transaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);

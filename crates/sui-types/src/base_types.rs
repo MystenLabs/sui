@@ -16,6 +16,7 @@ use hex::FromHex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use narwhal_crypto::traits::VerifyingKey;
 use opentelemetry::{global, Context};
 use rand::Rng;
 use schemars::JsonSchema;
@@ -26,7 +27,7 @@ use sha2::Sha512;
 use sha3::Sha3_256;
 
 use crate::committee::EpochId;
-use crate::crypto::{PublicKey, PublicKeyBytes};
+use crate::crypto::{AccountKeyPair, AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -67,7 +68,7 @@ pub type VersionNumber = SequenceNumber;
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-pub type AuthorityName = PublicKeyBytes;
+pub type AuthorityName = AuthorityPublicKeyBytes;
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
@@ -183,8 +184,8 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<&PublicKeyBytes> for SuiAddress {
-    fn from(pkb: &PublicKeyBytes) -> Self {
+impl From<&AuthorityPublicKeyBytes> for SuiAddress {
+    fn from(pkb: &AuthorityPublicKeyBytes) -> Self {
         let mut hasher = Sha3_256::default();
         hasher.update(pkb.as_ref());
         let g_arr = hasher.finalize();
@@ -195,10 +196,11 @@ impl From<&PublicKeyBytes> for SuiAddress {
     }
 }
 
-impl From<&PublicKey> for SuiAddress {
-    fn from(pkb: &PublicKey) -> Self {
+impl<T: VerifyingKey> From<&T> for SuiAddress 
+{
+    fn from(pk: &T) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(pkb.as_ref());
+        hasher.update(pk.as_ref());
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
@@ -481,8 +483,8 @@ impl ObjectDigest {
     }
 }
 
-pub fn get_new_address() -> SuiAddress {
-    crate::crypto::get_key_pair().0
+pub fn get_new_address<K: KeypairTraits>() -> SuiAddress {
+    crate::crypto::get_key_pair::<K>().0
 }
 
 pub fn bytes_as_hex<B, S>(bytes: B, serializer: S) -> Result<S::Ok, S::Error>

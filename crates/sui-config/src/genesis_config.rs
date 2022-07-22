@@ -8,7 +8,7 @@ use serde_with::serde_as;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
 use sui_types::object::Object;
 use sui_types::sui_serde::KeyPairBase64;
 use tracing::info;
@@ -28,7 +28,7 @@ impl GenesisConfig {
     pub fn generate_accounts<R: ::rand::RngCore + ::rand::CryptoRng>(
         &self,
         mut rng: R,
-    ) -> Result<(Vec<KeyPair>, Vec<Object>)> {
+    ) -> Result<(Vec<AuthorityKeyPair>, Vec<Object>)> {
         let mut addresses = Vec::new();
         let mut preload_objects = Vec::new();
         let mut all_preload_objects_set = BTreeSet::new();
