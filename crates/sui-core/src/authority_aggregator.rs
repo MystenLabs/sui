@@ -1701,8 +1701,6 @@ where
     ) -> SuiResult<SignedTransactionEffects> {
         let digest = cert.digest();
 
-        debug!(?digest, "execute_cert_to_true_effects");
-
         #[derive(Debug)]
         struct ExecuteCertState {
             cumulative_weight: StakeUnit,
@@ -1729,6 +1727,13 @@ where
 
         let validity = self.committee.validity_threshold();
         let total_weight = self.committee.total_votes;
+
+        debug!(
+            ?validity,
+            ?total_weight,
+            ?digest,
+            "execute_cert_to_true_effects"
+        );
         let final_state = self
             .quorum_map_then_reduce_with_timeout_and_prefs(
                 Some(&signers),
@@ -1750,6 +1755,7 @@ where
                                 *entry += weight;
 
                                 if *entry >= validity {
+                                    state.true_effects = Some(effects);
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
