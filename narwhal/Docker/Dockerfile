@@ -56,11 +56,12 @@ RUN sed -i 's/^members = .*/members = ["workspace-hack"]/g' Cargo.toml \
 # with all dependencies built.
 FROM chef AS builder 
 ARG BUILD_MODE
+ARG FEATURES="celo,benchmark"
 
 COPY --from=planner /narwhal/Cargo.toml Cargo.toml
 COPY --from=planner /narwhal/Cargo.lock Cargo.lock
 COPY --from=planner /narwhal/workspace-hack workspace-hack
-RUN cargo build --${BUILD_MODE} --all-features
+RUN cargo build --${BUILD_MODE} --features ${FEATURES}
 
 #################################################################
 # Stage 2.5 : Building
@@ -74,7 +75,8 @@ RUN cargo build --${BUILD_MODE} --all-features
 COPY . .
 
 # Build the binary named "node"
-RUN cargo build --${BUILD_MODE} --all-features --bin node
+RUN cargo build --${BUILD_MODE} --features ${FEATURES} --bin node --bin benchmark_client
+
 
 #################################################################
 # Stage 3 : Production image
@@ -83,10 +85,14 @@ RUN cargo build --${BUILD_MODE} --all-features --bin node
 # Creat another layer so we can re-use caching
 FROM debian:bullseye-slim
 ARG BUILD_MODE
+
 WORKDIR "$WORKDIR/narwhal"
 
 # Copy the Narwhal node binary to bin folder
 COPY --from=builder narwhal/target/${BUILD_MODE}/node bin/
+
+# This is used for testing a cluster by generating load.
+# We use this in our k8s cluster deployed alongside the workers and validators.
 COPY --from=builder narwhal/target/${BUILD_MODE}/benchmark_client bin/
 
 # Copy the entry point file
