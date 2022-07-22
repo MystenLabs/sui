@@ -88,9 +88,7 @@ export class Ed25519Keypair implements Keypair {
    */
   static isValidPath = (path: string): boolean => {
     if (
-      !new RegExp("^m\\/44'\\/784'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(
-        path
-      )
+      !new RegExp("^m\\/44'\\/784'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(path)
     ) {
       return false;
     }
@@ -111,10 +109,13 @@ export class Ed25519Keypair implements Keypair {
     const normalizeMnemonics = mnemonics
       .trim()
       .split(/\s+/)
-      .map(part => part.toLowerCase())
+      .map((part) => part.toLowerCase())
       .join(' ');
 
-    const { key } = derivePath(path, bip39.mnemonicToSeedHex(normalizeMnemonics));
+    const { key } = derivePath(
+      path,
+      bip39.mnemonicToSeedHex(normalizeMnemonics)
+    );
 
     return Ed25519Keypair.fromSeed(key);
   }
