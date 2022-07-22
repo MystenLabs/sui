@@ -9,7 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
@@ -411,6 +411,7 @@ fn process_package(
     // that don't exist on-chain because they are yet to be published.
     #[cfg(debug_assertions)]
     {
+        use std::collections::HashSet;
         let to_be_published_addresses: HashSet<_> = modules
             .iter()
             .map(|module| *module.self_id().address())

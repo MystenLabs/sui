@@ -88,14 +88,15 @@ button.gone {
 /* Mobile */
 
 .mobilefooter {
-    @apply sm:hidden block;
+    @apply sm:hidden block w-[85vw];
 }
 
 .mobiletoprow {
     @apply sm:hidden block grid grid-cols-6 my-2;
 }
 
-.mobiletoprow > button:nth-child(1) {
+.mobiletoprow > button:nth-child(1),
+.mobiletoprow > button:nth-child(3) {
     @apply col-span-1;
 }
 

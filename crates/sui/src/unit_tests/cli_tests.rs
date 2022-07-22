@@ -737,6 +737,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         panic!("Command failed")
     };
 
+    println!("9");
+
     // Check that we can switch to this address
     // Switch the address
     let resp = SuiClientCommands::Switch {

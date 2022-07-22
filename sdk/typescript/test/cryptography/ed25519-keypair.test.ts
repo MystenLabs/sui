@@ -49,16 +49,6 @@ describe('ed25519-keypair', () => {
     );
   });
 
-  it('generate keypair from from Derive Path', () => {
-    const keypair = Ed25519Keypair.fromDerivePath(
-      `m/44'/784'/0'/0'/0'`,
-      'shoot island position soft burden budget tooth cruel issue economy destroy above'
-    );
-    expect(keypair.getPublicKey().toBase64()).toEqual(
-      'MxHmoZrcHAalCeW/Rk6dTsxzA58xGslAuxGJb4L7ZTM='
-    );
-  });
-
   it('signature of data is valid', () => {
     const keypair = new Ed25519Keypair();
     const signData = new Base64DataBuffer(

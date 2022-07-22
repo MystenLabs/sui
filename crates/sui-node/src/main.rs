@@ -4,9 +4,8 @@
 use anyhow::Result;
 use clap::Parser;
 use multiaddr::Multiaddr;
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 use sui_config::{Config, NodeConfig};
-use tracing::info;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -53,6 +52,9 @@ async fn main() -> Result<()> {
     #[cfg(not(target_env = "msvc"))]
     {
         use jemalloc_ctl::config;
+        use std::time::Duration;
+        use tracing::info;
+
         let malloc_conf = config::malloc_conf::mib().unwrap();
         info!("Default Jemalloc conf: {}", malloc_conf.read().unwrap());
 

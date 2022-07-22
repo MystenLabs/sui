@@ -131,7 +131,7 @@ function Pagination({
         <></>
     );
 
-    const IndexZeroButton = (label: string) => (
+    const IndexZeroButton = (label: string = '1') => (
         <button
             className={
                 pageIndex === 0 ? styles.pagenumber : styles.btncontainer
@@ -204,7 +204,7 @@ function Pagination({
     const desktopPagination = (
         <div>
             {BackButton}
-            {IndexZeroButton('1')}
+            {IndexZeroButton()}
 
             <button
                 className={
@@ -262,11 +262,11 @@ function Pagination({
     const mobilePagination = (
         <div>
             <div className={styles.mobiletoprow}>
-                {IndexZeroButton('First')}
+                {IndexZeroButton()}
                 <button className={styles.basecontainer}>
-                    Page {pageIndex + 1} of {finalPageNo}
+                    Page {pageIndex + 1}
                 </button>
-                {FinalPageButton(finalPageNo, 'Last')}
+                {FinalPageButton(finalPageNo)}
             </div>
             <div className={styles.mobilebottomrow}>
                 {BackButton}

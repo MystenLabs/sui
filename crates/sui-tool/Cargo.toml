@@ -15,6 +15,13 @@ telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", re
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 textwrap = "0.15"
 futures = "0.3.21"
+rocksdb = "0.18.0"
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
+tempfile = "3.3.0"
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", package = "executor" }
+serde_with = { version = "1.14.0", features = ["hex"] }
+sui-storage = { path = "../sui-storage" }
+serde = { version = "1.0.139", features = ["derive"] }
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, KeyPair, KeypairTraits, Signature};
+use sui_types::crypto::{get_key_pair, EncodeDecodeBase64, KeyPair, KeypairTraits, Signature};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]
@@ -76,7 +76,12 @@ impl SuiKeystore {
     pub fn load_or_create(path: &Path) -> Result<Self, anyhow::Error> {
         let keys: Vec<KeyPair> = if path.exists() {
             let reader = BufReader::new(File::open(path)?);
-            serde_json::from_reader(reader)?
+            let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
+            kp_strings
+                .iter()
+                .map(|kpstr| KeyPair::decode_base64(kpstr))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| anyhow::anyhow!("Invalid Keypair file"))?
         } else {
             Vec::new()
         };
@@ -98,8 +103,14 @@ impl SuiKeystore {
 
     pub fn save(&self) -> Result<(), anyhow::Error> {
         if let Some(path) = &self.path {
-            let store =
-                serde_json::to_string_pretty(&self.keys.values().collect::<Vec<_>>()).unwrap();
+            let store = serde_json::to_string_pretty(
+                &self
+                    .keys
+                    .values()
+                    .map(|k| k.encode_base64())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
             fs::write(path, store)?
         }
         Ok(())

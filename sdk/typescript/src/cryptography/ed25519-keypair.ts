@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
-import bip39 from 'bip39-light';
-import { derivePath } from 'ed25519-hd-key';
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { PublicKey } from './publickey';
@@ -79,45 +77,6 @@ export class Ed25519Keypair implements Keypair {
    */
   static fromSeed(seed: Uint8Array): Ed25519Keypair {
     return new Ed25519Keypair(nacl.sign.keyPair.fromSeed(seed));
-  }
-
-  /**
-   * Test Derive Path from path string
-   *
-   * @param path path string (`m/44'/784'/0'/0'/0'`)
-   */
-  static isValidPath = (path: string): boolean => {
-    if (
-      !new RegExp("^m\\/44'\\/784'\\/[0-9]+'\\/[0-9]+'\\/[0-9]+'+$").test(path)
-    ) {
-      return false;
-    }
-    return true;
-  };
-
-  /**
-   * Generate a keypair from mnemonics.
-   *
-   * @param path path string (`m/44'/784'/0'/0'/0'`)
-   * @param mnemonics: mnemonics is a word seed phrase
-   */
-  static fromDerivePath(path: string, mnemonics: string): Ed25519Keypair {
-    if (!Ed25519Keypair.isValidPath(path)) {
-      throw new Error('Invalid derivation path');
-    }
-
-    const normalizeMnemonics = mnemonics
-      .trim()
-      .split(/\s+/)
-      .map((part) => part.toLowerCase())
-      .join(' ');
-
-    const { key } = derivePath(
-      path,
-      bip39.mnemonicToSeedHex(normalizeMnemonics)
-    );
-
-    return Ed25519Keypair.fromSeed(key);
   }
 
   /**
