@@ -1,0 +1,15 @@
+{
+  "name": "@sui-wallet-adapter/all-wallets",
+  "version": "1.0.0",
+  "description": "Module exporting all integrated wallets for Sui Wallet Adapter",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@sui-wallet-adapter/mock-wallet": "file:../mock-wallet",
+    "@sui-wallet-adapter/sui-wallet": "file:../sui-wallet"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "sui-wallet-adapter-ui",
+  "version": "1.0.0",
+  "description": "UI for the Sui Wallet Adapter",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^4.7.4"
+  },
+  "dependencies": {
+    "@mui/core": "^5.0.0-alpha.54",
+    "@mui/icons-material": "^5.8.4",
+    "sui-wallet-adapter-react": "file:../react-providers"
+  }
+}
