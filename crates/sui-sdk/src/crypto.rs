@@ -8,7 +8,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -103,8 +103,14 @@ impl SuiKeystore {
 
     pub fn save(&self) -> Result<(), anyhow::Error> {
         if let Some(path) = &self.path {
-            let store =
-                serde_json::to_string_pretty(&self.keys.values().collect::<Vec<_>>()).unwrap();
+            let store = serde_json::to_string_pretty(
+                &self
+                    .keys
+                    .values()
+                    .map(|k| k.encode_base64())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
             fs::write(path, store)?
         }
         Ok(())
