@@ -45,7 +45,7 @@ below for your operating system.
 
 Here are the packages required by operating system:
 
-|OS |Linux  | macOS| Windows 11|
+|Package/OS |Linux  | macOS| Windows 11|
 --- | --- | ---| ---|
 |Curl|X|X|X|
 |Rust|X|X|X|
