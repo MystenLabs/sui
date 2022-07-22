@@ -13,7 +13,8 @@ use narwhal_crypto::ed25519::{
 };
 pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
 pub use narwhal_crypto::traits::{
-    AggregateAuthenticator, Authenticator, SigningKey, ToFromBytes, VerifyingKey,
+    AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
+    VerifyingKey,
 };
 use narwhal_crypto::Verifier;
 use rand::rngs::OsRng;
