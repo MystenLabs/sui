@@ -547,7 +547,7 @@ untrusted = { version = "0.7", default-features = false }
 url = { version = "2", default-features = false }
 utf8parse = { version = "0.2" }
 vec_map = { version = "0.8", default-features = false }
-vte = { version = "0.10", features = ["arrayvec", "no_std"] }
+vte = { version = "0.11", features = ["arrayvec", "no_std"] }
 wait-timeout = { version = "0.2", default-features = false }
 walkdir = { version = "2", default-features = false }
 want = { version = "0.3", default-features = false }
@@ -1191,7 +1191,7 @@ variant_count = { version = "1", default-features = false }
 vcpkg = { version = "0.2", default-features = false }
 vec_map = { version = "0.8", default-features = false }
 version_check = { version = "0.9", default-features = false }
-vte = { version = "0.10", features = ["arrayvec", "no_std"] }
+vte = { version = "0.11", features = ["arrayvec", "no_std"] }
 vte_generate_state_changes = { version = "0.1", default-features = false }
 wait-timeout = { version = "0.2", default-features = false }
 walkdir = { version = "2", default-features = false }
