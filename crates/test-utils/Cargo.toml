@@ -12,8 +12,8 @@ futures = "0.3.21"
 rand = "0.7.3"
 tempfile = "3.3.0"
 bcs = "0.1.3"
-jsonrpsee-http-server = "0.14.0"
-jsonrpsee-http-client = "0.14.0"
+jsonrpsee-http-server = "0.15.0"
+jsonrpsee-http-client = "0.15.0"
 prometheus = "0.13.1"
 
 sui = { path = "../sui" }
