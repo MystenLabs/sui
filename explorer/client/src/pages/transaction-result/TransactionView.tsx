@@ -220,7 +220,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const validatorSignatureData = {
         title: 'Validator Signatures',
-        content: txdata.authSignInfo.signatures.map((validatorSign) => ({
+        content: txdata.authSignInfo.signature.map((validatorSign) => ({
             value: validatorSign,
             monotypeClass: true,
         })),
