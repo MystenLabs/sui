@@ -53,6 +53,7 @@ use sui_types::{
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
+use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
@@ -427,7 +428,10 @@ impl AuthorityState {
             )?;
         }
 
-        let resp = self.process_certificate(tx_guard, &certificate).await?;
+        let resp = self
+            .process_certificate(tx_guard, &certificate)
+            .await
+            .tap_err(|e| info!(?digest, "process_certificate failed: {}", e))?;
 
         let expected_effects_digest = signed_effects.digest();
         let observed_effects_digest = resp.signed_effects.as_ref().map(|e| e.digest());
@@ -469,7 +473,9 @@ impl AuthorityState {
         // for every tx.
         let tx_guard = self.database.acquire_tx_guard(&certificate).await?;
 
-        self.process_certificate(tx_guard, &certificate).await
+        self.process_certificate(tx_guard, &certificate)
+            .await
+            .tap_err(|e| info!(?digest, "process_certificate failed: {}", e))
     }
 
     #[instrument(level = "trace", skip_all)]
