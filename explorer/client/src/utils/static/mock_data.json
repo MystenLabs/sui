@@ -1073,7 +1073,7 @@
                 "txSignature": "PdUYEsl7ELW2xuBkkR2+T9LNYhYDkYyMXB9KrpWQhW1O0rqQFUnaN/zRNlG687urc0gMqqEzaB7X3z6qxnyiC8eSU1B+GYwODN677Gg4RKJsnoD9MoDgLfbD5KlmW6t0",
                 "authSignInfo": {
                     "epoch": 0,
-                    "signatures": [
+                    "signature": [
                         "LsI1DK+7kkcMx5DWb6bxuVPtkwCP4TJAjvVw2NosuJNgtfC0w6aP7JqD4MCMm/c/FBQ/wFP3nb6yck2gy4XkAw==",
                         "2d4WcVIS3cKSnk4csYDMyZSNtE3JiYoBh+ylYfjVNrjQAIgligEkM1Msk4vRwVDoRBjHkFILGmO/SQE8UP+bCg==",
                         "ZLWlGHYGf7wCThex8Hhl+ooea20vfXKjMbq8Xg1WGWxdqwVr18JoJWa8xR6DlVS7gwDPgrVYYVr2/fqurJ3nCw=="
@@ -1172,7 +1172,7 @@
                 "txSignature": "SWQ7hAuhkrky4Kxq0lfelPz8NfWr9IbpyBp4gcnULBjzw+G+t/l0pM0fNtNbXmSGo4GIXW6uHirlT9eiZcJnAMeSU1B+GYwODN677Gg4RKJsnoD9MoDgLfbD5KlmW6t0",
                 "authSignInfo": {
                     "epoch": 0,
-                    "signatures": [
+                    "signature": [
                         "6R+WxlZ80e53aRxr0R44Kzz9xVm3+0WgvuRYp43Z3BNrUYVfPX8kEVIjwGQ/5JCs5IbzKQh2TR+Geazj6LLwAg==",
                         "DvKi7uns1j97P2/U/ZjsGoBa9n413AXKRa/zyzKZlzpc3vvF90kN4U96DSQIH+OS5MMWGD1eI0Z0EaYRiVzsAg==",
                         "rWUlaHfK+fKKyGjzEgfQoKhxRf175JnPevX0IVa5kUxgpdGiMhSRCJ2ZIWpnfDwlRJQdQrWBkovW2JzNycVsCA=="
@@ -1241,7 +1241,7 @@
             "certificate": {
                 "authSignInfo": {
                     "epoch": 0,
-                    "signatures": [
+                    "signature": [
                         "PlOlGgEpHkq40F8Z8kdcze0diuNKuLCOCR41SIbv3ePBYZF/EHmJDnDzFbqdnCEqRGTbKeWdi8+GOlgqJ2O4Bg==",
                         "VVIuzJzLJQ91Dsr/IVclhDHlV3kyBGUqUcBLMiFawhimhZNjq476y5ERb42E9fmftTFOeoRl3J9/KEWmq3J8Dg==",
                         "HcfTrhvCqBqRXNL2FqI91JXbzFn1BsGUIO3jc7sQSKQP62fe4+orJFHjvYVHcLAJHURrn4R7bpXr6XsTbdc/DQ=="

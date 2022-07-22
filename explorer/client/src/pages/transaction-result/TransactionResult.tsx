@@ -55,7 +55,7 @@ const initState: TxnState = {
     txSignature: '',
     authSignInfo: {
         epoch: 0,
-        signatures: [],
+        signature: [],
     },
     status: 'success',
     gasFee: 0,
