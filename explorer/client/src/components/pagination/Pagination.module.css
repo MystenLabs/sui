@@ -14,6 +14,10 @@
         @apply px-2 py-2 mx-[4px];
     }
 
+    .under6footer .basecontainer {
+        @apply px-2 py-2 mx-[1vw] sm:mx-[4px];
+    }
+
     .btncontainer {
         @apply basecontainer hover:bg-sui-light hover:text-sui-grey-100 hover:stroke-sui-grey-100 cursor-pointer inline-block;
 
@@ -37,22 +41,9 @@ button.gone {
     @apply opacity-30;
 }
 
-/* Desktop */
-
-.desktopfooter {
-    @apply hidden sm:block sm:mt-2 sm:grid sm:grid-cols-12 text-center sm:text-left;
-}
-
+/* RHS stats styling */
 .rhs > div {
     @apply capitalize text-sui-grey-75 text-sm mx-auto mt-2 sm:mt-0;
-}
-
-.desktopfooter > div:first-child {
-    @apply inline-block sm:block sm:col-span-8 sm:self-center;
-}
-
-.desktopfooter > div:nth-child(2) {
-    @apply sm:col-span-4 sm:justify-self-end sm:items-center;
 }
 
 .rhs {
@@ -65,6 +56,33 @@ button.gone {
 
 .rhs > select {
     @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block;
+}
+
+/* Less than 6 case */
+.under6footer {
+    @apply mt-2 sm:grid sm:grid-cols-12 text-center text-left;
+}
+
+.under6footer > div:first-child {
+    @apply block sm:col-span-8 self-center sm:justify-self-start;
+}
+
+.under6footer > div:nth-child(2) {
+    @apply sm:col-span-4 justify-self-end items-center;
+}
+
+/* Desktop */
+
+.desktopfooter {
+    @apply hidden sm:block sm:mt-2 sm:grid sm:grid-cols-12 text-center sm:text-left;
+}
+
+.desktopfooter > div:first-child {
+    @apply inline-block sm:block sm:col-span-8 sm:self-center;
+}
+
+.desktopfooter > div:nth-child(2) {
+    @apply sm:col-span-4 sm:justify-self-end sm:items-center;
 }
 
 /* Mobile */

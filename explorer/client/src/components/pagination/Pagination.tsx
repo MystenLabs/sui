@@ -170,7 +170,7 @@ function Pagination({
 
     if (finalPageNo <= 5) {
         return (
-            <div className={styles.desktopfooter}>
+            <div className={styles.under6footer}>
                 <div>
                     {BackButton}
                     {Array(finalPageNo)
