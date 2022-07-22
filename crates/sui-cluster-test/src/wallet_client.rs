@@ -10,7 +10,7 @@ use sui_core::gateway_state::GatewayClient;
 use sui_gateway::rpc_gateway_client::RpcGatewayClient;
 use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::Signature;
+use sui_types::crypto::{Signature, KeypairTraits};
 use sui_types::messages::TransactionData;
 use tracing::info;
 use sui_types::crypto::KeypairTraits;
