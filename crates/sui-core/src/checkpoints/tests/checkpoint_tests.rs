@@ -206,7 +206,6 @@ fn make_checkpoint_db() {
     .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 1);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
-    assert_eq!(cps.next_checkpoint(), 1);
 
     cps.update_processed_transactions(&[(6, t6)]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 1);
@@ -823,6 +822,25 @@ fn checkpoint_integration() {
                     TestCausalOrderPendCertNoop,
                 )
                 .is_ok());
+            // Turn the signed checkpoint to a cert. This is required to make progress.
+            let checkpoint = match cps.latest_stored_checkpoint().unwrap() {
+                AuthenticatedCheckpoint::Signed(s) => s.summary,
+                _ => unreachable!(),
+            };
+            let signatures: Vec<_> = keys
+                .iter()
+                .map(|key| {
+                    let name = key.public().into();
+                    SignedCheckpointSummary::new_from_summary(checkpoint.clone(), name, key)
+                })
+                .collect();
+            let cert = CertifiedCheckpointSummary::aggregate(signatures, &committee).unwrap();
+            cps.promote_signed_checkpoint_to_cert(
+                &cert,
+                &committee,
+                &CheckpointMetrics::new_for_tests(),
+            )
+            .unwrap();
 
             // Loop invariant to ensure termination or error
             assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);

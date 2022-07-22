@@ -79,10 +79,10 @@ async fn wait_for_advance_to_next_checkpoint(
 
         match ok {
             true => break,
-            false => tokio::time::sleep(Duration::from_secs(1)).await,
+            false => sleep(Duration::from_secs(1)).await,
         }
         cnt += 1;
-        assert!(cnt <= 40);
+        assert!(cnt <= 20);
     }
 
     // Ensure all authorities moved to the next checkpoint sequence number.
