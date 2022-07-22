@@ -33,25 +33,9 @@ To immediately get started using Sui:
 The following operating systems (OSes) have been tested and are supported for
 running Sui:
 
-* Linux - Ubuntu version 18.04 (Bionic Beaver)
-* macOS - macOS Monterey
-* Microsoft Windows - Windows 11
-
-## Software requirements
-
-Here are the packages required by operating system:
-
-|OS |Linux  | macOS| Windows 11|
---- | --- | ---| ---|
-|Sui|X|X|X|
-|Curl|X|X|X|
-|Rust|X|X|X|
-|Git CLI|X|X|X|
-|CMake|X|X|X|
-|libssl-dev|X| | |
-|libclang-dev|X| | |
-|C++ build tools| | |X|
-|LLVM Compiler| | |X|
+* [Linux](#linux) - Ubuntu version 18.04 (Bionic Beaver)
+* [macOS](#macOS) - macOS Monterey
+* [Microsoft Windows](#microsoft-windows) - Windows 11
 
 ## Prerequisites
 
@@ -59,16 +43,40 @@ At a minimum, you should have a machine capable of installing command line tools
 First install the packages outlined this section. Then add the additional dependencies
 below for your operating system.
 
+Here are the packages required by operating system:
+
+|OS |Linux  | macOS| Windows 11|
+--- | --- | ---| ---|
+|Curl|X|X|X|
+|Rust|X|X|X|
+|Git CLI|X|X|X|
+|CMake|X|X|X|
+|libssl-dev|X| | |
+|libclang-dev|X| | |
+|Brew| |X| |
+|C++ build tools| | |X|
+|LLVM Compiler| | |X|
+|Sui|X|X|X|
+
+Follow the instructions below to install them. Then install the Sui [binaries](#binaries).
+
 Finally, if you will be altering Sui itself, also obtain the [Sui source code](#source-code).
 For simplicity, we recommend installing in `~/sui` or using an environment variable.
 
 >**Important:** You will need to restart your command prompt after installing these prerequisites
 >for them to be available in your environment.
 
-### Sui binaries
-Install the Sui [binaries](#binaries) as described below.
+### Brew
+In macOS, first install [Brew](https://brew.sh/) to install other packages:
+```shell
+$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
-### Curl
+### General packages
+
+Ensure each of the packages below exist on each OS:
+
+#### Curl
 Confirm that you can run the `curl` command to download dependencies.
 
 See whether you already have curl installed by running:
@@ -79,11 +87,20 @@ $ which curl
 
 And if you see no output path, install it with:
 
+*Linux*
 ```shell
 $ sudo apt install curl
 ```
 
-### Rust
+*macOS*
+```shell
+$ sudo brew install curl
+```
+
+*Microsoft Windows*
+Download and install from: https://curl.se/windows/
+
+#### Rust
 Sui is written in Rust, and we are using the latest version of the
 [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) toolchain
 to build and manage the dependencies. You will need Cargo to build and install Sui on your machine.
@@ -109,24 +126,32 @@ $ rustup update stable
 > For more details, see:
 > https://www.rust-lang.org/tools/install
 
-### Git CLI
+#### Git CLI
 
 Download and install the [`git` command line interface](https://git-scm.com/download/)
 for your operating system.
 
-### CMake
+#### CMake
 
 Get the `cmake` command to build Sui:
 
+*Linux*
 ```shell
 $ sudo apt install cmake
 ```
 
+*macOS*
+```shell
+$ sudo brew install cmake
+```
+*Microsoft Windows*
+Download and install from: https://cmake.org/download/
+
 If you run into issues, follow this detailed [CMake Installation](https://riptutorial.com/cmake/example/4459/cmake-installation) tutorial.
 
-### Linux
+### Linux-specific
 
-In Linux, also install:
+In Linux, install:
 
 libssl-dev
 ```shell
@@ -138,11 +163,11 @@ libclang-dev
 $ sudo apt install libclang-dev
 ```
 
-### macOS
+### macOS-specific
 
-In macOS, the general prerequisites outlined above are sufficient.
+In macOS, other than the aforementioned [Brew](#brew) package manager, the general prerequisites are sufficient.
 
-### Microsoft Windows
+### Microsoft Windows-specific
 
 In Microsoft Windows, also install:
 
