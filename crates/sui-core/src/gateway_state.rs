@@ -52,6 +52,8 @@ use sui_json_rpc_types::{
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
+use tap::TapFallible;
+
 #[cfg(test)]
 #[path = "unit_tests/gateway_state_tests.rs"]
 mod gateway_state_tests;
@@ -611,12 +613,8 @@ where
         self.download_object_from_authorities(SUI_SYSTEM_STATE_OBJECT_ID)
             .await?;
 
-        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
-            &self.store,
-            &transaction,
-            &self.metrics.shared_obj_tx,
-        )
-        .await?;
+        let (_gas_status, input_objects) =
+            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
 
         let owned_objects = input_objects.filter_owned_objects();
         if let Err(err) = self
@@ -648,12 +646,19 @@ where
 
         let exec_result = self
             .execute_transaction_impl_inner(input_objects, transaction)
-            .await;
+            .await
+            .tap_ok(|(_, effects)| {
+                if effects.effects.shared_objects.len() > 1 {
+                    self.metrics.shared_obj_tx.inc();
+                }
+            });
+
         if exec_result.is_err() && is_last_retry {
             // If we cannot successfully execute this transaction, even after all the retries,
             // we have to give up. Here we reset all transaction locks for each input object.
             self.store.reset_transaction_lock(&owned_objects).await?;
         }
+
         exec_result
     }
 
