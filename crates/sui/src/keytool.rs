@@ -11,7 +11,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::SuiAddress,
-    crypto::{get_key_pair, KeyPair},
+    crypto::{get_key_pair, EncodeDecodeBase64, KeyPair},
 };
 use tracing::info;
 
@@ -100,7 +100,7 @@ fn store_and_print_keypair(address: SuiAddress, keypair: KeyPair) {
     let path_str = format!("{}.key", address).to_lowercase();
     let path = Path::new(&path_str);
     let address = format!("{}", address);
-    let kp = serde_json::to_string(&keypair).unwrap();
+    let kp = keypair.encode_base64();
     let kp = &kp[1..kp.len() - 1];
     let out_str = format!("address: {}\nkeypair: {}", address, kp);
     fs::write(path, out_str).unwrap();
@@ -111,19 +111,12 @@ pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
     keypair: &KeyPair,
     path: P,
 ) -> anyhow::Result<()> {
-    use base64ct::Encoding;
-
-    let keypair = keypair.copy();
-    let public = keypair.public().0;
-    let secret = keypair.private().0;
-    let dalek = ed25519_dalek::Keypair { public, secret };
-    let contents = base64ct::Base64::encode_string(&dalek.to_bytes());
+    let contents = keypair.encode_base64();
     std::fs::write(path, contents)?;
-
     Ok(())
 }
 
 pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<KeyPair> {
     let contents = std::fs::read_to_string(path)?;
-    contents.parse()
+    KeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
 }
