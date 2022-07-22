@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
+use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_types::{base_types::*, messages::*, object::Owner};
@@ -59,6 +60,15 @@ pub enum ToolCommand {
 
         #[clap(long = "no-header", help = "don't show header in concise output")]
         no_header: bool,
+    },
+    /// Tool to read validator & gateway db.
+    #[clap(name = "db-tool")]
+    DbTool {
+        /// Path of the DB to read
+        #[clap(long = "db_path")]
+        db_path: String,
+        #[clap(subcommand)]
+        cmd: Option<DbToolCommand>,
     },
 }
 
@@ -327,8 +337,14 @@ impl ToolCommand {
                     println!("{}", VerboseObjectOutput(output));
                 }
             }
-        }
-
+            ToolCommand::DbTool { db_path, cmd } => {
+                let path = PathBuf::from(db_path);
+                match cmd {
+                    Some(c) => execute_db_tool_command(path, c)?,
+                    None => print_db_all_tables(path)?,
+                }
+            }
+        };
         Ok(())
     }
 }
