@@ -8,7 +8,6 @@ import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import TableCard from '../../components/table/TableCard';
-import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
@@ -34,7 +33,7 @@ import type {
 import styles from './RecentTxCard.module.css';
 
 const TRUNCATE_LENGTH = 10;
-const NUMBER_OF_TX_PER_PAGE = 15;
+const NUMBER_OF_TX_PER_PAGE = 20;
 const DEFAULT_PAGI_TYPE = 'more button';
 
 type PaginationType = 'more button' | 'pagination' | 'none';
@@ -149,6 +148,7 @@ function LatestTxCard({ ...data }: RecentTx) {
     const [txPerPage, setTxPerPage] = useState(
         data.txPerPage || NUMBER_OF_TX_PER_PAGE
     );
+
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
@@ -285,12 +285,12 @@ function LatestTxCard({ ...data }: RecentTx) {
             },
         ],
     };
+
     const tabsFooter = {
         stats: {
             count,
             stats_text: 'Total transactions',
         },
-        pagingElement: txPerPage,
     };
 
     return (
@@ -298,29 +298,24 @@ function LatestTxCard({ ...data }: RecentTx) {
             <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
                     <TableCard tabledata={recentTx} />
-                    <TabFooter
-                        stats={tabsFooter.stats}
-                        paging={tabsFooter.pagingElement}
-                        itemsPerPageChange={setTxPerPage}
-                    >
-                        {paginationtype !== 'none' ? (
-                            paginationtype === 'pagination' ? (
-                                <Pagination
-                                    totalItems={count}
-                                    itemsPerPage={txPerPage}
-                                    onPagiChangeFn={setpageIndex}
-                                    currentPage={pageIndex}
-                                />
-                            ) : (
-                                <Link className={styles.moretxbtn} to={`/`}>
-                                    More Transactions{' '}
-                                    <ContentForwardArrowDark />
-                                </Link>
-                            )
+                    {paginationtype !== 'none' ? (
+                        paginationtype === 'pagination' ? (
+                            <Pagination
+                                totalItems={count}
+                                itemsPerPage={txPerPage}
+                                updateItemsPerPage={setTxPerPage}
+                                onPagiChangeFn={setpageIndex}
+                                currentPage={pageIndex}
+                                stats={tabsFooter.stats}
+                            />
                         ) : (
-                            <></>
-                        )}
-                    </TabFooter>
+                            <Link className={styles.moretxbtn} to={`/`}>
+                                More Transactions <ContentForwardArrowDark />
+                            </Link>
+                        )
+                    ) : (
+                        <></>
+                    )}
                 </div>
             </Tabs>
         </div>
