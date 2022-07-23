@@ -600,11 +600,36 @@ where
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
-pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
+///
+/// # Safety
+/// We protect the access to this marker trait through a "sealed trait" pattern:
+/// impls must be add added here (nowehre else) which lets us note those impls
+/// MUST be on types that comply with the `serde_name` machinery
+/// for the below implementations not to panic. One way to check they work is to write
+/// a unit test for serialization to / deserialization from signable bytes.
+///
+///
+mod bcs_signable {
+
+    pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
+    impl BcsSignable for crate::batch::TransactionBatch {}
+    impl BcsSignable for crate::batch::AuthorityBatch {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointSummary {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointContents {}
+    impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
+    impl BcsSignable for crate::messages::TransactionEffects {}
+    impl BcsSignable for crate::messages::TransactionData {}
+    impl BcsSignable for crate::messages::EpochInfo {}
+    impl BcsSignable for crate::object::Object {}
+
+    impl BcsSignable for super::bcs_signable_test::Foo {}
+    #[cfg(test)]
+    impl BcsSignable for super::bcs_signable_test::Bar {}
+}
 
 impl<T, W> Signable<W> for T
 where
-    T: BcsSignable,
+    T: bcs_signable::BcsSignable,
     W: std::io::Write,
 {
     fn write(&self, writer: &mut W) {
@@ -617,12 +642,11 @@ where
 
 impl<T> SignableBytes for T
 where
-    T: BcsSignable,
+    T: bcs_signable::BcsSignable,
 {
     fn from_signable_bytes(bytes: &[u8]) -> Result<Self, Error> {
         // Remove name tag before deserialization using BCS
-        let name = serde_name::trace_name::<Self>()
-            .ok_or_else(|| anyhow::anyhow!("Self should be a struct or an enum"))?;
+        let name = serde_name::trace_name::<Self>().expect("Self should be a struct or an enum");
         let name_byte_len = format!("{}::", name).bytes().len();
         Ok(bcs::from_bytes(&bytes[name_byte_len..])?)
     }
@@ -678,5 +702,32 @@ impl<S: AggregateAuthenticator> VerificationObligation<S> {
         })?;
 
         Ok(())
+    }
+}
+
+pub mod bcs_signable_test {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize)]
+    pub struct Foo(pub String);
+
+    #[cfg(test)]
+    #[derive(Serialize, Deserialize)]
+    pub struct Bar(pub String);
+
+    #[cfg(test)]
+    use super::{AggregateAuthoritySignature, VerificationObligation};
+
+    #[cfg(test)]
+    pub fn get_obligation_input<T>(
+        value: &T,
+    ) -> (VerificationObligation<AggregateAuthoritySignature>, usize)
+    where
+        T: super::bcs_signable::BcsSignable,
+    {
+        let mut obligation = VerificationObligation::default();
+        // Add the obligation of the authority signature verifications.
+        let idx = obligation.add_message(value);
+        (obligation, idx)
     }
 }
