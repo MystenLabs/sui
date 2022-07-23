@@ -140,7 +140,7 @@ type RecentTx = {
 };
 
 // Generate table data from the transaction data
-const recentTxTable = (results: TxnData[], truncateLength:number) => {
+const recentTxTable = (results: TxnData[], truncateLength: number) => {
     return {
         data: results.map((txn) => ({
             date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
@@ -202,7 +202,7 @@ const recentTxTable = (results: TxnData[], truncateLength:number) => {
                 accessorKey: 'gas',
             },
         ],
-    }
+    };
 };
 
 function LatestTxCard({ ...data }: RecentTx) {
