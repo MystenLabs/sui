@@ -78,7 +78,11 @@ function HomeAPI() {
             className={cl([styles.home, styles.container])}
         >
             <section className="left-item">
-                <LastestTxCard count={results.count} />
+                <LastestTxCard
+                    txPerPage={15}
+                    count={results.count}
+                    paginationtype="more button"
+                />
             </section>
             <section className="right-item"></section>
         </div>
