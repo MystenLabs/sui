@@ -5,8 +5,22 @@ use futures::future::try_join_all;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
+use sui_config::PersistedConfig;
+use sui_types::gas_coin::GasCoin;
+use sui_config::SUI_GATEWAY_CONFIG;
+use sui_config::sui_config_dir;
+use sui_core::authority_aggregator::AuthAggMetrics;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::object::ObjectRead;
+use test_utils::messages::make_transfer_sui_transaction;
 use std::collections::{BTreeMap, VecDeque};
+use sui_json_rpc_types::GetObjectDataResponse;
+
+use std::path::PathBuf;
 use std::sync::{Arc, Barrier};
+use sui_gateway::config::GatewayConfig;
+
 use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::stress::context::Payload;
@@ -62,6 +76,8 @@ struct Opts {
     /// ideally same as number of workers
     #[clap(long, default_value = "3", global = true)]
     pub num_client_threads: usize,
+    #[clap(long, default_value = "/tmp/gateway.yaml", global = true)]
+    pub remote_config_path: String,
 }
 
 struct Stats {
@@ -321,22 +337,21 @@ async fn run(
 
 fn make_test_ctx(
     max_in_flight_ops: usize,
-    configs: &NetworkConfig,
     opts: &Opts,
 ) -> Box<dyn StressTestCtx<dyn Payload>> {
     match opts.transaction_type {
         TransactionType::SharedCounter => {
-            SharedCounterTestCtx::make_ctx(max_in_flight_ops as u64, configs)
+            SharedCounterTestCtx::make_ctx(max_in_flight_ops as u64)
         }
         TransactionType::TransferObject => TransferObjectTestCtx::make_ctx(
             max_in_flight_ops as u64,
             opts.num_transfer_accounts,
-            configs,
         ),
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
     config.log_string = Some("warn".to_string());
     config.log_file = Some("/tmp/stress.log".to_string());
@@ -345,6 +360,54 @@ fn main() {
 
     // This is the maximum number of increment counter ops in flight
     let max_in_flight_ops = opts.target_qps as usize * opts.in_flight_ratio as usize;
+
+    // create network client
+    // send transfer sui tx to transfer 10,000 sui to an address 1
+    // read transferred coin from the effects
+    // split the new coin into multiple gas objects for shared counter transfer
+    let config_path = Some(opts.remote_config_path)
+        .filter(|s| !s.is_empty())
+        .map(|s| PathBuf::from(s))
+        .unwrap_or(sui_config_dir().unwrap().join(SUI_GATEWAY_CONFIG));
+    eprintln!("{:?}", &config_path);
+    let config: GatewayConfig = PersistedConfig::read(&config_path).unwrap();
+    let committee = config.make_committee().unwrap();
+    let authority_clients = config.make_authority_clients();
+    let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
+    let client = AuthorityAggregator::new(committee, authority_clients, metrics);
+    let tx = {
+        // read master gas object
+        let object_id = ObjectID::from_hex_literal("0xa8f532e7acbb3e7d60ce06a9edf8e0fc4e37a3a4").unwrap();
+        let res = client.get_object_info_execute(object_id).await.unwrap();
+        // let master_gas = match res {
+        //     ObjectRead::Exists(_, object, _) => {
+        //         Some(object)
+        //     }
+        //     _ => {
+        //         None
+        //     }
+        // };
+        let parsed: GetObjectDataResponse = res.try_into().unwrap();
+        let master_coin = match parsed {
+            GetObjectDataResponse::Exists(o) => {
+                if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
+                    // Okay to unwrap() since we already checked type
+                    let gas_coin = GasCoin::try_from(&o).unwrap();
+                    Some(gas_coin)
+                } else {
+                    None
+                }
+            }
+            _ => {
+                None
+            }
+        }.unwrap();
+        eprintln!("Master gas coin value: {}", master_coin.value());
+        //let transfer_tx = make_transfer_sui_transaction(master_gas.unwrap(), );
+        ()
+    };
+    ()
+    /*
 
     let configs = {
         let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
@@ -355,7 +418,7 @@ fn main() {
         Arc::new(configs)
     };
 
-    let mut ctx = make_test_ctx(max_in_flight_ops, &configs, &opts);
+    let mut ctx = make_test_ctx(max_in_flight_ops, &opts);
 
     let genesis_objects = ctx.get_gas_objects();
 
@@ -402,4 +465,6 @@ fn main() {
         }
         run(clients, p, opts).await
     });
+
+    */
 }

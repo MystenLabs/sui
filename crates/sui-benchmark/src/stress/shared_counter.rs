@@ -51,7 +51,7 @@ pub struct SharedCounterTestCtx {
 }
 
 impl SharedCounterTestCtx {
-    pub fn make_ctx(count: u64, _configs: &NetworkConfig) -> Box<dyn StressTestCtx<dyn Payload>> {
+    pub fn make_ctx(count: u64) -> Box<dyn StressTestCtx<dyn Payload>> {
         // create enough gas to increment shared counters and publish module
         let counter_gas = generate_gas_objects_for_testing(count as usize);
         let publish_module_gas = generate_gas_object();

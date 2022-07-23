@@ -6604,6 +6604,8 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
+ "sui-gateway",
+ "sui-json-rpc-types",
  "sui-node",
  "sui-quorum-driver",
  "sui-types",

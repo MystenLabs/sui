@@ -83,7 +83,6 @@ impl TransferObjectTestCtx {
     pub fn make_ctx(
         count: u64,
         num_accounts: u64,
-        _configs: &NetworkConfig,
     ) -> Box<dyn StressTestCtx<dyn Payload>> {
         // create several accounts to transfer object between
         let keypairs: Arc<HashMap<SuiAddress, KeyPair>> =
