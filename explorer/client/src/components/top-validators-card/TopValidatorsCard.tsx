@@ -1,105 +1,106 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useContext, useEffect, useState } from 'react';
+
 import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
-import { numberSuffix } from '../../utils/numberUtil';
+import { NetworkContext } from '../../context';
+import {
+    getTabFooter,
+    getValidatorState,
+    processValidators,
+    sortValidatorsByStake,
+    stakeColumn,
+    ValidatorLoadFail,
+    type ValidatorState,
+} from '../../pages/validators/Validators';
+import { mockState } from '../../pages/validators/mockData';
+import theme from '../../styles/theme.module.css';
 
 import styles from './TopValidatorsCard.module.css';
 
-// TODO: Specify the type of the context
-// Specify the type of the context
-function TopValidatorsCard() {
-    // mock validators data
-    const validatorsData = [
-        {
-            validatorName: 'Jump Crypto',
-            suiStake: 9_220_000,
-            suiStakePercent: '5.2%',
-            eporchReward: '38,026',
-            position: 1,
+export const STATE_DEFAULT: ValidatorState = {
+    delegation_reward: 0,
+    epoch: 0,
+    id: { id: '', version: 0 },
+    parameters: {
+        type: '0x2::sui_system::SystemParameters',
+        fields: {
+            max_validator_candidate_count: 0,
+            min_validator_stake: BigInt(0),
         },
-        {
-            validatorName: 'Blockdaemon',
-            suiStake: 8_220_000,
-            suiStakePercent: '4.2%',
-            eporchReward: '34,100',
-            position: 2,
+    },
+    storage_fund: 0,
+    treasury_cap: {
+        type: '',
+        fields: {},
+    },
+    validators: {
+        type: '0x2::validator_set::ValidatorSet',
+        fields: {
+            delegation_stake: BigInt(0),
+            active_validators: [],
+            next_epoch_validators: [],
+            pending_removals: '',
+            pending_validators: '',
+            quorum_stake_threshold: BigInt(0),
+            total_validator_stake: BigInt(0),
         },
-        {
-            validatorName: 'Kraken',
-            suiStake: 4_650_000,
-            suiStakePercent: '2.69%',
-            eporchReward: '19,220',
-            position: 3,
-        },
-        {
-            validatorName: 'Coinbase',
-            suiStake: 4_550_000,
-            suiStakePercent: '2.63%',
-            eporchReward: '18,806',
-            position: 4,
-        },
-        {
-            validatorName: 'a16z',
-            suiStake: 2_860_000,
-            suiStakePercent: '1.58%',
-            eporchReward: '11,821',
-            position: 5,
-        },
-        {
-            validatorName: 'Figment',
-            suiStake: 2_840_000,
-            suiStakePercent: '1.63%',
-            eporchReward: '11,736',
-            position: 6,
-        },
-        {
-            validatorName: '0x813e...d21f07',
-            suiStake: 2_730_000,
-            suiStakePercent: '1.58%',
-            eporchReward: '11,736',
-            position: 7,
-        },
-        {
-            validatorName: '0x813e...d21f07',
-            suiStake: 2_730_000,
-            suiStakePercent: '1.58%',
-            eporchReward: '11,736',
-            position: 8,
-        },
-        {
-            validatorName: '0x813e...d21f07',
-            suiStake: 2_730_000,
-            suiStakePercent: '1.58%',
-            eporchReward: '11,736',
-            position: 9,
-        },
-        {
-            validatorName: '0x813e...d21f07',
-            suiStake: 2_730_000,
-            suiStakePercent: '1.58%',
-            eporchReward: '11,736',
-            position: 10,
-        },
-    ];
-    // map the above data to match the table combine stake and stake percent
-    const mockValidatorsData = {
+    },
+};
+
+export const TopValidatorsCardStatic = (): JSX.Element => {
+    return <TopValidatorsCard state={mockState as ValidatorState} />;
+};
+
+export const TopValidatorsCardAPI = (): JSX.Element => {
+    const [showObjectState, setObjectState] = useState(STATE_DEFAULT);
+    const [loadState, setLoadState] = useState('pending');
+    const [network] = useContext(NetworkContext);
+    useEffect(() => {
+        getValidatorState(network)
+            .then((objState: ValidatorState) => {
+                setObjectState(objState);
+                setLoadState('loaded');
+            })
+            .catch((error: any) => {
+                console.log(error);
+                setLoadState('fail');
+            });
+    }, [network]);
+
+    if (loadState === 'loaded') {
+        return <TopValidatorsCard state={showObjectState as ValidatorState} />;
+    }
+    if (loadState === 'pending') {
+        return <div className={theme.pending}>loading validator info...</div>;
+    }
+    if (loadState === 'fail') {
+        return <ValidatorLoadFail />;
+    }
+
+    return <div>"Something went wrong"</div>;
+};
+
+function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
+    const totalStake = state.validators.fields.total_validator_stake;
+    // sort by order of descending stake
+    sortValidatorsByStake(state.validators.fields.active_validators);
+
+    const validatorsData = processValidators(
+        state.validators.fields.active_validators,
+        totalStake
+    );
+
+    // map the above data to match the table - combine stake and stake percent
+    const tableData = {
         data: validatorsData.map((validator) => ({
-            validatorName: validator.validatorName,
-            stake: (
-                <div>
-                    {' '}
-                    {numberSuffix(validator.suiStake)}{' '}
-                    <span className={styles.stakepercent}>
-                        {' '}
-                        {validator.suiStakePercent}
-                    </span>
-                </div>
-            ),
-            eporchReward: validator.eporchReward,
+            name: validator.name,
+            stake: stakeColumn(validator),
+            delegation: validator.delegation_count,
             position: validator.position,
         })),
         columns: [
@@ -108,44 +109,38 @@ function TopValidatorsCard() {
                 accessorKey: 'position',
             },
             {
-                headerLabel: 'Validator',
-                accessorKey: 'validatorName',
+                headerLabel: 'Name',
+                accessorKey: 'name',
             },
             {
                 headerLabel: 'STAKE',
                 accessorKey: 'stake',
             },
             {
-                headerLabel: 'LAST EPOCH REWARD',
-                accessorKey: 'eporchReward',
+                headerLabel: 'Delegators',
+                accessorKey: 'delegation',
             },
         ],
     };
 
-    const tabsFooter = {
-        stats: {
-            count: 15482,
-            stats_text: 'total transactions',
-        },
-    };
+    const tabsFooter = getTabFooter(validatorsData.length);
 
     return (
         <div className={styles.validators}>
             <Tabs selected={0}>
                 <div title="Top Validators">
-                    <TableCard tabledata={mockValidatorsData} />
+                    <TableCard tabledata={tableData} />
                     <TabFooter stats={tabsFooter.stats}>
                         <Longtext
                             text=""
-                            category="transactions"
+                            category="validators"
                             isLink={true}
                             isCopyButton={false}
-                            showIconButton={true}
+                            /*showIconButton={true}*/
                             alttext="More Validators"
                         />
                     </TabFooter>
                 </div>
-                <div title=""></div>
             </Tabs>
         </div>
     );
