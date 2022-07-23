@@ -1,5 +1,5 @@
 ---
-title: Debug and Publish the SUi Move Package
+title: Debug and Publish the Sui Move Package
 ---
 
 ## Debugging a package
