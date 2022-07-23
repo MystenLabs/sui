@@ -152,13 +152,7 @@ impl CheckpointStore {
         // Extract the previous checkpoint digest if there is one.
         Ok(if checkpoint_sequence > 0 {
             self.get_checkpoint(checkpoint_sequence - 1)?
-                .map(|prev_checkpoint| match prev_checkpoint {
-                    AuthenticatedCheckpoint::Certified(cert) => cert.summary.digest(),
-                    AuthenticatedCheckpoint::Signed(signed) => signed.summary.digest(),
-                    _ => {
-                        unreachable!();
-                    }
-                })
+                .map(|prev_checkpoint| prev_checkpoint.summary().digest())
         } else {
             None
         })
@@ -311,8 +305,7 @@ impl CheckpointStore {
             .iter()
             .skip_to_last()
             .next()
-            .map(|(_, c)| c)
-            .unwrap_or(AuthenticatedCheckpoint::None);
+            .map(|(_, c)| c);
 
         // Get the current proposal if there is one.
         let current = latest_checkpoint_proposal
@@ -346,23 +339,17 @@ impl CheckpointStore {
         seq: CheckpointSequenceNumber,
     ) -> Result<CheckpointResponse, SuiError> {
         // Get the checkpoint with a given sequence number
-        let checkpoint = self
-            .checkpoints
-            .get(&seq)?
-            .unwrap_or(AuthenticatedCheckpoint::None);
+        let checkpoint = self.checkpoints.get(&seq)?;
 
         // If a checkpoint is found, and if requested, return the list of transaction digest in it.
-        let detail = if let &AuthenticatedCheckpoint::None = &checkpoint {
-            None
-        } else if detail {
-            self.checkpoint_contents.get(&seq)?
-        } else {
-            None
+        let content = match (detail, &checkpoint) {
+            (true, Some(_)) => self.checkpoint_contents.get(&seq)?,
+            _ => None,
         };
 
         Ok(CheckpointResponse {
             info: AuthorityCheckpointInfo::Past(checkpoint),
-            detail,
+            detail: content,
         })
     }
 

@@ -1605,7 +1605,9 @@ where
 
                     if let CheckpointResponse {
                         info:
-                            AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(past)),
+                            AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Certified(
+                                past,
+                            ))),
                         detail,
                     } = resp
                     {

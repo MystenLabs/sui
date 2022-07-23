@@ -129,11 +129,18 @@ impl CheckpointResponse {
                 if let Some(current) = current {
                     current.verify(committee, self.detail.as_ref())?;
                     // detail pertains to the current proposal, not the previous
-                    previous.verify(committee, None)?;
+                    if let Some(previous) = previous {
+                        previous.verify(committee, None)?;
+                    }
                 }
                 Ok(())
             }
-            AuthorityCheckpointInfo::Past(ckpt) => ckpt.verify(committee, self.detail.as_ref()),
+            AuthorityCheckpointInfo::Past(ckpt) => {
+                if let Some(ckpt) = ckpt {
+                    ckpt.verify(committee, self.detail.as_ref())?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -146,22 +153,19 @@ pub enum AuthorityCheckpointInfo {
     // the previous checkpoint.
     Proposal {
         current: Option<SignedCheckpointProposalSummary>,
-        previous: AuthenticatedCheckpoint,
+        previous: Option<AuthenticatedCheckpoint>,
         // Include in all responses the local state of the sequence
         // of transaction to allow followers to track the latest
         // updates.
         // last_local_sequence: TxSequenceNumber,
     },
     // Returns the requested checkpoint.
-    Past(AuthenticatedCheckpoint),
+    Past(Option<AuthenticatedCheckpoint>),
 }
 
 // TODO: Rename to AuthenticatedCheckpointSummary
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthenticatedCheckpoint {
-    // No authentication information is available
-    // or checkpoint is not available on this authority.
-    None,
     // The checkpoint with just a single authority
     // signature.
     Signed(SignedCheckpointSummary),
@@ -174,7 +178,6 @@ impl AuthenticatedCheckpoint {
         match self {
             Self::Signed(s) => &s.summary,
             Self::Certified(c) => &c.summary,
-            Self::None => unreachable!(),
         }
     }
 
@@ -182,7 +185,6 @@ impl AuthenticatedCheckpoint {
         match self {
             Self::Signed(s) => s.verify(committee, detail),
             Self::Certified(c) => c.verify(committee, detail),
-            Self::None => Ok(()),
         }
     }
 }

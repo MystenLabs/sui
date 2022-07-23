@@ -386,13 +386,9 @@ where
     fn verify_checkpoint_sequence(
         &self,
         expected_seq: Option<CheckpointSequenceNumber>,
-        checkpoint: &AuthenticatedCheckpoint,
+        checkpoint: &Option<AuthenticatedCheckpoint>,
     ) -> SuiResult {
-        let observed_seq = match checkpoint {
-            AuthenticatedCheckpoint::None => None,
-            AuthenticatedCheckpoint::Signed(s) => Some(*s.summary.sequence_number()),
-            AuthenticatedCheckpoint::Certified(c) => Some(*c.summary.sequence_number()),
-        };
+        let observed_seq = checkpoint.as_ref().map(|c| c.summary().sequence_number);
 
         if let (Some(e), Some(o)) = (expected_seq, observed_seq) {
             fp_ensure!(
@@ -419,21 +415,19 @@ where
 
         // Verify response data was correct for request
         match &req_type {
-            CheckpointRequestType::LatestCheckpointProposal => {
-                if let AuthorityCheckpointInfo::Proposal { previous, .. } = &resp.info {
+            CheckpointRequestType::LatestCheckpointProposal => match &resp.info {
+                AuthorityCheckpointInfo::Proposal { previous, .. } => {
                     self.verify_checkpoint_sequence(None, previous)?;
                     Ok(resp)
-                } else {
-                    Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                    })
                 }
-            }
+                _ => Err(SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                }),
+            },
             CheckpointRequestType::PastCheckpoint(seq) => {
                 if let AuthorityCheckpointInfo::Past(past) = &resp.info {
                     match past {
-                        AuthenticatedCheckpoint::Signed(_)
-                        | AuthenticatedCheckpoint::Certified(_) => {
+                        Some(_) => {
                             if detail && resp.detail.is_none() {
                                 // peer has the checkpoint, but refused to give us the contents.
                                 // (For AuthorityCheckpointInfo::Proposal, contents are not
@@ -444,7 +438,7 @@ where
                             }
                         }
                         // Checkpoint wasn't found, so detail is obviously not required.
-                        AuthenticatedCheckpoint::None => (),
+                        None => (),
                     }
                     self.verify_checkpoint_sequence(Some(*seq), past)?;
                     Ok(resp)
