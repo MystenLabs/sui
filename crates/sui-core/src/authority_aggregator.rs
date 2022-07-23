@@ -1650,6 +1650,40 @@ where
         .await
     }
 
+    pub async fn handle_cert_info_request(
+        &self,
+        digest: &TransactionDigest,
+        timeout_total: Option<Duration>,
+    ) -> SuiResult<TransactionInfoResponse> {
+        self.quorum_once_with_timeout(
+            None,
+            None,
+            |_authority, client| {
+                Box::pin(async move {
+                    let resp = client
+                        .handle_transaction_info_request((*digest).into())
+                        .await?;
+
+                    if let TransactionInfoResponse {
+                        certified_transaction: Some(_),
+                        signed_effects: Some(_),
+                        ..
+                    } = &resp
+                    {
+                        Ok(resp)
+                    } else {
+                        // handle_transaction_info_request returns success even if it doesn't have
+                        // any data.
+                        Err(SuiError::TransactionNotFound { digest: *digest })
+                    }
+                })
+            },
+            self.timeouts.serial_authority_request_timeout,
+            timeout_total,
+        )
+        .await
+    }
+
     pub async fn handle_transaction_and_effects_info_request(
         &self,
         digests: &ExecutionDigests,

@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 
-use tokio_stream::{wrappers::ReceiverStream, Stream, StreamExt};
+use tokio_stream::{Stream, StreamExt};
 
 use std::collections::{hash_map, HashMap, HashSet};
 use sui_storage::node_sync_store::NodeSyncStore;
@@ -17,7 +17,7 @@ use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     committee::{Committee, StakeUnit},
     error::{SuiError, SuiResult},
-    messages::{CertifiedTransaction, SignedTransactionEffects},
+    messages::{CertifiedTransaction, SignedTransactionEffects, TransactionInfoResponse},
     messages_checkpoint::CheckpointContents,
 };
 
@@ -25,6 +25,8 @@ use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use futures::stream::FuturesOrdered;
+
+use tap::TapFallible;
 
 use tokio::sync::{broadcast, mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
@@ -156,8 +158,9 @@ where
             tx.send(res).map_err(|_| SuiError::GenericAuthorityError {
                 error: format!("couldn't notify waiters for key {:?}", key),
             })?;
+        } else {
+            trace!("no pending waiters");
         }
-        // else: no one was waiting on this key.
         Ok(())
     }
 }
@@ -210,6 +213,10 @@ pub enum SyncArg {
 }
 
 impl SyncArg {
+    fn transaction_digest(&self) -> &TransactionDigest {
+        self.digests().0
+    }
+
     fn digests(&self) -> (&TransactionDigest, Option<&TransactionEffectsDigest>) {
         match self {
             SyncArg::Checkpoint(ExecutionDigests {
@@ -224,6 +231,21 @@ impl SyncArg {
                 },
             ) => (transaction, Some(effects)),
             SyncArg::ExecDriver(digest) => (digest, None),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum DownloadRequest {
+    Node(ExecutionDigests),
+    Validator(TransactionDigest),
+}
+
+impl DownloadRequest {
+    fn transaction_digest(&self) -> &TransactionDigest {
+        match self {
+            Self::Node(d) => &d.transaction,
+            Self::Validator(d) => d,
         }
     }
 }
@@ -243,6 +265,10 @@ pub struct NodeSyncState<A> {
 
     // Used to wait for parent transactions to be applied locally
     pending_txes: Waiter<TransactionDigest, ()>,
+
+    // Channels for enqueuing DigestMessage requests.
+    sender: mpsc::Sender<DigestsMessage>,
+    receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<DigestsMessage>>>,
 }
 
 impl<A> NodeSyncState<A> {
@@ -251,6 +277,7 @@ impl<A> NodeSyncState<A> {
         aggregator: Arc<AuthorityAggregator<A>>,
         node_sync_store: Arc<NodeSyncStore>,
     ) -> Self {
+        let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
         let committee = state.committee.load().deref().clone();
         Self {
             committee,
@@ -260,6 +287,8 @@ impl<A> NodeSyncState<A> {
             node_sync_store,
             pending_downloads: Waiter::new(),
             pending_txes: Waiter::new(),
+            sender,
+            receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
         }
     }
 }
@@ -268,18 +297,43 @@ impl<A> NodeSyncState<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    fn start(self: Arc<Self>, receiver: mpsc::Receiver<DigestsMessage>) -> JoinHandle<()> {
+    fn start(self: Arc<Self>) -> (JoinHandle<()>, mpsc::Sender<DigestsMessage>) {
+        let sender = self.sender.clone();
         let state = self;
-        tokio::spawn(async move { state.handle_stream(ReceiverStream::new(receiver)).await })
+
+        let mut receiver = match state.receiver.clone().try_lock_owned() {
+            Err(_) => {
+                // There's no reason this should ever happen, but if it does a bug - it would be
+                // better to change NodeSyncState::start() to return SuiResult but that turns out
+                // to be very awkward. Instead we just return the clone of the sender and start a
+                // new task that will exit at the same time as the original task.
+                error!(
+                    "Duplicate call to NodeSyncState::start() - caller will block until \
+                    previous task terminates (probably never)"
+                );
+
+                return (
+                    tokio::spawn(async move {
+                        state.receiver.lock().await;
+                    }),
+                    sender,
+                );
+            }
+            Ok(r) => r,
+        };
+
+        (
+            tokio::spawn(async move { state.handle_messages(&mut receiver).await }),
+            sender,
+        )
     }
 
-    async fn handle_stream(self: Arc<Self>, stream: impl Stream<Item = DigestsMessage>) {
+    async fn handle_messages(self: Arc<Self>, receiver: &mut mpsc::Receiver<DigestsMessage>) {
         // this pattern for limiting concurrency is from
         // https://github.com/tokio-rs/tokio/discussions/2648
         let limit = Arc::new(Semaphore::new(MAX_NODE_SYNC_CONCURRENCY));
-        let mut stream = Box::pin(stream);
 
-        while let Some(DigestsMessage { sync_arg, tx }) = stream.next().await {
+        while let Some(DigestsMessage { sync_arg, tx }) = receiver.recv().await {
             let state = self.clone();
             let limit = limit.clone();
             tokio::spawn(async move {
@@ -290,6 +344,15 @@ where
                 let res = state.process_digest(sync_arg, permit).await;
                 if let Err(error) = &res {
                     error!(?sync_arg, "process_digest failed: {}", error);
+                } else {
+                    let digest = sync_arg.transaction_digest();
+                    trace!(?digest, "notifying waiters");
+                    state
+                        .pending_txes
+                        .notify(digest, ())
+                        .await
+                        .tap_err(|e| debug!(?digest, "{}", e))
+                        .ok();
                 }
 
                 if let Some(tx) = tx {
@@ -309,26 +372,56 @@ where
         }
     }
 
-    async fn process_exec_driver_digest(&self, digest: &TransactionDigest) -> SuiResult {
+    async fn process_exec_driver_digest(
+        &self,
+        permit: OwnedSemaphorePermit,
+        digest: &TransactionDigest,
+    ) -> SuiResult {
         trace!(?digest, "validator pending execution requested");
 
-        todo!();
-
-        // Check if we already have the cert locally.
-        /*
-        match self.state.database.read_certificate(&digest)? {
-            Some(cert) => (Some(cert), None),
+        let cert = match self.state.database.read_certificate(digest)? {
+            Some(cert) => cert,
             None => {
-                let authorities: BTreeSet<_> = self
-                    .committee
-                    .names()
-                    .filter(|n| **n != self.state.name)
-                    .cloned()
-                    .collect();
-                (None, Some(authorities))
+                let (cert, _) = self
+                    .download_cert_and_effects(None, &DownloadRequest::Validator(*digest))
+                    .await?;
+                cert
             }
+        };
+
+        match self.state.handle_certificate(cert.clone()).await {
+            Ok(_) => Ok(()),
+            Err(SuiError::LockErrors { .. }) => {
+                debug!(?digest, "cert execution failed due to missing parents");
+
+                let effects = self.aggregator.execute_cert_to_true_effects(&cert).await?;
+                let parents = &effects.effects.dependencies;
+
+                // Must release permit before enqueuing new work to prevent deadlock.
+                std::mem::drop(permit);
+
+                debug!(?parents, "attempting to execute parents");
+
+                let handle = NodeSyncHandle::new_from_sender(self.sender.clone());
+                let results = handle.handle_execution_request(parents.iter().cloned());
+
+                let errors: Vec<_> = results.filter_map(|r| r.err()).collect().await;
+
+                if errors.is_empty() {
+                    // Parents have been executed, so this should now succeed.
+                    debug!(?digest, "parents executed, re-attempting cert");
+                    self.state.handle_certificate(cert.clone()).await?;
+                    Ok(())
+                } else {
+                    Err(SuiError::ExecutionDriverError {
+                        digest: *digest,
+                        msg: "Could not execute all parent certificates".into(),
+                        errors,
+                    })
+                }
+            }
+            Err(e) => Err(e),
         }
-        */
     }
 
     async fn process_digest(&self, arg: SyncArg, permit: OwnedSemaphorePermit) -> SuiResult {
@@ -354,7 +447,9 @@ where
         // These optimizations may well be worth it at some point if we are trying to get latency
         // down.
         let (digests, authorities_with_cert) = match arg {
-            SyncArg::ExecDriver(digest) => return self.process_exec_driver_digest(&digest).await,
+            SyncArg::ExecDriver(digest) => {
+                return self.process_exec_driver_digest(permit, &digest).await
+            }
             SyncArg::Follow(peer, digests) => {
                 // Check if the tx is final.
                 let stake = self.committee.weight(&peer);
@@ -401,11 +496,35 @@ where
         // Download the cert and effects - either finality has been establish (above), or
         // we are a validator.
         let (cert, effects) = self
-            .download_cert_and_effects(authorities_with_cert, &digests)
+            .download_cert_and_effects(authorities_with_cert, &DownloadRequest::Node(digests))
             .await?;
 
-        // we're done downloading at this point, so we no longer need to prevent other tasks from
-        // starting.
+        // Node sync request arrive in causal order via the follower API, so it is always safe to
+        // assume that the parents of this cert have already been enqueued.
+        self.wait_for_parents(permit, &digests.transaction, &effects)
+            .await?;
+
+        self.state
+            .handle_node_sync_certificate(cert, effects.clone())
+            .await?;
+
+        // Garbage collect data for this tx.
+        self.effects_stake
+            .lock()
+            .unwrap()
+            .forget_effects(effects.digest());
+        self.node_sync_store.delete_cert_and_effects(digest)?;
+
+        Ok(())
+    }
+
+    async fn wait_for_parents(
+        &self,
+        permit: OwnedSemaphorePermit,
+        digest: &TransactionDigest,
+        effects: &SignedTransactionEffects,
+    ) -> SuiResult {
+        // Must drop the permit before waiting to avoid deadlock.
         std::mem::drop(permit);
 
         for parent in effects.effects.dependencies.iter() {
@@ -431,20 +550,6 @@ where
             }
         }
 
-        self.state
-            .handle_node_sync_certificate(cert, effects.clone())
-            .await?;
-
-        // Garbage collect data for this tx.
-        self.effects_stake
-            .lock()
-            .unwrap()
-            .forget_effects(effects.digest());
-        self.node_sync_store.delete_cert_and_effects(digest)?;
-
-        // Notify waiting child transactions.
-        trace!(?digest, "notifying parent");
-        self.pending_txes.notify(digest, ()).await?;
         Ok(())
     }
 
@@ -454,32 +559,25 @@ where
     async fn download_cert_and_effects(
         &self,
         authorities_with_cert: Option<HashSet<AuthorityName>>,
-        digests: &ExecutionDigests,
+        req: &DownloadRequest,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
-        if let Some(c) = self
-            .node_sync_store
-            .get_cert_and_effects(&digests.transaction)?
-        {
+        let tx_digest = req.transaction_digest();
+        if let Some(c) = self.node_sync_store.get_cert_and_effects(tx_digest)? {
             return Ok(c);
         }
 
-        let (tx, mut rx) = self.pending_downloads.wait(&digests.transaction).await;
+        let (tx, mut rx) = self.pending_downloads.wait(tx_digest).await;
         // Only start the download if there are no other concurrent downloads.
         if let Some(tx) = tx {
             let aggregator = self.aggregator.clone();
             let node_sync_store = self.node_sync_store.clone();
-            let digests = *digests;
+            let req = req.clone();
             tokio::task::spawn(async move {
                 if let Err(error) = tx.send(
-                    Self::download_impl(
-                        authorities_with_cert,
-                        aggregator,
-                        &digests,
-                        node_sync_store,
-                    )
-                    .await,
+                    Self::download_impl(authorities_with_cert, aggregator, &req, node_sync_store)
+                        .await,
                 ) {
-                    error!(?digests, ?error, "Could not broadcast cert response");
+                    error!(?req, ?error, "Could not broadcast cert response");
                 }
             });
         }
@@ -491,11 +589,11 @@ where
             })??;
 
         self.node_sync_store
-            .get_cert_and_effects(&digests.transaction)?
+            .get_cert_and_effects(tx_digest)?
             .ok_or_else(|| SuiError::GenericAuthorityError {
                 error: format!(
                     "cert/effects for {:?} should have been in the node_sync_store",
-                    digests.transaction
+                    tx_digest
                 ),
             })
     }
@@ -503,15 +601,33 @@ where
     async fn download_impl(
         authorities: Option<HashSet<AuthorityName>>,
         aggregator: Arc<AuthorityAggregator<A>>,
-        digests: &ExecutionDigests,
+        req: &DownloadRequest,
         node_sync_store: Arc<NodeSyncStore>,
     ) -> SuiResult {
-        let (cert, effects) = aggregator
-            .handle_transaction_and_effects_info_request(digests, authorities.as_ref(), None)
-            .await?;
+        let (cert, effects) = match req {
+            DownloadRequest::Node(digests) => {
+                aggregator
+                    .handle_transaction_and_effects_info_request(
+                        digests,
+                        authorities.as_ref(),
+                        None,
+                    )
+                    .await?
+            }
+            DownloadRequest::Validator(digest) => {
+                let resp = aggregator.handle_cert_info_request(digest, None).await?;
+                match resp {
+                    TransactionInfoResponse {
+                        certified_transaction: Some(cert),
+                        signed_effects: Some(effects),
+                        ..
+                    } => (cert, effects),
+                    _ => return Err(SuiError::TransactionNotFound { digest: *digest }),
+                }
+            }
+        };
 
-        node_sync_store.store_cert_and_effects(&digests.transaction, &(cert, effects))?;
-
+        node_sync_store.store_cert_and_effects(req.transaction_digest(), &(cert, effects))?;
         Ok(())
     }
 }
@@ -519,7 +635,6 @@ where
 /// A cloneable handle that can send messages to a NodeSyncState
 #[derive(Clone)]
 pub struct NodeSyncHandle {
-    _sync_join_handle: Arc<JoinHandle<()>>,
     sender: mpsc::Sender<DigestsMessage>,
 }
 
@@ -528,13 +643,13 @@ impl NodeSyncHandle {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
-        let _sync_join_handle = Arc::new(sync_state.start(receiver));
+        let (_handle, sender) = sync_state.start();
 
-        Self {
-            _sync_join_handle,
-            sender,
-        }
+        Self { sender }
+    }
+
+    fn new_from_sender(sender: mpsc::Sender<DigestsMessage>) -> Self {
+        Self { sender }
     }
 
     async fn send_msg_with_tx(
