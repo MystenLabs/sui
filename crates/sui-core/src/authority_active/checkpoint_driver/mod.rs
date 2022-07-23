@@ -274,18 +274,13 @@ pub async fn checkpoint_process<A>(
 
         // (3) Create a new proposal locally. This will also allow other validators
         // to query the proposal.
-        // Only move to propose when we have the full checkpoint certificate
-        let sequence_number = state_checkpoints.lock().next_checkpoint();
-        if sequence_number > 0 {
-            // Check that we have the full certificate for the previous checkpoint.
-            // If not, we are not ready yet to make a proposal.
-            if !matches!(
-                state_checkpoints.lock().get_checkpoint(sequence_number - 1),
-                Ok(Some(AuthenticatedCheckpoint::Certified(..)))
-            ) {
-                tokio::time::sleep(timing.delay_on_local_failure).await;
-                continue;
-            }
+        // If we have already signed a new checkpoint locally, there is nothing to do.
+        if matches!(
+            state_checkpoints.lock().latest_stored_checkpoint(),
+            Some(AuthenticatedCheckpoint::Signed(..))
+        ) {
+            tokio::time::sleep(timing.delay_on_local_failure).await;
+            continue;
         }
 
         let proposal = state_checkpoints.lock().set_proposal(committee.epoch);
@@ -299,6 +294,10 @@ pub async fn checkpoint_process<A>(
             .sum();
 
         if weight < committee.quorum_threshold() {
+            debug!(
+                ?weight,
+                "Not enough proposals to make progress on checkpoint creation"
+            );
             // We don't have a quorum of proposals yet, we won't succeed making a checkpoint
             // even if we try. Sleep and come back latter.
             tokio::time::sleep(timing.delay_on_local_failure).await;
@@ -529,7 +528,7 @@ async fn update_latest_checkpoint<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let latest_local_checkpoint = state_checkpoints.lock().latest_stored_checkpoint()?;
+    let latest_local_checkpoint = state_checkpoints.lock().latest_stored_checkpoint();
     enum Action {
         Promote,
         NewCert,
@@ -617,7 +616,7 @@ where
     let net = active_authority.net.load();
     let state = active_authority.state.clone();
     // Get out last checkpoint
-    let latest_checkpoint = checkpoint_db.lock().latest_stored_checkpoint()?;
+    let latest_checkpoint = checkpoint_db.lock().latest_stored_checkpoint();
     // We use the latest available authorities not the authorities that signed the checkpoint
     // since these might be gone after the epoch they were active.
     let available_authorities: BTreeSet<_> = latest_known_checkpoint
@@ -790,16 +789,14 @@ where
                 match augment_fragment_with_diff_transactions(active_authority, fragment).await {
                     Ok(fragment) => {
                         // On success send the fragment to consensus
-                        let proposer = fragment.proposer.authority();
-                        let other = fragment.other.authority();
-                        debug!("Send fragment: {proposer:?} -- {other:?}");
-                        let _ = checkpoint_db.lock().submit_local_fragment_to_consensus(
+                        if let Err(err) = checkpoint_db.lock().submit_local_fragment_to_consensus(
                             &fragment,
                             &active_authority.state.committee.load(),
-                        );
+                        ) {
+                            warn!("Error submitting local fragment to consensus: {err:?}");
+                        }
                     }
                     Err(err) => {
-                        // TODO: some error occurred -- log it.
                         warn!("Error augmenting the fragment: {err:?}");
                     }
                 }
