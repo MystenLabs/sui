@@ -124,7 +124,7 @@ pub fn transfer_coin_transaction(
     )
 }
 
-fn transfer_object_move_transaction(
+pub fn transfer_object_move_transaction(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
