@@ -400,7 +400,7 @@ fn latest_proposal() {
     ));
     if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
         assert!(current.is_none());
-        assert!(matches!(previous, AuthenticatedCheckpoint::None));
+        assert!(matches!(previous, None));
     }
 
     // ---
@@ -423,7 +423,7 @@ fn latest_proposal() {
     ));
     if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
         assert!(current.is_some());
-        assert!(matches!(previous, AuthenticatedCheckpoint::None));
+        assert!(matches!(previous, None));
 
         let current_proposal = current.unwrap();
         current_proposal
@@ -444,7 +444,7 @@ fn latest_proposal() {
     ));
     if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
         assert!(current.is_some());
-        assert!(matches!(previous, AuthenticatedCheckpoint::None));
+        assert!(matches!(previous, None));
 
         let current_proposal = current.unwrap();
         current_proposal
@@ -535,7 +535,10 @@ fn latest_proposal() {
     ));
     if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
         assert!(current.is_none());
-        assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
+        assert!(matches!(
+            previous,
+            Some(AuthenticatedCheckpoint::Signed { .. })
+        ));
     }
 
     // --- TEST 4 ---
@@ -551,7 +554,10 @@ fn latest_proposal() {
     ));
     if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
         assert!(current.is_none());
-        assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
+        assert!(matches!(
+            previous,
+            Some(AuthenticatedCheckpoint::Signed { .. })
+        ));
     }
 
     // ---
@@ -570,7 +576,10 @@ fn latest_proposal() {
     ));
     if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
         assert!(current.is_some());
-        assert!(matches!(previous, AuthenticatedCheckpoint::Signed { .. }));
+        assert!(matches!(
+            previous,
+            Some(AuthenticatedCheckpoint::Signed { .. })
+        ));
 
         let current_proposal = current.unwrap();
         current_proposal
@@ -616,18 +625,12 @@ fn set_get_checkpoint() {
 
     // There is no previous checkpoint
     let response = cps1.handle_past_checkpoint(true, 0).unwrap();
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::None)
-    ));
+    assert!(matches!(response.info, AuthorityCheckpointInfo::Past(None)));
     assert!(response.detail.is_none());
 
     // There is no previous checkpoint
     let response = cps1.handle_past_checkpoint(true, 0).unwrap();
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::None)
-    ));
+    assert!(matches!(response.info, AuthorityCheckpointInfo::Past(None)));
     assert!(response.detail.is_none());
 
     // ---
@@ -694,9 +697,11 @@ fn set_get_checkpoint() {
     let response = cps1.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(..))
+        AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(..)))
     ));
-    if let AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) = response.info {
+    if let AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(signed))) =
+        response.info
+    {
         signed.verify(&committee, response.detail.as_ref()).unwrap();
     }
 
@@ -704,7 +709,7 @@ fn set_get_checkpoint() {
     let mut signed_checkpoint: Vec<SignedCheckpointSummary> = Vec::new();
     for x in [&mut cps1, &mut cps2, &mut cps3] {
         match x.handle_past_checkpoint(true, 0).unwrap().info {
-            AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(signed)) => {
+            AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(signed))) => {
                 signed_checkpoint.push(signed)
             }
             _ => unreachable!(),
@@ -726,7 +731,7 @@ fn set_get_checkpoint() {
     let response = cps1.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(..))
+        AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Certified(..)))
     ));
 
     // --- TEST 3 ---
@@ -756,7 +761,7 @@ fn set_get_checkpoint() {
     let response = cps4.handle_past_checkpoint(true, 0).unwrap();
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Certified(..))
+        AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Certified(..)))
     ));
 }
 
@@ -1814,7 +1819,7 @@ async fn checkpoint_messaging_flow() {
             .expect("No issues");
 
         match &response.info {
-            AuthorityCheckpointInfo::Past(AuthenticatedCheckpoint::Signed(checkpoint)) => {
+            AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(checkpoint))) => {
                 signed_checkpoint.push(checkpoint.clone());
                 contents = response.detail.clone();
             }
