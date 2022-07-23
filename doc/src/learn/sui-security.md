@@ -55,7 +55,7 @@ allow smart contracts to define custom access control logic. A user may have one
 multiple signature keys for convenience or privacy reasons. An address does not need any pre-registration, and sending
 an asset to an address automatically creates this address on the network. However, this means that users should
 be careful to check the recipient address of transfers, or parties involved in any other operations, as sending assets to
-an in correct address may have irrevocable effects.
+an incorrect address may have irrevocable effects.
 
 ### Smart contracts define asset types and their logic
 
