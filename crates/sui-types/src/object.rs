@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
-use crate::crypto::{sha3_hash, BcsSignable};
+use crate::crypto::sha3_hash;
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
 use crate::move_package::MovePackage;
@@ -359,8 +359,6 @@ pub struct Object {
     /// the present storage gas price.
     pub storage_rebate: u64,
 }
-
-impl BcsSignable for Object {}
 
 impl Object {
     /// Create a new Move object

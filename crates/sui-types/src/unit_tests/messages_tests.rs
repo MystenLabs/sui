@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use narwhal_crypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
+use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::{get_key_pair, PublicKeyBytes};
 use crate::object::Owner;
 
@@ -152,10 +153,6 @@ fn test_certificates() {
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
 }
 
-#[derive(Serialize, Deserialize)]
-struct Foo(String);
-impl BcsSignable for Foo {}
-
 #[test]
 fn test_new_with_signatures() {
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
@@ -188,18 +185,6 @@ fn test_new_with_signatures() {
             .unwrap(),
         alphabetical_authorities
     );
-}
-
-fn get_obligation_input<T>(
-    value: &T,
-) -> (VerificationObligation<AggregateAuthoritySignature>, usize)
-where
-    T: BcsSignable,
-{
-    let mut obligation = VerificationObligation::default();
-    // Add the obligation of the authority signature verifications.
-    let idx = obligation.add_message(value);
-    (obligation, idx)
 }
 
 #[test]
