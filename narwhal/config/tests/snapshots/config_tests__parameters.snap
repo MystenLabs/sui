@@ -1,0 +1,28 @@
+---
+source: config/tests/config_tests.rs
+expression: parameters
+---
+{
+  "header_size": 1000,
+  "max_header_delay": "100ms",
+  "gc_depth": 50,
+  "sync_retry_delay": "5000ms",
+  "sync_retry_nodes": 3,
+  "batch_size": 500000,
+  "max_batch_delay": "100ms",
+  "block_synchronizer": {
+    "certificates_synchronize_timeout": "2000ms",
+    "payload_synchronize_timeout": "2000ms",
+    "payload_availability_timeout": "2000ms",
+    "handler_certificate_deliver_timeout": "2000ms"
+  },
+  "consensus_api_grpc": {
+    "socket_addr": "/ip4/127.0.0.1/tcp/8081/http",
+    "get_collections_timeout": "5000ms",
+    "remove_collections_timeout": "5000ms"
+  },
+  "max_concurrent_requests": 500000,
+  "prometheus_metrics": {
+    "socket_addr": "127.0.0.1:8081"
+  }
+}

@@ -3,9 +3,14 @@
 
 use std::collections::BTreeMap;
 
-use config::{PrimaryAddresses, Stake};
-use crypto::ed25519::Ed25519PublicKey;
+use config::{
+    Committee, ConsensusAPIGrpcParameters, Epoch, Parameters, PrimaryAddresses,
+    PrometheusMetricsParameters, Stake,
+};
+use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use insta::assert_json_snapshot;
 use rand::seq::SliceRandom;
+use test_utils::make_authority_with_port_getter;
 
 #[test]
 fn update_primary_network_info_test() {
@@ -82,4 +87,56 @@ fn update_primary_network_info_test() {
     for (pk, a) in comm.authorities.iter() {
         assert_eq!(a.primary, new_info.get(pk).unwrap().1);
     }
+}
+
+#[test]
+fn parameters_snapshot_matches() {
+    // This configuration is load-bearing in the NW benchmarks,
+    // and in Sui (prod config + shared object bench base). If this test breaks,
+    // config needs to change in all of these.
+
+    // We avoid defaults that randomly bind to a random port
+    let consensus_api_grpc_parameters = ConsensusAPIGrpcParameters {
+        socket_addr: "/ip4/127.0.0.1/tcp/8081/http".parse().unwrap(),
+        ..ConsensusAPIGrpcParameters::default()
+    };
+    let prometheus_metrics_parameters = PrometheusMetricsParameters {
+        socket_addr: "127.0.0.1:8081".parse().unwrap(),
+    };
+
+    let parameters = Parameters {
+        consensus_api_grpc: consensus_api_grpc_parameters,
+        prometheus_metrics: prometheus_metrics_parameters,
+        ..Parameters::default()
+    };
+    assert_json_snapshot!("parameters", parameters)
+}
+
+#[test]
+fn commmittee_snapshot_matches() {
+    // The shape of this configuration is load-bearing in the NW benchmarks,
+    // and in Sui (prod)
+    let keys = test_utils::keys(None);
+
+    let committee = Committee {
+        epoch: Epoch::default(),
+        authorities: keys
+            .iter()
+            .map(|kp| {
+                let mut port = 0;
+                let increment_port_getter = || {
+                    port += 1;
+                    port
+                };
+                (
+                    kp.public().clone(),
+                    make_authority_with_port_getter(increment_port_getter),
+                )
+            })
+            .collect(),
+    };
+    // we need authorities to be serialized in order
+    let mut settings = insta::Settings::clone_current();
+    settings.set_sort_maps(true);
+    settings.bind(|| assert_json_snapshot!("committee", committee));
 }
