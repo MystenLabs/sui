@@ -1401,9 +1401,9 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
+        let digest = certificate.digest();
         let effects_digest = &signed_effects.digest();
-        let res = self
-            .database
+        self.database
             .update_state(
                 temporary_store,
                 certificate,
@@ -1411,13 +1411,10 @@ impl AuthorityState {
                 signed_effects,
                 effects_digest,
             )
-            .await;
-
-        let digest = certificate.digest();
-
-        debug!(?digest, ?effects_digest, "commit_certificate finished");
-
-        res
+            .await
+            .tap_ok(|_| {
+                debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
+            })
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
