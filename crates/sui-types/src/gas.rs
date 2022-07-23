@@ -357,6 +357,7 @@ pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u6
     let new_gas_coin = GasCoin::new(
         *gas_coin.id(),
         gas_object.version(),
+        None,
         balance + rebate_amount - deduct_amount,
     );
     let move_object = gas_object.data.try_as_move_mut().unwrap();
@@ -367,7 +368,7 @@ pub fn refund_gas(gas_object: &mut Object, amount: u64) {
     // The object must be a gas coin as we have checked in transaction handle phase.
     let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
     let balance = gas_coin.value();
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), balance + amount);
+    let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), None, balance + amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
     move_object.update_contents_and_increment_version(bcs::to_bytes(&new_gas_coin).unwrap());
 }

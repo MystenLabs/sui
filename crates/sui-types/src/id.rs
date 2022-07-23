@@ -17,13 +17,16 @@ use serde::{Deserialize, Serialize};
 pub const OBJECT_MODULE_NAME: &IdentStr = ident_str!("object");
 pub const INFO_STRUCT_NAME: &IdentStr = ident_str!("Info");
 pub const ID_STRUCT_NAME: &IdentStr = ident_str!("ID");
+pub const INFO_ID_FIELD: &IdentStr = ident_str!("id");
+pub const INFO_VERSION_FIELD: &IdentStr = ident_str!("version");
+pub const INFO_CHILD_COUNT_FIELD: &IdentStr = ident_str!("child_count");
 
 /// Rust version of the Move sui::object::Info type
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
 pub struct Info {
     pub id: ID,
     pub version: u64,
-    // pub child_count: Option<u64>,
+    pub child_count: Option<u64>,
 }
 
 /// Rust version of the Move sui::object::ID type
@@ -34,11 +37,11 @@ pub struct ID {
 }
 
 impl Info {
-    pub fn new(bytes: ObjectID, version: SequenceNumber) -> Self {
+    pub fn new(bytes: ObjectID, version: SequenceNumber, child_count: Option<u64>) -> Self {
         Self {
             id: { ID { bytes } },
             version: version.value(),
-            // child_count: None,
+            child_count,
         }
     }
 
@@ -68,14 +71,15 @@ impl Info {
             type_: Self::type_(),
             fields: vec![
                 MoveFieldLayout::new(
-                    ident_str!("id").to_owned(),
+                    INFO_ID_FIELD.to_owned(),
                     MoveTypeLayout::Struct(ID::layout()),
                 ),
-                MoveFieldLayout::new(ident_str!("version").to_owned(), MoveTypeLayout::U64),
-                // MoveFieldLayout::new(
-                //     ident_str!("child_count").to_owned(),
-                //     MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)),
-                // ),
+                MoveFieldLayout::new(INFO_VERSION_FIELD.to_owned(), MoveTypeLayout::U64),
+                MoveFieldLayout::new(
+                    INFO_CHILD_COUNT_FIELD.to_owned(),
+                    // option<u64> is a vector<u64> in Move
+                    MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)),
+                ),
             ],
         }
     }

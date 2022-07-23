@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
@@ -21,6 +21,21 @@ pub enum DeleteKind {
     Wrap,
 }
 
+pub enum DeleteEvent {
+    /// By-value object is deleted
+    Normal {
+        /// child count in Info at deletion
+        child_count: u64,
+    },
+    /// Unwrapped from another object then deleted
+    UnwrapThenDelete {
+        /// child count in Info at deletion
+        child_count: u64,
+    },
+    /// By-value object gets wrapped in another object
+    Wrap,
+}
+
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
 pub trait Storage {
     fn reset(&mut self);
@@ -36,7 +51,11 @@ pub trait Storage {
     /// Record an event that happened during execution
     fn log_event(&mut self, event: Event);
 
-    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind);
+    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteEvent);
+
+    fn decrement_child_counts(&mut self, decrements: BTreeMap<ObjectID, u64>);
+
+    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, u64)>;
 }
 
 pub trait BackingPackageStore {

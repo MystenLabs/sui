@@ -120,7 +120,7 @@ module sui::collection {
 
     public fun transfer_to_object_id<T: key + store>(
         obj: Collection<T>,
-        owner_id: &Info,
+        owner_id: &mut Info,
     ) {
         transfer::transfer_to_object_id(obj, owner_id)
     }

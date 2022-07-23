@@ -5,7 +5,7 @@
 module sui::object {
     use std::bcs;
     use std::vector;
-    // use std::option::{Self, Option};
+    use std::option::{Self, Option};
     use sui::tx_context::{Self, TxContext};
 
     friend sui::sui_system;
@@ -51,8 +51,8 @@ module sui::object {
         /// time the object with this ID is passed to a non-failing transaction
         /// either by value or by mutable reference.
         version: u64,
-        // /// The number of child objects. In order to delete the `Info`, this must be none or 0
-        // child_count: Option<u64>,
+        /// The number of child objects. In order to delete the `Info`, this must be none or 0
+        child_count: Option<u64>,
     }
 
     // === id ===
@@ -82,7 +82,7 @@ module sui::object {
         Info {
             id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID },
             version: INITIAL_VERSION,
-            // child_count: option::none(),
+            child_count: option::none(),
         }
     }
 
@@ -96,11 +96,19 @@ module sui::object {
         id_to_bytes(info_id(info))
     }
 
-    // /// Get the number of child objects.
-    // /// Returns 0 if `child_count` is none
-    // public fun info_child_count(info: &Info): u64 {
-    //     option::get_with_default(&info.child_count, 0)
-    // }
+    /// Get the number of child objects.
+    /// Returns 0 if `child_count` is none
+    /// Not currently public as this count may not be correct until the end of the transaction
+    fun info_child_count(info: &Info): u64 {
+        option::get_with_default(&info.child_count, 0)
+    }
+
+    /// Increments the number of child objects
+    /// Used by `sui::transfer`
+    public(friend) fun info_increment_child_count(info: &mut Info) {
+        let new_count = info_child_count(info) + 1;
+        option::swap_or_fill(&mut info.child_count, new_count);
+    }
 
     // === any object ===
 
@@ -110,7 +118,7 @@ module sui::object {
         Info {
             id: ID { bytes: tx_context::new_object(ctx) },
             version: INITIAL_VERSION,
-            // child_count: option::none(),
+            child_count: option::none(),
         }
     }
 
@@ -120,7 +128,8 @@ module sui::object {
     // `Info`. The implementation of this function emits a deleted
     // system event so Sui knows to process the object deletion
     public fun delete(info: Info) {
-        // assert!(info_child_count(&info) == 0, EParentHasChildren);
+        // we will check that the child_count is 0 at the end of the transaction, once all
+        // deletions are processed
         delete_impl(info)
     }
 
@@ -134,16 +143,23 @@ module sui::object {
         info_id_bytes(get_info(obj))
     }
 
-    // /// Get the number of child objects.
-    // public fun child_count<T: key>(obj: &T): u64 {
-    //     info_child_count(get_info(obj))
-    // }
-
     /// Get the `version` of `obj`.
     // Private and unused for now, but may expose in the future
     fun version<T: key>(obj: &T): u64 {
         let versioned_id = get_info(obj);
         versioned_id.version
+    }
+
+    /// Get the number of child objects
+    /// Not currently public as this count may not be correct until the end of the transaction
+    fun child_count<T: key>(obj: &T): u64 {
+        info_child_count(get_info(obj))
+    }
+
+    /// Increments the number of child objects
+    /// Used by `sui::transfer`
+    public(friend) fun increment_child_count<T: key>(obj: &mut T) {
+        info_increment_child_count(get_info_mut(obj))
     }
 
     /// Get the inner bytes of `id` as an address.
@@ -164,6 +180,13 @@ module sui::object {
     // bytecode verifier pass that forces every struct with
     // the `key` ability to have a distinguished `Info` field.
     native fun get_info<T: key>(obj: &T): &Info;
+
+    /// Get a mutable reference to the `Info` for `obj`.
+    // Safe because Sui has an extra
+    // bytecode verifier pass that forces every struct with
+    // the `key` ability to have a distinguished `Info` field.
+    native fun get_info_mut<T: key>(obj: &T): &mut Info;
+
 
     // === destructors ===
 

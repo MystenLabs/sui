@@ -27,9 +27,24 @@ fn test_to_json_value() {
         name: "test_event".into(),
         data: vec![100, 200, 300],
         coins: vec![
-            GasCoin::new(ObjectID::random(), SequenceNumber::from_u64(10), 1000000),
-            GasCoin::new(ObjectID::random(), SequenceNumber::from_u64(20), 2000000),
-            GasCoin::new(ObjectID::random(), SequenceNumber::from_u64(30), 3000000),
+            GasCoin::new(
+                ObjectID::random(),
+                SequenceNumber::from_u64(10),
+                None,
+                1000000,
+            ),
+            GasCoin::new(
+                ObjectID::random(),
+                SequenceNumber::from_u64(20),
+                None,
+                2000000,
+            ),
+            GasCoin::new(
+                ObjectID::random(),
+                SequenceNumber::from_u64(30),
+                None,
+                3000000,
+            ),
         ],
     };
     let event_bytes = bcs::to_bytes(&move_event).unwrap();

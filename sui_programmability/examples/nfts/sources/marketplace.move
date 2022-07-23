@@ -32,7 +32,7 @@ module nfts::marketplace {
         let info = object::new(ctx);
         let bag = bag::new(ctx);
         let bag_id = typed_id::new(&bag);
-        bag::transfer_to_object_id(bag, &info);
+        bag::transfer_to_object_id(bag, &mut info);
         let market_place = Marketplace {
             info,
             bag_id,

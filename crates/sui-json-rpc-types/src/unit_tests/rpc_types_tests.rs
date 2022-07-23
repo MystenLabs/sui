@@ -32,7 +32,7 @@ fn test_move_value_to_sui_bytearray() {
 fn test_move_value_to_sui_coin() {
     let id = ObjectID::random();
     let value = 10000;
-    let coin = GasCoin::new(id, SequenceNumber::new(), value);
+    let coin = GasCoin::new(id, SequenceNumber::new(), None, value);
     let bcs = coin.to_bcs_bytes();
 
     let move_object = MoveObject::new_gas_coin(bcs);
@@ -110,6 +110,7 @@ fn test_serde() {
         SuiMoveValue::Info {
             id: ObjectID::random(),
             version: u64::MAX,
+            child_count: Some(u64::MAX),
         },
         SuiMoveValue::String("some test string".to_string()),
         SuiMoveValue::Address(SuiAddress::random_for_testing_only()),
