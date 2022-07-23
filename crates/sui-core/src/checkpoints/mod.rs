@@ -540,6 +540,14 @@ impl CheckpointStore {
         committee: &Committee,
         handle_pending_cert: impl PendCertificateForExecution,
     ) -> Result<(), FragmentInternalError> {
+        let fragment_seq = fragment.proposer.summary.sequence_number;
+        debug!(
+            execution_index=?seq,
+            cp_seq=?fragment_seq,
+            "Fragment received from consensus. Proposal: {}, other: {}",
+            fragment.proposer.authority(),
+            fragment.other.authority(),
+        );
         // Ensure we have not already processed this fragment.
         if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
             if seq <= last_seq {
@@ -554,6 +562,7 @@ impl CheckpointStore {
             .map_err(FragmentInternalError::Error)?;
 
         // Schedule for execution all the certificates that are included here.
+        // TODO: We should not schedule a cert if it has already been executed.
         handle_pending_cert
             .add_pending_certificates(
                 fragment
