@@ -24,6 +24,9 @@ module sui::genesis {
     /// Initial storage gas price
     const INIT_STORAGE_GAS_PRICE: u64 = 1;
 
+    /// Initial storage fund rewards reinvest portion meastured in bpgs
+    const INIT_STORAGE_FUND_REINVEST_BPS: u64 = 0;
+
     /// This function will be explicitly called once at genesis.
     /// It will create a singleton SuiSystemState object, which contains
     /// all the information we need in the system.
@@ -71,6 +74,7 @@ module sui::genesis {
             INIT_MAX_VALIDATOR_COUNT,
             INIT_MIN_VALIDATOR_STAKE,
             INIT_STORAGE_GAS_PRICE,
+            INIT_STORAGE_FUND_REINVEST_BPS
         );
     }
 }
