@@ -145,3 +145,36 @@ async fn signature_service() {
     // Verify the signature we received.
     assert!(pk.verify(digest.as_ref(), &signature).is_ok());
 }
+
+use proptest::arbitrary::Arbitrary;
+
+proptest::proptest! {
+    #[test]
+    fn test_k256_against_secp256k1_lib(
+        r in <[u8; 32]>::arbitrary()
+    ) {
+        let message: &[u8] = b"Hello, world!";
+
+        // contruct private key with bytes and signs message
+        let priv_key = <Secp256k1PrivateKey as ToFromBytes>::from_bytes(&r).unwrap();
+        let key_pair = Secp256k1KeyPair::from(priv_key);
+        let key_pair_copied = key_pair.copy();
+        let signature = key_pair.sign(message);
+        assert!(key_pair.public().verify(message, &signature).is_ok());
+
+        // use k256 to construct private key with the same bytes and signs the same message
+        let priv_key_1 = k256::ecdsa::SigningKey::from_bytes(&r).map_err(|_e| signature::Error::new())?;
+        let pub_key_1 = priv_key_1.verifying_key();
+        let signature_1: k256::ecdsa::Signature = priv_key_1.sign(message);
+        assert!(pub_key_1.verify(message, &signature_1).is_ok());
+
+        // same byte string produces same private key
+        assert_eq!(key_pair.private().as_bytes(), priv_key_1.to_bytes().as_slice());
+
+        // same public key is created
+        assert_eq!(key_pair_copied.public().as_bytes(), pub_key_1.to_bytes().as_slice());
+
+        // same signatures produced from both implementations
+        assert_eq!(signature.as_ref(), ToFromBytes::as_bytes(&signature_1));
+   }
+}
