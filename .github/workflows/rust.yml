@@ -65,7 +65,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [self-hosted, self-hosted-ubuntu]
+          - [self-hosted, self-hosted-arc]
           - [self-hosted, windows]
       fail-fast: false
     steps:
@@ -97,7 +97,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [self-hosted, self-hosted-ubuntu]
+          - [self-hosted, self-hosted-arc]
           - [self-hosted, windows]
       fail-fast: false
     steps:
