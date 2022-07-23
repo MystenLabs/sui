@@ -13,9 +13,7 @@ use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{
-        sha3_hash, AuthoritySignature, BcsSignable, SuiAuthoritySignature, VerificationObligation,
-    },
+    crypto::{sha3_hash, AuthoritySignature, SuiAuthoritySignature, VerificationObligation},
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
@@ -231,8 +229,6 @@ impl CheckpointSummary {
     }
 }
 
-impl BcsSignable for CheckpointSummary {}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointSummaryEnvelope<S> {
     pub summary: CheckpointSummary,
@@ -386,8 +382,6 @@ pub struct CheckpointContents {
     pub transactions: Vec<ExecutionDigests>,
 }
 
-impl BcsSignable for CheckpointContents {}
-
 // TODO: We should create a type for ordered contents,
 // instead of mixing them in the same type.
 // https://github.com/MystenLabs/sui/issues/3038
@@ -438,8 +432,6 @@ impl CheckpointProposalSummary {
         sha3_hash(self)
     }
 }
-
-impl BcsSignable for CheckpointProposalSummary {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedCheckpointProposalSummary {

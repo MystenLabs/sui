@@ -9,25 +9,16 @@ use std::str::FromStr;
 use base64ct::{Base64, Encoding};
 use move_binary_format::file_format;
 
+use crate::crypto::bcs_signable_test::{Bar, Foo};
 use crate::crypto::{get_key_pair_from_bytes, AuthoritySignature, KeyPair, SuiAuthoritySignature};
 use crate::{
-    crypto::{get_key_pair, BcsSignable, Signature},
+    crypto::{get_key_pair, Signature},
     gas_coin::GasCoin,
     object::Object,
     SUI_FRAMEWORK_ADDRESS,
 };
 
 use super::*;
-
-#[derive(Serialize, Deserialize)]
-struct Foo(String);
-
-impl BcsSignable for Foo {}
-
-#[derive(Serialize, Deserialize)]
-struct Bar(String);
-
-impl BcsSignable for Bar {}
 
 #[test]
 fn test_signatures() {

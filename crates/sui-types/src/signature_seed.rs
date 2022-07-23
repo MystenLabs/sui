@@ -170,13 +170,14 @@ impl SignatureSeed {
     ///
     /// ```
     /// use serde::{Deserialize, Serialize};
-    /// use sui_types::crypto::BcsSignable;
     /// use sui_types::signature_seed::SignatureSeed;
+    /// use sui_types::crypto::bcs_signable_test::Foo;
     ///
-    /// #[derive(Serialize, Deserialize)]
-    /// struct Foo(String);
-    ///
-    /// impl BcsSignable for Foo {}
+    /// // The BcsSignable trait is implemented as a sealed trait, so this is equivalent to the
+    /// // following, with the BcsSignable impl. mandatorily situated in the bcs_signable module:
+    /// // #[derive(Serialize, Deserialize)]
+    /// // struct Foo(String);
+    /// // impl BcsSignable for Foo {}
     ///
     /// # fn main() {
     ///     // In production this SHOULD be a secret seed value, here we pin it for demo purposes.
