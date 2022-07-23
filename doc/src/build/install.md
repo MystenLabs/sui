@@ -91,12 +91,12 @@ And if you see no output path, install it with:
 
 *Linux*
 ```shell
-$ sudo apt install curl
+$ apt install curl
 ```
 
 *macOS*
 ```shell
-$ sudo brew install curl
+$ brew install curl
 ```
 
 *Microsoft Windows*
@@ -139,14 +139,15 @@ Get the `cmake` command to build Sui:
 
 *Linux*
 ```shell
-$ sudo apt install cmake
+$ apt install cmake
 ```
 
 *macOS*
 ```shell
-$ sudo brew install cmake
+$ brew install cmake
 ```
 *Microsoft Windows*
+
 Download and install from: https://cmake.org/download/
 
 If you run into issues, follow this detailed [CMake Installation](https://riptutorial.com/cmake/example/4459/cmake-installation) tutorial.
@@ -157,12 +158,12 @@ In Linux, install:
 
 libssl-dev
 ```shell
-$ sudo apt install libssl-dev
+$ apt install libssl-dev
 ```
 
 libclang-dev
 ```shell
-$ sudo apt install libclang-dev
+$ apt install libclang-dev
 ```
 
 ### macOS-specific
@@ -191,7 +192,7 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "d
 ```
 
 This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) that provide these command line interfaces (CLIs):
-* sui - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
+* [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
 Confirm the installation with:
@@ -204,6 +205,8 @@ $ echo $PATH
 $ echo %PATH%
 ```
 And ensure the `.cargo/bin` directory appears. Access the help for any of these binaries by passing the `--help` argument to it.
+
+> **Important:** Make sure your entire toolchain stays up-to-date. If you encounter issues building and installing the Sui binaries, update all packages above and re-install.
 
 ## Integrated Development Environment
 For Move development, we recommend the [Visual Studio Code (vscode)](https://code.visualstudio.com/) IDE with the Move Analyzer language server plugin installed:
