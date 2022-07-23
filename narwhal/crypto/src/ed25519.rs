@@ -367,13 +367,8 @@ impl FromStr for Ed25519KeyPair {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = Base64::decode_vec(s).map_err(|e| anyhow::anyhow!("{}", e.to_string()))?;
-        let kp = ed25519_dalek::Keypair::from_bytes(&value)
-            .map_err(|e| anyhow::anyhow!("{}", e.to_string()))?;
-        Ok(Ed25519KeyPair {
-            name: Ed25519PublicKey(kp.public),
-            secret: Ed25519PrivateKey(kp.secret),
-        })
+        let kp = Self::decode_base64(s).map_err(|e| anyhow::anyhow!("{}", e.to_string()))?;
+        Ok(kp)
     }
 }
 

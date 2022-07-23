@@ -4,6 +4,7 @@
 use std::{
     fmt::{self, Display},
     mem::MaybeUninit,
+    str::FromStr,
 };
 
 use ::blst::{blst_scalar, blst_scalar_from_uint64, BLST_ERROR};
@@ -432,6 +433,15 @@ impl Signer<BLS12381Signature> for BLS12381KeyPair {
             sig,
             bytes: OnceCell::new(),
         })
+    }
+}
+
+impl FromStr for BLS12381KeyPair {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let kp = Self::decode_base64(s).map_err(|e| anyhow::anyhow!("{}", e.to_string()))?;
+        Ok(kp)
     }
 }
 

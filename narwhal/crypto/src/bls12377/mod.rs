@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use crate::{
     pubkey_bytes::PublicKeyBytes,
@@ -422,6 +425,15 @@ impl Signer<BLS12377Signature> for BLS12377KeyPair {
             sig: celo_bls_sig,
             bytes: OnceCell::new(),
         })
+    }
+}
+
+impl FromStr for BLS12377KeyPair {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let kp = Self::decode_base64(s).map_err(|e| anyhow::anyhow!("{}", e.to_string()))?;
+        Ok(kp)
     }
 }
 

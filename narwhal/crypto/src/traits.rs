@@ -8,7 +8,10 @@ use rand::{CryptoRng, RngCore};
 
 use serde::{de::DeserializeOwned, Serialize};
 pub use signature::{Error, Signer};
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 pub const DEFAULT_DOMAIN: [u8; 16] = [0u8; 16];
 
@@ -139,7 +142,9 @@ pub trait Authenticator:
 
 /// Trait impl'd by a public / private key pair in asymmetric cryptography.
 ///
-pub trait KeyPair: Sized + From<Self::PrivKey> + Signer<Self::Sig> + EncodeDecodeBase64 {
+pub trait KeyPair:
+    Sized + From<Self::PrivKey> + Signer<Self::Sig> + EncodeDecodeBase64 + FromStr
+{
     type PubKey: VerifyingKey<PrivKey = Self::PrivKey>;
     type PrivKey: SigningKey<PubKey = Self::PubKey>;
     type Sig: Authenticator<PubKey = Self::PubKey>;

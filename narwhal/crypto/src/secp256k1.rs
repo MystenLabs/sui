@@ -11,6 +11,7 @@ use rust_secp256k1::{constants, rand::rngs::OsRng, Message, PublicKey, Secp256k1
 use serde::{de, Deserialize, Serialize};
 use signature::{Signature, Signer, Verifier};
 use std::fmt::{self, Debug, Display};
+use std::str::FromStr;
 
 #[readonly::make]
 #[derive(Debug, Clone)]
@@ -325,6 +326,15 @@ impl KeyPair for Secp256k1KeyPair {
             name: self.name.clone(),
             secret: Secp256k1PrivateKey::from_bytes(self.secret.as_ref()).unwrap(),
         }
+    }
+}
+
+impl FromStr for Secp256k1KeyPair {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let kp = Self::decode_base64(s).map_err(|e| anyhow::anyhow!("{}", e.to_string()))?;
+        Ok(kp)
     }
 }
 
