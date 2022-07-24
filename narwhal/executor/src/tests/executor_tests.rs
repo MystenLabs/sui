@@ -7,6 +7,7 @@ use crate::{
 };
 use crypto::ed25519::Ed25519PublicKey;
 use std::sync::Arc;
+use test_utils::committee;
 use tokio::sync::mpsc::channel;
 use types::Certificate;
 
@@ -15,12 +16,17 @@ async fn execute_transactions() {
     let (tx_executor, rx_executor) = channel(10);
     let (tx_output, mut rx_output) = channel(10);
 
+    let committee = committee(None);
+    let message = ReconfigureNotification::NewCommittee(committee);
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
+
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
     Core::<TestState, Ed25519PublicKey>::spawn(
         store.clone(),
         execution_state.clone(),
+        rx_reconfigure,
         /* rx_subscriber */ rx_executor,
         tx_output,
     );
@@ -57,12 +63,17 @@ async fn execute_empty_certificate() {
     let (tx_executor, rx_executor) = channel(10);
     let (tx_output, mut rx_output) = channel(10);
 
+    let committee = committee(None);
+    let message = ReconfigureNotification::NewCommittee(committee);
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
+
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
     Core::<TestState, Ed25519PublicKey>::spawn(
         store.clone(),
         execution_state.clone(),
+        rx_reconfigure,
         /* rx_subscriber */ rx_executor,
         tx_output,
     );
@@ -108,12 +119,17 @@ async fn execute_malformed_transactions() {
     let (tx_executor, rx_executor) = channel(10);
     let (tx_output, mut rx_output) = channel(10);
 
+    let committee = committee(None);
+    let message = ReconfigureNotification::NewCommittee(committee);
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
+
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
     Core::<TestState, Ed25519PublicKey>::spawn(
         store.clone(),
         execution_state.clone(),
+        rx_reconfigure,
         /* rx_subscriber */ rx_executor,
         tx_output,
     );
@@ -165,12 +181,17 @@ async fn internal_error_execution() {
     let (tx_executor, rx_executor) = channel(10);
     let (tx_output, mut rx_output) = channel(10);
 
+    let committee = committee(None);
+    let message = ReconfigureNotification::NewCommittee(committee);
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
+
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
     Core::<TestState, Ed25519PublicKey>::spawn(
         store.clone(),
         execution_state.clone(),
+        rx_reconfigure,
         /* rx_subscriber */ rx_executor,
         tx_output,
     );
@@ -212,12 +233,17 @@ async fn crash_recovery() {
     let (tx_executor, rx_executor) = channel(10);
     let (tx_output, mut rx_output) = channel(10);
 
+    let committee = committee(None);
+    let reconfigure_notification = ReconfigureNotification::NewCommittee(committee);
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(reconfigure_notification.clone());
+
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
     Core::<TestState, Ed25519PublicKey>::spawn(
         store.clone(),
         execution_state.clone(),
+        rx_reconfigure,
         /* rx_subscriber */ rx_executor,
         tx_output,
     );
@@ -267,10 +293,12 @@ async fn crash_recovery() {
     // Reboot the executor.
     let (tx_executor, rx_executor) = channel(10);
     let (tx_output, mut rx_output) = channel(10);
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(reconfigure_notification);
 
     Core::<TestState, Ed25519PublicKey>::spawn(
         store.clone(),
         execution_state.clone(),
+        rx_reconfigure,
         /* rx_subscriber */ rx_executor,
         tx_output,
     );

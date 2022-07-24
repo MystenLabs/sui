@@ -34,6 +34,7 @@ executor = { path = "../executor" }
 primary = { path = "../primary" }
 types = { path = "../types" }
 worker = { path = "../worker" }
+network = { path = "../network" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 axum = "0.5.13"
 prometheus = "0.13.1"
@@ -46,6 +47,7 @@ serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 structopt = "0.3.26"
 test_utils = { path = "../test_utils" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
 
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]

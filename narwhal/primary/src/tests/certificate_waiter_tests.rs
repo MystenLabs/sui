@@ -18,7 +18,7 @@ use std::{
 };
 use test_utils::{certificate, committee, fixture_headers_round, keys};
 use tokio::sync::{mpsc::channel, watch};
-use types::{Certificate, PrimaryMessage, Reconfigure, Round};
+use types::{Certificate, PrimaryMessage, ReconfigureNotification, Round};
 
 #[tokio::test]
 async fn process_certificate_missing_parents_in_reverse() {
@@ -28,7 +28,7 @@ async fn process_certificate_missing_parents_in_reverse() {
 
     // kept empty
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee(committee(None)));
+        watch::channel(ReconfigureNotification::NewCommittee(committee(None)));
     // synchronizer to header waiter
     let (tx_sync_headers, rx_sync_headers) = channel(1);
     // synchronizer to certificate waiter
@@ -166,7 +166,7 @@ async fn process_certificate_check_gc_fires() {
 
     // kept empty
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(Reconfigure::NewCommittee(committee(None)));
+        watch::channel(ReconfigureNotification::NewCommittee(committee(None)));
     // synchronizer to header waiter
     let (tx_sync_headers, rx_sync_headers) = channel(1);
     // synchronizer to certificate waiter

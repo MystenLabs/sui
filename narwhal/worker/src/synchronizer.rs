@@ -6,7 +6,7 @@ use config::{SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::WorkerNetwork;
-use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
+use primary::PrimaryWorkerMessage;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -23,8 +23,8 @@ use tokio::{
 };
 use tracing::{debug, error};
 use types::{
-    BatchDigest, PrimaryWorkerReconfigure, Reconfigure, Round, SerializedBatchMessage,
-    WorkerMessage,
+    BatchDigest, ReconfigureNotification, Round, SerializedBatchMessage, WorkerMessage,
+    WorkerPrimaryError, WorkerPrimaryMessage,
 };
 
 #[cfg(test)]
@@ -62,9 +62,9 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
     pending: HashMap<BatchDigest, (Round, Sender<()>, u128)>,
     /// Send reconfiguration update to other tasks.
-    tx_reconfigure: watch::Sender<Reconfigure<PublicKey>>,
+    tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
     /// Output channel to send out the batch requests.
-    tx_primary: Sender<WorkerPrimaryMessage>,
+    tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
     /// Metrics handler
     metrics: Arc<WorkerMetrics>,
 }
@@ -79,8 +79,8 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
         rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
-        tx_reconfigure: watch::Sender<Reconfigure<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage>,
+        tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
+        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
         metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -200,25 +200,28 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                         }
                         self.pending.retain(|_, (r, _, _)| r > &mut gc_round);
                     },
-                    PrimaryWorkerMessage::Reconfigure(command) => {
+                    PrimaryWorkerMessage::Reconfigure(message) => {
                         // Reconfigure this task and update the shared committee.
-                        let (token, mut rx) = channel(1);
-                        let (message, shutdown) = match command {
-                            PrimaryWorkerReconfigure::NewCommittee(new_committee) => {
+                        let shutdown = match &message {
+                            ReconfigureNotification::NewCommittee(new_committee) => {
                                 self.committee.swap(Arc::new(new_committee.clone()));
+                                tracing::debug!("Committee updated to {}", self.committee);
                                 self.pending.clear();
                                 self.round = 0;
                                 waiting.clear();
 
-                                (Reconfigure::NewCommittee(new_committee), false)
+                                false
                             }
-                            PrimaryWorkerReconfigure::Shutdown => {
-                                (Reconfigure::Shutdown(token), true)
-                            }
+                            ReconfigureNotification::Shutdown => true
                         };
+
+                        // Notify all other tasks.
                         self.tx_reconfigure.send(message).expect("All tasks dropped");
+
+                        // Exit only when we are sure that all the other tasks received
+                        // the shutdown message.
                         if shutdown {
-                            rx.recv().await;
+                            self.tx_reconfigure.closed().await;
                             return;
                         }
                     }

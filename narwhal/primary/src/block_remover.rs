@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use crate::{utils, PayloadToken, PrimaryWorkerMessage};
+use crate::{utils, PayloadToken};
 use config::{Committee, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
 use crypto::{traits::VerifyingKey, Digest, Hash};
@@ -27,7 +27,7 @@ use tokio::{
 use tracing::{debug, error, instrument, warn};
 use types::{
     BatchDigest, BlockRemoverError, BlockRemoverErrorKind, BlockRemoverResult, Certificate,
-    CertificateDigest, ConsensusPrimaryMessage, Header, HeaderDigest, Reconfigure, ShutdownToken,
+    CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage, ReconfigureNotification,
 };
 
 const BATCH_DELETE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -90,7 +90,7 @@ pub struct DeleteBatchMessage {
 /// # use futures::future::join_all;
 /// # use std::collections::BTreeMap;
 /// # use std::sync::Arc;
-/// # use types::Reconfigure;
+/// # use types::ReconfigureNotification;
 /// # use config::WorkerId;
 /// # use tempfile::tempdir;
 /// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken};
@@ -125,7 +125,7 @@ pub struct DeleteBatchMessage {
 ///
 ///     let name = Ed25519PublicKey::default();
 ///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
-///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee(committee.clone()));
+///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 ///     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 ///     // A dag with genesis for the committee
 ///     let (tx_new_certificates, rx_new_certificates) = channel(1);
@@ -204,7 +204,7 @@ pub struct BlockRemover<PublicKey: VerifyingKey> {
     worker_network: PrimaryToWorkerNetwork,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
 
     /// Receives the commands to execute against
     rx_commands: Receiver<BlockRemoverCommand>,
@@ -224,7 +224,7 @@ pub struct BlockRemover<PublicKey: VerifyingKey> {
     rx_delete_batches: Receiver<DeleteBatchResult>,
 
     /// Outputs all the successfully deleted certificates
-    tx_removed_certificates: Sender<ConsensusPrimaryMessage<PublicKey>>,
+    tx_removed_certificates: Sender<Certificate<PublicKey>>,
 }
 
 impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
@@ -236,13 +236,13 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         dag: Option<Arc<Dag<PublicKey>>>,
         worker_network: PrimaryToWorkerNetwork,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_commands: Receiver<BlockRemoverCommand>,
         rx_delete_batches: Receiver<DeleteBatchResult>,
-        removed_certificates: Sender<ConsensusPrimaryMessage<PublicKey>>,
+        removed_certificates: Sender<Certificate<PublicKey>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let shutdown_token = Self {
+            Self {
                 name,
                 committee,
                 certificate_store,
@@ -260,11 +260,10 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
             }
             .run()
             .await;
-            drop(shutdown_token);
         })
     }
 
-    async fn run(&mut self) -> ShutdownToken {
+    async fn run(&mut self) {
         let mut waiting = FuturesUnordered::new();
 
         loop {
@@ -284,10 +283,11 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        Reconfigure::NewCommittee(new_committee) => {
+                        ReconfigureNotification::NewCommittee(new_committee) => {
                             self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         }
-                        Reconfigure::Shutdown(token) => return token
+                        ReconfigureNotification::Shutdown => return
                     }
                 }
             }
@@ -412,9 +412,8 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
 
         // Now output all the removed certificates
         for certificate in certificates.clone() {
-            let message = ConsensusPrimaryMessage::Sequenced(certificate.clone());
             self.tx_removed_certificates
-                .send(message)
+                .send(certificate.clone())
                 .await
                 .expect("Couldn't forward removed certificates to channel");
         }

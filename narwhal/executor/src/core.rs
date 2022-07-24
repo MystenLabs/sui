@@ -4,18 +4,22 @@ use crate::{
     bail,
     errors::{SubscriberError, SubscriberResult},
     state::ExecutionIndices,
-    ExecutionState, SerializedTransaction,
+    ExecutionState, ExecutorOutput, SerializedTransaction,
 };
+use config::Committee;
 use consensus::ConsensusOutput;
 use crypto::traits::VerifyingKey;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use store::Store;
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::{
+        mpsc::{Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{Batch, BatchDigest, SequenceNumber, SerializedBatchMessage};
+use types::{Batch, BatchDigest, ReconfigureNotification, SequenceNumber, SerializedBatchMessage};
 use worker::WorkerMessage;
 
 #[cfg(test)]
@@ -31,10 +35,12 @@ pub struct Core<State: ExecutionState, PublicKey: VerifyingKey> {
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// The (global) state to perform execution.
     execution_state: Arc<State>,
+    /// Receive reconfiguration updates.
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Receive ordered consensus output to execute.
     rx_subscriber: Receiver<ConsensusOutput<PublicKey>>,
     /// Outputs executed transactions.
-    tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
+    tx_output: Sender<ExecutorOutput<State>>,
     /// The indices ensuring we do not execute twice the same transaction.
     execution_indices: ExecutionIndices,
 }
@@ -48,44 +54,61 @@ impl<State: ExecutionState, PublicKey: VerifyingKey> Drop for Core<State, Public
 impl<State, PublicKey> Core<State, PublicKey>
 where
     State: ExecutionState + Send + Sync + 'static,
+    State::Outcome: Send + 'static,
+    State::Error: Debug,
     PublicKey: VerifyingKey,
 {
     /// Spawn a new executor in a dedicated tokio task.
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_subscriber: Receiver<ConsensusOutput<PublicKey>>,
-        tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
+        tx_output: Sender<ExecutorOutput<State>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let execution_indices = execution_state
                 .load_execution_indices()
                 .await
-                .expect("Couldn't load execution indices");
+                .expect("Failed to load execution indices from store");
             Self {
                 store,
                 execution_state,
+                rx_reconfigure,
                 rx_subscriber,
                 tx_output,
                 execution_indices,
             }
             .run()
             .await
-            .unwrap();
+            .expect("Failed to run core")
         })
     }
 
     /// Main loop listening to new certificates and execute them.
     async fn run(&mut self) -> SubscriberResult<()> {
-        while let Some(message) = self.rx_subscriber.recv().await {
-            // Execute all transactions associated with the consensus output message. This function
-            // also persist the necessary data to enable crash-recovery.
-            self.execute_certificate(&message).await?;
+        loop {
+            tokio::select! {
+                // Execute all transactions associated with the consensus output message.
+                Some(message) = self.rx_subscriber.recv() => {
+                    // This function persists the necessary data to enable crash-recovery.
+                    self.execute_certificate(&message).await?;
 
-            // Cleanup the temporary persistent storage.
-            // TODO [issue #191]: Security cleanup the store.
+                    // Cleanup the temporary persistent storage.
+                    // TODO [issue #191]: Security cleanup the store.
+                },
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        ReconfigureNotification::NewCommittee(_) => (),
+                        ReconfigureNotification::Shutdown => return Ok(())
+                    }
+                }
+            }
         }
-        Ok(())
     }
 
     /// Execute a single certificate.
@@ -107,7 +130,7 @@ where
                 .execution_indices
                 .check_next_batch_index(index as SequenceNumber)
             {
-                self.execute_batch(*digest, total_batches).await?;
+                self.execute_batch(message, *digest, total_batches).await?;
             }
         }
         Ok(())
@@ -116,6 +139,7 @@ where
     /// Execute a single batch of transactions.
     async fn execute_batch(
         &mut self,
+        consensus_output: &ConsensusOutput<PublicKey>,
         batch_digest: BatchDigest,
         total_batches: usize,
     ) -> SubscriberResult<()> {
@@ -150,27 +174,48 @@ where
             {
                 // Execute the transaction
                 let result = self
-                    .execute_transaction(transaction.clone(), total_transactions, total_batches)
+                    .execute_transaction(
+                        consensus_output,
+                        transaction.clone(),
+                        total_transactions,
+                        total_batches,
+                    )
                     .await;
 
-                // Output the result (eg. to notify the end-user);
-                let output = (result.clone(), transaction);
-                if self.tx_output.send(output).await.is_err() {
-                    debug!("No users listening for transaction execution");
-                }
+                let (bail, result) = match result {
+                    Ok((outcome, committee)) => {
+                        if let Some(_committee) = committee {
+                            // TODO: Do we really need to receive back the committee here? We will know
+                            // once we try to integrate Narwhal with Sui. #580
+                            // todo!();
+                        }
 
-                match result {
-                    Ok(_) => (),
+                        (None, Ok(outcome))
+                    }
 
                     // We may want to log the errors that are the user's fault (i.e., that are neither
                     // our fault or the fault of consensus) for debug purposes. It is safe to continue
                     // by ignoring those transactions since all honest subscribers will do the same.
-                    Err(SubscriberError::ClientExecutionError(e)) => debug!("{e}"),
+                    Err(error @ SubscriberError::ClientExecutionError(_)) => {
+                        debug!("{error}");
+                        (None, Err(error))
+                    }
 
                     // We must take special care to errors that are our fault, such as storage errors.
                     // We may be the only authority experiencing it, and thus cannot continue to process
                     // transactions until the problem is fixed.
-                    Err(e) => bail!(e),
+                    Err(error) => (Some(error.clone()), Err(error)),
+                };
+
+                // Output the result (eg. to notify the end-user);
+                let output = (result, transaction);
+                if self.tx_output.send(output).await.is_err() {
+                    debug!("No users listening for transaction execution");
+                }
+
+                // Bail if a fatal error occurred.
+                if let Some(e) = bail {
+                    bail!(e);
                 }
             }
         }
@@ -180,10 +225,14 @@ where
     /// Execute a single transaction.
     async fn execute_transaction(
         &mut self,
+        consensus_output: &ConsensusOutput<PublicKey>,
         serialized: SerializedTransaction,
         total_transactions: usize,
         total_batches: usize,
-    ) -> SubscriberResult<Vec<u8>> {
+    ) -> SubscriberResult<(
+        <State as ExecutionState>::Outcome,
+        Option<Committee<PublicKey>>,
+    )> {
         // Compute the next expected indices. Those will be persisted upon transaction execution
         // and are only used for crash-recovery.
         self.execution_indices
@@ -200,9 +249,14 @@ where
             ))),
         };
 
-        // Execute the transaction.
+        // Execute the transaction. Note that the executor will need to choose whether to discard
+        // transactions from previous epochs by itself.
         self.execution_state
-            .handle_consensus_transaction(self.execution_indices.clone(), transaction)
+            .handle_consensus_transaction(
+                consensus_output,
+                self.execution_indices.clone(),
+                transaction,
+            )
             .await
             .map_err(SubscriberError::from)
     }

@@ -13,19 +13,24 @@ use multiaddr::Multiaddr;
 use std::collections::{HashMap, HashSet};
 use store::Store;
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::{error, warn};
 use types::{
     serialized_batch_digest, BatchDigest, BincodeEncodedPayload, ClientBatchRequest,
-    SerializedBatchMessage, WorkerToWorkerClient,
+    ReconfigureNotification, SerializedBatchMessage, WorkerToWorkerClient,
 };
 
 /// Download transactions data from the consensus workers and notifies the called when the job is done.
 pub struct BatchLoader<PublicKey: VerifyingKey> {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
     store: Store<BatchDigest, SerializedBatchMessage>,
+    /// Receive reconfiguration updates.
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Receive consensus outputs for which to download the associated transaction data.
     rx_input: Receiver<ConsensusOutput<PublicKey>>,
     /// The network addresses of the consensus workers.
@@ -38,57 +43,72 @@ impl<PublicKey: VerifyingKey> BatchLoader<PublicKey> {
     /// Spawn a new batch loaded in a dedicated tokio task.
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_input: Receiver<ConsensusOutput<PublicKey>>,
         addresses: HashMap<WorkerId, Multiaddr>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 store,
+                rx_reconfigure,
                 rx_input,
                 addresses,
                 connections: HashMap::new(),
             }
             .run()
             .await
-            .unwrap();
+            .expect("Failed to run batch loader")
         })
     }
 
     /// Receive consensus messages for which we need to download the associated transaction data.
     async fn run(&mut self) -> SubscriberResult<()> {
-        while let Some(message) = self.rx_input.recv().await {
-            let certificate = &message.certificate;
+        loop {
+            tokio::select! {
+                // Receive sync requests.
+                Some(message) = self.rx_input.recv() => {
+                    let certificate = &message.certificate;
 
-            // Send a request for every batch referenced by the certificate.
-            // TODO: Can we write it better without allocating a HashMap every time?
-            let mut map = HashMap::with_capacity(certificate.header.payload.len());
-            for (digest, worker_id) in certificate.header.payload.iter() {
-                map.entry(*worker_id).or_insert_with(Vec::new).push(*digest);
-            }
-            for (worker_id, digests) in map {
-                let address = self
-                    .addresses
-                    .get(&worker_id)
-                    .ok_or(SubscriberError::UnexpectedWorkerId(worker_id))?;
+                    // Send a request for every batch referenced by the certificate.
+                    // TODO: Can we write it better without allocating a HashMap every time?
+                    let mut map = HashMap::with_capacity(certificate.header.payload.len());
+                    for (digest, worker_id) in certificate.header.payload.iter() {
+                        map.entry(*worker_id).or_insert_with(Vec::new).push(*digest);
+                    }
+                    for (worker_id, digests) in map {
+                        let address = self
+                            .addresses
+                            .get(&worker_id)
+                            .ok_or(SubscriberError::UnexpectedWorkerId(worker_id))?;
 
-                let sender = self.connections.entry(worker_id).or_insert_with(|| {
-                    let (sender, receiver) = channel(DEFAULT_CHANNEL_SIZE);
-                    SyncConnection::spawn::<PublicKey>(
-                        address.clone(),
-                        self.store.clone(),
-                        receiver,
-                    );
-                    sender
-                });
+                        let sender = self.connections.entry(worker_id).or_insert_with(|| {
+                            let (sender, receiver) = channel(DEFAULT_CHANNEL_SIZE);
+                            SyncConnection::spawn::<PublicKey>(
+                                address.clone(),
+                                self.store.clone(),
+                                receiver,
+                            );
+                            sender
+                        });
 
-                sender
-                    .send(digests)
-                    .await
-                    .expect("Sync connections are kept alive and never die");
+                        sender
+                            .send(digests)
+                            .await
+                            .expect("Sync connections are kept alive and never die");
+                    }
+                }
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        ReconfigureNotification::NewCommittee(_) => (),
+                        ReconfigureNotification::Shutdown => return Ok(())
+                    }
+                }
             }
         }
-
-        Ok(())
     }
 }
 

@@ -4,11 +4,14 @@ use crate::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::traits::VerifyingKey;
 use std::sync::Arc;
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::{
+        mpsc::{Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::{debug, error};
-use types::{Certificate, CertificateDigest, ConsensusStore, StoreResult};
+use types::{Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification, StoreResult};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]
@@ -23,6 +26,8 @@ pub struct SubscriberHandler<PublicKey: VerifyingKey> {
     consensus_store: Arc<ConsensusStore<PublicKey>>,
     // The persistent store holding the certificates.
     certificate_store: CertificateStore<PublicKey>,
+    /// Receive reconfiguration update.
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     // Channel to receive the output of consensus.
     rx_sequence: Receiver<ConsensusOutput<PublicKey>>,
     /// Channel to receive sync requests from the client.
@@ -36,6 +41,7 @@ impl<PublicKey: VerifyingKey> SubscriberHandler<PublicKey> {
     pub fn spawn(
         consensus_store: Arc<ConsensusStore<PublicKey>>,
         certificate_store: CertificateStore<PublicKey>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_sequence: Receiver<ConsensusOutput<PublicKey>>,
         rx_client: Receiver<ConsensusSyncRequest>,
         tx_client: Sender<ConsensusOutput<PublicKey>>,
@@ -44,13 +50,14 @@ impl<PublicKey: VerifyingKey> SubscriberHandler<PublicKey> {
             Self {
                 consensus_store,
                 certificate_store,
+                rx_reconfigure,
                 rx_sequence,
                 rx_client,
                 tx_client,
             }
             .run()
             .await
-            .unwrap();
+            .expect("Failed to run subscriber")
         })
     }
 
@@ -69,7 +76,17 @@ impl<PublicKey: VerifyingKey> SubscriberHandler<PublicKey> {
                 // Receive client sync requests.
                 Some(request) = self.rx_client.recv() => self
                     .synchronize(request)
-                    .await?
+                    .await?,
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        ReconfigureNotification::NewCommittee(_) => (),
+                        ReconfigureNotification::Shutdown => return Ok(())
+                    }
+                }
             }
         }
     }

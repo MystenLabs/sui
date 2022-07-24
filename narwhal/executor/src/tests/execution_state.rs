@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use async_trait::async_trait;
+use config::Committee;
+use consensus::ConsensusOutput;
+use crypto::traits::VerifyingKey;
 use futures::executor::block_on;
 use std::path::Path;
 use store::{
@@ -38,12 +41,14 @@ impl Default for TestState {
 impl ExecutionState for TestState {
     type Transaction = u64;
     type Error = TestStateError;
+    type Outcome = Vec<u8>;
 
-    async fn handle_consensus_transaction(
+    async fn handle_consensus_transaction<PublicKey: VerifyingKey>(
         &self,
+        _consensus_output: &ConsensusOutput<PublicKey>,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<Vec<u8>, Self::Error> {
+    ) -> Result<(Self::Outcome, Option<Committee<PublicKey>>), Self::Error> {
         if transaction == MALFORMED_TRANSACTION {
             Err(Self::Error::ClientError)
         } else if transaction == KILLER_TRANSACTION {
@@ -52,7 +57,7 @@ impl ExecutionState for TestState {
             self.store
                 .write(Self::INDICES_ADDRESS, execution_indices)
                 .await;
-            Ok(Vec::default())
+            Ok((Vec::default(), None))
         }
     }
 

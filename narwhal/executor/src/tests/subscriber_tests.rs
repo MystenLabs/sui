@@ -6,6 +6,7 @@ use crate::{
     sequencer::MockSequencer,
 };
 use crypto::ed25519::Ed25519PublicKey;
+use test_utils::committee;
 use tokio::sync::mpsc::{channel, Sender};
 use types::Certificate;
 
@@ -14,9 +15,16 @@ async fn spawn_consensus_and_subscriber(
     rx_sequence: Receiver<Certificate<Ed25519PublicKey>>,
     tx_batch_loader: Sender<ConsensusOutput<Ed25519PublicKey>>,
     tx_executor: Sender<ConsensusOutput<Ed25519PublicKey>>,
-) -> Store<BatchDigest, SerializedBatchMessage> {
+) -> (
+    Store<BatchDigest, SerializedBatchMessage>,
+    watch::Sender<ReconfigureNotification<Ed25519PublicKey>>,
+) {
     let (tx_consensus_to_client, rx_consensus_to_client) = channel(10);
     let (tx_client_to_consensus, rx_client_to_consensus) = channel(10);
+
+    let committee = committee(None);
+    let message = ReconfigureNotification::NewCommittee(committee);
+    let (tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn a mock consensus core.
     MockSequencer::spawn(rx_sequence, rx_client_to_consensus, tx_consensus_to_client);
@@ -26,6 +34,7 @@ async fn spawn_consensus_and_subscriber(
     let next_consensus_index = SequenceNumber::default();
     Subscriber::<Ed25519PublicKey>::spawn(
         store.clone(),
+        rx_reconfigure,
         rx_consensus_to_client,
         tx_client_to_consensus,
         tx_batch_loader,
@@ -33,7 +42,7 @@ async fn spawn_consensus_and_subscriber(
         next_consensus_index,
     );
 
-    store
+    (store, tx_reconfigure)
 }
 
 #[tokio::test]
@@ -43,7 +52,8 @@ async fn handle_certificate_with_downloaded_batch() {
     let (tx_executor, mut rx_executor) = channel(10);
 
     // Spawn a subscriber.
-    let store = spawn_consensus_and_subscriber(rx_sequence, tx_batch_loader, tx_executor).await;
+    let (store, _tx_reconfigure) =
+        spawn_consensus_and_subscriber(rx_sequence, tx_batch_loader, tx_executor).await;
 
     // Feed certificates to the mock sequencer and ensure the batch loader receive the command to
     // download the corresponding transaction data.
@@ -76,7 +86,8 @@ async fn handle_empty_certificate() {
     let (tx_executor, mut rx_executor) = channel(10);
 
     // Spawn a subscriber.
-    let _ = spawn_consensus_and_subscriber(rx_sequence, tx_batch_loader, tx_executor).await;
+    let _do_not_drop =
+        spawn_consensus_and_subscriber(rx_sequence, tx_batch_loader, tx_executor).await;
 
     // Feed certificates to the mock sequencer and ensure the batch loader receive the command to
     // download the corresponding transaction data.
@@ -100,6 +111,10 @@ async fn synchronize() {
     let (tx_consensus_to_client, rx_consensus_to_client) = channel(10);
     let (tx_client_to_consensus, rx_client_to_consensus) = channel(10);
 
+    let committee = committee(None);
+    let message = ReconfigureNotification::NewCommittee(committee);
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
+
     // Spawn a mock consensus core.
     MockSequencer::spawn(rx_sequence, rx_client_to_consensus, tx_consensus_to_client);
 
@@ -114,6 +129,7 @@ async fn synchronize() {
     let next_consensus_index = SequenceNumber::default();
     Subscriber::<Ed25519PublicKey>::spawn(
         store.clone(),
+        rx_reconfigure,
         rx_consensus_to_client,
         tx_client_to_consensus,
         tx_batch_loader,

@@ -86,7 +86,7 @@ PrimaryWorkerMessage:
     2:
       Reconfigure:
         NEWTYPE:
-          TYPENAME: PrimaryWorkerReconfigure
+          TYPENAME: ReconfigureNotification
     3:
       RequestBatch:
         NEWTYPE:
@@ -96,12 +96,14 @@ PrimaryWorkerMessage:
         NEWTYPE:
           SEQ:
             TYPENAME: BatchDigest
-PrimaryWorkerReconfigure:
+ReconfigureNotification:
   ENUM:
     0:
       NewCommittee:
         NEWTYPE:
           TYPENAME: Committee
+    1:
+      Shutdown: UNIT
 WorkerAddresses:
   STRUCT:
     - transactions: BYTES
@@ -144,4 +146,8 @@ WorkerPrimaryMessage:
       Error:
         NEWTYPE:
           TYPENAME: WorkerPrimaryError
+    5:
+      Reconfigure:
+        NEWTYPE:
+          TYPENAME: ReconfigureNotification
 

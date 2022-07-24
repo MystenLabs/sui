@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 use arc_swap::ArcSwap;
 use config::{Committee, Epoch, Parameters};
-use crypto::traits::KeyPair;
+use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
 use futures::future::join_all;
+use network::{CancelHandler, WorkerToPrimaryNetwork};
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{collections::BTreeMap, sync::Arc};
 use test_utils::{keys, make_authority, pure_committee_from_keys, temp_dir};
-use tokio::sync::mpsc::channel;
-use types::ConsensusPrimaryMessage;
+use tokio::sync::{mpsc::channel, watch};
+use types::{ReconfigureNotification, WorkerPrimaryMessage};
 
 /// The epoch changes but the stake distribution and network addresses stay the same.
 #[tokio::test]
@@ -36,6 +37,9 @@ async fn test_simple_epoch_change() {
         let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
 
+        let initial_committee = ReconfigureNotification::NewCommittee(committee_0.clone());
+        let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
         let store = NodeStorage::reopen(temp_dir());
 
         Primary::spawn(
@@ -50,6 +54,7 @@ async fn test_simple_epoch_change() {
             /* rx_consensus */ rx_feedback,
             /* dag */ None,
             NetworkModel::Asynchronous,
+            tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
         );
@@ -67,17 +72,30 @@ async fn test_simple_epoch_change() {
     }
 
     // Move to the next epochs.
+    let mut old_committee = committee_0;
     for epoch in 1..=3 {
         // Move to the next epoch.
         let new_committee = Committee {
             epoch,
-            ..committee_0.clone()
+            ..old_committee.clone()
         };
 
-        for tx in &tx_channels {
-            tx.send(ConsensusPrimaryMessage::Committee(new_committee.clone()))
-                .await
-                .unwrap();
+        // Notify the old committee to change epoch.
+        let addresses: Vec<_> = old_committee
+            .authorities
+            .values()
+            .map(|authority| authority.primary.worker_to_primary.clone())
+            .collect();
+        let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewCommittee(
+            new_committee.clone(),
+        ));
+        let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+        for address in addresses {
+            _do_not_drop.push(
+                WorkerToPrimaryNetwork::default()
+                    .send(address, &message)
+                    .await,
+            );
         }
 
         // Run for a while.
@@ -89,6 +107,8 @@ async fn test_simple_epoch_change() {
                 }
             }
         }
+
+        old_committee = new_committee;
     }
 }
 
@@ -122,6 +142,8 @@ async fn test_partial_committee_change() {
         epoch_0_rx_channels.push(rx_new_certificates);
         let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
         epoch_0_tx_channels.push(tx_feedback.clone());
+        let initial_committee = ReconfigureNotification::NewCommittee(committee_0.clone());
+        let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
         let store = NodeStorage::reopen(temp_dir());
 
@@ -137,6 +159,7 @@ async fn test_partial_committee_change() {
             /* rx_consensus */ rx_feedback,
             /* dag */ None,
             NetworkModel::Asynchronous,
+            tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
         );
@@ -196,6 +219,9 @@ async fn test_partial_committee_change() {
         let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
         epoch_1_tx_channels.push(tx_feedback.clone());
 
+        let initial_committee = ReconfigureNotification::NewCommittee(committee_1.clone());
+        let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
         let store = NodeStorage::reopen(temp_dir());
 
         Primary::spawn(
@@ -210,16 +236,28 @@ async fn test_partial_committee_change() {
             /* rx_consensus */ rx_feedback,
             /* dag */ None,
             NetworkModel::Asynchronous,
+            tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
         );
     }
 
     // Tell the nodes of epoch 0 to transition to epoch 1.
-    for tx in &epoch_0_tx_channels {
-        tx.send(ConsensusPrimaryMessage::Committee(committee_1.clone()))
-            .await
-            .unwrap();
+    let addresses: Vec<_> = committee_0
+        .authorities
+        .values()
+        .map(|authority| authority.primary.worker_to_primary.clone())
+        .collect();
+    let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewCommittee(
+        committee_1.clone(),
+    ));
+    let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+    for address in addresses {
+        _do_not_drop.push(
+            WorkerToPrimaryNetwork::default()
+                .send(address, &message)
+                .await,
+        );
     }
 
     // Run for a while in epoch 1.
@@ -258,6 +296,9 @@ async fn test_restart_with_new_committee_change() {
         let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
 
+        let initial_committee = ReconfigureNotification::NewCommittee(committee_0.clone());
+        let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
         let store = NodeStorage::reopen(temp_dir());
 
         let primary_handles = Primary::spawn(
@@ -272,6 +313,7 @@ async fn test_restart_with_new_committee_change() {
             /* rx_consensus */ rx_feedback,
             /* dag */ None,
             NetworkModel::Asynchronous,
+            tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
         );
@@ -290,13 +332,23 @@ async fn test_restart_with_new_committee_change() {
     }
 
     // Shutdown the committee of the previous epoch;
-    for tx in &tx_channels {
-        let (token, mut rx) = channel(1);
-        tx.send(ConsensusPrimaryMessage::Shutdown(token))
-            .await
-            .unwrap();
-        rx.recv().await;
+    let addresses: Vec<_> = committee_0
+        .authorities
+        .values()
+        .map(|authority| authority.primary.worker_to_primary.clone())
+        .collect();
+    let message =
+        WorkerPrimaryMessage::<Ed25519PublicKey>::Reconfigure(ReconfigureNotification::Shutdown);
+    let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+    for address in addresses {
+        _do_not_drop.push(
+            WorkerToPrimaryNetwork::default()
+                .send(address, &message)
+                .await,
+        );
     }
+
+    // Wait for the committee to shutdown.
     join_all(handles).await;
 
     // Move to the next epochs.
@@ -316,6 +368,9 @@ async fn test_restart_with_new_committee_change() {
             let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
             tx_channels.push(tx_feedback.clone());
 
+            let initial_committee = ReconfigureNotification::NewCommittee(new_committee.clone());
+            let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
             let store = NodeStorage::reopen(temp_dir());
 
             let primary_handles = Primary::spawn(
@@ -330,6 +385,7 @@ async fn test_restart_with_new_committee_change() {
                 /* rx_consensus */ rx_feedback,
                 /* dag */ None,
                 NetworkModel::Asynchronous,
+                tx_reconfigure,
                 /* tx_committed_certificates */ tx_feedback,
                 &Registry::new(),
             );
@@ -347,13 +403,24 @@ async fn test_restart_with_new_committee_change() {
         }
 
         // Shutdown the committee of the previous epoch;
-        for tx in &tx_channels {
-            let (token, mut rx) = channel(1);
-            tx.send(ConsensusPrimaryMessage::Shutdown(token))
-                .await
-                .unwrap();
-            rx.recv().await;
+        let addresses: Vec<_> = committee_0
+            .authorities
+            .values()
+            .map(|authority| authority.primary.worker_to_primary.clone())
+            .collect();
+        let message = WorkerPrimaryMessage::<Ed25519PublicKey>::Reconfigure(
+            ReconfigureNotification::Shutdown,
+        );
+        let mut _do_not_drop: Vec<CancelHandler<_>> = Vec::new();
+        for address in addresses {
+            _do_not_drop.push(
+                WorkerToPrimaryNetwork::default()
+                    .send(address, &message)
+                    .await,
+            );
         }
+
+        // Wait for the committee to shutdown.
         join_all(handles).await;
     }
 }

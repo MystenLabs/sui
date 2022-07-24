@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{block_synchronizer::handler::Handler, PrimaryWorkerMessage};
+use crate::block_synchronizer::handler::Handler;
 use config::Committee;
 use crypto::{traits::VerifyingKey, Digest, Hash};
 use futures::{
@@ -24,7 +24,7 @@ use tokio::{
 use tracing::{debug, error, instrument, warn};
 use types::{
     BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
-    CertificateDigest, Header, Reconfigure, ShutdownToken,
+    CertificateDigest, Header, PrimaryWorkerMessage, ReconfigureNotification,
 };
 use Result::*;
 
@@ -124,7 +124,7 @@ type RequestKey = Vec<u8>;
 /// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
 /// # use types::{BatchMessage, BatchDigest, CertificateDigest, Batch};
 /// # use mockall::*;
-/// # use types::Reconfigure;
+/// # use types::ReconfigureNotification;
 /// # use crypto::traits::VerifyingKey;
 /// # use async_trait::async_trait;
 /// # use std::sync::Arc;
@@ -157,7 +157,7 @@ type RequestKey = Vec<u8>;
 ///
 ///     let name = Ed25519PublicKey::default();
 ///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
-///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(Reconfigure::NewCommittee(committee.clone()));
+///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 ///
 ///     // A dummy certificate
 ///     let certificate = Certificate::<Ed25519PublicKey>::default();
@@ -220,7 +220,7 @@ pub struct BlockWaiter<
     worker_network: PrimaryToWorkerNetwork,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
 
     /// The batch receive channel is listening for received
     /// messages for batches that have been requested
@@ -255,13 +255,13 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let shutdown_token = Self {
+            Self {
                 name,
                 committee,
                 rx_commands,
@@ -276,11 +276,10 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             }
             .run()
             .await;
-            drop(shutdown_token);
         })
     }
 
-    async fn run(&mut self) -> ShutdownToken {
+    async fn run(&mut self) {
         let mut waiting_get_block = FuturesUnordered::new();
         let mut waiting_get_blocks = FuturesUnordered::new();
 
@@ -330,10 +329,11 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        Reconfigure::NewCommittee(new_committee) => {
+                        ReconfigureNotification::NewCommittee(new_committee) => {
                             self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         }
-                        Reconfigure::Shutdown(token) => return token,
+                        ReconfigureNotification::Shutdown => return,
                     }
                 }
             }
@@ -777,10 +777,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         // ensure that we won't wait forever for a batch result to come
         let r = match timeout(BATCH_RETRIEVE_TIMEOUT, batch_receiver).await {
             Ok(Ok(result)) => result.or(Err(BlockErrorKind::BatchError)),
-            Ok(Err(err)) => {
-                println!("Receiver error: {err}");
-                Err(BlockErrorKind::BatchError)
-            }
+            Ok(Err(_)) => Err(BlockErrorKind::BatchError),
             Err(_) => Err(BlockErrorKind::BatchTimeout),
         };
 

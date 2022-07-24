@@ -16,7 +16,7 @@ use tokio::{
 use tracing::debug;
 use types::{
     error::{DagError, DagResult},
-    BatchDigest, Certificate, Header, Reconfigure, Round,
+    BatchDigest, Certificate, Header, ReconfigureNotification, Round,
 };
 
 #[cfg(test)]
@@ -39,7 +39,7 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     network_model: NetworkModel,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Receives the parents to include in the next header (along with their round number).
     rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
@@ -70,7 +70,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         header_size: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
         tx_core: Sender<Header<PublicKey>>,
@@ -132,6 +132,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
         self.committee = committee;
         self.round = 0;
         self.last_parents = Certificate::genesis(&self.committee);
+        tracing::debug!("Committee updated to {}", self.committee);
     }
 
     // Main loop listening to incoming messages.
@@ -253,10 +254,10 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                         Ordering::Greater => {
                             let message = self.rx_reconfigure.borrow_and_update().clone();
                             match message  {
-                                Reconfigure::NewCommittee(new_committee) => {
+                                ReconfigureNotification::NewCommittee(new_committee) => {
                                     self.update_committee(new_committee);
                                 },
-                                Reconfigure::Shutdown(_token) => return,
+                                ReconfigureNotification::Shutdown => return,
                             }
                         }
                         Ordering::Less => {
@@ -310,10 +311,10 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        Reconfigure::NewCommittee(new_committee) => {
+                        ReconfigureNotification::NewCommittee(new_committee) => {
                             self.update_committee(new_committee);
                         },
-                        Reconfigure::Shutdown(_token) => return,
+                        ReconfigureNotification::Shutdown => return,
                     }
                 }
             }

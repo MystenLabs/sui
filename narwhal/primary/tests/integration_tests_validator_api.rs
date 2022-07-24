@@ -22,13 +22,13 @@ use test_utils::{
     fixture_header_builder, keys, make_optimal_certificates, make_optimal_signed_certificates,
     temp_dir,
 };
-use tokio::sync::mpsc::channel;
+use tokio::sync::{mpsc::channel, watch};
 use tonic::transport::Channel;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
     CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
-    ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, SerializedBatchMessage,
-    ValidatorClient,
+    ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
+    SerializedBatchMessage, ValidatorClient,
 };
 use worker::{
     metrics::{Metrics, WorkerMetrics},
@@ -104,6 +104,8 @@ async fn test_get_collections() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -121,6 +123,7 @@ async fn test_get_collections() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
@@ -281,6 +284,8 @@ async fn test_remove_collections() {
     }
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     Primary::spawn(
         name.clone(),
@@ -294,6 +299,7 @@ async fn test_remove_collections() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
@@ -478,6 +484,9 @@ async fn test_read_causal_signed_certificates() {
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
@@ -498,12 +507,16 @@ async fn test_read_causal_signed_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -529,6 +542,7 @@ async fn test_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback_2,
         &Registry::new(),
     );
@@ -676,6 +690,9 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
+
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
@@ -689,12 +706,15 @@ async fn test_read_causal_unsigned_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
@@ -713,6 +733,7 @@ async fn test_read_causal_unsigned_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback_2,
         &Registry::new(),
     );
@@ -833,6 +854,8 @@ async fn test_get_collections_with_missing_certificates() {
     // Spawn the primary 1 (which will be the one that we'll interact with)
     let (tx_new_certificates_1, rx_new_certificates_1) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_1, rx_feedback_1) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -850,6 +873,7 @@ async fn test_get_collections_with_missing_certificates() {
             Dag::new(&committee, rx_new_certificates_1, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback_1,
         &Registry::new(),
     );
@@ -871,6 +895,8 @@ async fn test_get_collections_with_missing_certificates() {
     // Spawn the primary 2 - a peer to fetch missing certificates from
     let (tx_new_certificates_2, _) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     Primary::spawn(
         name_2.clone(),
@@ -885,6 +911,7 @@ async fn test_get_collections_with_missing_certificates() {
         /* external_consensus */
         None,
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback_2,
         &Registry::new(),
     );

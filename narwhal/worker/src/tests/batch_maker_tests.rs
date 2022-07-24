@@ -9,7 +9,7 @@ use tokio::sync::mpsc::channel;
 async fn make_batch() {
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(Reconfigure::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
     let (tx_transaction, rx_transaction) = channel(1);
     let (tx_message, mut rx_message) = channel(1);
 
@@ -39,7 +39,7 @@ async fn make_batch() {
 async fn batch_timeout() {
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(Reconfigure::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
     let (tx_transaction, rx_transaction) = channel(1);
     let (tx_message, mut rx_message) = channel(1);
 

@@ -11,7 +11,7 @@ use config::{Parameters, SharedCommittee, WorkerId};
 use crypto::traits::VerifyingKey;
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
-use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
+use primary::PrimaryWorkerMessage;
 use std::{net::Ipv4Addr, pin::Pin, sync::Arc};
 use store::Store;
 use tokio::{
@@ -24,9 +24,10 @@ use tokio::{
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
-    BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty, PrimaryToWorker,
-    PrimaryToWorkerServer, Reconfigure, SerializedBatchMessage, Transaction, TransactionProto,
-    Transactions, TransactionsServer, WorkerToWorker, WorkerToWorkerServer,
+    error::DagError, BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty,
+    PrimaryToWorker, PrimaryToWorkerServer, ReconfigureNotification, SerializedBatchMessage,
+    Transaction, TransactionProto, Transactions, TransactionsServer, WorkerPrimaryMessage,
+    WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -78,8 +79,9 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
 
         let initial_committee = (*(&*(&*committee).load()).clone()).clone();
-        let (tx_reconfigure, rx_reconfigure) =
-            watch::channel(Reconfigure::NewCommittee(initial_committee.clone()));
+        let (tx_reconfigure, rx_reconfigure) = watch::channel(
+            ReconfigureNotification::NewCommittee(initial_committee.clone()),
+        );
 
         let client_flow_handles =
             worker.handle_clients_transactions(&tx_reconfigure, tx_primary.clone());
@@ -113,8 +115,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle messages from our primary.
     fn handle_primary_messages(
         &self,
-        tx_reconfigure: watch::Sender<Reconfigure<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage>,
+        tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
+        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
         node_metrics: Arc<WorkerMetrics>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
@@ -129,7 +131,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
             .unwrap();
-        let primary_handle = PrimaryReceiverHandler { tx_synchronizer }.spawn(address.clone());
+        let primary_handle = PrimaryReceiverHandler { tx_synchronizer }
+            .spawn(address.clone(), tx_reconfigure.subscribe());
 
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
@@ -158,8 +161,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle clients transactions.
     fn handle_clients_transactions(
         &self,
-        tx_reconfigure: &watch::Sender<Reconfigure<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage>,
+        tx_reconfigure: &watch::Sender<ReconfigureNotification<PublicKey>>,
+        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
         let (tx_quorum_waiter, rx_quorum_waiter) = channel(CHANNEL_CAPACITY);
@@ -175,7 +178,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
             .unwrap();
-        let tx_receiver_handle = TxReceiverHandler { tx_batch_maker }.spawn(address.clone());
+        let tx_receiver_handle =
+            TxReceiverHandler { tx_batch_maker }.spawn(address.clone(), tx_reconfigure.subscribe());
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -227,8 +231,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle messages from other workers.
     fn handle_workers_messages(
         &self,
-        tx_reconfigure: &watch::Sender<Reconfigure<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage>,
+        tx_reconfigure: &watch::Sender<ReconfigureNotification<PublicKey>>,
+        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
         let (tx_client_helper, rx_client_helper) = channel(CHANNEL_CAPACITY);
@@ -249,7 +253,11 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
             tx_client_helper,
             tx_processor,
         }
-        .spawn(address.clone(), self.parameters.max_concurrent_requests);
+        .spawn(
+            address.clone(),
+            self.parameters.max_concurrent_requests,
+            tx_reconfigure.subscribe(),
+        );
 
         // The `Helper` is dedicated to reply to batch requests from other workers.
         let helper_handle = Helper::spawn(
@@ -288,18 +296,36 @@ struct TxReceiverHandler {
 }
 
 impl TxReceiverHandler {
-    fn spawn(self, address: Multiaddr) -> JoinHandle<()> {
+    async fn wait_for_shutdown<PublicKey: VerifyingKey>(
+        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    ) {
+        loop {
+            let result = rx_reconfigure.changed().await;
+            result.expect("Committee channel dropped");
+            let message = rx_reconfigure.borrow().clone();
+            if let ReconfigureNotification::Shutdown = message {
+                break;
+            }
+        }
+    }
+
+    fn spawn<PublicKey: VerifyingKey>(
+        self,
+        address: Multiaddr,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let config = mysten_network::config::Config::new();
-            config
-                .server_builder()
-                .add_service(TransactionsServer::new(self))
-                .bind(&address)
-                .await
-                .unwrap()
-                .serve()
-                .await
-                .unwrap()
+            tokio::select! {
+                _result =  mysten_network::config::Config::new()
+                    .server_builder()
+                    .add_service(TransactionsServer::new(self))
+                    .bind(&address)
+                    .await
+                    .unwrap()
+                    .serve() => (),
+
+                () = Self::wait_for_shutdown(rx_reconfigure) => ()
+            }
         })
     }
 }
@@ -315,7 +341,8 @@ impl Transactions for TxReceiverHandler {
         self.tx_batch_maker
             .send(message.to_vec())
             .await
-            .expect("Failed to send transaction");
+            .map_err(|_| DagError::ShuttingDown)
+            .map_err(|e| Status::not_found(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
     }
@@ -346,19 +373,39 @@ struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
-    fn spawn(self, address: Multiaddr, max_concurrent_requests: usize) -> JoinHandle<()> {
+    async fn wait_for_shutdown(
+        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    ) {
+        loop {
+            let result = rx_reconfigure.changed().await;
+            result.expect("Committee channel dropped");
+            let message = rx_reconfigure.borrow().clone();
+            if let ReconfigureNotification::Shutdown = message {
+                break;
+            }
+        }
+    }
+
+    fn spawn(
+        self,
+        address: Multiaddr,
+        max_concurrent_requests: usize,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut config = mysten_network::config::Config::new();
             config.concurrency_limit_per_connection = Some(max_concurrent_requests);
-            config
+            tokio::select! {
+                _result = config
                 .server_builder()
                 .add_service(WorkerToWorkerServer::new(self))
                 .bind(&address)
                 .await
                 .unwrap()
-                .serve()
-                .await
-                .unwrap()
+                .serve() => (),
+
+                () = Self::wait_for_shutdown(rx_reconfigure) => ()
+            }
         })
     }
 }
@@ -374,19 +421,19 @@ impl<PublicKey: VerifyingKey> WorkerToWorker for WorkerReceiverHandler<PublicKey
             .deserialize()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
         match message {
-            WorkerMessage::Batch(..) => {
-                self.tx_processor
-                    .send(request.get_ref().payload.to_vec())
-                    .await
-                    .expect("Failed to send batch");
-            }
-            WorkerMessage::BatchRequest(missing, requestor) => {
-                self.tx_worker_helper
-                    .send((missing, requestor))
-                    .await
-                    .expect("Failed to send batch request");
-            }
+            WorkerMessage::Batch(..) => self
+                .tx_processor
+                .send(request.get_ref().payload.to_vec())
+                .await
+                .map_err(|_| DagError::ShuttingDown),
+
+            WorkerMessage::BatchRequest(missing, requestor) => self
+                .tx_worker_helper
+                .send((missing, requestor))
+                .await
+                .map_err(|_| DagError::ShuttingDown),
         }
+        .map_err(|e| Status::not_found(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
     }
@@ -411,7 +458,8 @@ impl<PublicKey: VerifyingKey> WorkerToWorker for WorkerReceiverHandler<PublicKey
         self.tx_client_helper
             .send((missing, sender))
             .await
-            .expect("Failed to send batch request");
+            .map_err(|_| DagError::ShuttingDown)
+            .map_err(|e| Status::not_found(e.to_string()))?;
 
         let stream = tokio_stream::wrappers::ReceiverStream::new(receiver).map(|batch| {
             let payload = BincodeEncodedPayload {
@@ -433,18 +481,36 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    fn spawn(self, address: Multiaddr) -> JoinHandle<()> {
+    async fn wait_for_shutdown(
+        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    ) {
+        loop {
+            let result = rx_reconfigure.changed().await;
+            result.expect("Committee channel dropped");
+            let message = rx_reconfigure.borrow().clone();
+            if let ReconfigureNotification::Shutdown = message {
+                break;
+            }
+        }
+    }
+
+    fn spawn(
+        self,
+        address: Multiaddr,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let config = mysten_network::config::Config::new();
-            config
-                .server_builder()
-                .add_service(PrimaryToWorkerServer::new(self))
-                .bind(&address)
-                .await
-                .unwrap()
-                .serve()
-                .await
-                .unwrap()
+            tokio::select! {
+                _result = mysten_network::config::Config::new()
+                    .server_builder()
+                    .add_service(PrimaryToWorkerServer::new(self))
+                    .bind(&address)
+                    .await
+                    .unwrap()
+                    .serve() => (),
+
+                () = Self::wait_for_shutdown(rx_reconfigure) => ()
+            }
         })
     }
 }
@@ -463,7 +529,8 @@ impl<PublicKey: VerifyingKey> PrimaryToWorker for PrimaryReceiverHandler<PublicK
         self.tx_synchronizer
             .send(message)
             .await
-            .expect("Failed to send transaction");
+            .map_err(|_| DagError::ShuttingDown)
+            .map_err(|e| Status::not_found(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
     }

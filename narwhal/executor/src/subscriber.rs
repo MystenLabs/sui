@@ -13,11 +13,14 @@ use futures::{
 use std::cmp::Ordering;
 use store::Store;
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::{
+        mpsc::{Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{BatchDigest, SequenceNumber, SerializedBatchMessage};
+use types::{BatchDigest, ReconfigureNotification, SequenceNumber, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]
@@ -30,6 +33,8 @@ pub mod subscriber_tests;
 pub struct Subscriber<PublicKey: VerifyingKey> {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
     store: Store<BatchDigest, SerializedBatchMessage>,
+    /// Receive reconfiguration updates.
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// A channel to receive consensus messages.
     rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
     /// A channel to send sync request to consensus for missed messages.
@@ -47,6 +52,7 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
     /// Spawn a new subscriber in a new tokio task.
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
         tx_consensus: Sender<ConsensusSyncRequest>,
         tx_batch_loader: Sender<ConsensusOutput<PublicKey>>,
@@ -56,6 +62,7 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
         tokio::spawn(async move {
             Self {
                 store,
+                rx_reconfigure,
                 rx_consensus,
                 tx_consensus,
                 tx_batch_loader,
@@ -64,7 +71,7 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
             }
             .run()
             .await
-            .unwrap();
+            .expect("Failed to run subscriber")
         })
     }
 
@@ -200,7 +207,17 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
                     .tx_executor
                     .send(message?)
                     .await
-                    .map_err(|_| SubscriberError::ExecutorConnectionDropped)?
+                    .map_err(|_| SubscriberError::ExecutorConnectionDropped)?,
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        ReconfigureNotification::NewCommittee(_) => (),
+                        ReconfigureNotification::Shutdown => return Ok(())
+                    }
+                }
             }
         }
     }

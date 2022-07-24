@@ -4,7 +4,6 @@
 
 use config::WorkerId;
 use crypto::traits::VerifyingKey;
-use primary::WorkerPrimaryMessage;
 use store::Store;
 use tokio::{
     sync::{
@@ -14,7 +13,10 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::error;
-use types::{serialized_batch_digest, BatchDigest, Reconfigure, SerializedBatchMessage};
+use types::{
+    error::DagError, serialized_batch_digest, BatchDigest, ReconfigureNotification,
+    SerializedBatchMessage, WorkerPrimaryMessage,
+};
 
 #[cfg(test)]
 #[path = "tests/processor_tests.rs"]
@@ -30,11 +32,11 @@ impl Processor {
         // The persistent storage.
         store: Store<BatchDigest, SerializedBatchMessage>,
         // Receive reconfiguration signals.
-        mut rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         // Input channel to receive batches.
         mut rx_batch: Receiver<SerializedBatchMessage>,
         // Output channel to send out batches' digests.
-        tx_digest: Sender<WorkerPrimaryMessage>,
+        tx_digest: Sender<WorkerPrimaryMessage<PublicKey>>,
         // Whether we are processing our own batches or the batches of other nodes.
         own_digest: bool,
     ) -> JoinHandle<()> {
@@ -55,10 +57,12 @@ impl Processor {
                                     true => WorkerPrimaryMessage::OurBatch(digest, id),
                                     false => WorkerPrimaryMessage::OthersBatch(digest, id),
                                 };
-                                tx_digest
+                                if tx_digest
                                     .send(message)
                                     .await
-                                    .expect("Failed to send digest");
+                                    .is_err() {
+                                    tracing::debug!("{}", DagError::ShuttingDown);
+                                };
                             }
                             Err(error) => {
                                 error!("Received invalid batch, serialization failure: {error}");
@@ -70,7 +74,7 @@ impl Processor {
                     result = rx_reconfigure.changed() => {
                         result.expect("Committee channel dropped");
                         let message = rx_reconfigure.borrow().clone();
-                        if let Reconfigure::Shutdown(_token) = message {
+                        if let ReconfigureNotification::Shutdown = message {
                             return;
                         }
                     }

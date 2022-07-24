@@ -7,7 +7,7 @@ use crate::{
         PendingIdentifier::{Header, Payload},
     },
     primary::PrimaryMessage,
-    utils, PayloadToken, PrimaryWorkerMessage, CHANNEL_CAPACITY,
+    utils, PayloadToken, CHANNEL_CAPACITY,
 };
 use config::{BlockSynchronizerParameters, Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Hash};
@@ -33,7 +33,9 @@ use tokio::{
     time::{sleep, timeout},
 };
 use tracing::{debug, error, instrument, trace, warn};
-use types::{BatchDigest, Certificate, CertificateDigest, Reconfigure};
+use types::{
+    BatchDigest, Certificate, CertificateDigest, PrimaryWorkerMessage, ReconfigureNotification,
+};
 
 #[cfg(test)]
 #[path = "tests/block_synchronizer_tests.rs"]
@@ -153,7 +155,7 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
     committee: Committee<PublicKey>,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
 
     /// Receive the commands for the synchronizer
     rx_commands: Receiver<Command<PublicKey>>,
@@ -199,7 +201,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_commands: Receiver<Command<PublicKey>>,
         rx_certificate_responses: Receiver<CertificatesResponse<PublicKey>>,
         rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse<PublicKey>>,
@@ -242,7 +244,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         // processing.
         let mut waiting = FuturesUnordered::new();
 
-        let shutdown_token = loop {
+        loop {
             tokio::select! {
                 Some(command) = self.rx_commands.recv() => {
                     match command {
@@ -306,15 +308,15 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        Reconfigure::NewCommittee(new_committee) => {
+                        ReconfigureNotification::NewCommittee(new_committee) => {
                             self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         },
-                        Reconfigure::Shutdown(token) => break token
+                        ReconfigureNotification::Shutdown => return
                     }
                 }
             }
-        };
-        drop(shutdown_token)
+        }
     }
 
     async fn notify_requestors_for_result(

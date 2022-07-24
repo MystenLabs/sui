@@ -2,17 +2,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
-use config::{Committee, SharedCommittee};
+use config::Committee;
 use crypto::{traits::VerifyingKey, Hash};
-use std::{cmp::max, collections::HashMap, sync::Arc};
+use std::{
+    cmp::{max, Ordering},
+    collections::HashMap,
+    sync::Arc,
+};
 use store::Store;
 use tokio::{
-    sync::mpsc::{Receiver, Sender},
+    sync::{
+        mpsc::{Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::{info, instrument};
 use types::{
-    Certificate, CertificateDigest, ConsensusPrimaryMessage, ConsensusStore, Round, StoreResult,
+    Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification, Round, StoreResult,
 };
 
 /// The representation of the DAG in memory.
@@ -171,19 +178,24 @@ pub trait ConsensusProtocol<PublicKey: VerifyingKey> {
         // The new certificate.
         certificate: Certificate<PublicKey>,
     ) -> StoreResult<Vec<ConsensusOutput<PublicKey>>>;
+
+    fn update_committee(&mut self, new_committee: Committee<PublicKey>) -> StoreResult<()>;
 }
 
 pub struct Consensus<PublicKey: VerifyingKey, ConsensusProtocol> {
+    /// The committee information.
+    committee: Committee<PublicKey>,
+
+    /// Receive reconfiguration update.
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
     rx_primary: Receiver<Certificate<PublicKey>>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
-    tx_primary: Sender<ConsensusPrimaryMessage<PublicKey>>,
+    tx_primary: Sender<Certificate<PublicKey>>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_output: Sender<ConsensusOutput<PublicKey>>,
 
-    /// The genesis certificates.
-    genesis: Vec<Certificate<PublicKey>>,
     /// The (global) consensus index. We assign one index to each sequenced certificate. this is
     /// helpful for clients.
     consensus_index: SequenceNumber,
@@ -201,34 +213,50 @@ where
     Protocol: ConsensusProtocol<PublicKey> + Send + 'static,
 {
     pub fn spawn(
-        committee: SharedCommittee<PublicKey>,
+        committee: Committee<PublicKey>,
         store: Arc<ConsensusStore<PublicKey>>,
         cert_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_primary: Receiver<Certificate<PublicKey>>,
-        tx_primary: Sender<ConsensusPrimaryMessage<PublicKey>>,
+        tx_primary: Sender<Certificate<PublicKey>>,
         tx_output: Sender<ConsensusOutput<PublicKey>>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let consensus_index = store.read_last_consensus_index().expect("Store error");
+            let consensus_index = store
+                .read_last_consensus_index()
+                .expect("Failed to load consensus index from store");
             let recovered_last_committed = store.read_last_committed();
-            let committee: &Committee<PublicKey> = &committee.load();
-            let genesis = Certificate::genesis(committee);
             Self {
+                committee,
+                rx_reconfigure,
                 rx_primary,
                 tx_primary,
                 tx_output,
-                genesis,
                 consensus_index,
                 protocol,
                 metrics,
             }
             .run(recovered_last_committed, cert_store, gc_depth)
             .await
-            .unwrap();
+            .expect("Failed to run consensus")
         })
+    }
+
+    fn reconfigure(
+        &mut self,
+        new_committee: Committee<PublicKey>,
+    ) -> StoreResult<ConsensusState<PublicKey>> {
+        self.committee = new_committee.clone();
+        self.protocol.update_committee(new_committee)?;
+        tracing::debug!("Committee updated to {}", self.committee);
+
+        self.consensus_index = 0;
+
+        let genesis = Certificate::genesis(&self.committee);
+        Ok(ConsensusState::new(genesis, self.metrics.clone()))
     }
 
     async fn run(
@@ -238,8 +266,9 @@ where
         gc_depth: Round,
     ) -> StoreResult<()> {
         // The consensus state (everything else is immutable).
+        let genesis = Certificate::genesis(&self.committee);
         let mut state = ConsensusState::new_from_store(
-            self.genesis.clone(),
+            genesis,
             self.metrics.clone(),
             recover_last_committed,
             cert_store,
@@ -248,40 +277,76 @@ where
         .await;
 
         // Listen to incoming certificates.
-        while let Some(certificate) = self.rx_primary.recv().await {
-            let sequence =
-                self.protocol
-                    .process_certificate(&mut state, self.consensus_index, certificate)?;
+        loop {
+            tokio::select! {
+                Some(certificate) = self.rx_primary.recv() => {
+                    // If the core already moved to the next epoch we should pull the next
+                    // committee as well.
+                    match certificate.epoch().cmp(&self.committee.epoch()) {
+                        Ordering::Greater => {
+                            let message = self.rx_reconfigure.borrow_and_update().clone();
+                            match message  {
+                                ReconfigureNotification::NewCommittee(new_committee) => {
+                                    state = self.reconfigure(new_committee)?;
+                                },
+                                ReconfigureNotification::Shutdown => return Ok(()),
+                            }
+                        }
+                        Ordering::Less => {
+                            // We already updated committee but the core is slow.
+                            tracing::debug!("Already moved to the next epoch");
+                            continue
+                        },
+                        Ordering::Equal => {
+                            // Nothing to do, we can proceed.
+                        }
+                    }
 
-            // Update the consensus index.
-            self.consensus_index += sequence.len() as u64;
+                    // Process the certificate using the selected consensus protocol.
+                    let sequence =
+                        self.protocol
+                            .process_certificate(&mut state, self.consensus_index, certificate)?;
 
-            // Output the sequence in the right order.
-            for output in sequence {
-                let certificate = &output.certificate;
-                #[cfg(not(feature = "benchmark"))]
-                if output.consensus_index % 5_000 == 0 {
-                    tracing::debug!("Committed {}", certificate.header);
-                }
+                    // Update the consensus index.
+                    self.consensus_index += sequence.len() as u64;
 
-                #[cfg(feature = "benchmark")]
-                for digest in certificate.header.payload.keys() {
-                    // NOTE: This log entry is used to compute performance.
-                    tracing::info!("Committed {} -> {:?}", certificate.header, digest);
-                }
+                    // Output the sequence in the right order.
+                    for output in sequence {
+                        let certificate = &output.certificate;
+                        #[cfg(not(feature = "benchmark"))]
+                        if output.consensus_index % 5_000 == 0 {
+                            tracing::debug!("Committed {}", certificate.header);
+                        }
 
-                let message = ConsensusPrimaryMessage::Sequenced(certificate.clone());
-                self.tx_primary
-                    .send(message)
-                    .await
-                    .expect("Failed to send certificate to primary");
+                        #[cfg(feature = "benchmark")]
+                        for digest in certificate.header.payload.keys() {
+                            // NOTE: This log entry is used to compute performance.
+                            tracing::info!("Committed {} -> {:?}", certificate.header, digest);
+                        }
 
-                if let Err(e) = self.tx_output.send(output).await {
-                    tracing::warn!("Failed to output certificate: {e}");
+                        self.tx_primary
+                            .send(certificate.clone())
+                            .await
+                            .expect("Failed to send certificate to primary");
+
+                        if let Err(e) = self.tx_output.send(output).await {
+                            tracing::warn!("Failed to output certificate: {e}");
+                        }
+                    }
+                },
+
+                // Check whether the committee changed.
+                result = self.rx_reconfigure.changed() => {
+                    result.expect("Committee channel dropped");
+                    let message = self.rx_reconfigure.borrow().clone();
+                    match message {
+                        ReconfigureNotification::NewCommittee(new_committee) => {
+                            state = self.reconfigure(new_committee)?;
+                        },
+                        ReconfigureNotification::Shutdown => return Ok(())
+                    }
                 }
             }
         }
-
-        Ok(())
     }
 }

@@ -27,13 +27,11 @@ use crypto::{
 use multiaddr::{Multiaddr, Protocol};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
-use serde::{Deserialize, Serialize};
 use std::{
     net::Ipv4Addr,
     sync::{atomic::AtomicU64, Arc},
 };
 use store::Store;
-use thiserror::Error;
 use tokio::{
     sync::{
         mpsc::{channel, Receiver, Sender},
@@ -44,39 +42,15 @@ use tokio::{
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, CertificateDigest, Empty,
-    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, Reconfigure, WorkerToPrimary,
+    error::DagError, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate,
+    CertificateDigest, Empty, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
+    ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary,
     WorkerToPrimaryServer,
 };
-pub use types::{ConsensusPrimaryMessage, PrimaryMessage, PrimaryWorkerMessage};
+pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
-
-/// The messages sent by the workers to their primary.
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum WorkerPrimaryMessage {
-    /// The worker indicates it sealed a new batch.
-    OurBatch(BatchDigest, WorkerId),
-    /// The worker indicates it received a batch's digest from another authority.
-    OthersBatch(BatchDigest, WorkerId),
-    /// The worker sends a requested batch
-    RequestedBatch(BatchDigest, Batch),
-    /// When batches are successfully deleted, this message is sent dictating the
-    /// batches that have been deleted from the worker.
-    DeletedBatches(Vec<BatchDigest>),
-    /// An error has been returned by worker
-    Error(WorkerPrimaryError),
-}
-
-#[derive(Debug, Serialize, Deserialize, Error, Clone, Eq, PartialEq)]
-pub enum WorkerPrimaryError {
-    #[error("Batch with id {0} has not been found")]
-    RequestedBatchNotFound(BatchDigest),
-
-    #[error("An error occurred while deleting batches. None deleted")]
-    ErrorWhileDeletingBatches(Vec<BatchDigest>),
-}
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
 pub type PayloadToken = u8;
@@ -101,15 +75,13 @@ impl Primary {
         certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate<PublicKey>>,
-        rx_consensus: Receiver<ConsensusPrimaryMessage<PublicKey>>,
+        rx_consensus: Receiver<Certificate<PublicKey>>,
         dag: Option<Arc<Dag<PublicKey>>>,
         network_model: NetworkModel,
-        tx_committed_certificates: Sender<ConsensusPrimaryMessage<PublicKey>>,
+        tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
+        tx_committed_certificates: Sender<Certificate<PublicKey>>,
         registry: &Registry,
     ) -> Vec<JoinHandle<()>> {
-        let initial_committee = Reconfigure::NewCommittee((**committee.load()).clone());
-        let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
-
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
         let (tx_parents, rx_parents) = channel(CHANNEL_CAPACITY);
@@ -129,11 +101,12 @@ impl Primary {
         let (tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
         let (tx_payload_availability_responses, rx_payload_availability_responses) =
             channel(CHANNEL_CAPACITY);
+        let (tx_state_handler, rx_state_handler) = channel(CHANNEL_CAPACITY);
 
         // Write the parameters to the logs.
         parameters.tracing();
 
-        // Initialise the metrics
+        // Initialize the metrics
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
@@ -184,6 +157,7 @@ impl Primary {
             tx_others_digests,
             tx_batches,
             tx_batch_removal,
+            tx_state_handler,
             metrics: node_metrics.clone(),
         }
         .spawn(address.clone(), tx_reconfigure.subscribe());
@@ -340,7 +314,7 @@ impl Primary {
             (**committee.load()).clone(),
             certificate_store,
             payload_store,
-            rx_reconfigure,
+            tx_reconfigure.subscribe(),
             rx_helper_requests,
         );
 
@@ -365,6 +339,7 @@ impl Primary {
             committee.clone(),
             consensus_round,
             rx_consensus,
+            rx_state_handler,
             tx_reconfigure,
         );
 
@@ -406,12 +381,14 @@ struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
 }
 
 impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>) {
+    async fn wait_for_shutdown(
+        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    ) {
         loop {
             let result = rx_reconfigure.changed().await;
             result.expect("Committee channel dropped");
             let message = rx_reconfigure.borrow().clone();
-            if let Reconfigure::Shutdown(_token) = message {
+            if let ReconfigureNotification::Shutdown = message {
                 break;
             }
         }
@@ -421,7 +398,7 @@ impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
         self,
         address: Multiaddr,
         max_concurrent_requests: usize,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         primary_endpoint_metrics: PrimaryEndpointMetrics,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -458,12 +435,12 @@ impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<Public
                 .tx_helper_requests
                 .send(message)
                 .await
-                .expect("Failed to send primary message"),
+                .map_err(|_| DagError::ShuttingDown),
             PrimaryMessage::CertificatesBatchRequest { .. } => self
                 .tx_helper_requests
                 .send(message)
                 .await
-                .expect("Failed to send primary message"),
+                .map_err(|_| DagError::ShuttingDown),
             PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
                 .tx_certificate_responses
                 .send(CertificatesResponse {
@@ -471,12 +448,12 @@ impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<Public
                     from: from.clone(),
                 })
                 .await
-                .expect("Failed to send primary message"),
+                .map_err(|_| DagError::ShuttingDown),
             PrimaryMessage::PayloadAvailabilityRequest { .. } => self
                 .tx_helper_requests
                 .send(message)
                 .await
-                .expect("Failed to send primary message"),
+                .map_err(|_| DagError::ShuttingDown),
             PrimaryMessage::PayloadAvailabilityResponse {
                 payload_availability,
                 from,
@@ -487,13 +464,14 @@ impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<Public
                     from: from.clone(),
                 })
                 .await
-                .expect("Failed to send primary message"),
-            _ => {
-                let res = self.tx_primary_messages.send(message).await;
-
-                res.expect("Failed to send certificate");
-            }
+                .map_err(|_| DagError::ShuttingDown),
+            _ => self
+                .tx_primary_messages
+                .send(message)
+                .await
+                .map_err(|_| DagError::ShuttingDown),
         }
+        .map_err(|e| Status::not_found(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
     }
@@ -501,32 +479,33 @@ impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<Public
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
-struct WorkerReceiverHandler {
+struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
     tx_others_digests: Sender<(BatchDigest, WorkerId)>,
     tx_batches: Sender<BatchResult>,
     tx_batch_removal: Sender<DeleteBatchResult>,
+    tx_state_handler: Sender<ReconfigureNotification<PublicKey>>,
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl WorkerReceiverHandler {
-    async fn wait_for_shutdown<PublicKey: VerifyingKey>(
-        mut rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
+    async fn wait_for_shutdown(
+        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     ) {
         loop {
             let result = rx_reconfigure.changed().await;
             result.expect("Committee channel dropped");
             let message = rx_reconfigure.borrow().clone();
-            if let Reconfigure::Shutdown(_token) = message {
+            if let ReconfigureNotification::Shutdown = message {
                 break;
             }
         }
     }
 
-    fn spawn<PublicKey: VerifyingKey>(
+    fn spawn(
         self,
         address: Multiaddr,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             tokio::select! {
@@ -545,12 +524,12 @@ impl WorkerReceiverHandler {
 }
 
 #[async_trait]
-impl WorkerToPrimary for WorkerReceiverHandler {
+impl<PublicKey: VerifyingKey> WorkerToPrimary for WorkerReceiverHandler<PublicKey> {
     async fn send_message(
         &self,
         request: Request<BincodeEncodedPayload>,
     ) -> Result<Response<Empty>, Status> {
-        let message: WorkerPrimaryMessage = request
+        let message: WorkerPrimaryMessage<_> = request
             .into_inner()
             .deserialize()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -564,7 +543,7 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 self.tx_our_digests
                     .send((digest, worker_id))
                     .await
-                    .expect("Failed to send workers' digests")
+                    .map_err(|_| DagError::ShuttingDown)
             }
             WorkerPrimaryMessage::OthersBatch(digest, worker_id) => {
                 self.metrics
@@ -574,7 +553,7 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 self.tx_others_digests
                     .send((digest, worker_id))
                     .await
-                    .expect("Failed to send workers' digests")
+                    .map_err(|_| DagError::ShuttingDown)
             }
             WorkerPrimaryMessage::RequestedBatch(digest, transactions) => self
                 .tx_batches
@@ -583,25 +562,31 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                     transactions,
                 }))
                 .await
-                .expect("Failed to send batch result"),
+                .map_err(|_| DagError::ShuttingDown),
             WorkerPrimaryMessage::DeletedBatches(batch_ids) => self
                 .tx_batch_removal
                 .send(Ok(DeleteBatchMessage { ids: batch_ids }))
                 .await
-                .expect("Failed to send batch delete result"),
+                .map_err(|_| DagError::ShuttingDown),
             WorkerPrimaryMessage::Error(error) => match error.clone() {
                 WorkerPrimaryError::RequestedBatchNotFound(digest) => self
                     .tx_batches
                     .send(Err(BatchMessageError { id: digest }))
                     .await
-                    .expect("Failed to send batch result"),
+                    .map_err(|_| DagError::ShuttingDown),
                 WorkerPrimaryError::ErrorWhileDeletingBatches(batch_ids) => self
                     .tx_batch_removal
                     .send(Err(DeleteBatchMessage { ids: batch_ids }))
                     .await
-                    .expect("Failed to send error batch delete result"),
+                    .map_err(|_| DagError::ShuttingDown),
             },
+            WorkerPrimaryMessage::Reconfigure(notification) => self
+                .tx_state_handler
+                .send(notification)
+                .await
+                .map_err(|_| DagError::ShuttingDown),
         }
+        .map_err(|e| Status::not_found(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
     }

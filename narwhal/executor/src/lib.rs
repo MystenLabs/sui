@@ -23,18 +23,21 @@ pub use state::ExecutionIndices;
 
 use crate::{batch_loader::BatchLoader, core::Core, subscriber::Subscriber};
 use async_trait::async_trait;
-use config::SharedCommittee;
+use config::{Committee, SharedCommittee};
 use consensus::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::traits::VerifyingKey;
 use serde::de::DeserializeOwned;
 use std::{fmt::Debug, sync::Arc};
 use store::Store;
 use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
     task::JoinHandle,
 };
 use tracing::info;
-use types::{BatchDigest, SerializedBatchMessage};
+use types::{BatchDigest, ReconfigureNotification, SerializedBatchMessage};
 
 /// Default inter-task channel size.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
@@ -53,13 +56,18 @@ pub trait ExecutionState {
     /// The error type to return in case something went wrong during execution.
     type Error: ExecutionStateError;
 
+    /// The execution outcome to output.
+    type Outcome;
+
     /// Execute the transaction and atomically persist the consensus index. This function
-    /// returns a serialized result (Vec<u8>) that will be output by the executor channel.
-    async fn handle_consensus_transaction(
+    /// returns an execution outcome that will be output by the executor channel. It may
+    /// also return a new committee to reconfigure the system.
+    async fn handle_consensus_transaction<PublicKey: VerifyingKey>(
         &self,
+        consensus_output: &ConsensusOutput<PublicKey>,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<Vec<u8>, Self::Error>;
+    ) -> Result<(Self::Outcome, Option<Committee<PublicKey>>), Self::Error>;
 
     /// Simple guardrail ensuring there is a single instance using the state
     /// to call `handle_consensus_transaction`. Many instances may read the state,
@@ -74,6 +82,12 @@ pub trait ExecutionState {
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error>;
 }
 
+/// The output of the executor.
+pub type ExecutorOutput<State> = (
+    SubscriberResult<<State as ExecutionState>::Outcome>,
+    SerializedTransaction,
+);
+
 /// A client subscribing to the consensus output and executing every transaction.
 pub struct Executor;
 
@@ -84,12 +98,15 @@ impl Executor {
         committee: SharedCommittee<PublicKey>,
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
+        tx_reconfigure: &watch::Sender<ReconfigureNotification<PublicKey>>,
         rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
         tx_consensus: Sender<ConsensusSyncRequest>,
-        tx_output: Sender<(SubscriberResult<Vec<u8>>, SerializedTransaction)>,
+        tx_output: Sender<ExecutorOutput<State>>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
+        State::Outcome: Send + 'static,
+        State::Error: Debug,
         PublicKey: VerifyingKey,
     {
         let (tx_batch_loader, rx_batch_loader) = channel(DEFAULT_CHANNEL_SIZE);
@@ -108,6 +125,7 @@ impl Executor {
         // Spawn the subscriber.
         let subscriber_handle = Subscriber::<PublicKey>::spawn(
             store.clone(),
+            tx_reconfigure.subscribe(),
             rx_consensus,
             tx_consensus,
             tx_batch_loader,
@@ -119,6 +137,7 @@ impl Executor {
         let executor_handle = Core::<State, PublicKey>::spawn(
             store.clone(),
             execution_state,
+            tx_reconfigure.subscribe(),
             /* rx_subscriber */ rx_executor,
             tx_output,
         );
@@ -135,7 +154,12 @@ impl Executor {
             .iter()
             .map(|(id, x)| (*id, x.worker_to_worker.clone()))
             .collect();
-        let batch_loader_handle = BatchLoader::spawn(store, rx_batch_loader, worker_addresses);
+        let batch_loader_handle = BatchLoader::spawn(
+            store,
+            tx_reconfigure.subscribe(),
+            rx_batch_loader,
+            worker_addresses,
+        );
 
         // Return the handle.
         info!("Consensus subscriber successfully started");

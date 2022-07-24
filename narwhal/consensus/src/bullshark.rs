@@ -5,12 +5,12 @@ use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusOutput,
 };
-use config::{Committee, SharedCommittee, Stake};
+use config::{Committee, Stake};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Hash,
 };
-use std::{collections::HashMap, ops::Deref, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
 
@@ -20,7 +20,7 @@ pub mod bullshark_tests;
 
 pub struct Bullshark<PublicKey: VerifyingKey> {
     /// The committee information.
-    pub committee: SharedCommittee<PublicKey>,
+    pub committee: Committee<PublicKey>,
     /// Persistent storage to safe ensure crash-recovery.
     pub store: Arc<ConsensusStore<PublicKey>>,
     /// The depth of the garbage collector.
@@ -60,11 +60,11 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Bullshark<PublicK
         if leader_round <= state.last_committed_round {
             return Ok(Vec::new());
         }
-        let (leader_digest, leader) =
-            match Self::leader(self.committee.load().deref(), leader_round, &state.dag) {
-                Some(x) => x,
-                None => return Ok(Vec::new()),
-            };
+        let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
+        {
+            Some(x) => x,
+            None => return Ok(Vec::new()),
+        };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
         let stake: Stake = state
@@ -73,13 +73,13 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Bullshark<PublicK
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.load().stake(&x.origin()))
+            .map(|(_, x)| self.committee.stake(&x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
         // the last committed leader, and commit all preceding leaders in the right order. Committing
         // a leader block means committing all its dependencies.
-        if stake < self.committee.load().validity_threshold() {
+        if stake < self.committee.validity_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
             return Ok(Vec::new());
         }
@@ -87,10 +87,9 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Bullshark<PublicK
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
         let mut sequence = Vec::new();
-        for leader in
-            utils::order_leaders(self.committee.load().deref(), leader, state, Self::leader)
-                .iter()
-                .rev()
+        for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
+            .iter()
+            .rev()
         {
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
@@ -127,9 +126,27 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Bullshark<PublicK
 
         Ok(sequence)
     }
+
+    fn update_committee(&mut self, new_committee: Committee<PublicKey>) -> StoreResult<()> {
+        self.committee = new_committee;
+        self.store.clear()
+    }
 }
 
 impl<PublicKey: VerifyingKey> Bullshark<PublicKey> {
+    /// Create a new Bullshark consensus instance.
+    pub fn new(
+        committee: Committee<PublicKey>,
+        store: Arc<ConsensusStore<PublicKey>>,
+        gc_depth: Round,
+    ) -> Self {
+        Self {
+            committee,
+            store,
+            gc_depth,
+        }
+    }
+
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
     fn leader<'a>(

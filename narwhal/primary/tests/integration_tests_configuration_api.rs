@@ -9,11 +9,11 @@ use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{committee, keys, temp_dir};
-use tokio::sync::mpsc::channel;
+use tokio::sync::{mpsc::channel, watch};
 use tonic::transport::Channel;
 use types::{
     ConfigurationClient, Empty, MultiAddrProto, NewEpochRequest, NewNetworkInfoRequest,
-    PrimaryAddressesProto, PublicKeyProto, ValidatorData,
+    PrimaryAddressesProto, PublicKeyProto, ReconfigureNotification, ValidatorData,
 };
 
 #[tokio::test]
@@ -32,6 +32,8 @@ async fn test_new_epoch() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -49,6 +51,7 @@ async fn test_new_epoch() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
@@ -104,6 +107,8 @@ async fn test_new_network_info() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
@@ -121,6 +126,7 @@ async fn test_new_network_info() {
             Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         /* tx_committed_certificates */ tx_feedback,
         &Registry::new(),
     );

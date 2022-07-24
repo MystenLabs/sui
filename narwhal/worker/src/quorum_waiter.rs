@@ -12,7 +12,9 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use types::{Batch, Reconfigure, SerializedBatchMessage, WorkerMessage};
+use types::{
+    error::DagError, Batch, ReconfigureNotification, SerializedBatchMessage, WorkerMessage,
+};
 
 #[cfg(test)]
 #[path = "tests/quorum_waiter_tests.rs"]
@@ -27,7 +29,7 @@ pub struct QuorumWaiter<PublicKey: VerifyingKey> {
     /// The committee information.
     committee: Committee<PublicKey>,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Input Channel to receive commands.
     rx_message: Receiver<Batch>,
     /// Channel to deliver batches for which we have enough acknowledgments.
@@ -42,7 +44,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
         name: PublicKey,
         id: WorkerId,
         committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_message: Receiver<Batch>,
         tx_batch: Sender<Vec<u8>>,
     ) -> JoinHandle<()> {
@@ -100,14 +102,30 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
                     // the dag). This should reduce the amount of synching.
                     let threshold = self.committee.quorum_threshold();
                     let mut total_stake = self.committee.stake(&self.name);
-                    while let Some(stake) = wait_for_quorum.next().await  {
-                        total_stake += stake;
-                        if total_stake >= threshold {
-                            self.tx_batch
-                                .send(serialized)
-                                .await
-                                .expect("Failed to deliver batch");
-                            break;
+                    loop {
+                        tokio::select! {
+                            Some(stake) = wait_for_quorum.next() => {
+                                total_stake += stake;
+                                if total_stake >= threshold {
+                                    if self.tx_batch.send(serialized).await.is_err() {
+                                        tracing::debug!("{}", DagError::ShuttingDown);
+                                    }
+                                    break;
+                                }
+                            }
+
+                            result = self.rx_reconfigure.changed() => {
+                                result.expect("Committee channel dropped");
+                                let message = self.rx_reconfigure.borrow().clone();
+                                match message {
+                                    ReconfigureNotification::NewCommittee(new_committee) => {
+                                        self.committee=new_committee;
+                                        tracing::debug!("Committee updated to {}", self.committee);
+                                        break; // Don't wait for acknowledgements.
+                                    },
+                                    ReconfigureNotification::Shutdown => return
+                                }
+                            }
                         }
                     }
                 },
@@ -117,11 +135,11 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        Reconfigure::NewCommittee(new_committee) => {
-                            self.committee=new_committee;
-                            break; // Don't wait for acknowledgements.
+                        ReconfigureNotification::NewCommittee(new_committee) => {
+                            self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         },
-                        Reconfigure::Shutdown(_token) => return
+                        ReconfigureNotification::Shutdown => return
                     }
                 }
             }

@@ -3,41 +3,45 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::Committee;
 use crypto::traits::VerifyingKey;
-use multiaddr::Multiaddr;
-use primary::WorkerPrimaryMessage;
+use futures::{stream::FuturesUnordered, StreamExt};
+use network::WorkerToPrimaryNetwork;
 use tokio::{
     sync::{mpsc::Receiver, watch},
     task::JoinHandle,
 };
-use tonic::transport::Channel;
-use types::{BincodeEncodedPayload, Reconfigure, WorkerToPrimaryClient};
+use types::{ReconfigureNotification, WorkerPrimaryMessage};
+
+/// The maximum number of digests kept in memory waiting to be sent to the primary.
+pub const MAX_PENDING_DIGESTS: usize = 10_000;
 
 // Send batches' digests to the primary.
 pub struct PrimaryConnector<PublicKey: VerifyingKey> {
+    /// The public key of this authority.
+    name: PublicKey,
+    /// The committee information.
+    committee: Committee<PublicKey>,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Input channel to receive the messages to send to the primary.
-    rx_digest: Receiver<WorkerPrimaryMessage>,
+    rx_digest: Receiver<WorkerPrimaryMessage<PublicKey>>,
     /// A network sender to send the batches' digests to the primary.
-    primary_client: PrimaryClient,
+    primary_client: WorkerToPrimaryNetwork,
 }
 
 impl<PublicKey: VerifyingKey> PrimaryConnector<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
-        rx_digest: Receiver<WorkerPrimaryMessage>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_digest: Receiver<WorkerPrimaryMessage<PublicKey>>,
     ) -> JoinHandle<()> {
-        let address = committee
-            .primary(&name)
-            .expect("Our public key is not in the committee")
-            .worker_to_primary;
         tokio::spawn(async move {
             Self {
+                name,
+                committee,
                 rx_reconfigure,
                 rx_digest,
-                primary_client: PrimaryClient::new(address),
+                primary_client: WorkerToPrimaryNetwork::default(),
             }
             .run()
             .await;
@@ -45,52 +49,39 @@ impl<PublicKey: VerifyingKey> PrimaryConnector<PublicKey> {
     }
 
     async fn run(&mut self) {
+        let mut futures = FuturesUnordered::new();
         loop {
             tokio::select! {
                 // Send the digest through the network.
                 Some(digest) = self.rx_digest.recv() => {
-                    // We don't care about the error
-                    let _ = self.primary_client.send(&digest).await;
+                    if futures.len() >= MAX_PENDING_DIGESTS {
+                        tracing::warn!("Primary unreachable: dropping {digest:?}");
+                        continue;
+                    }
+
+                    let address = self.committee
+                        .primary(&self.name)
+                        .expect("Our public key is not in the committee")
+                        .worker_to_primary;
+                    let handle = self.primary_client.send(address, &digest).await;
+                    futures.push(handle);
                 },
+
                 // Trigger reconfigure.
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
-                    if let Reconfigure::Shutdown(_token) = message {
-                        return;
+                    match message {
+                        ReconfigureNotification::NewCommittee(new_committee) => {
+                            self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
+                        },
+                        ReconfigureNotification::Shutdown => return
                     }
                 }
+
+                Some(_result) = futures.next() => ()
             }
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct PrimaryClient {
-    /// The primary network address.
-    _primary_address: Multiaddr,
-    client: WorkerToPrimaryClient<Channel>,
-}
-
-impl PrimaryClient {
-    pub fn new(address: Multiaddr) -> Self {
-        //TODO don't panic here if address isn't supported
-        let config = mysten_network::config::Config::new();
-        let channel = config.connect_lazy(&address).unwrap();
-        let client = WorkerToPrimaryClient::new(channel);
-
-        Self {
-            _primary_address: address,
-            client,
-        }
-    }
-
-    pub async fn send(&mut self, message: &WorkerPrimaryMessage) -> anyhow::Result<()> {
-        let message = BincodeEncodedPayload::try_from(message)?;
-        self.client
-            .send_message(message)
-            .await
-            .map_err(Into::into)
-            .map(|_| ())
     }
 }

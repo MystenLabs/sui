@@ -4,7 +4,6 @@
 use super::*;
 
 use crate::{metrics::ConsensusMetrics, Consensus};
-use arc_swap::ArcSwap;
 use crypto::ed25519::Ed25519PublicKey;
 #[allow(unused_imports)]
 use crypto::traits::KeyPair;
@@ -15,7 +14,8 @@ use store::{reopen, rocks, rocks::DBMap};
 use test_utils::mock_committee;
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
-use types::CertificateDigest;
+use tokio::sync::watch;
+use types::{CertificateDigest, ReconfigureNotification};
 
 pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore<Ed25519PublicKey>> {
     const LAST_COMMITTED_CF: &str = "last_committed";
@@ -73,20 +73,21 @@ async fn commit_one() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = test_utils::temp_dir();
-    let consensus_store = make_consensus_store(&store_path);
+
+    let committee = mock_committee(&keys[..]);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
-    let bullshark = Bullshark {
-        committee: Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        store: consensus_store.clone(),
-        gc_depth,
-    };
+    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     Consensus::spawn(
-        Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        consensus_store,
+        committee,
+        store,
         cert_store,
+        rx_reconfigure,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -135,21 +136,22 @@ async fn dead_node() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = test_utils::temp_dir();
-    let consensus_store = make_consensus_store(&store_path);
+
+    let committee = mock_committee(&keys[..]);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
-    let bullshark = Bullshark {
-        committee: Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        store: consensus_store.clone(),
-        gc_depth,
-    };
+    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Consensus::spawn(
-        Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        consensus_store,
+        committee,
+        store,
         cert_store,
+        rx_reconfigure,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -244,21 +246,22 @@ async fn not_enough_support() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = test_utils::temp_dir();
-    let consensus_store = make_consensus_store(&store_path);
+
+    let committee = mock_committee(&keys[..]);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
-    let bullshark = Bullshark {
-        committee: Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        store: consensus_store.clone(),
-        gc_depth,
-    };
+    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Consensus::spawn(
-        Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        consensus_store,
+        committee,
+        store,
         cert_store,
+        rx_reconfigure,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -327,21 +330,22 @@ async fn missing_leader() {
     let (tx_waiter, rx_waiter) = channel(1);
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
-    let store_path = test_utils::temp_dir();
-    let consensus_store = make_consensus_store(&store_path);
+
+    let committee = mock_committee(&keys[..]);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
     let cert_store = make_certificate_store(&test_utils::temp_dir());
     let gc_depth = 50;
-    let bullshark = Bullshark {
-        committee: Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        store: consensus_store.clone(),
-        gc_depth,
-    };
+    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Consensus::spawn(
-        Arc::new(ArcSwap::from_pointee(mock_committee(&keys[..]))),
-        consensus_store,
+        committee,
+        store,
         cert_store,
+        rx_reconfigure,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -372,4 +376,173 @@ async fn missing_leader() {
     }
     let output = rx_output.recv().await.unwrap();
     assert_eq!(output.certificate.round(), 4);
+}
+
+// Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
+// the leader of round 2. Then change epoch and do the same in the new epoch.
+#[tokio::test]
+async fn epoch_change() {
+    let keys: Vec<_> = test_utils::keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
+    let mut committee = mock_committee(&keys[..]);
+
+    // Spawn the consensus engine and sink the primary channel.
+    let (tx_waiter, rx_waiter) = channel(1);
+    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_output, mut rx_output) = channel(1);
+
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+
+    let store = make_consensus_store(&test_utils::temp_dir());
+    let cert_store = make_certificate_store(&test_utils::temp_dir());
+    let gc_depth = 50;
+    let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
+    let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    Consensus::spawn(
+        committee.clone(),
+        store,
+        cert_store,
+        rx_reconfigure,
+        rx_waiter,
+        tx_primary,
+        tx_output,
+        bullshark,
+        metrics,
+        gc_depth,
+    );
+    tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
+
+    // Run for a few epochs.
+    for epoch in 0..5 {
+        // Make certificates for rounds 1 and 2.
+        let genesis = Certificate::genesis(&committee)
+            .iter()
+            .map(|x| x.digest())
+            .collect::<BTreeSet<_>>();
+        let (mut certificates, next_parents) =
+            test_utils::make_certificates_with_epoch(1..=2, epoch, &genesis, &keys);
+
+        // Make two certificate (f+1) with round 3 to trigger the commits.
+        let (_, certificate) = test_utils::mock_certificate_with_epoch(
+            keys[0].clone(),
+            3,
+            epoch,
+            next_parents.clone(),
+        );
+        certificates.push_back(certificate);
+        let (_, certificate) =
+            test_utils::mock_certificate_with_epoch(keys[1].clone(), 3, epoch, next_parents);
+        certificates.push_back(certificate);
+
+        // Feed all certificates to the consensus. Only the last certificate should trigger
+        // commits, so the task should not block.
+        while let Some(certificate) = certificates.pop_front() {
+            tx_waiter.send(certificate).await.unwrap();
+        }
+
+        // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
+        // leader); then the leader's certificate should be committed.
+        for _ in 1..=4 {
+            let output = rx_output.recv().await.unwrap();
+            assert_eq!(output.certificate.epoch(), epoch);
+            assert_eq!(output.certificate.round(), 1);
+        }
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.epoch(), epoch);
+        assert_eq!(output.certificate.round(), 2);
+
+        // Move to the next epoch.
+        committee.epoch = epoch + 1;
+        let message = ReconfigureNotification::NewCommittee(committee.clone());
+        tx_reconfigure.send(message).unwrap();
+    }
+}
+
+// Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
+// the leader of round 2. Then shutdown consensus and restart it in a
+#[tokio::test]
+async fn restart_with_new_committee() {
+    let keys: Vec<_> = test_utils::keys(None)
+        .into_iter()
+        .map(|kp| kp.public().clone())
+        .collect();
+    let mut committee = mock_committee(&keys[..]);
+
+    // Run for a few epochs.
+    for epoch in 0..5 {
+        // Spawn the consensus engine and sink the primary channel.
+        let (tx_waiter, rx_waiter) = channel(1);
+        let (tx_primary, mut rx_primary) = channel(1);
+        let (tx_output, mut rx_output) = channel(1);
+
+        let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+        let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
+        let store = make_consensus_store(&test_utils::temp_dir());
+        let cert_store = make_certificate_store(&test_utils::temp_dir());
+        let gc_depth = 50;
+        let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+        let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
+
+        let handle = Consensus::spawn(
+            committee.clone(),
+            store,
+            cert_store,
+            rx_reconfigure,
+            rx_waiter,
+            tx_primary,
+            tx_output,
+            bullshark,
+            metrics.clone(),
+            gc_depth,
+        );
+        tokio::spawn(async move { while rx_primary.recv().await.is_some() {} });
+
+        // Make certificates for rounds 1 and 2.
+        let genesis = Certificate::genesis(&committee)
+            .iter()
+            .map(|x| x.digest())
+            .collect::<BTreeSet<_>>();
+        let (mut certificates, next_parents) =
+            test_utils::make_certificates_with_epoch(1..=2, epoch, &genesis, &keys);
+
+        // Make two certificate (f+1) with round 3 to trigger the commits.
+        let (_, certificate) = test_utils::mock_certificate_with_epoch(
+            keys[0].clone(),
+            3,
+            epoch,
+            next_parents.clone(),
+        );
+        certificates.push_back(certificate);
+        let (_, certificate) =
+            test_utils::mock_certificate_with_epoch(keys[1].clone(), 3, epoch, next_parents);
+        certificates.push_back(certificate);
+
+        // Feed all certificates to the consensus. Only the last certificate should trigger
+        // commits, so the task should not block.
+        while let Some(certificate) = certificates.pop_front() {
+            tx_waiter.send(certificate).await.unwrap();
+        }
+
+        // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
+        // leader); then the leader's certificate should be committed.
+        for _ in 1..=4 {
+            let output = rx_output.recv().await.unwrap();
+            assert_eq!(output.certificate.epoch(), epoch);
+            assert_eq!(output.certificate.round(), 1);
+        }
+        let output = rx_output.recv().await.unwrap();
+        assert_eq!(output.certificate.epoch(), epoch);
+        assert_eq!(output.certificate.round(), 2);
+
+        // Move to the next epoch.
+        committee.epoch = epoch + 1;
+        let message = ReconfigureNotification::Shutdown;
+        tx_reconfigure.send(message).unwrap();
+
+        // Ensure consensus stopped.
+        handle.await.unwrap();
+    }
 }

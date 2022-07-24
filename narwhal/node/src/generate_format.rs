@@ -6,14 +6,14 @@ use crypto::{
     traits::{KeyPair, Signer},
     Digest, Hash,
 };
-use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
+use primary::PrimaryWorkerMessage;
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    PrimaryWorkerReconfigure,
+    ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -111,7 +111,7 @@ fn get_registry() -> Result<Registry> {
         PrimaryWorkerMessage::<Ed25519PublicKey>::DeleteBatches(vec![BatchDigest([0u8; 32])]);
     let sync = PrimaryWorkerMessage::Synchronize(vec![BatchDigest([0u8; 32])], pk.clone());
     let reconfigure =
-        PrimaryWorkerMessage::Reconfigure(PrimaryWorkerReconfigure::NewCommittee(committee));
+        PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewCommittee(committee));
     tracer.trace_value(&mut samples, &cleanup)?;
     tracer.trace_value(&mut samples, &request_batch)?;
     tracer.trace_value(&mut samples, &delete_batch)?;
@@ -137,7 +137,7 @@ fn get_registry() -> Result<Registry> {
     // tracer.trace_type::<PrimaryWorkerMessage<Ed25519PublicKey>>(&samples)?;
 
     // The final entry points that we must document
-    tracer.trace_type::<WorkerPrimaryMessage>(&samples)?;
+    tracer.trace_type::<WorkerPrimaryMessage<Ed25519PublicKey>>(&samples)?;
     tracer.trace_type::<WorkerPrimaryError>(&samples)?;
     tracer.registry()
 }
@@ -177,6 +177,8 @@ fn main() {
             writeln!(f, "{}", content).unwrap();
         }
         Action::Test => {
+            // If this test fails, run the following command from the folder `node`:
+            // cargo -q run --example generate-format -- print > tests/staged/narwhal.yaml
             let reference = std::fs::read_to_string(FILE_PATH).unwrap();
             let reference: Registry = serde_yaml::from_str(&reference).unwrap();
             pretty_assertions::assert_eq!(reference, registry);

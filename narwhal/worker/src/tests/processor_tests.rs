@@ -15,7 +15,7 @@ async fn hash_and_store() {
 
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(Reconfigure::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
@@ -44,10 +44,14 @@ async fn hash_and_store() {
     tx_batch.send(serialized.clone()).await.unwrap();
 
     // Ensure the `Processor` outputs the batch's digest.
-    let output = rx_digest.recv().await.unwrap();
     let digest = batch.digest();
-    let expected = WorkerPrimaryMessage::OurBatch(digest, id);
-    assert_eq!(output, expected);
+    match rx_digest.recv().await.unwrap() {
+        WorkerPrimaryMessage::OurBatch(x, y) => {
+            assert_eq!(x, digest);
+            assert_eq!(y, id);
+        }
+        _ => panic!("Unexpected protocol message"),
+    }
 
     // Ensure the `Processor` correctly stored the batch.
     let stored_batch = store.read(digest).await.unwrap();

@@ -5,12 +5,12 @@ use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusOutput, SequenceNumber,
 };
-use config::{Committee, SharedCommittee, Stake};
+use config::{Committee, Stake};
 use crypto::{
     traits::{EncodeDecodeBase64, VerifyingKey},
     Hash,
 };
-use std::{collections::HashMap, ops::Deref, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, StoreResult};
 
@@ -20,7 +20,7 @@ pub mod tusk_tests;
 
 pub struct Tusk<PublicKey: VerifyingKey> {
     /// The committee information.
-    pub committee: SharedCommittee<PublicKey>,
+    pub committee: Committee<PublicKey>,
     /// Persistent storage to safe ensure crash-recovery.
     pub store: Arc<ConsensusStore<PublicKey>>,
     /// The depth of the garbage collector.
@@ -60,11 +60,11 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
         if leader_round <= state.last_committed_round {
             return Ok(Vec::new());
         }
-        let (leader_digest, leader) =
-            match Self::leader(self.committee.load().deref(), leader_round, &state.dag) {
-                Some(x) => x,
-                None => return Ok(Vec::new()),
-            };
+        let (leader_digest, leader) = match Self::leader(&self.committee, leader_round, &state.dag)
+        {
+            Some(x) => x,
+            None => return Ok(Vec::new()),
+        };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
         let stake: Stake = state
@@ -73,13 +73,13 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.load().stake(&x.origin()))
+            .map(|(_, x)| self.committee.stake(&x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
         // the last committed leader, and commit all preceding leaders in the right order. Committing
         // a leader block means committing all its dependencies.
-        if stake < self.committee.load().validity_threshold() {
+        if stake < self.committee.validity_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
             return Ok(Vec::new());
         }
@@ -87,10 +87,9 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
         let mut sequence = Vec::new();
-        for leader in
-            utils::order_leaders(self.committee.load().deref(), leader, state, Self::leader)
-                .iter()
-                .rev()
+        for leader in utils::order_leaders(&self.committee, leader, state, Self::leader)
+            .iter()
+            .rev()
         {
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in utils::order_dag(self.gc_depth, leader, state) {
@@ -127,9 +126,27 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Tusk<PublicKey> {
 
         Ok(sequence)
     }
+
+    fn update_committee(&mut self, new_committee: Committee<PublicKey>) -> StoreResult<()> {
+        self.committee = new_committee;
+        self.store.clear()
+    }
 }
 
 impl<PublicKey: VerifyingKey> Tusk<PublicKey> {
+    /// Create a new Tusk consensus instance.
+    pub fn new(
+        committee: Committee<PublicKey>,
+        store: Arc<ConsensusStore<PublicKey>>,
+        gc_depth: Round,
+    ) -> Self {
+        Self {
+            committee,
+            store,
+            gc_depth,
+        }
+    }
+
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
     fn leader<'a>(
@@ -192,11 +209,7 @@ mod tests {
         let consensus_index = 0;
         let mut state =
             ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
-        let mut tusk = Tusk {
-            committee: Arc::new(ArcSwap::from_pointee(committee)),
-            store,
-            gc_depth,
-        };
+        let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, consensus_index, certificate)
                 .unwrap();
@@ -244,11 +257,8 @@ mod tests {
         let mut state =
             ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
         let consensus_index = 0;
-        let mut tusk = Tusk {
-            committee,
-            store,
-            gc_depth,
-        };
+        let mut tusk = Tusk::new((**committee.load()).clone(), store, gc_depth);
+
         for certificate in certificates {
             tusk.process_certificate(&mut state, consensus_index, certificate)
                 .unwrap();

@@ -17,7 +17,7 @@ pub use crate::{
     bounded_executor::BoundedExecutor,
     primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
     retry::RetryConfig,
-    worker::WorkerNetwork,
+    worker::{WorkerNetwork, WorkerToPrimaryNetwork},
 };
 
 // the result of our network messages
@@ -25,7 +25,7 @@ pub type MessageResult = Result<tonic::Response<types::Empty>, anyhow::Error>;
 
 #[derive(Debug)]
 #[must_use]
-pub struct CancelHandler<T>(tokio::task::JoinHandle<T>);
+pub struct CancelHandler<T>(pub tokio::task::JoinHandle<T>);
 
 impl<T> Drop for CancelHandler<T> {
     fn drop(&mut self) {

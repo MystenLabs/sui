@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{Certificate, CertificateDigest, Round};
-use config::Committee;
+use crate::{CertificateDigest, Round};
 use crypto::traits::VerifyingKey;
 use std::{collections::HashMap, ops::RangeInclusive};
 use store::{
@@ -15,23 +14,6 @@ pub type SequenceNumber = u64;
 
 /// Shutdown token dropped when a task is properly shut down.
 pub type ShutdownToken = mpsc::Sender<()>;
-
-/// Message to reconfigure tasks.
-#[derive(Clone, Debug)]
-pub enum Reconfigure<PublicKey: VerifyingKey> {
-    /// Indicates the committee has been updated.
-    NewCommittee(Committee<PublicKey>),
-    /// Indicate a shutdown.
-    Shutdown(ShutdownToken),
-}
-
-/// Message send by the consensus to the primary.
-#[derive(Debug)]
-pub enum ConsensusPrimaryMessage<PublicKey: VerifyingKey> {
-    Sequenced(Certificate<PublicKey>),
-    Committee(Committee<PublicKey>),
-    Shutdown(ShutdownToken),
-}
 
 /// Convenience type to propagate store errors.
 pub type StoreResult<T> = Result<T, TypedStoreError>;
@@ -54,6 +36,13 @@ impl<PublicKey: VerifyingKey> ConsensusStore<PublicKey> {
             last_committed,
             sequence,
         }
+    }
+
+    /// Clear the store.
+    pub fn clear(&self) -> StoreResult<()> {
+        self.last_committed.clear()?;
+        self.sequence.clear()?;
+        Ok(())
     }
 
     /// Persist the consensus state.

@@ -23,7 +23,7 @@ async fn synchronize() {
 
     let committee = committee(None);
     let (tx_reconfiguration, _rx_reconfiguration) =
-        watch::channel(Reconfigure::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();
@@ -73,7 +73,7 @@ async fn test_successful_request_batch() {
 
     let committee = committee(None);
     let (tx_reconfiguration, _rx_reconfiguration) =
-        watch::channel(Reconfigure::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();
@@ -135,7 +135,7 @@ async fn test_request_batch_not_found() {
 
     let committee = committee(None);
     let (tx_reconfiguration, _rx_reconfiguration) =
-        watch::channel(Reconfigure::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();
@@ -196,7 +196,7 @@ async fn test_successful_batch_delete() {
 
     let committee = committee(None);
     let (tx_reconfiguration, _rx_reconfiguration) =
-        watch::channel(Reconfigure::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 
     // Create a new test store.
     let store = open_batch_store();

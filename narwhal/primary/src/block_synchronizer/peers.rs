@@ -251,7 +251,6 @@ mod tests {
 
             for peer in peers.peers().values() {
                 for c in peer.assigned_values() {
-                    //println!("Cert for peer {}: {}", peer.name.encode_base64(), c.0);
                     assert!(
                         seen_certificates.insert(c.digest()),
                         "Certificate already assigned to another peer"

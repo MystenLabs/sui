@@ -21,11 +21,11 @@ use test_utils::{
     committee, committee_from_keys, keys, make_optimal_certificates,
     make_optimal_signed_certificates, temp_dir,
 };
-use tokio::sync::mpsc::channel;
+use tokio::sync::{mpsc::channel, watch};
 use tonic::transport::Channel;
 use types::{
     Certificate, CertificateDigest, NodeReadCausalRequest, ProposerClient, PublicKeyProto,
-    RoundsRequest,
+    ReconfigureNotification, RoundsRequest,
 };
 
 #[tokio::test]
@@ -72,6 +72,8 @@ async fn test_rounds_errors() {
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
@@ -101,6 +103,7 @@ async fn test_rounds_errors() {
             Dag::new(&no_name_committee, rx_new_certificates, consensus_metrics).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
@@ -152,6 +155,8 @@ async fn test_rounds_return_successful_response() {
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     // AND setup the DAG
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -169,6 +174,7 @@ async fn test_rounds_return_successful_response() {
         /* rx_consensus */ rx_feedback,
         /* external_consensus */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
@@ -286,6 +292,8 @@ async fn test_node_read_causal_signed_certificates() {
         .unwrap();
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -307,12 +315,16 @@ async fn test_node_read_causal_signed_certificates() {
         /* rx_consensus */ rx_feedback,
         /* dag */ Some(dag.clone()),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback,
         &Registry::new(),
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
+
+    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -338,6 +350,7 @@ async fn test_node_read_causal_signed_certificates() {
             Dag::new(&committee, rx_new_certificates_2, consensus_metrics_2).1,
         )),
         NetworkModel::Asynchronous,
+        tx_reconfigure,
         tx_feedback_2,
         &Registry::new(),
     );

@@ -13,7 +13,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use types::{Batch, Reconfigure, Transaction};
+use types::{error::DagError, Batch, ReconfigureNotification, Transaction};
 
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]
@@ -28,7 +28,7 @@ pub struct BatchMaker<PublicKey: VerifyingKey> {
     /// The maximum delay after which to seal the batch.
     max_batch_delay: Duration,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Channel to receive transactions from the network.
     rx_transaction: Receiver<Transaction>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
@@ -44,7 +44,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         committee: Committee<PublicKey>,
         batch_size: usize,
         max_batch_delay: Duration,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_transaction: Receiver<Transaction>,
         tx_message: Sender<Batch>,
     ) -> JoinHandle<()> {
@@ -94,10 +94,11 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        Reconfigure::NewCommittee(new_committee) => {
-                            self.committee=new_committee;
+                        ReconfigureNotification::NewCommittee(new_committee) => {
+                            self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         },
-                        Reconfigure::Shutdown(_token) => return
+                        ReconfigureNotification::Shutdown => return
                     }
                 }
             }
@@ -149,9 +150,8 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
         }
 
         // Send the batch through the deliver channel for further processing.
-        self.tx_message
-            .send(batch)
-            .await
-            .expect("Failed to deliver batch");
+        if self.tx_message.send(batch).await.is_err() {
+            tracing::debug!("{}", DagError::ShuttingDown);
+        }
     }
 }

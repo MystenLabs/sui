@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
+use config::Committee;
+use consensus::ConsensusOutput;
+use crypto::traits::VerifyingKey;
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use thiserror::Error;
 
@@ -11,13 +14,15 @@ pub struct SimpleExecutionState;
 impl ExecutionState for SimpleExecutionState {
     type Transaction = String;
     type Error = SimpleExecutionError;
+    type Outcome = Vec<u8>;
 
-    async fn handle_consensus_transaction(
+    async fn handle_consensus_transaction<PublicKey: VerifyingKey>(
         &self,
+        _consensus_output: &ConsensusOutput<PublicKey>,
         _execution_indices: ExecutionIndices,
         _transaction: Self::Transaction,
-    ) -> Result<Vec<u8>, Self::Error> {
-        Ok(Vec::default())
+    ) -> Result<(Self::Outcome, Option<Committee<PublicKey>>), Self::Error> {
+        Ok((Vec::default(), None))
     }
 
     fn ask_consensus_write_lock(&self) -> bool {

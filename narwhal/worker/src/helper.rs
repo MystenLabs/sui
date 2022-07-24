@@ -14,7 +14,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{error, trace, warn};
-use types::{BatchDigest, Reconfigure, SerializedBatchMessage};
+use types::{BatchDigest, ReconfigureNotification, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]
@@ -29,7 +29,7 @@ pub struct Helper<PublicKey: VerifyingKey> {
     /// The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
     /// Input channel to receive batch requests from workers.
     rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
     /// Input channel to receive batch requests from workers.
@@ -43,7 +43,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         id: WorkerId,
         committee: Committee<PublicKey>,
         store: Store<BatchDigest, SerializedBatchMessage>,
-        rx_reconfigure: watch::Receiver<Reconfigure<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
         rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
         rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
     ) -> JoinHandle<()> {
@@ -111,10 +111,11 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        Reconfigure::NewCommittee(new_committee) => {
-                            self.committee=new_committee;
+                        ReconfigureNotification::NewCommittee(new_committee) => {
+                            self.committee = new_committee;
+                            tracing::debug!("Committee updated to {}", self.committee);
                         },
-                        Reconfigure::Shutdown(_token) => return
+                        ReconfigureNotification::Shutdown => return
                     }
                 }
             }
