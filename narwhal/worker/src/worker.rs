@@ -78,7 +78,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
 
-        let initial_committee = (*(&*(&*committee).load()).clone()).clone();
+        let initial_committee = (*(*(*committee).load()).clone()).clone();
         let (tx_reconfigure, rx_reconfigure) = watch::channel(
             ReconfigureNotification::NewCommittee(initial_committee.clone()),
         );
@@ -185,7 +185,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
-            (*(&*(&*self.committee).load()).clone()).clone(),
+            (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
             tx_reconfigure.subscribe(),
@@ -198,7 +198,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.name.clone(),
             self.id,
-            (*(&*(&*self.committee).load()).clone()).clone(),
+            (*(*(*self.committee).load()).clone()).clone(),
             tx_reconfigure.subscribe(),
             /* rx_message */ rx_quorum_waiter,
             /* tx_batch */ tx_processor,
@@ -262,7 +262,7 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
         // The `Helper` is dedicated to reply to batch requests from other workers.
         let helper_handle = Helper::spawn(
             self.id,
-            (*(&*(&*self.committee).load()).clone()).clone(),
+            (*(*(*self.committee).load()).clone()).clone(),
             self.store.clone(),
             tx_reconfigure.subscribe(),
             /* rx_worker_request */ rx_worker_helper,

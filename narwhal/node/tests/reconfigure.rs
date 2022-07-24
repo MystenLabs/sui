@@ -65,7 +65,7 @@ impl ExecutionState for SimpleExecutionState {
             epoch += 1;
             {
                 let mut guard = self.committee.lock().unwrap();
-                (*guard).epoch = epoch;
+                guard.epoch = epoch;
             };
 
             let keypair = keys(None)
