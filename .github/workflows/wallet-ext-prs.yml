@@ -2,7 +2,7 @@ name: Wallet Extension PR checks
 on: pull_request
 jobs:
   diff:
-    runs-on: [self-hosted, self-hosted-ubuntu]
+    runs-on: [self-hosted, self-hosted-arc]
     outputs:
       isWalletExt: ${{ steps.diff.outputs.isWalletExt }}
     steps:
