@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use std::time::Duration;
+use telemetry_subscribers::TelemetryGuards;
 use test_utils::cluster::Cluster;
 use tracing::info;
 use types::{TransactionProto, TransactionsClient};
@@ -13,12 +14,12 @@ type StringTransaction = String;
 async fn test_restore_from_disk() {
     // Enabled debug tracing so we can easily observe the
     // nodes logs.
-    setup_tracing();
+    let _guard = setup_tracing();
 
     let mut cluster = Cluster::new(None, None);
 
     // start the cluster
-    cluster.start(Some(4), Some(1)).await;
+    cluster.start(Some(4), Some(1), None).await;
 
     let id = 0;
     let name = cluster.authority(0).name;
@@ -32,7 +33,8 @@ async fn test_restore_from_disk() {
     // Subscribe to the transaction confirmation channel
     let mut receiver = cluster
         .authority(0)
-        .primary
+        .primary()
+        .await
         .tx_transaction_confirmation
         .subscribe();
 
@@ -62,7 +64,7 @@ async fn test_restore_from_disk() {
     }
 
     // Now stop node 0
-    cluster.stop_node(0);
+    cluster.stop_node(0).await;
 
     // Let other primaries advance
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -76,24 +78,17 @@ async fn test_restore_from_disk() {
     let node = cluster.authority(0);
 
     // Check the metrics to ensure the node was recovered from disk
-    let mut node_recovered_state = false;
-    let metric_family = node.primary.registry.gather();
+    let primary = node.primary().await;
 
-    for metric in metric_family {
-        if metric.get_name() == "narwhal_primary_recovered_consensus_state" {
-            let value = metric
-                .get_metric()
-                .first()
-                .unwrap()
-                .get_counter()
-                .get_value();
+    let node_recovered_state =
+        if let Some(metric) = primary.metric("narwhal_primary_recovered_consensus_state") {
+            let value = metric.get_counter().get_value();
             info!("Found metric for recovered consensus state.");
-            if value > 0.0 {
-                node_recovered_state = true;
-                break;
-            }
-        }
-    }
+
+            value > 0.0
+        } else {
+            false
+        };
 
     assert!(node_recovered_state, "Node did not recover state from disk");
 }
@@ -109,35 +104,31 @@ async fn test_read_causal_signed_certificates() {
 
     // Enabled debug tracing so we can easily observe the
     // nodes logs.
-    setup_tracing();
+    let _guard = setup_tracing();
 
     let mut cluster = Cluster::new(None, None);
 
     // start the cluster
-    cluster.start(Some(4), Some(1)).await;
+    cluster.start(Some(4), Some(1), None).await;
 
     // Let primaries advance little bit
     tokio::time::sleep(Duration::from_secs(10)).await;
 
     // Ensure all nodes advanced
-    for authority in cluster.authorities() {
-        let metric_family = authority.primary.registry.gather();
+    for authority in cluster.authorities().await {
+        if let Some(metric) = authority.primary().await.metric(CURRENT_ROUND_METRIC) {
+            let value = metric.get_gauge().get_value();
 
-        for metric in metric_family {
-            if metric.get_name() == CURRENT_ROUND_METRIC {
-                let value = metric.get_metric().first().unwrap().get_gauge().get_value();
+            info!("Metric -> {:?}", value);
 
-                info!("Metrics name {} -> {:?}", metric.get_name(), value);
-
-                // If the current round is increasing then it means that the
-                // node starts catching up and is proposing.
-                assert!(value > 1.0, "Node didn't progress further than the round 1");
-            }
+            // If the current round is increasing then it means that the
+            // node starts catching up and is proposing.
+            assert!(value > 1.0, "Node didn't progress further than the round 1");
         }
     }
 
     // Now stop node 0
-    cluster.stop_node(0);
+    cluster.stop_node(0).await;
 
     // Let other primaries advance
     tokio::time::sleep(Duration::from_secs(10)).await;
@@ -149,25 +140,20 @@ async fn test_read_causal_signed_certificates() {
     // iterations. If metric hasn't picked up then we know that node can't make
     // progress.
     let mut node_made_progress = false;
-    let node = cluster.authority(0);
+    let node = cluster.authority(0).primary().await;
 
     for _ in 0..10 {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        let metric_family = node.primary.registry.gather();
+        if let Some(metric) = node.metric(CURRENT_ROUND_METRIC) {
+            let value = metric.get_gauge().get_value();
+            info!("Metric -> {:?}", value);
 
-        for metric in metric_family {
-            if metric.get_name() == CURRENT_ROUND_METRIC {
-                let value = metric.get_metric().first().unwrap().get_gauge().get_value();
-
-                info!("Metrics name {} -> {:?}", metric.get_name(), value);
-
-                // If the current round is increasing then it means that the
-                // node starts catching up and is proposing.
-                if value > 1.0 {
-                    node_made_progress = true;
-                    break;
-                }
+            // If the current round is increasing then it means that the
+            // node starts catching up and is proposing.
+            if value > 1.0 {
+                node_made_progress = true;
+                break;
             }
         }
     }
@@ -178,17 +164,18 @@ async fn test_read_causal_signed_certificates() {
     );
 }
 
-fn setup_tracing() {
+fn setup_tracing() -> TelemetryGuards {
     // Setup tracing
     let tracing_level = "debug";
     let network_tracing_level = "info";
 
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
 
-    let _guard = telemetry_subscribers::TelemetryConfig::new("narwhal")
+    telemetry_subscribers::TelemetryConfig::new("narwhal")
         // load env variables
         .with_env()
         // load special log filter
         .with_log_level(&log_filter)
-        .init();
+        .init()
+        .0
 }
