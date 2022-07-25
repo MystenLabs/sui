@@ -24,13 +24,10 @@
 }
 
 .title {
-    font-style: normal;
-    font-weight: 600;
-    font-size: 12px;
-    text-transform: uppercase;
-    color: colors.$gray-75;
     align-self: flex-start;
     margin-bottom: 2px;
+
+    @include utils.typography('stat/col-header');
 }
 
 .alert {
