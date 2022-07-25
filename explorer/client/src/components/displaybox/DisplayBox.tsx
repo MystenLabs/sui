@@ -85,21 +85,15 @@ function DisplayBox({ display }: { display: string }) {
             <>
                 {hasClickedImage && (
                     <section
-                        className={styles.largeimagecontainer}
                         onClick={handleImageClick}
                     >
                         <img
                             id="loadedImage"
                             className={
-                                hasClickedImage
-                                    ? styles.largeimage
-                                    : styles.smallimage
+                                    styles.largeimage
                             }
-                            style={imageStyle}
                             alt="NFT"
                             src={transformURL(display)}
-                            onLoad={handleImageLoad}
-                            onError={handleImageFail}
                         />
                         <div className={styles.cross}>&times;</div>
                         <div className={styles.detailsbg} />
