@@ -10,6 +10,7 @@ use once_cell::sync::Lazy;
 use std::path::Path;
 use sui_types::error::{SuiError, SuiResult};
 
+pub mod cost_calib;
 pub mod natives;
 
 pub use sui_framework_build::build_move_stdlib_modules as get_move_stdlib_modules;
