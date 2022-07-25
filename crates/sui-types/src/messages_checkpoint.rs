@@ -122,7 +122,6 @@ pub struct CheckpointResponse {
 impl CheckpointResponse {
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         match &self.info {
-            AuthorityCheckpointInfo::Success => Ok(()),
             AuthorityCheckpointInfo::Proposal { current, previous } => {
                 if let Some(current) = current {
                     current.verify(committee, self.detail.as_ref())?;
@@ -145,8 +144,6 @@ impl CheckpointResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
-    // Denotes success of he operation with no return
-    Success,
     // Returns the current proposal if any, and
     // the previous checkpoint.
     Proposal {

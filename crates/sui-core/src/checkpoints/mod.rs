@@ -471,7 +471,7 @@ impl CheckpointStore {
         &mut self,
         fragment: &CheckpointFragment,
         committee: &Committee,
-    ) -> Result<CheckpointResponse, SuiError> {
+    ) -> SuiResult {
         // Check structure is correct and signatures verify
         fragment.verify(committee)?;
 
@@ -524,10 +524,7 @@ impl CheckpointStore {
         //       according to the byte length of the fragment, to create
         //       incentives for nodes to submit smaller fragments.
 
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Success,
-            detail: None,
-        })
+        Ok(())
     }
 
     /// This function should be called by the consensus output, it is idempotent,
