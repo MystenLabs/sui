@@ -6425,7 +6425,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "011cbb39cf7c1f62871aea3cc46e5817b0937b49e9447370c93cacbe93a766d8"
 dependencies = [
- "vte 0.10.1",
+ "vte",
 ]
 
 [[package]]
@@ -8256,17 +8256,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vte"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aae21c12ad2ec2d168c236f369c38ff332bc1134f7246350dca641437365045"
-dependencies = [
- "arrayvec 0.7.2",
- "utf8parse",
- "vte_generate_state_changes",
-]
-
-[[package]]
 name = "vte_generate_state_changes"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9244,7 +9233,7 @@ dependencies = [
  "vcpkg",
  "vec_map",
  "version_check",
- "vte 0.11.0",
+ "vte",
  "vte_generate_state_changes",
  "wait-timeout",
  "walkdir",
