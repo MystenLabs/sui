@@ -101,6 +101,7 @@ function DisplayBox({ display }: { display: string }) {
                             onLoad={handleImageLoad}
                             onError={handleImageFail}
                         />
+                        <div className={styles.cross}>&times;</div>
                         <div className={styles.detailsbg} />
                     </section>
                 )}

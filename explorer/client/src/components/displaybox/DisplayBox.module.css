@@ -12,6 +12,11 @@ img.largeimage {
     transform: translate(-50%, -50%);
 }
 
+div.cross {
+    @apply fixed right-[5vw] top-[10vh] text-offwhite z-50 bg-offblack w-[30px] h-[30px]
+  flex justify-center items-center rounded-[50px] cursor-pointer;
+}
+
 div.detailsbg {
     @apply fixed top-0 left-0 w-full h-full bg-sui-grey-100 z-20 opacity-[0.85];
 }
