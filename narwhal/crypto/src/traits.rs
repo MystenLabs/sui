@@ -145,9 +145,9 @@ pub trait Authenticator:
 pub trait KeyPair:
     Sized + From<Self::PrivKey> + Signer<Self::Sig> + EncodeDecodeBase64 + FromStr
 {
-    type PubKey: VerifyingKey<PrivKey = Self::PrivKey>;
-    type PrivKey: SigningKey<PubKey = Self::PubKey>;
-    type Sig: Authenticator<PubKey = Self::PubKey>;
+    type PubKey: VerifyingKey<PrivKey = Self::PrivKey, Sig = Self::Sig>;
+    type PrivKey: SigningKey<PubKey = Self::PubKey, Sig = Self::Sig>;
+    type Sig: Authenticator<PubKey = Self::PubKey, PrivKey = Self::PrivKey>;
 
     fn public(&'_ self) -> &'_ Self::PubKey;
     fn private(self) -> Self::PrivKey;

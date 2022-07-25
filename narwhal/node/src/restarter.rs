@@ -3,7 +3,7 @@
 use crate::{Node, NodeStorage};
 use arc_swap::ArcSwap;
 use config::{Committee, Parameters};
-use crypto::traits::{KeyPair, Signer, VerifyingKey};
+use crypto::traits::KeyPair;
 use executor::{ExecutionState, ExecutorOutput};
 use futures::future::join_all;
 use network::{PrimaryToWorkerNetwork, WorkerToPrimaryNetwork};
@@ -17,20 +17,19 @@ use types::{PrimaryWorkerMessage, ReconfigureNotification, WorkerPrimaryMessage}
 pub struct NodeRestarter;
 
 impl NodeRestarter {
-    pub async fn watch<Keys, PublicKey, State>(
+    pub async fn watch<Keys, State>(
         keypair: Keys,
-        committee: &Committee<PublicKey>,
+        committee: &Committee<Keys::PubKey>,
         storage_base_path: PathBuf,
         execution_state: Arc<State>,
         parameters: Parameters,
-        mut rx_reconfigure: Receiver<(Keys, Committee<PublicKey>)>,
+        mut rx_reconfigure: Receiver<(Keys, Committee<Keys::PubKey>)>,
         tx_output: Sender<ExecutorOutput<State>>,
     ) where
-        PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
-        Keys: KeyPair<PubKey = PublicKey> + Signer<PublicKey::Sig> + Send + 'static,
+        Keys: KeyPair + Send + 'static,
     {
         let mut keypair = keypair;
         let mut name = keypair.public().clone();
@@ -87,8 +86,9 @@ impl NodeRestarter {
                 .primary(&name)
                 .expect("Our key is not in the committee")
                 .worker_to_primary;
-            let message =
-                WorkerPrimaryMessage::<PublicKey>::Reconfigure(ReconfigureNotification::Shutdown);
+            let message = WorkerPrimaryMessage::<Keys::PubKey>::Reconfigure(
+                ReconfigureNotification::Shutdown,
+            );
             let primary_cancel_handle = primary_network.send(address, &message).await;
 
             let addresses = committee
@@ -97,8 +97,9 @@ impl NodeRestarter {
                 .into_iter()
                 .map(|x| x.primary_to_worker)
                 .collect();
-            let message =
-                PrimaryWorkerMessage::<PublicKey>::Reconfigure(ReconfigureNotification::Shutdown);
+            let message = PrimaryWorkerMessage::<Keys::PubKey>::Reconfigure(
+                ReconfigureNotification::Shutdown,
+            );
             let worker_cancel_handles = worker_network.broadcast(addresses, &message).await;
 
             // Ensure the message has been received.
