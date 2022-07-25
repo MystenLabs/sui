@@ -84,20 +84,19 @@ function DisplayBox({ display }: { display: string }) {
         return (
             <>
                 {hasClickedImage && (
-                    <section
-                        onClick={handleImageClick}
-                    >
-                        <img
-                            id="loadedImage"
-                            className={
-                                    styles.largeimage
-                            }
-                            alt="NFT"
-                            src={transformURL(display)}
-                        />
-                        <div className={styles.cross}>&times;</div>
+                    <div onClick={handleImageClick}>
+                        <div className={styles.container}>
+                            <img
+                                id="loadedImage"
+                                className={styles.largeimage}
+                                alt="NFT"
+                                src={transformURL(display)}
+                            />
+                            <span className={styles.cross}>&times;</span>
+                            <div className={styles.caption}>Text</div>
+                        </div>
                         <div className={styles.detailsbg} />
-                    </section>
+                    </div>
                 )}
 
                 <div

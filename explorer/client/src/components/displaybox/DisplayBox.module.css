@@ -6,15 +6,23 @@ img.smallimage {
     @apply object-scale-down w-[100%] cursor-pointer;
 }
 
-img.largeimage {
-    @apply fixed left-[50%] top-[50%] max-w-[90vw] max-h-[80vh] z-50 rounded-[6px];
-
-    transform: translate(-50%, -50%);
+.container {
+    @apply w-[100%] z-50 fixed left-0 top-[10vh] text-center justify-center flex flex-wrap;
 }
 
-div.cross {
-    @apply fixed right-[5vw] top-[10vh] text-offwhite z-50 bg-offblack w-[30px] h-[30px]
-  flex justify-center items-center rounded-[50px] cursor-pointer;
+img.largeimage {
+    @apply max-w-[80vw] max-h-[80vh] z-50 self-start border-0;
+
+    border-radius: 6px !important;
+}
+
+span.cross {
+    @apply block text-offwhite bg-sui-grey-100 z-50 h-[30px] w-[30px] self-start
+  flex justify-center items-center rounded-[50px] cursor-pointer ml-2 text-2xl;
+}
+
+div.caption {
+    @apply w-[80vw] text-offwhite z-50 text-left;
 }
 
 div.detailsbg {
