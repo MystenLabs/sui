@@ -29,8 +29,8 @@ module examples::transferable_witness {
 
     /// Unwrap a carrier and get the inner WITNESS type.
     public fun get_witness(carrier: WitnessCarrier): WITNESS {
-        let WitnessCarrier { id, witness } = carrier;
-        object::delete(id);
+        let WitnessCarrier { info, witness } = carrier;
+        object::delete(info);
         witness
     }
 }

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module examples::strings {
-    use sui::object::Info;
-    use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, Info};
+    use sui::tx_context::TxContext;
 
     // Use this dependency to get a type wrapper for UTF-8 strings
     use sui::utf8::{Self, String};
