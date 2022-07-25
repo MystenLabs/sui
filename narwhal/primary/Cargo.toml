@@ -45,7 +45,7 @@ dashmap = "5.3.4"
 [dev-dependencies]
 arc-swap = { version = "1.5.0", features = ["serde"] }
 itertools = "0.10.3"
-mockall = "0.11.1"
+mockall = "0.11.2"
 node = { path = "../node" }
 tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
