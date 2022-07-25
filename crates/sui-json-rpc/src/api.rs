@@ -56,11 +56,11 @@ pub trait RpcReadApi {
     #[method(name = "getObjectsOwnedByObject")]
     async fn get_objects_owned_by_object(
         &self,
-        /// the id of the owner object
+        /// the ID of the owner object
         object_id: ObjectID,
     ) -> RpcResult<Vec<SuiObjectInfo>>;
 
-    /// Return the total number of transaction known to the server.
+    /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionNumber")]
     async fn get_total_transaction_number(&self) -> RpcResult<u64>;
 
@@ -94,7 +94,7 @@ pub trait RpcReadApi {
     #[method(name = "getObject")]
     async fn get_object(
         &self,
-        /// the id of the queried object
+        /// the ID of the queried object
         object_id: ObjectID,
     ) -> RpcResult<GetObjectDataResponse>;
 }
@@ -106,7 +106,7 @@ pub trait RpcFullNodeReadApi {
     #[method(name = "getTransactionsByInputObject")]
     async fn get_transactions_by_input_object(
         &self,
-        /// the id of the input object
+        /// the ID of the input object
         object: ObjectID,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
@@ -114,7 +114,7 @@ pub trait RpcFullNodeReadApi {
     #[method(name = "getTransactionsByMutatedObject")]
     async fn get_transactions_by_mutated_object(
         &self,
-        /// the id of the mutated object
+        /// the ID of the mutated object
         object: ObjectID,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
 
@@ -150,7 +150,7 @@ pub trait RpcFullNodeReadApi {
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcTransactionBuilder {
-    /// Create a unsigned transaction to transfer an object from one address to another. The object's type
+    /// Create an unsigned transaction to transfer an object from one address to another. The object's type
     /// must allow public transfers
     #[method(name = "transferObject")]
     async fn transfer_object(
@@ -162,7 +162,7 @@ pub trait RpcTransactionBuilder {
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create a unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.
+    /// Create an unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.
     #[method(name = "transferSui")]
     async fn transfer_sui(
         &self,
@@ -173,7 +173,7 @@ pub trait RpcTransactionBuilder {
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create a unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.
+    /// Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.
     #[method(name = "moveCall")]
     async fn move_call(
         &self,
@@ -187,7 +187,7 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create a unsigned transaction to publish Move module.
+    /// Create an unsigned transaction to publish Move module.
     #[method(name = "publish")]
     async fn publish(
         &self,
@@ -197,7 +197,7 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create a unsigned transaction to split a coin object into multiple coins
+    /// Create an unsigned transaction to split a coin object into multiple coins.
     #[method(name = "splitCoin")]
     async fn split_coin(
         &self,
@@ -208,7 +208,7 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create a unsigned transaction to merge multiple coins into one coin
+    /// Create an unsigned transaction to merge multiple coins into one coin.
     #[method(name = "mergeCoins")]
     async fn merge_coin(
         &self,
@@ -219,7 +219,7 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create a unsigned batched transaction
+    /// Create an unsigned batched transaction.
     #[method(name = "batchTransaction")]
     async fn batch_transaction(
         &self,
@@ -233,7 +233,7 @@ pub trait RpcTransactionBuilder {
 #[open_rpc(namespace = "sui", tag = "BCS API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcBcsApi {
-    /// Return the raw BCS serialised move object bytes for a specified object
+    /// Return the raw BCS serialized move object bytes for a specified object.
     #[method(name = "getRawObject")]
     async fn get_raw_object(
         &self,
@@ -257,7 +257,7 @@ pub trait EventStreamingApi {
 #[open_rpc(namespace = "sui", tag = "Event Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventReadApi {
-    /// Return list of events emitted by a specified transaction
+    /// Return list of events emitted by a specified transaction.
     #[method(name = "getEventsByTransaction")]
     async fn get_events_by_transaction(
         &self,
@@ -269,7 +269,7 @@ pub trait EventReadApi {
     #[method(name = "getEventsByModule")]
     async fn get_events_by_module(
         &self,
-        /// the Move package id
+        /// the Move package ID
         package: ObjectID,
         /// the module name
         module: String,
@@ -295,7 +295,7 @@ pub trait EventReadApi {
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events involving a specified sender
+    /// Return list of events involving a specified sender.
     #[method(name = "getEventsBySender")]
     async fn get_events_by_sender(
         &self,
@@ -313,7 +313,7 @@ pub trait EventReadApi {
     #[method(name = "getEventsByObject")]
     async fn get_events_by_object(
         &self,
-        /// the object id
+        /// the object ID
         object: ObjectID,
         /// maximum size of the result
         count: u64,
@@ -323,7 +323,7 @@ pub trait EventReadApi {
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events involving a specified owner
+    /// Return list of events involving a specified owner.
     #[method(name = "getEventsByOwner")]
     async fn get_events_by_owner(
         &self,
