@@ -206,7 +206,6 @@ fn make_checkpoint_db() {
     .unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 1);
     assert_eq!(cps.extra_transactions.iter().count(), 1);
-    assert_eq!(cps.next_checkpoint(), 1);
 
     cps.update_processed_transactions(&[(6, t6)]).unwrap();
     assert_eq!(cps.checkpoint_contents.iter().count(), 1);
@@ -523,49 +522,43 @@ fn latest_proposal() {
 
     // --- TEST3 ---
 
-    // No valid checkpoint proposal condition...
-    assert!(cps1.get_locals().current_proposal.is_none());
+    // Proposals are not cleared until we have a cert.
+    assert!(cps1.get_locals().current_proposal.is_some());
+
+    let signed: Vec<_> = [
+        cps1.latest_stored_checkpoint().unwrap(),
+        cps2.latest_stored_checkpoint().unwrap(),
+    ]
+    .into_iter()
+    .map(|a| match a {
+        AuthenticatedCheckpoint::Signed(s) => s,
+        _ => panic!("Unexpected type"),
+    })
+    .collect();
+    // We only need f+1 to make a cert. 2 is sufficient.
+    let cert = CertifiedCheckpointSummary::aggregate(signed, &committee).unwrap();
+    cps1.promote_signed_checkpoint_to_cert(&cert, &committee, &CheckpointMetrics::new_for_tests())
+        .unwrap();
 
     let request = CheckpointRequest::latest(false);
     let response = cps1.handle_latest_proposal(&request).expect("no errors");
     assert!(response.detail.is_none());
+    // The proposal should have been cleared now.
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Proposal { .. }
+        AuthorityCheckpointInfo::Proposal {
+            current: None,
+            previous: Some(AuthenticatedCheckpoint::Certified { .. })
+        }
     ));
-    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
-        assert!(current.is_none());
-        assert!(matches!(
-            previous,
-            Some(AuthenticatedCheckpoint::Signed { .. })
-        ));
-    }
-
-    // --- TEST 4 ---
-
-    // When details are needed, then return unexecuted transactions if there is no proposal
-    let request = CheckpointRequest::latest(true);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
-    assert!(response.detail.is_none());
-
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::Proposal { .. }
-    ));
-    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
-        assert!(current.is_none());
-        assert!(matches!(
-            previous,
-            Some(AuthenticatedCheckpoint::Signed { .. })
-        ));
-    }
 
     // ---
     cps1.update_processed_transactions(&[(6, t6)]).unwrap();
 
+    // Create a new proposal.
     let _p1 = cps1.set_proposal(committee.epoch).unwrap();
 
-    // --- TEST 5 ---
+    // --- TEST 4 ---
 
     // Get the full proposal with previous proposal
     let request = CheckpointRequest::latest(true);
@@ -578,7 +571,7 @@ fn latest_proposal() {
         assert!(current.is_some());
         assert!(matches!(
             previous,
-            Some(AuthenticatedCheckpoint::Signed { .. })
+            Some(AuthenticatedCheckpoint::Certified { .. })
         ));
 
         let current_proposal = current.unwrap();
@@ -823,6 +816,25 @@ fn checkpoint_integration() {
                     TestCausalOrderPendCertNoop,
                 )
                 .is_ok());
+            // Turn the signed checkpoint to a cert. This is required to make progress.
+            let checkpoint = match cps.latest_stored_checkpoint().unwrap() {
+                AuthenticatedCheckpoint::Signed(s) => s.summary,
+                _ => unreachable!(),
+            };
+            let signatures: Vec<_> = keys
+                .iter()
+                .map(|key| {
+                    let name = key.public().into();
+                    SignedCheckpointSummary::new_from_summary(checkpoint.clone(), name, key)
+                })
+                .collect();
+            let cert = CertifiedCheckpointSummary::aggregate(signatures, &committee).unwrap();
+            cps.promote_signed_checkpoint_to_cert(
+                &cert,
+                &committee,
+                &CheckpointMetrics::new_for_tests(),
+            )
+            .unwrap();
 
             // Loop invariant to ensure termination or error
             assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
@@ -1424,8 +1436,8 @@ fn test_fragment_full_flow() {
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
     assert_eq!(seq.next_transaction_index, 6);
-    // Advanced to next checkpoint
-    assert_eq!(cps0.next_checkpoint(), 1);
+    // We don't update next checkpoint yet until we get a cert.
+    assert_eq!(cps0.next_checkpoint(), 0);
 
     let response = cps0
         .handle_past_checkpoint(true, 0)
@@ -1453,7 +1465,7 @@ fn test_fragment_full_flow() {
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
     assert_eq!(cps6.fragments.iter().count(), 6);
     // Cannot advance to next checkpoint
-    assert_eq!(cps6.next_checkpoint(), 0);
+    assert!(cps6.latest_stored_checkpoint().is_none());
     // But recording of fragments is closed
 
     // However recording has stopped
