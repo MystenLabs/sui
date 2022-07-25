@@ -12,7 +12,7 @@ use futures::{
     stream::{FuturesOrdered, FuturesUnordered},
     StreamExt,
 };
-use std::future::Future;
+use std::future::{ready, Future, Ready};
 use std::ops::Deref;
 use std::{
     collections::{HashSet, VecDeque},
@@ -262,8 +262,14 @@ where
 
 #[async_trait]
 pub(crate) trait DigestHandler<A> {
+    type DigestResult: Future<Output = SuiResult>;
+
     /// handle_digest
-    async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult;
+    async fn handle_digest(
+        &self,
+        follower: &Follower<A>,
+        digest: ExecutionDigests,
+    ) -> SuiResult<Self::DigestResult>;
 }
 
 #[derive(Clone, Copy)]
@@ -310,20 +316,31 @@ impl<A> DigestHandler<A> for GossipDigestHandler
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult {
-        if !follower
-            .state
-            .database
-            .effects_exists(&digest.transaction)?
-        {
-            // Download the certificate
-            let response = follower
-                .client
-                .handle_transaction_info_request(TransactionInfoRequest::from(digest.transaction))
-                .await?;
-            Self::process_response(follower, response).await?;
-        }
-        Ok(())
+    type DigestResult = Ready<SuiResult>;
+
+    async fn handle_digest(
+        &self,
+        follower: &Follower<A>,
+        digest: ExecutionDigests,
+    ) -> SuiResult<Self::DigestResult> {
+        let inner = || async move {
+            if !follower
+                .state
+                .database
+                .effects_exists(&digest.transaction)?
+            {
+                // Download the certificate
+                let response = follower
+                    .client
+                    .handle_transaction_info_request(TransactionInfoRequest::from(
+                        digest.transaction,
+                    ))
+                    .await?;
+                Self::process_response(follower, response).await?;
+            }
+            Ok(())
+        };
+        Ok(ready(inner().await))
     }
 }
 
@@ -428,7 +445,7 @@ where
                             // batch has been fully processed.
                             last_seq_in_cur_batch = seq;
 
-                            let fut = handler.handle_digest(self, digests);
+                            let fut = handler.handle_digest(self, digests).await?;
                             results.push(async move {
                                 fut.await?;
                                 Ok::<(TxSequenceNumber, ExecutionDigests), SuiError>((seq, digests))
