@@ -21,6 +21,7 @@ use sui_types::{
     messages_checkpoint::CheckpointContents,
 };
 
+use std::future::Future;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
@@ -403,7 +404,9 @@ where
                 debug!(?parents, "attempting to execute parents");
 
                 let handle = NodeSyncHandle::new_from_sender(self.sender.clone());
-                let results = handle.handle_execution_request(parents.iter().cloned());
+                let results = handle
+                    .handle_execution_request(parents.iter().cloned())
+                    .await?;
 
                 let errors: Vec<_> = results.filter_map(|r| r.err()).collect().await;
 
@@ -632,6 +635,33 @@ where
     }
 }
 
+pub struct MappedRx(oneshot::Receiver<SuiResult>);
+
+impl Future for MappedRx {
+    type Output = SuiResult;
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let inner = std::pin::Pin::new(&mut self.0);
+        match inner.poll(cx) {
+            std::task::Poll::Ready(res) => {
+                let res = res.map_err(|e| SuiError::GenericAuthorityError {
+                    error: e.to_string(),
+                });
+
+                std::task::Poll::Ready(match res {
+                    Ok(r) => r,
+                    Err(e) => Err(e),
+                })
+            }
+
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
+    }
+}
+
 /// A cloneable handle that can send messages to a NodeSyncState
 #[derive(Clone)]
 pub struct NodeSyncHandle {
@@ -655,46 +685,43 @@ impl NodeSyncHandle {
     async fn send_msg_with_tx(
         sender: mpsc::Sender<DigestsMessage>,
         msg: DigestsMessage,
-        rx: oneshot::Receiver<SuiResult>,
     ) -> SuiResult {
         sender
             .send(msg)
             .await
             .map_err(|e| SuiError::GenericAuthorityError {
                 error: e.to_string(),
-            })?;
-        rx.await.map_err(|e| SuiError::GenericAuthorityError {
-            error: e.to_string(),
-        })?
+            })
     }
 
-    pub fn sync_checkpoint(
+    pub async fn sync_checkpoint(
         &self,
         checkpoint_contents: &CheckpointContents,
-    ) -> impl Stream<Item = SuiResult> {
-        let futures: FuturesOrdered<_> = checkpoint_contents
-            .iter()
-            .map(|digests| {
-                let (tx, rx) = oneshot::channel();
-                let msg = DigestsMessage::new_for_ckpt(digests, tx);
-                Self::send_msg_with_tx(self.sender.clone(), msg, rx)
-            })
-            .collect();
-        futures
+    ) -> SuiResult<impl Stream<Item = SuiResult>> {
+        let mut futures = FuturesOrdered::new();
+        for digests in checkpoint_contents.iter() {
+            let (tx, rx) = oneshot::channel();
+            let msg = DigestsMessage::new_for_ckpt(digests, tx);
+            Self::send_msg_with_tx(self.sender.clone(), msg).await?;
+            futures.push(MappedRx(rx));
+        }
+
+        Ok(futures)
     }
 
-    pub fn handle_execution_request(
+    pub async fn handle_execution_request(
         &self,
         digests: impl Iterator<Item = TransactionDigest>,
-    ) -> impl Stream<Item = SuiResult> {
-        let futures: FuturesOrdered<_> = digests
-            .map(|digest| {
-                let (tx, rx) = oneshot::channel();
-                let msg = DigestsMessage::new_for_exec_driver(&digest, tx);
-                Self::send_msg_with_tx(self.sender.clone(), msg, rx)
-            })
-            .collect();
-        futures
+    ) -> SuiResult<impl Stream<Item = SuiResult>> {
+        let mut futures = FuturesOrdered::new();
+        for digest in digests {
+            let (tx, rx) = oneshot::channel();
+            let msg = DigestsMessage::new_for_exec_driver(&digest, tx);
+            Self::send_msg_with_tx(self.sender.clone(), msg).await?;
+            futures.push(MappedRx(rx));
+        }
+
+        Ok(futures)
     }
 }
 
@@ -703,15 +730,21 @@ impl<A> DigestHandler<A> for NodeSyncHandle
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    async fn handle_digest(&self, follower: &Follower<A>, digests: ExecutionDigests) -> SuiResult {
+    type DigestResult = MappedRx;
+
+    async fn handle_digest(
+        &self,
+        follower: &Follower<A>,
+        digests: ExecutionDigests,
+    ) -> SuiResult<Self::DigestResult> {
         let (tx, rx) = oneshot::channel();
         let sender = self.sender.clone();
         Self::send_msg_with_tx(
             sender,
             DigestsMessage::new(&digests, follower.peer_name, tx),
-            rx,
         )
-        .await
+        .await?;
+        Ok(MappedRx(rx))
     }
 }
 
