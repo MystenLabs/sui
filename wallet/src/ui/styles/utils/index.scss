@@ -1,5 +1,6 @@
 @use '_variables' as v;
 @use '_values/sizing';
+@use '_values/colors';
 
 $main-space-var: v.use(v.$sizing-nav-height-placeholder);
 $main-extra-space: sizing.$main-bottom-space;
@@ -8,17 +9,84 @@ $main-extra-space: sizing.$main-bottom-space;
     padding-bottom: calc($main-space-var + $main-extra-space);
 }
 
-@mixin override-main-padding() {
+@mixin escape-main-sides-space() {
     margin-left: sizing.$main-sides-space * -1;
     margin-right: sizing.$main-sides-space * -1;
-    margin-bottom: calc(($main-space-var + $main-extra-space) * -1);
+}
+
+@mixin override-main-sides-space() {
     padding-left: sizing.$main-sides-space;
     padding-right: sizing.$main-sides-space;
+
+    @include escape-main-sides-space;
+}
+
+@mixin override-main-padding() {
+    margin-bottom: calc(($main-space-var + $main-extra-space) * -1);
+
+    @include override-main-sides-space;
     @include main-extra-space-for-nav;
 }
 
-@mixin overflow-ellipsis() {
-    max-width: 100%;
+@mixin overflow-ellipsis($max-width: 100%) {
+    max-width: $max-width;
     overflow-x: hidden;
     text-overflow: ellipsis;
+}
+
+@mixin typography($type) {
+    @if $type == 'stat/col-header' {
+        font-style: normal;
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        color: colors.$gray-75;
+    } @else if $type == 'page-description' {
+        font-style: normal;
+        font-weight: 400;
+        font-size: 12px;
+        color: colors.$gray-80;
+    } @else if $type == 'tooltip/label' {
+        font-style: normal;
+        font-weight: 600;
+        font-size: 11px;
+        line-height: 10px;
+        text-transform: uppercase;
+        color: colors.$gray-80;
+    } @else if $type == 'stats/text-lg' {
+        font-style: normal;
+        font-weight: 600;
+        font-size: 18px;
+        line-height: 19px;
+        color: colors.$gray-100;
+    } @else if $type == 'header/search-text' {
+        font-style: normal;
+        font-weight: 500;
+        font-size: 14px;
+        line-height: 14px;
+        color: colors.$gray-70;
+    } @else if $type == 'table/text-xs' {
+        font-style: normal;
+        font-weight: 500;
+        font-size: 12px;
+        line-height: 12px;
+        color: colors.$gray-75;
+    } @else if $type == 'table/text-sm' {
+        font-style: normal;
+        font-weight: 500;
+        font-size: 13px;
+        line-height: 12px;
+        color: colors.$white;
+    } @else if $type == 'table/text-lg' {
+        font-style: normal;
+        font-weight: 500;
+        font-size: 14px;
+        line-height: 13px;
+    } @else if $type == 'table/title-sm' {
+        font-style: normal;
+        font-weight: 600;
+        font-size: 14px;
+        line-height: 17px;
+        color: colors.$gray-100;
+    }
 }
