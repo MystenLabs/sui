@@ -1,6 +1,6 @@
 # Rust SDK examples
 
-This directory contains examples of interacting with a Move language smart contract using the Sui Rust SDK.
+This directory contains examples of interacting with a Move language smart contract using the Sui Rust SDK. See the [introduction to the Rust SDK](https://github.com/MystenLabs/sui/blob/main/doc/src/build/rust-sdk.md) for additional details.
 
 ## Tic Tac Toe
 
