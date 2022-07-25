@@ -48,6 +48,10 @@ export function truncate(fullStr: string, strLen: number, separator?: string) {
     );
 }
 
+export function extractFileType(displayString: string) {
+    return ` 1 ${displayString.split('.').at(-1)?.toUpperCase()} File`;
+}
+
 /* Currently unused but potentially useful:
  *
  * export const isValidHttpUrl = (url: string) => {

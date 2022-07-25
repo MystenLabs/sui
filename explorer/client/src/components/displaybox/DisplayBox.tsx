@@ -8,7 +8,7 @@ import {
     FALLBACK_IMAGE,
     ImageModClient,
 } from '../../utils/imageModeratorClient';
-import { transformURL } from '../../utils/stringUtils';
+import { transformURL, extractFileType } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
@@ -100,8 +100,11 @@ function DisplayBox({
                             />
                             <span className={styles.cross}>&times;</span>
                             {caption && (
-                                <div className={styles.caption}>{caption}</div>
+                                <div className={styles.caption}>{caption} </div>
                             )}
+                            <div className={styles.filetype}>
+                                {extractFileType(display)}
+                            </div>
                         </div>
                         <div className={styles.detailsbg} />
                     </div>

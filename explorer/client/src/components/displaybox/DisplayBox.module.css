@@ -7,7 +7,7 @@ img.smallimage {
 }
 
 .container {
-    @apply w-[100%] z-50 fixed left-0 top-[5vh] text-center justify-center flex flex-wrap;
+    @apply w-[100%] z-50 fixed left-0 top-0 text-center justify-center flex flex-wrap;
 }
 
 img.largeimage {
@@ -21,8 +21,13 @@ span.cross {
   flex justify-center items-center rounded-[50px] cursor-pointer ml-2 text-2xl;
 }
 
+div.filetype,
 div.caption {
     @apply w-[90vw] text-offwhite z-50 text-left text-2xl font-semibold mt-5;
+}
+
+div.filetype {
+    @apply text-sm text-sui-grey-60 font-medium mt-0;
 }
 
 div.detailsbg {
