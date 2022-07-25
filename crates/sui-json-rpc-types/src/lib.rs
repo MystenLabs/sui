@@ -781,20 +781,25 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .iter()
         .map(|(id, value)| (id.to_string(), value.clone().into()))
         .collect::<BTreeMap<_, SuiMoveValue>>();
-    let res = try_convert_type_impl(&struct_name, &fields);
-    if res.is_none() {
+    // a bit wonky. Ideally there would be a custom enum or result here, but it is not easy
+    // as custom code with `?` is still in nightly
+    let mut should_warn = true;
+    let res = try_convert_type_impl(&mut should_warn, &struct_name, &fields);
+    if should_warn {
         warn!(
             fields =? fields,
-            "Failed to convert {struct_name} to SuiMoveValue"
+            "Failed to convert known type, {struct_name}, to SuiMoveValue"
         );
     }
     res
 }
 
 fn try_convert_type_impl(
+    should_warn: &mut bool,
     struct_name: &str,
     fields: &BTreeMap<String, SuiMoveValue>,
 ) -> Option<SuiMoveValue> {
+    debug_assert!(*should_warn);
     Some(match struct_name {
         "0x2::utf8::String" | "0x1::ascii::String" => {
             let bytes = match fields.get("bytes")? {
@@ -853,7 +858,10 @@ fn try_convert_type_impl(
             };
             SuiMoveValue::Option(Box::new(values.first().cloned()))
         }
-        _ => return None,
+        _ => {
+            *should_warn = false;
+            return None;
+        }
     })
 }
 
