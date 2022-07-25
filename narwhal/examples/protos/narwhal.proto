@@ -21,7 +21,7 @@ message Transaction {
     bytes transaction = 1;
 }
 
- enum CollectionErrorType {
+enum CollectionErrorType {
     COLLECTION_NOT_FOUND = 0;
     COLLECTION_TIMEOUT = 1;
     COLLECTION_ERROR = 2;
@@ -69,7 +69,7 @@ message GetCollectionsRequest {
 }
 
 message GetCollectionsResponse {
-    // TODO: Revisit this for spec compliance.  
+    // TODO: Revisit this for spec compliance.
     // List of retrieval results of collections.
     repeated CollectionRetrievalResult result = 1;
 }
@@ -129,68 +129,67 @@ message NewEpochRequest {
 // while we don't have good protobuf definitions for Narwhal types
 message BincodeEncodedPayload {
     bytes payload = 1;
-  }
-  
-// Empty message for when we don't have anything to return
-message Empty {
 }
+
+// Empty message for when we don't have anything to return
+message Empty {}
 
 // The consensus to mempool interface for validator actions.
 service Validator {
     // Returns collection contents for each requested collection.
-    rpc GetCollections (GetCollectionsRequest) returns (GetCollectionsResponse);
+    rpc GetCollections(GetCollectionsRequest) returns (GetCollectionsResponse);
     // Expunges collections from the mempool.
-    rpc RemoveCollections (RemoveCollectionsRequest) returns (Empty);
+    rpc RemoveCollections(RemoveCollectionsRequest) returns (Empty);
     // Returns collections along a DAG walk with a well-defined starting point.
-    rpc ReadCausal (ReadCausalRequest) returns (ReadCausalResponse);
+    rpc ReadCausal(ReadCausalRequest) returns (ReadCausalResponse);
 }
 
 /// The API that hosts the endpoints that should be used to help
 /// proposing a block.
 service Proposer {
-  rpc Rounds (RoundsRequest) returns (RoundsResponse);
-  // Returns the read_causal obtained by starting the DAG walk at the collection 
-  // proposed by the input authority (as indicated by their public key) at the input round
-  rpc NodeReadCausal (NodeReadCausalRequest) returns (NodeReadCausalResponse);
+    rpc Rounds(RoundsRequest) returns (RoundsResponse);
+    // Returns the read_causal obtained by starting the DAG walk at the collection
+    // proposed by the input authority (as indicated by their public key) at the input round
+    rpc NodeReadCausal(NodeReadCausalRequest) returns (NodeReadCausalResponse);
 }
 
 service Configuration {
     // Signals a new epoch
-    rpc NewEpoch (NewEpochRequest) returns (Empty);
+    rpc NewEpoch(NewEpochRequest) returns (Empty);
     // Signals a change in networking info
-    rpc NewNetworkInfo (NewNetworkInfoRequest) returns (Empty);
+    rpc NewNetworkInfo(NewNetworkInfoRequest) returns (Empty);
 }
 
 // The primary-to-primary interface
 service PrimaryToPrimary {
-  // Sends a message
-  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
+    // Sends a message
+    rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
 }
 
 // The worker-to-worker interface
 service WorkerToWorker {
-  // Sends a worker message
-  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
-  // requests a number of batches that the service then streams back to the client
-  rpc ClientBatchRequest (BincodeEncodedPayload) returns (stream BincodeEncodedPayload) {}
+    // Sends a worker message
+    rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
+    // requests a number of batches that the service then streams back to the client
+    rpc ClientBatchRequest(BincodeEncodedPayload) returns (stream BincodeEncodedPayload) {}
 }
 
 // The worker-to-primary interface
 service WorkerToPrimary {
-  // Sends a message
-  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
+    // Sends a message
+    rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
 }
 
 // The primary-to-worker interface
 service PrimaryToWorker {
-  // Sends a message
-  rpc SendMessage (BincodeEncodedPayload) returns (Empty) {}
+    // Sends a message
+    rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
 }
 
 service Transactions {
     // Submit a Transactions
-    rpc SubmitTransaction (Transaction) returns (Empty) {}
+    rpc SubmitTransaction(Transaction) returns (Empty) {}
 
     // Submit a Transactions
-    rpc SubmitTransactionStream (stream Transaction) returns (Empty) {}
+    rpc SubmitTransactionStream(stream Transaction) returns (Empty) {}
 }

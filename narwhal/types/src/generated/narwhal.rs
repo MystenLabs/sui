@@ -83,7 +83,7 @@ pub struct GetCollectionsRequest {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCollectionsResponse {
-    /// TODO: Revisit this for spec compliance.  
+    /// TODO: Revisit this for spec compliance.
     /// List of retrieval results of collections.
     #[prost(message, repeated, tag="1")]
     pub result: ::prost::alloc::vec::Vec<CollectionRetrievalResult>,
