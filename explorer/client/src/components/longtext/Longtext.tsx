@@ -26,6 +26,7 @@ function Longtext({
         | 'transactions'
         | 'addresses'
         | 'ethAddress'
+        | 'validators'
         | 'unknown';
     isLink?: boolean;
     alttext?: string;
