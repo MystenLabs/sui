@@ -22,7 +22,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a unsigned batched transaction",
+      "description": "Create an unsigned batched transaction.",
       "params": [
         {
           "name": "signer",
@@ -177,7 +177,7 @@
       "params": [
         {
           "name": "package",
-          "description": "the Move package id",
+          "description": "the Move package ID",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -244,7 +244,7 @@
       "params": [
         {
           "name": "object",
-          "description": "the object id",
+          "description": "the object ID",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -299,7 +299,7 @@
           "name": "Event Read API"
         }
       ],
-      "description": "Return list of events involving a specified owner",
+      "description": "Return list of events involving a specified owner.",
       "params": [
         {
           "name": "owner",
@@ -358,7 +358,7 @@
           "name": "Event Read API"
         }
       ],
-      "description": "Return list of events involving a specified sender",
+      "description": "Return list of events involving a specified sender.",
       "params": [
         {
           "name": "sender",
@@ -417,7 +417,7 @@
           "name": "Event Read API"
         }
       ],
-      "description": "Return list of events emitted by a specified transaction",
+      "description": "Return list of events emitted by a specified transaction.",
       "params": [
         {
           "name": "digest",
@@ -450,7 +450,7 @@
       "params": [
         {
           "name": "object_id",
-          "description": "the id of the queried object",
+          "description": "the ID of the queried object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -505,7 +505,7 @@
       "params": [
         {
           "name": "object_id",
-          "description": "the id of the owner object",
+          "description": "the ID of the owner object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -530,7 +530,7 @@
           "name": "BCS API"
         }
       ],
-      "description": "Return the raw BCS serialised move object bytes for a specified object",
+      "description": "Return the raw BCS serialized move object bytes for a specified object.",
       "params": [
         {
           "name": "object_id",
@@ -599,7 +599,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the total number of transaction known to the server.",
+      "description": "Return the total number of transactions known to the server.",
       "params": [],
       "result": {
         "name": "u64",
@@ -648,7 +648,7 @@
       "params": [
         {
           "name": "object",
-          "description": "the id of the input object",
+          "description": "the ID of the input object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -744,7 +744,7 @@
       "params": [
         {
           "name": "object",
-          "description": "the id of the mutated object",
+          "description": "the ID of the mutated object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -916,7 +916,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a unsigned transaction to merge multiple coins into one coin",
+      "description": "Create an unsigned transaction to merge multiple coins into one coin.",
       "params": [
         {
           "name": "signer",
@@ -970,7 +970,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.",
+      "description": "Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.",
       "params": [
         {
           "name": "signer",
@@ -1051,7 +1051,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a unsigned transaction to publish Move module.",
+      "description": "Create an unsigned transaction to publish Move module.",
       "params": [
         {
           "name": "sender",
@@ -1101,7 +1101,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a unsigned transaction to split a coin object into multiple coins",
+      "description": "Create an unsigned transaction to split a coin object into multiple coins.",
       "params": [
         {
           "name": "signer",
@@ -1218,7 +1218,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a unsigned transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
+      "description": "Create an unsigned transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
       "params": [
         {
           "name": "signer",
@@ -1272,7 +1272,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.",
+      "description": "Create an unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.",
       "params": [
         {
           "name": "signer",
