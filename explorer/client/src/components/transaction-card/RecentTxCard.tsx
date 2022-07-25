@@ -8,6 +8,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import TableCard from '../../components/table/TableCard';
+import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
@@ -138,93 +139,10 @@ type RecentTx = {
     truncateLength?: number;
 };
 
-function LatestTxCard({ ...data }: RecentTx) {
-    const {
-        count = 0,
-        truncateLength = TRUNCATE_LENGTH,
-        paginationtype = DEFAULT_PAGI_TYPE,
-    } = data;
-
-    const [txPerPage, setTxPerPage] = useState(
-        data.txPerPage || NUMBER_OF_TX_PER_PAGE
-    );
-
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [results, setResults] = useState(initState);
-    const [network] = useContext(NetworkContext);
-    const [searchParams, setSearchParams] = useSearchParams();
-
-    const [pageIndex, setpageIndex] = useState(
-        parseInt(searchParams.get('p') || '1', 10) || 1
-    );
-
-    useEffect(() => {
-        let isMounted = true;
-
-        // If pageIndex is greater than maxTxPage, set to maxTxPage
-        const maxTxPage = Math.ceil(count / txPerPage);
-        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
-        setpageIndex(pg);
-
-        pageIndex > 1
-            ? setSearchParams({ p: pg.toString() })
-            : setSearchParams({});
-
-        getRecentTransactions(network, count, txPerPage, pg)
-            .then(async (resp: any) => {
-                if (isMounted) {
-                    setIsLoaded(true);
-                }
-                setResults({
-                    loadState: 'loaded',
-                    latestTx: resp,
-                    totalTxcount: count,
-                });
-            })
-            .catch((err) => {
-                setResults({
-                    ...initState,
-                    loadState: 'fail',
-                });
-                setIsLoaded(false);
-                console.error(
-                    'Encountered error when fetching recent transactions',
-                    err
-                );
-                Sentry.captureException(err);
-            });
-        return () => {
-            isMounted = false;
-        };
-    }, [count, network, pageIndex, paginationtype, setSearchParams, txPerPage]);
-
-    // update the page index when the user clicks on the pagination buttons
-
-    if (results.loadState === 'pending') {
-        return (
-            <div className={theme.textresults}>
-                <div className={styles.content}>Loading...</div>
-            </div>
-        );
-    }
-
-    if (!isLoaded && results.loadState === 'fail') {
-        return (
-            <ErrorResult
-                id=""
-                errorMsg="There was an issue getting the latest transactions"
-            />
-        );
-    }
-
-    if (results.loadState === 'loaded' && !results.latestTx.length) {
-        return <ErrorResult id="" errorMsg="No Transactions Found" />;
-    }
-
-    //TODO update initial state and match the latestTx table data
-    const defaultActiveTab = 0;
-    const recentTx = {
-        data: results.latestTx.map((txn) => ({
+// Generate table data from the transaction data
+const recentTxTable = (results: TxnData[], truncateLength: number) => {
+    return {
+        data: results.map((txn) => ({
             date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
             transactionId: [
                 {
@@ -285,37 +203,121 @@ function LatestTxCard({ ...data }: RecentTx) {
             },
         ],
     };
+};
 
-    const tabsFooter = {
-        stats: {
-            count,
-            stats_text: 'Total transactions',
-        },
+function LatestTxCard({ ...data }: RecentTx) {
+    const {
+        count = 0,
+        truncateLength = TRUNCATE_LENGTH,
+        paginationtype = DEFAULT_PAGI_TYPE,
+    } = data;
+
+    const [txPerPage, setTxPerPage] = useState(
+        data.txPerPage || NUMBER_OF_TX_PER_PAGE
+    );
+
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [results, setResults] = useState(initState);
+    const [network] = useContext(NetworkContext);
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const [pageIndex, setpageIndex] = useState(
+        parseInt(searchParams.get('p') || '1', 10) || 1
+    );
+
+    // update the page index when the user clicks on the pagination buttons
+    useEffect(() => {
+        let isMounted = true;
+        // If pageIndex is greater than maxTxPage, set to maxTxPage
+        const maxTxPage = Math.ceil(count / txPerPage);
+        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
+        setpageIndex(pg);
+        pageIndex > 1
+            ? setSearchParams({ p: pg.toString() })
+            : setSearchParams({});
+
+        getRecentTransactions(network, count, txPerPage, pg)
+            .then(async (resp: any) => {
+                if (isMounted) {
+                    setIsLoaded(true);
+                }
+                setResults({
+                    loadState: 'loaded',
+                    latestTx: resp,
+                    totalTxcount: count,
+                });
+            })
+            .catch((err) => {
+                setResults({
+                    ...initState,
+                    loadState: 'fail',
+                });
+                setIsLoaded(false);
+                console.error(
+                    'Encountered error when fetching recent transactions',
+                    err
+                );
+                Sentry.captureException(err);
+            });
+        return () => {
+            isMounted = false;
+        };
+    }, [count, network, pageIndex, setSearchParams, txPerPage]);
+
+    if (results.loadState === 'pending') {
+        return (
+            <div className={theme.textresults}>
+                <div className={styles.content}>Loading...</div>
+            </div>
+        );
+    }
+
+    if (!isLoaded && results.loadState === 'fail') {
+        return (
+            <ErrorResult
+                id=""
+                errorMsg="There was an issue getting the latest transactions"
+            />
+        );
+    }
+
+    if (results.loadState === 'loaded' && !results.latestTx.length) {
+        return <ErrorResult id="" errorMsg="No Transactions Found" />;
+    }
+
+    const defaultActiveTab = 0;
+    const recentTx = recentTxTable(results.latestTx, truncateLength);
+
+    const stats = {
+        count,
+        stats_text: 'Total transactions',
     };
+
+    const PaginationWithStatsOrStatsWithLink =
+        paginationtype === 'pagination' ? (
+            <Pagination
+                totalItems={count}
+                itemsPerPage={txPerPage}
+                updateItemsPerPage={setTxPerPage}
+                onPagiChangeFn={setpageIndex}
+                currentPage={pageIndex}
+                stats={stats}
+            />
+        ) : (
+            <TabFooter stats={stats}>
+                <Link className={styles.moretxbtn} to={`/`}>
+                    More Transactions <ContentForwardArrowDark />
+                </Link>
+            </TabFooter>
+        );
 
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
             <Tabs selected={defaultActiveTab}>
                 <div title="Transactions">
                     <TableCard tabledata={recentTx} />
-                    {paginationtype !== 'none' ? (
-                        paginationtype === 'pagination' ? (
-                            <Pagination
-                                totalItems={count}
-                                itemsPerPage={txPerPage}
-                                updateItemsPerPage={setTxPerPage}
-                                onPagiChangeFn={setpageIndex}
-                                currentPage={pageIndex}
-                                stats={tabsFooter.stats}
-                            />
-                        ) : (
-                            <Link className={styles.moretxbtn} to={`/`}>
-                                More Transactions <ContentForwardArrowDark />
-                            </Link>
-                        )
-                    ) : (
-                        <></>
-                    )}
+                    {paginationtype !== 'none' &&
+                        PaginationWithStatsOrStatsWithLink}
                 </div>
             </Tabs>
         </div>
