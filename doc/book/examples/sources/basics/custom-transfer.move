@@ -5,7 +5,7 @@ module examples::restricted_transfer {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::Info;
+    use sui::object::{Self, Info};
     use sui::transfer;
     use sui::sui::SUI;
 
