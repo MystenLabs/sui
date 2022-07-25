@@ -10,6 +10,14 @@ See our [JSON-RPC](json-rpc.md#sui-json-rpc-methods) doc for the list of availab
 
 > Note: As of [Sui version 0.6.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.0), the WebSocket client is for [subscription only](pubsub.md); use the HTTP client for other API methods.
 
+## References
+
+Find the `rustdoc` output for key Sui projects at:
+
+* Sui blockchain - https://mystenlabs.github.io/sui/
+* Narwhal and Tusk consensus engine - https://mystenlabs.github.io/narwhal/
+* Mysten Labs infrastructure - https://mystenlabs.github.io/mysten-infra/
+
 ## Configuration
 Add the `sui-sdk` crate in your `Cargo.toml` like so:
 ```toml
