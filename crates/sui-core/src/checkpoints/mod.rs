@@ -513,6 +513,7 @@ impl CheckpointStore {
         if !locals.no_more_fragments {
             // Send to consensus for sequencing.
             if let Some(sender) = &self.sender {
+                debug!("Send fragment: {} -- {}", self.name, other_name);
                 sender.send_to_consensus(fragment.clone())?;
             } else {
                 return Err(SuiError::from("No consensus sender configured"));
@@ -539,6 +540,14 @@ impl CheckpointStore {
         committee: &Committee,
         handle_pending_cert: impl PendCertificateForExecution,
     ) -> Result<(), FragmentInternalError> {
+        let fragment_seq = fragment.proposer.summary.sequence_number;
+        debug!(
+            execution_index=?seq,
+            cp_seq=?fragment_seq,
+            "Fragment received from consensus. Proposal: {}, other: {}",
+            fragment.proposer.authority(),
+            fragment.other.authority(),
+        );
         // Ensure we have not already processed this fragment.
         if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
             if seq <= last_seq {
@@ -553,6 +562,7 @@ impl CheckpointStore {
             .map_err(FragmentInternalError::Error)?;
 
         // Schedule for execution all the certificates that are included here.
+        // TODO: We should not schedule a cert if it has already been executed.
         handle_pending_cert
             .add_pending_certificates(
                 fragment
@@ -717,6 +727,7 @@ impl CheckpointStore {
         let locals = self.get_locals();
         let mut new_locals = locals.as_ref().clone();
         new_locals.no_more_fragments = true;
+        debug!("no_more_fragments is set");
         self.set_locals(locals, new_locals)?;
 
         Err(SuiError::from(
@@ -732,13 +743,14 @@ impl CheckpointStore {
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
-            self.latest_stored_checkpoint()?,
+            self.latest_stored_checkpoint(),
             Some(AuthenticatedCheckpoint::Signed(_))
         ));
         let seq = checkpoint.summary.sequence_number();
         self.checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
         metrics.checkpoint_sequence_number.set(*seq as i64);
+        self.clear_proposal(*seq + 1)?;
         Ok(())
     }
 
@@ -764,7 +776,22 @@ impl CheckpointStore {
             effects_store,
         )?;
         metrics.checkpoint_sequence_number.set(*seq as i64);
+        self.clear_proposal(*seq + 1)?;
         Ok(())
+    }
+
+    fn clear_proposal(
+        &mut self,
+        new_expected_next_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let locals = self.get_locals();
+
+        let mut new_locals = locals.as_ref().clone();
+        new_locals.current_proposal = None;
+        new_locals.proposal_next_transaction = None;
+        new_locals.no_more_fragments = false;
+        new_locals.next_checkpoint = new_expected_next_checkpoint;
+        self.set_locals(locals, new_locals)
     }
 
     // Helper read functions
@@ -780,15 +807,12 @@ impl CheckpointStore {
     }
 
     /// Get the latest stored checkpoint if there is one
-    pub fn latest_stored_checkpoint(
-        &mut self,
-    ) -> Result<Option<AuthenticatedCheckpoint>, SuiError> {
-        Ok(self
-            .checkpoints
+    pub fn latest_stored_checkpoint(&mut self) -> Option<AuthenticatedCheckpoint> {
+        self.checkpoints
             .iter()
             .skip_to_last()
             .next()
-            .map(|(_, ckp)| ckp))
+            .map(|(_, ckp)| ckp)
     }
 
     pub fn is_ready_to_start_epoch_change(&mut self) -> bool {
@@ -825,6 +849,7 @@ impl CheckpointStore {
         };
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
+        let size = transactions.transactions.len();
         let checkpoint_proposal = CheckpointProposal::new(
             epoch,
             checkpoint_sequence,
@@ -839,7 +864,7 @@ impl CheckpointStore {
         new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
-        info!(cp_seq=?checkpoint_sequence, "A new checkpoint proposal is created");
+        info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
         Ok(checkpoint_proposal)
     }
 
@@ -946,16 +971,6 @@ impl CheckpointStore {
 
         // Write to the database.
         batch.write()?;
-
-        // Clean up our proposal if any
-        let locals = self.get_locals();
-
-        let mut new_locals = locals.as_ref().clone();
-        new_locals.current_proposal = None;
-        new_locals.proposal_next_transaction = None;
-        new_locals.no_more_fragments = false;
-        new_locals.next_checkpoint = expected_seq + 1;
-        self.set_locals(locals, new_locals)?;
 
         Ok(())
     }
