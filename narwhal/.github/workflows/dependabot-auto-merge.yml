@@ -1,0 +1,23 @@
+name: auto-merge
+
+on:
+  pull_request_target:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    permissions:
+      contents: none
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ahmadnassri/action-dependabot-auto-merge@v2.6
+        with:
+          github-token: ${{ secrets.AUTOMERGE_TOKEN }}
+          command: 'squash and merge'
+          target: minor
