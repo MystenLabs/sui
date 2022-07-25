@@ -11,7 +11,7 @@ bcs = "0.1.3"
 arc-swap = "1.5.0"
 camino = "1.0.9"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
-serde = { version = "1.0.139", features = ["derive", "rc"] }
+serde = { version = "1.0.140", features = ["derive", "rc"] }
 serde_with = "1.14.0"
 serde_yaml = "0.8.26"
 rand = "0.7.3"
