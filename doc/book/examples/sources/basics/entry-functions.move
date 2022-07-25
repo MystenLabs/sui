@@ -3,8 +3,8 @@
 
 module examples::object {
     use sui::transfer;
-    use sui::object::Info;
-    use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, Info};
+    use sui::tx_context::TxContext;
 
     struct Object has key {
         info: Info

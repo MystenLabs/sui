@@ -62,19 +62,19 @@ module examples::donuts_with_events {
 
         let coin_balance = coin::balance_mut(payment);
         let paid = balance::split(coin_balance, shop.price);
-        let id = object::new(ctx);
+        let info = object::new(ctx);
 
         balance::join(&mut shop.balance, paid);
 
         // Emit the event using future object's ID.
-        event::emit(DonutBought { id: *object::info_id(&id) });
-        transfer::transfer(Donut { id }, tx_context::sender(ctx))
+        event::emit(DonutBought { id: *object::info_id(&info) });
+        transfer::transfer(Donut { info }, tx_context::sender(ctx))
     }
 
     /// Consume donut and get nothing...
     public entry fun eat_donut(d: Donut) {
-        let Donut { id } = d;
-        object::delete(id);
+        let Donut { info } = d;
+        object::delete(info);
     }
 
     /// Take coin from `DonutShop` and transfer it to tx sender.

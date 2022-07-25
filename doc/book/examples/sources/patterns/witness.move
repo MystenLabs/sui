@@ -4,8 +4,8 @@
 /// Module that defines a generic type `Guardian<T>` which can only be
 /// instantiated with a witness.
 module examples::guardian {
-    use sui::object::Info;
-    use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, Info};
+    use sui::tx_context::TxContext;
 
     /// Phantom parameter T can only be initialized in the `create_guardian`
     /// function. But the types passed here must have `drop`.

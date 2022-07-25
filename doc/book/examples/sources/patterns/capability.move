@@ -3,7 +3,7 @@
 
 module examples::item {
     use sui::transfer;
-    use sui::object::Info;
+    use sui::object::{Self, Info};
     use sui::utf8::{Self, String};
     use sui::tx_context::{Self, TxContext};
 

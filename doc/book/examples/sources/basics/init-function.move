@@ -3,7 +3,7 @@
 
 module examples::one_timer {
     use sui::transfer;
-    use sui::object::Info;
+    use sui::object::{Self, Info};
     use sui::tx_context::{Self, TxContext};
 
     /// The one of a kind - created in the module initializer.
