@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+const IPFS_START_STRING = 'https://ipfs.io/ipfs/';
+
 export function hexToAscii(hex: string) {
     if (!hex || typeof hex != 'string') return;
     hex = hex.replace(/^0x/, '');
@@ -28,7 +30,7 @@ export function transformURL(url: string) {
     if (!found) {
         return url;
     }
-    return `https://ipfs.io/ipfs/${found}`;
+    return `${IPFS_START_STRING}${found}`;
 }
 
 export function truncate(fullStr: string, strLen: number, separator?: string) {
@@ -49,7 +51,12 @@ export function truncate(fullStr: string, strLen: number, separator?: string) {
 }
 
 export function extractFileType(displayString: string) {
-    return ` 1 ${displayString.split('.').at(-1)?.toUpperCase()} File`;
+    return `1 ${
+        displayString.startsWith(IPFS_START_STRING) ||
+        findIPFSvalue(displayString)
+            ? 'IPFS'
+            : displayString.split('.').at(-1)?.toUpperCase()
+    } File`;
 }
 
 /* Currently unused but potentially useful:
