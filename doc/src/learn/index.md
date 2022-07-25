@@ -42,7 +42,7 @@ Go to the [Move Quick Start](../build/move/index.md) for installation, defining 
 ### Start the Sui network with Sui CLI client
 See the [Sui CLI client Quick Start](../build/cli-client.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
-### Take tic-tac-toe tutorial
+### Take the tic-tac-toe tutorial
 Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
 
 ### Program with Objects
