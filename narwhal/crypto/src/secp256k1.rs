@@ -30,11 +30,14 @@ pub struct Secp256k1PrivateKey {
     pub bytes: OnceCell<[u8; constants::SECRET_KEY_SIZE]>,
 }
 
+// Compact signature followed by one extra byte for recover id, used to recover public key from signature.
+pub const RECOVERABLE_SIGNATURE_SIZE: usize = constants::COMPACT_SIGNATURE_SIZE + 1;
+
 #[readonly::make]
 #[derive(Debug, Clone)]
 pub struct Secp256k1Signature {
-    pub sig: rust_secp256k1::ecdsa::Signature,
-    pub bytes: OnceCell<[u8; constants::COMPACT_SIGNATURE_SIZE]>,
+    pub sig: rust_secp256k1::ecdsa::RecoverableSignature,
+    pub bytes: OnceCell<[u8; RECOVERABLE_SIGNATURE_SIZE]>,
 }
 
 impl std::hash::Hash for Secp256k1PublicKey {
@@ -71,9 +74,17 @@ impl VerifyingKey for Secp256k1PublicKey {
 
 impl Verifier<Secp256k1Signature> for Secp256k1PublicKey {
     fn verify(&self, msg: &[u8], signature: &Secp256k1Signature) -> Result<(), signature::Error> {
+        // k256 defaults to keccak256 as digest to hash message for sign/verify, thus use this hash function to match in proptest.
+        #[cfg(test)]
+        let message =
+            Message::from_slice(<sha3::Keccak256 as sha3::digest::Digest>::digest(msg).as_slice())
+                .unwrap();
+
+        #[cfg(not(test))]
         let message = Message::from_hashed_data::<rust_secp256k1::hashes::sha256::Hash>(msg);
+
         let vrfy = Secp256k1::verification_only();
-        vrfy.verify_ecdsa(&message, &signature.sig, &self.pubkey)
+        vrfy.verify_ecdsa(&message, &signature.sig.to_standard(), &self.pubkey)
             .map_err(|_e| signature::Error::new())
     }
 }
@@ -218,7 +229,8 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
 
 impl Signature for Secp256k1Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        match rust_secp256k1::ecdsa::Signature::from_compact(bytes) {
+        let recovery_id = rust_secp256k1::ecdsa::RecoveryId::from_i32(bytes[64] as i32).unwrap();
+        match rust_secp256k1::ecdsa::RecoverableSignature::from_compact(&bytes[..64], recovery_id) {
             Ok(sig) => Ok(Secp256k1Signature {
                 sig,
                 bytes: OnceCell::new(),
@@ -231,13 +243,17 @@ impl Signature for Secp256k1Signature {
 impl Authenticator for Secp256k1Signature {
     type PubKey = Secp256k1PublicKey;
     type PrivKey = Secp256k1PrivateKey;
-    const LENGTH: usize = constants::COMPACT_SIGNATURE_SIZE;
+    const LENGTH: usize = RECOVERABLE_SIGNATURE_SIZE;
 }
 
 impl AsRef<[u8]> for Secp256k1Signature {
     fn as_ref(&self) -> &[u8] {
+        let mut bytes = [0u8; RECOVERABLE_SIGNATURE_SIZE];
+        let (recovery_id, sig) = self.sig.serialize_compact();
+        bytes[..64].copy_from_slice(&sig);
+        bytes[64] = recovery_id.to_i32() as u8;
         self.bytes
-            .get_or_try_init::<_, eyre::Report>(|| Ok(self.sig.serialize_compact()))
+            .get_or_try_init::<_, eyre::Report>(|| Ok(bytes))
             .expect("OnceCell invariant violated")
     }
 }
@@ -264,8 +280,7 @@ impl Display for Secp256k1Signature {
 
 impl Default for Secp256k1Signature {
     fn default() -> Self {
-        <Secp256k1Signature as Signature>::from_bytes(&[0u8; constants::COMPACT_SIGNATURE_SIZE])
-            .unwrap()
+        <Secp256k1Signature as Signature>::from_bytes(&[1u8; RECOVERABLE_SIGNATURE_SIZE]).unwrap()
     }
 }
 
@@ -340,10 +355,17 @@ impl FromStr for Secp256k1KeyPair {
 
 impl Signer<Secp256k1Signature> for Secp256k1KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Secp256k1Signature, signature::Error> {
-        let secp = Secp256k1::new();
+        let secp = Secp256k1::signing_only();
+        #[cfg(test)]
+        let message =
+            Message::from_slice(<sha3::Keccak256 as sha3::digest::Digest>::digest(msg).as_slice())
+                .unwrap();
+
+        #[cfg(not(test))]
         let message = Message::from_hashed_data::<rust_secp256k1::hashes::sha256::Hash>(msg);
+
         Ok(Secp256k1Signature {
-            sig: secp.sign_ecdsa(&message, &self.secret.privkey),
+            sig: secp.sign_ecdsa_recoverable(&message, &self.secret.privkey),
             bytes: OnceCell::new(),
         })
     }

@@ -20,7 +20,9 @@ tokio = { version = "1.20.0", features = ["sync", "rt", "macros"] }
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
 hkdf = { version = "0.12.3", features = ["std"] }
 serde_with = "1.14.0"
-rust_secp256k1 = { version = "0.24.0", package = "secp256k1", features = ["rand", "bitcoin_hashes"] }
+serde_json = "1.0.80"
+schemars ="0.8.10"
+rust_secp256k1 = { version = "0.24.0", package = "secp256k1", features = ["recovery", "rand-std", "bitcoin_hashes", "global-context"] }
 
 # TODO: switch to https://github.com/celo-org/celo-bls-snark-rs 
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
@@ -57,5 +59,4 @@ sha3 = "0.10.1"
 hex-literal = "0.3.4"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
-serde_json = "1.0.80"
-k256 = { version = "0.11.3", features = ["ecdsa", "sha256"] }
+k256 = { version = "0.11.3", features = ["ecdsa", "sha256", "keccak256"] }
