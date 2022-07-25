@@ -7,7 +7,7 @@ img.smallimage {
 }
 
 .container {
-    @apply w-[100%] z-50 fixed left-0 top-0 text-center justify-center flex flex-wrap;
+    @apply w-[100%] h-[90%] z-50 fixed left-0 top-[5%] text-center justify-center flex flex-wrap;
 }
 
 img.largeimage {
