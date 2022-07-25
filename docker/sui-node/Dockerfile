@@ -39,8 +39,9 @@ RUN cargo build --profile $PROFILE --bin sui-node
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
+ARG PROFILE=release
 WORKDIR sui
-COPY --from=builder /sui/target/$PROFILE/sui-node /usr/local/bin
+COPY --from=builder "/sui/target/$PROFILE/sui-node" /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REVISION
