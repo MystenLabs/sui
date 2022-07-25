@@ -8,15 +8,15 @@ use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
-use std::sync::{Arc, Barrier};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use strum_macros::EnumString;
-use sui_benchmark::stress::context::get_latest;
-use sui_benchmark::stress::context::Payload;
-use sui_benchmark::stress::context::StressTestCtx;
-use sui_benchmark::stress::shared_counter::SharedCounterTestCtx;
-use sui_benchmark::stress::transfer_object::TransferObjectTestCtx;
+use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
+use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
+use sui_benchmark::workloads::workload::get_latest;
+use sui_benchmark::workloads::workload::Payload;
+use sui_benchmark::workloads::workload::Workload;
 use sui_config::Config;
 use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
@@ -33,12 +33,15 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{AccountKeyPair, EmptySignInfo};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    Transaction, TransactionEnvelope,
+    TransactionEnvelope,
 };
-use test_utils::authority::{spawn_test_authorities, test_and_configure_authority_configs};
+use test_utils::authority::spawn_test_authorities;
+use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::objects::generate_gas_objects_with_owner;
 use test_utils::test_account_keys;
 use tokio::runtime::Builder;
+use tokio::sync::Barrier;
+use tokio::sync::OnceCell;
 use tokio::time;
 use tokio::time::Instant;
 use tracing::{debug, error};
@@ -116,128 +119,98 @@ enum TransactionType {
     TransferObject,
 }
 
-type RetryType = Box<(TransactionEnvelope<EmptySignInfo>, Arc<dyn Payload>)>;
+type RetryType = Box<(TransactionEnvelope<EmptySignInfo>, Box<dyn Payload>)>;
 enum NextOp {
     Response(Option<(Instant, Box<dyn Payload>)>),
-    Retry(Box<(Transaction, Arc<dyn Payload>)>),
+    Retry(RetryType),
+}
+
+async fn print_start_benchmark() {
+    static ONCE: OnceCell<bool> = OnceCell::const_new();
+    ONCE.get_or_init(|| async move {
+        eprintln!("Starting benchmark!");
+        true
+    })
+    .await;
 }
 
 async fn run(
     clients: AuthorityAggregator<NetworkAuthorityClient>,
-    payloads: Vec<Arc<dyn Payload>>,
+    workload: Box<dyn Workload<dyn Payload>>,
+    num_requests_per_worker: u64,
     opts: Opts,
+    barrier: Arc<Barrier>,
 ) {
-    eprintln!("Starting benchmark!");
-    let payload_per_worker = payloads.len() / opts.num_workers as usize;
-    let partitioned_payload: Vec<Vec<Arc<dyn Payload>>> = payloads
-        .chunks(payload_per_worker)
-        .map(|s| s.into())
-        .collect();
     let mut tasks = Vec::new();
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     let request_delay_micros = 1_000_000 / (opts.num_workers * opts.target_qps);
     let stat_delay_micros = 1_000_000 * opts.stat_collection_interval;
-    (0..opts.num_workers).for_each(|i| {
-            let mut free_pool = partitioned_payload[i as usize].clone();
-            // Make a per worker quorum driver, otherwise they all share the same task.
-            let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
-            let qd = quorum_driver_handler.clone_quorum_driver();
-            let tx_cloned = tx.clone();
+
+    for i in 0..opts.num_workers {
+        eprintln!("Starting worker: {}", i);
+        let mut free_pool = workload
+            .make_test_payloads(num_requests_per_worker, &clients)
+            .await;
+        let tx_cloned = tx.clone();
+        let cloned_barrier = barrier.clone();
+        // Make a per worker quorum driver, otherwise they all share the same task.
+        let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
+        let qd = quorum_driver_handler.clone_quorum_driver();
+        let runner = tokio::spawn(async move {
+            cloned_barrier.wait().await;
+            print_start_benchmark().await;
+            let mut num_success = 0;
+            let mut num_error = 0;
+            let mut min_latency = Duration::MAX;
+            let mut max_latency = Duration::ZERO;
+            let mut num_no_gas = 0;
+            let mut num_in_flight: u64 = 0;
+            let mut num_submitted = 0;
             let mut request_interval = time::interval(Duration::from_micros(request_delay_micros));
             request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
 
             let mut stat_interval = time::interval(Duration::from_micros(stat_delay_micros));
-            let runner = tokio::spawn(async move {
-                let mut num_success = 0;
-                let mut num_error = 0;
-                let mut min_latency = Duration::MAX;
-                let mut max_latency = Duration::ZERO;
-                let mut num_no_gas = 0;
-                let mut num_in_flight: u64 = 0;
-                let mut num_submitted = 0;
-                let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
+            let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
 
-                let mut retry_queue : VecDeque<RetryType> = VecDeque::new();
+            let mut retry_queue: VecDeque<RetryType> = VecDeque::new();
 
-                loop {
-                    tokio::select! {
-                        _ = stat_interval.tick() => {
-                            if tx_cloned
-                                .send(Stats {
-                                    id: i as usize,
-                                    num_success,
-                                    num_error,
-                                    min_latency,
-                                    max_latency,
-                                    num_no_gas,
-                                    num_in_flight,
-                                    num_submitted,
-                                    duration: Duration::from_micros(stat_delay_micros),
-                                })
-                                .await
-                                .is_err()
-                            {
-                                debug!("Failed to update stat!");
-                            }
-                            num_success = 0;
-                            num_error = 0;
-                            num_no_gas = 0;
-                            num_submitted = 0;
-                            min_latency = Duration::MAX;
-                            max_latency = Duration::ZERO;
+            loop {
+                tokio::select! {
+                    _ = stat_interval.tick() => {
+                        if tx_cloned
+                            .send(Stats {
+                                id: i as usize,
+                                num_success,
+                                num_error,
+                                min_latency,
+                                max_latency,
+                                num_no_gas,
+                                num_in_flight,
+                                num_submitted,
+                                duration: Duration::from_micros(stat_delay_micros),
+                            })
+                            .await
+                            .is_err()
+                        {
+                            debug!("Failed to update stat!");
                         }
-                        _ = request_interval.tick() => {
+                        num_success = 0;
+                        num_error = 0;
+                        num_no_gas = 0;
+                        num_submitted = 0;
+                        min_latency = Duration::MAX;
+                        max_latency = Duration::ZERO;
+                    }
+                    _ = request_interval.tick() => {
 
-                            // If a retry is available send that
-                            // (sending retries here subjects them to our rate limit)
-                            if let Some(b) = retry_queue.pop_front() {
-
-                                num_submitted += 1;
-                                num_error += 1;
-                                let res = qd
-                                    .execute_transaction(ExecuteTransactionRequest {
-                                        transaction: b.0.clone(),
-                                        request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-                                    })
-                                    .map(move |res| {
-                                        match res {
-                                            Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
-                                                let (_, effects) = *result;
-                                                let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
-                                                    object_ref.0 == b.1.get_object_id()
-                                                }).map(|x| x.0).unwrap();
-                                                NextOp::Response(Some((
-                                                    Instant::now(),
-                                                    b.1.make_new_payload(new_version, effects.effects.gas_object.0),
-                                                ),
-                                                ))
-                                            }
-                                            Ok(resp) => {
-                                                error!("unexpected_response: {:?}", resp);
-                                                NextOp::Retry(b)
-                                            }
-                                            Err(sui_err) => {
-                                                error!("{}", sui_err);
-                                                NextOp::Retry(b)
-                                            }
-                                        }
-                                    });
-                                futures.push(Box::pin(res));
-                                continue
-                            }
-
-                            // Otherwise send a fresh request
-                            if free_pool.is_empty() {
-                                num_no_gas += 1;
-                            } else {
-                                num_in_flight += 1;
-                                num_submitted += 1;
-                                let payload = free_pool.pop().unwrap();
-                                let tx = payload.make_transaction();
-                                let start = Instant::now();
-                                let res = qd
-                                    .execute_transaction(ExecuteTransactionRequest {
-                                        transaction: tx.clone(),
+                        // If a retry is available send that
+                        // (sending retries here subjects them to our rate limit)
+                        if let Some(b) = retry_queue.pop_front() {
+                            num_submitted += 1;
+                            num_error += 1;
+                            let res = qd
+                                .execute_transaction(ExecuteTransactionRequest {
+                                    transaction: b.0.clone(),
                                     request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
                                 })
                                 .map(move |res| {
@@ -245,54 +218,95 @@ async fn run(
                                         Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
                                             let (_, effects) = *result;
                                             let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
-                                                object_ref.0 == payload.get_object_id()
+                                                object_ref.0 == b.1.get_object_id()
                                             }).map(|x| x.0).unwrap();
                                             NextOp::Response(Some((
-                                                start,
-                                                payload.make_new_payload(new_version, effects.effects.gas_object.0),
-                                            )))
+                                                Instant::now(),
+                                                b.1.make_new_payload(new_version, effects.effects.gas_object.0),
+                                            ),
+                                            ))
                                         }
                                         Ok(resp) => {
                                             error!("unexpected_response: {:?}", resp);
-                                            NextOp::Retry(Box::new((tx, payload)))
+                                            NextOp::Retry(b)
                                         }
                                         Err(sui_err) => {
-                                            error!("Retry due to error: {}", sui_err);
-                                            NextOp::Retry(Box::new((tx, payload)))
+                                            error!("{}", sui_err);
+                                            NextOp::Retry(b)
                                         }
                                     }
                                 });
-                                futures.push(Box::pin(res));
-                            }
+                            futures.push(Box::pin(res));
+                            continue
                         }
-                        Some(op) = futures.next() => {
-                            match op {
-                                NextOp::Retry(b) => {
-                                    retry_queue.push_back(b);
-                                }
-                                NextOp::Response(Some((start, payload))) => {
-                                    free_pool.push(Arc::from(payload));
-                                    let latency = start.elapsed();
-                                    num_success += 1;
-                                    num_in_flight -= 1;
-                                    if latency > max_latency {
-                                        max_latency = latency;
+
+                        // Otherwise send a fresh request
+                        if free_pool.is_empty() {
+                            num_no_gas += 1;
+                        } else {
+                            num_in_flight += 1;
+                            num_submitted += 1;
+                            let payload = free_pool.pop().unwrap();
+                            let tx = payload.make_transaction();
+                            let start = Instant::now();
+                            let res = qd
+                                .execute_transaction(ExecuteTransactionRequest {
+                                    transaction: tx.clone(),
+                                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                            })
+                            .map(move |res| {
+                                match res {
+                                    Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+                                        let (_, effects) = *result;
+                                        let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
+                                            object_ref.0 == payload.get_object_id()
+                                        }).map(|x| x.0).unwrap();
+                                        NextOp::Response(Some((
+                                            start,
+                                            payload.make_new_payload(new_version, effects.effects.gas_object.0),
+                                        )))
                                     }
-                                    if latency < min_latency {
-                                        min_latency = latency;
+                                    Ok(resp) => {
+                                        error!("unexpected_response: {:?}", resp);
+                                        NextOp::Retry(Box::new((tx, payload)))
+                                    }
+                                    Err(sui_err) => {
+                                        error!("Retry due to error: {}", sui_err);
+                                        NextOp::Retry(Box::new((tx, payload)))
                                     }
                                 }
-                                NextOp::Response(None) => {
-                                    // num_in_flight -= 1;
-                                    unreachable!();
+                            });
+                            futures.push(Box::pin(res));
+                        }
+                    }
+                    Some(op) = futures.next() => {
+                        match op {
+                            NextOp::Retry(b) => {
+                                retry_queue.push_back(b);
+                            }
+                            NextOp::Response(Some((start, payload))) => {
+                                free_pool.push(payload);
+                                let latency = start.elapsed();
+                                num_success += 1;
+                                num_in_flight -= 1;
+                                if latency > max_latency {
+                                    max_latency = latency;
                                 }
+                                if latency < min_latency {
+                                    min_latency = latency;
+                                }
+                            }
+                            NextOp::Response(None) => {
+                                // num_in_flight -= 1;
+                                unreachable!();
                             }
                         }
                     }
                 }
-            });
-            tasks.push(runner);
+            }
         });
+        tasks.push(runner);
+    }
 
     tasks.push(tokio::spawn(async move {
             let mut stat_collection: BTreeMap<usize, Stats> = BTreeMap::new();
@@ -350,22 +364,20 @@ async fn run(
     try_join_all(tasks).await.unwrap().into_iter().collect()
 }
 
-fn make_test_ctx(
+fn make_workload(
     primary_gas_id: ObjectID,
     primary_gas_account_owner: SuiAddress,
-    primary_gas_account_keypair: AccountKeyPair,
-    max_in_flight_ops: usize,
+    primary_gas_account_keypair: Arc<AccountKeyPair>,
     opts: &Opts,
-) -> Box<dyn StressTestCtx<dyn Payload>> {
+) -> Box<dyn Workload<dyn Payload>> {
     match opts.transaction_type {
-        TransactionType::SharedCounter => SharedCounterTestCtx::make_ctx(
-            max_in_flight_ops as u64,
+        TransactionType::SharedCounter => SharedCounterWorkload::new_boxed(
             primary_gas_id,
             primary_gas_account_owner,
             primary_gas_account_keypair,
+            None,
         ),
-        TransactionType::TransferObject => TransferObjectTestCtx::make_ctx(
-            max_in_flight_ops as u64,
+        TransactionType::TransferObject => TransferObjectWorkload::new_boxed(
             opts.num_transfer_accounts,
             primary_gas_id,
             primary_gas_account_owner,
@@ -426,16 +438,16 @@ async fn main() -> Result<()> {
                 // Setup the network
                 let nodes: Vec<SuiNode> = spawn_test_authorities(cloned_gas, &cloned_config).await;
                 let handles: Vec<_> = nodes.into_iter().map(move |node| node.wait()).collect();
-                cloned_barrier.wait();
+                cloned_barrier.wait().await;
                 if try_join_all(handles).await.is_err() {
                     error!("Failed while waiting for nodes");
                 }
             });
         });
-        (primary_gas_id, owner, keypair, gateway_config)
+        (primary_gas_id, owner, Arc::new(keypair), gateway_config)
     } else {
         eprintln!("Configuring remote benchmark..");
-        cloned_barrier.wait();
+        cloned_barrier.wait().await;
         let config_path = Some(&opts.gateway_config_path)
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
@@ -483,12 +495,11 @@ async fn main() -> Result<()> {
         (
             primary_gas_id,
             primary_gas_account,
-            keypair.parse()?,
+            Arc::new(keypair.parse()?),
             config,
         )
     };
-    barrier.wait();
-    let ctx = make_test_ctx(primary_gas_id, owner, keypair, max_in_flight_ops, &opts);
+    barrier.wait().await;
     // create client runtime
     let client_runtime = Builder::new_multi_thread()
         .enable_all()
@@ -502,13 +513,17 @@ async fn main() -> Result<()> {
             let authority_clients = gateway_config.make_authority_clients();
             let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
             let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
-            let mut payloads = ctx.make_test_payloads(&aggregator).await;
-            let mut p: Vec<Arc<dyn Payload>> = vec![];
-            while !payloads.is_empty() {
-                let entry: Box<dyn Payload> = payloads.pop().unwrap();
-                p.push(Arc::from(entry));
-            }
-            run(aggregator, p, opts).await
+            let mut workload = make_workload(primary_gas_id, owner, keypair, &opts);
+            workload.init(&aggregator).await;
+            let barrier = Arc::new(Barrier::new(opts.num_workers as usize));
+            run(
+                aggregator,
+                workload,
+                max_in_flight_ops as u64 / opts.num_workers,
+                opts,
+                barrier,
+            )
+            .await
         });
     });
     if handle.join().is_err() {

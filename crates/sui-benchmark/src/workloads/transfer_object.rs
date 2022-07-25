@@ -17,8 +17,8 @@ use sui_types::{
 
 use test_utils::messages::make_transfer_object_transaction;
 
-use super::context::{
-    get_latest, transfer_sui_for_testing, Gas, Payload, StressTestCtx, MAX_GAS_FOR_TESTING,
+use super::workload::{
+    get_latest, transfer_sui_for_testing, Gas, Payload, Workload, WorkloadType, MAX_GAS_FOR_TESTING,
 };
 
 pub struct TransferObjectTestPayload {
@@ -30,7 +30,11 @@ pub struct TransferObjectTestPayload {
 }
 
 impl Payload for TransferObjectTestPayload {
-    fn make_new_payload(&self, new_object: ObjectRef, new_gas: ObjectRef) -> Box<dyn Payload> {
+    fn make_new_payload(
+        self: Box<Self>,
+        new_object: ObjectRef,
+        new_gas: ObjectRef,
+    ) -> Box<dyn Payload> {
         let updated_gas: Vec<Gas> = self
             .gas
             .iter()
@@ -72,33 +76,33 @@ impl Payload for TransferObjectTestPayload {
     fn get_object_id(&self) -> ObjectID {
         self.transfer_object.0
     }
+    fn get_workload_type(&self) -> WorkloadType {
+        WorkloadType::TransferObject
+    }
 }
 
-pub struct TransferObjectTestCtx {
+pub struct TransferObjectWorkload {
     pub test_gas: ObjectID,
     pub test_gas_owner: SuiAddress,
-    pub test_gas_keypair: AccountKeyPair,
-    pub num_transfer_objects: u64,
+    pub test_gas_keypair: Arc<AccountKeyPair>,
     pub num_accounts: u64,
     pub transfer_keypairs: Arc<HashMap<SuiAddress, AccountKeyPair>>,
 }
 
-impl TransferObjectTestCtx {
-    pub fn make_ctx(
-        count: u64,
+impl TransferObjectWorkload {
+    pub fn new_boxed(
         num_accounts: u64,
         gas: ObjectID,
         owner: SuiAddress,
-        keypair: AccountKeyPair,
-    ) -> Box<dyn StressTestCtx<dyn Payload>> {
+        keypair: Arc<AccountKeyPair>,
+    ) -> Box<dyn Workload<dyn Payload>> {
         // create several accounts to transfer object between
         let keypairs: Arc<HashMap<SuiAddress, AccountKeyPair>> =
             Arc::new((0..num_accounts).map(|_| get_key_pair()).collect());
-        Box::new(TransferObjectTestCtx {
+        Box::new(TransferObjectWorkload {
             test_gas: gas,
             test_gas_owner: owner,
             test_gas_keypair: keypair,
-            num_transfer_objects: count,
             num_accounts,
             transfer_keypairs: keypairs,
         })
@@ -106,9 +110,13 @@ impl TransferObjectTestCtx {
 }
 
 #[async_trait]
-impl StressTestCtx<dyn Payload> for TransferObjectTestCtx {
+impl Workload<dyn Payload> for TransferObjectWorkload {
+    async fn init(&mut self, _aggregator: &AuthorityAggregator<NetworkAuthorityClient>) {
+        return;
+    }
     async fn make_test_payloads(
         &self,
+        count: u64,
         aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
     ) -> Vec<Box<dyn Payload>> {
         // Read latest test gas object
@@ -120,8 +128,9 @@ impl StressTestCtx<dyn Payload> for TransferObjectTestCtx {
             .choose(&mut rand::thread_rng())
             .unwrap();
         // create as many gas objects as there are number of transfer objects times number of accounts
+        eprintln!("Creating enough gas to transfer objects..");
         let mut transfer_gas: Vec<Vec<Gas>> = vec![];
-        for _i in 0..self.num_transfer_objects {
+        for _i in 0..count {
             let mut account_transfer_gas = vec![];
             for (owner, _) in self.transfer_keypairs.iter() {
                 if let Some((updated, minted)) = transfer_sui_for_testing(
@@ -139,9 +148,10 @@ impl StressTestCtx<dyn Payload> for TransferObjectTestCtx {
             }
             transfer_gas.push(account_transfer_gas);
         }
+        eprintln!("Creating objects to transfer..");
         // create transfer objects with 1 SUI value each
         let mut transfer_objects: Vec<Gas> = vec![];
-        for _i in 0..self.num_transfer_objects {
+        for _i in 0..count {
             if let Some((updated, minted)) = transfer_sui_for_testing(
                 (primary_gas_ref, Owner::AddressOwner(self.test_gas_owner)),
                 &self.test_gas_keypair,
