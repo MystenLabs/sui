@@ -16,7 +16,7 @@ rand = { version = "0.7.3", features = ["std"] }
 serde = { version = "1.0.139", features = ["derive"] }
 zeroize = "1.5.7"
 signature = "1.5.0"
-tokio = { version = "1.20.0", features = ["sync", "rt", "macros"] }
+tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
 hkdf = { version = "0.12.3", features = ["std"] }
 serde_with = "1.14.0"

@@ -17,7 +17,7 @@ futures = "0.3.21"
 rand = "0.7.3"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 thiserror = "1.0.31"
-tokio = { version = "1.20.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = "0.1.9"
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tracing = "0.1.35"
