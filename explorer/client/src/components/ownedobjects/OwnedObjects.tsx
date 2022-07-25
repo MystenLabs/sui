@@ -302,7 +302,10 @@ function OwnedObjectView({ results }: { results: resultType }) {
                 <div className={styles.objectbox} key={`object-${index1}`}>
                     {entryObj.display !== undefined && (
                         <div className={styles.previewimage}>
-                            <DisplayBox display={entryObj.display} />
+                            <DisplayBox
+                                display={entryObj.display}
+                                caption={trimStdLibPrefix(entryObj.Type)}
+                            />
                         </div>
                     )}
                     <div className={styles.textitem}>

@@ -12,7 +12,13 @@ import { transformURL } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
-function DisplayBox({ display }: { display: string }) {
+function DisplayBox({
+    display,
+    caption,
+}: {
+    display: string;
+    caption?: string;
+}) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
 
@@ -93,7 +99,9 @@ function DisplayBox({ display }: { display: string }) {
                                 src={transformURL(display)}
                             />
                             <span className={styles.cross}>&times;</span>
-                            <div className={styles.caption}>Text</div>
+                            {caption && (
+                                <div className={styles.caption}>{caption}</div>
+                            )}
                         </div>
                         <div className={styles.detailsbg} />
                     </div>

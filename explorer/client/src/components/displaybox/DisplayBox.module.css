@@ -7,7 +7,7 @@ img.smallimage {
 }
 
 .container {
-    @apply w-[100%] z-50 fixed left-0 top-[10vh] text-center justify-center flex flex-wrap;
+    @apply w-[100%] z-50 fixed left-0 top-[5vh] text-center justify-center flex flex-wrap;
 }
 
 img.largeimage {
@@ -22,7 +22,7 @@ span.cross {
 }
 
 div.caption {
-    @apply w-[80vw] text-offwhite z-50 text-left;
+    @apply w-[90vw] text-offwhite z-50 text-left text-2xl font-semibold mt-5;
 }
 
 div.detailsbg {
