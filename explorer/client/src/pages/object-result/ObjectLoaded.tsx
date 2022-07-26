@@ -293,7 +293,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                     ) : (
                         <ModulesWrapper
                             data={{
-                                title: '',
+                                title: 'Modules',
                                 content: properties,
                             }}
                         />

@@ -32,7 +32,7 @@ function ModuleViewWrapper({ data }: { data: Modules }) {
 
     return (
         <div className={styles.modulewraper}>
-            <h3 className={styles.title}>Modules </h3>
+            <h3 className={styles.title}>{data.title}</h3>
             <div className={styles.module}>
                 {moduleData.content
                     .filter(
