@@ -1049,6 +1049,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a28b32d32ca44b70c3e4acd7db1babf555fa026e385fb95f18028f88848b3c31"
+dependencies = [
+ "encode_unicode",
+ "libc",
+ "once_cell",
+ "terminal_size",
+ "winapi",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1841,6 +1854,12 @@ dependencies = [
  "subtle",
  "zeroize",
 ]
+
+[[package]]
+name = "encode_unicode"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
 name = "encoding_rs"
@@ -2774,6 +2793,22 @@ checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.1",
+]
+
+[[package]]
+name = "insta"
+version = "1.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36fb7ec420af04ce7d1a422945cd19c52bf01772ead45934cee77f056dca1081"
+dependencies = [
+ "console",
+ "once_cell",
+ "pest",
+ "pest_derive",
+ "serde 1.0.140",
+ "serde_json",
+ "serde_yaml",
+ "similar",
 ]
 
 [[package]]
@@ -6189,6 +6224,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "similar"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e24979f63a11545f5f2c60141afe249d4f19f84581ea2138065e400941d83d3"
+
+[[package]]
 name = "simplelog"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6657,6 +6698,7 @@ dependencies = [
  "config 0.1.0",
  "crypto",
  "dirs",
+ "insta",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -7301,6 +7343,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bab24d30b911b2376f3a13cc2cd443142f0c81dda04c118693e35b3835757755"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "terminal_size"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633c1a546cee861a1a6d0dc69ebeca693bf4296661ba7852b9d21d159e0506df"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -8726,6 +8778,7 @@ dependencies = [
  "config 0.1.0",
  "config 0.11.0",
  "consensus",
+ "console",
  "const-oid",
  "constant_time_eq",
  "core2",
@@ -8872,6 +8925,7 @@ dependencies = [
  "include_dir_macros",
  "indenter",
  "indexmap",
+ "insta",
  "instant",
  "integer-encoding",
  "internment",
@@ -9132,6 +9186,7 @@ dependencies = [
  "shell-words",
  "shlex",
  "signature",
+ "similar",
  "simplelog",
  "siphasher",
  "sized-chunks",
@@ -9172,6 +9227,7 @@ dependencies = [
  "tempfile",
  "tera",
  "termcolor",
+ "terminal_size",
  "termtree",
  "test-fuzz",
  "test-fuzz-internal",

@@ -1,0 +1,17 @@
+---
+source: crates/sui-config/tests/snapshot_tests.rs
+expression: genesis.narwhal_committee()
+---
+authorities:
+  IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ/LRIhon3oUQ=:
+    stake: 1
+    primary:
+      primary_to_primary: ""
+      worker_to_primary: ""
+    workers:
+      0:
+        transactions: ""
+        worker_to_worker: ""
+        primary_to_worker: ""
+epoch: 0
+

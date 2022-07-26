@@ -33,4 +33,5 @@ sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
+insta = { version = "1.16.0", features = ["redactions"] }
 tempfile = "3.3.0"

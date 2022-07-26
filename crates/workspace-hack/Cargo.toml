@@ -93,6 +93,7 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 config-1ff49526a7fa5493 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", features = ["benchmark", "rand"] }
+console = { version = "0.15", default-features = false }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -221,6 +222,7 @@ im = { version = "15", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["std"] }
+insta = { version = "1", features = ["colors", "console", "pest", "pest_derive", "redactions"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
@@ -441,6 +443,7 @@ sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9", features = ["std"] 
 sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1", features = ["std"] }
 signature = { version = "1", features = ["digest", "digest-preview", "rand-preview", "rand_core", "std"] }
+similar = { version = "2", features = ["inline", "text"] }
 simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
@@ -475,6 +478,7 @@ telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", re
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
+terminal_size = { version = "0.1", default-features = false }
 termtree = { version = "0.2", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
@@ -661,6 +665,7 @@ combine = { version = "4", features = ["alloc", "bytes", "std"] }
 config-1ff49526a7fa5493 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", features = ["benchmark", "rand"] }
+console = { version = "0.15", default-features = false }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
@@ -807,6 +812,7 @@ include_dir = { version = "0.7", features = ["glob"] }
 include_dir_macros = { version = "0.7", default-features = false }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["std"] }
+insta = { version = "1", features = ["colors", "console", "pest", "pest_derive", "redactions"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
@@ -1067,6 +1073,7 @@ sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1", features = ["std"] }
 shlex = { version = "1", features = ["std"] }
 signature = { version = "1", features = ["digest", "digest-preview", "rand-preview", "rand_core", "std"] }
+similar = { version = "2", features = ["inline", "text"] }
 simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
@@ -1107,6 +1114,7 @@ telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", re
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
+terminal_size = { version = "0.1", default-features = false }
 termtree = { version = "0.2", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }

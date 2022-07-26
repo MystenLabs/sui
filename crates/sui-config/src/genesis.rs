@@ -535,8 +535,6 @@ mod test {
             .generate_accounts(&mut rand::rngs::OsRng)
             .unwrap();
 
-        let mut builder = Builder::new().add_objects(objects);
-
         let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
@@ -551,8 +549,7 @@ mod test {
             narwhal_consensus_address: utils::new_network_address(),
         };
 
-        builder = builder.add_validator(validator);
-
+        let builder = Builder::new().add_objects(objects).add_validator(validator);
         builder.save(dir.path()).unwrap();
         Builder::load(dir.path()).unwrap();
     }
