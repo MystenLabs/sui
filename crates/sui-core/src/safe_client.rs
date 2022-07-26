@@ -367,16 +367,18 @@ where
     /// Handle Transaction + Effects information requests for this account.
     pub async fn handle_transaction_and_effects_info_request(
         &self,
-        digest: &TransactionDigest,
-        effects_digest: Option<&TransactionEffectsDigest>,
+        digests: &ExecutionDigests,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_info = self
             .authority_client
-            .handle_transaction_info_request((*digest).into())
+            .handle_transaction_info_request(digests.transaction.into())
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, effects_digest, &transaction_info)
-        {
+        if let Err(err) = self.check_transaction_response(
+            &digests.transaction,
+            Some(&digests.effects),
+            &transaction_info,
+        ) {
             self.report_client_error(err.clone());
             return Err(err);
         }
