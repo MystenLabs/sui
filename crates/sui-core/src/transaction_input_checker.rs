@@ -4,6 +4,7 @@
 use crate::authority::SuiDataStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt::Debug;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -22,7 +23,7 @@ pub async fn check_transaction_input<S, T>(
     transaction: &TransactionEnvelope<T>,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let mut gas_status = check_gas(
         store,
@@ -57,7 +58,7 @@ async fn check_gas<S>(
     is_system_tx: bool,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     if is_system_tx {
         Ok(SuiGasStatus::new_unmetered())
@@ -87,7 +88,7 @@ async fn fetch_objects<S>(
     input_objects: &[InputObjectKind],
 ) -> Result<Vec<Option<Object>>, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
     store.get_objects(&ids[..])
@@ -101,7 +102,7 @@ async fn check_locks<S>(
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let input_objects = transaction.input_objects()?;
     // These IDs act as authenticators that can own other objects.
