@@ -8,7 +8,7 @@
  * @module rpc
  */
 
-import { SuiObjectRef } from './types';
+import { SuiObjectRef } from "./types";
 
 /**
  * Result of a `sui_getObject` RPC call.
@@ -68,7 +68,7 @@ export type TxResponse = {
    * Lists created objects grouped by their types.
    * Only @PublishTx
    */
-  createdByType?: { [key: string]: SuiObjectRef };
+  createdByType: { [key: string]: SuiObjectRef[] };
   /**
    * Lists deleted objects indexed by objectid. Only available in
    * @MoveCallTx
@@ -129,7 +129,7 @@ export class RpcClient {
    * @param id ID of the object to fetch
    */
   public async fetchObj(id: string): Promise<any> {
-    let res = await this.req('sui_getObject', [id]);
+    let res = await this.req("sui_getObject", [id]);
     return res;
   }
 
@@ -139,7 +139,7 @@ export class RpcClient {
    */
   public async fetchObjRef(id: string): Promise<SuiObjectRef> {
     return this.fetchObj(id).then(
-      o => (o.details && o.details.reference) || null
+      (o) => (o.details && o.details.reference) || null
     );
   }
 
@@ -148,7 +148,7 @@ export class RpcClient {
    * @param address Address of the account to fetch objects for
    */
   public async myObjects(address: string): Promise<OwnedObjectResponse[]> {
-    return this.req('sui_getObjectsOwnedByAddress', [address]);
+    return this.req("sui_getObjectsOwnedByAddress", [address]);
   }
 
   /**
@@ -170,13 +170,13 @@ export class RpcClient {
    * Send a signed transaction to the Gateway.
    */
   public async sendTx(args: any[]): Promise<TxResponse> {
-    let res = await this.reqTx('sui_executeTransaction', args);
+    let res = await this.reqTx("sui_executeTransaction", args);
     if (res.error) {
       return Promise.reject(res);
     }
 
     // Process MoveCallTx and reach uniformity with the TxResponse type.
-    if ('EffectResponse' in res) {
+    if ("EffectResponse" in res) {
       let processed = res.EffectResponse.effects;
 
       let created = groupRefs(processed.created || []);
@@ -186,7 +186,7 @@ export class RpcClient {
       let deleted = groupRefs(processed.deleted || []);
 
       let events = (processed.events || [])
-        .filter((obj: object) => 'moveEvent' in obj)
+        .filter((obj: object) => "moveEvent" in obj)
         .reduce(
           (acc: object, { moveEvent: evt }: any) =>
             Object.assign(acc, {
@@ -201,6 +201,7 @@ export class RpcClient {
         wrapped,
         unwrapped,
         created,
+        createdByType: {},
         deleted,
         events,
         gas: processed.gasObject.reference,
@@ -210,7 +211,7 @@ export class RpcClient {
     }
 
     // Process publish transaction and reach uniformity with the TxResponse type.
-    if ('PublishResponse' in res) {
+    if ("PublishResponse" in res) {
       res = res.PublishResponse;
 
       let created = groupRefs(res.createdObjects || []);
@@ -240,7 +241,7 @@ export class RpcClient {
       };
     }
 
-    throw new Error('Unknown transaction response');
+    throw new Error("Unknown transaction response");
   }
 }
 
@@ -259,15 +260,15 @@ function setupClient(origin: string) {
     params: object | Array<any>
   ): Promise<any> {
     let body = {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       method,
       id: counter++,
       params: params.constructor === Array ? params : Object.values(params),
     };
 
     let res = await fetch(origin, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 

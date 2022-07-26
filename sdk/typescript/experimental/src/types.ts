@@ -12,37 +12,37 @@
  * @module types
  */
 
-import { bcs, decodeStr, encodeStr } from '@mysten/bcs';
+import { bcs, decodeStr, encodeStr } from "@mysten/bcs";
 
 // This buddy collects definitions for BCS.
 const initializers: Function[] = [];
 
 initializers.push((b: typeof bcs) =>
   b
-    .registerVectorType('vector<u8>', 'u8')
-    .registerVectorType('vector<vector<u8>>', 'vector<u8>')
-    .registerAddressType('ObjectID', 20)
-    .registerAddressType('SuiAddress', 20)
+    .registerVectorType("vector<u8>", "u8")
+    .registerVectorType("vector<vector<u8>>", "vector<u8>")
+    .registerAddressType("ObjectID", 20)
+    .registerAddressType("SuiAddress", 20)
     .registerType(
-      'utf8string',
+      "utf8string",
       (writer, str) => {
         let bytes = Array.from(Buffer.from(str));
         return writer.writeVec(bytes, (writer, el) => writer.write8(el));
       },
-      reader => {
-        let bytes = reader.readVec(reader => reader.read8());
-        return Buffer.from(bytes).toString('utf-8');
+      (reader) => {
+        let bytes = reader.readVec((reader) => reader.read8());
+        return Buffer.from(bytes).toString("utf-8");
       }
     )
     .registerType(
-      'ObjectDigest',
+      "ObjectDigest",
       (writer, str) => {
-        let bytes = Array.from(decodeStr(str, 'base64'));
+        let bytes = Array.from(decodeStr(str, "base64"));
         return writer.writeVec(bytes, (writer, el) => writer.write8(el));
       },
-      reader => {
-        let bytes = reader.readVec(reader => reader.read8());
-        return encodeStr(new Uint8Array(bytes), 'base64');
+      (reader) => {
+        let bytes = reader.readVec((reader) => reader.read8());
+        return encodeStr(new Uint8Array(bytes), "base64");
       }
     )
 );
@@ -57,10 +57,10 @@ export type SuiObjectRef = {
 };
 
 initializers.push((b: typeof bcs) =>
-  b.registerStructType('SuiObjectRef', {
-    objectId: 'ObjectID',
-    version: 'u64',
-    digest: 'ObjectDigest',
+  b.registerStructType("SuiObjectRef", {
+    objectId: "ObjectID",
+    version: "u64",
+    digest: "ObjectDigest",
   })
 );
 
@@ -77,9 +77,9 @@ export type TransferCoinTx = {
 };
 
 initializers.push((b: typeof bcs) =>
-  b.registerStructType('TransferCoinTx', {
-    recipient: 'SuiAddress',
-    object_ref: 'SuiObjectRef',
+  b.registerStructType("TransferCoinTx", {
+    recipient: "SuiAddress",
+    object_ref: "SuiObjectRef",
   })
 );
 
@@ -108,8 +108,8 @@ export type PublishTx = {
 };
 
 initializers.push((b: typeof bcs) =>
-  b.registerStructType('PublishTx', {
-    modules: 'vector<vector<u8>>',
+  b.registerStructType("PublishTx", {
+    modules: "vector<vector<u8>>",
   })
 );
 
@@ -143,13 +143,13 @@ export type CallArg = { Pure: Iterable<number> } | { Object: ObjectArg };
 
 initializers.push((b: typeof bcs) =>
   b
-    .registerEnumType('ObjectArg', {
-      ImmOrOwned: 'SuiObjectRef',
-      Shared: 'ObjectID',
+    .registerEnumType("ObjectArg", {
+      ImmOrOwned: "SuiObjectRef",
+      Shared: "ObjectID",
     })
-    .registerEnumType('CallArg', {
-      Pure: 'vector<u8>',
-      Object: 'ObjectArg',
+    .registerEnumType("CallArg", {
+      Pure: "vector<u8>",
+      Object: "ObjectArg",
     })
 );
 
@@ -178,22 +178,22 @@ export type TypeTag =
 
 initializers.push((b: typeof bcs) =>
   b
-    .registerEnumType('TypeTag', {
+    .registerEnumType("TypeTag", {
       bool: null,
       u8: null,
       u64: null,
       u128: null,
       address: null,
       signer: null,
-      vector: 'TypeTag',
-      struct: 'StructTag',
+      vector: "TypeTag",
+      struct: "StructTag",
     })
-    .registerVectorType('vector<TypeTag>', 'TypeTag')
-    .registerStructType('StructTag', {
-      address: 'SuiAddress',
-      module: 'string',
-      name: 'string',
-      typeParams: 'vector<TypeTag>',
+    .registerVectorType("vector<TypeTag>", "TypeTag")
+    .registerStructType("StructTag", {
+      address: "SuiAddress",
+      module: "string",
+      name: "string",
+      typeParams: "vector<TypeTag>",
     })
 );
 
@@ -214,13 +214,13 @@ export type MoveCallTx = {
 
 initializers.push((b: typeof bcs) =>
   b
-    .registerVectorType('vector<CallArg>', 'CallArg')
-    .registerStructType('MoveCallTx', {
-      package: 'SuiObjectRef',
-      module: 'string',
-      function: 'string',
-      typeArguments: 'vector<TypeTag>',
-      arguments: 'vector<CallArg>',
+    .registerVectorType("vector<CallArg>", "CallArg")
+    .registerStructType("MoveCallTx", {
+      package: "SuiObjectRef",
+      module: "string",
+      function: "string",
+      typeArguments: "vector<TypeTag>",
+      arguments: "vector<CallArg>",
     })
 );
 
@@ -229,10 +229,10 @@ initializers.push((b: typeof bcs) =>
 export type Transaction = MoveCallTx | PublishTx | TransferCoinTx;
 
 initializers.push((b: typeof bcs) =>
-  b.registerEnumType('Transaction', {
-    TransferCoin: 'TransferCoinTx',
-    Publish: 'PublishTx',
-    Call: 'MoveCallTx',
+  b.registerEnumType("Transaction", {
+    TransferCoin: "TransferCoinTx",
+    Publish: "PublishTx",
+    Call: "MoveCallTx",
   })
 );
 
@@ -248,10 +248,10 @@ export type TransactionKind =
 
 initializers.push((b: typeof bcs) =>
   b
-    .registerVectorType('vector<Transaction>', 'Transaction')
-    .registerEnumType('TransactionKind', {
-      Single: 'Transaction',
-      Batch: 'vector<Transaction>',
+    .registerVectorType("vector<Transaction>", "Transaction")
+    .registerEnumType("TransactionKind", {
+      Single: "Transaction",
+      Batch: "vector<Transaction>",
     })
 );
 
@@ -270,12 +270,12 @@ export type TransactionData = {
 };
 
 initializers.push((b: typeof bcs) =>
-  b.registerStructType('TransactionData', {
-    kind: 'TransactionKind',
-    sender: 'SuiAddress',
-    gasPayment: 'SuiObjectRef',
-    gasPrice: 'u64',
-    gasBudget: 'u64',
+  b.registerStructType("TransactionData", {
+    kind: "TransactionKind",
+    sender: "SuiAddress",
+    gasPayment: "SuiObjectRef",
+    gasPrice: "u64",
+    gasBudget: "u64",
   })
 );
 
@@ -283,8 +283,10 @@ initializers.push((b: typeof bcs) =>
  * Initialize BCS definitions.
  * @param {BCS} bcs
  */
-export function registerTypes(b: typeof bcs) {
+export function registerTypes(b: typeof bcs): typeof bcs {
   for (let init of initializers) {
     init(b);
   }
+
+  return b;
 }

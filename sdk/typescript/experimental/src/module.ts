@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectRef, CallArg, TypeTag, MoveCallTx } from './types';
+import { SuiObjectRef, CallArg, TypeTag, MoveCallTx } from "./types";
 
 /**
  * Base class for helping implement MoveCall functionality.
