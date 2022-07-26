@@ -10,12 +10,9 @@
 }
 */
 
-import type {
-    ObjectId,
-    ObjectOwner,
-    SequenceNumber,
-    SuiAddress,
-} from '@mysten/sui.js';
+import { SuiAddress, ObjectOwner } from "./common";
+import { ObjectId, SequenceNumber } from "./objects";
+
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
 export type MoveEvent = {
