@@ -22,6 +22,7 @@ import { findDataFromID } from '../../utils/static/searchUtil';
 import { type DataType } from './TransactionResultType';
 import TransactionView from './TransactionView';
 
+import type { SuiEvent } from '../../components/events/eventTypes';
 import type {
     CertifiedTransaction,
     TransactionEffectsResponse,
@@ -29,7 +30,6 @@ import type {
     TransactionEffects,
     SuiObjectRef,
 } from '@mysten/sui.js';
-import type { SuiEvent } from '../../components/events/eventTypes';
 
 type TxnState = CertifiedTransaction & {
     loadState: string;
@@ -65,7 +65,7 @@ const initState: TxnState = {
     timestamp_ms: 0,
     mutated: [],
     created: [],
-    events: []
+    events: [],
 };
 
 function fetchTransactionData(
