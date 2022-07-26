@@ -19,7 +19,7 @@ Find the `rustdoc` output for key Sui projects at:
 * Mysten Labs infrastructure - https://mystenlabs.github.io/mysten-infra/
 
 ## Configuration
-Add the `sui-sdk` crate in your `Cargo.toml` like so:
+Add the `sui-sdk` crate in your [`Cargo.toml`](https://doc.rust-lang.org/cargo/reference/manifest.html) file like so:
 ```toml
 [dependencies]
 sui-sdk = { git = "https://github.com/MystenLabs/sui" }
@@ -29,10 +29,6 @@ If you are connecting to the devnet, use the `devnet` branch instead:
 [dependencies]
 sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
 ```
-TODO: Give them a little more guidance on what this file is and where to find it. We describe `Move.toml` more fully at:
-https://docs.sui.io/build/move#move-code-organization
-Can we say they are similar and link to this?:
-https://doc.rust-lang.org/cargo/reference/manifest.html
 
 ## Examples
 
