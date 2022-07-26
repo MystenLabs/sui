@@ -7058,7 +7058,6 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "test-utils",
  "textwrap 0.15.0",
  "tokio",
  "tracing",
