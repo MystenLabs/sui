@@ -9,8 +9,8 @@ use signature::Signer;
 use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_types::crypto::{get_key_pair, PublicKeyBytes};
-use sui_types::crypto::{KeyPair, KeypairTraits, Signature};
+use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
+use sui_types::crypto::{KeypairTraits, Signature};
 
 use sui_types::messages::Transaction;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
@@ -30,7 +30,7 @@ pub async fn init_local_authorities(
     let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
     let mut key_pairs = Vec::new();
     for i in 0..committee_size {
-        let (_, key_pair) = get_key_pair();
+        let (_, key_pair): (_, AuthorityKeyPair) = get_key_pair();
         let authority_name = key_pair.public().into();
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
@@ -53,7 +53,7 @@ pub async fn init_local_authorities(
 
 pub async fn init_local_authorities_with_genesis(
     genesis: &Genesis,
-    key_pairs: Vec<(PublicKeyBytes, KeyPair)>,
+    key_pairs: Vec<(AuthorityPublicKeyBytes, AuthorityKeyPair)>,
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
@@ -336,8 +336,8 @@ async fn execute_transaction_with_fault_configs(
     configs_before_process_transaction: &[(usize, LocalAuthorityClientFaultConfig)],
     configs_before_process_certificate: &[(usize, LocalAuthorityClientFaultConfig)],
 ) -> SuiResult {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
+    let (addr2, _): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let mut authorities = init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()])
@@ -494,8 +494,8 @@ async fn test_map_reducer() {
 
 #[tokio::test]
 async fn test_get_all_owned_objects() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
+    let (addr2, _): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_ref_1 = gas_object1.compute_object_reference();
     let gas_object2 = Object::with_owner_for_testing(addr2);
@@ -582,8 +582,8 @@ async fn test_get_all_owned_objects() {
 
 #[tokio::test]
 async fn test_sync_all_owned_objects() {
-    let (addr1, key1) = get_key_pair();
-    let (addr2, _) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
+    let (addr2, _): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let (authorities, _) =
@@ -693,7 +693,7 @@ async fn test_sync_all_owned_objects() {
 
 #[tokio::test]
 async fn test_process_transaction1() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let (authorities, _) =
@@ -740,7 +740,7 @@ async fn test_process_transaction1() {
 async fn get_owned_objects(
     authorities: &AuthorityAggregator<LocalAuthorityClient>,
     addr: SuiAddress,
-) -> BTreeMap<ObjectRef, Vec<PublicKeyBytes>> {
+) -> BTreeMap<ObjectRef, Vec<AuthorityPublicKeyBytes>> {
     let (owned_objects, _) = authorities
         .get_all_owned_objects(addr, Duration::from_secs(10))
         .await
@@ -753,7 +753,7 @@ async fn get_owned_objects(
 
 #[tokio::test]
 async fn test_process_certificate() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let (authorities, _) =
@@ -794,7 +794,6 @@ async fn test_process_certificate() {
     do_transaction(authority_clients[2], &create2).await;
 
     let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
-    println!("Hey before process_certificate");
     get_owned_objects(&authorities, addr1).await;
 
     // Test: process the certificate, including bring up to date authority 3.
@@ -811,7 +810,7 @@ async fn test_process_certificate() {
 
 #[tokio::test]
 async fn test_execute_cert_to_true_effects() {
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let (authorities, _) =

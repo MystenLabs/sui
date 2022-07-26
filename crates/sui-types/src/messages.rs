@@ -5,9 +5,10 @@
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignature, AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, Signature,
-    SuiAuthoritySignature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignature,
+    AuthorityStrongQuorumSignInfo, Ed25519SuiSignature, EmptySignInfo,
+    Signable, Signature, SuiAuthoritySignature, SuiSignature, SuiSignatureInner, ToFromBytes,
+    VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
@@ -24,7 +25,6 @@ use move_core_types::{
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
-use narwhal_crypto::traits::AggregateAuthenticator;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
@@ -526,7 +526,7 @@ pub struct TransactionEnvelope<S> {
 impl<S> TransactionEnvelope<S> {
     fn add_sender_sig_to_verification_obligation(
         &self,
-        obligation: &mut VerificationObligation<AggregateAccountSignature>,
+        obligation: &mut VerificationObligation,
         idx: usize,
     ) -> SuiResult<()> {
         // We use this flag to see if someone has checked this before
@@ -537,30 +537,15 @@ impl<S> TransactionEnvelope<S> {
             return Ok(());
         }
 
-        let (signature, public_key) = self
-            .tx_signature
-            .get_verification_inputs(self.data.sender)?;
-        let key = public_key
-            .try_into()
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid public key".to_owned(),
-            })?;
+        self.tx_signature.add_to_verification_obligation_or_verify(
+            self.data.sender,
+            obligation,
+            idx,
+        )
+    }
 
-        obligation
-            .public_keys
-            .get_mut(idx)
-            .ok_or(SuiError::InvalidAuthenticator)?
-            .push(key);
-        obligation
-            .signatures
-            .get_mut(idx)
-            .ok_or(SuiError::InvalidAuthenticator)?
-            .add_signature(signature)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Failed to add signature to obligation".to_string(),
-            })?;
-
-        Ok(())
+    pub fn verify_sender_signature(&self) -> SuiResult<()> {
+        self.tx_signature.verify(&self.data, self.data.sender)
     }
 
     pub fn sender_address(&self) -> SuiAddress {
@@ -671,12 +656,7 @@ impl Transaction {
     }
 
     pub fn verify(&self) -> Result<(), SuiError> {
-        let mut obligation = VerificationObligation::default();
-
-        let idx = obligation.add_message(&self.data);
-
-        self.add_sender_sig_to_verification_obligation(&mut obligation, idx)?;
-        obligation.verify_all().map(|_| ())
+        self.verify_sender_signature()
     }
 }
 
@@ -742,7 +722,10 @@ impl SignedTransaction {
             transaction_digest: OnceCell::new(),
             is_verified: false,
             data,
-            tx_signature: Signature::new_empty(),
+            // Arbitrary keypair
+            tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
+                .unwrap()
+                .into(),
             auth_sign_info: AuthoritySignInfo {
                 epoch: next_epoch,
                 authority,
@@ -757,7 +740,13 @@ impl SignedTransaction {
 
         let idx = obligation.add_message(&self.data);
 
-        self.add_sender_sig_to_verification_obligation(&mut obligation, idx)?;
+        if self
+            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
+            .is_err()
+        {
+            self.verify_sender_signature()?;
+        }
+
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -1723,23 +1712,21 @@ impl CertifiedTransaction {
         }
 
         let mut obligation = VerificationObligation::default();
-        self.add_to_verification_obligation(committee, &mut obligation)?;
-        obligation.verify_all().map(|_| ())
-    }
-
-    fn add_to_verification_obligation(
-        &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
-    ) -> SuiResult<()> {
         // Add the obligation of the authority signature verifications.
         let idx = obligation.add_message(&self.data);
 
         // Add the obligation of the sender signature verification.
-        self.add_sender_sig_to_verification_obligation(obligation, idx)?;
+        if self
+            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
+            .is_err()
+        {
+            self.verify_sender_signature()?;
+        }
 
         self.auth_sign_info
-            .add_to_verification_obligation(committee, obligation, idx)
+            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+
+        obligation.verify_all().map(|_| ())
     }
 }
 

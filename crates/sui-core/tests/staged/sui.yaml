@@ -26,11 +26,13 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
+AuthorityPublicKeyBytes:
+  NEWTYPESTRUCT: BYTES
 AuthoritySignInfo:
   STRUCT:
     - epoch: U64
     - authority:
-        TYPENAME: PublicKeyBytes
+        TYPENAME: AuthorityPublicKeyBytes
     - signature:
         TYPENAME: Ed25519Signature
 CallArg:
@@ -72,6 +74,8 @@ Ed25519KeyPair:
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
 Ed25519Signature:
+  NEWTYPESTRUCT: BYTES
+Ed25519SuiSignature:
   NEWTYPESTRUCT: BYTES
 EntryArgumentError:
   STRUCT:
@@ -323,12 +327,14 @@ Owner:
       Shared: UNIT
     3:
       Immutable: UNIT
-PublicKeyBytes:
-  NEWTYPESTRUCT: BYTES
 SequenceNumber:
   NEWTYPESTRUCT: U64
 Signature:
-  NEWTYPESTRUCT: BYTES
+  ENUM:
+    0:
+      Ed25519SuiSignature:
+        NEWTYPE:
+          TYPENAME: Ed25519SuiSignature
 SignedBatch:
   STRUCT:
     - batch:

@@ -8,6 +8,7 @@ use super::move_integration_tests::build_and_try_publish_test_package;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use sui_adapter::genesis;
+use sui_types::crypto::AccountKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
@@ -212,7 +213,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
 
 #[tokio::test]
 async fn test_publish_gas() -> anyhow::Result<()> {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
@@ -333,7 +334,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_move_call_gas() -> SuiResult {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
     let package_object_ref = authority_state.get_framework_object_ref().await?;
@@ -494,7 +495,7 @@ async fn execute_transfer_with_price(
     gas_price: u64,
     run_confirm: bool,
 ) -> TransferResult {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;

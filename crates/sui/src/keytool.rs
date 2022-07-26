@@ -7,12 +7,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
-use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, EncodeDecodeBase64, KeypairTraits};
 use sui_types::sui_serde::{Base64, Encoding};
-use sui_types::{
-    base_types::SuiAddress,
-    crypto::{get_key_pair, EncodeDecodeBase64, KeyPair},
-};
+use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -26,7 +23,7 @@ pub enum KeyToolCommand {
     },
     /// Extract components
     Unpack {
-        keypair: KeyPair,
+        keypair: AccountKeyPair,
     },
     /// List all keys in the keystore
     List,
@@ -43,7 +40,7 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate => {
-                let (_address, keypair) = get_key_pair();
+                let (_address, keypair): (_, AccountKeyPair) = get_key_pair();
 
                 let hex = encode_bytes_hex(keypair.public());
                 let file_name = format!("{hex}.key");
@@ -52,7 +49,7 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Show { file } => {
-                let keypair = read_keypair_from_file(file)?;
+                let keypair: AuthorityKeyPair = read_keypair_from_file(file)?;
                 println!("Public Key: {}", encode_bytes_hex(keypair.public()));
             }
 
@@ -96,7 +93,7 @@ impl KeyToolCommand {
     }
 }
 
-fn store_and_print_keypair(address: SuiAddress, keypair: KeyPair) {
+fn store_and_print_keypair<K: KeypairTraits>(address: SuiAddress, keypair: K) {
     let path_str = format!("{}.key", address).to_lowercase();
     let path = Path::new(&path_str);
     let address = format!("{}", address);
@@ -107,8 +104,8 @@ fn store_and_print_keypair(address: SuiAddress, keypair: KeyPair) {
     println!("Address and keypair written to {}", path.to_str().unwrap());
 }
 
-pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
-    keypair: &KeyPair,
+pub fn write_keypair_to_file<K: KeypairTraits, P: AsRef<std::path::Path>>(
+    keypair: &K,
     path: P,
 ) -> anyhow::Result<()> {
     let contents = keypair.encode_base64();
@@ -116,7 +113,9 @@ pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
     Ok(())
 }
 
-pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<KeyPair> {
+pub fn read_keypair_from_file<K: KeypairTraits, P: AsRef<std::path::Path>>(
+    path: P,
+) -> anyhow::Result<K> {
     let contents = std::fs::read_to_string(path)?;
-    KeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
+    K::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
 }

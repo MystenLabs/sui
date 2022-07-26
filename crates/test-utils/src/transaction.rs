@@ -37,6 +37,7 @@ pub async fn submit_single_owner_transaction(
     let certificate = make_certificates(vec![transaction]).pop().unwrap();
 
     let mut responses = Vec::new();
+
     for config in configs {
         let client = get_client(config);
         let reply = client

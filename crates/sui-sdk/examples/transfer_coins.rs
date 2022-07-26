@@ -6,6 +6,7 @@ use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::types::sui_serde::Base64;
 use sui_sdk::SuiClient;
+use sui_types::crypto::SuiSignature;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -33,6 +34,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let transaction_response = sui
         .execute_transaction(
             transfer_tx.tx_bytes,
+            Base64::from_bytes(signature.flag_bytes()),
             Base64::from_bytes(signature.signature_bytes()),
             Base64::from_bytes(signature.public_key_bytes()),
         )

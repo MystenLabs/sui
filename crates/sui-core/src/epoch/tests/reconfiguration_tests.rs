@@ -12,7 +12,7 @@ use std::{
 
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AuthoritySignature, Signature, SuiAuthoritySignature},
+    crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature},
     error::SuiError,
     gas::SuiGasStatus,
     messages::{InputObjects, SignatureAggregator, Transaction, TransactionData},
@@ -31,7 +31,7 @@ use crate::{
 #[tokio::test]
 async fn test_start_epoch_change() {
     // Create a sender, owning an object and a gas object.
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let genesis_objects = vec![object.clone(), gas_object.clone()];
@@ -162,6 +162,7 @@ async fn test_finish_epoch_change() {
             ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap()
         })
         .collect();
+
     let results: Vec<_> = states
         .iter()
         .zip(actives.iter())

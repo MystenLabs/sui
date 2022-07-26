@@ -13,6 +13,7 @@ use sui_faucet::FaucetResponse;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionResponse};
 use sui_sdk::crypto::KeystoreType;
+use sui_types::crypto::AccountKeyPair;
 use sui_types::{
     base_types::{encode_bytes_hex, ObjectID, SuiAddress},
     crypto::get_key_pair,
@@ -62,7 +63,7 @@ impl ClusterTest {
         assert!(!coins.is_empty(), "Not enough gas objects to run test.");
         let signer = self.context.address;
         let wallet_context = self.wallet_context();
-        let (receipent_addr, _) = get_key_pair();
+        let (receipent_addr, _): (_, AccountKeyPair) = get_key_pair();
         let obj_to_transfer = coins.remove(0);
         let data = wallet_context
             .gateway

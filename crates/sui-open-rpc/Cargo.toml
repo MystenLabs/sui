@@ -16,7 +16,7 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 clap = { version = "3.1.17", features = ["derive"] }
 pretty_assertions = "1.2.0"
 serde_json = "1.0.80"
-tokio = { version = "1.20.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 hyper = { version = "0.14.20", features = ["full"] }
 
 sui = { path = "../sui" }

@@ -23,6 +23,7 @@ use sui_sdk::{
     },
     SuiClient,
 };
+use sui_types::crypto::SuiSignature;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -98,11 +99,17 @@ impl TicTacToe {
         let signature = self.keystore.sign(&player_x, &transaction_bytes)?;
         let signature_base64 = Base64::from_bytes(signature.signature_bytes());
         let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        let flag_base64 = Base64::from_bytes(signature.flag_bytes());
 
         // Execute the transaction.
         let response = self
             .client
-            .execute_transaction(create_game_call.tx_bytes, signature_base64, pub_key)
+            .execute_transaction(
+                create_game_call.tx_bytes,
+                flag_base64,
+                signature_base64,
+                pub_key,
+            )
             .await?;
 
         // We know `create_game` move function will create 1 object.
@@ -188,11 +195,17 @@ impl TicTacToe {
             let signature = self.keystore.sign(&my_identity, &transaction_bytes)?;
             let signature_base64 = Base64::from_bytes(signature.signature_bytes());
             let pub_key = Base64::from_bytes(signature.public_key_bytes());
+            let flag_base64 = Base64::from_bytes(signature.flag_bytes());
 
             // Execute the transaction.
             let response = self
                 .client
-                .execute_transaction(place_mark_call.tx_bytes, signature_base64, pub_key)
+                .execute_transaction(
+                    place_mark_call.tx_bytes,
+                    flag_base64,
+                    signature_base64,
+                    pub_key,
+                )
                 .await?;
 
             // Print any execution error.

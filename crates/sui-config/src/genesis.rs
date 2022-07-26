@@ -17,8 +17,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::PublicKey;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes};
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
@@ -61,7 +60,7 @@ impl Genesis {
         )
     }
 
-    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee<PublicKey> {
+    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee<AuthorityPublicKey> {
         let narwhal_committee = self
             .validator_set
             .iter()
@@ -202,7 +201,7 @@ impl<'de> Deserialize<'de> for Genesis {
 
 pub struct Builder {
     objects: BTreeMap<ObjectID, Object>,
-    validators: BTreeMap<PublicKeyBytes, ValidatorInfo>,
+    validators: BTreeMap<AuthorityPublicKeyBytes, ValidatorInfo>,
 }
 
 impl Default for Builder {
@@ -515,7 +514,7 @@ mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use narwhal_crypto::traits::KeyPair;
-    use sui_types::crypto::get_key_pair_from_rng;
+    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
 
     #[test]
     fn roundtrip() {
@@ -537,7 +536,7 @@ mod test {
 
         let mut builder = Builder::new().add_objects(objects);
 
-        let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
             public_key: key.public().into(),

@@ -1,12 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use narwhal_crypto::traits::KeyPair;
 use rand::{prelude::StdRng, SeedableRng};
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::get_key_pair_from_rng;
-use sui_types::crypto::PublicKeyBytes;
-use sui_types::crypto::{KeyPair, KeypairTraits};
+use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::AuthorityKeyPair;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
@@ -30,12 +32,14 @@ use sui_types::messages::{
 };
 use sui_types::object::Object;
 
-pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Committee, SuiAddress, KeyPair)
+pub(crate) fn init_state_parameters_from_rng<R>(
+    rng: &mut R,
+) -> (Committee, SuiAddress, AuthorityKeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let (authority_address, authority_key) = get_key_pair_from_rng(rng);
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let (authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair_from_rng(rng);
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
         /* address */ authority_key.public().into(),
         /* voting right */ 1,
@@ -47,7 +51,7 @@ where
 
 pub(crate) async fn init_state(
     committee: Committee,
-    authority_key: KeyPair,
+    authority_key: AuthorityKeyPair,
     store: Arc<AuthorityStore>,
 ) -> AuthorityState {
     AuthorityState::new(
@@ -340,7 +344,7 @@ async fn test_batch_manager_drop_out_of_order() {
 
 #[tokio::test]
 async fn test_handle_move_order_with_batch() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let authority_state = Arc::new(init_state_with_objects(vec![gas_payment_object]).await);
@@ -734,8 +738,8 @@ async fn test_safe_batch_stream() {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
-    let (_, authority_key) = get_key_pair();
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     let public_key_bytes = authority_key.public().into();
     println!("init public key {:?}", public_key_bytes);
 
@@ -788,7 +792,7 @@ async fn test_safe_batch_stream() {
     assert!(!error_found);
 
     // Byzantine cases:
-    let (_, authority_key) = get_key_pair();
+    let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
     let public_key_bytes_b = authority_key.public().into();
     let state_b = AuthorityState::new(
         committee.clone(),

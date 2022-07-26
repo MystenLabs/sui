@@ -16,7 +16,7 @@ bytes = "1.2.0"
 serde = { version = "1.0.140", features = ["derive"] }
 serde_json = "1.0.79"
 serde_with = "1.14.0"
-tokio = { version = "1.20.0", features = ["full", "tracing", "test-util"] }
+tokio = { version = "1.20.1", features = ["full", "tracing", "test-util"] }
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 parking_lot = "0.12.1"
 async-trait = "0.1.53"
@@ -49,10 +49,11 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "790715
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", package = "crypto", features=["copy_key"]}
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", package = "executor" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", package = "types" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", package = "node" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", package = "crypto", features=["copy_key"]}
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", package = "executor" }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", package = "types" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", package = "node" }
+
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]

@@ -14,8 +14,10 @@ use sui_json_rpc_types::{
     SuiTypeTag, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::crypto::SuiSignature;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
+
 pub struct RpcGatewayClient {
     client: SuiClient,
 }
@@ -32,12 +34,13 @@ impl GatewayAPI for RpcGatewayClient {
     async fn execute_transaction(&self, tx: Transaction) -> Result<TransactionResponse, Error> {
         let signature = tx.tx_signature;
         let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
+        let flag_bytes = Base64::from_bytes(signature.flag_bytes());
         let signature_bytes = Base64::from_bytes(signature.signature_bytes());
         let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
         Ok(self
             .client
-            .execute_transaction(tx_bytes, signature_bytes, pub_key)
+            .execute_transaction(tx_bytes, flag_bytes, signature_bytes, pub_key)
             .await?)
     }
 
