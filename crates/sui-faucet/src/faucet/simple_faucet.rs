@@ -6,11 +6,12 @@ use async_trait::async_trait;
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiParsedObject};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
     messages::Transaction,
 };
 use tracing::info;
+use uuid::Uuid;
 
 use crate::{Faucet, FaucetError, FaucetReceipt};
 
@@ -67,8 +68,11 @@ impl SimpleFaucet {
         })
     }
 
-    async fn get_coins(&self, amounts: &[u64]) -> Result<Vec<SuiParsedObject>, FaucetError> {
-        let result = self
+    async fn get_coins(
+        &self,
+        amounts: &[u64],
+    ) -> Result<(Vec<SuiParsedObject>, TransactionDigest), FaucetError> {
+        let (coins, tx_digest) = self
             .split_coins(
                 amounts,
                 self.primary_coin_id,
@@ -79,26 +83,29 @@ impl SimpleFaucet {
             .await
             .map_err(|err| FaucetError::Wallet(err.to_string()))?;
 
-        Ok(result)
+        Ok((coins, tx_digest))
     }
 
     async fn public_transfer_objects(
         &self,
         coins: &[ObjectID],
         recipient: SuiAddress,
-    ) -> Result<(), FaucetError> {
+    ) -> Result<Vec<TransactionDigest>, FaucetError> {
+        let mut digests = Vec::with_capacity(coins.len());
         for coin_id in coins.iter() {
-            self.public_transfer_object(
-                *coin_id,
-                self.gas_coin_id,
-                self.active_address,
-                recipient,
-                DEFAULT_GAS_BUDGET,
-            )
-            .await
-            .map_err(|err| FaucetError::Transfer(err.to_string()))?;
+            let digest = self
+                .public_transfer_object(
+                    *coin_id,
+                    self.gas_coin_id,
+                    self.active_address,
+                    recipient,
+                    DEFAULT_GAS_BUDGET,
+                )
+                .await
+                .map_err(|err| FaucetError::Transfer(err.to_string()))?;
+            digests.push(digest);
         }
-        Ok(())
+        Ok(digests)
     }
 
     async fn split_coins(
@@ -108,8 +115,9 @@ impl SimpleFaucet {
         gas_object_id: ObjectID,
         signer: SuiAddress,
         budget: u64,
-    ) -> Result<Vec<SuiParsedObject>, anyhow::Error> {
+    ) -> Result<(Vec<SuiParsedObject>, TransactionDigest), anyhow::Error> {
         // TODO: move this function to impl WalletContext{} and reuse in wallet_commands
+        info!(primary_coin_id = ?coin_id, ?amounts, ?gas_object_id, "Splitting coins");
         let context = &self.wallet;
         let data = context
             .gateway
@@ -122,13 +130,17 @@ impl SimpleFaucet {
             )
             .await?;
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
+        let tx = Transaction::new(data, signature);
+
+        info!(tx_digest = ?tx.digest(), coin_id = ?coin_id, gas_object_id = ?gas_object_id, "Broadcasting split coin txn");
         let response = context
             .gateway
-            .execute_transaction(Transaction::new(data, signature))
+            .execute_transaction(tx)
             .await?
-            .to_split_coin_response()?
-            .new_coins;
-        Ok(response)
+            .to_split_coin_response()?;
+        let new_coins = response.new_coins;
+        let tx_digest = response.certificate.transaction_digest;
+        Ok((new_coins, tx_digest))
     }
 
     async fn public_transfer_object(
@@ -138,7 +150,7 @@ impl SimpleFaucet {
         signer: SuiAddress,
         recipient: SuiAddress,
         budget: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<TransactionDigest, anyhow::Error> {
         let context = &self.wallet;
 
         let data = context
@@ -146,16 +158,20 @@ impl SimpleFaucet {
             .public_transfer_object(signer, coin_id, Some(gas_object_id), budget, recipient)
             .await?;
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
-        let effects = context
+
+        let tx = Transaction::new(data, signature);
+        info!(tx_digest = ?tx.digest(), recipient = ?recipient, coin_id = ?coin_id, gas_object_id = ?gas_object_id, "Broadcasting transfer obj txn");
+        let response = context
             .gateway
-            .execute_transaction(Transaction::new(data, signature))
+            .execute_transaction(tx)
             .await?
-            .to_effect_response()?
-            .effects;
+            .to_effect_response()?;
+        let effects = response.effects;
         if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));
         }
-        Ok(())
+
+        Ok(response.certificate.transaction_digest)
     }
 }
 
@@ -163,12 +179,16 @@ impl SimpleFaucet {
 impl Faucet for SimpleFaucet {
     async fn send(
         &self,
+        id: Uuid,
         recipient: SuiAddress,
         amounts: &[u64],
     ) -> Result<FaucetReceipt, FaucetError> {
-        let coins = self.get_coins(amounts).await?;
+        info!(?recipient, uuid = ?id, "Getting faucet requests");
+        let (coins, tx_digest) = self.get_coins(amounts).await?;
         let coin_ids = coins.iter().map(|c| c.id()).collect::<Vec<ObjectID>>();
-        self.public_transfer_objects(&coin_ids, recipient).await?;
+        info!(?recipient, ?tx_digest, ?coin_ids, "SplitCoin txn succeeded");
+        let tx_digests = self.public_transfer_objects(&coin_ids, recipient).await?;
+        info!(?recipient, ?tx_digests, ?coin_ids, "Transfer txn succeeded");
         Ok(coins.iter().by_ref().collect())
     }
 }

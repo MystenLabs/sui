@@ -19,6 +19,8 @@ tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit
 tower-http = { version = "0.3.4", features = ["cors"] }
 http = { version = "0.2.8" }
 
+uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
+
 sui = { path = "../sui" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }

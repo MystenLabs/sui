@@ -546,6 +546,7 @@ unsigned-varint = { version = "0.7", default-features = false, features = ["std"
 untrusted = { version = "0.7", default-features = false }
 url = { version = "2", default-features = false }
 utf8parse = { version = "0.2" }
+uuid = { version = "1", features = ["fast-rng", "private_getrandom", "private_rand", "rng", "std", "v4"] }
 vec_map = { version = "0.8", default-features = false }
 vte = { version = "0.10", features = ["arrayvec", "no_std"] }
 wait-timeout = { version = "0.2", default-features = false }
@@ -1187,6 +1188,7 @@ untrusted = { version = "0.7", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
 url = { version = "2", default-features = false }
 utf8parse = { version = "0.2" }
+uuid = { version = "1", features = ["fast-rng", "private_getrandom", "private_rand", "rng", "std", "v4"] }
 variant_count = { version = "1", default-features = false }
 vcpkg = { version = "0.2", default-features = false }
 vec_map = { version = "0.8", default-features = false }
