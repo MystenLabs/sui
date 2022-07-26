@@ -225,7 +225,7 @@ mod test {
     #[tokio::test]
     async fn start_and_stop() {
         telemetry_subscribers::init_for_testing();
-        let mut swarm = Swarm::builder().build(None);
+        let mut swarm = Swarm::builder().build();
 
         let validator = swarm.validators_mut().next().unwrap();
 

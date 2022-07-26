@@ -1,8 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{helper::verify_gas_coin, TestCaseImpl, TestContext};
-use anyhow::{anyhow, bail};
+use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
+use anyhow::bail;
 use async_trait::async_trait;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
@@ -52,28 +52,20 @@ impl TestCaseImpl for CoinMergeSplitTest {
             .or_else(|e| bail!("Failed to execute SplitCoin: {e}"))?;
 
         // Verify fullnode observes the txn
-        // Let fullnode sync
         ctx.let_fullnode_sync().await;
 
-        let verification_results = futures::future::join_all(
+        let _ = futures::future::join_all(
             split_response
                 .new_coins
                 .iter()
                 .map(|coin_info| {
-                    verify_gas_coin(
-                        ctx.get_fullnode(),
-                        coin_info.reference.object_id,
-                        Owner::AddressOwner(signer),
-                        false,
-                        true,
-                    )
+                    ObjectChecker::new(coin_info.reference.object_id)
+                        .owner(Owner::AddressOwner(signer))
+                        .check_into_gas_coin(ctx.get_fullnode())
                 })
                 .collect::<Vec<_>>(),
         )
         .await;
-        verification_results.into_iter().for_each(|r| {
-            r.unwrap().unwrap();
-        });
 
         // Merge
         info!("Testing coin merge.");
@@ -91,39 +83,32 @@ impl TestCaseImpl for CoinMergeSplitTest {
         }
 
         // Verify fullnode observes the txn
-        // Let fullnode sync
         ctx.let_fullnode_sync().await;
 
-        futures::future::join_all(
+        let _ = futures::future::join_all(
             coins_merged
                 .iter()
                 .map(|obj_id| {
-                    verify_gas_coin(
-                        ctx.get_fullnode(),
-                        *obj_id,
-                        Owner::AddressOwner(signer),
-                        true,
-                        true,
-                    )
+                    ObjectChecker::new(*obj_id)
+                        .owner(Owner::AddressOwner(signer))
+                        .deleted()
+                        .check(ctx.get_fullnode())
                 })
                 .collect::<Vec<_>>(),
         )
-        .await;
+        .await
+        .into_iter()
+        .collect::<Vec<_>>();
 
         // Owner still owns the primary coin
         debug!(
             "Verifying owner still owns the primary coin {}",
             *primary_coin.id()
         );
-        let primary_after_merge = verify_gas_coin(
-            ctx.get_fullnode(),
-            primary_coin_id,
-            Owner::AddressOwner(ctx.get_wallet_address()),
-            false,
-            true,
-        )
-        .await?
-        .ok_or_else(|| anyhow!("Fail to verify object"))?;
+        let primary_after_merge = ObjectChecker::new(primary_coin_id)
+            .owner(Owner::AddressOwner(ctx.get_wallet_address()))
+            .check_into_gas_coin(ctx.get_fullnode())
+            .await;
         assert_eq!(
             primary_after_merge.value(),
             original_value,

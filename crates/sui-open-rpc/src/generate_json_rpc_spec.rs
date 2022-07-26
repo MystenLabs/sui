@@ -119,8 +119,7 @@ async fn create_response_sample() -> Result<
     ),
     anyhow::Error,
 > {
-    let network =
-        start_rpc_test_network(Some(GenesisConfig::custom_genesis(1, 4, 30)), None).await?;
+    let network = start_rpc_test_network(Some(GenesisConfig::custom_genesis(1, 4, 30))).await?;
     let working_dir = network.network.dir();
     let config = working_dir.join(SUI_CLIENT_CONFIG);
 

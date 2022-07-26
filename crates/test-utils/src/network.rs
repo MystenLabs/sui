@@ -32,15 +32,22 @@ const NUM_VALIDAOTR: usize = 4;
 
 pub async fn start_test_network(
     genesis_config: Option<GenesisConfig>,
-    fullnode_count: Option<usize>,
 ) -> Result<Swarm, anyhow::Error> {
-    let mut builder: SwarmBuilder =
-        Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
+    start_test_network_with_fullnodes(genesis_config, 0).await
+}
+
+pub async fn start_test_network_with_fullnodes(
+    genesis_config: Option<GenesisConfig>,
+    fullnode_count: usize,
+) -> Result<Swarm, anyhow::Error> {
+    let mut builder: SwarmBuilder = Swarm::builder()
+        .committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap())
+        .with_fullnode_count(fullnode_count);
     if let Some(genesis_config) = genesis_config {
         builder = builder.initial_accounts_config(genesis_config);
     }
 
-    let mut swarm = builder.build(fullnode_count);
+    let mut swarm = builder.build();
     swarm.launch().await?;
 
     let accounts = swarm
@@ -94,7 +101,7 @@ pub async fn start_test_network(
 
 pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddress), anyhow::Error>
 {
-    let swarm = start_test_network(None, None).await?;
+    let swarm = start_test_network(None).await?;
 
     // Create Wallet context.
     let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
@@ -129,9 +136,15 @@ async fn start_rpc_gateway(
 
 pub async fn start_rpc_test_network(
     genesis_config: Option<GenesisConfig>,
-    fullnode_count: Option<usize>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    let network = start_test_network(genesis_config, fullnode_count).await?;
+    start_rpc_test_network_with_fullnode(genesis_config, 0).await
+}
+
+pub async fn start_rpc_test_network_with_fullnode(
+    genesis_config: Option<GenesisConfig>,
+    fullnode_count: usize,
+) -> Result<TestNetwork, anyhow::Error> {
+    let network = start_test_network_with_fullnodes(genesis_config, fullnode_count).await?;
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;

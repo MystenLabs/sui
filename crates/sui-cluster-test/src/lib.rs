@@ -3,12 +3,12 @@
 use async_trait::async_trait;
 use clap::*;
 use cluster::{Cluster, ClusterFactory};
-use config::{ClusterTestOpt, Env};
+use config::ClusterTestOpt;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_core::gateway_state::GatewayClient;
 
-use crate::faucet::{Faucet, FaucetFactory};
+use crate::faucet::{FaucetClient, FaucetClientFactory};
 use sui_json_rpc_types::TransactionResponse;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
@@ -28,15 +28,13 @@ pub mod wallet_client;
 
 #[allow(unused)]
 pub struct TestContext {
-    /// The cluster env
-    env: Env,
     /// Cluster handle that allows access to various components in a cluster
-    cluster: Arc<dyn Cluster + Sync + Send>,
+    cluster: Box<dyn Cluster + Sync + Send>,
     /// Client that provides wallet context and gateway access
     /// Once we sunset gateway, we will spin off fullnode client,
     client: WalletClient,
     /// Facuet client that provides faucet access to a test
-    faucet: Arc<dyn Faucet + Sync + Send>,
+    faucet: Arc<dyn FaucetClient + Sync + Send>,
 }
 
 impl TestContext {
@@ -82,12 +80,11 @@ impl TestContext {
     pub async fn setup(options: ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let cluster = ClusterFactory::start(&options).await?;
         let faucet_url = cluster.faucet_url().map(String::from);
-
+        let wallet_client = WalletClient::new_from_cluster(&cluster);
         Ok(Self {
-            env: options.env.clone(),
-            cluster: cluster.clone(),
-            client: WalletClient::new_from_cluster(cluster),
-            faucet: FaucetFactory::create(&options, faucet_url),
+            cluster,
+            client: wallet_client,
+            faucet: FaucetClientFactory::create(&options, faucet_url),
         })
     }
 
@@ -95,7 +92,7 @@ impl TestContext {
     // A potential way to do this is to subscribe to txns from fullnode
     // when the feature is ready
     pub async fn let_fullnode_sync(&self) {
-        let duration = Duration::from_secs(2);
+        let duration = Duration::from_secs(10);
         sleep(duration).await;
     }
 }

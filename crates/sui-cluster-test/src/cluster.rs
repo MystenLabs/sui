@@ -3,30 +3,32 @@
 use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use clap::*;
-use sui_types::crypto::KeypairTraits;
-use std::sync::Arc;
 use sui_config::genesis_config::GenesisConfig;
 use sui_swarm::memory::Node;
 use sui_swarm::memory::Swarm;
+use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{get_key_pair, KeyPair};
-use test_utils::network::{start_rpc_test_network, TestNetwork};
+use test_utils::network::{start_rpc_test_network_with_fullnode, TestNetwork};
 
 const DEVNET_FAUCET_ADDR: &str = "https://faucet.devnet.sui.io:443";
 const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
+const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.continuous.sui.io:443";
 const DEVNET_GATEWAY_ADDR: &str = "https://gateway.devnet.sui.io:443";
 const STAGING_GATEWAY_ADDR: &str = "https://gateway.staging.sui.io:443";
+const CONTINUOUS_GATEWAY_ADDR: &str = "https://gateway.continuous.sui.io:443";
 const DEVNET_FULLNODE_ADDR: &str = "https://fullnode.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
+const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.continuous.sui.io:443";
 
 pub struct ClusterFactory;
 
 impl ClusterFactory {
     pub async fn start(
         options: &ClusterTestOpt,
-    ) -> Result<Arc<dyn Cluster + Sync + Send>, anyhow::Error> {
+    ) -> Result<Box<dyn Cluster + Sync + Send>, anyhow::Error> {
         Ok(match &options.env {
-            Env::NewLocal => Arc::new(LocalNewCluster::start(options).await?),
-            _ => Arc::new(RemoteRunningCluster::start(options).await?),
+            Env::NewLocal => Box::new(LocalNewCluster::start(options).await?),
+            _ => Box::new(RemoteRunningCluster::start(options).await?),
         })
     }
 }
@@ -55,7 +57,7 @@ pub struct RemoteRunningCluster {
 impl Cluster for RemoteRunningCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let (rpc_url, faucet_url, fullnode_url) = match options.env {
-            Env::Prod => (
+            Env::DevNet => (
                 String::from(DEVNET_GATEWAY_ADDR),
                 String::from(DEVNET_FAUCET_ADDR),
                 String::from(DEVNET_FULLNODE_ADDR),
@@ -64,6 +66,11 @@ impl Cluster for RemoteRunningCluster {
                 String::from(STAGING_GATEWAY_ADDR),
                 String::from(STAGING_FAUCET_ADDR),
                 String::from(STAGING_FULLNODE_ADDR),
+            ),
+            Env::Continuous => (
+                String::from(CONTINUOUS_GATEWAY_ADDR),
+                String::from(CONTINUOUS_FAUCET_ADDR),
+                String::from(CONTINUOUS_FULLNODE_ADDR),
             ),
             Env::CustomRemote => (
                 options
@@ -81,7 +88,9 @@ impl Cluster for RemoteRunningCluster {
             ),
             Env::NewLocal => unreachable!("NewLocal shouldn't use RemoteRunningCluster"),
         };
+
         // TODO: test connectivity before proceeding?
+
         Ok(Self {
             rpc_url,
             faucet_url,
@@ -97,7 +106,6 @@ impl Cluster for RemoteRunningCluster {
     fn faucet_url(&self) -> Option<&str> {
         Some(&self.faucet_url)
     }
-
     fn user_key(&self) -> KeyPair {
         get_key_pair().1
     }
@@ -119,7 +127,8 @@ impl LocalNewCluster {
 impl Cluster for LocalNewCluster {
     async fn start(_options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let genesis_config = GenesisConfig::for_local_testing();
-        let test_network = start_rpc_test_network(Some(genesis_config), Some(1))
+
+        let test_network = start_rpc_test_network_with_fullnode(Some(genesis_config), 1)
             .await
             .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
         let fullnode: &Node = test_network
@@ -130,7 +139,7 @@ impl Cluster for LocalNewCluster {
         let fullnode_url = format!("http://{}", fullnode.json_rpc_address());
 
         // Let nodes connect to one another
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         // TODO: test connectivity before proceeding?
         Ok(Self {

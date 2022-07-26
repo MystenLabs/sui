@@ -2,17 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
-use futures::{future, StreamExt};
+use futures::future;
 use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
-use std::collections::HashSet;
-use std::net::SocketAddr;
-use std::{collections::BTreeMap, sync::Arc};
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -21,8 +17,6 @@ use tracing::info;
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
-use sui_json::SuiJsonValue;
-use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     SplitCoinResponse, SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue,
     SuiObjectInfo, SuiObjectRead,
@@ -30,9 +24,8 @@ use sui_json_rpc_types::{
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
-    batch::UpdateItem,
-    messages::{Transaction, BatchInfoRequest, BatchInfoResponseItem, TransactionInfoRequest},
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    messages::TransactionInfoRequest,
 };
 use test_utils::network::setup_network_and_wallet;
 

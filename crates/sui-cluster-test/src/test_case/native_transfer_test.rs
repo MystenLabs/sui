@@ -1,10 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{helper::verify_transfer_object_event, TestCaseImpl, TestContext};
+use crate::{
+    helper::{ObjectChecker, TransferObjectEventChecker},
+    TestCaseImpl, TestContext,
+};
 use anyhow::bail;
 use async_trait::async_trait;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiExecutionStatus};
+use sui_json_rpc_types::SuiExecutionStatus;
 use sui_types::{
     crypto::get_key_pair, event::TransferType, object::Owner, SUI_FRAMEWORK_OBJECT_ID,
 };
@@ -64,39 +67,22 @@ impl TestCaseImpl for NativeTransferTest {
         );
         let event = events.remove(0);
 
-        verify_transfer_object_event(
-            &event,
-            Some(SUI_FRAMEWORK_OBJECT_ID),
-            Some("native".into()),
-            Some(signer),
-            Some(Owner::AddressOwner(recipient_addr)),
-            Some(*obj_to_transfer.id()),
-            None,
-            Some(TransferType::Coin),
-        )?;
+        TransferObjectEventChecker::new()
+            .package_id(SUI_FRAMEWORK_OBJECT_ID)
+            .transaction_module("native".into())
+            .sender(signer)
+            .recipient(Owner::AddressOwner(recipient_addr))
+            .object_id(*obj_to_transfer.id())
+            .type_(TransferType::Coin)
+            .check(&event);
 
         // Verify fullnode observes the txn
-        // Let fullnode sync
         ctx.let_fullnode_sync().await;
-        let object_read = ctx
-            .get_fullnode()
-            .get_object(*obj_to_transfer.id())
-            .await
-            .or_else(|e| bail!("Failed to get created NFT object: {e}"))?;
 
-        if let GetObjectDataResponse::Exists(sui_object) = object_read {
-            assert_eq!(
-                sui_object.owner,
-                Owner::AddressOwner(recipient_addr),
-                "Expect new owner to be the recipient_addr, but got {:?}",
-                sui_object.owner
-            );
-            Ok(())
-        } else {
-            bail!(
-                "Object {} does not exist or was deleted",
-                *obj_to_transfer.id()
-            );
-        }
+        let _ = ObjectChecker::new(*obj_to_transfer.id())
+            .owner(Owner::AddressOwner(recipient_addr))
+            .check(ctx.get_fullnode())
+            .await;
+        Ok(())
     }
 }

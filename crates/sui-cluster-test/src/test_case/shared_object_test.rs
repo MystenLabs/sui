@@ -1,11 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{TestCaseImpl, TestContext};
-use anyhow::bail;
+use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use sui::client_commands::WalletContext;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiExecutionStatus, TransactionEffectsResponse};
+use sui_json_rpc_types::{SuiExecutionStatus, TransactionEffectsResponse};
 use sui_types::base_types::SequenceNumber;
 use sui_types::object::Owner;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
@@ -47,24 +46,19 @@ impl TestCaseImpl for SharedCounterTest {
             .expect("Expect obj {counter_id} in shared_objects");
 
         // Verify fullnode observes the txn
-        // Let fullnode sync
         ctx.let_fullnode_sync().await;
-        let object_read = ctx
-            .get_fullnode()
-            .get_object(counter_id)
-            .await
-            .or_else(|e| bail!("Failed to get counter object: {e}"))?;
 
-        if let GetObjectDataResponse::Exists(sui_object) = object_read {
-            assert_eq!(sui_object.owner, Owner::Shared, "Expect owner to be Shared");
-            assert_eq!(
-                sui_object.reference.version,
-                SequenceNumber::from_u64(2),
-                "Expect sequence number to be 2"
-            );
-        } else {
-            bail!("Counter Object {:?} is not existent", counter_id);
-        }
+        let sui_object = ObjectChecker::new(counter_id)
+            .owner(Owner::Shared)
+            .check_into_sui_object(ctx.get_fullnode())
+            .await;
+
+        assert_eq!(
+            sui_object.reference.version,
+            SequenceNumber::from_u64(2),
+            "Expect sequence number to be 2"
+        );
+
         Ok(())
     }
 }

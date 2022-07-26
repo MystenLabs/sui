@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::helper::ObjectChecker;
 use crate::{TestCaseImpl, TestContext};
 use anyhow::bail;
 use async_trait::async_trait;
@@ -8,7 +9,7 @@ use serde::Deserialize;
 use serde_json::json;
 use sui::client_commands::{call_move, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiEvent};
+use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SequenceNumber;
 use sui_types::id::ID;
 use sui_types::{
@@ -105,31 +106,20 @@ impl TestCaseImpl for CallContractTest {
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
-        // Let fullnode sync
         ctx.let_fullnode_sync().await;
 
-        let object_read = ctx
-            .get_fullnode()
-            .get_object(nft_id)
-            .await
-            .or_else(|e| bail!("Failed to retrieve NFT object: {e} from fullnode"))?;
+        let sui_object = ObjectChecker::new(nft_id)
+            .owner(Owner::AddressOwner(signer))
+            .check_into_sui_object(ctx.get_fullnode())
+            .await;
 
-        if let GetObjectDataResponse::Exists(sui_object) = object_read {
-            assert_eq!(
-                sui_object.owner,
-                Owner::AddressOwner(signer),
-                "Expect owner to be {:?}",
-                signer
-            );
-            assert_eq!(
-                sui_object.reference.version,
-                SequenceNumber::from_u64(1),
-                "Expect sequence number to be 1"
-            );
-            Ok(())
-        } else {
-            bail!("NFT object do not exist or was deleted");
-        }
+        assert_eq!(
+            sui_object.reference.version,
+            SequenceNumber::from_u64(1),
+            "Expect sequence number to be 1"
+        );
+
+        Ok(())
     }
 }
 

@@ -23,6 +23,7 @@ pub struct SwarmBuilder<R = OsRng> {
     dir: Option<PathBuf>,
     committee_size: NonZeroUsize,
     initial_accounts_config: Option<GenesisConfig>,
+    fullnode_count: usize,
 }
 
 impl SwarmBuilder {
@@ -33,6 +34,7 @@ impl SwarmBuilder {
             dir: None,
             committee_size: NonZeroUsize::new(1).unwrap(),
             initial_accounts_config: None,
+            fullnode_count: 0,
         }
     }
 }
@@ -44,6 +46,7 @@ impl<R> SwarmBuilder<R> {
             dir: self.dir,
             committee_size: self.committee_size,
             initial_accounts_config: self.initial_accounts_config,
+            fullnode_count: self.fullnode_count,
         }
     }
 
@@ -69,11 +72,16 @@ impl<R> SwarmBuilder<R> {
         self.initial_accounts_config = Some(initial_accounts_config);
         self
     }
+
+    pub fn with_fullnode_count(mut self, fullnode_count: usize) -> Self {
+        self.fullnode_count = fullnode_count;
+        self
+    }
 }
 
 impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
     /// Create the configured Swarm.
-    pub fn build(self, fullnode_count: Option<usize>) -> Swarm {
+    pub fn build(self) -> Swarm {
         let dir = if let Some(dir) = self.dir {
             SwarmDirectory::Persistent(dir)
         } else {
@@ -99,8 +107,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
 
         let mut fullnodes = HashMap::new();
 
-        if let Some(cnt) = fullnode_count {
-            (0..cnt).for_each(|_| {
+        if self.fullnode_count > 0 {
+            (0..self.fullnode_count).for_each(|_| {
                 let config = network_config.generate_fullnode_config();
                 fullnodes.insert(config.sui_address(), Node::new(config));
             });
@@ -148,21 +156,13 @@ impl Swarm {
 
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
-        // Start all the validators
-        let mut start_handles = self
+        let nodes_iter = self
             .validators
             .values_mut()
-            .map(|validator| validator.spawn())
+            .chain(self.fullnodes.values_mut());
+        let start_handles = nodes_iter
+            .map(|node| node.spawn())
             .collect::<Result<Vec<_>>>()?;
-
-        // start all fullnodes if any
-        start_handles.append(
-            &mut self
-                .fullnodes
-                .values_mut()
-                .map(|node| node.spawn())
-                .collect::<Result<Vec<_>>>()?,
-        );
 
         try_join_all(start_handles).await?;
 
@@ -282,12 +282,17 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let mut swarm = Swarm::builder()
             .committee_size(NonZeroUsize::new(4).unwrap())
-            .build(None);
+            .with_fullnode_count(1)
+            .build();
 
         swarm.launch().await.unwrap();
 
         for validator in swarm.validators() {
             validator.health_check().await.unwrap();
+        }
+
+        for fullnode in swarm.fullnodes() {
+            fullnode.health_check().await.unwrap();
         }
     }
 }
