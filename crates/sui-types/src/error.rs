@@ -197,6 +197,17 @@ pub enum SuiError {
     SubscriptionServiceClosed,
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
+    #[error(
+        "ExecutionDriver error for {:?}: {} - Caused by : {:#?}",
+        digest,
+        msg,
+        errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>()
+    )]
+    ExecutionDriverError {
+        digest: TransactionDigest,
+        msg: String,
+        errors: Vec<SuiError>,
+    },
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]

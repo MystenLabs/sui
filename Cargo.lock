@@ -7382,6 +7382,8 @@ dependencies = [
  "sui-swarm",
  "sui-types",
  "tempfile",
+ "tokio",
+ "tracing",
  "workspace-hack 0.1.0",
 ]
 
