@@ -126,6 +126,10 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Use Almost Any OS",
+            "url": "/build/install"
+          },
+          {
             "name": "Try Sui Wallet Browser Extension",
             "url": "/explore/wallet-browser"
           },
@@ -147,10 +151,6 @@
           {
             "name": "Run a Fullnode",
             "url": "/build/fullnode"
-          },
-          {
-            "name": "Learn Sui Tokenomics",
-            "url": "/learn/tokenomics/index"
           }
         ]
       },
