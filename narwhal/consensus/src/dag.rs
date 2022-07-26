@@ -179,7 +179,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         }
     }
 
-    #[instrument(level = "debug", skip_all, fields(certificate = ?certificate), err)]
+    #[instrument(level = "trace", skip_all, fields(certificate = ?certificate), err)]
     fn insert(
         &mut self,
         certificate: Certificate<PublicKey>,
@@ -210,13 +210,13 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     /// Returns whether the dag has ever contained a node with the provided digest. The method will return
     /// true either when the node is live (uncompressed) or has been already compressed as still exists
     /// as weak reference.
-    #[instrument(level = "debug", skip_all, fields(digest = ?digest))]
+    #[instrument(level = "trace", skip_all, fields(digest = ?digest))]
     fn has_ever_contained(&self, digest: CertificateDigest) -> bool {
         self.dag.contains(digest)
     }
 
     /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG
-    #[instrument(level = "debug", skip_all, fields(origin = ?origin), err)]
+    #[instrument(level = "trace", skip_all, fields(origin = ?origin), err)]
     fn rounds(
         &mut self,
         origin: PublicKey,
@@ -260,7 +260,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
 
     /// Returns a breadth first traversal of the Dag, starting with the certified collection
     /// passed as argument.
-    #[instrument(level = "debug", skip_all, fields(start_certificate_id = ?start), err)]
+    #[instrument(level = "trace", skip_all, fields(start_certificate_id = ?start), err)]
     fn read_causal(
         &self,
         start: CertificateDigest,
@@ -271,7 +271,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
 
     /// Returns a breadth first traversal of the Dag, starting with the certified collection
     /// passed as argument.
-    #[instrument(level = "debug", skip_all, fields(origin = ?origin, round = ?round), err)]
+    #[instrument(level = "trace", skip_all, fields(origin = ?origin, round = ?round), err)]
     fn node_read_causal(
         &self,
         origin: PublicKey,
@@ -285,7 +285,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     }
 
     /// Removes certificates from the Dag, reclaiming memory in the process.
-    #[instrument(level = "debug", skip_all, fields(num_certificate_ids = digests.len()), err)]
+    #[instrument(level = "trace", skip_all, fields(num_certificate_ids = digests.len()), err)]
     fn remove(
         &mut self,
         digests: Vec<CertificateDigest>,
