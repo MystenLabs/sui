@@ -26,7 +26,7 @@ impl NodeRestarter {
         mut rx_reconfigure: Receiver<(Keys, Committee<Keys::PubKey>)>,
         tx_output: Sender<ExecutorOutput<State>>,
     ) where
-        State: ExecutionState + Send + Sync + 'static,
+        State: ExecutionState<PubKey = Keys::PubKey> + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
         Keys: KeyPair + Send + 'static,

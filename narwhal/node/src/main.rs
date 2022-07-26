@@ -167,7 +167,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 &store,
                 parameters.clone(),
                 /* consensus */ !sub_matches.is_present("consensus-disabled"),
-                /* execution_state */ Arc::new(SimpleExecutionState),
+                /* execution_state */ Arc::new(SimpleExecutionState::default()),
                 tx_transaction_confirmation,
                 &registry,
             )

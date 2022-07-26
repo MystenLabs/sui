@@ -48,16 +48,17 @@ impl SimpleExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
+    type PubKey = Ed25519PublicKey;
     type Transaction = u64;
     type Error = SimpleExecutionError;
     type Outcome = u64;
 
-    async fn handle_consensus_transaction<PublicKey: VerifyingKey>(
+    async fn handle_consensus_transaction(
         &self,
-        _consensus_output: &ConsensusOutput<PublicKey>,
+        _consensus_output: &ConsensusOutput<Ed25519PublicKey>,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee<PublicKey>>), Self::Error> {
+    ) -> Result<(Self::Outcome, Option<Committee<Ed25519PublicKey>>), Self::Error> {
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();

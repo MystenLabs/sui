@@ -50,6 +50,8 @@ pub type SerializedTransactionDigest = u64;
 
 #[async_trait]
 pub trait ExecutionState {
+    type PubKey: VerifyingKey;
+
     /// The type of the transaction to process.
     type Transaction: DeserializeOwned + Send + Debug;
 
@@ -62,12 +64,12 @@ pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index. This function
     /// returns an execution outcome that will be output by the executor channel. It may
     /// also return a new committee to reconfigure the system.
-    async fn handle_consensus_transaction<PublicKey: VerifyingKey>(
+    async fn handle_consensus_transaction(
         &self,
-        consensus_output: &ConsensusOutput<PublicKey>,
+        consensus_output: &ConsensusOutput<Self::PubKey>,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee<PublicKey>>), Self::Error>;
+    ) -> Result<(Self::Outcome, Option<Committee<Self::PubKey>>), Self::Error>;
 
     /// Simple guardrail ensuring there is a single instance using the state
     /// to call `handle_consensus_transaction`. Many instances may read the state,
@@ -104,7 +106,7 @@ impl Executor {
         tx_output: Sender<ExecutorOutput<State>>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
-        State: ExecutionState + Send + Sync + 'static,
+        State: ExecutionState<PubKey = PublicKey> + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
         PublicKey: VerifyingKey,

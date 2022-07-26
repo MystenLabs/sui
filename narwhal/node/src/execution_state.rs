@@ -5,18 +5,20 @@ use config::Committee;
 use consensus::ConsensusOutput;
 use crypto::traits::VerifyingKey;
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
+use std::marker::PhantomData;
 use thiserror::Error;
 
 /// A simple/dumb execution engine.
-pub struct SimpleExecutionState;
+pub struct SimpleExecutionState<PublicKey: VerifyingKey>(PhantomData<PublicKey>);
 
 #[async_trait]
-impl ExecutionState for SimpleExecutionState {
+impl<PublicKey: VerifyingKey> ExecutionState for SimpleExecutionState<PublicKey> {
+    type PubKey = PublicKey;
     type Transaction = String;
     type Error = SimpleExecutionError;
     type Outcome = Vec<u8>;
 
-    async fn handle_consensus_transaction<PublicKey: VerifyingKey>(
+    async fn handle_consensus_transaction(
         &self,
         _consensus_output: &ConsensusOutput<PublicKey>,
         _execution_indices: ExecutionIndices,
@@ -33,6 +35,12 @@ impl ExecutionState for SimpleExecutionState {
 
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
         Ok(ExecutionIndices::default())
+    }
+}
+
+impl<PublicKey: VerifyingKey> Default for SimpleExecutionState<PublicKey> {
+    fn default() -> Self {
+        Self(PhantomData)
     }
 }
 

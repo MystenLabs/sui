@@ -124,7 +124,7 @@ impl Node {
     where
         PublicKey: VerifyingKey,
         Keys: KeyPair<PubKey = PublicKey> + Signer<PublicKey::Sig> + Send + 'static,
-        State: ExecutionState + Send + Sync + 'static,
+        State: ExecutionState<PubKey = PublicKey> + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
@@ -237,7 +237,7 @@ impl Node {
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
-        State: ExecutionState + Send + Sync + 'static,
+        State: ExecutionState<PubKey = PublicKey> + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
