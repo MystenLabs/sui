@@ -1,0 +1,68 @@
+---
+source: crates/sui-config/tests/snapshot_tests.rs
+expression: genesis_config
+---
+validator_genesis_info: ~
+committee_size: 4
+accounts:
+  - gas_objects:
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+    gas_object_ranges: []
+  - gas_objects:
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+    gas_object_ranges: []
+  - gas_objects:
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+    gas_object_ranges: []
+  - gas_objects:
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+    gas_object_ranges: []
+  - gas_objects:
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+      - object_id: "[fake object id]"
+        gas_value: 100000000
+    gas_object_ranges: []
+
