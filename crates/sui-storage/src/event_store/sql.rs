@@ -63,6 +63,10 @@ enum EventsTableColumns {
     ObjectId,
     /// fields TEXT
     Fields,
+    /// type_struct TEXT
+    TypeStruct,
+    /// contents BLOB
+    Contents,
 }
 
 const INDEXED_COLUMNS: &[&str] = &[
@@ -223,6 +227,8 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
             Vec::new()
         }
     };
+    let move_event_contents: Option<Vec<u8>> = row.get(EventsTableColumns::Contents as usize);
+    let move_event_struct_tag: Option<String> = row.get(EventsTableColumns::TypeStruct as usize);
 
     StoredEvent {
         timestamp: timestamp as u64,
@@ -234,27 +240,35 @@ fn sql_row_to_event(row: SqliteRow) -> StoredEvent {
         function_name: function.map(SharedStr::from),
         object_id,
         fields,
+        move_event_contents,
+        move_event_struct_tag,
     }
 }
 
 // Adds JSON fields for items not in any of the standard columns in table definition, eg for MOVE events.
+// FIXME!!!
 fn event_to_json(event: &EventEnvelope) -> String {
     if let Some(json_value) = &event.move_struct_json_value {
         json_value.to_string()
     } else {
-        let maybe_json = match &event.event {
-            Event::TransferObject {
-                version,
-                recipient,
-                type_,
-                ..
-            } => Some(json!({"destination": recipient.to_string(),
-                       "version": version.value(),
-                       "type": type_.to_string() })),
-            // TODO: for other event types eg EpochChange
-            _ => None,
-        };
-        maybe_json.map(|j| j.to_string()).unwrap_or_default()
+        "".into()
+        // let maybe_json = match &event.event {
+        //     Event::TransferObject {
+        //         sender,
+        //         version,
+        //         recipient,
+        //         type_,
+        //         ..
+        //     } => Some(json!({
+        //         "sender": sender.to_string(),
+        //         "recipient": recipient.to_string(),
+        //         "version": version.value(),
+        //         "type": type_.to_string() ,
+        //         })),
+        //     // TODO: for other event types eg EpochChange
+        //     _ => None,
+        // };
+        // maybe_json.map(|j| j.to_string()).unwrap_or_default()
     }
 }
 
@@ -309,6 +323,7 @@ impl EventStore for SqlEventStore {
             // If batching, turn off persistent to avoid caching as we may fill up the prepared statement cache
             let insert_tx_q = sqlx::query(SQL_INSERT_TX).persistent(true);
             let event_type = EventType::from(&event.event);
+            // let s = event.event.object_id().map(|id| id.to_vec());
             // TODO: use batched API?
             insert_tx_q
                 .bind(event.timestamp as i64)
@@ -320,6 +335,8 @@ impl EventStore for SqlEventStore {
                 .bind(event.event.module_name())
                 .bind(event.event.object_id().map(|id| id.to_vec()))
                 .bind(event_to_json(event))
+                .bind(event.event.move_event_struct_tag().map(|st| st.to_string()))
+                .bind(event.event.move_event_contents())
                 .execute(&self.pool)
                 .await
                 .map_err(convert_sqlx_err)?;
@@ -617,6 +634,7 @@ mod tests {
 
         // Query for records in time range, end should be exclusive - should get 2
         let queried_events = db.event_iterator(1_000_000, 1_002_000, 20).await?;
+        warn!(?queried_events);
 
         assert_eq!(queried_events.len(), 2);
         for i in 0..2 {

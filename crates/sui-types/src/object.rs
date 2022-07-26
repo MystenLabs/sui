@@ -255,7 +255,7 @@ impl Data {
 }
 
 #[derive(
-    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd, strum_macros::EnumString,
 )]
 pub enum Owner {
     /// Object is exclusively owned by a single address, and is mutable.

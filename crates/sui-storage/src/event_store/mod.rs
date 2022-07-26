@@ -19,13 +19,13 @@ use move_core_types::value::MoveValue;
 use serde_json::Value;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::error::SuiError;
-use sui_types::event::{EventEnvelope, EventType};
+use sui_types::event::{EventEnvelope, EventType, SlimEventEnvelope};
 use tokio_stream::StreamExt;
 
 pub mod sql;
 pub use sql::SqlEventStore;
 
-use flexstr::SharedStr;
+use flexstr::{SharedStr, ToLocalStr};
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
@@ -57,6 +57,30 @@ pub struct StoredEvent {
     /// * `destination` - address, in hex bytes, used by TransferObject
     /// * `type` - used by TransferObject (TransferType - Coin, ToAddress, ToObject)
     fields: Vec<(SharedStr, EventValue)>, // Change this to something based on CBOR for binary values, or our own value types for efficiency
+    /// Contents for MoveEvent
+    move_event_contents: Option<Vec<u8>>,
+    /// StructTag for MoveEvent
+    move_event_struct_tag: Option<String>,
+}
+
+impl TryInto<SlimEventEnvelope> for StoredEvent {
+    type Error = anyhow::Error;
+    fn try_into(self) -> Result<SlimEventEnvelope, Self::Error> {
+        // TODO needs an unit test to make sure every vairant is checked
+        match self.event_type.as_str() {
+            "MoveEvent" => (),
+            "Publish" => (),
+            "TransferObject" => (),
+            "DeleteObject" => (),
+            "NewObject" => (),
+            // TODO support "EpochChange" and "Checkpoint"
+        };
+        SlimEventEnvelope {
+            timestamp: self.timestamp,
+            tx_digest: self.tx_digest,
+            event:
+        }
+    }
 }
 
 /// Enum for different types of values returnable from events in the EventStore

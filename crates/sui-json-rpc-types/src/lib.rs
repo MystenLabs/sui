@@ -1,14 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This file contain response types used by the GatewayAPI, most of the types mirrors it's internal type counterparts.
-/// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
-///
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-
 use colored::Colorize;
 use either::Either;
 use itertools::Itertools;
@@ -23,6 +15,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+/// This file contain response types used by the GatewayAPI, most of the types mirrors it's internal type counterparts.
+/// These mirrored types allow us to optimise the JSON serde without impacting the internal types, which are optimise for storage.
+///
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 use tracing::warn;
 
 use sui_json::SuiJsonValue;
@@ -33,6 +32,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
 use sui_types::error::SuiError;
 use sui_types::event::EventType;
+use sui_types::event::SlimEventEnvelope;
 use sui_types::event::{Event, TransferType};
 use sui_types::event_filter::EventFilter;
 use sui_types::gas::GasCostSummary;
@@ -1257,6 +1257,16 @@ pub struct SuiEventEnvelope {
     /// Specific event type
     pub event: SuiEvent,
 }
+
+// impl From<StoredEvent> for SuiEventEnvelope {
+//     fn from(stored_event: StoredEvent) -> Self {
+//         Self {
+//             timestamp: stored_event.timestamp,
+//             tx_digest: stored_event.
+//             digest: oref.2,
+//         }
+//     }
+// }
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]

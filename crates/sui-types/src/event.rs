@@ -14,6 +14,7 @@ use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::Bytes;
 use strum::VariantNames;
+use strum_macros::EnumString;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 
 use crate::error::SuiError;
@@ -41,6 +42,19 @@ pub struct EventEnvelope {
     pub move_struct_json_value: Option<Value>,
 }
 
+/// A slim version of EventEnvelope with a few fields cut out.
+/// It is mostly used in the event query read path, particularly in
+/// EventEnvelope conversions as an intermediary struct from StoredEvent
+/// to SuiEventEnvelope.
+pub struct SlimEventEnvelope {
+    /// UTC timestamp in milliseconds since epoch (1/1/1970)
+    pub timestamp: u64,
+    /// Transaction digest of associated transaction, if any
+    pub tx_digest: Option<TransactionDigest>,
+    /// Specific event type
+    pub event: Event,
+}
+
 impl EventEnvelope {
     pub fn new(
         timestamp: u64,
@@ -64,7 +78,7 @@ impl EventEnvelope {
 }
 
 #[derive(
-    Eq, Debug, strum_macros::Display, Clone, PartialEq, Deserialize, Serialize, Hash, JsonSchema,
+    Eq, Debug, strum_macros::Display, strum_macros::EnumString, Clone, PartialEq, Deserialize, Serialize, Hash, JsonSchema,
 )]
 pub enum TransferType {
     Coin,
@@ -253,6 +267,22 @@ impl Event {
                 Some(recipient)
             }
             _ => None,
+        }
+    }
+
+    pub fn move_event_contents(&self) -> Option<&[u8]> {
+        if let Event::MoveEvent { contents, .. } = self {
+            Some(contents)
+        } else {
+            None
+        }
+    }
+
+    pub fn move_event_struct_tag(&self) -> Option<&StructTag> {
+        if let Event::MoveEvent { type_, .. } = self {
+            Some(type_)
+        } else {
+            None
         }
     }
 
