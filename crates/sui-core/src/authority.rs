@@ -1247,7 +1247,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        QueryHelpers::get_transaction(&self.database, digest)
+        QueryHelpers::get_transaction(&self.database, &digest)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {

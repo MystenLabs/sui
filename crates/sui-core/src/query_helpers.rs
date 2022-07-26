@@ -75,12 +75,12 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> QueryHelpers<S> {
 
     pub fn get_transaction(
         database: &SuiDataStore<S>,
-        digest: TransactionDigest,
+        digest: &TransactionDigest,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let opt = database.get_certified_transaction(&digest)?;
+        let opt = database.get_certified_transaction(digest)?;
         match opt {
-            Some(certificate) => Ok((certificate, database.get_effects(&digest)?)),
-            None => Err(anyhow!(SuiError::TransactionNotFound { digest })),
+            Some(certificate) => Ok((certificate, database.get_effects(digest)?)),
+            None => Err(anyhow!(SuiError::TransactionNotFound { digest: *digest })),
         }
     }
 }
