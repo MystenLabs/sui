@@ -21,6 +21,7 @@ import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxResultHeader from './TxResultHeader';
 
+import type { SuiEvent } from '../../components/events/eventTypes';
 import type { DataType, Category } from './TransactionResultType';
 import type {
     CertifiedTransaction,
@@ -39,6 +40,7 @@ type TxDataProps = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    events?: SuiEvent[];
 };
 
 function generateMutatedCreated(tx: TxDataProps) {
@@ -190,6 +192,26 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
+function eventToDisplay(event: SuiEvent) {
+    console.log('event to display', event);
+    const isNewObject = 'newObject' in event;
+    const inner = isNewObject ? event.newObject : null;
+
+    if (inner === null) {
+        return {
+            label: 'null (FIX ME)',
+            value: null,
+            monotypeClass: false,
+        };
+    }
+
+    return {
+        label: '',
+        value: event,
+        monotypeClass: false,
+    };
+}
+
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
     const txKindName = getTransactionKindName(txdetails);
@@ -206,6 +228,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         txKindName: txKindName,
         ...(txdata.txError ? { error: txdata.txError } : {}),
     };
+
+    console.log('txdata', txdata);
+    console.log('txdata events', txdata.events);
+    const txEventData = {
+        title: 'Events',
+        content: txdata.events?.map(eventToDisplay),
+    };
+
+    console.log(txEventData);
 
     const transactionSignatureData = {
         title: 'Transaction Signatures',
@@ -351,6 +382,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                     </div>
                     <div className={styles.txgridcomponent}>
                         <ItemView data={GasStorageFees} />
+                    </div>
+                </section>
+                <section title="Events">
+                    <div className={styles.txgridcomponent}>
+                        <ItemView data={transactionSignatureData} />
+                        <ItemView data={validatorSignatureData} />
                     </div>
                 </section>
                 <section title="Signatures">
