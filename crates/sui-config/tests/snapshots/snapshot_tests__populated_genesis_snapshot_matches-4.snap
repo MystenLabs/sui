@@ -1,0 +1,115 @@
+---
+source: crates/sui-config/tests/snapshot_tests.rs
+expression: genesis.sui_system_object()
+---
+info:
+  id: "0x0000000000000000000000000000000000000005"
+  version: 1
+epoch: 0
+validators:
+  validator_stake: 1
+  delegation_stake: 0
+  quorum_stake_threshold: 1
+  active_validators:
+    - metadata:
+        sui_address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
+        pubkey_bytes:
+          - 32
+          - 253
+          - 186
+          - 201
+          - 177
+          - 11
+          - 117
+          - 135
+          - 187
+          - 167
+          - 181
+          - 188
+          - 22
+          - 59
+          - 206
+          - 105
+          - 231
+          - 150
+          - 215
+          - 30
+          - 78
+          - 212
+          - 76
+          - 16
+          - 252
+          - 180
+          - 72
+          - 134
+          - 137
+          - 247
+          - 161
+          - 68
+        name:
+          - 48
+        net_address: []
+        next_epoch_stake: 1
+        next_epoch_delegation: 0
+      stake_amount: 1
+      delegation: 0
+      pending_stake: 0
+      pending_withdraw: 0
+      pending_delegation: 0
+      pending_delegation_withdraw: 0
+      delegator_count: 0
+      pending_delegator_count: 0
+      pending_delegator_withdraw_count: 0
+  pending_validators: []
+  pending_removals: []
+  next_epoch_validators:
+    - sui_address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
+      pubkey_bytes:
+        - 32
+        - 253
+        - 186
+        - 201
+        - 177
+        - 11
+        - 117
+        - 135
+        - 187
+        - 167
+        - 181
+        - 188
+        - 22
+        - 59
+        - 206
+        - 105
+        - 231
+        - 150
+        - 215
+        - 30
+        - 78
+        - 212
+        - 76
+        - 16
+        - 252
+        - 180
+        - 72
+        - 134
+        - 137
+        - 247
+        - 161
+        - 68
+      name:
+        - 48
+      net_address: []
+      next_epoch_stake: 1
+      next_epoch_delegation: 0
+treasury_cap:
+  value: 100000000000001
+storage_fund:
+  value: 100000000000000
+parameters:
+  min_validator_stake: 100000000000000
+  max_validator_candidate_count: 100
+  storage_gas_price: 1
+delegation_reward:
+  value: 0
+
