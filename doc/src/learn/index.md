@@ -16,7 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 Find the latest updates to these contents in this section:
 
-* Sui now supports development using Microsoft Windows 11, macOS, and Linux. See [install Sui](../build/install.md) for the prerequisites of each operating system.
+* Sui now supports development using [Microsoft Windows 11, macOS, and Linux](../build/install.md#supported-oses). See [install Sui](../build/install.md#prerequisites) for the prerequisites of each operating system.
 * `sui::id` is now `sui::object` and `VersionedID` is now `Info`. Use the [Object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) that has [replaced the former ID.move.](https://github.com/MystenLabs/sui/pull/3241)
 * Find a list of [single-writer apps](../learn/single-writer-apps.md) that would benefit from Sui's advantages in handling [simple transactions](../learn/how-sui-works.md#simple-transactions).
 * Sui [version 0.6.1](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.1) released to DevNet. See the [#sui-release-notes](https://discord.com/channels/916379725201563759/974444055259910174) channel in Discord for details on this and prior releases.
