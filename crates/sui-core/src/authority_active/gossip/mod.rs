@@ -9,10 +9,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{
+    future::BoxFuture,
     stream::{FuturesOrdered, FuturesUnordered},
     StreamExt,
 };
-use std::future::{ready, Future, Ready};
+use std::future::Future;
 use std::ops::Deref;
 use std::{
     collections::{HashSet, VecDeque},
@@ -281,7 +282,9 @@ impl GossipDigestHandler {
     }
 
     async fn process_response<A>(
-        follower: &Follower<A>,
+        aggregator: Arc<AuthorityAggregator<A>>,
+        state: Arc<AuthorityState>,
+        peer_name: AuthorityName,
         response: TransactionInfoResponse,
     ) -> Result<(), SuiError>
     where
@@ -289,23 +292,22 @@ impl GossipDigestHandler {
     {
         if let Some(certificate) = response.certified_transaction {
             // Process the certificate from one authority to ourselves
-            follower
-                .aggregator
+            aggregator
                 .sync_authority_source_to_destination(
                     certificate,
-                    follower.peer_name,
+                    peer_name,
                     &LocalCertificateHandler {
-                        state: follower.state.clone(),
+                        state: state.clone(),
                     },
                 )
                 .await?;
-            follower.state.metrics.gossip_sync_count.inc();
+            state.metrics.gossip_sync_count.inc();
             Ok(())
         } else {
             // The authority did not return the certificate, despite returning info
             // But it should know the certificate!
             Err(SuiError::ByzantineAuthoritySuspicion {
-                authority: follower.peer_name,
+                authority: peer_name,
             })
         }
     }
@@ -316,31 +318,29 @@ impl<A> DigestHandler<A> for GossipDigestHandler
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    type DigestResult = Ready<SuiResult>;
+    type DigestResult = BoxFuture<'static, SuiResult>;
 
     async fn handle_digest(
         &self,
         follower: &Follower<A>,
         digest: ExecutionDigests,
     ) -> SuiResult<Self::DigestResult> {
-        let inner = || async move {
-            if !follower
-                .state
-                .database
-                .effects_exists(&digest.transaction)?
-            {
+        let state = follower.state.clone();
+        let client = follower.client.clone();
+        let aggregator = follower.aggregator.clone();
+        let name = follower.peer_name;
+        Ok(Box::pin(async move {
+            if !state.database.effects_exists(&digest.transaction)? {
                 // Download the certificate
-                let response = follower
-                    .client
+                let response = client
                     .handle_transaction_info_request(TransactionInfoRequest::from(
                         digest.transaction,
                     ))
                     .await?;
-                Self::process_response(follower, response).await?;
+                Self::process_response(aggregator, state, name, response).await?;
             }
             Ok(())
-        };
-        Ok(ready(inner().await))
+        }))
     }
 }
 
