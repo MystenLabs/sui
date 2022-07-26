@@ -22,6 +22,7 @@ use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 // TODO: Increase this once we use multiple gas objects
 const CONCURRENCY_LIMIT: usize = 1;
@@ -120,11 +121,15 @@ async fn request_gas(
     Json(payload): Json<FaucetRequest>,
     Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
+    // ID for traceability
+    let id = Uuid::new_v4();
+    info!(uuid = ?id, "Got new gas request.");
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
             state
                 .faucet
                 .send(
+                    id,
                     requests.recipient,
                     &vec![state.config.amount; state.config.num_coins],
                 )
@@ -132,9 +137,12 @@ async fn request_gas(
         }
     };
     match result {
-        Ok(v) => (StatusCode::CREATED, Json(FaucetResponse::from(v))),
+        Ok(v) => {
+            info!(uuid =?id, "Request is successfully served");
+            (StatusCode::CREATED, Json(FaucetResponse::from(v)))
+        }
         Err(v) => {
-            warn!("Failed to request gas: {:?}", v);
+            warn!(uuid =?id, "Failed to request gas: {:?}", v);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(FaucetResponse::from(v)),
@@ -155,6 +163,7 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
 
+    info!(?address, "Sync client states");
     // Sync client to retrieve objects from the network.
     SuiClientCommands::SyncClientState {
         address: Some(address),
