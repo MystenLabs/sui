@@ -114,7 +114,7 @@ pub struct StoreTables<S> {
     pub(crate) epochs: DBMap<EpochId, AuthenticatedEpoch>,
 }
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
-    /// If with_secondary_path is set, the DB is opened in read only mode witht he path specified
+    /// If with_secondary_path is set, the DB is opened in read only mode with the path specified
     pub fn open_impl<P: AsRef<Path>>(
         path: P,
         db_options: Option<Options>,
@@ -329,7 +329,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
                     .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
                     .collect::<BTreeMap<_, _>>()
             }
-            _ => anyhow::bail!("No such table name: {}", table_name)),
+            _ => anyhow::bail!("No such table name: {}", table_name),
         })
     }
 }
