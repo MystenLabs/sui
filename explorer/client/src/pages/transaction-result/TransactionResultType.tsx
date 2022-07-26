@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiEventType } from '../../components/events/eventTypes';
+import type { SuiEvent } from '../../components/events/eventTypes';
 import type {
     CertifiedTransaction,
     ExecutionStatusType,
@@ -16,7 +16,7 @@ export type DataType = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
-    events: SuiEventType[];
+    events?: SuiEvent[];
     timestamp_ms: number | null;
 };
 

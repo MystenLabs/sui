@@ -57,7 +57,7 @@ export type NewObjectEvent = {
     objectId: ObjectId;
 };
 
-export type SuiEventType =
+export type SuiEvent =
     | { moveEvent: MoveEvent }
     | { publish: PublishEvent }
     | { transferObject: TransferObjectEvent }
