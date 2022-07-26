@@ -172,7 +172,7 @@ $ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
 Next we can call the function to create a color object:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 
