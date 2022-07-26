@@ -367,7 +367,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         }
     }
 
-    #[instrument(level="debug", skip_all, fields(block_ids = ?ids))]
+    #[instrument(level="debug", skip_all, fields(num_block_ids = ids.len()))]
     async fn handle_get_blocks_command<'a>(
         &mut self,
         ids: Vec<CertificateDigest>,
@@ -421,7 +421,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     /// fetch it via the peers. Otherwise if available on the storage
     /// should return the result immediately. The method is blocking to
     /// retrieve all the results.
-    #[instrument(level = "debug", skip_all, fields(certificate_ids = ?ids))]
+    #[instrument(level = "debug", skip_all, fields(num_certificate_ids = ids.len()))]
     async fn get_certificates(
         &mut self,
         ids: Vec<CertificateDigest>,
@@ -525,7 +525,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     // handles received commands and returns back a future if needs to
     // wait for further results. Otherwise, an empty option is returned
     // if no further waiting on processing is needed.
-    #[instrument(level="debug", skip_all, fields(block_ids = ?id))]
+    #[instrument(level="debug", skip_all, fields(block_id = ?id))]
     async fn handle_get_block_command<'a>(
         &mut self,
         id: CertificateDigest,

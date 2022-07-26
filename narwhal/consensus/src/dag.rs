@@ -285,7 +285,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     }
 
     /// Removes certificates from the Dag, reclaiming memory in the process.
-    #[instrument(level = "debug", skip_all, fields(certificate_ids = ?digests), err)]
+    #[instrument(level = "debug", skip_all, fields(num_certificate_ids = digests.len()), err)]
     fn remove(
         &mut self,
         digests: Vec<CertificateDigest>,

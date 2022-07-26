@@ -359,7 +359,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     /// logic of waiting and gathering the replies from the primary nodes
     /// for the payload availability. This future is returning the next State
     /// to be executed.
-    #[instrument(level="debug", skip_all, fields(certificates = ?certificates))]
+    #[instrument(level="debug", skip_all, fields(num_certificates = certificates.len()))]
     async fn handle_synchronize_block_payload_command<'a>(
         &mut self,
         certificates: Vec<Certificate<PublicKey>>,

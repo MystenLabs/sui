@@ -170,7 +170,7 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
     /// * Internal: An internal error caused
     /// * BlockDeliveryTimeout: Timed out while waiting for the certificate to become available
     /// after submitting it for processing to core
-    #[instrument(level="debug", skip_all, fields(block_ids = ?block_ids))]
+    #[instrument(level="debug", skip_all, fields(num_block_ids = block_ids.len()))]
     async fn get_and_synchronize_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
@@ -235,7 +235,7 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
         results
     }
 
-    #[instrument(level="debug", skip_all, fields(block_ids = ?block_ids))]
+    #[instrument(level="debug", skip_all, fields(num_block_ids = block_ids.len()))]
     async fn get_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
