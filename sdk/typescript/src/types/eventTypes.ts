@@ -19,11 +19,11 @@ import type {
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
 export type MoveEvent = {
-    packageId: ObjectId;
-    transactionModule: string;
-    sender: SuiAddress;
+    packageId?: ObjectId;
+    transactionModule?: string;
+    sender?: SuiAddress;
     type: string;
-    fields?: object; // TODO - better type
+    fields: object; // TODO - better type
     bcs: string;
 };
 
